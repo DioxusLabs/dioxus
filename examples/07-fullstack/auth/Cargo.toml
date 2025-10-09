@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 dioxus-web = { workspace = true, features = ["hydrate"], optional = true }
 dioxus = { features = ["fullstack"], workspace = true }
-axum = { workspace = true, optional = true }
+axum = { workspace = true, optional = true, features = ["macros"]}
 tokio = { workspace = true, features = ["full"], optional = true }
 tower-http = { workspace = true, features = ["auth"], optional = true }
 async-trait = { version = "0.1.88", optional = true }
@@ -44,7 +44,7 @@ features = ["sqlite"]
 optional = true
 
 [features]
-default = []
+default = ["web", "server"]
 server = [
     "dioxus/server",
     "dep:axum",

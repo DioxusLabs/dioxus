@@ -155,7 +155,7 @@ fn animate(
 
 fn orbit_camera_system(
     mut camera_query: Query<(&mut Transform, &mut OrbitCamera), With<Camera3d>>,
-    mut mouse_motion_events: EventReader<MouseMotion>,
+    mut mouse_motion_events: MessageReader<MouseMotion>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
 ) {
     for (mut transform, mut orbit_camera) in camera_query.iter_mut() {

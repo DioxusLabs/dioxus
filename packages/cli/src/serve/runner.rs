@@ -28,7 +28,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use subsecond_types::JumpTable;
 use syn::spanned::Spanned;
 use tokio::process::Command;
 
@@ -53,7 +52,7 @@ pub(crate) struct AppServer {
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
 
     // Tracked state related to open builds and hot reloading
-    pub(crate) applied_hot_reload_message: HotReloadMsg,
+    pub(crate) applied_client_hot_reload_message: HotReloadMsg,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
@@ -185,7 +184,7 @@ impl AppServer {
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),
-            applied_hot_reload_message: Default::default(),
+            applied_client_hot_reload_message: Default::default(),
             automatic_rebuilds: true,
             watch_fs,
             use_hotpatch_engine,
@@ -235,9 +234,9 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start(build_mode.clone());
+        self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
-            server.start(build_mode);
+            server.start(build_mode, BuildId::SECONDARY);
         }
     }
 
@@ -274,14 +273,14 @@ impl AppServer {
             // Wait for the client to finish
             client_update = client_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::CLIENT,
+                    id: BuildId::PRIMARY,
                     update: client_update,
                 }
             }
 
             Some(server_update) = server_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::SERVER,
+                    id: BuildId::SECONDARY,
                     update: server_update,
                 }
             }
@@ -492,17 +491,18 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec());
+                self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec());
+                    server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client.start_rebuild(BuildMode::Base { run: true });
+                self.client
+                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true });
+                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -561,13 +561,14 @@ impl AppServer {
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
-        match artifacts.bundle {
-            BundleFormat::Server => {
+        match artifacts.build_id {
+            BuildId::PRIMARY => self.client.artifacts = Some(artifacts.clone()),
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
                 }
             }
-            _ => self.client.artifacts = Some(artifacts.clone()),
+            _ => {}
         }
 
         let should_open = self.client.stage == BuildStage::Success
@@ -635,7 +636,7 @@ impl AppServer {
                     fullstack_address,
                     false,
                     false,
-                    BuildId::SERVER,
+                    BuildId::SECONDARY,
                     &self.server_args,
                 )
                 .await?;
@@ -650,7 +651,7 @@ impl AppServer {
                 fullstack_address,
                 open_browser,
                 self.always_on_top,
-                BuildId::CLIENT,
+                BuildId::PRIMARY,
                 &self.client_args,
             )
             .await?;
@@ -697,9 +698,10 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start_rebuild(build_mode.clone());
+        self.client
+            .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
         if let Some(s) = self.server.as_mut() {
-            s.start_rebuild(build_mode)
+            s.start_rebuild(build_mode, BuildId::SECONDARY);
         }
 
         self.clear_hot_reload_changes();
@@ -709,33 +711,77 @@ impl AppServer {
 
     pub(crate) async fn hotpatch(
         &mut self,
-        res: &BuildArtifacts,
+        bundle: &BuildArtifacts,
         id: BuildId,
         cache: &HotpatchModuleCache,
-    ) -> Result<JumpTable> {
+        devserver: &mut WebServer,
+    ) -> Result<()> {
+        let elapsed = bundle
+            .time_end
+            .duration_since(bundle.time_start)
+            .unwrap_or_default();
+
         let jump_table = match id {
-            BuildId::CLIENT => self.client.hotpatch(res, cache).await,
-            BuildId::SERVER => {
+            BuildId::PRIMARY => self.client.hotpatch(bundle, cache).await,
+            BuildId::SECONDARY => {
                 self.server
                     .as_mut()
                     .context("Server not found")?
-                    .hotpatch(res, cache)
+                    .hotpatch(bundle, cache)
                     .await
             }
             _ => bail!("Invalid build id"),
         }?;
 
-        if id == BuildId::CLIENT {
-            self.applied_hot_reload_message.jump_table = self.client.patches.last().cloned();
+        if id == BuildId::PRIMARY {
+            self.applied_client_hot_reload_message.jump_table = self.client.patches.last().cloned();
         }
 
-        Ok(jump_table)
+        // If no server, just send the patch immediately
+        let Some(server) = self.server.as_mut() else {
+            devserver
+                .send_patch(jump_table, elapsed, id, self.client.pid)
+                .await;
+            return Ok(());
+        };
+
+        // If we have a server, we need to wait until both the client and server are ready
+        // Otherwise we end up with an annoying race condition where the client can't actually load the patch
+        if self.client.stage == BuildStage::Success && server.stage == BuildStage::Success {
+            let client_jump_table = self
+                .client
+                .patches
+                .last()
+                .cloned()
+                .context("Missing client jump table")?;
+
+            let server_jump_table = server
+                .patches
+                .last()
+                .cloned()
+                .context("Missing server jump table")?;
+
+            devserver
+                .send_patch(server_jump_table, elapsed, BuildId::SECONDARY, server.pid)
+                .await;
+
+            devserver
+                .send_patch(
+                    client_jump_table,
+                    elapsed,
+                    BuildId::PRIMARY,
+                    self.client.pid,
+                )
+                .await;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
-            BuildId::CLIENT => Some(&self.client),
-            BuildId::SERVER => self.server.as_ref(),
+            BuildId::PRIMARY => Some(&self.client),
+            BuildId::SECONDARY => self.server.as_ref(),
             _ => None,
         }
     }
@@ -751,20 +797,20 @@ impl AppServer {
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self, build: BuildId) -> HotReloadMsg {
-        let mut msg = self.applied_hot_reload_message.clone();
+        let mut msg = self.applied_client_hot_reload_message.clone();
 
-        if build == BuildId::CLIENT {
+        if build == BuildId::PRIMARY {
             msg.jump_table = self.client.patches.last().cloned();
-            msg.for_build_id = Some(BuildId::CLIENT.0 as _);
+            msg.for_build_id = Some(BuildId::PRIMARY.0 as _);
             if let Some(lib) = msg.jump_table.as_mut() {
                 lib.lib = PathBuf::from("/").join(lib.lib.clone());
             }
         }
 
-        if build == BuildId::SERVER {
+        if build == BuildId::SECONDARY {
             if let Some(server) = self.server.as_mut() {
                 msg.jump_table = server.patches.last().cloned();
-                msg.for_build_id = Some(BuildId::SERVER.0 as _);
+                msg.for_build_id = Some(BuildId::SECONDARY.0 as _);
             }
         }
 
@@ -773,7 +819,7 @@ impl AppServer {
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
     pub(crate) fn clear_hot_reload_changes(&mut self) {
-        self.applied_hot_reload_message = Default::default();
+        self.applied_client_hot_reload_message = Default::default();
     }
 
     pub(crate) fn clear_patches(&mut self) {
@@ -790,7 +836,7 @@ impl AppServer {
         pid: Option<u32>,
     ) {
         match build_id {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
                 if self.client.build.bundle != BundleFormat::Web {
@@ -802,7 +848,7 @@ impl AppServer {
                     }
                 }
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.aslr_reference = aslr_reference;
                 }
@@ -836,7 +882,7 @@ impl AppServer {
 
     /// Store the hot reload changes for any future clients that connect
     fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        let applied = &mut self.applied_hot_reload_message;
+        let applied = &mut self.applied_client_hot_reload_message;
 
         // Merge the assets, unknown files, and templates
         // We keep the newer change if there is both a old and new change
@@ -1108,10 +1154,10 @@ impl AppServer {
         }
 
         match build {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 _ = self.client.open_debugger(dev).await;
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     _ = server.open_debugger(dev).await;
                 }

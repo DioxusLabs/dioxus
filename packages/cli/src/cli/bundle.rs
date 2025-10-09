@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, BundleFormat};
+use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat};
 use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -40,16 +40,17 @@ impl Bundle {
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
         let mut server_artifacts = None;
-        let client_artifacts = AppBuilder::started(&client, BuildMode::Base { run: false })?
-            .finish_build()
-            .await?;
+        let client_artifacts =
+            AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
+                .finish_build()
+                .await?;
 
         tracing::info!(path = ?client.root_dir(), "Client build completed successfully! 🚀");
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
             server_artifacts = Some(
-                AppBuilder::started(server, BuildMode::Base { run: false })?
+                AppBuilder::started(server, BuildMode::Base { run: false }, BuildId::SECONDARY)?
                     .finish_build()
                     .await?,
             );

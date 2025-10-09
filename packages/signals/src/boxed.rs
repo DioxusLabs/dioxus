@@ -14,7 +14,7 @@ use crate::{
     since = "0.7.0",
     note = "Use `ReadSignal` instead. Will be removed in 0.8"
 )]
-pub type ReadOnlySignal<T, S> = ReadSignal<T, S>;
+pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {

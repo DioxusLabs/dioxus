@@ -17,6 +17,7 @@ Option 1:
 For simple, synchronous, thread-safe data, we can use statics with atomic types or mutexes.
 The `LazyLock` type from the standard library is a great choice for simple, synchronous data
 */
+#[cfg(feature = "server")]
 static MESSAGES: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[post("/api/messages")]

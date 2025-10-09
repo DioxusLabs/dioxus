@@ -154,19 +154,20 @@ impl AppBuilder {
     }
 
     /// Create a new `AppBuilder` and immediately start a build process.
-    pub fn started(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
+    pub fn started(request: &BuildRequest, mode: BuildMode, build_id: BuildId) -> Result<Self> {
         let mut builder = Self::new(request)?;
-        builder.start(mode);
+        builder.start(mode, build_id);
         Ok(builder)
     }
 
-    pub(crate) fn start(&mut self, mode: BuildMode) {
+    pub(crate) fn start(&mut self, mode: BuildMode, build_id: BuildId) {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let tx = self.tx.clone();
             async move {
                 let ctx = BuildContext {
                     mode,
+                    build_id,
                     tx: tx.clone(),
                 };
                 request.verify_tooling(&ctx).await?;
@@ -290,10 +291,12 @@ impl AppBuilder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
+    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>, build_id: BuildId) {
         // We need the rustc args from the original build to pass to the new build
         let Some(artifacts) = self.artifacts.as_ref().cloned() else {
-            tracing::warn!("Ignoring patch rebuild since there is no existing build.");
+            tracing::warn!(
+                "Ignoring patch rebuild for {build_id:?} since there is no existing build."
+            );
             return;
         };
 
@@ -327,6 +330,7 @@ impl AppBuilder {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
+                build_id,
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
@@ -340,7 +344,7 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn start_rebuild(&mut self, mode: BuildMode) {
+    pub(crate) fn start_rebuild(&mut self, mode: BuildMode, build_id: BuildId) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
@@ -351,6 +355,7 @@ impl AppBuilder {
             let ctx = BuildContext {
                 tx: self.tx.clone(),
                 mode,
+                build_id,
             };
             async move { request.build(&ctx).await }
         });
@@ -715,7 +720,7 @@ impl AppBuilder {
 
         let changed_file = changed_files.first().unwrap();
         tracing::info!(
-            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#} ({})",
+            "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
                 .display()
                 .to_string()
@@ -723,8 +728,7 @@ impl AppBuilder {
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()
-                .as_millis(),
-            triple
+                .as_millis()
         );
 
         self.patches.push(jump_table.clone());

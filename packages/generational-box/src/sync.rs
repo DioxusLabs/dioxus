@@ -34,7 +34,7 @@ pub(crate) enum RwLockStorageEntryData {
 impl Debug for RwLockStorageEntryData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Reference(location) => write!(f, "Reference({:?})", location),
+            Self::Reference(location) => write!(f, "Reference({location:?})"),
             Self::Rc(_) => write!(f, "Rc"),
             Self::Data(_) => write!(f, "Data"),
             Self::Empty => write!(f, "Empty"),

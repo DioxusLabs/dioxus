@@ -4,15 +4,14 @@
 //! in the "values" field.
 
 use dioxus::prelude::*;
-use std::collections::HashMap;
 
 fn main() {
     dioxus::launch(app);
 }
 
 fn app() -> Element {
-    let mut values = use_signal(HashMap::new);
-    let mut submitted_values = use_signal(HashMap::new);
+    let mut values = use_signal(Vec::new);
+    let mut submitted_values = use_signal(Vec::new);
 
     rsx! {
         div { style: "display: flex",
@@ -63,7 +62,7 @@ fn app() -> Element {
                     input { r#type: "text", name: "full-name" }
 
                     label { r#for: "email", "Email (matching <name>@example.com)" }
-                    input { r#type: "email", pattern: ".+@example\\.com", size: "30", required: "true", id: "email", name: "email" }
+                    input { r#type: "email", size: "30", id: "email", name: "email" }
 
                     label { r#for: "password", "Password" }
                     input { r#type: "password", name: "password" }
@@ -122,6 +121,9 @@ fn app() -> Element {
                         input { r#type: "checkbox", name: "cbox", value: "yellow", id: "cbox-yellow" }
                     }
 
+                    // File input
+                    label { r#for: "headshot", "Headshot" }
+                    input { r#type: "file", name: "headshot", id: "headshot", multiple: true, accept: ".png,.jpg,.jpeg" }
 
                     // Buttons will submit your form by default.
                     button { r#type: "submit", value: "Submit", "Submit the form" }

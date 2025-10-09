@@ -24,6 +24,8 @@ mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
 
+use std::process::ExitCode;
+
 pub(crate) use build::*;
 pub(crate) use cli::*;
 pub(crate) use config::*;
@@ -39,7 +41,7 @@ pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
         return rustcwrapper::run_rustc();
@@ -81,4 +83,6 @@ async fn main() {
 
         output => tracing::info!(json = %output),
     }
+
+    ExitCode::SUCCESS
 }

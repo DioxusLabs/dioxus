@@ -2,17 +2,14 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{consume_context, ElementId, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, ScopeId, VirtualDom};
 use dioxus_history::History;
-use dioxus_html::PlatformEventData;
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
@@ -406,35 +403,6 @@ impl App {
     ) {
         for webview in self.webviews.values() {
             webview.show_toast(header_text, message, level, duration, after_reload);
-        }
-    }
-
-    pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
-        let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
-            return;
-        };
-
-        let id = ElementId(file_dialog.target);
-        let event_name = &file_dialog.event;
-        let event_bubbles = file_dialog.bubbles;
-        let files = file_dialog.get_file_event();
-
-        let as_any = Box::new(DesktopFileUploadForm { files });
-
-        let data = Rc::new(PlatformEventData::new(as_any));
-
-        let Some(view) = self.webviews.get_mut(&window) else {
-            return;
-        };
-
-        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
-
-        let runtime = view.dom.runtime();
-        if event_name == "change&input" {
-            runtime.handle_event("input", event.clone(), id);
-            runtime.handle_event("change", event, id);
-        } else {
-            runtime.handle_event(event_name, event, id);
         }
     }
 

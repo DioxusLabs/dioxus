@@ -7,6 +7,6 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { path = "../../dioxus", features = ["web"]}
+dioxus = { path = "../../dioxus", features = ["web"] }
 
 [workspace]

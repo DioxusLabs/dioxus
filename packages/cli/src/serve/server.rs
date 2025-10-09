@@ -26,6 +26,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
+use rustls::crypto::{aws_lc_rs::default_provider, CryptoProvider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -148,7 +149,7 @@ impl WebServer {
                 if let Some(new_socket) = new_hot_reload_socket {
                     let aslr_reference = new_socket.aslr_reference;
                     let pid = new_socket.pid;
-                    let id = new_socket.build_id.unwrap_or(BuildId::CLIENT);
+                    let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
 
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
@@ -412,7 +413,10 @@ async fn devserver_mainloop(
         return Ok(());
     }
 
-    // If we're using rustls, we need to get the cert/key paths and then set up rustls
+    // If we're using rustls, we need to install the provider, get the cert/key paths, and then set up rustls
+    if let Err(provider) = CryptoProvider::install_default(default_provider()) {
+        bail!("Failed to install default CryptoProvider: {provider:?}");
+    }
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
     let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
 
