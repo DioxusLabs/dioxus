@@ -200,7 +200,7 @@ fn file_dialog_responder(
         .values
         .iter()
         .position(|x| x.key == file_dialog.target_name)
-        .context("Failed to find target_name in values")?;
+        .unwrap_or(0);
 
     // Remove any existing entries
     file_dialog
