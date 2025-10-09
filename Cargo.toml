@@ -698,6 +698,11 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "redirect"
+path = "examples/07-fullstack/redirect.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "header_map"
 path = "examples/07-fullstack/header_map.rs"
 doc-scrape-examples = true

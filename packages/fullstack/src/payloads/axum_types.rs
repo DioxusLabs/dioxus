@@ -1,9 +1,10 @@
 use super::*;
 use crate::{ClientResponse, FromResponse};
 pub use axum::extract::Json;
-use axum::response::Html;
+use axum::response::{Html, Redirect};
 use dioxus_fullstack_core::{RequestError, ServerFnError};
 use futures::StreamExt;
+use http::StatusCode;
 use std::future::Future;
 
 impl<T: From<String>> FromResponse for Html<T> {
@@ -29,6 +30,25 @@ impl<T: DeserializeOwned> FromResponse for Json<T> {
         async move {
             let data = res.json::<T>().await?;
             Ok(Json(data))
+        }
+    }
+}
+
+impl FromResponse for Redirect {
+    fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
+        async move {
+            let location = res
+                .headers()
+                .get(http::header::LOCATION)
+                .ok_or_else(|| RequestError::Redirect("Missing Location header".into()))?
+                .to_str()
+                .map_err(|_| RequestError::Redirect("Invalid Location header".into()))?;
+            match res.status() {
+                StatusCode::SEE_OTHER => Ok(Redirect::to(location)),
+                StatusCode::TEMPORARY_REDIRECT => Ok(Redirect::temporary(location)),
+                StatusCode::PERMANENT_REDIRECT => Ok(Redirect::permanent(location)),
+                _ => Err(RequestError::Redirect("Not a redirect status code".into()).into()),
+            }
         }
     }
 }
