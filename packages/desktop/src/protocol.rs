@@ -196,11 +196,13 @@ fn file_dialog_responder(
 
     let file_list = file_dialog.get_file_event();
 
+    // Get the position of the entry we're updating, so we can insert new entries in the same place
+    // If we can't find it, just append to the end. This is usually due to the input not being in a form element.
     let position_of_entry = file_dialog
         .values
         .iter()
         .position(|x| x.key == file_dialog.target_name)
-        .context("Failed to find target_name in values")?;
+        .unwrap_or(file_dialog.values.len());
 
     // Remove any existing entries
     file_dialog
