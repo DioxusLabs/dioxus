@@ -703,6 +703,11 @@ path = "examples/07-fullstack/redirect.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "server_fn_namespace"
+path = "examples/07-fullstack/server_fn_namespace.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "header_map"
 path = "examples/07-fullstack/header_map.rs"
 doc-scrape-examples = true
