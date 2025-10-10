@@ -97,22 +97,24 @@ impl FullstackContext {
 
     /// Set the current HTTP status for the route. This will be used when committing the response
     /// to the client.
-    pub fn set_route_http_status(&mut self, status: HttpError) {
-        self.route_http_status.set(status);
+    pub fn commit_http_status(&mut self, status: StatusCode, message: Option<String>) {
+        self.route_http_status.set(HttpError { status, message });
     }
 
-    /// Commit the current HTTP status for the route. This will be used when committing the response
-    /// to the client. The returned `HttpError` can be used to render different UI based on the error.
+    /// Commit the CapturedError as the current HTTP status for the route.
+    /// This will attempt to downcast the error to known types and set the appropriate
+    /// status code. If the error type is unknown, it will default to
+    /// `StatusCode::INTERNAL_SERVER_ERROR`.
     pub fn commit_error_status(error: impl Into<CapturedError>) -> HttpError {
         let error = error.into();
-        let status = err_to_status_code(&error);
+        let status = status_code_from_error(&error);
         let http_error = HttpError {
             status,
             message: Some(error.to_string()),
         };
 
         if let Some(mut ctx) = Self::current() {
-            ctx.set_route_http_status(http_error.clone());
+            ctx.commit_http_status(http_error.status, http_error.message.clone());
         }
 
         http_error
@@ -189,7 +191,7 @@ pub fn current_status() -> StreamingStatus {
 ///
 /// This will attempt to downcast the error to known types and return a corresponding status code.
 /// If the error type is unknown, it will default to `StatusCode::INTERNAL_SERVER_ERROR`.
-pub fn err_to_status_code(error: &CapturedError) -> StatusCode {
+pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     if let Some(err) = error.downcast_ref::<ServerFnError>() {
         match err {
             ServerFnError::ServerError {

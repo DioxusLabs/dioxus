@@ -425,8 +425,6 @@ impl SsrRendererPool {
             .await
             .map_err(|err| SSRError::Incremental(IncrementalRendererError::Other(err.into())))??;
 
-        tracing::info!("Rendering with status {}", status);
-
         Ok((
             status,
             RenderFreshness::now(None),

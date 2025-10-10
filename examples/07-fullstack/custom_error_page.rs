@@ -1,21 +1,14 @@
-//! We can use the `#[error]` attribute on the Dioxus Router to customize the error page.
+//! To render custom error pages, you can create a layout component that captures errors from routes
+//! with an `ErrorBoundary` and display different content based on the error type.
 //!
-//! The `#[error]` attribute catches any errors while rendering a route and returns a `RoutingError`.
-//! It's up to you to decide how to handle the error and what to show the user.
+//! While capturing the error, we set the appropriate HTTP status code using `FullstackContext::commit_error_status`.
+//! The router will then use this status code when doing server-side rendering (SSR).
 //!
-//! The Router will automatically downcast any errors into something that returns a `StatusCode`,
-//! and if it can't it, it will return a 500 Internal Server Error. When used in SSR, the Router will
-//! take these status codes and call `dioxus::fullstack::set_status` to set the HTTP status code appropriately.
-//!
-//! Note that the `#[error]` attribute applies *per layout*. A layout can have a dedicated error handler
-//! that prevents the error from bubbling up to the parent layout.
-//!
-//! An `#[error]` handler can also return an `Error` which then propagates up to the parent layout.
-//! This lets certain errors like `NotAuthorized` be handled locally, while more serious errors
-//! like `InternalServerError` can be handled by the root layout.
+//! Any errors not captured by an error boundary will be handled by dioxus-ssr itself, which will render
+//! a generic error page instead.
 
 use dioxus::prelude::*;
-use dioxus_fullstack::StatusCode;
+use dioxus_fullstack::{FullstackContext, StatusCode};
 
 fn main() {
     dioxus::launch(|| {
@@ -58,8 +51,11 @@ fn Blog(id: u32) -> Element {
     }
 }
 
-/// In our `ErrorPage` component, we can match on the status code and display
-/// different content based on the error type.
+/// In our `ErrorLayout` component, we wrap the `Outlet` in an `ErrorBoundary`. This lets us attempt
+/// to downcast the error to an `HttpError` and set the appropriate status code.
+///
+/// The `commit_error_status` function will attempt to downcast the error to an `HttpError` and
+/// set the status code accordingly. Note that you can commit any status code you want with `commit_http_status`.
 ///
 /// The router will automatically set the HTTP status code when doing SSR.
 #[component]
@@ -67,7 +63,7 @@ fn ErrorLayout() -> Element {
     rsx! {
         ErrorBoundary {
             handle_error: move |err: ErrorContext| {
-                let http_error = dioxus_fullstack::FullstackContext::commit_error_status(err.error().unwrap());
+                let http_error = FullstackContext::commit_error_status(err.error().unwrap());
                 match http_error.status {
                     StatusCode::NOT_FOUND => rsx! { div { "404 - Page not found" } },
                     StatusCode::UNAUTHORIZED => rsx! { div { "401 - Unauthorized" } },
