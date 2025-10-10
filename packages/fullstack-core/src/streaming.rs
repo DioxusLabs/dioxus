@@ -95,10 +95,16 @@ impl FullstackContext {
         self.route_http_status.read().clone()
     }
 
+    pub fn set_current_http_status(&mut self, status: HttpError) {
+        self.route_http_status.set(status);
+    }
+
     /// Set the current HTTP status for the route. This will be used when committing the response
     /// to the client.
-    pub fn commit_http_status(&mut self, status: StatusCode, message: Option<String>) {
-        self.route_http_status.set(HttpError { status, message });
+    pub fn commit_http_status(status: StatusCode, message: Option<String>) {
+        if let Some(mut ctx) = Self::current() {
+            ctx.set_current_http_status(HttpError { status, message });
+        }
     }
 
     /// Commit the CapturedError as the current HTTP status for the route.
@@ -114,7 +120,7 @@ impl FullstackContext {
         };
 
         if let Some(mut ctx) = Self::current() {
-            ctx.commit_http_status(http_error.status, http_error.message.clone());
+            ctx.set_current_http_status(http_error.clone());
         }
 
         http_error
