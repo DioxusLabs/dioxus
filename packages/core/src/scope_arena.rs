@@ -1,6 +1,6 @@
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{throw_error, RenderError, ScopeOrder, ScopeState},
+    innerlude::{RenderError, ScopeOrder, ScopeState},
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -108,8 +108,8 @@ impl VirtualDom {
     fn handle_element_return(&self, node: &mut Element, scope: &Scope) {
         match node {
             Err(RenderError::Error(e)) => {
-                tracing::error!("Error while rendering component `{}`:\n{e}", scope.name);
-                throw_error(e.clone());
+                tracing::error!("Error while rendering component `{}`: {e}", scope.name);
+                self.runtime.throw_error(scope.id, e.clone());
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();

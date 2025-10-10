@@ -15,6 +15,7 @@
 //! like `InternalServerError` can be handled by the root layout.
 
 use dioxus::prelude::*;
+use dioxus_fullstack::StatusCode;
 
 fn main() {
     dioxus::launch(|| {
@@ -66,7 +67,6 @@ fn ErrorLayout() -> Element {
     rsx! {
         ErrorBoundary {
             handle_error: move |err: ErrorContext| {
-                use dioxus_fullstack::StatusCode;
                 let http_error = dioxus_fullstack::FullstackContext::commit_error_status(err.error().unwrap());
                 match http_error.status {
                     StatusCode::NOT_FOUND => rsx! { div { "404 - Page not found" } },

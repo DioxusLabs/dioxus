@@ -640,13 +640,13 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if !self.suspended_tasks_remaining() {
-                break;
-            }
-
             self.wait_for_suspense_work().await;
 
             self.render_suspense_immediate().await;
+
+            if !self.suspended_tasks_remaining() {
+                break;
+            }
         }
     }
 
@@ -736,9 +736,11 @@ impl VirtualDom {
                     }
                 }
             }
+
             // Queue any new events
             self.queue_events();
             work_done += 1;
+
             // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
             if work_done > 32 {
                 yield_now().await;

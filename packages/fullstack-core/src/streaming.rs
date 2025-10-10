@@ -111,10 +111,9 @@ impl FullstackContext {
             message: Some(error.to_string()),
         };
 
-        // if let Some(mut ctx) = Self::current() {
-        tracing::info!("Committing error status: {}", http_error.status);
-        let mut ctx = Self::current().expect("No FullstackContext found");
-        ctx.set_route_http_status(http_error.clone());
+        if let Some(mut ctx) = Self::current() {
+            ctx.set_route_http_status(http_error.clone());
+        }
 
         http_error
     }
