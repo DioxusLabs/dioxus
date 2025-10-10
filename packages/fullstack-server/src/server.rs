@@ -12,6 +12,7 @@ use axum::{
     routing::*,
 };
 use dioxus_core::{Element, VirtualDom};
+use dioxus_fullstack_core::HttpError;
 use futures::Stream;
 use http::{header::*, request::Parts};
 use std::path::Path;
@@ -299,10 +300,15 @@ impl RenderHandleState {
         let (parts, _) = request.into_parts();
 
         match state.render(parts, cfg, build_virtual_dom).await {
-            Ok((freshness, rx)) => {
-                let mut response =
-                    axum::response::Html::from(Body::from_stream(rx)).into_response();
+            Ok((status, freshness, rx)) => {
+                let mut response = axum::response::Response::builder()
+                    .status(status.status)
+                    .header(CONTENT_TYPE, "text/html; charset=utf-8")
+                    .body(Body::from_stream(rx))
+                    .unwrap();
+
                 freshness.write(response.headers_mut());
+
                 Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
             }
 
@@ -338,6 +344,7 @@ impl RenderHandleState {
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
     ) -> Result<
         (
+            HttpError,
             RenderFreshness,
             impl Stream<Item = Result<String, IncrementalRendererError>>,
         ),
