@@ -88,9 +88,9 @@ use syn::{
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
     // Parse the attribute list using the old server_fn arg parser.
-    let args = match syn::parse::<ServerFnArgs>(_attr) {
+    let args = match syn::parse::<ServerFnArgs>(attr) {
         Ok(args) => args,
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
@@ -202,7 +202,30 @@ fn route_impl_with_route(
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
-    let function = syn::parse::<ItemFn>(item)?;
+    let mut function = syn::parse::<ItemFn>(item)?;
+
+    let middleware_attrs = function
+        .attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("middleware"))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let middleware_inits = middleware_attrs
+        .into_iter()
+        .map(|f| match f.meta {
+            Meta::List(meta_list) => Ok(meta_list.tokens),
+            _ => Err(Error::new(
+                f.span(),
+                "Expected middleware attribute to be a list, e.g. #[middleware(MyLayer::new())]",
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // don't re-emit the middleware attribute on the inner
+    function
+        .attrs
+        .retain(|attr| !attr.path().is_ident("middleware"));
 
     let server_args = route.server_args.clone();
     let mut function_on_server = function.clone();
@@ -346,7 +369,7 @@ fn route_impl_with_route(
         quote! {}
     } else {
         quote! {
-            let (#(#server_names,)*) = dioxus_fullstack::StreamingContext::extract::<(#(#server_types,)*), _>().await?;
+            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
         }
     };
 
@@ -417,6 +440,15 @@ fn route_impl_with_route(
             dioxus_fullstack::const_format::concatcp!(#prefix, #route_lit, #hash)
         }
     };
+
+    let middleware_extra = middleware_inits
+        .iter()
+        .map(|init| {
+            quote! {
+                .layer(#init)
+            }
+        })
+        .collect::<Vec<_>>();
 
     Ok(quote! {
         #(#fn_docs)*
@@ -530,7 +562,9 @@ fn route_impl_with_route(
                     ServerFunction::new(
                         dioxus_fullstack::http::Method::#method_ident,
                         __ENDPOINT_PATH,
-                        || #__axum::routing::#http_method(__inner__function__ #ty_generics)
+                        || {
+                            #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
+                        }
                     )
                 }
 

@@ -62,7 +62,7 @@ impl FullstackContext {
     /// since it's assumed that rendering the app is done under a `GET` request.
     pub async fn extract<T: FromRequest<(), M>, M>() -> Result<T, ServerFnError> {
         let this = Self::current()
-            .ok_or_else(|| ServerFnError::new("No StreamingContext found".to_string()))?;
+            .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
 
         let parts = this.request_headers.borrow_mut().clone();
         let request =
@@ -76,7 +76,7 @@ impl FullstackContext {
         }
     }
 
-    /// Get the current `StreamingContext` if it exists. This will return `None` if called on the client
+    /// Get the current `FullstackContext` if it exists. This will return `None` if called on the client
     /// or outside of a streaming response on the server.
     pub fn current() -> Option<Self> {
         if let Some(rt) = dioxus_core::Runtime::try_current() {

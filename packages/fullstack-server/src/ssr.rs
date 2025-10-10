@@ -293,7 +293,7 @@ impl SsrRendererPool {
                 return;
             }
 
-            // Check the StreamingContext in case the user set the statuscode manually or via a layout.
+            // Check the FullstackContext in case the user set the statuscode manually or via a layout.
             let http_status = streaming_context.current_http_status();
 
             // Now that we handled any errors from rendering, we can send the initial ok result

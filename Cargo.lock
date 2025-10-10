@@ -5706,6 +5706,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.12",
  "tokio",
+ "tower-http",
  "uuid",
  "wasm-splitter",
  "wasm-streams",
