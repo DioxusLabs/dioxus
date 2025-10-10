@@ -421,6 +421,28 @@ fn route_impl_with_route(
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
+        #[deny(
+            unexpected_cfgs,
+            reason = "
+==========================================================================================
+  Using Dioxus Server Functions requires a `server` feature flag in your `Cargo.toml`.
+  Please add the following to your `Cargo.toml`:
+
+  ```toml
+  [features]
+  server = [\"dioxus/server\"]
+  ```
+
+  To enable better Rust-Analyzer support, you can make `server` a default feature:
+  ```toml
+  [features]
+  default = [\"web\", \"server\"]
+  web = [\"dioxus/web\"]
+  server = [\"dioxus/server\"]
+  ```
+==========================================================================================
+        "
+        )]
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) -> #out_ty #where_clause {
