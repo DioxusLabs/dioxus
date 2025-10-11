@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "tracing", "svg", "system-fonts"]
+default = ["accessibility", "svg", "system-fonts"]
 svg = ["blitz-dom/svg"]
 accessibility = ["blitz-dom/accessibility"]
 tracing = ["dep:tracing", "blitz-dom/tracing"]
