@@ -208,6 +208,10 @@ impl SsrRendererPool {
             // rebuild the virtual dom
             virtual_dom.rebuild_in_place();
 
+            // Process any pending events that might have been triggered during the rebuild
+            // This ensures things like error boundaries get a chance to run.
+            virtual_dom.process_events();
+
             // If streaming is disabled, wait for the virtual dom to finish all suspense work
             // before rendering anything
             if streaming_mode == StreamingMode::Disabled {
