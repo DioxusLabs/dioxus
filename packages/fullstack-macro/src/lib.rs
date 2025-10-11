@@ -282,15 +282,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
-    let __axum = quote! { dioxus_fullstack::axum };
-
-    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = {
-        (
-            quote!(),
-            quote! { #__axum::routing::#http_method(__inner__function__ #ty_generics) },
-            quote! { #__axum::routing::MethodRouter },
-        )
-    };
+    let __axum = quote! { dioxus_server::axum };
 
     let output_type = match &function.sig.output {
         syn::ReturnType::Default => parse_quote! { () },
@@ -537,7 +529,6 @@ fn route_impl_with_route(
                 #function_on_server
 
                 #[allow(clippy::unused_unit)]
-                #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
                     ___state: #__axum::extract::State<DioxusServerState>,
                     #path_extractor
@@ -558,9 +549,9 @@ fn route_impl_with_route(
                     return response;
                 }
 
-                dioxus_fullstack::inventory::submit! {
+                dioxus_server::inventory::submit! {
                     ServerFunction::new(
-                        dioxus_fullstack::http::Method::#method_ident,
+                        dioxus_server::http::Method::#method_ident,
                         __ENDPOINT_PATH,
                         || {
                             #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
@@ -744,14 +735,14 @@ impl CompiledRoute {
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
         quote! {
-            dioxus_fullstack::axum::extract::Path((#(#idents,)*)): dioxus_fullstack::axum::extract::Path<(#(#types,)*)>,
+            dioxus_server::axum::extract::Path((#(#idents,)*)): dioxus_server::axum::extract::Path<(#(#types,)*)>,
         }
     }
 
     pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         quote! {
-            dioxus_fullstack::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::axum::extract::Query<__QueryParams__>,
+            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
         }
     }
 

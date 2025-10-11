@@ -79,6 +79,8 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 #[tokio::main]
 async fn main() {
+    use dioxus_server::DioxusRouterExt;
+
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
     // and we use the generated address the CLI gives us
     let address = dioxus::cli_config::fullstack_address_or_localhost();
@@ -87,7 +89,7 @@ async fn main() {
     let router = axum::Router::new()
         // You can add a dioxus application to the router with the `serve_dioxus_application` method
         // This will add a fallback route to the router that will serve your component and server functions
-        .serve_dioxus_application(dioxus::server::ServeConfig::new().unwrap(), App);
+        .serve_dioxus_application(dioxus_server::ServeConfig::new().unwrap(), App);
 
     // Finally, we can launch the server
     let router = router.into_make_service();

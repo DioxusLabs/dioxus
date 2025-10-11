@@ -133,17 +133,17 @@ impl ServeConfigBuilder {
     ///     dioxus::launch(app);
     ///
     ///    #[cfg(feature = "server")]
-    ///    dioxus::serve(|| {
-    ///        use dioxus::server::axum;
+    ///    dioxus_server::serve(|| async move {
+    ///        use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
     ///
     ///        let config = ServeConfigBuilder::default()
     ///            // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///            .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>]));
+    ///            .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>]))
+    ///            .build()?;
     ///
     ///        Ok(
     ///            axum::Router::new()
     ///                .serve_dioxus_application(config, app)
-    ///                .into_make_service(),
     ///        )
     ///    })
     /// }
@@ -191,17 +191,17 @@ impl ServeConfigBuilder {
     ///     dioxus::launch(app);
     ///
     ///     #[cfg(feature = "server")]
-    ///     dioxus::serve(|| {
-    ///         use dioxus::server::axum;
+    ///     dioxus_server::serve(|| async move {
+    ///        use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
     ///
     ///         let config = ServeConfigBuilder::default()
     ///             // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///             .context_provider(|| 1234u32);
+    ///             .context_provider(|| 1234u32)
+    ///             .build()?;
     ///
     ///         Ok(
     ///             axum::Router::new()
     ///                 .serve_dioxus_application(config, app)
-    ///                 .into_make_service(),
     ///         )
     ///     });
     /// }
@@ -242,16 +242,16 @@ impl ServeConfigBuilder {
     ///
     ///     // Run a custom server with axum on the server
     ///     #[cfg(feature = "server")]
-    ///     dioxus::serve(|| {
-    ///         use dioxus::server::axum;
+    ///     dioxus_server::serve(|| async move {
+    ///         use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
     ///
     ///         let config = ServeConfigBuilder::default()
-    ///             .context(1234u32);
-    ///
+    ///             .context(1234u32)
+    ///             .build()?;
+    //
     ///         Ok(
     ///             axum::Router::new()
     ///                 .serve_dioxus_application(config, app)
-    ///                 .into_make_service(),
     ///         )
     ///     });
     /// }
