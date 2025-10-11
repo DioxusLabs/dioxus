@@ -46,14 +46,14 @@ module.exports = defineConfig({
 
   /* Run your local dev server before starting the tests */
   webServer: [
-    {
-      command:
-        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
-      port: 3030,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
+    // {
+    //   command:
+    //     "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
+    //   port: 3030,
+    //   timeout: 50 * 60 * 1000,
+    //   reuseExistingServer: !process.env.CI,
+    //   stdout: "pipe",
+    // },
     {
       cwd: path.join(process.cwd(), "web"),
       command:

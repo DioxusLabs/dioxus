@@ -23,7 +23,7 @@ class IPC {
     ws.onopen = () => {
       // we ping every 30 seconds to keep the websocket alive
       setInterval(ping, 30000);
-      ws.send(window.interpreter.serializeIpcMessage("initialize"));
+      ws.send(JSON.stringify({ method: "initialize" }));
     };
 
     ws.onerror = (err) => {
@@ -40,7 +40,6 @@ class IPC {
         window.interpreter.run_from_bytes(messageData);
       } else {
         // text frame
-
         let decoder = new TextDecoder("utf-8");
 
         // Using decode method to get string output
