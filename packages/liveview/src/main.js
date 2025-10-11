@@ -23,7 +23,6 @@ class IPC {
     ws.onopen = () => {
       // we ping every 30 seconds to keep the websocket alive
       setInterval(ping, 30000);
-      ws.send(JSON.stringify({ method: "initialize" }));
     };
 
     ws.onerror = (err) => {
