@@ -1,7 +1,7 @@
 use axum::body::Body;
 use axum::handler::Handler;
 use axum::routing::MethodRouter;
-use axum::Router; // both req/res // both req/res // req only
+use axum::Router;
 use dashmap::DashMap;
 use dioxus_fullstack_core::DioxusServerState;
 use http::Method;
@@ -106,20 +106,6 @@ impl ServerFunction {
         //     .and_then(|v| v.to_str().ok())
         //     .map(|v| v.contains("text/html"))
         //     .unwrap_or(false);
-
-        // let mthd: MethodRouter<()> = axum::routing::get(self.handler);
-
-        // // this is taken from server_fn source...
-        // //
-        // // [`server_fn::axum::get_server_fn_service`]
-        // let mut service = {
-        //     let middleware = self.middleware();
-        //     let mut service = self.clone().boxed();
-        //     for middleware in middleware {
-        //         service = middleware.layer(service);
-        //     }
-        //     service
-        // };
 
         // actually run the server fn (which may use the server context)
         // let fut = crate::with_server_context(server_context.clone(), || service.run(req));

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 
 #[cfg(feature = "tokio_runtime")]
 use tokio::{fs::File, io::AsyncReadExt};
@@ -11,11 +11,11 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, HasDragData, HasFileData, HasFormData, HasMouseData, NativeFileData,
-    SerializedMouseData, SerializedPointInteraction,
+    FileData, FormValue, HasDragData, HasFileData, HasFormData, HasMouseData, NativeFileData,
+    SerializedFormData, SerializedFormObject, SerializedMouseData, SerializedPointInteraction,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     cell::{Cell, RefCell},
     path::PathBuf,
@@ -25,7 +25,7 @@ use std::{
 };
 use wry::DragDropEvent;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct FileDialogRequest {
     #[serde(default)]
     accept: Option<String>,
@@ -34,6 +34,8 @@ pub(crate) struct FileDialogRequest {
     pub event: String,
     pub target: usize,
     pub bubbles: bool,
+    pub target_name: String,
+    pub values: Vec<SerializedFormObject>,
 }
 
 #[allow(unused)]
@@ -61,57 +63,69 @@ impl FileDialogRequest {
         target_os = "openbsd"
     ))]
     pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
-        fn get_file_event_for_folder(
-            request: &FileDialogRequest,
-            dialog: rfd::FileDialog,
-        ) -> Vec<PathBuf> {
-            if request.multiple {
-                dialog.pick_folders().into_iter().flatten().collect()
-            } else {
-                dialog.pick_folder().into_iter().collect()
-            }
-        }
-
-        fn get_file_event_for_file(
-            request: &FileDialogRequest,
-            mut dialog: rfd::FileDialog,
-        ) -> Vec<PathBuf> {
-            let filters: Vec<_> = request
-                .accept
-                .as_deref()
-                .unwrap_or(".*")
-                .split(',')
-                .filter_map(|s| Filters::from_str(s.trim()).ok())
-                .collect();
-
-            let file_extensions: Vec<_> = filters
-                .iter()
-                .flat_map(|f| f.as_extensions().into_iter())
-                .collect();
-
-            let filter_name = file_extensions
-                .iter()
-                .map(|extension| format!("*.{extension}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-
-            dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
-
-            let files: Vec<_> = if request.multiple {
-                dialog.pick_files().into_iter().flatten().collect()
-            } else {
-                dialog.pick_file().into_iter().collect()
-            };
-
-            files
-        }
-
         let dialog = rfd::FileDialog::new();
 
         if self.directory {
-            get_file_event_for_folder(self, dialog)
+            self.get_file_event_for_folder(dialog)
         } else {
-            get_file_event_for_file(self, dialog)
+            self.get_file_event_for_file(dialog)
+        }
+    }
+
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    fn get_file_event_for_file(&self, mut dialog: rfd::FileDialog) -> Vec<PathBuf> {
+        let filters: Vec<_> = self
+            .accept
+            .as_deref()
+            .unwrap_or(".*")
+            .split(',')
+            .filter_map(|s| Filters::from_str(s.trim()).ok())
+            .collect();
+
+        let file_extensions: Vec<_> = filters
+            .iter()
+            .flat_map(|f| f.as_extensions().into_iter())
+            .collect();
+
+        let filter_name = file_extensions
+            .iter()
+            .map(|extension| format!("*.{extension}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
+
+        let files: Vec<_> = if self.multiple {
+            dialog.pick_files().into_iter().flatten().collect()
+        } else {
+            dialog.pick_file().into_iter().collect()
+        };
+
+        files
+    }
+
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    fn get_file_event_for_folder(&self, dialog: rfd::FileDialog) -> Vec<PathBuf> {
+        if self.multiple {
+            dialog.pick_folders().into_iter().flatten().collect()
+        } else {
+            dialog.pick_folder().into_iter().collect()
         }
     }
 }
@@ -154,23 +168,52 @@ impl FromStr for Filters {
 }
 
 #[derive(Clone)]
-pub(crate) struct DesktopFileUploadForm {
-    pub files: Vec<PathBuf>,
+pub(crate) struct DesktopFormData {
+    pub value: String,
+    pub valid: bool,
+    pub values: Vec<(String, FormValue)>,
 }
 
-impl HasFileData for DesktopFileUploadForm {
+impl DesktopFormData {
+    pub fn new(values: Vec<(String, FormValue)>) -> Self {
+        Self {
+            value: String::new(),
+            valid: true,
+            values,
+        }
+    }
+}
+
+impl HasFileData for DesktopFormData {
     fn files(&self) -> Vec<FileData> {
-        self.files
+        self.values
             .iter()
-            .cloned()
-            .map(|f| FileData::new(DesktopFileData(f)))
+            .filter_map(|(_, v)| {
+                if let FormValue::File(Some(f)) = v {
+                    Some(f.clone())
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 }
 
-impl HasFormData for DesktopFileUploadForm {
+impl HasFormData for DesktopFormData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn value(&self) -> String {
+        self.value.clone()
+    }
+
+    fn valid(&self) -> bool {
+        self.valid
+    }
+
+    fn values(&self) -> Vec<(String, FormValue)> {
+        self.values.clone()
     }
 }
 

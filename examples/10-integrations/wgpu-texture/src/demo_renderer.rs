@@ -5,7 +5,7 @@ use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHand
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::Instant;
 use wgpu::{
-    CommandEncoderDescriptor, Device, Extent3d, FragmentState, Instance, LoadOp, MultisampleState,
+    CommandEncoderDescriptor, Device, Extent3d, FragmentState, LoadOp, MultisampleState,
     Operations, PipelineLayoutDescriptor, PrimitiveState, PushConstantRange, Queue,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
     ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, Texture, TextureDescriptor,
@@ -21,7 +21,7 @@ pub struct DemoPaintSource {
 }
 
 impl CustomPaintSource for DemoPaintSource {
-    fn resume(&mut self, _instance: &Instance, device_handle: &DeviceHandle) {
+    fn resume(&mut self, device_handle: &DeviceHandle) {
         // Extract device and queue from device_handle
         let device = &device_handle.device;
         let queue = &device_handle.queue;
@@ -175,8 +175,7 @@ impl ActiveDemoRenderer {
         // If "next texture" size doesn't match specified size then unregister and drop texture
         if let Some(next) = &self.next_texture {
             if next.texture.width() != width || next.texture.height() != height {
-                ctx.unregister_texture(next.handle);
-                self.next_texture = None;
+                ctx.unregister_texture(self.next_texture.take().unwrap().handle);
             }
         }
 
@@ -192,7 +191,7 @@ impl ActiveDemoRenderer {
         };
 
         let next_texture = &texture_and_handle.texture;
-        let next_texture_handle = texture_and_handle.handle;
+        let next_texture_handle = texture_and_handle.handle.clone();
 
         let elapsed: f32 = start_time.elapsed().as_millis() as f32 / 500.;
         let [light_red, light_green, light_blue] = light;
@@ -213,6 +212,7 @@ impl ActiveDemoRenderer {
                         load: LoadOp::Clear(wgpu::Color::GREEN),
                         store: StoreOp::Store,
                     },
+                    depth_slice: None,
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,

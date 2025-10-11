@@ -104,6 +104,11 @@ pub fn ui(props: UIProps) -> Element {
         }
     });
 
+    let color = *state.cube_color.read();
+    let [r, g, b, a] = color.map(|c| (c * 255.0) as u8);
+
+    println!("rgba({r}, {g}, {b}, {a})");
+
     rsx! {
         style { {include_str!("./ui.css")} }
         div {
@@ -161,6 +166,16 @@ pub fn ui(props: UIProps) -> Element {
                             state.cube_rotation_speed.set(speed);
                         }
                     }
+                }
+            }
+            div {
+                flex: "0 0 150px",
+                display: "grid",
+                align_items: "center",
+                justify_items: "center",
+                div {
+                    class: "spin-box",
+                    background: "rgba({r}, {g}, {b}, {a}",
                 }
             }
             div {

@@ -58,9 +58,11 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
           - target: x86_64-unknown-linux-gnu
-            os: blacksmith-4vcpu-ubuntu-2404
+            os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
-            os: blacksmith-4vcpu-ubuntu-2404
+            os: ubuntu-24.04-arm
+          # os: blacksmith-4vcpu-ubuntu-2404
+          # os: blacksmith-4vcpu-ubuntu-2404
           # - target: x86_64-unknown-linux-musl
           #   os: ubuntu-24.04
           # - target: aarch64-unknown-linux-musl
@@ -90,7 +92,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.88.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2

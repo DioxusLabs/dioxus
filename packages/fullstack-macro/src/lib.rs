@@ -88,9 +88,9 @@ use syn::{
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
     // Parse the attribute list using the old server_fn arg parser.
-    let args = match syn::parse::<ServerFnArgs>(_attr) {
+    let args = match syn::parse::<ServerFnArgs>(attr) {
         Ok(args) => args,
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
@@ -202,7 +202,30 @@ fn route_impl_with_route(
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
-    let function = syn::parse::<ItemFn>(item)?;
+    let mut function = syn::parse::<ItemFn>(item)?;
+
+    let middleware_attrs = function
+        .attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("middleware"))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let middleware_inits = middleware_attrs
+        .into_iter()
+        .map(|f| match f.meta {
+            Meta::List(meta_list) => Ok(meta_list.tokens),
+            _ => Err(Error::new(
+                f.span(),
+                "Expected middleware attribute to be a list, e.g. #[middleware(MyLayer::new())]",
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // don't re-emit the middleware attribute on the inner
+    function
+        .attrs
+        .retain(|attr| !attr.path().is_ident("middleware"));
 
     let server_args = route.server_args.clone();
 
@@ -267,15 +290,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
-    let __axum = quote! { dioxus_fullstack::axum };
-
-    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = {
-        (
-            quote!(),
-            quote! { #__axum::routing::#http_method(__inner__function__ #ty_generics) },
-            quote! { #__axum::routing::MethodRouter },
-        )
-    };
+    let __axum = quote! { dioxus_server::axum };
 
     let output_type = match &function.sig.output {
         syn::ReturnType::Default => parse_quote! { () },
@@ -313,6 +328,14 @@ fn route_impl_with_route(
         })
         .collect::<Vec<_>>();
 
+    let server_types = server_args
+        .iter()
+        .map(|pat_type| match pat_type {
+            FnArg::Receiver(_) => parse_quote! { () },
+            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
+        })
+        .collect::<Vec<_>>();
+
     let body_struct_impl = {
         let tys = body_json_types
             .iter()
@@ -342,28 +365,13 @@ fn route_impl_with_route(
     };
 
     // there's no active request on the server, so we just create a dummy one
-    let server_defaults = server_args.iter().map(|arg| {
-        let name = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(pat_ident) => &pat_ident.ident,
-                _ => panic!("Expected Pat::Ident"),
-            },
-        };
-
-        let ty = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
-        };
-
+    let server_defaults = if server_args.is_empty() {
+        quote! {}
+    } else {
         quote! {
-            let #name = {
-                use dioxus_fullstack::axum::extract::FromRequest;
-                let __request = dioxus_fullstack::axum::extract::Request::new(dioxus_fullstack::axum::body::Body::empty());
-                <#ty as FromRequest<_, _>>::from_request(__request, &()).await.unwrap()
-            };
+            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
         }
-    });
+    };
 
     let endpoint_path = {
         let prefix = route
@@ -462,120 +470,156 @@ fn route_impl_with_route(
         quote! { None }
     };
 
+    let middleware_extra = middleware_inits
+        .iter()
+        .map(|init| {
+            quote! {
+                .layer(#init)
+            }
+        })
+        .collect::<Vec<_>>();
+
     Ok(quote! {
-        #(#fn_docs)*
-        #route_docs
-        #vis async fn #fn_name #impl_generics(
-            #original_inputs
-        ) -> #out_ty #where_clause {
-            use dioxus_fullstack::serde as serde;
-            use dioxus_fullstack::{
-                // concrete types
-                ServerFnEncoder, ServerFnDecoder, DioxusServerState,
+            #(#fn_docs)*
+            #route_docs
+            #[deny(
+                unexpected_cfgs,
+                reason = "
+==========================================================================================
+  Using Dioxus Server Functions requires a `server` feature flag in your `Cargo.toml`.
+  Please add the following to your `Cargo.toml`:
 
-                // "magic" traits for encoding/decoding on the client
-                ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
+  ```toml
+  [features]
+  server = [\"dioxus/server\"]
+  ```
 
-                // "magic" traits for encoding/decoding on the server
-                MakeAxumResponse, MakeAxumError,
-            };
+  To enable better Rust-Analyzer support, you can make `server` a default feature:
+  ```toml
+  [features]
+  default = [\"web\", \"server\"]
+  web = [\"dioxus/web\"]
+  server = [\"dioxus/server\"]
+  ```
+==========================================================================================
+        "
+            )]
+            #vis async fn #fn_name #impl_generics(
+                #original_inputs
+            ) -> #out_ty #where_clause {
+                use dioxus_fullstack::serde as serde;
+                use dioxus_fullstack::{
+                    // concrete types
+                    ServerFnEncoder, ServerFnDecoder, DioxusServerState,
 
-            _ = dioxus_fullstack::assert_is_result::<#out_ty>();
+                    // "magic" traits for encoding/decoding on the client
+                    ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
 
-            #query_params_struct
+                    // "magic" traits for encoding/decoding on the server
+                    MakeAxumResponse, MakeAxumError,
+                };
 
-            #body_struct_impl
+                _ = dioxus_fullstack::assert_is_result::<#out_ty>();
 
-            const __ENDPOINT_PATH: &str = #endpoint_path;
+                #query_params_struct
 
-            // On the client, we make the request to the server
-            // We want to support extremely flexible error types and return types, making this more complex than it should
-            #[allow(clippy::unused_unit)]
-            #[cfg(not(feature = "server"))]
-            {
-                let client = dioxus_fullstack::ClientRequest::new(
-                    dioxus_fullstack::http::Method::#method_ident,
-                    #query_endpoint,
-                    &__QueryParams__ { #(#query_param_names,)* },
-                );
+                #body_struct_impl
 
-                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .verify_can_serialize();
+                const __ENDPOINT_PATH: &str = #endpoint_path;
 
-                dioxus_fullstack::assert_can_encode(verify_token);
-
-                let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
-                    .await;
-
-                let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                    .decode_client_response(response)
-                    .await;
-
-                let result = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                    .decode_client_err(decoded)
-                    .await;
-
-                return result;
-            }
-
-            // On the server, we expand the tokens and submit the function to inventory
-            #[cfg(feature = "server")] {
-                use #__axum::response::IntoResponse;
-                use dioxus_server::ServerFunction;
-
+                // On the client, we make the request to the server
+                // We want to support extremely flexible error types and return types, making this more complex than it should
                 #[allow(clippy::unused_unit)]
-                #aide_ident_docs
-                #asyncness fn __inner__function__ #impl_generics(
-                    ___state: #__axum::extract::State<DioxusServerState>,
-                    #path_extractor
-                    #query_extractor
-                    request: #__axum::extract::Request,
-                ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
-                    #extract_self
-
-                    let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                        .extract_axum(___state.0, request, #unpack).await?;
-
-                    let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_response(
-                           #receiver #function_on_server_name #ty_generics(#self_args #(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
-                        );
-
-                    let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_error(encoded);
-
-                    return response;
-                }
-
-                dioxus_fullstack::inventory::submit! {
-                    ServerFunction::new(
+                #[cfg(not(feature = "server"))]
+                {
+                    let client = dioxus_fullstack::ClientRequest::new(
                         dioxus_fullstack::http::Method::#method_ident,
-                        __ENDPOINT_PATH,
-                        || #__axum::routing::#http_method(__inner__function__ #ty_generics),
-                        #namespace
-                    )
+                        #query_endpoint,
+                        &__QueryParams__ { #(#query_param_names,)* },
+                    );
+
+                    let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                        .verify_can_serialize();
+
+                    dioxus_fullstack::assert_can_encode(verify_token);
+
+                    let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                        .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
+                        .await;
+
+                    let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .decode_client_response(response)
+                        .await;
+
+                    let result = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .decode_client_err(decoded)
+                        .await;
+
+                    return result;
                 }
 
-                #(#server_defaults)*
+                // On the server, we expand the tokens and submit the function to inventory
+                #[cfg(feature = "server")] {
+                    use #__axum::response::IntoResponse;
+                    use dioxus_server::ServerFunction;
 
-                return #function_on_server_name #ty_generics(
-                    #(#extracted_idents,)*
-                    #(#body_json_names,)*
-                    #(#server_names,)*
-                ).await;
+                    #[allow(clippy::unused_unit)]
+                    #asyncness fn __inner__function__ #impl_generics(
+                        ___state: #__axum::extract::State<DioxusServerState>,
+                        #path_extractor
+                        #query_extractor
+                        request: #__axum::extract::Request,
+                    ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
+                        #extract_self
+
+                        let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                            .extract_axum(___state.0, request, #unpack).await?;
+
+                        let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
+                            .make_axum_response(
+                               #receiver #function_on_server_name #ty_generics(#self_args #(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
+                            );
+
+                        let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                            .make_axum_error(encoded);
+
+                        return response;
+                    }
+
+                    dioxus_server::inventory::submit! {
+                        ServerFunction::new(
+                            dioxus_server::http::Method::#method_ident,
+                            __ENDPOINT_PATH,
+    <<<<<<< HEAD
+                            || #__axum::routing::#http_method(__inner__function__ #ty_generics),
+                            #namespace
+    =======
+                            || {
+                                #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
+                            }
+    >>>>>>> origin/main
+                        )
+                    }
+
+                    #server_defaults
+
+                    return #function_on_server_name #ty_generics(
+                        #(#extracted_idents,)*
+                        #(#body_json_names,)*
+                        #(#server_names,)*
+                    ).await;
+                }
+
+                #[allow(unreachable_code)]
+                {
+                    unreachable!()
+                }
             }
 
-            #[allow(unreachable_code)]
-            {
-                unreachable!()
-            }
-        }
-
-        #[cfg(feature = "server")]
-        #[doc(hidden)]
-        #function_on_server
-    })
+            #[cfg(feature = "server")]
+            #[doc(hidden)]
+            #function_on_server
+        })
 }
 
 struct CompiledRoute {
@@ -733,14 +777,14 @@ impl CompiledRoute {
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
         quote! {
-            dioxus_fullstack::axum::extract::Path((#(#idents,)*)): dioxus_fullstack::axum::extract::Path<(#(#types,)*)>,
+            dioxus_server::axum::extract::Path((#(#idents,)*)): dioxus_server::axum::extract::Path<(#(#types,)*)>,
         }
     }
 
     pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         quote! {
-            dioxus_fullstack::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::axum::extract::Query<__QueryParams__>,
+            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
         }
     }
 

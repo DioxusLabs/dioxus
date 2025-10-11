@@ -11,18 +11,16 @@ use std::sync::Arc;
 use crate::IncrementalRendererConfig;
 
 #[allow(unused)]
-pub(crate) type ContextProviders =
-    Arc<Vec<Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>>;
+pub(crate) type ContextProviders = Arc<Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>>>;
 
-/// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
+/// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus_ssr`].
 #[derive(Clone, Default)]
 pub struct ServeConfigBuilder {
     pub(crate) root_id: Option<&'static str>,
     pub(crate) index_html: Option<String>,
     pub(crate) index_path: Option<PathBuf>,
     pub(crate) incremental: Option<IncrementalRendererConfig>,
-    pub(crate) context_providers:
-        Vec<Arc<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync + 'static>>,
+    pub(crate) context_providers: Vec<Arc<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>>,
     pub(crate) streaming_mode: StreamingMode,
 }
 
@@ -130,31 +128,24 @@ impl ServeConfigBuilder {
     /// use std::any::Any;
     ///
     /// fn main() {
-    ///     #[cfg(feature = "web")]
     ///     // Hydrate the application on the client
+    ///     #[cfg(not(feature = "server"))]
     ///     dioxus::launch(app);
-    ///     #[cfg(feature = "server")]
-    ///     {
-    ///         tokio::runtime::Runtime::new()
-    ///             .unwrap()
-    ///             .block_on(async move {
-    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
-    ///                 let listener = tokio::net::TcpListener::bind(address)
-    ///                     .await
-    ///                     .unwrap();
-    ///                 let config = ServeConfigBuilder::default()
-    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///                     .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn std::any::Any> + Send + Sync>]));
-    ///                 axum::serve(
-    ///                         listener,
-    ///                         axum::Router::new()
-    ///                             .serve_dioxus_application(config, app)
-    ///                             .into_make_service(),
-    ///                     )
-    ///                     .await
-    ///                     .unwrap();
-    ///             });
-    ///      }
+    ///
+    ///    #[cfg(feature = "server")]
+    ///    dioxus_server::serve(|| async move {
+    ///        use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
+    ///
+    ///        let config = ServeConfigBuilder::default()
+    ///            // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///            .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>]))
+    ///            .build()?;
+    ///
+    ///        Ok(
+    ///            axum::Router::new()
+    ///                .serve_dioxus_application(config, app)
+    ///        )
+    ///    })
     /// }
     ///
     /// #[server]
@@ -195,31 +186,24 @@ impl ServeConfigBuilder {
     /// use dioxus::prelude::*;
     ///
     /// fn main() {
-    ///     #[cfg(feature = "web")]
+    ///     #[cfg(not(feature = "server"))]
     ///     // Hydrate the application on the client
     ///     dioxus::launch(app);
+    ///
     ///     #[cfg(feature = "server")]
-    ///     {
-    ///         tokio::runtime::Runtime::new()
-    ///             .unwrap()
-    ///             .block_on(async move {
-    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
-    ///                 let listener = tokio::net::TcpListener::bind(address)
-    ///                     .await
-    ///                     .unwrap();
-    ///                 let config = ServeConfigBuilder::default()
-    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///                     .context_provider(move || 1234u32);
-    ///                 axum::serve(
-    ///                         listener,
-    ///                         axum::Router::new()
-    ///                             .serve_dioxus_application(config, app)
-    ///                             .into_make_service(),
-    ///                     )
-    ///                     .await
-    ///                     .unwrap();
-    ///             });
-    ///      }
+    ///     dioxus_server::serve(|| async move {
+    ///        use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
+    ///
+    ///         let config = ServeConfigBuilder::default()
+    ///             // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///             .context_provider(|| 1234u32)
+    ///             .build()?;
+    ///
+    ///         Ok(
+    ///             axum::Router::new()
+    ///                 .serve_dioxus_application(config, app)
+    ///         )
+    ///     });
     /// }
     ///
     /// #[server]
@@ -252,31 +236,24 @@ impl ServeConfigBuilder {
     /// use dioxus::prelude::*;
     ///
     /// fn main() {
-    ///     #[cfg(feature = "web")]
     ///     // Hydrate the application on the client
+    ///     #[cfg(not(feature = "server"))]
     ///     dioxus::launch(app);
+    ///
+    ///     // Run a custom server with axum on the server
     ///     #[cfg(feature = "server")]
-    ///     {
-    ///         tokio::runtime::Runtime::new()
-    ///             .unwrap()
-    ///             .block_on(async move {
-    ///                 let address = dioxus_cli_config::fullstack_address_or_localhost();
-    ///                 let listener = tokio::net::TcpListener::bind(address)
-    ///                     .await
-    ///                     .unwrap();
-    ///                 let config = ServeConfigBuilder::default()
-    ///                     // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///                     .context(1234u32);
-    ///                 axum::serve(
-    ///                         listener,
-    ///                         axum::Router::new()
-    ///                             .serve_dioxus_application(config, app)
-    ///                             .into_make_service(),
-    ///                     )
-    ///                     .await
-    ///                     .unwrap();
-    ///             });
-    ///      }
+    ///     dioxus_server::serve(|| async move {
+    ///         use dioxus_server::{axum, ServeConfigBuilder, DioxusRouterExt};
+    ///
+    ///         let config = ServeConfigBuilder::default()
+    ///             .context(1234u32)
+    ///             .build()?;
+    //
+    ///         Ok(
+    ///             axum::Router::new()
+    ///                 .serve_dioxus_application(config, app)
+    ///         )
+    ///     });
     /// }
     ///
     /// #[server]
@@ -491,7 +468,7 @@ pub enum StreamingMode {
     OutOfOrder,
 }
 
-/// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus-ssr`].
+/// Used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus_ssr`].
 /// See [`ServeConfigBuilder`] to create a ServeConfig
 #[derive(Clone)]
 pub struct ServeConfig {

@@ -85,7 +85,8 @@ features = [
     "File",
     "FileList",
     "FileReader",
-    "ReadableStream"
+    "ReadableStream",
+    "FormData"
 ]
 
 [build-dependencies]

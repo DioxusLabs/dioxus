@@ -62,6 +62,17 @@ html, body, #main {
     background-color: blue;
 }
 
+.spin-box {
+    width: 50px;
+    height: 50px;
+    animation: spin 4s infinite linear;
+}
+
+@keyframes spin {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(360deg); }
+}
+
 #translation-speed-control, #rotation-speed-control {
     display: flex;
     flex-direction: row;

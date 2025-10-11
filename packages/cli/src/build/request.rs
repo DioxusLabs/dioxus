@@ -445,7 +445,6 @@ pub enum BuildMode {
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
-    pub(crate) bundle: BundleFormat,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
@@ -1251,7 +1250,6 @@ impl BuildRequest {
         let assets = self.collect_assets(&exe, ctx).await?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let bundle = self.bundle;
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
         tracing::debug!(
@@ -1262,7 +1260,6 @@ impl BuildRequest {
 
         Ok(BuildArtifacts {
             time_end,
-            bundle,
             exe,
             direct_rustc,
             time_start,
