@@ -45,6 +45,8 @@ fn app() -> Element {
 //
 // Here, we're applying a timeout to the `per_route_middleware` handler, which will return a 504
 // if the handler takes longer than 3 seconds to complete.
+//
+// To add multiple middleware layers, simply stack multiple `#[middleware]` attributes.
 #[get("/api/count")]
 #[middleware(TimeoutLayer::new(Duration::from_secs(3)))]
 async fn per_route_middleware() -> Result<String> {
