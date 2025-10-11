@@ -15,6 +15,8 @@ pub(crate) use config::*;
 pub use config::*;
 pub use config::{ServeConfig, ServeConfigBuilder};
 pub use document::ServerDocument;
+pub use http;
+pub use inventory;
 pub use server::*;
 
 pub mod redirect;

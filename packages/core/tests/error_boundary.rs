@@ -61,9 +61,7 @@ fn clear_error_boundary() {
                 handle_error: |error: ErrorContext| {
                     error.clear_errors();
 
-                    rsx! {
-                        "We cleared it"
-                    }
+                    rsx! { "We cleared it" }
                 },
 
                 ThrowsError {}

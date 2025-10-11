@@ -5705,6 +5705,7 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.12",
  "tokio",
+ "tower-http",
  "uuid",
  "wasm-splitter",
  "wasm-streams",
@@ -6005,6 +6006,13 @@ dependencies = [
 
 [[package]]
 name = "dioxus-playwright-default-features-disabled-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "dioxus-playwright-fullstack-error-codes-test"
 version = "0.1.0"
 dependencies = [
  "dioxus",

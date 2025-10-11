@@ -137,6 +137,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
+    "packages/playwright-tests/fullstack-error-codes",
 ]
 
 [workspace.package]
@@ -478,6 +479,7 @@ bytes = { workspace = true }
 futures = { workspace = true }
 axum-core = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
+tower-http = { workspace = true, features = ["timeout"] }
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
@@ -695,6 +697,21 @@ doc-scrape-examples = true
 [[example]]
 name = "flat_router"
 path = "examples/06-routing/flat_router.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "middleware"
+path = "examples/07-fullstack/middleware.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_error_page"
+path = "examples/07-fullstack/custom_error_page.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "redirect"
+path = "examples/07-fullstack/redirect.rs"
 doc-scrape-examples = true
 
 [[example]]
