@@ -1326,6 +1326,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || name.contains("wasm_bindgen4__rt8wbg_")
 }
 
 /// Manually parse the data section from a wasm module
