@@ -17,6 +17,7 @@ impl Default for DioxusConfig {
         Self {
             application: ApplicationConfig {
                 out_dir: None,
+                static_dir: None,
                 tailwind_input: None,
                 tailwind_output: None,
                 ios_info_plist: None,
@@ -53,5 +54,30 @@ impl Default for DioxusConfig {
             },
             bundle: BundleConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_dir_defaults_to_none() {
+        let config = DioxusConfig::default();
+        assert!(config.application.static_dir.is_none());
+    }
+
+    #[test]
+    fn static_dir_can_be_overridden() {
+        let source = r#"
+            [application]
+            static_dir = "static"
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.application.static_dir.as_deref(),
+            Some(std::path::Path::new("static"))
+        );
     }
 }

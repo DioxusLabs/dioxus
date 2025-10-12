@@ -59,10 +59,11 @@ or you can use this bare-bones template (only mandatory fields) to get started:
 name = "project-name"
 # Currently supported platforms: web, desktop
 default_platform = "web"
+# Optional: enable copying from a static directory (e.g. "public")
+# static_dir = "public"
 
 [web.app]
 title = "Hello"
 
 [web.resource.dev]
 ```
-

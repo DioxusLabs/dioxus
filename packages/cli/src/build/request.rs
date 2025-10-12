@@ -337,9 +337,10 @@ use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use serde_json::{from_slice, to_vec};
 use std::{borrow::Cow, ffi::OsString};
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
@@ -353,6 +354,7 @@ use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
+use walkdir::WalkDir;
 
 use super::HotpatchModuleCache;
 
@@ -398,6 +400,28 @@ pub(crate) struct BuildRequest {
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
     pub(crate) session_cache_dir: PathBuf,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct StaticManifest {
+    entries: Vec<StaticManifestEntry>,
+}
+
+impl StaticManifest {
+    fn load(path: &Path) -> Self {
+        if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(manifest) = from_slice::<StaticManifest>(&bytes) {
+                return manifest;
+            }
+        }
+        Self::default()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct StaticManifestEntry {
+    path: PathBuf,
+    is_dir: bool,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -1010,6 +1034,170 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    fn sync_static_dir_into_root(&self, root: &Path) -> Result<()> {
+        let Some(source) = self.static_dir_source() else {
+            return Ok(());
+        };
+
+        let manifest_path = self.static_manifest_path();
+        let mut previous_manifest = StaticManifest::load(&manifest_path);
+
+        if !source.exists() {
+            tracing::trace!(
+                "Static directory {:?} does not exist, clearing previous static assets if any",
+                source
+            );
+            Self::remove_manifest_entries(root, &previous_manifest.entries);
+            previous_manifest.entries.clear();
+            let _ = std::fs::remove_file(&manifest_path);
+            return Ok(());
+        }
+
+        if !source.is_dir() {
+            tracing::warn!(
+                "Configured static directory {:?} is not a directory",
+                source
+            );
+            return Ok(());
+        }
+
+        let canonical_source = dunce::canonicalize(&source).unwrap_or(source.clone());
+        let canonical_dest = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        if canonical_source == canonical_dest {
+            tracing::warn!(
+                "Static directory {:?} points to the build output; skipping to avoid recursion",
+                source
+            );
+            return Ok(());
+        }
+
+        tracing::debug!(
+            "Syncing static directory {:?} -> {:?}",
+            canonical_source,
+            canonical_dest
+        );
+
+        let mut new_entries: HashMap<PathBuf, bool> = HashMap::new();
+
+        for entry in WalkDir::new(&canonical_source).follow_links(true) {
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(err) => {
+                    tracing::error!(
+                        "Failed to walk static directory {:?}: {err}",
+                        canonical_source
+                    );
+                    continue;
+                }
+            };
+
+            let Ok(relative_path) = entry.path().strip_prefix(&canonical_source) else {
+                continue;
+            };
+
+            if relative_path.as_os_str().is_empty() {
+                continue;
+            }
+
+            let relative_path = relative_path.to_path_buf();
+            let destination = canonical_dest.join(&relative_path);
+            let is_dir = entry.file_type().is_dir();
+            new_entries.entry(relative_path.clone()).or_insert(is_dir);
+
+            if is_dir {
+                if let Err(err) = std::fs::create_dir_all(&destination) {
+                    tracing::error!("Failed to create static directory {:?}: {err}", destination);
+                }
+                continue;
+            }
+
+            if let Some(parent) = destination.parent() {
+                if let Err(err) = std::fs::create_dir_all(parent) {
+                    tracing::error!(
+                        "Failed to create parent directory {:?} for static file: {err}",
+                        parent
+                    );
+                    continue;
+                }
+            }
+
+            if let Err(err) = std::fs::copy(entry.path(), &destination) {
+                tracing::error!(
+                    "Failed to copy static file {:?} -> {:?}: {err}",
+                    entry.path(),
+                    destination
+                );
+            }
+        }
+
+        let mut removals = Vec::new();
+        for entry in previous_manifest.entries.iter() {
+            if !new_entries.contains_key(&entry.path) {
+                removals.push(entry.clone());
+            }
+        }
+        if !removals.is_empty() {
+            Self::remove_manifest_entries(root, &removals);
+        }
+
+        if new_entries.is_empty() {
+            previous_manifest.entries.clear();
+            let _ = std::fs::remove_file(&manifest_path);
+        } else {
+            let mut next_entries: Vec<StaticManifestEntry> = new_entries
+                .into_iter()
+                .map(|(path, is_dir)| StaticManifestEntry { path, is_dir })
+                .collect();
+            next_entries.sort_by(|a, b| a.path.cmp(&b.path));
+            previous_manifest.entries = next_entries;
+            std::fs::write(&manifest_path, to_vec(&previous_manifest)?)?;
+        }
+
+        tracing::debug!(
+            "Finished syncing static directory {:?} into public output",
+            canonical_source
+        );
+
+        Ok(())
+    }
+
+    fn static_manifest_path(&self) -> PathBuf {
+        self.platform_dir().join(".dx-static-manifest.json")
+    }
+
+    fn remove_manifest_entries(root: &Path, entries: &[StaticManifestEntry]) {
+        if entries.is_empty() {
+            return;
+        }
+
+        let canonical_root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+
+        let mut file_paths = Vec::new();
+        let mut dir_paths = Vec::new();
+
+        for entry in entries {
+            let path = canonical_root.join(&entry.path);
+            if entry.is_dir {
+                dir_paths.push(path);
+            } else {
+                file_paths.push(path);
+            }
+        }
+
+        for path in file_paths {
+            if let Err(err) = std::fs::remove_file(&path) {
+                tracing::trace!("Failed to remove static file {:?}: {err}", path);
+            }
+        }
+
+        dir_paths.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+        for path in dir_paths {
+            if let Err(err) = std::fs::remove_dir_all(&path) {
+                tracing::trace!("Failed to remove static directory {:?}: {err}", path);
+            }
+        }
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
@@ -3438,9 +3626,41 @@ impl BuildRequest {
             .to_path_buf()
     }
 
+    /// Resolve the configured static directory relative to the crate, if any.
+    pub(crate) fn static_dir_source(&self) -> Option<PathBuf> {
+        self.config
+            .application
+            .static_dir
+            .as_ref()
+            .and_then(|path| {
+                if path.as_os_str().is_empty() {
+                    return None;
+                }
+
+                Some(if path.is_absolute() {
+                    path.clone()
+                } else {
+                    self.crate_dir().join(path)
+                })
+            })
+    }
+
     /// Get the package we are currently in
     pub(crate) fn package(&self) -> &krates::cm::Package {
         &self.workspace.krates[self.crate_package]
+    }
+
+    pub(crate) fn path_is_in_static_dir(&self, path: &Path) -> bool {
+        let Some(static_dir) = self.static_dir_source() else {
+            return false;
+        };
+
+        // Canonicalize when possible so we work with editors that use tmp files
+        let canonical_static =
+            dunce::canonicalize(&static_dir).unwrap_or_else(|_| static_dir.clone());
+        let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        canonical_path.starts_with(&canonical_static)
     }
 
     /// Get the name of the package we are compiling
@@ -4093,6 +4313,9 @@ impl BuildRequest {
 
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
+
+        // Copy any configured static assets into the web output root
+        self.sync_static_dir_into_root(&self.root_dir())?;
 
         Ok(())
     }

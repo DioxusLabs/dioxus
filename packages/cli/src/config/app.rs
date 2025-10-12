@@ -7,6 +7,9 @@ pub(crate) struct ApplicationConfig {
     pub(crate) out_dir: Option<PathBuf>,
 
     #[serde(default)]
+    pub(crate) static_dir: Option<PathBuf>,
+
+    #[serde(default)]
     pub(crate) tailwind_input: Option<PathBuf>,
 
     #[serde(default)]
