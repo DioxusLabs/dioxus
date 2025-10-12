@@ -1,5 +1,5 @@
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
-use const_serialize::SerializeConst;
+use const_serialize::{ConstStr, SerializeConst};
 
 /// Options for a css asset
 #[derive(
@@ -91,9 +91,16 @@ impl AssetOptionsBuilder<CssAssetOptions> {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
+        let (mount_path, has_mount_path) = match self.mount_path {
+            Some(path) => (ConstStr::new(path), true),
+            None => (ConstStr::new(""), false),
+        };
+
         AssetOptions {
-            add_hash: true,
+            add_hash: self.add_hash,
             variant: AssetVariant::Css(self.variant),
+            mount_path,
+            has_mount_path,
         }
     }
 }

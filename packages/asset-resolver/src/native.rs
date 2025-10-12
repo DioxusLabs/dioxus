@@ -40,7 +40,7 @@ pub(crate) fn resolve_native_asset_path(path: &str) -> Result<PathBuf, AssetPath
 fn resolve_asset_path_from_filesystem(path: &str) -> Option<PathBuf> {
     // If the user provided a custom asset handler, then call it and return the response if the request was handled.
     // The path is the first part of the URI, so we need to trim the leading slash.
-    let mut uri_path = PathBuf::from(
+    let uri_path = PathBuf::from(
         percent_encoding::percent_decode_str(path)
             .decode_utf8()
             .expect("expected URL to be UTF-8 encoded")
@@ -55,8 +55,19 @@ fn resolve_asset_path_from_filesystem(path: &str) -> Option<PathBuf> {
     // If there's no asset root, we use the cargo manifest dir as the root, or the current dir
     if !uri_path.exists() || uri_path.starts_with("/assets/") {
         let bundle_root = get_asset_root();
-        let relative_path = uri_path.strip_prefix("/").unwrap();
-        uri_path = bundle_root.join(relative_path);
+        let relative_path = uri_path.strip_prefix("/").unwrap_or(&uri_path);
+
+        // First attempt: resolve directly relative to the bundle root (eg `.well-known/...`).
+        let direct_candidate = bundle_root.join(relative_path);
+        if direct_candidate.exists() {
+            return Some(direct_candidate);
+        }
+
+        // Fallback: look inside the conventional `assets/` directory.
+        let assets_candidate = bundle_root.join("assets").join(relative_path);
+        if assets_candidate.exists() {
+            return Some(assets_candidate);
+        }
     }
 
     // If the asset exists, return it

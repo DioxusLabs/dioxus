@@ -1,6 +1,5 @@
-use const_serialize::SerializeConst;
-
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
+use const_serialize::{ConstStr, SerializeConst};
 
 /// Options for a javascript asset
 #[derive(
@@ -94,9 +93,16 @@ impl AssetOptionsBuilder<JsAssetOptions> {
 
     /// Convert the builder into asset options with the given variant
     pub const fn into_asset_options(self) -> AssetOptions {
+        let (mount_path, has_mount_path) = match self.mount_path {
+            Some(path) => (ConstStr::new(path), true),
+            None => (ConstStr::new(""), false),
+        };
+
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Js(self.variant),
+            mount_path,
+            has_mount_path,
         }
     }
 }

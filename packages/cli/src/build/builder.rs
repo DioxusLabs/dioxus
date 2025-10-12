@@ -645,8 +645,6 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let triple = self.build.triple.clone();
-        let asset_dir = self.build.asset_dir();
-
         // Hotpatch asset!() calls
         for bundled in res.assets.unique_assets() {
             let original_artifacts = self
@@ -663,7 +661,7 @@ impl AppBuilder {
 
             let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
 
-            let to = asset_dir.join(bundled.bundled_path());
+            let to = self.build.asset_destination_path(bundled);
 
             tracing::debug!("Copying asset from patch: {}", from.display());
             if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
@@ -756,11 +754,6 @@ impl AppBuilder {
 
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
         // we won't actually be using the build dir.
-        let asset_dir = match self.runtime_asset_dir.as_ref() {
-            Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.build.asset_dir(),
-        };
-
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
         let changed_file = dunce::canonicalize(changed_file)
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
@@ -770,9 +763,19 @@ impl AppBuilder {
         let resources = artifacts.assets.get_assets_for_source(&changed_file)?;
         let mut bundled_names = Vec::new();
         for resource in resources {
-            let output_path = asset_dir.join(resource.bundled_path());
+            let output_path = if let Some(runtime_dir) = self.runtime_asset_dir.as_ref() {
+                let mut base = runtime_dir.to_path_buf().join("assets");
+                if let Some(mount) = self.build.normalized_mount_path(resource.options()) {
+                    if !mount.as_os_str().is_empty() {
+                        base = base.join(mount);
+                    }
+                }
+                base.join(resource.bundled_path())
+            } else {
+                self.build.asset_destination_path(resource)
+            };
 
-            tracing::debug!("Hotreloading asset {changed_file:?} in target {asset_dir:?}");
+            tracing::debug!("Hotreloading asset {changed_file:?} into {output_path:?}");
 
             // Remove the old asset if it exists
             _ = std::fs::remove_file(&output_path);
@@ -782,15 +785,27 @@ impl AppBuilder {
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
             let res = process_file_to(&options, &changed_file, &output_path);
-            let bundled_name = PathBuf::from(resource.bundled_path());
+            let bundled_name = self.build.asset_public_path(resource);
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
             }
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
             if self.build.bundle == BundleFormat::Android {
-                _ = self
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                let mut android_relative = bundled_name.clone();
+                while android_relative.has_root() {
+                    android_relative = android_relative
+                        .strip_prefix(Path::new("/"))
+                        .unwrap_or(android_relative.as_path())
+                        .to_path_buf();
+                }
+
+                if let Ok(stripped) = android_relative.strip_prefix("assets") {
+                    android_relative = stripped.to_path_buf();
+                }
+
+                let _ = self
+                    .copy_file_to_android_tmp(&changed_file, &android_relative)
                     .await;
             }
             bundled_names.push(bundled_name);

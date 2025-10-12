@@ -1,6 +1,5 @@
-use const_serialize::SerializeConst;
-
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
+use const_serialize::{ConstStr, SerializeConst};
 
 /// The type of an image. You can read more about the tradeoffs between image formats [here](https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types)
 #[derive(
@@ -227,9 +226,16 @@ impl AssetOptionsBuilder<ImageAssetOptions> {
 
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
+        let (mount_path, has_mount_path) = match self.mount_path {
+            Some(path) => (ConstStr::new(path), true),
+            None => (ConstStr::new(""), false),
+        };
+
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Image(self.variant),
+            mount_path,
+            has_mount_path,
         }
     }
 }

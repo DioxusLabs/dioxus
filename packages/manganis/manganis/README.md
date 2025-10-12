@@ -26,6 +26,23 @@ pub const RESIZED_PNG_ASSET: Asset =
 pub const AVIF_ASSET: Asset = asset!("/assets/image.png", AssetOptions::image().with_format(ImageFormat::Avif));
 ```
 
+## Custom mount paths
+
+By default, bundled assets are emitted under `/assets/…`. You can override the served location with `with_mount_path`, which is especially useful for well-known files:
+
+```rust
+use manganis::{asset, Asset, AssetOptions};
+
+const SECURITY_TXT: Asset = asset!(
+    "/assets/security.txt",
+    AssetOptions::builder()
+        .with_hash_suffix(false)
+        .with_mount_path("/.well-known")
+);
+```
+
+When paired with the updated CLI, the file above will be written to `/.well-known/security.txt` in web builds, and requests to that URL will resolve correctly at runtime.
+
 ## Adding Support to Your CLI
 
 To add support for your CLI, you need to integrate with the [manganis_cli_support](https://github.com/DioxusLabs/manganis/tree/main/cli-support) crate. This crate provides utilities to collect assets that integrate with the Manganis macro. It makes it easy to integrate an asset collection and optimization system into a build tool.

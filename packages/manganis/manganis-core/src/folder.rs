@@ -1,6 +1,5 @@
-use const_serialize::SerializeConst;
-
 use crate::{AssetOptions, AssetOptionsBuilder};
+use const_serialize::{ConstStr, SerializeConst};
 
 /// The builder for a folder asset.
 #[derive(
@@ -50,9 +49,16 @@ impl AssetOptions {
 impl AssetOptionsBuilder<FolderAssetOptions> {
     /// Convert the options into options for a generic asset
     pub const fn into_asset_options(self) -> AssetOptions {
+        let (mount_path, has_mount_path) = match self.mount_path {
+            Some(path) => (ConstStr::new(path), true),
+            None => (ConstStr::new(""), false),
+        };
+
         AssetOptions {
             add_hash: false,
             variant: crate::AssetVariant::Folder(self.variant),
+            mount_path,
+            has_mount_path,
         }
     }
 }

@@ -375,7 +375,7 @@ impl AppServer {
             // todo(jon): don't hardcode this here
             if let Some(bundled_names) = self.client.hotreload_bundled_assets(path).await {
                 for bundled_name in bundled_names {
-                    assets.push(PathBuf::from("/assets/").join(bundled_name));
+                    assets.push(bundled_name);
                 }
             }
 

@@ -155,25 +155,35 @@ impl Asset {
             return PathBuf::from(self.bundled().absolute_source_path.as_str());
         }
 
-        #[cfg(feature = "dioxus")]
-        let bundle_root = {
-            let base_path = dioxus_cli_config::base_path();
-            let base_path = base_path
-                .as_deref()
-                .map(|base_path| {
-                    let trimmed = base_path.trim_matches('/');
-                    format!("/{trimmed}")
-                })
-                .unwrap_or_default();
-            PathBuf::from(format!("{base_path}/assets/"))
-        };
-        #[cfg(not(feature = "dioxus"))]
-        let bundle_root = PathBuf::from("/assets/");
+        let mut bundle_root = PathBuf::from("/");
 
-        // Otherwise presumably we're bundled and we can use the bundled path
-        bundle_root.join(PathBuf::from(
-            self.bundled().bundled_path.as_str().trim_start_matches('/'),
-        ))
+        #[cfg(feature = "dioxus")]
+        {
+            let base_path = dioxus_cli_config::base_path();
+            if let Some(base) = base_path.as_deref() {
+                let trimmed = base.trim_matches('/');
+                if !trimmed.is_empty() {
+                    bundle_root = bundle_root.join(trimmed);
+                }
+            }
+        }
+
+        let bundled = self.bundled();
+        let bundled_options = bundled.options();
+
+        match bundled_options.mount_path() {
+            Some(raw_mount) => {
+                let trimmed = raw_mount.trim_matches('/');
+                if !trimmed.is_empty() {
+                    bundle_root = bundle_root.join(trimmed);
+                }
+            }
+            None => {
+                bundle_root = bundle_root.join("assets");
+            }
+        }
+
+        bundle_root.join(bundled.bundled_path().trim_start_matches('/'))
     }
 }
 

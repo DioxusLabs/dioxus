@@ -333,7 +333,7 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::AssetOptions;
+use manganis::{AssetOptions, BundledAsset};
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -341,7 +341,7 @@ use std::{borrow::Cow, ffi::OsString};
 use std::{
     collections::{BTreeMap, HashSet},
     io::Write,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Stdio,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -1471,7 +1471,7 @@ impl BuildRequest {
         // Create a set of all the paths that new files will be bundled to
         let mut keep_bundled_output_paths: HashSet<_> = assets
             .unique_assets()
-            .map(|a| asset_dir.join(a.bundled_path()))
+            .map(|asset| self.asset_destination_path(asset))
             .collect();
 
         // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
@@ -1511,7 +1511,7 @@ impl BuildRequest {
         // Queue the bundled assets
         for bundled in assets.unique_assets() {
             let from = PathBuf::from(bundled.absolute_source_path());
-            let to = asset_dir.join(bundled.bundled_path());
+            let to = self.asset_destination_path(bundled);
 
             // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
             let from_ = from
@@ -4409,6 +4409,84 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
+    pub(crate) fn normalized_mount_path(&self, options: &AssetOptions) -> Option<PathBuf> {
+        let raw = options.mount_path()?;
+
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Some(PathBuf::new());
+        }
+
+        let slashes_trimmed = trimmed.trim_matches('/');
+        if slashes_trimmed.is_empty() {
+            return Some(PathBuf::new());
+        }
+
+        let candidate = PathBuf::from(slashes_trimmed);
+        if candidate
+            .components()
+            .any(|component| matches!(component, Component::ParentDir | Component::Prefix(_)))
+        {
+            tracing::warn!("Ignoring invalid asset mount path {raw:?}; falling back to /assets");
+            return None;
+        }
+
+        Some(candidate)
+    }
+
+    pub(crate) fn asset_destination_path(&self, bundled: &BundledAsset) -> PathBuf {
+        if let Some(mount) = self.normalized_mount_path(bundled.options()) {
+            let mut base = if self.bundle == BundleFormat::Web {
+                self.root_dir()
+            } else {
+                self.asset_dir()
+            };
+
+            if !mount.as_os_str().is_empty() {
+                base = base.join(&mount);
+            }
+
+            base.join(bundled.bundled_path())
+        } else {
+            self.asset_dir().join(bundled.bundled_path())
+        }
+    }
+
+    pub(crate) fn asset_public_path(&self, bundled: &BundledAsset) -> PathBuf {
+        let mount = self.normalized_mount_path(bundled.options());
+
+        if self.bundle == BundleFormat::Web {
+            let mut path = PathBuf::from("/");
+            if let Some(base) = self.base_path() {
+                let trimmed = base.trim_matches('/');
+                if !trimmed.is_empty() {
+                    path = path.join(trimmed);
+                }
+            }
+
+            if let Some(ref mount_path) = mount {
+                if !mount_path.as_os_str().is_empty() {
+                    path = path.join(mount_path);
+                }
+            } else {
+                path = path.join("assets");
+            }
+
+            return path.join(bundled.bundled_path());
+        }
+
+        let mut path = PathBuf::from("/");
+        if let Some(ref mount_path) = mount {
+            if !mount_path.as_os_str().is_empty() {
+                path = path.join(mount_path);
+            }
+        } else {
+            path = path.join("assets");
+        }
+
+        path.join(bundled.bundled_path())
+    }
+
     /// The directory in which we'll put the main exe
     ///
     /// Mac, Android, Web are a little weird
@@ -4777,26 +4855,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Inject any resources from manganis into the head
         for asset in assets.unique_assets() {
-            let asset_path = asset.bundled_path();
+            let public_path = self.asset_public_path(asset);
+            let public_path = public_path.to_string_lossy().replace('\\', "/");
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                            "<link rel=\"preload\" as=\"style\" href=\"{public_path}\" crossorigin>"
                         ))
                     }
                 }
                 AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                            "<link rel=\"preload\" as=\"image\" href=\"{public_path}\" crossorigin>"
                         ))
                     }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
                         head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
+                            "<link rel=\"preload\" as=\"script\" href=\"{public_path}\" crossorigin>"
                         ))
                     }
                 }

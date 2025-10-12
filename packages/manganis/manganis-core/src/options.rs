@@ -1,4 +1,4 @@
-use const_serialize::SerializeConst;
+use const_serialize::{ConstStr, SerializeConst};
 
 use crate::{
     CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions,
@@ -23,6 +23,9 @@ pub struct AssetOptions {
     pub(crate) add_hash: bool,
     /// The variant of the asset
     pub(crate) variant: AssetVariant,
+    /// Mount path relative to the bundle root
+    pub(crate) mount_path: ConstStr,
+    pub(crate) has_mount_path: bool,
 }
 
 impl AssetOptions {
@@ -39,6 +42,14 @@ impl AssetOptions {
     /// Check if a hash should be added to the asset path
     pub const fn hash_suffix(&self) -> bool {
         self.add_hash
+    }
+
+    pub const fn mount_path(&self) -> Option<&str> {
+        if self.has_mount_path {
+            Some(self.mount_path.as_str())
+        } else {
+            None
+        }
     }
 
     /// Try to get the extension for the asset. If the asset options don't define an extension, this will return None
@@ -72,6 +83,8 @@ impl AssetOptions {
 pub struct AssetOptionsBuilder<T> {
     /// If a hash should be added to the asset path
     pub(crate) add_hash: bool,
+    /// Optional mount path relative to the bundle root
+    pub(crate) mount_path: Option<&'static str>,
     /// The variant of the asset
     pub(crate) variant: T,
 }
@@ -87,6 +100,7 @@ impl AssetOptionsBuilder<()> {
     pub const fn new() -> Self {
         Self {
             add_hash: true,
+            mount_path: None,
             variant: (),
         }
     }
@@ -98,9 +112,16 @@ impl AssetOptionsBuilder<()> {
 
     /// Convert the builder into asset options with the given variant
     pub const fn into_asset_options(self) -> AssetOptions {
+        let (mount_path, has_mount_path) = match self.mount_path {
+            Some(path) => (ConstStr::new(path), true),
+            None => (ConstStr::new(""), false),
+        };
+
         AssetOptions {
             add_hash: self.add_hash,
             variant: AssetVariant::Unknown,
+            mount_path,
+            has_mount_path,
         }
     }
 }
@@ -110,6 +131,7 @@ impl<T> AssetOptionsBuilder<T> {
     pub(crate) const fn variant(variant: T) -> Self {
         Self {
             add_hash: true,
+            mount_path: None,
             variant,
         }
     }
@@ -127,7 +149,7 @@ impl<T> AssetOptionsBuilder<T> {
     /// If you are using an asset outside of rust code where you know what the asset hash will be, you must use the
     /// `#[used]` attribute to ensure the asset is included in the binary even if it is not referenced in the code.
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// #[used]
     /// static ASSET: manganis::Asset = manganis::asset!(
     ///     "/assets/style.css",
@@ -139,6 +161,22 @@ impl<T> AssetOptionsBuilder<T> {
     /// </div>
     pub const fn with_hash_suffix(mut self, add_hash: bool) -> Self {
         self.add_hash = add_hash;
+        self
+    }
+
+    /// Override the mount path for the bundled asset relative to the bundle root.
+    ///
+    /// ```rust,ignore
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!(
+    ///     "/assets/security.txt",
+    ///     AssetOptions::builder()
+    ///         .with_hash_suffix(false)
+    ///         .with_mount_path("/.well-known")
+    /// );
+    /// ```
+    pub const fn with_mount_path(mut self, mount_path: &'static str) -> Self {
+        self.mount_path = Some(mount_path);
         self
     }
 }
@@ -171,4 +209,23 @@ pub enum AssetVariant {
     Js(JsAssetOptions),
     /// An unknown asset
     Unknown,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_builder_has_no_mount_path() {
+        let opts = AssetOptions::builder().into_asset_options();
+        assert!(opts.mount_path().is_none());
+    }
+
+    #[test]
+    fn builder_with_mount_path_is_preserved() {
+        let opts = AssetOptions::builder()
+            .with_mount_path("/.well-known")
+            .into_asset_options();
+        assert_eq!(opts.mount_path(), Some("/.well-known"));
+    }
 }
