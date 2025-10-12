@@ -640,7 +640,9 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if !self.suspended_tasks_remaining() && !self.has_dirty_scopes() {
+            self.queue_events();
+
+            if !(self.suspended_tasks_remaining() || self.has_dirty_scopes()) {
                 break;
             }
 
