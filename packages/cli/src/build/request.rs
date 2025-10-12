@@ -1720,10 +1720,7 @@ impl BuildRequest {
 
         // On linux, we need to set a more complete PATH for the linker to find its libraries
         if cfg!(target_os = "linux") {
-            command_envs.push((
-                "PATH".to_string(),
-                "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin".to_string(),
-            ));
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
         }
 
         // Run the linker directly!
@@ -2251,10 +2248,7 @@ impl BuildRequest {
 
         // On linux, we need to set a more complete PATH for the linker to find its libraries
         if cfg!(target_os = "linux") {
-            command_envs.push((
-                "PATH".to_string(),
-                "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin".to_string(),
-            ));
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
         }
 
         // Run the linker directly!
