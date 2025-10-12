@@ -258,7 +258,6 @@ jobs:
           # The hot patch test requires incremental compilation
           CARGO_INCREMENTAL: 1
         run: |
-          export PATH=$PATH:/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin
           npm ci
           npm install -D @playwright/test
           npx playwright install --with-deps
