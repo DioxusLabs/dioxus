@@ -1715,6 +1715,17 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push((
+                "PATH".to_string(),
+                "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin".to_string(),
+            ));
+        }
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
@@ -1722,7 +1733,7 @@ impl BuildRequest {
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -2235,11 +2246,22 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push((
+                "PATH".to_string(),
+                "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin".to_string(),
+            ));
+        }
+
         // Run the linker directly!
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
