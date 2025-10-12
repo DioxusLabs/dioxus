@@ -642,7 +642,7 @@ impl VirtualDom {
         loop {
             self.queue_events();
 
-            if !(self.suspended_tasks_remaining() || self.has_dirty_scopes()) {
+            if !self.suspended_tasks_remaining() && !self.has_dirty_scopes() {
                 break;
             }
 
