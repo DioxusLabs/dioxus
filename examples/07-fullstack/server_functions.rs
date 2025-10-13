@@ -129,8 +129,8 @@
 
 use axum_core::response::IntoResponse;
 use dioxus::prelude::*;
+use dioxus_fullstack::FromResponse;
 use dioxus_fullstack::http::StatusCode;
-use dioxus_fullstack::{FromResponse, HeaderMap};
 use serde::{Deserialize, Serialize};
 
 fn main() {
@@ -138,8 +138,46 @@ fn main() {
 }
 
 fn app() -> Element {
+    let mut echo_action = use_action(echo);
+    let mut chat_action = use_action(chat);
+    let mut dog_data = use_action(get_data);
+    let mut custom_data = use_action(get_custom_data);
+    let mut anonymous_action = use_action(anonymous);
+    let mut custom_anonymous_action = use_action(custom_anonymous);
+
     rsx! {
         h1 { "Server Functions Example" }
+        div {
+            display: "flex",
+            flex_direction: "column",
+            gap: "8px",
+
+            button { onclick: move |_| echo_action.call("Hello from client".into()), "Echo: Hello" }
+            button { onclick: move |_| chat_action.call(42u32, Some(7u32)), "Chat (user 42, room 7)" }
+            button { onclick: move |_| dog_data.call(), "Get dog data" }
+            button { onclick: move |_| custom_data.call(), "Get custom data" }
+            button { onclick: move |_| anonymous_action.call(), "Call anonymous" }
+            button { onclick: move |_| custom_anonymous_action.call(), "Call custom anonymous" }
+
+            button {
+                onclick: move |_| {
+                    echo_action.reset();
+                    chat_action.reset();
+                    dog_data.reset();
+                    custom_data.reset();
+                    anonymous_action.reset();
+                    custom_anonymous_action.reset();
+                },
+                "Clear results"
+            }
+
+            pre { "Echo result: {echo_action.result():#?}" }
+            pre { "Chat result: {chat_action.result():#?}" }
+            pre { "Dog data: {dog_data.result():#?}" }
+            pre { "Custom data: {custom_data.result():#?}" }
+            pre { "Anonymous: {anonymous_action.result():#?}" }
+            pre { "Custom anonymous: {custom_anonymous_action.result():#?}" }
+        }
     }
 }
 
@@ -151,7 +189,7 @@ async fn echo(body: String) -> Result<String> {
 }
 
 /// A Server function that takes path and query parameters, as well as a server-only extractor.
-#[post("/api/{user_id}/chat?room_id", headers: HeaderMap)]
+#[post("/api/{user_id}/chat?room_id", headers: dioxus_fullstack::HeaderMap)]
 async fn chat(user_id: u32, room_id: Option<u32>) -> Result<String> {
     Ok(format!(
         "User ID: {}, Room ID: {} - Headers: {:#?}",
@@ -180,7 +218,7 @@ async fn get_data() -> Result<DogData> {
     })
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 struct DogData {
     name: String,
     age: u8,
@@ -194,6 +232,7 @@ async fn get_custom_data() -> Result<CustomData> {
     })
 }
 
+#[derive(Debug)]
 struct CustomData {
     message: String,
 }
