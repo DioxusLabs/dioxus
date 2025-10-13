@@ -144,6 +144,7 @@ fn app() -> Element {
     let mut custom_data = use_action(get_custom_data);
     let mut anonymous_action = use_action(anonymous);
     let mut custom_anonymous_action = use_action(custom_anonymous);
+    let mut custom_response_action = use_action(get_custom_response);
 
     rsx! {
         h1 { "Server Functions Example" }
@@ -158,6 +159,7 @@ fn app() -> Element {
             button { onclick: move |_| custom_data.call(), "Get custom data" }
             button { onclick: move |_| anonymous_action.call(), "Call anonymous" }
             button { onclick: move |_| custom_anonymous_action.call(), "Call custom anonymous" }
+            button { onclick: move |_| custom_response_action.call(), "Get custom response" }
 
             button {
                 onclick: move |_| {
@@ -167,6 +169,7 @@ fn app() -> Element {
                     custom_data.reset();
                     anonymous_action.reset();
                     custom_anonymous_action.reset();
+                    custom_response_action.reset();
                 },
                 "Clear results"
             }
@@ -177,6 +180,7 @@ fn app() -> Element {
             pre { "Custom data: {custom_data.result():#?}" }
             pre { "Anonymous: {anonymous_action.result():#?}" }
             pre { "Custom anonymous: {custom_anonymous_action.result():#?}" }
+            pre { "Custom response: {custom_response_action.result():#?}" }
         }
     }
 }
@@ -250,6 +254,19 @@ impl FromResponse for CustomData {
         let message = res.json::<String>().await?;
         Ok(CustomData { message })
     }
+}
+
+/// A server function that returns an axum type directly.
+///
+/// When make these endpoints, we need to use the `axum::response::Response` type and then call `into_response`
+/// on the return value to convert it into a response.
+#[get("/api/custom_response")]
+async fn get_custom_response() -> Result<axum_core::response::Response> {
+    Ok(axum_core::response::Response::builder()
+        .status(StatusCode::CREATED)
+        .body("Created!".to_string())
+        .unwrap()
+        .into_response())
 }
 
 /// An anonymous server function - the url path is generated from the module path and function name.
