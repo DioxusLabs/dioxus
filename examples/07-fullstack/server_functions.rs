@@ -32,8 +32,8 @@
 //!
 //! The `Err` type of the server function return type is also somewhat special. The `Err` type can be:
 //! - `anyhow::Error` (the `dioxus_core::Err` type alias) for untyped errors with rich context. Note
-//!  that these errors will always downcast to `ServerFnError` on the client, losing the original
-//!  error stack and type.
+//!   that these errors will always downcast to `ServerFnError` on the client, losing the original
+//!   error stack and type.
 //! - `ServerFnError` for typed errors with a status code and optional message.
 //! - `StatusCode` for returning raw HTTP status codes.
 //! - `HttpError` for returning HTTP status codes with custom messages.
