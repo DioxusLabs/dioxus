@@ -228,8 +228,16 @@ fn route_impl_with_route(
         .retain(|attr| !attr.path().is_ident("middleware"));
 
     let server_args = route.server_args.clone();
+
     let mut function_on_server = function.clone();
     function_on_server.sig.inputs.extend(server_args.clone());
+    function_on_server.sig.ident = format_ident!("__server_fn_inner_{}", function.sig.ident);
+    let function_on_server_name = function_on_server.sig.ident.clone();
+
+    let mut self_token = function.sig.inputs.first().map(|arg| match arg {
+        FnArg::Receiver(receiver) => Some(receiver.self_token),
+        _ => None,
+    });
 
     // Now we can compile the route
     let original_inputs = function
@@ -237,7 +245,7 @@ fn route_impl_with_route(
         .inputs
         .iter()
         .map(|arg| match arg {
-            FnArg::Receiver(_receiver) => panic!("Self type is not supported"),
+            FnArg::Receiver(_receiver) => _receiver.to_token_stream(),
             FnArg::Typed(pat_type) => {
                 quote! {
                     #[allow(unused_mut)]
@@ -365,31 +373,6 @@ fn route_impl_with_route(
         }
     };
 
-    let as_axum_path = route.to_axum_path_string();
-
-    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
-        let prefix = route
-            .prefix
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
-            .value();
-        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
-        let full_url = format!(
-            "{}{}{}",
-            prefix,
-            if url_without_queries.starts_with("/") {
-                ""
-            } else {
-                "/"
-            },
-            url_without_queries
-        );
-        quote! { format!(#full_url, #( #path_param_args)*) }
-    } else {
-        quote! { __ENDPOINT_PATH.to_string() }
-    };
-
     let endpoint_path = {
         let prefix = route
             .prefix
@@ -397,6 +380,7 @@ fn route_impl_with_route(
             .cloned()
             .unwrap_or_else(|| LitStr::new("", Span::call_site()));
 
+        let as_axum_path = route.to_axum_path_string();
         let route_lit = if !as_axum_path.is_empty() {
             quote! { #as_axum_path }
         } else {
@@ -433,6 +417,59 @@ fn route_impl_with_route(
         }
     };
 
+    // The endpoint the client will query, passed to `ClientRequest`
+    // ie `/api/my_fnc`
+    //
+    // If there's a `&self` parameter, then we need to look up where `&self` is mounted.
+    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
+        let prefix = route
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
+            .value();
+        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
+        let full_url = format!(
+            "{}{}{}",
+            prefix,
+            if url_without_queries.starts_with("/") {
+                ""
+            } else {
+                "/"
+            },
+            url_without_queries
+        );
+        quote! { format!(#full_url, #( #path_param_args )*) }
+    } else {
+        quote! { __ENDPOINT_PATH.to_string() }
+    };
+
+    let receiver = if let Some(self_token) = self_token.take() {
+        quote! { Self:: }
+    } else {
+        quote! {}
+    };
+
+    let extract_self = if self_token.is_some() {
+        quote! {
+            let __self = ___state.get_endpoint::<Self>().expect("Failed to get endpoint state");
+        }
+    } else {
+        quote! {}
+    };
+
+    let self_args = if self_token.is_some() {
+        quote! { &*__self, }
+    } else {
+        quote! {}
+    };
+
+    let namespace = if self_token.is_some() {
+        quote! { Some(std::any::TypeId::of::<Self>()) }
+    } else {
+        quote! { None }
+    };
+
     let middleware_extra = middleware_inits
         .iter()
         .map(|init| {
@@ -443,11 +480,11 @@ fn route_impl_with_route(
         .collect::<Vec<_>>();
 
     Ok(quote! {
-        #(#fn_docs)*
-        #route_docs
-        #[deny(
-            unexpected_cfgs,
-            reason = "
+            #(#fn_docs)*
+            #route_docs
+            #[deny(
+                unexpected_cfgs,
+                reason = "
 ==========================================================================================
   Using Dioxus Server Functions requires a `server` feature flag in your `Cargo.toml`.
   Please add the following to your `Cargo.toml`:
@@ -466,114 +503,123 @@ fn route_impl_with_route(
   ```
 ==========================================================================================
         "
-        )]
-        #vis async fn #fn_name #impl_generics(
-            #original_inputs
-        ) -> #out_ty #where_clause {
-            use dioxus_fullstack::serde as serde;
-            use dioxus_fullstack::{
-                // concrete types
-                ServerFnEncoder, ServerFnDecoder, DioxusServerState,
+            )]
+            #vis async fn #fn_name #impl_generics(
+                #original_inputs
+            ) -> #out_ty #where_clause {
+                use dioxus_fullstack::serde as serde;
+                use dioxus_fullstack::{
+                    // concrete types
+                    ServerFnEncoder, ServerFnDecoder, DioxusServerState,
 
-                // "magic" traits for encoding/decoding on the client
-                ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
+                    // "magic" traits for encoding/decoding on the client
+                    ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
 
-                // "magic" traits for encoding/decoding on the server
-                MakeAxumResponse, MakeAxumError,
-            };
+                    // "magic" traits for encoding/decoding on the server
+                    MakeAxumResponse, MakeAxumError,
+                };
 
-            _ = dioxus_fullstack::assert_is_result::<#out_ty>();
+                _ = dioxus_fullstack::assert_is_result::<#out_ty>();
 
-            #query_params_struct
+                #query_params_struct
 
-            #body_struct_impl
+                #body_struct_impl
 
-            const __ENDPOINT_PATH: &str = #endpoint_path;
+                const __ENDPOINT_PATH: &str = #endpoint_path;
 
-            // On the client, we make the request to the server
-            // We want to support extremely flexible error types and return types, making this more complex than it should
-            #[allow(clippy::unused_unit)]
-            #[cfg(not(feature = "server"))]
-            {
-                let client = dioxus_fullstack::ClientRequest::new(
-                    dioxus_fullstack::http::Method::#method_ident,
-                    #query_endpoint,
-                    &__QueryParams__ { #(#query_param_names,)* },
-                );
-
-                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .verify_can_serialize();
-
-                dioxus_fullstack::assert_can_encode(verify_token);
-
-                let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
-                    .await;
-
-                let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                    .decode_client_response(response)
-                    .await;
-
-                let result = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                    .decode_client_err(decoded)
-                    .await;
-
-                return result;
-            }
-
-            // On the server, we expand the tokens and submit the function to inventory
-            #[cfg(feature = "server")] {
-                use #__axum::response::IntoResponse;
-                use dioxus_server::ServerFunction;
-
-                #function_on_server
-
+                // On the client, we make the request to the server
+                // We want to support extremely flexible error types and return types, making this more complex than it should
                 #[allow(clippy::unused_unit)]
-                #asyncness fn __inner__function__ #impl_generics(
-                    ___state: #__axum::extract::State<DioxusServerState>,
-                    #path_extractor
-                    #query_extractor
-                    request: #__axum::extract::Request,
-                ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
-                    let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                        .extract_axum(___state.0, request, #unpack).await?;
+                #[cfg(not(feature = "server"))]
+                {
+                    let client = dioxus_fullstack::ClientRequest::new(
+                        dioxus_fullstack::http::Method::#method_ident,
+                        #query_endpoint,
+                        &__QueryParams__ { #(#query_param_names,)* },
+                    );
 
-                    let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
-                        );
+                    let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                        .verify_can_serialize();
 
-                    let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_error(encoded);
+                    dioxus_fullstack::assert_can_encode(verify_token);
 
-                    return response;
+                    let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                        .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
+                        .await;
+
+                    let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .decode_client_response(response)
+                        .await;
+
+                    let result = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                        .decode_client_err(decoded)
+                        .await;
+
+                    return result;
                 }
 
-                dioxus_server::inventory::submit! {
-                    ServerFunction::new(
-                        dioxus_server::http::Method::#method_ident,
-                        __ENDPOINT_PATH,
-                        || {
-                            #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
-                        }
-                    )
+                // On the server, we expand the tokens and submit the function to inventory
+                #[cfg(feature = "server")] {
+                    use #__axum::response::IntoResponse;
+                    use dioxus_server::ServerFunction;
+
+                    #[allow(clippy::unused_unit)]
+                    #asyncness fn __inner__function__ #impl_generics(
+                        ___state: #__axum::extract::State<DioxusServerState>,
+                        #path_extractor
+                        #query_extractor
+                        request: #__axum::extract::Request,
+                    ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
+                        #extract_self
+
+                        let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                            .extract_axum(___state.0, request, #unpack).await?;
+
+                        let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
+                            .make_axum_response(
+                               #receiver #function_on_server_name #ty_generics(#self_args #(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
+                            );
+
+                        let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                            .make_axum_error(encoded);
+
+                        return response;
+                    }
+
+                    dioxus_server::inventory::submit! {
+                        ServerFunction::new(
+                            dioxus_server::http::Method::#method_ident,
+                            __ENDPOINT_PATH,
+    <<<<<<< HEAD
+                            || #__axum::routing::#http_method(__inner__function__ #ty_generics),
+                            #namespace
+    =======
+                            || {
+                                #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
+                            }
+    >>>>>>> origin/main
+                        )
+                    }
+
+                    #server_defaults
+
+                    return #function_on_server_name #ty_generics(
+                        #(#extracted_idents,)*
+                        #(#body_json_names,)*
+                        #(#server_names,)*
+                    ).await;
                 }
 
-                #server_defaults
-
-                return #fn_name #ty_generics(
-                    #(#extracted_idents,)*
-                    #(#body_json_names,)*
-                    #(#server_names,)*
-                ).await;
+                #[allow(unreachable_code)]
+                {
+                    unreachable!()
+                }
             }
 
-            #[allow(unreachable_code)]
-            {
-                unreachable!()
-            }
-        }
-    })
+            #[cfg(feature = "server")]
+            #[doc(hidden)]
+            #function_on_server
+        })
 }
 
 struct CompiledRoute {
@@ -607,10 +653,6 @@ impl CompiledRoute {
                 }
                 PathParam::Static(lit) => path.push_str(&lit.value()),
             }
-            // if colon.is_some() {
-            //     path.push(':');
-            // }
-            // path.push_str(&ident.value());
         }
 
         path
@@ -805,7 +847,7 @@ impl CompiledRoute {
 
                     Some(pat_type.clone())
                 } else {
-                    unimplemented!("Self type is not supported")
+                    None
                 }
             })
             .collect()
@@ -842,7 +884,7 @@ impl CompiledRoute {
                     new_pat_type.pat = Box::new(parse_quote!(#ident));
                     Some(new_pat_type)
                 } else {
-                    unimplemented!("Self type is not supported")
+                    None
                 }
             })
             .collect()

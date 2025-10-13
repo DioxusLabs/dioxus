@@ -8,6 +8,8 @@
 //!
 //! To run this example, simply run `cargo run --package ssr-only` and navigate to `http://localhost:8080`.
 
+use std::any::TypeId;
+
 use dioxus::prelude::*;
 
 fn main() {

@@ -5687,6 +5687,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "ciborium",
+ "dashmap 6.1.0",
  "dioxus",
  "dioxus-html",
  "dioxus-ssr",

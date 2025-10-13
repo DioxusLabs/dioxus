@@ -11,6 +11,8 @@ mod server_future;
 mod streaming;
 mod transport;
 
+use std::{any::Any, sync::Arc};
+
 pub use crate::errors::*;
 pub use crate::loader::*;
 pub use crate::server_cached::*;
@@ -28,3 +30,9 @@ pub use httperror::*;
 
 #[derive(Clone, Default)]
 pub struct DioxusServerState {}
+
+impl DioxusServerState {
+    pub fn get_endpoint<T: Any>(&self) -> Option<Arc<T>> {
+        todo!()
+    }
+}
