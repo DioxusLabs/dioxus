@@ -188,7 +188,7 @@ async fn get_throws_typed_error() -> Result<(), MyCustomError> {
 #[post("/api/data")]
 async fn get_throws_serverfn_error() -> Result<(), ServerFnError> {
     Err(ServerFnError::ServerError {
-        message: "Unauthorized access",
+        message: "Unauthorized access".to_string(),
         code: StatusCode::UNAUTHORIZED.as_u16(),
         details: None,
     })
