@@ -258,15 +258,12 @@ impl SsrRendererPool {
                 // we need to eventually be able to downcast that and get the status code from it
                 if let Some(ServerFnError::ServerError { message, code, .. }) = error.downcast_ref()
                 {
-                    if let Some(code) = code {
-                        status_code = Some(
-                            (*code)
-                                .try_into()
-                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                        );
-                    } else {
-                        status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
+                    status_code = Some(
+                        (*code)
+                            .try_into()
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    );
+
                     out_message = Some(message.clone());
                 }
 

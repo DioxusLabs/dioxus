@@ -22,7 +22,7 @@
 //!
 //! Try running requests against the endpoints directly with `curl` or `postman` to see the actual HTTP responses!
 
-use dioxus::fullstack::{Json, StatusCode};
+use dioxus::fullstack::{AsStatusCode, Json, StatusCode};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -164,10 +164,32 @@ enum MyCustomError {
     ServerFnError(#[from] ServerFnError),
 }
 
+impl AsStatusCode for MyCustomError {
+    fn as_status_code(&self) -> StatusCode {
+        match self {
+            MyCustomError::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            MyCustomError::NotFound => StatusCode::NOT_FOUND,
+            MyCustomError::ServerFnError(e) => e.as_status_code(),
+        }
+    }
+}
+
 /// Returns a custom typed error (serializable) so clients can handle specific cases.
+///
+/// Our custom error must implement `AsStatusCode` so it can properly set the outgoing HTTP status code.
 #[get("/api/typed-error")]
 async fn get_throws_typed_error() -> Result<(), MyCustomError> {
     Err(MyCustomError::BadRequest {
         custom_name: "Invalid input".into(),
+    })
+}
+
+/// Simple POST endpoint used to show a successful server function that returns `StatusCode`.
+#[post("/api/data")]
+async fn get_throws_serverfn_error() -> Result<(), ServerFnError> {
+    Err(ServerFnError::ServerError {
+        message: "Unauthorized access",
+        code: StatusCode::UNAUTHORIZED.as_u16(),
+        details: None,
     })
 }

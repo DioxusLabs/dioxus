@@ -200,9 +200,9 @@ pub fn current_status() -> StreamingStatus {
 pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     if let Some(err) = error.downcast_ref::<ServerFnError>() {
         match err {
-            ServerFnError::ServerError {
-                code: Some(code), ..
-            } => return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            ServerFnError::ServerError { code, .. } => {
+                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+            }
             _ => return StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
