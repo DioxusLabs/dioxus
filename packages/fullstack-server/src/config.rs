@@ -71,7 +71,7 @@ impl ServeConfig {
         self
     }
 
-    /// Set the contents of the index.html file to be served. (precedence over index_path)
+    /// Set the contents of the index.html file to be served.
     pub fn index_html(mut self, index_html: String) -> Self {
         self.index_html_override = Some(index_html);
         self
@@ -146,8 +146,7 @@ impl ServeConfig {
     ///
     ///        let config = ServeConfig::default()
     ///            // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///            .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>]))
-    ///            .build()?;
+    ///            .context_providers(Arc::new(vec![Box::new(|| Box::new(1234u32) as Box<dyn Any>) as Box<dyn Fn() -> Box<dyn Any> + Send + Sync>]));
     ///
     ///        Ok(
     ///            axum::Router::new()
@@ -204,8 +203,7 @@ impl ServeConfig {
     ///
     ///         let config = ServeConfig::default()
     ///             // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
-    ///             .context_provider(|| 1234u32)
-    ///             .build()?;
+    ///             .context_provider(|| 1234u32);
     ///
     ///         Ok(
     ///             axum::Router::new()
@@ -254,9 +252,9 @@ impl ServeConfig {
     ///         use dioxus_server::{axum, ServeConfig, DioxusRouterExt};
     ///
     ///         let config = ServeConfig::default()
-    ///             .context(1234u32)
-    ///             .build()?;
-    //
+    ///             // You can provide context to your whole app on the server (including server functions) with the `context_provider` method on the launch builder
+    ///             .context(1234u32);
+    ///
     ///         Ok(
     ///             axum::Router::new()
     ///                 .serve_dioxus_application(config, app)

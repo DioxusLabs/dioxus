@@ -441,6 +441,7 @@ impl<T> Resource<T> {
 
 impl<T, E> Resource<Result<T, E>> {
     /// Convert the `Resource<Result<T, E>>` into an `Option<Result<MappedSignal<T>, MappedSignal<E>>>`
+    #[allow(clippy::type_complexity)]
     pub fn result(
         &self,
     ) -> Option<
