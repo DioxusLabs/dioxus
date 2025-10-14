@@ -316,6 +316,7 @@ impl WebServer {
             for_build_id: Some(build.0 as _),
         });
         self.send_devserver_message_to_all(msg).await;
+        self.set_ready().await;
     }
 
     /// Tells all clients that a hot patch has started.
@@ -338,8 +339,7 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
-        self.build_status.set(Status::Ready);
-        self.send_build_status().await;
+        self.set_ready().await;
         self.send_devserver_message_to_all(DevserverMsg::FullReloadCommand)
             .await;
     }
@@ -358,6 +358,16 @@ impl WebServer {
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await;
         }
+    }
+
+    /// Mark the devserver status as ready and notify listeners.
+    async fn set_ready(&mut self) {
+        if matches!(self.build_status.get(), Status::Ready) {
+            return;
+        }
+
+        self.build_status.set(Status::Ready);
+        self.send_build_status().await;
     }
 
     /// Get the address the devserver should run on
