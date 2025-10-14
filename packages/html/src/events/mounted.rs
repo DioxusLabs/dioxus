@@ -278,6 +278,8 @@ impl_event! [
     onmounted
 ];
 
+pub use onmounted as onmount;
+
 /// The MountedResult type for the MountedData
 pub type MountedResult<T> = Result<T, MountedError>;
 

@@ -82,15 +82,7 @@ pub struct Action<I, T: 'static> {
 }
 
 impl<I: 'static, O: 'static> Action<I, O> {
-    pub fn value(&self) -> Option<ReadSignal<O>> {
-        if self.value.read().is_none() {
-            return None;
-        }
-
-        Some(self.reader)
-    }
-
-    pub fn result(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
+    pub fn value(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
         if !matches!(
             *self.state.read(),
             ActionState::Ready | ActionState::Errored
@@ -109,7 +101,7 @@ impl<I: 'static, O: 'static> Action<I, O> {
         Some(Ok(self.reader))
     }
 
-    pub fn is_pending(&self) -> bool {
+    pub fn pending(&self) -> bool {
         *self.state.read() == ActionState::Pending
     }
 

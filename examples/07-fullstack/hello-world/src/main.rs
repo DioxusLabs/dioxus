@@ -38,7 +38,7 @@ fn app() -> Element {
             div { style: "margin: 1rem 0;",
                 h2 { "Server Greeting" }
                 button { onclick: move |_| message.call("World".to_string(), 30), "Get Server Greeting" }
-                if message.is_pending() {
+                if message.pending() {
                     p { "Loading..." }
                 }
                 p { "{message:#?}" }

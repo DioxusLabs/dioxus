@@ -11,8 +11,8 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use std::ops::Deref;
 use std::{cell::Cell, future::Future, rc::Rc};
+use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
@@ -324,6 +324,11 @@ impl<T> Resource<T> {
         self.task.cloned()
     }
 
+    /// Is the resource's future currently running?
+    pub fn pending(&self) -> bool {
+        matches!(*self.state.peek(), UseResourceState::Pending)
+    }
+
     /// Is the resource's future currently finished running?
     ///
     /// Reading this does not subscribe to the future's state
@@ -494,6 +499,19 @@ impl<T> Readable for Resource<T> {
 
     fn subscribers(&self) -> Subscribers {
         self.value.subscribers()
+    }
+}
+
+impl<T> Writable for Resource<T> {
+    type WriteMetadata = <Signal<Option<T>> as Writable>::WriteMetadata;
+
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.value.try_write_unchecked()
     }
 }
 
