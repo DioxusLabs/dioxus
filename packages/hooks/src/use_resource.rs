@@ -439,6 +439,34 @@ impl<T> Resource<T> {
     }
 }
 
+impl<T, E> Resource<Result<T, E>> {
+    /// Convert the `Resource<Result<T, E>>` into an `Option<Result<MappedSignal<T>, MappedSignal<E>>>`
+    pub fn result(
+        &self,
+    ) -> Option<
+        Result<
+            MappedSignal<T, Signal<Option<Result<T, E>>>>,
+            MappedSignal<E, Signal<Option<Result<T, E>>>>,
+        >,
+    > {
+        let value: MappedSignal<T, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
+            Some(Ok(ref res)) => res,
+            _ => panic!("Resource is not ready"),
+        });
+
+        let error: MappedSignal<E, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
+            Some(Err(ref err)) => err,
+            _ => panic!("Resource is not ready"),
+        });
+
+        match &*self.value.peek() {
+            Some(Ok(_)) => Some(Ok(value)),
+            Some(Err(_)) => Some(Err(error)),
+            None => None,
+        }
+    }
+}
+
 impl<T> From<Resource<T>> for ReadSignal<Option<T>> {
     fn from(val: Resource<T>) -> Self {
         val.value.into()
