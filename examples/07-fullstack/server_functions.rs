@@ -174,13 +174,13 @@ fn app() -> Element {
                 "Clear results"
             }
 
-            pre { "Echo result: {echo_action.result():#?}" }
-            pre { "Chat result: {chat_action.result():#?}" }
-            pre { "Dog data: {dog_data.result():#?}" }
-            pre { "Custom data: {custom_data.result():#?}" }
-            pre { "Anonymous: {anonymous_action.result():#?}" }
-            pre { "Custom anonymous: {custom_anonymous_action.result():#?}" }
-            pre { "Custom response: {custom_response_action.result():#?}" }
+            pre { "Echo result: {echo_action.value():#?}" }
+            pre { "Chat result: {chat_action.value():#?}" }
+            pre { "Dog data: {dog_data.value():#?}" }
+            pre { "Custom data: {custom_data.value():#?}" }
+            pre { "Anonymous: {anonymous_action.value():#?}" }
+            pre { "Custom anonymous: {custom_anonymous_action.value():#?}" }
+            pre { "Custom response: {custom_response_action.value():#?}" }
         }
     }
 }

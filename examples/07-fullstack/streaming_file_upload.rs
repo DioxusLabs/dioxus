@@ -80,7 +80,7 @@ fn app() -> Element {
                     },
                     "Drop files here"
                 }
-                pre { "{upload_as_file_upload.result():?}" }
+                pre { "{upload_as_file_upload.value():?}" }
             }
 
             div {

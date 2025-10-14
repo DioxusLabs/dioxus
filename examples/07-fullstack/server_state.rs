@@ -108,13 +108,13 @@ fn app() -> Element {
     rsx! {
         div {
             button { onclick: move |_| users.call(), "Get Users" }
-            pre { "{users.result():?}" }
+            pre { "{users.value():?}" }
             button { onclick: move |_| messages.call(), "Get Messages" }
-            pre { "{messages.result():?}" }
+            pre { "{messages.value():?}" }
             button { onclick: move |_| broadcast.call(), "Broadcast Message" }
-            pre { "{broadcast.result():?}" }
+            pre { "{broadcast.value():?}" }
             button { onclick: move |_| add.call(), "Add Message" }
-            pre { "{add.result():?}" }
+            pre { "{add.value():?}" }
         }
     }
 }
