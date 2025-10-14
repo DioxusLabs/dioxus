@@ -101,7 +101,7 @@ where
             // Remap the error to the captured error type so it's cheap to clone and pass out, just
             // slightly more cumbersome to access the inner error.
             let out = out.map_err(|e| {
-                let anyhow_err: anyhow::Error = e.into().into();
+                let anyhow_err: anyhow::Error = e.into();
                 anyhow_err.into()
             });
 
