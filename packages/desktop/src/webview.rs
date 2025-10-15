@@ -155,16 +155,17 @@ impl WebviewEdits {
             }
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                let file_event = hovered_file.current().unwrap();
-                let paths = match file_event {
-                    wry::DragDropEvent::Enter { paths, .. } => paths,
-                    wry::DragDropEvent::Drop { paths, .. } => paths,
+                let file_event = hovered_file.current();
+                let file_paths = match file_event {
+                    Some(wry::DragDropEvent::Enter { paths, .. }) => paths,
+                    Some(wry::DragDropEvent::Drop { paths, .. }) => paths,
                     _ => vec![],
                 };
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
-                    files: paths,
+                    data_transfer: drag.data_transfer.clone(),
+                    files: file_paths,
                 })))
             }
             _ => data.into_any(),

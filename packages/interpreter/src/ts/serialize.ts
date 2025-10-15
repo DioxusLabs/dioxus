@@ -321,17 +321,42 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
 }
 
 function serializeDragEvent(event: DragEvent): SerializedEvent {
-  let files = undefined;
-  // On desktop if there is file data, we insert it from wry. We just add a placeholder to let the rust side of dioxus know there's files
-  if (
-    event.dataTransfer &&
-    event.dataTransfer.files &&
-    event.dataTransfer.files.length > 0
-  ) {
-    files = {
-      files: { placeholder: [] },
-    };
+  let data_transfer = event.dataTransfer || new DataTransfer();
+  let items = [];
+  let files = [];
+  let effect_allowed = data_transfer.effectAllowed;
+  let drop_effect = data_transfer.dropEffect;
+
+  for (let i = 0; i < data_transfer.items.length; i++) {
+    let item = data_transfer.items[i];
+    let data;
+    if (item.kind === "string") {
+      // we can only get the data if we do this synchronously
+      // which is a bit sad, but oh well.
+      data = data_transfer.getData(item.type);
+    } else {
+      data = item.getAsFile()?.name || "";
+    }
+
+    items.push({
+      kind: item.kind,
+      type: item.type,
+      data
+    });
   }
+
+  for (let i = 0; i < data_transfer.files.length; i++) {
+    let file = data_transfer.files[i];
+    files.push({
+      name: file.name,
+      path: file.name,
+      size: file.size,
+      last_modified: file.lastModified,
+      content_type: file.type,
+      contents: undefined, // we don't serialize contents here
+    });
+  }
+
   return {
     mouse: {
       alt_key: event.altKey,
@@ -340,7 +365,12 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       shift_key: event.shiftKey,
       ...serializeMouseEvent(event),
     },
-    files,
+    data_transfer: {
+      items,
+      files,
+      effect_allowed,
+      drop_effect,
+    },
   };
 }
 
@@ -458,3 +488,6 @@ export function retrieveSelectValue(target: HTMLSelectElement): string[] {
   }
   return values;
 }
+
+export type SerializedDataTransfer = {}
+export type SerializedDataTransferItem = {}
