@@ -63,7 +63,7 @@ impl ServeConfig {
     /// // Finally, launch the app with the config
     /// LaunchBuilder::new()
     ///     // Only set the server config if the server feature is enabled
-    ///     .with_cfg(server_only!(dioxus_server::ServerConfig::default().incremental(dioxus_server::IncrementalRendererConfig::default())))
+    ///     .with_cfg(server_only!(dioxus_server::ServeConfig::default().incremental(dioxus_server::IncrementalRendererConfig::default())))
     ///     .launch(app);
     /// ```
     pub fn incremental(mut self, cfg: IncrementalRendererConfig) -> Self {
