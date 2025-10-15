@@ -8,43 +8,11 @@ struct Item {
     id: usize,
     name: String,
     category: String,
+    contents: String,
 }
 
 fn app() -> Element {
-    let mut items = use_signal(|| {
-        vec![
-            Item {
-                id: 1,
-                name: "Item 1".into(),
-                category: "A".into(),
-            },
-            Item {
-                id: 2,
-                name: "Item 2".into(),
-                category: "A".into(),
-            },
-            Item {
-                id: 3,
-                name: "Item 3".into(),
-                category: "A".into(),
-            },
-            Item {
-                id: 4,
-                name: "Item 4".into(),
-                category: "B".into(),
-            },
-            Item {
-                id: 5,
-                name: "Item 5".into(),
-                category: "B".into(),
-            },
-            Item {
-                id: 6,
-                name: "Item 6".into(),
-                category: "C".into(),
-            },
-        ]
-    });
+    let mut items = use_signal(initial_kanban_data);
 
     rsx! {
         div {
@@ -70,7 +38,7 @@ fn app() -> Element {
                             }
                         }
                     },
-                    h2 { "{category}" }
+                    h2 { "Category: {category}" }
                     for (index, item) in items.iter().enumerate().filter(|item| item.1.category == category) {
                         div {
                             key: "{item.id}",
@@ -85,11 +53,59 @@ fn app() -> Element {
                                 let id = items.read()[index].id.to_string();
                                 e.data_transfer().set_data("text/plain", &id).unwrap();
                             },
-                            "{item.name}"
+                            pre { "{item.name}" }
+                            input {
+                                r#type: "text",
+                                value: "{item.contents}",
+                                oninput: move |e| {
+                                    items.write()[index].contents = e.value();
+                                }
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+fn initial_kanban_data() -> Vec<Item> {
+    vec![
+        Item {
+            id: 1,
+            name: "Item 1".into(),
+            category: "A".into(),
+            contents: "This is item 1".into(),
+        },
+        Item {
+            id: 2,
+            name: "Item 2".into(),
+            category: "A".into(),
+            contents: "This is item 2".into(),
+        },
+        Item {
+            id: 3,
+            name: "Item 3".into(),
+            category: "A".into(),
+            contents: "This is item 3".into(),
+        },
+        Item {
+            id: 4,
+            name: "Item 4".into(),
+            category: "B".into(),
+            contents: "This is item 4".into(),
+        },
+        Item {
+            id: 5,
+            name: "Item 5".into(),
+            category: "B".into(),
+            contents: "This is item 5".into(),
+        },
+        Item {
+            id: 6,
+            name: "Item 6".into(),
+            category: "C".into(),
+            contents: "This is item 6".into(),
+        },
+    ]
 }
