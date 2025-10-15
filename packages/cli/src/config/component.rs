@@ -11,5 +11,5 @@ pub(crate) struct ComponentConfig {
 
     /// The path where components are stored when adding or removing components
     #[serde(default)]
-    pub(crate) component_dir: Option<PathBuf>,
+    pub(crate) components_dir: Option<PathBuf>,
 }

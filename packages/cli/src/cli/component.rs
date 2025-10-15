@@ -210,7 +210,7 @@ impl ComponentCommand {
             Self::Update { registry } => {
                 let config = Self::resolve_config().await?;
                 registry
-                    .unwrap_or(config.component.registry.remote)
+                    .unwrap_or(config.components.registry.remote)
                     .update()
                     .await?;
             }
@@ -301,7 +301,7 @@ impl ComponentCommand {
             return Ok(registry);
         }
 
-        Ok(config.component.registry.clone())
+        Ok(config.components.registry.clone())
     }
 
     /// Add any rust dependencies required for a component
@@ -523,7 +523,7 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
 
     let root = Workspace::crate_root_from_path()?;
 
-    if let Some(component_path) = &config.component.component_dir {
+    if let Some(component_path) = &config.components.components_dir {
         return Ok(root.join(component_path));
     }
 

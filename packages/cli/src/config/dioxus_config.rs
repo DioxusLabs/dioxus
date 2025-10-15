@@ -14,7 +14,7 @@ pub(crate) struct DioxusConfig {
     pub(crate) bundle: BundleConfig,
 
     #[serde(default)]
-    pub(crate) component: ComponentConfig,
+    pub(crate) components: ComponentConfig,
 }
 
 impl Default for DioxusConfig {
@@ -58,7 +58,7 @@ impl Default for DioxusConfig {
                 wasm_opt: Default::default(),
             },
             bundle: BundleConfig::default(),
-            component: ComponentConfig::default(),
+            components: ComponentConfig::default(),
         }
     }
 }

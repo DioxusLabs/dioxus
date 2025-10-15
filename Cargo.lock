@@ -5500,7 +5500,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-component-manifest"
-version = "0.7.0-rc.0"
+version = "0.7.0-rc.1"
 dependencies = [
  "schemars 1.0.4",
  "serde",

@@ -117,9 +117,9 @@ pub(crate) enum Commands {
     Tools(BuildTools),
 
     /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
-    #[clap(name = "component")]
+    #[clap(name = "components")]
     #[clap(subcommand)]
-    Component(component::ComponentCommand),
+    Components(component::ComponentCommand),
 }
 
 #[allow(clippy::large_enum_variant)]
