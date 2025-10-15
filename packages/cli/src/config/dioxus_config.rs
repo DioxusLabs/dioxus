@@ -17,7 +17,7 @@ impl Default for DioxusConfig {
         Self {
             application: ApplicationConfig {
                 out_dir: None,
-                static_dir: None,
+                public_dir: Some("public".into()),
                 tailwind_input: None,
                 tailwind_output: None,
                 ios_info_plist: None,
@@ -62,9 +62,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn static_dir_defaults_to_none() {
+    fn static_dir_defaults_to_public() {
         let config = DioxusConfig::default();
-        assert!(config.application.static_dir.is_none());
+        assert_eq!(
+            config.application.public_dir,
+            Some(std::path::PathBuf::from("public"))
+        );
     }
 
     #[test]
@@ -76,7 +79,7 @@ mod tests {
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(
-            config.application.static_dir.as_deref(),
+            config.application.public_dir.as_deref(),
             Some(std::path::Path::new("static"))
         );
     }

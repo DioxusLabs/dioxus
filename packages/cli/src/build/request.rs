@@ -3630,7 +3630,7 @@ impl BuildRequest {
     pub(crate) fn static_dir_source(&self) -> Option<PathBuf> {
         self.config
             .application
-            .static_dir
+            .public_dir
             .as_ref()
             .and_then(|path| {
                 if path.as_os_str().is_empty() {
