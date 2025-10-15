@@ -184,5 +184,3 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]
