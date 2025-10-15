@@ -21,6 +21,7 @@ thiserror = { workspace = true }
 dioxus-fullstack-core = { workspace = true }
 http = { workspace = true }
 anyhow = { workspace = true }
+miette = { workspace = true }
 dioxus-core = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-hooks = { workspace = true }
@@ -89,6 +90,7 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }
 dioxus-server = { workspace = true }
+miette = { workspace = true }
 
 [features]
 default = ["ws"]

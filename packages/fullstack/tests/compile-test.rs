@@ -90,6 +90,12 @@ mod simple_extractors {
         Ok(Bytes::from_static(b"Hello!"))
     }
 
+    /// We can use the miette error type
+    #[get("/hello")]
+    async fn nine_b() -> miette::Result<Bytes> {
+        Ok(Bytes::from_static(b"Hello!"))
+    }
+
     /// We can use the ServerFnError error type
     #[get("/hello")]
     async fn ten() -> Result<Bytes, ServerFnError> {

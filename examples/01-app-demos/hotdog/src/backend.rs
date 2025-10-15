@@ -1,4 +1,3 @@
-use anyhow::Result;
 use dioxus::prelude::*;
 
 #[cfg(feature = "server")]
@@ -19,7 +18,7 @@ thread_local! {
 }
 
 #[get("/api/dogs")]
-pub async fn list_dogs() -> Result<Vec<(usize, String)>> {
+pub async fn list_dogs() -> anyhow::Result<Vec<(usize, String)>> {
     DB.with(|db| {
         Ok(db
             .prepare("SELECT id, url FROM dogs ORDER BY id DESC LIMIT 10")?
@@ -29,13 +28,13 @@ pub async fn list_dogs() -> Result<Vec<(usize, String)>> {
 }
 
 #[delete("/api/dogs/{id}")]
-pub async fn remove_dog(id: usize) -> Result<()> {
+pub async fn remove_dog(id: usize) -> anyhow::Result<()> {
     DB.with(|db| db.execute("DELETE FROM dogs WHERE id = ?1", [id]))?;
     Ok(())
 }
 
 #[post("/api/dogs")]
-pub async fn save_dog(image: String) -> Result<()> {
+pub async fn save_dog(image: String) -> anyhow::Result<()> {
     DB.with(|db| db.execute("INSERT INTO dogs (url) VALUES (?1)", [&image]))?;
     Ok(())
 }

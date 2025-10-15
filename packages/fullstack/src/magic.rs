@@ -375,6 +375,35 @@ mod decode_ok {
         }
     }
 
+    /// Here we convert to ServerFnError and then into the miette::Report, letting the user downcast
+    /// from the ServerFnError if they want to.
+    ///
+    /// This loses any actual type information, but is the most flexible for users.
+    impl<T> RequestDecodeErr<T, miette::Report> for &ServerFnDecoder<Result<T, miette::Report>> {
+        fn decode_client_err(
+            &self,
+            res: Result<Result<T, ServerFnError>, RequestError>,
+        ) -> impl Future<Output = Result<T, miette::Report>> + Send {
+            SendWrapper::new(async move {
+                match res {
+                    Ok(Ok(res)) => Ok(res),
+                    Ok(Err(ServerFnError::ServerError {
+                        message,
+                        details: Some(details),
+                        ..
+                    })) => {
+                        let diag = serde_json::from_value::<miette::MietteDiagnostic>(details)
+                            .unwrap_or(miette::MietteDiagnostic::new(message.clone()));
+                        let report = miette::Report::new(diag);
+                        Err(report)
+                    }
+                    Ok(Err(e)) => Err(miette::Report::from_err(e)),
+                    Err(err) => Err(miette::Report::from_err(err)),
+                }
+            })
+        }
+    }
+
     /// This converts to statuscode, which can be useful but loses a lot of information.
     impl<T> RequestDecodeErr<T, StatusCode> for &ServerFnDecoder<Result<T, StatusCode>> {
         fn decode_client_err(
@@ -709,6 +738,47 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    Err(resp)
+                }
+            }
+        }
+    }
+
+    impl<T> MakeAxumError<miette::Report> for &ServerFnDecoder<Result<T, miette::Report>> {
+        fn make_axum_error(
+            self,
+            result: Result<Response, miette::Report>,
+        ) -> Result<Response, Response> {
+            match result {
+                Ok(res) => Ok(res),
+                Err(err) => {
+                    // Convert miette::Report to ServerFnError, then to ErrorPayload
+                    let server_fn_error = ServerFnError::from(err);
+                    let payload = match server_fn_error {
+                        ServerFnError::ServerError {
+                            message,
+                            code,
+                            details,
+                        } => ErrorPayload {
+                            message,
+                            code,
+                            data: details,
+                        },
+                        other => ErrorPayload {
+                            message: other.to_string(),
+                            code: 500,
+                            data: None,
+                        },
+                    };
+
+                    let body = serde_json::to_string(&payload).unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/json"),
+                    );
+                    *resp.status_mut() = StatusCode::from_u16(payload.code)
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                     Err(resp)
                 }
             }
