@@ -78,16 +78,10 @@ impl HasDataTransferData for Synthetic<DragEvent> {
         use wasm_bindgen::JsCast;
 
         if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
-            if let Some(data_transfer) = target.data_transfer() {
-                let web_data_transfer = WebDataTransfer {
-                    data: data_transfer,
-                };
+            if let Some(data) = target.data_transfer() {
+                let web_data_transfer = WebDataTransfer::new(data);
                 return dioxus_html::DataTransfer::new(web_data_transfer);
-            } else {
-                tracing::warn!("DragEvent had no DataTransfer");
             }
-        } else {
-            tracing::warn!("DragEvent target was not a DragEvent");
         }
 
         // Return an empty DataTransfer if we couldn't get one from the event

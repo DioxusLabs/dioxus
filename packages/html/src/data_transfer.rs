@@ -9,6 +9,22 @@ impl DataTransfer {
         }
     }
 
+    #[cfg(feature = "serialize")]
+    pub fn store(&self, item: impl Serialize) -> Result<(), String> {
+        let serialized = serde_json::to_string(&item).map_err(|e| e.to_string())?;
+        self.set_data("application/json", &serialized)
+    }
+
+    #[cfg(feature = "serialize")]
+    pub fn retrieve<T: for<'de> serde::Deserialize<'de>>(&self) -> Result<Option<T>, String> {
+        if let Some(data) = self.get_data("application/json") {
+            let deserialized = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+            Ok(Some(deserialized))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn get_data(&self, format: &str) -> Option<String> {
         self.inner.get_data(format)
     }
@@ -63,6 +79,8 @@ pub trait HasDataTransferData {
 
 #[cfg(feature = "serialize")]
 pub use ser::*;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 
 #[cfg(feature = "serialize")]
 mod ser {
@@ -96,13 +114,15 @@ mod ser {
         }
 
         fn set_data(&self, _format: &str, _data: &str) -> Result<(), String> {
-            todo!()
+            // todo!()
             // Err("Cannot set data on serialized DataTransfer".into())
+            Ok(())
         }
 
         fn clear_data(&self, _format: Option<&str>) -> Result<(), String> {
-            todo!()
+            // todo!()
             // Err("Cannot clear data on serialized DataTransfer".into())
+            Ok(())
         }
 
         fn effect_allowed(&self) -> String {

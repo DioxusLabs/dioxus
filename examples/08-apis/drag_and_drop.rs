@@ -1,3 +1,13 @@
+//! This example shows how to implement a simple drag-and-drop kanban board using Dioxus.
+//! You can drag items between different categories and edit their contents.
+//!
+//! This example uses the `.data_transfer()` API to handle drag-and-drop events. When an item is dragged,
+//! its ID is stored in the data transfer object. When the item is dropped into a new category, its ID is retrieved
+//! from the data transfer object and used to update the item's category.
+//!
+//! Note that in a real-world application, you'll want more sophisticated drop handling, such as visual
+//! feedback during dragging, and better drop-zone detection to allow dropping *between* items.
+
 use dioxus::prelude::*;
 
 fn main() {
@@ -49,11 +59,12 @@ fn app() -> Element {
                             class: "item",
                             draggable: "true",
                             background: "white",
+                            cursor: "grab",
                             ondragstart: move |e| {
                                 let id = items.read()[index].id.to_string();
                                 e.data_transfer().set_data("text/plain", &id).unwrap();
                             },
-                            pre { "{item.name}" }
+                            pre { webkit_user_select: "none", "{item.name}" }
                             input {
                                 r#type: "text",
                                 value: "{item.contents}",

@@ -164,6 +164,7 @@ impl WebviewEdits {
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
+                    data_transfer: drag.data_transfer.clone(),
                     files: file_paths,
                 })))
             }
