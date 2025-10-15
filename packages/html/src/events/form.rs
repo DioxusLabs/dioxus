@@ -1,5 +1,5 @@
-use crate::file_data::HasFileData;
 use crate::FileData;
+use crate::{file_data::HasFileData, DataTransfer};
 use std::fmt::Debug;
 
 use dioxus_core::Event;
@@ -76,6 +76,13 @@ impl FormData {
     /// Did this form pass its own validation?
     pub fn valid(&self) -> bool {
         !self.inner.value().is_empty()
+    }
+
+    /// Get the DataTransfer object associated with this event, if any.
+    ///
+    /// The data transfer object will always exist, though its contents may be empty.
+    pub fn data_transfer(&self) -> DataTransfer {
+        todo!()
     }
 }
 

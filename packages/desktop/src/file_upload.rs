@@ -11,8 +11,9 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDragData, HasFileData, HasFormData, HasMouseData, NativeFileData,
-    SerializedFormData, SerializedFormObject, SerializedMouseData, SerializedPointInteraction,
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedFormData, SerializedFormObject, SerializedMouseData,
+    SerializedPointInteraction,
 };
 
 use serde::{Deserialize, Serialize};
@@ -244,6 +245,12 @@ impl HasFileData for DesktopFileDragEvent {
             .cloned()
             .map(|f| FileData::new(DesktopFileData(f)))
             .collect()
+    }
+}
+
+impl HasDataTransferData for DesktopFileDragEvent {
+    fn data_transfer(&self) -> dioxus_html::DataTransfer {
+        todo!()
     }
 }
 
