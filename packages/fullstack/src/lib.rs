@@ -52,6 +52,9 @@ mod client;
 pub use client::*;
 
 pub use axum::extract::Json;
+pub use axum::response::{NoContent, Redirect};
+
+pub use crate::request::{FromResponse, FromResponseParts};
 
 pub use payloads::*;
 pub mod payloads {

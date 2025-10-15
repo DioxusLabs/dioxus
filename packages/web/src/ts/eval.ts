@@ -4,8 +4,8 @@ import {
   WeakDioxusChannel,
 } from "../../../document/src/ts/eval";
 
-window.__nextChannelId = 0;
-window.__channels = [];
+globalThis.__nextChannelId = 0;
+globalThis.__channels = [];
 
 export { WeakDioxusChannel };
 export class WebDioxusChannel extends DioxusChannel {
@@ -20,9 +20,9 @@ export class WebDioxusChannel extends DioxusChannel {
     this.js_to_rust = new Channel();
     this.rust_to_js = new Channel();
 
-    this.id = window.__nextChannelId;
-    window.__channels[this.id] = this;
-    window.__nextChannelId += 1;
+    this.id = globalThis.__nextChannelId;
+    globalThis.__channels[this.id] = this;
+    globalThis.__nextChannelId += 1;
   }
 
   // Return a weak reference to this channel
@@ -52,6 +52,6 @@ export class WebDioxusChannel extends DioxusChannel {
 
   // Close the channel, dropping it.
   close(): void {
-    window.__channels[this.id] = null;
+    globalThis.__channels[this.id] = null;
   }
 }

@@ -43,8 +43,7 @@ fn Doggo() -> Element {
         }
 
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
-            .await
-            .unwrap()
+            .await?
             .json::<DogApi>()
             .await
     })?;

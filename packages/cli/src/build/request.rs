@@ -868,6 +868,26 @@ impl BuildRequest {
             ]);
         }
 
+        // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
+        if matches!(bundle, BundleFormat::Ios) {
+            let xcode_path = Workspace::get_xcode_path()
+                .await
+                .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
+
+            let sysroot_location = match triple.environment {
+                target_lexicon::Environment::Sim => xcode_path
+                    .join("Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk"),
+                _ => xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"),
+            };
+
+            if sysroot_location.exists() && !rustflags.flags.iter().any(|f| f == "-isysroot") {
+                rustflags.flags.extend([
+                    "-Clink-arg=-isysroot".to_string(),
+                    format!("-Clink-arg={}", sysroot_location.display()),
+                ]);
+            }
+        }
+
         // automatically set the getrandom backend for web builds if the user requested it
         if matches!(bundle, BundleFormat::Web) && args.wasm_js_cfg {
             rustflags.flags.extend(
@@ -1715,6 +1735,14 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        }
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
@@ -1722,7 +1750,7 @@ impl BuildRequest {
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -1834,12 +1862,20 @@ impl BuildRequest {
                 // -lxyz
                 // There might be more, but some flags might break our setup.
                 for (idx, arg) in original_args.iter().enumerate() {
-                    if *arg == "-framework" || *arg == "-arch" || *arg == "-L" {
+                    if *arg == "-framework"
+                        || *arg == "-arch"
+                        || *arg == "-L"
+                        || *arg == "-target"
+                        || *arg == "-isysroot"
+                    {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
                     }
 
-                    if arg.starts_with("-l") || arg.starts_with("-m") {
+                    if arg.starts_with("-l")
+                        || arg.starts_with("-m")
+                        || arg.starts_with("-nodefaultlibs")
+                    {
                         out_args.push(arg.to_string());
                     }
                 }
@@ -2235,11 +2271,19 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        }
+
         // Run the linker directly!
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -3968,7 +4012,8 @@ impl BuildRequest {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
                 wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
+                    base_path = self.base_path_or_default(),
                     url = assets
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
@@ -3992,9 +4037,10 @@ impl BuildRequest {
 
                 writeln!(
                     glue,
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/{base_path}/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
 
+                    base_path = self.base_path_or_default(),
 
                     // Again, register this wasm with the asset system
                     url = assets

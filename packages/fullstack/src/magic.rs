@@ -89,8 +89,7 @@ pub enum RestEndpointPayload<T, E> {
 pub struct ErrorPayload<E> {
     message: String,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    code: Option<u16>,
+    code: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<E>,
@@ -280,7 +279,7 @@ mod decode_ok {
                                     if let Ok(text) = String::from_utf8(as_bytes.to_vec()) {
                                         Ok(RestEndpointPayload::Error(ErrorPayload {
                                             message: format!("HTTP {}: {}", status.as_u16(), text),
-                                            code: Some(status.as_u16()),
+                                            code: status.as_u16(),
                                             data: None,
                                         }))
                                     } else {
@@ -397,8 +396,10 @@ mod decode_ok {
                             message: _message,
                             details: _details,
                             code,
-                        } => Err(StatusCode::from_u16(code.unwrap_or(500))
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)),
+                        } => {
+                            Err(StatusCode::from_u16(code)
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+                        }
 
                         ServerFnError::Registration(_) | ServerFnError::MiddlewareError(_) => {
                             Err(StatusCode::INTERNAL_SERVER_ERROR)
@@ -439,7 +440,7 @@ mod decode_ok {
                     Ok(Ok(res)) => Ok(res),
                     Ok(Err(res)) => match res {
                         ServerFnError::ServerError { message, code, .. } => Err(HttpError {
-                            status: StatusCode::from_u16(code.unwrap_or(500))
+                            status: StatusCode::from_u16(code)
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
                             message: Some(message),
                         }),
@@ -617,16 +618,33 @@ mod resp {
         fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response>;
     }
 
+    /// Get the status code from the error type if possible.
+    pub trait AsStatusCode {
+        fn as_status_code(&self) -> StatusCode;
+    }
+
+    impl AsStatusCode for ServerFnError {
+        fn as_status_code(&self) -> StatusCode {
+            match self {
+                Self::ServerError { code, .. } => {
+                    StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            }
+        }
+    }
+
     impl<T, E> MakeAxumError<E> for &&&ServerFnDecoder<Result<T, E>>
     where
-        E: From<ServerFnError> + Serialize + DeserializeOwned + Display,
+        E: AsStatusCode + From<ServerFnError> + Serialize + DeserializeOwned + Display,
     {
         fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response> {
             match result {
                 Ok(res) => Ok(res),
                 Err(err) => {
+                    let status_code = err.as_status_code();
                     let err = ErrorPayload {
-                        code: None,
+                        code: status_code.as_u16(),
                         message: err.to_string(),
                         data: Some(err),
                     };
@@ -636,7 +654,7 @@ mod resp {
                         http::header::CONTENT_TYPE,
                         HeaderValue::from_static("application/json"),
                     );
-                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    *resp.status_mut() = status_code;
                     Err(resp)
                 }
             }
@@ -665,7 +683,7 @@ mod resp {
                         },
                         Ok(other) => ErrorPayload {
                             message: other.to_string(),
-                            code: None,
+                            code: 500,
                             data: None,
                         },
                         Err(err) => match err.downcast::<HttpError>() {
@@ -673,11 +691,11 @@ mod resp {
                                 message: http_err
                                     .message
                                     .unwrap_or_else(|| http_err.status.to_string()),
-                                code: Some(http_err.status.as_u16()),
+                                code: http_err.status.as_u16(),
                                 data: None,
                             },
                             Err(err) => ErrorPayload {
-                                code: None,
+                                code: 500,
                                 message: err.to_string(),
                                 data: None,
                             },
@@ -706,7 +724,7 @@ mod resp {
                 Ok(resp) => Ok(resp),
                 Err(status) => {
                     let body = serde_json::to_string(&ErrorPayload::<()> {
-                        code: Some(status.as_u16()),
+                        code: status.as_u16(),
                         message: status.to_string(),
                         data: None,
                     })
@@ -732,7 +750,7 @@ mod resp {
                 Ok(resp) => Ok(resp),
                 Err(http_err) => {
                     let body = serde_json::to_string(&ErrorPayload::<()> {
-                        code: Some(http_err.status.as_u16()),
+                        code: http_err.status.as_u16(),
                         message: http_err
                             .message
                             .unwrap_or_else(|| http_err.status.to_string()),

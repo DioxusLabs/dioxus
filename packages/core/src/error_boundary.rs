@@ -201,131 +201,6 @@ pub struct ErrorBoundaryProps {
     children: Element,
     handle_error: ErrorHandler,
 }
-impl ErrorBoundaryProps {
-    /**
-    Create a builder for building `ErrorBoundaryProps`.
-    On the builder, call `.children(...)`(optional), `.handle_error(...)`(optional) to set the values of the fields.
-    Finally, call `.build()` to create the instance of `ErrorBoundaryProps`.
-                        */
-    #[allow(dead_code)]
-    pub fn builder() -> ErrorBoundaryPropsBuilder<((), ())> {
-        ErrorBoundaryPropsBuilder { fields: ((), ()) }
-    }
-}
-
-#[must_use]
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub struct ErrorBoundaryPropsBuilder<TypedBuilderFields> {
-    fields: TypedBuilderFields,
-}
-impl<TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<TypedBuilderFields>
-where
-    TypedBuilderFields: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            fields: self.fields.clone(),
-        }
-    }
-}
-impl Properties for ErrorBoundaryProps {
-    type Builder = ErrorBoundaryPropsBuilder<((), ())>;
-    fn builder() -> Self::Builder {
-        ErrorBoundaryProps::builder()
-    }
-    fn memoize(&mut self, other: &Self) -> bool {
-        *self = other.clone();
-        false
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub trait ErrorBoundaryPropsBuilder_Optional<T> {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
-}
-impl<T> ErrorBoundaryPropsBuilder_Optional<T> for () {
-    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
-        default()
-    }
-}
-impl<T> ErrorBoundaryPropsBuilder_Optional<T> for (T,) {
-    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
-        self.0
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__handle_error> ErrorBoundaryPropsBuilder<((), __handle_error)> {
-    pub fn children(
-        self,
-        children: Element,
-    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-        let children = (children,);
-        let (_, handle_error) = self.fields;
-        ErrorBoundaryPropsBuilder {
-            fields: (children, handle_error),
-        }
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_children {}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__handle_error> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-    #[deprecated(note = "Repeated field children")]
-    pub fn children(
-        self,
-        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_children,
-    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
-        self
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__children> ErrorBoundaryPropsBuilder<(__children, ())> {
-    pub fn handle_error(
-        self,
-        handle_error: impl ::core::convert::Into<ErrorHandler>,
-    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-        let handle_error = (handle_error.into(),);
-        let (children, _) = self.fields;
-        ErrorBoundaryPropsBuilder {
-            fields: (children, handle_error),
-        }
-    }
-}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, non_snake_case)]
-pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error {}
-#[doc(hidden)]
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-    #[deprecated(note = "Repeated field handle_error")]
-    pub fn handle_error(
-        self,
-        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error,
-    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
-        self
-    }
-}
-#[allow(dead_code, non_camel_case_types, missing_docs)]
-impl<
-        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
-        __children: ErrorBoundaryPropsBuilder_Optional<Element>,
-    > ErrorBoundaryPropsBuilder<(__children, __handle_error)>
-{
-    pub fn build(self) -> ErrorBoundaryProps {
-        let (children, handle_error) = self.fields;
-        let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
-        let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
-            ErrorHandler(Rc::new(default_handler))
-        });
-        ErrorBoundaryProps {
-            children,
-            handle_error,
-        }
-    }
-}
 
 /// Create a new error boundary component that catches any errors thrown from child components
 ///
@@ -457,5 +332,131 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
                 Default::default(),
             )
         })
+    }
+}
+
+impl ErrorBoundaryProps {
+    /**
+    Create a builder for building `ErrorBoundaryProps`.
+    On the builder, call `.children(...)`(optional), `.handle_error(...)`(optional) to set the values of the fields.
+    Finally, call `.build()` to create the instance of `ErrorBoundaryProps`.
+                        */
+    #[allow(dead_code)]
+    pub fn builder() -> ErrorBoundaryPropsBuilder<((), ())> {
+        ErrorBoundaryPropsBuilder { fields: ((), ()) }
+    }
+}
+
+#[must_use]
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub struct ErrorBoundaryPropsBuilder<TypedBuilderFields> {
+    fields: TypedBuilderFields,
+}
+impl<TypedBuilderFields> Clone for ErrorBoundaryPropsBuilder<TypedBuilderFields>
+where
+    TypedBuilderFields: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            fields: self.fields.clone(),
+        }
+    }
+}
+impl Properties for ErrorBoundaryProps {
+    type Builder = ErrorBoundaryPropsBuilder<((), ())>;
+    fn builder() -> Self::Builder {
+        ErrorBoundaryProps::builder()
+    }
+    fn memoize(&mut self, other: &Self) -> bool {
+        *self = other.clone();
+        false
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub trait ErrorBoundaryPropsBuilder_Optional<T> {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T;
+}
+impl<T> ErrorBoundaryPropsBuilder_Optional<T> for () {
+    fn into_value<F: FnOnce() -> T>(self, default: F) -> T {
+        default()
+    }
+}
+impl<T> ErrorBoundaryPropsBuilder_Optional<T> for (T,) {
+    fn into_value<F: FnOnce() -> T>(self, _: F) -> T {
+        self.0
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__handle_error> ErrorBoundaryPropsBuilder<((), __handle_error)> {
+    pub fn children(
+        self,
+        children: Element,
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
+        let children = (children,);
+        let (_, handle_error) = self.fields;
+        ErrorBoundaryPropsBuilder {
+            fields: (children, handle_error),
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_children {}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__handle_error> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
+    #[deprecated(note = "Repeated field children")]
+    pub fn children(
+        self,
+        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_children,
+    ) -> ErrorBoundaryPropsBuilder<((Element,), __handle_error)> {
+        self
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__children> ErrorBoundaryPropsBuilder<(__children, ())> {
+    pub fn handle_error(
+        self,
+        handle_error: impl ::core::convert::Into<ErrorHandler>,
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
+        let handle_error = (handle_error.into(),);
+        let (children, _) = self.fields;
+        ErrorBoundaryPropsBuilder {
+            fields: (children, handle_error),
+        }
+    }
+}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, non_snake_case)]
+pub enum ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error {}
+#[doc(hidden)]
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
+    #[deprecated(note = "Repeated field handle_error")]
+    pub fn handle_error(
+        self,
+        _: ErrorBoundaryPropsBuilder_Error_Repeated_field_handle_error,
+    ) -> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
+        self
+    }
+}
+#[allow(dead_code, non_camel_case_types, missing_docs)]
+impl<
+        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
+        __children: ErrorBoundaryPropsBuilder_Optional<Element>,
+    > ErrorBoundaryPropsBuilder<(__children, __handle_error)>
+{
+    pub fn build(self) -> ErrorBoundaryProps {
+        let (children, handle_error) = self.fields;
+        let children = ErrorBoundaryPropsBuilder_Optional::into_value(children, VNode::empty);
+        let handle_error = ErrorBoundaryPropsBuilder_Optional::into_value(handle_error, || {
+            ErrorHandler(Rc::new(default_handler))
+        });
+        ErrorBoundaryProps {
+            children,
+            handle_error,
+        }
     }
 }

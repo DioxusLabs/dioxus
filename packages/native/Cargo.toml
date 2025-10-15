@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "tracing", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog"]
 clipboard = ["blitz-shell/clipboard"]
 file_dialog = ["blitz-shell/file_dialog"]
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
@@ -58,4 +58,3 @@ futures-util = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]

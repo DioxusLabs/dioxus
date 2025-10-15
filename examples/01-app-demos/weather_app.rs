@@ -20,7 +20,7 @@ fn app() -> Element {
     let current_weather = use_loader(move || get_weather(country()));
 
     rsx! {
-        Stylesheet { href: "https://unpkg.com/tailwindcss@^2.0/dist/tailwind.min.css" }
+        Stylesheet { href: asset!("/examples/assets/weatherapp.css") }
         div { class: "mx-auto p-4 bg-gray-100 h-screen flex justify-center",
             div { class: "flex items-center justify-center flex-row",
                 div { class: "flex items-start justify-center flex-row",
@@ -35,6 +35,11 @@ fn app() -> Element {
                                             weather: weather.cloned(),
                                         }
                                         Forecast { weather: weather.cloned() }
+                                        div { height: "20px", margin_top: "10px",
+                                            if weather.loading() {
+                                                "Fetching weather data..."
+                                            }
+                                        }
                                     },
                                     Err(Loading::Pending(_)) => rsx! {
                                         div { "Loading weather data..." }
@@ -56,8 +61,8 @@ fn app() -> Element {
 #[component]
 fn CountryData(weather: WeatherResponse, country: WeatherLocation) -> Element {
     let today = "Today";
-    let max_temp = weather.daily.temperature_2m_max.first().unwrap();
-    let min_temp = weather.daily.temperature_2m_min.first().unwrap();
+    let max_temp = weather.daily.temperature_2m_max[0];
+    let min_temp = weather.daily.temperature_2m_min[0];
 
     rsx! {
         div { class: "flex mb-4 justify-between items-center",
@@ -82,15 +87,11 @@ fn CountryData(weather: WeatherResponse, country: WeatherLocation) -> Element {
 #[allow(non_snake_case)]
 #[component]
 fn Forecast(weather: WeatherResponse) -> Element {
-    let today = (weather.daily.temperature_2m_max.first().unwrap()
-        + weather.daily.temperature_2m_max.first().unwrap())
-        / 2.0;
-    let tomorrow = (weather.daily.temperature_2m_max.get(1).unwrap()
-        + weather.daily.temperature_2m_max.get(1).unwrap())
-        / 2.0;
-    let past_tomorrow = (weather.daily.temperature_2m_max.get(2).unwrap()
-        + weather.daily.temperature_2m_max.get(2).unwrap())
-        / 2.0;
+    let today = (weather.daily.temperature_2m_max[0] + weather.daily.temperature_2m_max[0]) / 2.0;
+    let tomorrow =
+        (weather.daily.temperature_2m_max[1] + weather.daily.temperature_2m_max[1]) / 2.0;
+    let past_tomorrow =
+        (weather.daily.temperature_2m_max[2] + weather.daily.temperature_2m_max[2]) / 2.0;
 
     rsx! {
         div { class: "px-6 pt-4 relative",
@@ -117,7 +118,7 @@ fn Forecast(weather: WeatherResponse) -> Element {
 #[component]
 fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
     let mut input = use_signal(|| "".to_string());
-    let locations = use_resource(move || get_locations(input()));
+    let locations = use_loader(move || get_locations(input()));
 
     rsx! {
         div {
@@ -145,17 +146,32 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                     }
                 }
                 ul { class: "bg-white border border-gray-100 w-full mt-2 max-h-72 overflow-auto",
-                    if let Some(Ok(locs)) = locations.read().as_ref() {
-                        for wl in locs.iter().take(5).cloned() {
-                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
-                                onclick: move |_| country.set(wl.clone()),
-                                MapIcon {}
-                                b { "{wl.name}" }
-                                " · {wl.country}"
+                    match locations {
+                        Ok(locs) if locs.is_empty() => rsx! {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
+                                "No locations found"
+                            }
+                        },
+                        Ok(locs) => rsx! {
+                            for wl in locs.read().iter().take(5).cloned() {
+                                li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative cursor-pointer hover:bg-yellow-50 hover:text-gray-900",
+                                    onclick: move |_| country.set(wl.clone()),
+                                    MapIcon {}
+                                    b { "{wl.name}" }
+                                    " · {wl.country}"
+                                }
+                            }
+                        },
+                        Err(Loading::Pending(_)) => rsx! {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
+                                "Searching..."
+                            }
+                        },
+                        Err(Loading::Failed(handle)) => rsx! {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
+                                "Failed to search: {handle.error():?}"
                             }
                         }
-                    } else {
-                        "loading locations..."
                     }
                 }
             }
@@ -200,10 +216,11 @@ type WeatherLocations = Vec<WeatherLocation>;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct SearchResponse {
+    #[serde(default)]
     results: WeatherLocations,
 }
 
-async fn get_locations(input: impl Display) -> reqwest::Result<WeatherLocations> {
+async fn get_locations(input: impl Display) -> Result<WeatherLocations> {
     let res = reqwest::get(&format!(
         "https://geocoding-api.open-meteo.com/v1/search?name={input}"
     ))

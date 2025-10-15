@@ -11,10 +11,11 @@ pub use bytes::Bytes;
 pub use dioxus_fullstack_core::{ServerFnError, ServerFnResult};
 
 pub use axum;
-pub(crate) use config::*;
+pub use config::ServeConfig;
 pub use config::*;
-pub use config::{ServeConfig, ServeConfigBuilder};
 pub use document::ServerDocument;
+pub use http;
+pub use inventory;
 pub use server::*;
 
 pub mod redirect;
@@ -44,3 +45,6 @@ pub use serverfn::*;
 
 pub mod isrg;
 pub use isrg::*;
+
+mod index_html;
+pub(crate) use index_html::IndexHtml;
