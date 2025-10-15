@@ -111,8 +111,6 @@ targets = [
   "aarch64-linux-android",
   "armv7-linux-androideabi",
 ]
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
