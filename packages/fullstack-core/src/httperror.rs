@@ -202,6 +202,16 @@ impl<T> OrHttpError<T, AnyhowMarker> for Result<T, anyhow::Error> {
     }
 }
 
+pub struct MietteMarker;
+impl<T> OrHttpError<T, MietteMarker> for Result<T, miette::Report> {
+    fn or_http_error(self, status: StatusCode, message: impl Into<String>) -> Result<T, HttpError> {
+        self.map_err(|_| HttpError {
+            status,
+            message: Some(message.into()),
+        })
+    }
+}
+
 impl IntoResponse for HttpError {
     fn into_response(self) -> axum_core::response::Response {
         let body = match &self.message {

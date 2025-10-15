@@ -231,6 +231,7 @@ bevy = "0.17"
 # a fork of pretty please for tests - let's get off of this if we can!
 prettier-please = { version = "0.3.0", features = ["verbatim"] }
 anyhow = "1.0.98"
+miette = { version = "7.2.0", features = ["serde"] }
 clap = { version = "4.5.40" }
 askama_escape = "0.13.0"
 tracing = "0.1.41"
