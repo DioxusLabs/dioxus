@@ -4803,23 +4803,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if css_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
+                        );
                     }
                 }
                 AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
                     }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if js_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
+                        );
                     }
                 }
                 _ => {}
@@ -4827,9 +4842,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
-        ));
+        _ = write!(
+            head_resources,
+            r#"<link rel="preload" as="fetch" type="application/wasm" href="/{{base_path}}/{wasm_path}" crossorigin>"#
+        );
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
