@@ -25,7 +25,7 @@ pub fn log_stacktrace(err: &anyhow::Error, padding: usize) -> String {
         ));
     }
 
-    if crate::VERBOSITY.get().unwrap().trace {
+    if crate::verbosity_or_default().trace {
         trace.push_str(&format!("\nBacktrace:\n{}", err.backtrace()));
     }
 
