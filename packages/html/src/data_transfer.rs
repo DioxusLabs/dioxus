@@ -150,7 +150,7 @@ mod ser {
     }
 
     impl From<&DragData> for SerializedDataTransfer {
-        fn from(drag: &DragData) -> Self {
+        fn from(_drag: &DragData) -> Self {
             todo!()
             //     let items = vec![]; // drag.data_transfer().items().iter().map(|item| SerializedDataTransferItem {
             //                         //     kind: item.kind().to_string(),
