@@ -667,8 +667,6 @@ impl SsrRendererPool {
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
         let title = {
             let document: Option<Rc<ServerDocument>> =
                 virtual_dom.in_scope(ScopeId::ROOT, dioxus_core::try_consume_context);
@@ -676,13 +674,13 @@ impl SsrRendererPool {
             document.and_then(|document| document.title())
         };
 
-        to.write_str(&index.head_before_title)?;
+        to.write_str(&cfg.index.head_before_title)?;
         if let Some(title) = title {
             to.write_str(&title)?;
         } else {
-            to.write_str(&index.title)?;
+            to.write_str(&cfg.index.title)?;
         }
-        to.write_str(&index.head_after_title)?;
+        to.write_str(&cfg.index.head_after_title)?;
 
         let document =
             virtual_dom.in_scope(ScopeId::ROOT, try_consume_context::<Rc<ServerDocument>>);
@@ -704,9 +702,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
-        to.write_str(&index.close_head)?;
+        to.write_str(&cfg.index.close_head)?;
 
         // // #[cfg(feature = "document")]
         // {
@@ -723,8 +719,6 @@ impl SsrRendererPool {
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
         let resolved_data = SsrRendererPool::serialize_server_data(virtual_dom, ScopeId::ROOT);
@@ -749,7 +743,7 @@ impl SsrRendererPool {
             )?;
         }
         write!(to, r#"</script>"#,)?;
-        to.write_str(&index.post_main)?;
+        to.write_str(&cfg.index.post_main)?;
 
         Ok(())
     }
@@ -759,9 +753,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
-        to.write_str(&index.after_closing_body_tag)?;
+        to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
     }

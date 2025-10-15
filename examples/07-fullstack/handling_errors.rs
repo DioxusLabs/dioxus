@@ -72,12 +72,12 @@ fn main() {
                 pre { "Dog data: {dog_data.value():#?}" }
                 pre { "IP data: {ip_data.value():#?}" }
                 pre { "Custom encoded data: {custom_data.value():#?}" }
-                pre { "Error data: {error_data.result():#?}" }
-                pre { "Typed error data: {typed_error_data.result():#?}" }
-                pre { "HTTP 400 data: {http_error_data.result():#?}" }
-                pre { "HTTP 400 (context) data: {http_error_context_data.result():#?}" }
-                pre { "Dog error data: {dog_data_err.result():#?}" }
-                pre { "Throws ok data: {throws_ok_data.result():#?}" }
+                pre { "Error data: {error_data.value():#?}" }
+                pre { "Typed error data: {typed_error_data.value():#?}" }
+                pre { "HTTP 400 data: {http_error_data.value():#?}" }
+                pre { "HTTP 400 (context) data: {http_error_context_data.value():#?}" }
+                pre { "Dog error data: {dog_data_err.value():#?}" }
+                pre { "Throws ok data: {throws_ok_data.value():#?}" }
             }
         }
     });

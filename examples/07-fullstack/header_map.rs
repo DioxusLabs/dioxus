@@ -21,7 +21,7 @@ fn app() -> Element {
     rsx! {
         h1 { "Header Map Example" }
         button { onclick: move |_| headers.call(), "Get Headers" }
-        if let Some(Ok(headers)) = headers.result() {
+        if let Some(Ok(headers)) = headers.value() {
             p { "Response from server:" }
             pre { "{headers}" }
         } else {

@@ -36,12 +36,12 @@ fn Home() -> Element {
 }
 
 #[component]
-fn Post(id: u32) -> Element {
+fn Post(id: ReadSignal<u32>) -> Element {
     // You can return `HttpError` to return a specific HTTP status code and message.
     // `404 Not Found` will cause the server to return a 404 status code.
     //
     // `use_loader` will suspend the server-side rendering until the future resolves.
-    let post_data = use_loader(move || get_post(id))?;
+    let post_data = use_loader(move || get_post(id()))?;
 
     rsx! {
         h1 { "Post {id}" }
