@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use miette::IntoDiagnostic;
 
 #[cfg(feature = "server")]
 thread_local! {
@@ -34,7 +35,8 @@ pub async fn remove_dog(id: usize) -> anyhow::Result<()> {
 }
 
 #[post("/api/dogs")]
-pub async fn save_dog(image: String) -> anyhow::Result<()> {
-    DB.with(|db| db.execute("INSERT INTO dogs (url) VALUES (?1)", [&image]))?;
+pub async fn save_dog(image: String) -> miette::Result<()> {
+    DB.with(|db| db.execute("INSERT INTO dogs (url) VALUES (?1)", [&image]))
+        .into_diagnostic()?;
     Ok(())
 }
