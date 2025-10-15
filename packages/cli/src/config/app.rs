@@ -6,6 +6,9 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) out_dir: Option<PathBuf>,
 
+    #[serde(default = "public_dir_default")]
+    pub(crate) public_dir: Option<PathBuf>,
+
     #[serde(default)]
     pub(crate) tailwind_input: Option<PathBuf>,
 
@@ -42,4 +45,8 @@ pub(crate) struct ApplicationConfig {
     /// Specified minimum sdk version for gradle to build the app with.
     #[serde(default)]
     pub(crate) android_min_sdk_version: Option<u32>,
+}
+
+fn public_dir_default() -> Option<PathBuf> {
+    Some("public".into())
 }

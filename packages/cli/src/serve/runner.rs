@@ -361,6 +361,7 @@ impl AppServer {
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
         let mut needs_full_rebuild = false;
+        let mut needs_static_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -370,6 +371,12 @@ impl AppServer {
                 .extension()
                 .and_then(|v| v.to_str())
                 .unwrap_or_default();
+
+            if self.client.build.path_is_in_static_dir(path) {
+                needs_full_rebuild = true;
+                needs_static_rebuild = true;
+                continue;
+            }
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
@@ -490,7 +497,7 @@ impl AppServer {
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine {
+            if self.use_hotpatch_engine && !needs_static_rebuild {
                 self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
                     server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
@@ -1027,6 +1034,14 @@ impl AppServer {
         // This will end up being dependencies in the workspace and non-workspace dependencies on the user's computer.
         let mut watched_crates = self.local_dependencies(crate_package);
         watched_crates.push(crate_dir);
+
+        if crate_package == self.client.build.crate_package {
+            if let Some(static_dir) = self.client.build.static_dir_source() {
+                if static_dir.exists() {
+                    watched_paths.push(static_dir);
+                }
+            }
+        }
 
         // Now, watch all the folders in the crates, but respecting their respective ignore files
         for krate_root in watched_crates {
