@@ -1,14 +1,14 @@
 use tao::window::Window;
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
 pub type DioxusMenu = muda::Menu;
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos"))]
 pub type DioxusMenu = ();
 
 /// Initializes the menu bar for the window.
 #[allow(unused)]
 pub fn init_menu_bar(menu: &DioxusMenu, window: &Window) {
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
     {
         desktop_platforms::init_menu_bar(menu, window);
     }
@@ -21,13 +21,13 @@ pub fn init_menu_bar(menu: &DioxusMenu, window: &Window) {
 /// > by [`MenuItem`](muda::MenuItem).
 #[allow(unused)]
 pub fn default_menu_bar() -> DioxusMenu {
-    #[cfg(not(any(target_os = "ios", target_os = "android")))]
+    #[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
     {
         desktop_platforms::default_menu_bar()
     }
 }
 
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
 mod desktop_platforms {
     use super::*;
     use muda::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -40,7 +40,7 @@ mod desktop_platforms {
             menu.init_for_hwnd(window.hwnd());
         }
 
-        #[cfg(target_os = "linux")]
+        #[cfg(all(target_os = "linux", not(target_env = "ohos")))]
         {
             use tao::platform::unix::WindowExtUnix;
             menu.init_for_gtk_window(window.gtk_window(), window.default_vbox())
