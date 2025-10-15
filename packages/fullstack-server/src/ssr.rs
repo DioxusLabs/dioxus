@@ -17,7 +17,7 @@ use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::{request::Parts, StatusCode};
+use http::{request::Parts, HeaderMap, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -103,6 +103,7 @@ impl SsrRendererPool {
     ) -> Result<
         (
             HttpError,
+            HeaderMap,
             RenderFreshness,
             impl Stream<Item = Result<String, IncrementalRendererError>>,
         ),
@@ -154,6 +155,7 @@ impl SsrRendererPool {
                     status: StatusCode::OK,
                     message: None,
                 },
+                HeaderMap::new(),
                 freshness,
                 ReceiverWithDrop {
                     receiver: rx,
@@ -292,9 +294,12 @@ impl SsrRendererPool {
 
             // Check the FullstackContext in case the user set the statuscode manually or via a layout.
             let http_status = streaming_context.current_http_status();
+            let headers = streaming_context
+                .take_response_headers()
+                .unwrap_or_default();
 
             // Now that we handled any errors from rendering, we can send the initial ok result
-            _ = initial_result_tx.send(Ok(http_status));
+            _ = initial_result_tx.send(Ok((http_status, headers)));
 
             // Wait long enough to assemble the `<head>` of the document before starting to stream
             let mut pre_body = String::new();
@@ -418,12 +423,13 @@ impl SsrRendererPool {
         let join_handle = Self::spawn_platform(create_render_future);
 
         // Wait for the initial result which determines the status code
-        let status = initial_result_rx
+        let (status, headers) = initial_result_rx
             .await
             .map_err(|err| SSRError::Incremental(IncrementalRendererError::Other(err.into())))??;
 
         Ok((
             status,
+            headers,
             RenderFreshness::now(None),
             ReceiverWithDrop {
                 receiver: rx,

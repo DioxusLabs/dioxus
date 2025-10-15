@@ -304,14 +304,22 @@ impl RenderHandleState {
             .await;
 
         match response {
-            Ok((status, freshness, rx)) => {
+            Ok((status, headers, freshness, rx)) => {
                 let mut response = Response::builder()
                     .status(status.status)
                     .header(CONTENT_TYPE, "text/html; charset=utf-8")
                     .body(Body::from_stream(rx))
                     .unwrap();
 
+                // Write our freshness header
                 freshness.write(response.headers_mut());
+
+                // write the other headers set by the user
+                for (key, value) in headers.into_iter() {
+                    if let Some(key) = key {
+                        response.headers_mut().insert(key, value);
+                    }
+                }
 
                 response
             }
