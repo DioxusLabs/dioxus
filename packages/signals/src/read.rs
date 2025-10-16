@@ -1,4 +1,4 @@
-use std::{mem::MaybeUninit, ops::Index};
+use std::ops::Index;
 
 use dioxus_core::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
@@ -239,44 +239,75 @@ pub trait ReadableExt: Readable {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
 
-    /// SAFETY: You must call this function directly with `self` as the argument.
-    /// This function relies on the size of the object you return from the deref
-    /// being the same as the object you pass in
+    /// Casts this [`Readable`] into a closure which defers to [read](ReadableExt::read).
     #[doc(hidden)]
-    unsafe fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
+    fn deref_impl(&self) -> &(impl Fn() -> Self::Target + use<Self>)
     where
-        Self: Sized + 'a,
+        Self: Sized,
         Self::Target: Clone + 'static,
     {
         // https://github.com/dtolnay/case-studies/tree/master/callable-types
 
-        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-        let uninit_callable = MaybeUninit::<Self>::uninit();
-        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
-
-        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-        let size_of_closure = std::mem::size_of_val(&uninit_closure);
-        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-        // Then cast the lifetime of the closure to the lifetime of &self.
-        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-            b
+        /// Helper function to transmute `src` from a `&Source` into a `&Donor`.
+        /// Unlike [transmute](core::mem::transmute), this method uses a reference to
+        /// the `Donor` value to allow inferring the destination type.
+        /// This allows transmuting into an unnameable type (e.g., a closure).
+        ///
+        /// Note that the lifetime of `src`, `'a`, is unmodified by this operation.
+        /// This can only be used to change the type a reference points to; it **cannot**
+        /// extend the lifetime of a reference.
+        ///
+        /// # Safety
+        ///
+        /// **All** safety invariants of [transmute](core::mem::transmute) **must** be upheld by the
+        /// caller of this function.
+        const unsafe fn transmute_ref_by_value<'a, Source, Donor>(
+            src: &'a Source,
+            _: &Donor,
+        ) -> &'a Donor {
+            // SAFETY: Caller is responsible for upholding all invariants of transmute.
+            unsafe { ::core::mem::transmute::<&'a Source, &Donor>(src) }
         }
-        let reference_to_closure = cast_lifetime(
-            {
-                // The real closure that we will never use.
-                &uninit_closure
-            },
-            #[allow(clippy::missing_transmute_annotations)]
-            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-            unsafe {
-                std::mem::transmute(self)
-            },
-        );
 
-        // Cast the closure to a trait object.
-        reference_to_closure as &_
+        // The real closure that we will never use.
+        let uninit_closure = const {
+            // First we create a closure that captures something with the same
+            // in memory layout as Self (MaybeUninit<Self>).
+            let uninit_callable = ::core::mem::MaybeUninit::<Self>::uninit();
+
+            // Then move that value into the closure.
+            let uninit_closure = move || {
+                // SAFETY: Initialization comes from transposing `self` into the position of `uninit_callable`.
+                let this: &Self = unsafe { uninit_callable.assume_init_ref() };
+                Self::read(this).clone()
+            };
+
+            // We assume that the closure now has a in memory layout of Self.
+            // const-compatible alternative to:
+            // assert_eq!(::core::alloc::Layout::new::<Self>(), ::core::alloc::Layout::for_value(&uninit_closure));
+            {
+                // FIXME: PartialEq::ne is not stable in const contexts, so must manually
+                //        compare all components of `Layout`.
+                let layout_self = ::core::alloc::Layout::new::<Self>();
+                let layout_closure = ::core::alloc::Layout::for_value(&uninit_closure);
+
+                if layout_self.align() != layout_closure.align()
+                    || layout_self.size() != layout_closure.size()
+                {
+                    // This panic will be cause evaluation of the const block to fail at compile time
+                    // if the assumption above is not valid.
+                    panic!("assumed layout of closures capturing a single value proven false!");
+                }
+            }
+
+            uninit_closure
+        };
+
+        // We transmute self into a reference to the closure.
+        // SAFETY: uninit_closure is ensured to have the same Layout as self by the above assertion,
+        //         and is known to contain a single value of type Self.
+        //         Therefore, uninit_closure must be equivalent to self.
+        unsafe { transmute_ref_by_value::<Self, _>(self, &uninit_closure) }
     }
 }
 

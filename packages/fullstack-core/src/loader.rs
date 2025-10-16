@@ -280,7 +280,7 @@ where
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+        ReadableExt::deref_impl(self)
     }
 }
 
