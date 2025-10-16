@@ -4826,10 +4826,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
 
-        // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
-        ));
+        // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
+        // And if they do not match then Safari downloads the wasm file twice.
+        // See https://github.com/wasm-bindgen/wasm-bindgen/blob/ac51055a4c39fa0affe02f7b63fb1d4c9b3ddfaf/crates/cli-support/src/js/mod.rs#L967
+        
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
