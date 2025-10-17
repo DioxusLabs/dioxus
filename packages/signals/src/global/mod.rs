@@ -182,11 +182,26 @@ where
         let context = get_global_context();
 
         // Get the entry if it already exists
+        let mut evicted_stale_entry = false;
         {
             let read = context.map.borrow();
             if let Some(signal) = read.get(&key) {
-                return signal.downcast_ref::<T>().cloned().unwrap();
+                if let Some(signal) = signal.downcast_ref::<T>() {
+                    return signal.clone();
+                }
+                evicted_stale_entry = true;
+                #[cfg(debug_assertions)]
+                tracing::warn!(
+                    ?key,
+                    stored_type = ?signal.type_id(),
+                    expected_type = std::any::type_name::<T>(),
+                    expected_type_id = ?std::any::TypeId::of::<T>(),
+                    "Global signal cache entry type mismatch; rebuilding entry"
+                );
             }
+        }
+        if evicted_stale_entry {
+            context.map.borrow_mut().remove(&key);
         }
         // Otherwise, create it
         // Constructors are always run in the root scope
