@@ -284,8 +284,10 @@ impl RenderHandleState {
     ///     axum::serve(listener, router).await.unwrap();
     /// }
     /// ```
-    pub async fn render_handler(State(state): State<Self>, request: Request<Body>) -> Response {
+    pub async fn render_handler(State(mut state): State<Self>, request: Request<Body>) -> Response {
         let (parts, _) = request.into_parts();
+
+        state.config.resolve_index();
 
         let response = state
             .renderers

@@ -14,7 +14,7 @@ pub(crate) type ContextProviders = Arc<Vec<Box<dyn Fn() -> Box<dyn Any> + Send +
 #[derive(Clone, Default)]
 pub struct ServeConfig {
     pub(crate) root_id: Option<&'static str>,
-    pub(crate) index: IndexHtml,
+    pub(crate) index: Option<IndexHtml>,
     pub(crate) index_html_override: Option<String>,
     pub(crate) incremental: Option<IncrementalRendererConfig>,
     pub(crate) context_providers: Vec<Arc<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>>,
@@ -46,7 +46,7 @@ impl ServeConfig {
         Self {
             root_id: None,
             incremental: None,
-            index: IndexHtml::default(),
+            index: None,
             index_html_override: None,
             context_providers: Default::default(),
             streaming_mode: StreamingMode::default(),
@@ -312,5 +312,33 @@ impl ServeConfig {
     pub fn enable_out_of_order_streaming(mut self) -> Self {
         self.streaming_mode = StreamingMode::OutOfOrder;
         self
+    }
+
+    pub(crate) fn resolve_index(&mut self) -> &IndexHtml {
+        // Create the IndexHtml object if the user has specified an override
+        if let Some(raw_index_html) = self.index_html_override.as_ref() {
+            self.index = Some(
+                IndexHtml::new(raw_index_html, self.root_id.unwrap_or("main"))
+                    .expect("Failed to parse custom index.html"),
+            );
+        } else if !cfg!(target_arch = "wasm32") {
+            let public_path = crate::public_path();
+            let index_html_path = public_path.join("index.html");
+
+            if index_html_path.exists() {
+                let index_html = std::fs::read_to_string(index_html_path)
+                    .expect("Failed to read index.html from public directory");
+                self.index = Some(
+                    IndexHtml::new(&index_html, self.root_id.unwrap_or("main"))
+                        .expect("Failed to parse index.html from public directory"),
+                );
+            }
+        } else if self.index.is_none() {
+            self.index = Some(IndexHtml::default());
+        }
+
+        self.index
+            .as_ref()
+            .expect("IndexHtml is always set after it is resolved")
     }
 }

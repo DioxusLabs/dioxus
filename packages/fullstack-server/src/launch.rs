@@ -1,6 +1,5 @@
 //! A launch function that creates an axum router for the LaunchBuilder
 
-use crate::IndexHtml;
 use crate::{server::DioxusRouterExt, RenderHandleState, ServeConfig};
 use anyhow::Context;
 use axum::{
@@ -66,22 +65,6 @@ async fn serve_server(
     for ctx in contexts {
         let arced = Arc::new(ctx) as Arc<dyn Fn() -> Box<dyn Any> + Send + Sync>;
         cfg.context_providers.push(arced);
-    }
-
-    // Create the IndexHtml object if the user has specified an override
-    if let Some(raw_index_html) = cfg.index_html_override.as_ref() {
-        cfg.index = IndexHtml::new(raw_index_html, cfg.root_id.unwrap_or("main"))
-            .expect("Failed to parse custom index.html");
-    } else if !cfg!(target_arch = "wasm32") {
-        let public_path = crate::public_path();
-        let index_html_path = public_path.join("index.html");
-
-        if index_html_path.exists() {
-            let index_html = std::fs::read_to_string(index_html_path)
-                .expect("Failed to read index.html from public directory");
-            cfg.index = IndexHtml::new(&index_html, cfg.root_id.unwrap_or("main"))
-                .expect("Failed to parse index.html from public directory");
-        }
     }
 
     // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address

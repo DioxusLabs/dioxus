@@ -57,14 +57,14 @@ impl IndexHtml {
             head_after_title = new_head_after_title.to_string();
         }
 
-        Ok(IndexHtml {
+        Ok(dbg!(IndexHtml {
             head_before_title,
             head_after_title,
             title,
             close_head,
             post_main: post_main.to_string(),
             after_closing_body_tag: "</body>".to_string() + after_closing_body_tag,
-        })
+        }))
     }
 }
 
