@@ -680,13 +680,13 @@ impl SsrRendererPool {
             document.and_then(|document| document.title())
         };
 
-        to.write_str(&cfg.index.head_before_title)?;
+        to.write_str(&cfg.index.as_ref().unwrap().head_before_title)?;
         if let Some(title) = title {
             to.write_str(&title)?;
         } else {
-            to.write_str(&cfg.index.title)?;
+            to.write_str(&cfg.index.as_ref().unwrap().title)?;
         }
-        to.write_str(&cfg.index.head_after_title)?;
+        to.write_str(&cfg.index.as_ref().unwrap().head_after_title)?;
 
         let document =
             virtual_dom.in_scope(ScopeId::ROOT, try_consume_context::<Rc<ServerDocument>>);
@@ -708,7 +708,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        to.write_str(&cfg.index.close_head)?;
+        to.write_str(&cfg.index.as_ref().unwrap().close_head)?;
 
         // // #[cfg(feature = "document")]
         // {
@@ -749,7 +749,7 @@ impl SsrRendererPool {
             )?;
         }
         write!(to, r#"</script>"#,)?;
-        to.write_str(&cfg.index.post_main)?;
+        to.write_str(&cfg.index.as_ref().unwrap().post_main)?;
 
         Ok(())
     }
@@ -759,7 +759,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        to.write_str(&cfg.index.after_closing_body_tag)?;
+        to.write_str(&cfg.index.as_ref().unwrap().after_closing_body_tag)?;
 
         Ok(())
     }
