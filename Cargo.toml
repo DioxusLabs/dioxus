@@ -69,6 +69,7 @@ members = [
     "packages/native-dom",
     "packages/asset-resolver",
     "packages/depinfo",
+    "packages/component-manifest",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -182,6 +183,7 @@ dioxus-native = { path = "packages/native", version = "0.7.0-rc.2" }
 dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0-rc.2" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0-rc.2" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0-rc.2" }
+dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.0-rc.2" }
 
 generational-box = { path = "packages/generational-box", version = "0.7.0-rc.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0-rc.2" }

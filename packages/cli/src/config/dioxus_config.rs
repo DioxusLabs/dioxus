@@ -1,3 +1,5 @@
+use crate::config::component::ComponentConfig;
+
 use super::*;
 use serde::{Deserialize, Serialize};
 
@@ -10,12 +12,16 @@ pub(crate) struct DioxusConfig {
 
     #[serde(default)]
     pub(crate) bundle: BundleConfig,
+
+    #[serde(default)]
+    pub(crate) components: ComponentConfig,
 }
 
 impl Default for DioxusConfig {
     fn default() -> Self {
         Self {
             application: ApplicationConfig {
+                asset_dir: None,
                 out_dir: None,
                 public_dir: Some("public".into()),
                 tailwind_input: None,
@@ -53,6 +59,7 @@ impl Default for DioxusConfig {
                 wasm_opt: Default::default(),
             },
             bundle: BundleConfig::default(),
+            components: ComponentConfig::default(),
         }
     }
 }

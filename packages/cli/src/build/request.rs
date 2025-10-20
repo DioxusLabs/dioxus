@@ -2567,7 +2567,7 @@ impl BuildRequest {
         cargo_args.push(self.executable_name().to_string());
 
         // Set offline/locked/frozen
-        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        let lock_opts = crate::verbosity_or_default();
         if lock_opts.frozen {
             cargo_args.push("--frozen".to_string());
         }

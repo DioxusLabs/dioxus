@@ -556,6 +556,24 @@ impl Workspace {
     pub(crate) fn global_settings_file() -> PathBuf {
         Self::dioxus_data_dir().join("settings.toml")
     }
+
+    /// The path where components downloaded from git are cached
+    pub(crate) fn component_cache_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("components")
+    }
+
+    /// Get the path to a specific component in the cache
+    pub(crate) fn component_cache_path(git: &str, rev: Option<&str>) -> PathBuf {
+        use std::hash::Hasher;
+
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(git, &mut hasher);
+        if let Some(rev) = rev {
+            std::hash::Hash::hash(rev, &mut hasher);
+        }
+        let hash = hasher.finish();
+        Self::component_cache_dir().join(format!("{hash:016x}"))
+    }
 }
 
 impl std::fmt::Debug for Workspace {

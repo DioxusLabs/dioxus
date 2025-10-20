@@ -1,6 +1,6 @@
 use crate::{
-    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
-    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context};
 use dioxus_cli_opt::process_file_to;
@@ -489,11 +489,7 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY
-            .get()
-            .map(|f| f.verbose)
-            .unwrap_or_default()
-        {
+        if verbosity_or_default().verbose {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
