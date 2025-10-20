@@ -56,31 +56,29 @@ webbrowser = { workspace = true }
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(any(target_os = "linux", not(target_env = "ohos")))'.dependencies]
 wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
+[target.'cfg(all(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"), not(target_env = "ohos")))'.dependencies]
 global-hotkey = "0.7.0"
 rfd = { version = "0.15.3", default-features = false, features = ["xdg-portal", "tokio"] }
 muda = { workspace = true }
 
-[target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]
+[target.'cfg(all(any(target_os = "windows",target_os = "macos",target_os = "linux"), not(target_env = "ohos")))'.dependencies]
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = "0.2.7"
 objc_id = "0.1.1"
 
-# use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
-tungstenite = { workspace = true, features = ["rustls"] }
 jni = "0.21.1"
 ndk = { version = "0.9.0" }
 ndk-sys = { version = "0.6.0" }
 ndk-context = { version = "0.1.1" }
 
 # use native tls on other platforms
-[target.'cfg(not(target_os = "android"))'.dependencies]
+[target.'cfg(any(not(target_os = "android"), not(target_env = "ohos")))'.dependencies]
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]

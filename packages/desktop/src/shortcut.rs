@@ -1,18 +1,21 @@
-#[cfg(any(
-    target_os = "windows",
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "dragonfly",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd"
+#[cfg(all(
+    any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ),
+    not(target_env = "ohos")
 ))]
 pub use global_hotkey::{
     hotkey::{Code, HotKey},
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
 };
 
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos"))]
 pub use crate::mobile_shortcut::*;
 
 use crate::window;
@@ -64,7 +67,10 @@ impl ShortcutRegistry {
         }
     }
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     pub(crate) fn call_handlers(&self, id: GlobalHotKeyEvent) {
         if let Some(ShortcutInner { callbacks, .. }) = self.shortcuts.borrow_mut().get_mut(&id.id) {
             for (_, callback) in callbacks.iter_mut() {
