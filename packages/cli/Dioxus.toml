@@ -7,7 +7,7 @@ name = "project_name"
 out_dir = "dist"
 
 # Static files copied verbatim into the built app (set to enable, e.g. "public")
-# static_dir = "public"
+public_dir = "public"
 
 [web.app]
 

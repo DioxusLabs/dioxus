@@ -8,15 +8,17 @@
 //! Eventually, we might want to expand this to include more metadata about the build, including
 //! build time, target platform, etc.
 
-use std::path::PathBuf;
-
 use dioxus_cli_opt::AssetManifest;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppManifest {
+    /// Stable since 0.7.0
     pub cli_version: String,
+
+    /// Stable since 0.7.0
     pub rust_version: String,
+
+    /// Stable since 0.7.0
     pub assets: AssetManifest,
-    pub public_items: Vec<PathBuf>,
 }

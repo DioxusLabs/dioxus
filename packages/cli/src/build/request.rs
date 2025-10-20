@@ -4124,9 +4124,6 @@ impl BuildRequest {
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
 
-        // // Sync the public directory if it exists
-        // self.sync_public_dir()?;
-
         Ok(())
     }
 
@@ -5346,7 +5343,6 @@ We checked the folders:
             assets: assets.clone(),
             cli_version: crate::VERSION.to_string(),
             rust_version: self.workspace.rustc_version.clone(),
-            public_items: vec![],
         };
 
         let manifest_path = self.app_manifest();
