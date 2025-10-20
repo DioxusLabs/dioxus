@@ -3,13 +3,20 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::launch(|| {
-        rsx! {
-            Comp {}
-            Comp {}
-            Button {}
-        }
-    });
+    // we split these two to ensure `dioxus::serve` works properly.
+    #[cfg(feature = "server")]
+    dioxus::serve(|| async move { Ok(dioxus::server::router(app)) });
+
+    #[cfg(not(feature = "server"))]
+    dioxus::launch(app);
+}
+
+fn app() -> Element {
+    rsx! {
+        Comp {}
+        Comp {}
+        Button {}
+    }
 }
 
 #[component]
