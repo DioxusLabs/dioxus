@@ -2,8 +2,8 @@ use crate::{HttpError, ServerFnError};
 use axum_core::{extract::FromRequest, response::IntoResponse};
 use dioxus_core::{try_consume_context, CapturedError};
 use dioxus_signals::{ReadableExt, Signal, WritableExt};
-use http::request::Parts;
 use http::StatusCode;
+use http::{request::Parts, HeaderMap};
 use std::{cell::RefCell, rc::Rc};
 
 /// The context provided by dioxus fullstack for server-side rendering.
@@ -13,6 +13,7 @@ use std::{cell::RefCell, rc::Rc};
 pub struct FullstackContext {
     current_status: Signal<StreamingStatus>,
     request_headers: Rc<RefCell<http::request::Parts>>,
+    response_headers: Rc<RefCell<Option<HeaderMap>>>,
     route_http_status: Signal<HttpError>,
 }
 
@@ -34,6 +35,7 @@ impl FullstackContext {
                 status: http::StatusCode::OK,
                 message: None,
             }),
+            response_headers: Rc::new(RefCell::new(Some(HeaderMap::new()))),
         }
     }
 
@@ -97,6 +99,23 @@ impl FullstackContext {
 
     pub fn set_current_http_status(&mut self, status: HttpError) {
         self.route_http_status.set(status);
+    }
+
+    /// Add a header to the response. This will be sent to the client when the response is committed.
+    pub fn add_response_header(
+        &self,
+        key: impl Into<http::header::HeaderName>,
+        value: impl Into<http::header::HeaderValue>,
+    ) {
+        if let Some(headers) = self.response_headers.borrow_mut().as_mut() {
+            headers.insert(key.into(), value.into());
+        }
+    }
+
+    /// Take the response headers out of the context. This will leave the context without any headers,
+    /// so it should only be called once when the response is being committed.
+    pub fn take_response_headers(&self) -> Option<HeaderMap> {
+        self.response_headers.borrow_mut().take()
     }
 
     /// Set the current HTTP status for the route. This will be used when committing the response
@@ -200,9 +219,9 @@ pub fn current_status() -> StreamingStatus {
 pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     if let Some(err) = error.downcast_ref::<ServerFnError>() {
         match err {
-            ServerFnError::ServerError {
-                code: Some(code), ..
-            } => return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+            ServerFnError::ServerError { code, .. } => {
+                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+            }
             _ => return StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

@@ -1,11 +1,12 @@
-use crate::{WebFileData, WebFileEngine};
+use crate::{WebDataTransfer, WebFileData, WebFileEngine};
 
 use super::{Synthetic, WebEventExt};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{decode_mouse_button_set, MouseButton},
-    FileData, HasDragData, HasFileData, HasMouseData, InteractionElementOffset,
-    InteractionLocation, Modifiers, ModifiersInteraction, PointerInteraction,
+    FileData, HasDataTransferData, HasDragData, HasFileData, HasMouseData,
+    InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
+    PointerInteraction,
 };
 use web_sys::{DragEvent, FileReader};
 
@@ -69,6 +70,23 @@ impl HasMouseData for Synthetic<DragEvent> {
 impl HasDragData for Synthetic<DragEvent> {
     fn as_any(&self) -> &dyn std::any::Any {
         &self.event
+    }
+}
+
+impl HasDataTransferData for Synthetic<DragEvent> {
+    fn data_transfer(&self) -> dioxus_html::DataTransfer {
+        use wasm_bindgen::JsCast;
+
+        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
+            if let Some(data) = target.data_transfer() {
+                let web_data_transfer = WebDataTransfer::new(data);
+                return dioxus_html::DataTransfer::new(web_data_transfer);
+            }
+        }
+
+        // Return an empty DataTransfer if we couldn't get one from the event
+        let web_data_transfer = WebDataTransfer::new(web_sys::DataTransfer::new().unwrap());
+        dioxus_html::DataTransfer::new(web_data_transfer)
     }
 }
 

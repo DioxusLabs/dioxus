@@ -1,17 +1,14 @@
-use dioxus_core::{
-    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, Task,
-};
+use dioxus_core::{use_hook, IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
-use dioxus_hooks::{use_callback, use_signal};
+use dioxus_hooks::{use_resource, use_signal, Resource};
 use dioxus_signals::{
     read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable,
     WritableExt, WriteLock,
 };
-use futures_util::{future, pin_mut, FutureExt, StreamExt};
 use generational_box::{BorrowResult, UnsyncStorage};
 use serde::{de::DeserializeOwned, Serialize};
-use std::future::Future;
-use std::{cell::Cell, ops::Deref, rc::Rc};
+use std::ops::Deref;
+use std::{cmp::PartialEq, future::Future};
 
 /// A hook to create a resource that loads data asynchronously.
 ///
@@ -35,105 +32,118 @@ use std::{cell::Cell, ops::Deref, rc::Rc};
 pub fn use_loader<F, T, E>(mut future: impl FnMut() -> F + 'static) -> Result<Loader<T>, Loading>
 where
     F: Future<Output = Result<T, E>> + 'static,
-    T: 'static + std::cmp::PartialEq + Serialize + DeserializeOwned,
+    T: 'static + PartialEq + Serialize + DeserializeOwned,
     E: Into<dioxus_core::Error> + 'static,
 {
-    let location = std::panic::Location::caller();
+    let serialize_context = use_hook(crate::transport::serialize_context);
 
-    // todo: wire up serialize context into loader
-    // let serialize_context = use_hook(crate::transport::serialize_context);
-    // // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
-    // let storage_entry: SerializeContextEntry<T> = use_hook(|| serialize_context.create_entry());
-    // use crate::{transport::SerializeContextEntry, use_server_future, use_server_future_unsuspended};
+    // We always create a storage entry, even if the data isn't ready yet to make it possible to deserialize pending server futures on the client
+    #[allow(unused)]
+    let storage_entry: crate::transport::SerializeContextEntry<Result<T, CapturedError>> =
+        use_hook(|| serialize_context.create_entry());
 
-    let mut err = use_signal(|| None as Option<CapturedError>);
+    #[cfg(feature = "server")]
+    let caller = std::panic::Location::caller();
+
+    // If this is the first run and we are on the web client, the data might be cached
+    #[cfg(feature = "web")]
+    let initial_web_result =
+        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Some(storage_entry.get()))));
+
+    let mut error = use_signal(|| None as Option<CapturedError>);
     let mut value = use_signal(|| None as Option<T>);
-    let mut state = use_signal(|| LoaderState::Pending);
-    let (rc, changed) = use_hook(|| {
-        let (rc, changed) = ReactiveContext::new_with_origin(location);
-        (rc, Rc::new(Cell::new(Some(changed))))
-    });
+    let mut loader_state = use_signal(|| LoaderState::Pending);
 
-    let callback = use_callback(move |_| {
-        // Set the state to Pending when the task is restarted
-        state.set(LoaderState::Pending);
+    let resource = use_resource(move || {
+        #[cfg(feature = "server")]
+        let storage_entry = storage_entry.clone();
 
-        // Create the user's task
-        let fut = rc.reset_and_run_in(&mut future);
+        let user_fut = future();
 
-        // Spawn a wrapper task that polls the inner future and watches its dependencies
-        spawn(async move {
-            // Move the future here and pin it so we can poll it
-            let fut = fut;
-            pin_mut!(fut);
+        #[cfg(feature = "web")]
+        let initial_web_result = initial_web_result.clone();
 
-            // Run each poll in the context of the reactive scope
-            // This ensures the scope is properly subscribed to the future's dependencies
-            let res = future::poll_fn(|cx| {
-                rc.run_in(|| {
-                    tracing::trace_span!("polling resource", location = %location)
-                        .in_scope(|| fut.poll_unpin(cx))
-                })
-            })
-            .await;
+        #[allow(clippy::let_and_return)]
+        async move {
+            // If this is the first run and we are on the web client, the data might be cached
+            #[cfg(feature = "web")]
+            match initial_web_result.take() {
+                // The data was deserialized successfully from the server
+                Some(Ok(o)) => {
+                    match o {
+                        Ok(v) => {
+                            value.set(Some(v));
+                            loader_state.set(LoaderState::Ready);
+                        }
+                        Err(e) => {
+                            error.set(Some(e));
+                            loader_state.set(LoaderState::Failed);
+                        }
+                    };
+                    return;
+                }
 
-            // Map the error to the captured error type so it's cheap to clone and pass out
-            // We go through the anyhow::Error first since it's more useful.
-            let res: Result<T, CapturedError> = res.map_err(|e| {
-                let res: dioxus_core::Error = e.into();
-                res.into()
+                // The data is still pending from the server. Don't try to resolve it on the client
+                Some(Err(crate::transport::TakeDataError::DataPending)) => {
+                    std::future::pending::<()>().await
+                }
+
+                // The data was not available on the server, rerun the future
+                Some(Err(_)) => {}
+
+                // This isn't the first run, so we don't need do anything
+                None => {}
+            }
+
+            // Otherwise just run the future itself
+            let out = user_fut.await;
+
+            // Remap the error to the captured error type so it's cheap to clone and pass out, just
+            // slightly more cumbersome to access the inner error.
+            let out = out.map_err(|e| {
+                let anyhow_err: anyhow::Error = e.into();
+                anyhow_err.into()
             });
 
-            match res {
+            // If this is the first run and we are on the server, cache the data in the slot we reserved for it
+            #[cfg(feature = "server")]
+            storage_entry.insert(&out, caller);
+
+            match out {
                 Ok(v) => {
-                    err.set(None);
                     value.set(Some(v));
-                    state.set(LoaderState::Ready);
+                    loader_state.set(LoaderState::Ready);
                 }
                 Err(e) => {
-                    err.set(Some(e));
-                    state.set(LoaderState::Failed);
+                    error.set(Some(e));
+                    loader_state.set(LoaderState::Failed);
                 }
-            }
-        })
+            };
+        }
     });
 
-    let mut task = use_hook(|| Signal::new(callback(())));
-
+    // On the first run, force this task to be polled right away in case its value is ready
     use_hook(|| {
-        let mut changed = changed.take().unwrap();
-        spawn(async move {
-            loop {
-                // Wait for the dependencies to change
-                let _ = changed.next().await;
-
-                // Stop the old task
-                task.write().cancel();
-
-                // Start a new task
-                task.set(callback(()));
-            }
-        })
+        let _ = resource.task().poll_now();
     });
 
     let read_value = use_hook(|| value.map(|f| f.as_ref().unwrap()).boxed());
 
     let handle = LoaderHandle {
-        task,
-        err,
-        callback,
-        state,
+        resource,
+        error,
+        state: loader_state,
+        _marker: std::marker::PhantomData,
     };
 
-    match &*state.read_unchecked() {
+    match &*loader_state.read_unchecked() {
         LoaderState::Pending => Err(Loading::Pending(handle)),
         LoaderState::Failed => Err(Loading::Failed(handle)),
         LoaderState::Ready => Ok(Loader {
             real_value: value,
             read_value,
-            error: err,
-            state,
-            task,
+            error,
+            state: loader_state,
             handle,
         }),
     }
@@ -153,7 +163,6 @@ pub struct Loader<T: 'static> {
     real_value: Signal<Option<T>>,
     error: Signal<Option<CapturedError>>,
     state: Signal<LoaderState>,
-    task: Signal<Task>,
     handle: LoaderHandle,
 }
 
@@ -178,8 +187,12 @@ impl<T: 'static> Loader<T> {
     }
 
     /// Cancel the current loading task.
-    pub fn cancel(&self) {
-        self.task.read().cancel();
+    pub fn cancel(&mut self) {
+        self.handle.resource.cancel();
+    }
+
+    pub fn loading(&self) -> bool {
+        !self.handle.resource.finished()
     }
 }
 
@@ -294,24 +307,26 @@ pub enum LoaderState {
 }
 
 #[derive(PartialEq)]
-pub struct LoaderHandle {
-    callback: Callback<(), Task>,
-    task: Signal<Task>,
-    err: Signal<Option<CapturedError>>,
+pub struct LoaderHandle<M = ()> {
+    resource: Resource<()>,
+    error: Signal<Option<CapturedError>>,
     state: Signal<LoaderState>,
+    _marker: std::marker::PhantomData<M>,
 }
 
 impl LoaderHandle {
     /// Restart the loading task.
     pub fn restart(&mut self) {
-        self.task.write().cancel();
-        let new_task = self.callback.call(());
-        self.task.set(new_task);
+        self.resource.restart();
     }
 
     /// Get the current state of the loader.
     pub fn state(&self) -> LoaderState {
         *self.state.read()
+    }
+
+    pub fn error(&self) -> Option<CapturedError> {
+        self.error.read().as_ref().cloned()
     }
 }
 
@@ -354,9 +369,9 @@ impl std::fmt::Display for Loading {
 impl From<Loading> for RenderError {
     fn from(val: Loading) -> Self {
         match val {
-            Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.task.cloned())),
+            Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.resource.task())),
             Loading::Failed(err) => RenderError::Error(
-                err.err
+                err.error
                     .cloned()
                     .expect("LoaderHandle in Failed state should always have an error"),
             ),

@@ -89,7 +89,7 @@ async fn main() {
     let router = axum::Router::new()
         // You can add a dioxus application to the router with the `serve_dioxus_application` method
         // This will add a fallback route to the router that will serve your component and server functions
-        .serve_dioxus_application(dioxus_server::ServeConfig::new().unwrap(), App);
+        .serve_dioxus_application(dioxus_server::ServeConfig::new(), App);
 
     // Finally, we can launch the server
     let router = router.into_make_service();

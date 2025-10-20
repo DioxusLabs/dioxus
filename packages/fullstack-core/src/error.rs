@@ -32,11 +32,11 @@ pub enum ServerFnError {
     /// representation of the error.
     #[error("error running server function: {message} (details: {details:#?})")]
     ServerError {
+        /// A human-readable message describing the error.
         message: String,
 
-        /// Optional HTTP status code associated with the error.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        code: Option<u16>,
+        /// HTTP status code associated with the error.
+        code: u16,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         details: Option<serde_json::Value>,
@@ -89,7 +89,7 @@ impl ServerFnError {
         ServerFnError::ServerError {
             message: f.to_string(),
             details: None,
-            code: None,
+            code: 500,
         }
     }
 
@@ -110,7 +110,7 @@ impl ServerFnError {
 
         ServerFnError::ServerError {
             message,
-            code: Some(status.as_u16()),
+            code: status.as_u16(),
             details: None,
         }
     }
@@ -121,7 +121,7 @@ impl From<anyhow::Error> for ServerFnError {
         ServerFnError::ServerError {
             message: value.to_string(),
             details: None,
-            code: None,
+            code: 500,
         }
     }
 }
@@ -135,11 +135,9 @@ impl From<serde_json::Error> for ServerFnError {
 impl From<ServerFnError> for http::StatusCode {
     fn from(value: ServerFnError) -> Self {
         match value {
-            ServerFnError::ServerError { code, .. } => match code {
-                Some(code) => http::StatusCode::from_u16(code)
-                    .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
-                None => http::StatusCode::INTERNAL_SERVER_ERROR,
-            },
+            ServerFnError::ServerError { code, .. } => {
+                http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
+            }
             ServerFnError::Request(err) => match err {
                 RequestError::Status(_, code) => http::StatusCode::from_u16(code)
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
@@ -174,7 +172,7 @@ impl From<HttpError> for ServerFnError {
                     .unwrap_or("Unknown error")
                     .to_string()
             }),
-            code: Some(value.status.as_u16()),
+            code: value.status.as_u16(),
             details: None,
         }
     }
@@ -188,9 +186,8 @@ impl IntoResponse for ServerFnError {
                 code,
                 details,
             } => {
-                let status = code
-                    .and_then(|c| StatusCode::from_u16(c).ok())
-                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                let status =
+                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
                 let body = if let Some(details) = details {
                     serde_json::json!({
                         "error": message,

@@ -1,5 +1,4 @@
 use axum::body::Body;
-use axum::handler::Handler;
 use axum::routing::MethodRouter;
 use axum::Router;
 use dashmap::DashMap;
@@ -17,10 +16,6 @@ pub struct ServerFunction<Caller = ()> {
     method: Method,
     handler: fn() -> MethodRouter<DioxusServerState>,
     _phantom: PhantomData<Caller>,
-}
-
-pub struct MakeRequest<T> {
-    _phantom: PhantomData<T>,
 }
 
 impl ServerFunction {
@@ -52,56 +47,14 @@ impl ServerFunction {
         inventory::iter::<ServerFunction>().collect()
     }
 
+    pub fn handler(&self) -> fn() -> MethodRouter<DioxusServerState> {
+        self.handler
+    }
+
     pub fn register_server_fn_on_router<S>(&'static self, router: Router<S>) -> Router<S>
     where
         S: Send + Sync + Clone + 'static,
     {
-        tracing::info!(
-            "Registering server function: {} {}",
-            self.method(),
-            self.path()
-        );
-        use http::method::Method;
-        let path = self.path();
-        let method = self.method();
-        let handler = move |req| self.handle_server_fns_inner(req);
-        match method {
-            Method::GET => router.route(path, axum::routing::get(handler)),
-            Method::POST => router.route(path, axum::routing::post(handler)),
-            Method::PUT => router.route(path, axum::routing::put(handler)),
-            Method::DELETE => router.route(path, axum::routing::delete(handler)),
-            Method::PATCH => router.route(path, axum::routing::patch(handler)),
-            Method::HEAD => router.route(path, axum::routing::head(handler)),
-            Method::OPTIONS => router.route(path, axum::routing::options(handler)),
-            Method::CONNECT => router.route(path, axum::routing::connect(handler)),
-            Method::TRACE => router.route(path, axum::routing::trace(handler)),
-            _ => unimplemented!("Unsupported server function method: {}", method),
-        }
-    }
-
-    pub async fn handle_server_fns_inner(&self, req: http::Request<Body>) -> http::Response<Body> {
-        // todo: jon
-        // - bring back middleware to serverfns. the new layer system is fine but isn't a full replacement
-        //
-        // use axum::body;
-        // use axum::extract::State;
-        // use axum::routing::*;
-        // use axum::{
-        //     body::Body,
-        //     http::{Request, Response, StatusCode},
-        //     response::IntoResponse,
-        // };
-        // use http::header::*;
-
-        // let (parts, body) = req.into_parts();
-        // let req = Request::from_parts(parts.clone(), body);
-
-        // // Create the server context with info from the request
-        // let server_context = DioxusServerContext::new(parts);
-
-        // // Provide additional context from the render state
-        // server_context.add_server_context(&additional_context);
-
         // // store Accepts and Referrer in case we need them for redirect (below)
         // let referrer = req.headers().get(REFERER).cloned();
         // let accepts_html = req
@@ -110,13 +63,6 @@ impl ServerFunction {
         //     .and_then(|v| v.to_str().ok())
         //     .map(|v| v.contains("text/html"))
         //     .unwrap_or(false);
-
-        // actually run the server fn (which may use the server context)
-        // let fut = crate::with_server_context(server_context.clone(), || service.run(req));
-        // let fut = crate::with_server_context(server_context.clone(), || service.run(req));
-
-        // let res = ProvideServerContext::new(fut, server_context.clone()).await;
-        // let mut res = res.res;
 
         // // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
         // // Location set, then redirect to Referer
@@ -130,13 +76,10 @@ impl ServerFunction {
         //     }
         // }
 
-        // // apply the response parts from the server context to the response
-        // server_context.send_response(&mut res);
-
-        let mthd: MethodRouter<DioxusServerState> =
-            (self.handler)().with_state(DioxusServerState {});
-
-        mthd.call(req, DioxusServerState {}).await
+        router.route(
+            self.path(),
+            ((self.handler)()).with_state(DioxusServerState {}),
+        )
     }
 }
 

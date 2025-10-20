@@ -2,20 +2,17 @@ use crate::{
     ssr::{SSRError, SsrRendererPool},
     ServeConfig, ServerFunction,
 };
-use crate::{IncrementalRendererError, RenderFreshness};
 use axum::{
-    body,
     body::Body,
     extract::State,
-    http::{Request, Response, StatusCode},
+    http::{Request, StatusCode},
     response::IntoResponse,
+    response::Response,
     routing::*,
 };
 use dioxus_core::{Element, VirtualDom};
-use dioxus_fullstack_core::HttpError;
-use futures::Stream;
-use http::{header::*, request::Parts};
-use std::path::Path;
+use http::header::*;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tower::util::MapResponse;
 use tower::ServiceExt;
@@ -46,10 +43,9 @@ use tower_http::services::fs::ServeFileSystemResponseBody;
 ///         // Note you can use `register_server_functions_with_context`
 ///         // to inject the context into server functions running outside
 ///         // of an SSR render context.
-///         .fallback(get(render_handler)
-///             .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app))
-///         )
-///         .into_make_service();
+///         .fallback(get(render_handler))
+///         .with_state(RenderHandleState::new(ServeConfig::new(), app));
+///
 ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 ///     axum::serve(listener, router).await.unwrap();
 /// }
@@ -103,7 +99,7 @@ pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_dioxus_application(ServeConfig::new().unwrap(), app)
+    ///         .serve_dioxus_application(ServeConfig::new(), app)
     ///         .into_make_service();
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     ///     axum::serve(listener, router).await.unwrap();
@@ -124,11 +120,9 @@ where
     S: Send + Sync + Clone + 'static,
 {
     fn serve_static_assets(self) -> Self {
-        let public_path = crate::public_path();
-
-        if !public_path.exists() {
+        let Some(public_path) = public_path() else {
             return self;
-        }
+        };
 
         // Serve all files in public folder except index.html
         serve_dir_cached(self, &public_path, &public_path)
@@ -166,6 +160,7 @@ pub trait DioxusRouterFnExt<S> {
     fn register_server_functions(self) -> Self
     where
         Self: Sized;
+
     /// Serves a Dioxus application without static assets.
     /// Sets up server function routes and rendering endpoints only.
     ///
@@ -179,7 +174,7 @@ pub trait DioxusRouterFnExt<S> {
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = axum::Router::new()
-    ///         .serve_api_application(ServeConfig::new().unwrap(), app)
+    ///         .serve_api_application(ServeConfig::new(), app)
     ///         .into_make_service();
     ///     // ...
     /// }
@@ -195,8 +190,14 @@ pub trait DioxusRouterFnExt<S> {
 
 impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
     fn register_server_functions(mut self) -> Self {
-        for f in ServerFunction::collect() {
-            self = f.register_server_fn_on_router(self);
+        for func in ServerFunction::collect() {
+            tracing::info!(
+                "Registering server function: {} {}",
+                func.method(),
+                func.path()
+            );
+
+            self = func.register_server_fn_on_router(self);
         }
         self
     }
@@ -229,7 +230,8 @@ impl RenderHandleState {
         }
     }
 
-    /// Create a new [`RenderHandleState`] with a custom [`VirtualDom`] factory. This method can be used to pass context into the root component of your application.
+    /// Create a new [`RenderHandleState`] with a custom [`VirtualDom`] factory. This method can be
+    /// used to pass context into the root component of your application.
     pub fn new_with_virtual_dom_factory(
         config: ServeConfig,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
@@ -272,52 +274,65 @@ impl RenderHandleState {
     ///         // Note you can use `register_server_functions_with_context`
     ///         // to inject the context into server functions running outside
     ///         // of an SSR render context.
-    ///         .fallback(get(render_handler)
-    ///             .with_state(RenderHandleState::new(ServeConfig::new().unwrap(), app))
-    ///         )
+    ///         .fallback(get(render_handler))
+    ///         .with_state(RenderHandleState::new(ServeConfig::new(), app))
     ///         .into_make_service();
+    ///
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     ///     axum::serve(listener, router).await.unwrap();
     /// }
     /// ```
-    pub async fn render_handler(
-        State(state): State<Self>,
-        request: Request<Body>,
-    ) -> impl IntoResponse {
-        let cfg = &state.config;
-        let build_virtual_dom = {
-            let build_virtual_dom = state.build_virtual_dom.clone();
-            let context_providers = state.config.context_providers.clone();
-            move || {
-                let mut vdom = build_virtual_dom();
-                for state in context_providers.as_slice() {
-                    vdom.insert_any_root_context(state());
-                }
-                vdom
-            }
-        };
-
+    pub async fn render_handler(State(state): State<Self>, request: Request<Body>) -> Response {
         let (parts, _) = request.into_parts();
 
-        match state.render(parts, cfg, build_virtual_dom).await {
-            Ok((status, freshness, rx)) => {
-                let mut response = axum::response::Response::builder()
+        let response = state
+            .renderers
+            .clone()
+            .render_to(parts, &state.config, {
+                let build_virtual_dom = state.build_virtual_dom.clone();
+                let context_providers = state.config.context_providers.clone();
+                move || {
+                    let mut vdom = build_virtual_dom();
+                    for state in context_providers.as_slice() {
+                        vdom.insert_any_root_context(state());
+                    }
+                    vdom
+                }
+            })
+            .await;
+
+        match response {
+            Ok((status, headers, freshness, rx)) => {
+                let mut response = Response::builder()
                     .status(status.status)
                     .header(CONTENT_TYPE, "text/html; charset=utf-8")
                     .body(Body::from_stream(rx))
                     .unwrap();
 
+                // Write our freshness header
                 freshness.write(response.headers_mut());
 
-                Result::<http::Response<axum::body::Body>, StatusCode>::Ok(response)
+                // write the other headers set by the user
+                for (key, value) in headers.into_iter() {
+                    if let Some(key) = key {
+                        response.headers_mut().insert(key, value);
+                    }
+                }
+
+                response
             }
 
             Err(SSRError::Incremental(e)) => {
                 tracing::error!("Failed to render page: {}", e);
-                Ok(Self::err_to_axum_response(e).into_response())
+
+                Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(e.to_string())
+                    .unwrap()
+                    .into_response()
             }
 
-            Err(SSRError::HttpError { status, message }) => Ok(Response::builder()
+            Err(SSRError::HttpError { status, message }) => Response::builder()
                 .status(status)
                 .body(Body::from(message.unwrap_or_else(|| {
                     status
@@ -325,43 +340,28 @@ impl RenderHandleState {
                         .unwrap_or("An unknown error occurred")
                         .to_string()
                 })))
-                .unwrap()),
+                .unwrap(),
         }
-    }
-
-    fn err_to_axum_response<E: std::fmt::Display>(e: E) -> Response<axum::body::Body> {
-        Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(body::Body::new(format!("Error: {}", e)))
-            .unwrap()
-    }
-
-    /// Render the application to HTML.
-    pub async fn render<'a>(
-        &'a self,
-        parts: Parts,
-        cfg: &'a ServeConfig,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
-    ) -> Result<
-        (
-            HttpError,
-            RenderFreshness,
-            impl Stream<Item = Result<String, IncrementalRendererError>>,
-        ),
-        SSRError,
-    > {
-        self.renderers
-            .clone()
-            .render_to(parts, cfg, virtual_dom_factory)
-            .await
     }
 }
 
-fn serve_dir_cached<S>(
-    mut router: Router<S>,
-    public_path: &std::path::Path,
-    directory: &std::path::Path,
-) -> Router<S>
+/// Get the path to the public assets directory to serve static files from
+pub(crate) fn public_path() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("DIOXUS_PUBLIC_PATH") {
+        return Some(PathBuf::from(path));
+    }
+
+    // The CLI always bundles static assets into the exe/public directory
+    Some(
+        std::env::current_exe()
+            .ok()?
+            .parent()
+            .unwrap()
+            .join("public"),
+    )
+}
+
+fn serve_dir_cached<S>(mut router: Router<S>, public_path: &Path, directory: &Path) -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
 {
@@ -376,8 +376,16 @@ where
         if path == public_path.join("index.html") {
             continue;
         }
-        let route = path.strip_prefix(public_path).unwrap();
-        let route = path_components_to_route_lossy(route);
+
+        let route = format!(
+            "/{}",
+            path.strip_prefix(public_path)
+                .unwrap()
+                .iter()
+                .map(|segment| segment.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        );
 
         if path.is_dir() {
             router = serve_dir_cached(router, public_path, &path);
@@ -395,15 +403,6 @@ where
     }
 
     router
-}
-
-fn path_components_to_route_lossy(path: &Path) -> String {
-    let route = path
-        .iter()
-        .map(|segment| segment.to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/");
-    format!("/{}", route)
 }
 
 type MappedAxumService<S> = MapResponse<
