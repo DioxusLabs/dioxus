@@ -82,18 +82,10 @@ impl HotpatchTip {
         let artifacts = AppBuilder::started(request, mode, build_id)?
             .finish_build()
             .await?;
-        let root_dir = request.root_dir();
-        let base_path = request.base_path();
         let patch_exe = request.patch_exe(artifacts.time_start);
 
         Ok(StructuredOutput::Hotpatch {
-            jump_table: crate::build::create_jump_table(
-                &patch_exe,
-                &request.triple,
-                &root_dir,
-                base_path,
-                &cache,
-            )?,
+            jump_table: request.create_jump_table(&patch_exe, &cache)?,
             artifacts: artifacts.into_structured_output(),
         })
     }

@@ -349,6 +349,7 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
+use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
@@ -2332,6 +2333,48 @@ impl BuildRequest {
         );
 
         Ok(())
+    }
+
+    pub(crate) fn create_jump_table(
+        &self,
+        patch: &Path,
+        cache: &HotpatchModuleCache,
+    ) -> Result<JumpTable> {
+        use crate::build::patch::{
+            create_native_jump_table, create_wasm_jump_table, create_windows_jump_table,
+        };
+
+        let root_dir = self.root_dir();
+        let base_path = self.base_path();
+        let triple = &self.triple;
+
+        // Symbols are stored differently based on the platform, so we need to handle them differently.
+        // - Wasm requires the walrus crate and actually modifies the patch file
+        // - windows requires the pdb crate and pdb files
+        // - nix requires the object crate
+        let mut jump_table = match triple.operating_system {
+            OperatingSystem::Windows => create_windows_jump_table(patch, cache)?,
+            _ if triple.architecture == Architecture::Wasm32 => {
+                create_wasm_jump_table(patch, cache)?
+            }
+            _ => create_native_jump_table(patch, triple, cache)?,
+        };
+
+        // root_dir: &Path,
+        //     base_path: Option<&str>,
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if triple.architecture == target_lexicon::Architecture::Wasm32 {
+            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+            //
+            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+            //    but we want to ship `/wasm/lib.wasm`
+            jump_table.lib = PathBuf::from(
+                "/".to_string() + base_path.unwrap_or_default().trim_start_matches('/'),
+            )
+            .join(jump_table.lib.strip_prefix(root_dir).unwrap())
+        }
+
+        Ok(jump_table)
     }
 
     /// Automatically detect the linker flavor based on the target triple and any custom linkers.

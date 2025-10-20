@@ -290,39 +290,7 @@ impl HotpatchModuleCache {
     }
 }
 
-/// Create a jump table for the given original and patch files.
-pub fn create_jump_table(
-    patch: &Path,
-    triple: &Triple,
-    root_dir: &Path,
-    base_path: Option<&str>,
-    cache: &HotpatchModuleCache,
-) -> Result<JumpTable> {
-    // Symbols are stored differently based on the platform, so we need to handle them differently.
-    // - Wasm requires the walrus crate and actually modifies the patch file
-    // - windows requires the pdb crate and pdb files
-    // - nix requires the object crate
-    let mut jump_table = match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(patch, cache)?,
-        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache)?,
-        _ => create_native_jump_table(patch, triple, cache)?,
-    };
-
-    // Rebase the wasm binary to be relocatable once the jump table is generated
-    if triple.architecture == target_lexicon::Architecture::Wasm32 {
-        // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-        //
-        // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-        //    but we want to ship `/wasm/lib.wasm`
-        jump_table.lib =
-            PathBuf::from("/".to_string() + base_path.unwrap_or_default().trim_start_matches('/'))
-                .join(jump_table.lib.strip_prefix(root_dir).unwrap())
-    }
-
-    Ok(jump_table)
-}
-
-fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
     let old_name_to_addr = &cache.symbol_table;
 
@@ -376,7 +344,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(
+pub fn create_native_jump_table(
     patch: &Path,
     triple: &Triple,
     cache: &HotpatchModuleCache,
@@ -431,7 +399,7 @@ fn create_native_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
-fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
     let old_symbols =

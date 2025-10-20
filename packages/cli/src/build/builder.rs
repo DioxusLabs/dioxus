@@ -640,7 +640,6 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
         // Hotpatch asset!() calls
@@ -688,10 +687,7 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let root_dir = self.build.root_dir();
-        let base_path = self.build.base_path();
-        let mut jump_table =
-            crate::build::create_jump_table(&new, &triple, &root_dir, base_path.as_deref(), cache)?;
+        let mut jump_table = self.build.create_jump_table(&new, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {
