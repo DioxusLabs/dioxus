@@ -381,7 +381,6 @@ impl AppServer {
 
             // If it's in the public dir, we sync it and trigger a full rebuild
             if self.client.build.path_is_in_public_dir(path) {
-                _ = self.client.build.sync_public_dir();
                 needs_full_rebuild = true;
                 continue;
             }

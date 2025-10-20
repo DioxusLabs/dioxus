@@ -333,14 +333,13 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::AssetOptions;
-use manganis_core::AssetVariant;
+use manganis::{AssetOptions, BundledAsset};
+use manganis_core::{AssetOptionsBuilder, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use serde_json::to_vec;
 use std::{borrow::Cow, ffi::OsString};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashSet},
     io::Write,
     path::{Path, PathBuf},
     process::Stdio,
@@ -354,7 +353,6 @@ use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
-use walkdir::WalkDir;
 
 use super::HotpatchModuleCache;
 
@@ -1297,13 +1295,40 @@ impl BuildRequest {
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
     async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if !self.skip_assets {
-            ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe).await?;
+        if self.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        ctx.status_extracting_assets();
+
+        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+
+        // If the user has a public dir, we submit all the entries there as assets too
+        //
+        // These don't receive a hash in their filename, since they're user-provided static assets
+        // We only do this for web builds
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        AssetOptionsBuilder::new()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
+                }
+            }
         }
 
         Ok(manifest)
@@ -1503,7 +1528,6 @@ impl BuildRequest {
             .load_manifest()
             .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
             .unwrap_or(true);
-
         if clear_cache {
             keep_bundled_output_paths.clear();
         }
@@ -4100,8 +4124,8 @@ impl BuildRequest {
         // Write the index.html file with the pre-configured contents we got from pre-rendering
         self.write_index_html(assets)?;
 
-        // Sync the public directory if it exists
-        self.sync_public_dir()?;
+        // // Sync the public directory if it exists
+        // self.sync_public_dir()?;
 
         Ok(())
     }
@@ -4878,168 +4902,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             *content = content.replace(replace, with);
         } else if let Some(pos) = content.find(or_insert_before) {
             content.insert_str(pos, with);
-        }
-    }
-
-    pub(crate) fn sync_public_dir(&self) -> Result<()> {
-        let Some(source) = self.user_public_dir() else {
-            return Ok(());
-        };
-
-        let root = &self.root_dir();
-        let manifest_path = self.app_manifest();
-        let mut previous_manifest = std::fs::read_to_string(&manifest_path)
-            .ok()
-            .and_then(|data| serde_json::from_str::<AppManifest>(&data).ok())
-            .unwrap_or_default();
-
-        if !source.exists() {
-            tracing::trace!(
-                "public directory {:?} does not exist, clearing previous static assets if any",
-                source
-            );
-            Self::remove_manifest_entries(root, &previous_manifest.public_items);
-            previous_manifest.public_items.clear();
-            let _ = std::fs::remove_file(&manifest_path);
-            return Ok(());
-        }
-
-        if !source.is_dir() {
-            tracing::warn!(
-                "Configured public directory {:?} is not a directory",
-                source
-            );
-            return Ok(());
-        }
-
-        let canonical_source = dunce::canonicalize(&source).unwrap_or(source.clone());
-        let canonical_dest = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-        if canonical_source == canonical_dest {
-            tracing::warn!(
-                "public directory {:?} points to the build output; skipping to avoid recursion",
-                source
-            );
-            return Ok(());
-        }
-
-        tracing::debug!(
-            "Syncing public directory {:?} -> {:?}",
-            canonical_source,
-            canonical_dest
-        );
-
-        let mut new_entries: HashMap<PathBuf, bool> = HashMap::new();
-
-        for entry in WalkDir::new(&canonical_source).follow_links(true) {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(err) => {
-                    tracing::error!(
-                        "Failed to walk public directory {:?}: {err}",
-                        canonical_source
-                    );
-                    continue;
-                }
-            };
-
-            let Ok(relative_path) = entry.path().strip_prefix(&canonical_source) else {
-                continue;
-            };
-
-            if relative_path.as_os_str().is_empty() {
-                continue;
-            }
-
-            let relative_path = relative_path.to_path_buf();
-            let destination = canonical_dest.join(&relative_path);
-            let is_dir = entry.file_type().is_dir();
-            new_entries.entry(relative_path.clone()).or_insert(is_dir);
-
-            if is_dir {
-                if let Err(err) = std::fs::create_dir_all(&destination) {
-                    tracing::error!("Failed to create public directory {:?}: {err}", destination);
-                }
-                continue;
-            }
-
-            if let Some(parent) = destination.parent() {
-                if let Err(err) = std::fs::create_dir_all(parent) {
-                    tracing::error!(
-                        "Failed to create parent directory {:?} for static file: {err}",
-                        parent
-                    );
-                    continue;
-                }
-            }
-
-            if let Err(err) = std::fs::copy(entry.path(), &destination) {
-                tracing::error!(
-                    "Failed to copy static file {:?} -> {:?}: {err}",
-                    entry.path(),
-                    destination
-                );
-            }
-        }
-
-        let mut removals = Vec::new();
-        for entry in previous_manifest.public_items.iter() {
-            if !new_entries.contains_key(entry.as_path()) {
-                removals.push(entry.clone());
-            }
-        }
-        if !removals.is_empty() {
-            Self::remove_manifest_entries(&root, &removals);
-        }
-
-        if new_entries.is_empty() {
-            previous_manifest.public_items.clear();
-            let _ = std::fs::remove_file(&manifest_path);
-        } else {
-            let mut next_entries: Vec<PathBuf> =
-                new_entries.into_iter().map(|(path, is_dir)| path).collect();
-            next_entries.sort_by(|a, b| a.cmp(&b));
-            previous_manifest.public_items = next_entries;
-            std::fs::write(&manifest_path, to_vec(&previous_manifest)?)?;
-        }
-
-        tracing::debug!(
-            "Finished syncing public directory {:?} into public output",
-            canonical_source
-        );
-
-        Ok(())
-    }
-
-    fn remove_manifest_entries(root: &Path, entries: &[PathBuf]) {
-        if entries.is_empty() {
-            return;
-        }
-
-        let canonical_root = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
-
-        let mut file_paths = Vec::new();
-        let mut dir_paths = Vec::new();
-
-        for entry in entries {
-            let path = canonical_root.join(&entry);
-            if entry.is_dir() {
-                dir_paths.push(path);
-            } else {
-                file_paths.push(path);
-            }
-        }
-
-        for path in file_paths {
-            if let Err(err) = std::fs::remove_file(&path) {
-                tracing::trace!("Failed to remove static file {:?}: {err}", path);
-            }
-        }
-
-        dir_paths.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
-        for path in dir_paths {
-            if let Err(err) = std::fs::remove_dir_all(&path) {
-                tracing::trace!("Failed to remove public directory {:?}: {err}", path);
-            }
         }
     }
 
