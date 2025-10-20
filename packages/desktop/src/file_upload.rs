@@ -11,8 +11,9 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDragData, HasFileData, HasFormData, HasMouseData, NativeFileData,
-    SerializedFormData, SerializedFormObject, SerializedMouseData, SerializedPointInteraction,
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
 };
 
 use serde::{Deserialize, Serialize};
@@ -234,6 +235,7 @@ impl NativeFileHover {
 #[derive(Clone)]
 pub(crate) struct DesktopFileDragEvent {
     pub mouse: SerializedPointInteraction,
+    pub data_transfer: SerializedDataTransfer,
     pub files: Vec<PathBuf>,
 }
 
@@ -244,6 +246,12 @@ impl HasFileData for DesktopFileDragEvent {
             .cloned()
             .map(|f| FileData::new(DesktopFileData(f)))
             .collect()
+    }
+}
+
+impl HasDataTransferData for DesktopFileDragEvent {
+    fn data_transfer(&self) -> dioxus_html::DataTransfer {
+        dioxus_html::DataTransfer::new(self.data_transfer.clone())
     }
 }
 
@@ -389,3 +397,5 @@ impl NativeFileData for DesktopFileData {
         )
     }
 }
+
+pub struct DesktopDataTransfer {}

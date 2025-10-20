@@ -120,11 +120,9 @@ where
     S: Send + Sync + Clone + 'static,
 {
     fn serve_static_assets(self) -> Self {
-        let public_path = public_path();
-
-        if !public_path.exists() {
+        let Some(public_path) = public_path() else {
             return self;
-        }
+        };
 
         // Serve all files in public folder except index.html
         serve_dir_cached(self, &public_path, &public_path)
@@ -304,14 +302,22 @@ impl RenderHandleState {
             .await;
 
         match response {
-            Ok((status, freshness, rx)) => {
+            Ok((status, headers, freshness, rx)) => {
                 let mut response = Response::builder()
                     .status(status.status)
                     .header(CONTENT_TYPE, "text/html; charset=utf-8")
                     .body(Body::from_stream(rx))
                     .unwrap();
 
+                // Write our freshness header
                 freshness.write(response.headers_mut());
+
+                // write the other headers set by the user
+                for (key, value) in headers.into_iter() {
+                    if let Some(key) = key {
+                        response.headers_mut().insert(key, value);
+                    }
+                }
 
                 response
             }
@@ -340,17 +346,19 @@ impl RenderHandleState {
 }
 
 /// Get the path to the public assets directory to serve static files from
-pub(crate) fn public_path() -> PathBuf {
+pub(crate) fn public_path() -> Option<PathBuf> {
     if let Ok(path) = std::env::var("DIOXUS_PUBLIC_PATH") {
-        return PathBuf::from(path);
+        return Some(PathBuf::from(path));
     }
 
     // The CLI always bundles static assets into the exe/public directory
-    std::env::current_exe()
-        .expect("Failed to get current executable path")
-        .parent()
-        .unwrap()
-        .join("public")
+    Some(
+        std::env::current_exe()
+            .ok()?
+            .parent()
+            .unwrap()
+            .join("public"),
+    )
 }
 
 fn serve_dir_cached<S>(mut router: Router<S>, public_path: &Path, directory: &Path) -> Router<S>

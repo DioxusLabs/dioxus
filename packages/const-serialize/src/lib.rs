@@ -222,32 +222,34 @@ const MAX_STR_SIZE: usize = 256;
 
 /// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
 #[derive(Eq, PartialEq, PartialOrd, Clone, Copy, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConstStr {
-    #[cfg_attr(feature = "serde", serde(with = "serde_bytes"))]
     bytes: [u8; MAX_STR_SIZE],
     len: u32,
 }
 
 #[cfg(feature = "serde")]
 mod serde_bytes {
-    use serde::{Deserialize, Serializer};
+    use serde::{Deserialize, Serialize, Serializer};
 
-    pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_bytes(bytes)
+    use crate::ConstStr;
+
+    impl Serialize for ConstStr {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_str(self.as_str())
+        }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<[u8; super::MAX_STR_SIZE], D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let bytes = Vec::<u8>::deserialize(deserializer)?;
-        bytes
-            .try_into()
-            .map_err(|_| serde::de::Error::custom("Failed to convert bytes to a fixed size array"))
+    impl<'de> Deserialize<'de> for ConstStr {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let s = String::deserialize(deserializer)?;
+            Ok(ConstStr::new(&s))
+        }
     }
 }
 
