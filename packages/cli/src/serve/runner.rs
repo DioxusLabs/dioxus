@@ -379,7 +379,7 @@ impl AppServer {
                 }
             }
 
-            // If it's in the public dir, we need a full rebuild
+            // If it's in the public dir, we sync it and trigger a full rebuild
             if self.client.build.path_is_in_public_dir(path) {
                 _ = self.client.build.sync_public_dir();
                 needs_full_rebuild = true;
@@ -1035,10 +1035,11 @@ impl AppServer {
         let mut watched_crates = self.local_dependencies(crate_package);
         watched_crates.push(crate_dir);
 
-        if crate_package == self.client.build.crate_package {
-            if let Some(static_dir) = self.client.build.static_dir_source() {
-                if static_dir.exists() {
-                    watched_paths.push(static_dir);
+        // Watch the `public` directory if this is the client crate
+        if self.client.build.crate_package == crate_package {
+            if let Some(public_dir) = self.client.build.user_public_dir() {
+                if public_dir.exists() {
+                    watched_paths.push(public_dir);
                 }
             }
         }

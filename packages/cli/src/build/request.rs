@@ -4897,7 +4897,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     pub(crate) fn sync_public_dir(&self) -> Result<()> {
         let root = &self.root_dir();
 
-        let Some(source) = self.static_dir_source() else {
+        let Some(source) = self.user_public_dir() else {
             return Ok(());
         };
 
@@ -5061,7 +5061,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     /// Resolve the configured static directory relative to the crate, if any.
-    pub(crate) fn static_dir_source(&self) -> Option<PathBuf> {
+    pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
         self.config
             .application
             .public_dir
@@ -5080,7 +5080,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
-        let Some(static_dir) = self.static_dir_source() else {
+        let Some(static_dir) = self.user_public_dir() else {
             return false;
         };
 

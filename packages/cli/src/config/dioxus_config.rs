@@ -83,4 +83,15 @@ mod tests {
             Some(std::path::Path::new("public2"))
         );
     }
+
+    #[test]
+    fn static_dir_can_be_disabled() {
+        let source = r#"
+            [application]
+            public_dir = ""
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(config.application.public_dir.as_deref(), None);
+    }
 }
