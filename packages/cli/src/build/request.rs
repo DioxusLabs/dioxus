@@ -320,7 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    verbosity_or_default, AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error,
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
     WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
@@ -333,8 +333,8 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::AssetOptions;
-use manganis_core::AssetVariant;
+use manganis::{AssetOptions, BundledAsset};
+use manganis_core::{AssetOptionsBuilder, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -445,7 +445,6 @@ pub enum BuildMode {
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
-    pub(crate) bundle: BundleFormat,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
@@ -454,6 +453,7 @@ pub struct BuildArtifacts {
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
+    pub(crate) build_id: BuildId,
 }
 
 impl BuildRequest {
@@ -868,6 +868,26 @@ impl BuildRequest {
             ]);
         }
 
+        // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
+        if matches!(bundle, BundleFormat::Ios) {
+            let xcode_path = Workspace::get_xcode_path()
+                .await
+                .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
+
+            let sysroot_location = match triple.environment {
+                target_lexicon::Environment::Sim => xcode_path
+                    .join("Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk"),
+                _ => xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"),
+            };
+
+            if sysroot_location.exists() && !rustflags.flags.iter().any(|f| f == "-isysroot") {
+                rustflags.flags.extend([
+                    "-Clink-arg=-isysroot".to_string(),
+                    format!("-Clink-arg={}", sysroot_location.display()),
+                ]);
+            }
+        }
+
         // automatically set the getrandom backend for web builds if the user requested it
         if matches!(bundle, BundleFormat::Web) && args.wasm_js_cfg {
             rustflags.flags.extend(
@@ -989,10 +1009,10 @@ impl BuildRequest {
         _ = std::fs::File::create_new(self.windows_command_file());
 
         if !matches!(ctx.mode, BuildMode::Thin { .. }) {
-            self.prepare_build_dir()?;
+            self.prepare_build_dir(ctx)?;
         }
 
-        if self.bundle == BundleFormat::Server {
+        if !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -1250,7 +1270,6 @@ impl BuildRequest {
         let assets = self.collect_assets(&exe, ctx).await?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let bundle = self.bundle;
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
         tracing::debug!(
@@ -1261,7 +1280,6 @@ impl BuildRequest {
 
         Ok(BuildArtifacts {
             time_end,
-            bundle,
             exe,
             direct_rustc,
             time_start,
@@ -1270,19 +1288,47 @@ impl BuildRequest {
             depinfo,
             root_dir: self.root_dir(),
             patch_cache: None,
+            build_id: ctx.build_id,
         })
     }
 
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
     async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if !self.skip_assets {
-            ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe).await?;
+        if self.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        ctx.status_extracting_assets();
+
+        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+
+        // If the user has a public dir, we submit all the entries there as assets too
+        //
+        // These don't receive a hash in their filename, since they're user-provided static assets
+        // We only do this for web builds
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        AssetOptionsBuilder::new()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
+                }
+            }
         }
 
         Ok(manifest)
@@ -1460,7 +1506,7 @@ impl BuildRequest {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.bundle == BundleFormat::Server {
+        if !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -1475,14 +1521,13 @@ impl BuildRequest {
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
-        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
-        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
-        // all assets.
-        let version_file = self.asset_optimizer_version_file();
-        let clear_cache = std::fs::read_to_string(&version_file)
-            .ok()
-            .filter(|s| s == crate::VERSION.as_str())
-            .is_none();
+        // The CLI creates a .manifest.json file in the asset dir to keep track of the assets and
+        // other build metadata. If we can't parse this file (or the CLI version changed), then we
+        // want to re-copy all the assets rather than trying to do an incremental update.
+        let clear_cache = self
+            .load_manifest()
+            .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
+            .unwrap_or(true);
         if clear_cache {
             keep_bundled_output_paths.clear();
         }
@@ -1491,20 +1536,6 @@ impl BuildRequest {
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-
-        // use walkdir::WalkDir;
-        // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
-        //     // If this asset is in the manifest, we don't need to remove it
-        //     let canonicalized = dunce::canonicalize(item.path())?;
-        //     if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
-        //         // Remove empty dirs, remove files not in the manifest
-        //         if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
-        //             std::fs::remove_dir(item.path())?;
-        //         } else {
-        //             std::fs::remove_file(item.path())?;
-        //         }
-        //     }
-        // }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -1570,7 +1601,7 @@ impl BuildRequest {
         }
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
+        self.write_app_manifest(assets).await?;
 
         Ok(())
     }
@@ -1716,6 +1747,14 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        }
+
         // Run the linker directly!
         //
         // We dump its output directly into the patch exe location which is different than how rustc
@@ -1723,7 +1762,7 @@ impl BuildRequest {
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -1835,12 +1874,20 @@ impl BuildRequest {
                 // -lxyz
                 // There might be more, but some flags might break our setup.
                 for (idx, arg) in original_args.iter().enumerate() {
-                    if *arg == "-framework" || *arg == "-arch" || *arg == "-L" {
+                    if *arg == "-framework"
+                        || *arg == "-arch"
+                        || *arg == "-L"
+                        || *arg == "-target"
+                        || *arg == "-isysroot"
+                    {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
                     }
 
-                    if arg.starts_with("-l") || arg.starts_with("-m") {
+                    if arg.starts_with("-l")
+                        || arg.starts_with("-m")
+                        || arg.starts_with("-nodefaultlibs")
+                    {
                         out_args.push(arg.to_string());
                     }
                 }
@@ -2236,11 +2283,19 @@ impl BuildRequest {
             out_args = vec![format!("@{}", self.windows_command_file().display())];
         }
 
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
+        }
+
         // Run the linker directly!
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -2512,7 +2567,7 @@ impl BuildRequest {
         cargo_args.push(self.executable_name().to_string());
 
         // Set offline/locked/frozen
-        let lock_opts = verbosity_or_default();
+        let lock_opts = crate::verbosity_or_default();
         if lock_opts.frozen {
             cargo_args.push("--frozen".to_string());
         }
@@ -3073,8 +3128,18 @@ impl BuildRequest {
         }
     }
 
+    /// Create a workdir for the given platform
+    /// This can be used as a temporary directory for the build, but in an observable way such that
+    /// you can see the files in the directory via `target`
+    ///
+    /// target/dx/build/app/web/
+    /// target/dx/build/app/web/public/
+    /// target/dx/build/app/web/server.exe
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.bundle, self.release)
+        self.internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join(self.bundle.build_folder_name())
     }
 
     fn platform_exe_name(&self) -> String {
@@ -3371,20 +3436,6 @@ impl BuildRequest {
         let dir = self.target_dir.join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    /// Create a workdir for the given platform
-    /// This can be used as a temporary directory for the build, but in an observable way such that
-    /// you can see the files in the directory via `target`
-    ///
-    /// target/dx/build/app/web/
-    /// target/dx/build/app/web/public/
-    /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, bundle: BundleFormat, release: bool) -> PathBuf {
-        self.internal_out_dir()
-            .join(&self.main_target)
-            .join(if release { "release" } else { "debug" })
-            .join(bundle.build_folder_name())
     }
 
     /// target/dx/bundle/app/
@@ -3969,7 +4020,8 @@ impl BuildRequest {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
                 wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
+                    base_path = self.base_path_or_default(),
                     url = assets
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
@@ -3993,9 +4045,10 @@ impl BuildRequest {
 
                 writeln!(
                     glue,
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/{base_path}/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
 
+                    base_path = self.base_path_or_default(),
 
                     // Again, register this wasm with the asset system
                     url = assets
@@ -4320,14 +4373,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// - extra scaffolding
     ///
     /// It's not guaranteed that they're different from any other folder
-    pub(crate) fn prepare_build_dir(&self) -> Result<()> {
+    pub(crate) fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
         static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
         let success = INITIALIZED.get_or_init(|| {
-            if self.bundle != BundleFormat::Server {
+            if ctx.is_primary_build() {
                 _ = remove_dir_all(self.exe_dir());
             }
 
@@ -4377,12 +4430,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("main")
                 .join("assets"),
 
+            // We put assets in public/assets for server apps
+            BundleFormat::Server => self.root_dir().join("public").join("assets"),
+
             // everyone else is soooo normal, just app/assets :)
-            BundleFormat::Web
-            | BundleFormat::Ios
-            | BundleFormat::Windows
-            | BundleFormat::Linux
-            | BundleFormat::Server => self.root_dir().join("assets"),
+            BundleFormat::Web | BundleFormat::Ios | BundleFormat::Windows | BundleFormat::Linux => {
+                self.root_dir().join("assets")
+            }
         }
     }
 
@@ -4437,9 +4491,21 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .with_extension("wasm")
     }
 
-    /// Get the path to the asset optimizer version file
-    pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
+    /// Get the path to the app manifest file
+    ///
+    /// This includes metadata about the build such as the bundle format, target triple, features, etc.
+    /// Manifests are only written by the `PRIMARY` build.
+    pub(crate) fn app_manifest(&self) -> PathBuf {
+        self.platform_dir().join(".manifest.json")
+    }
+
+    pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
+        let manifest_path = self.app_manifest();
+        let manifest_data = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+        let manifest: AppManifest = serde_json::from_str(&manifest_data)
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+        Ok(manifest)
     }
 
     /// Check for tooling that might be required for this build.
@@ -4688,7 +4754,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(assets, wasm_path, &mut html)?;
+        self.inject_resources(assets, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(assets, &mut html);
@@ -4707,12 +4773,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        assets: &AssetManifest,
-        wasm_path: &str,
-        html: &mut String,
-    ) -> Result<()> {
+    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
         use std::fmt::Write;
 
         // Collect all resources into a list of styles and scripts
@@ -4781,10 +4842,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
 
-        // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
-        ));
+        // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
+        // And if they do not match then Safari downloads the wasm file twice.
+        // See https://github.com/wasm-bindgen/wasm-bindgen/blob/ac51055a4c39fa0affe02f7b63fb1d4c9b3ddfaf/crates/cli-support/src/js/mod.rs#L967
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
@@ -4841,6 +4901,34 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         } else if let Some(pos) = content.find(or_insert_before) {
             content.insert_str(pos, with);
         }
+    }
+
+    /// Resolve the configured public directory relative to the crate, if any.
+    pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
+        let path = self.config.application.public_dir.as_ref()?;
+
+        if path.as_os_str().is_empty() {
+            return None;
+        }
+
+        Some(if path.is_absolute() {
+            path.clone()
+        } else {
+            self.crate_dir().join(path)
+        })
+    }
+
+    pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
+        let Some(static_dir) = self.user_public_dir() else {
+            return false;
+        };
+
+        // Canonicalize when possible so we work with editors that use tmp files
+        let canonical_static =
+            dunce::canonicalize(&static_dir).unwrap_or_else(|_| static_dir.clone());
+        let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        canonical_path.starts_with(&canonical_static)
     }
 
     /// Get the base path from the config or None if this is not a web or server build
@@ -5249,5 +5337,18 @@ We checked the folders:
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         ))
+    }
+
+    async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {
+        let manifest = AppManifest {
+            assets: assets.clone(),
+            cli_version: crate::VERSION.to_string(),
+            rust_version: self.workspace.rustc_version.clone(),
+        };
+
+        let manifest_path = self.app_manifest();
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+
+        Ok(())
     }
 }

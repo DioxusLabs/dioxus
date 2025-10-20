@@ -1,20 +1,20 @@
 use crate::bevy_scene_plugin::BevyScenePlugin;
 use bevy::{
+    camera::{ManualTextureViewHandle, RenderTarget},
     prelude::*,
     render::{
-        camera::{ManualTextureView, ManualTextureViewHandle, ManualTextureViews, RenderTarget},
         render_resource::TextureFormat,
         renderer::{
             RenderAdapter, RenderAdapterInfo, RenderDevice, RenderInstance, RenderQueue,
             WgpuWrapper,
         },
         settings::{RenderCreation, RenderResources},
+        texture::ManualTextureView,
         RenderPlugin,
     },
 };
 use dioxus_native::{CustomPaintCtx, DeviceHandle, TextureHandle};
 use std::sync::Arc;
-use wgpu::Instance;
 
 #[derive(Resource, Default)]
 pub struct UIData {
@@ -30,7 +30,7 @@ pub struct BevyRenderer {
 }
 
 impl BevyRenderer {
-    pub fn new(instance: &Instance, device_handle: &DeviceHandle) -> Self {
+    pub fn new(device_handle: &DeviceHandle) -> Self {
         // Create a headless Bevy App.
         let mut app = App::new();
         app.add_plugins(
@@ -42,7 +42,7 @@ impl BevyRenderer {
                         RenderQueue(Arc::new(WgpuWrapper::new(device_handle.queue.clone()))),
                         RenderAdapterInfo(WgpuWrapper::new(device_handle.adapter.get_info())),
                         RenderAdapter(Arc::new(WgpuWrapper::new(device_handle.adapter.clone()))),
-                        RenderInstance(Arc::new(WgpuWrapper::new(instance.clone()))),
+                        RenderInstance(Arc::new(WgpuWrapper::new(device_handle.instance.clone()))),
                     )),
                     synchronous_pipeline_compilation: true,
                     ..default()
@@ -51,6 +51,7 @@ impl BevyRenderer {
                     primary_window: None,
                     exit_condition: bevy::window::ExitCondition::DontExit,
                     close_when_requested: false,
+                    ..Default::default()
                 })
                 .disable::<bevy::winit::WinitPlugin>(),
         );
@@ -95,7 +96,7 @@ impl BevyRenderer {
         // Run one frame of the Bevy app to render the 3D scene.
         self.app.update();
 
-        self.texture_handle
+        self.texture_handle.clone()
     }
 
     fn init_texture(&mut self, mut ctx: CustomPaintCtx<'_>, width: u32, height: u32) {
@@ -114,9 +115,8 @@ impl BevyRenderer {
 
         if let Some(mut manual_texture_views) = world.get_resource_mut::<ManualTextureViews>() {
             // Clean previous texture if any.
-            if let Some(texture_handle) = self.texture_handle {
-                ctx.unregister_texture(texture_handle);
-                self.texture_handle = None;
+            if self.texture_handle.is_some() {
+                ctx.unregister_texture(self.texture_handle.take().unwrap());
             }
             if let Some(old_handle) = self.manual_texture_view_handle {
                 manual_texture_views.remove(&old_handle);

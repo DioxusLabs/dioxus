@@ -95,7 +95,11 @@ impl<S> IntoRequest for MultipartFormData<S> {
             // and construct a multipart form body manually.
             #[cfg(not(target_arch = "wasm32"))]
             {
-                todo!("Properly implement multipart form data for non-web wasm32 clients");
+                let data = self._client.clone().ok_or_else(|| {
+                    RequestError::Builder("Failed to get FormData from event".into())
+                })?;
+
+                return _req.send_multipart(&data).await;
             }
 
             unimplemented!("Non web wasm32 clients are not supported yet")

@@ -17,6 +17,7 @@ Option 1:
 For simple, synchronous, thread-safe data, we can use statics with atomic types or mutexes.
 The `LazyLock` type from the standard library is a great choice for simple, synchronous data
 */
+#[cfg(feature = "server")]
 static MESSAGES: LazyLock<Mutex<Vec<String>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 #[post("/api/messages")]
@@ -107,13 +108,13 @@ fn app() -> Element {
     rsx! {
         div {
             button { onclick: move |_| users.call(), "Get Users" }
-            pre { "{users.result():?}" }
+            pre { "{users.value():?}" }
             button { onclick: move |_| messages.call(), "Get Messages" }
-            pre { "{messages.result():?}" }
+            pre { "{messages.value():?}" }
             button { onclick: move |_| broadcast.call(), "Broadcast Message" }
-            pre { "{broadcast.result():?}" }
+            pre { "{broadcast.value():?}" }
             button { onclick: move |_| add.call(), "Add Message" }
-            pre { "{add.result():?}" }
+            pre { "{add.value():?}" }
         }
     }
 }

@@ -57,7 +57,6 @@ pub struct IpcMessage {
 /// A set of known messages that we need to respond to
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
-    FileDialog,
     UserEvent,
     Query,
     BrowserOpen,
@@ -68,7 +67,6 @@ pub enum IpcMethod<'a> {
 impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
-            "file_dialog" => IpcMethod::FileDialog,
             "user_event" => IpcMethod::UserEvent,
             "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,

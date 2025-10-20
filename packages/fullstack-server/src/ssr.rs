@@ -11,13 +11,13 @@ use dioxus_core::{
     SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
 use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
+use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
-use dioxus_fullstack_core::{StreamingContext, StreamingStatus};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::StatusCode;
+use http::{request::Parts, HeaderMap, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -67,30 +67,29 @@ impl SsrRendererPool {
         route: &str,
         render_into: &mut Sender<Result<String, IncrementalRendererError>>,
     ) -> Option<RenderFreshness> {
-        if let Some(incremental) = &self.incremental_cache {
-            if let Ok(mut incremental) = incremental.write() {
-                match incremental.get(route) {
-                    Ok(Some(cached_render)) => {
-                        let CachedRender {
-                            freshness,
-                            response,
-                            ..
-                        } = cached_render;
-                        _ = render_into.start_send(
-                            String::from_utf8(response.to_vec())
-                                .map_err(|err| IncrementalRendererError::Other(err.into())),
-                        );
-                        return Some(freshness);
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            "Failed to get route \"{route}\" from incremental cache: {e}"
-                        );
-                    }
-                    _ => {}
+        let incremental = self.incremental_cache.as_ref()?;
+
+        if let Ok(mut incremental) = incremental.write() {
+            match incremental.get(route) {
+                Ok(Some(cached_render)) => {
+                    let CachedRender {
+                        freshness,
+                        response,
+                        ..
+                    } = cached_render;
+                    _ = render_into.start_send(
+                        String::from_utf8(response.to_vec())
+                            .map_err(|err| IncrementalRendererError::Other(err.into())),
+                    );
+                    return Some(freshness);
                 }
+                Err(e) => {
+                    tracing::error!("Failed to get route \"{route}\" from incremental cache: {e}");
+                }
+                _ => {}
             }
         }
+
         None
     }
 
@@ -98,11 +97,13 @@ impl SsrRendererPool {
     /// The streaming is canceled when the stream the function returns is dropped
     pub(crate) async fn render_to(
         self: Arc<Self>,
+        parts: Parts,
         cfg: &ServeConfig,
-        route: String,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
     ) -> Result<
         (
+            HttpError,
+            HeaderMap,
             RenderFreshness,
             impl Stream<Item = Result<String, IncrementalRendererError>>,
         ),
@@ -133,6 +134,15 @@ impl SsrRendererPool {
             }
         }
 
+        let route = parts
+            .uri
+            .path_and_query()
+            .ok_or_else(|| SSRError::HttpError {
+                status: StatusCode::BAD_REQUEST,
+                message: None,
+            })?
+            .to_string();
+
         let (mut into, rx) =
             futures_channel::mpsc::channel::<Result<String, IncrementalRendererError>>(1000);
 
@@ -141,6 +151,11 @@ impl SsrRendererPool {
         // before we even spawn anything, we can check synchronously if we have the route cached
         if let Some(freshness) = self.check_cached_route(&route, &mut into) {
             return Ok((
+                HttpError {
+                    status: StatusCode::OK,
+                    message: None,
+                },
+                HeaderMap::new(),
                 freshness,
                 ReceiverWithDrop {
                     receiver: rx,
@@ -177,13 +192,15 @@ impl SsrRendererPool {
             };
 
             // Provide the document and streaming context to the root of the app
-            let streaming_context = virtual_dom.in_scope(ScopeId::ROOT, StreamingContext::new);
+            let streaming_context =
+                virtual_dom.in_scope(ScopeId::ROOT, || FullstackContext::new(parts));
             virtual_dom.provide_root_context(document.clone() as Rc<dyn dioxus_document::Document>);
-            virtual_dom.provide_root_context(streaming_context);
+            virtual_dom.provide_root_context(streaming_context.clone());
 
             virtual_dom.in_scope(ScopeId::ROOT, || {
                 // Wrap the memory history in a fullstack history provider to provide the initial route for hydration
                 provide_fullstack_history_context(history);
+
                 // Provide a hydration compatible error boundary that serializes errors for the client
                 dioxus_core::provide_create_error_boundary(
                     dioxus_fullstack_core::init_error_boundary,
@@ -202,8 +219,9 @@ impl SsrRendererPool {
                 loop {
                     // Check if the router has finished and set the streaming context to finished
                     let streaming_context_finished = virtual_dom
-                        .in_scope(ScopeId::ROOT, || streaming_context.current_status())
+                        .in_scope(ScopeId::ROOT, || streaming_context.streaming_state())
                         == StreamingStatus::InitialChunkCommitted;
+
                     // Or if this app isn't using the router and has finished suspense
                     let suspense_finished = !virtual_dom.suspended_tasks_remaining();
                     if streaming_context_finished || suspense_finished {
@@ -218,7 +236,7 @@ impl SsrRendererPool {
                 }
             }
 
-            // check if there are any errors
+            // check if there are any errors from the root error boundary
             let error = virtual_dom.in_scope(ScopeId::ROOT_ERROR_BOUNDARY, || {
                 consume_context::<ErrorContext>().error()
             });
@@ -242,15 +260,12 @@ impl SsrRendererPool {
                 // we need to eventually be able to downcast that and get the status code from it
                 if let Some(ServerFnError::ServerError { message, code, .. }) = error.downcast_ref()
                 {
-                    if let Some(code) = code {
-                        status_code = Some(
-                            (*code)
-                                .try_into()
-                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                        );
-                    } else {
-                        status_code = Some(StatusCode::INTERNAL_SERVER_ERROR);
-                    }
+                    status_code = Some(
+                        (*code)
+                            .try_into()
+                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                    );
+
                     out_message = Some(message.clone());
                 }
 
@@ -277,8 +292,14 @@ impl SsrRendererPool {
                 return;
             }
 
+            // Check the FullstackContext in case the user set the statuscode manually or via a layout.
+            let http_status = streaming_context.current_http_status();
+            let headers = streaming_context
+                .take_response_headers()
+                .unwrap_or_default();
+
             // Now that we handled any errors from rendering, we can send the initial ok result
-            _ = initial_result_tx.send(Ok(()));
+            _ = initial_result_tx.send(Ok((http_status, headers)));
 
             // Wait long enough to assemble the `<head>` of the document before starting to stream
             let mut pre_body = String::new();
@@ -402,11 +423,13 @@ impl SsrRendererPool {
         let join_handle = Self::spawn_platform(create_render_future);
 
         // Wait for the initial result which determines the status code
-        initial_result_rx
+        let (status, headers) = initial_result_rx
             .await
             .map_err(|err| SSRError::Incremental(IncrementalRendererError::Other(err.into())))??;
 
         Ok((
+            status,
+            headers,
             RenderFreshness::now(None),
             ReceiverWithDrop {
                 receiver: rx,
@@ -650,8 +673,6 @@ impl SsrRendererPool {
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
         let title = {
             let document: Option<Rc<ServerDocument>> =
                 virtual_dom.in_scope(ScopeId::ROOT, dioxus_core::try_consume_context);
@@ -659,13 +680,13 @@ impl SsrRendererPool {
             document.and_then(|document| document.title())
         };
 
-        to.write_str(&index.head_before_title)?;
+        to.write_str(&cfg.index.head_before_title)?;
         if let Some(title) = title {
             to.write_str(&title)?;
         } else {
-            to.write_str(&index.title)?;
+            to.write_str(&cfg.index.title)?;
         }
-        to.write_str(&index.head_after_title)?;
+        to.write_str(&cfg.index.head_after_title)?;
 
         let document =
             virtual_dom.in_scope(ScopeId::ROOT, try_consume_context::<Rc<ServerDocument>>);
@@ -687,9 +708,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
-        to.write_str(&index.close_head)?;
+        to.write_str(&cfg.index.close_head)?;
 
         // // #[cfg(feature = "document")]
         // {
@@ -706,8 +725,6 @@ impl SsrRendererPool {
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
         // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
         // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
         let resolved_data = SsrRendererPool::serialize_server_data(virtual_dom, ScopeId::ROOT);
@@ -732,7 +749,7 @@ impl SsrRendererPool {
             )?;
         }
         write!(to, r#"</script>"#,)?;
-        to.write_str(&index.post_main)?;
+        to.write_str(&cfg.index.post_main)?;
 
         Ok(())
     }
@@ -742,9 +759,7 @@ impl SsrRendererPool {
         cfg: &ServeConfig,
         to: &mut R,
     ) -> Result<(), IncrementalRendererError> {
-        let ServeConfig { index, .. } = cfg;
-
-        to.write_str(&index.after_closing_body_tag)?;
+        to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
     }

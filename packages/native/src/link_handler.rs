@@ -10,8 +10,9 @@ impl NavigationProvider for DioxusNativeNavigationProvider {
         if options.method == Method::GET
             && matches!(options.url.scheme(), "http" | "https" | "mailto")
         {
-            if let Err(err) = webbrowser::open(options.url.as_str()) {
-                tracing::error!("Failed to open URL: {}", err);
+            if let Err(_err) = webbrowser::open(options.url.as_str()) {
+                #[cfg(feature = "tracing")]
+                tracing::error!("Failed to open URL: {}", _err);
             }
         }
     }

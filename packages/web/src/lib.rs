@@ -30,6 +30,9 @@ pub use history::{HashHistory, WebHistory};
 mod files;
 pub use files::*;
 
+mod data_transfer;
+pub use data_transfer::*;
+
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
 

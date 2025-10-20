@@ -1,4 +1,5 @@
 use axum_core::response::IntoResponse;
+use futures_util::TryStreamExt;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -31,11 +32,11 @@ pub enum ServerFnError {
     /// representation of the error.
     #[error("error running server function: {message} (details: {details:#?})")]
     ServerError {
+        /// A human-readable message describing the error.
         message: String,
 
-        /// Optional HTTP status code associated with the error.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        code: Option<u16>,
+        /// HTTP status code associated with the error.
+        code: u16,
 
         #[serde(skip_serializing_if = "Option::is_none")]
         details: Option<serde_json::Value>,
@@ -88,7 +89,29 @@ impl ServerFnError {
         ServerFnError::ServerError {
             message: f.to_string(),
             details: None,
-            code: None,
+            code: 500,
+        }
+    }
+
+    /// Create a new server error (status code 500) with a message and details.
+    pub async fn from_axum_response(resp: axum_core::response::Response) -> Self {
+        let status = resp.status();
+        let message = resp
+            .into_body()
+            .into_data_stream()
+            .try_fold(Vec::new(), |mut acc, chunk| async move {
+                acc.extend_from_slice(&chunk);
+                Ok(acc)
+            })
+            .await
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_else(|| status.canonical_reason().unwrap_or("").to_string());
+
+        ServerFnError::ServerError {
+            message,
+            code: status.as_u16(),
+            details: None,
         }
     }
 }
@@ -98,7 +121,7 @@ impl From<anyhow::Error> for ServerFnError {
         ServerFnError::ServerError {
             message: value.to_string(),
             details: None,
-            code: None,
+            code: 500,
         }
     }
 }
@@ -112,11 +135,9 @@ impl From<serde_json::Error> for ServerFnError {
 impl From<ServerFnError> for http::StatusCode {
     fn from(value: ServerFnError) -> Self {
         match value {
-            ServerFnError::ServerError { code, .. } => match code {
-                Some(code) => http::StatusCode::from_u16(code)
-                    .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
-                None => http::StatusCode::INTERNAL_SERVER_ERROR,
-            },
+            ServerFnError::ServerError { code, .. } => {
+                http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
+            }
             ServerFnError::Request(err) => match err {
                 RequestError::Status(_, code) => http::StatusCode::from_u16(code)
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
@@ -151,7 +172,7 @@ impl From<HttpError> for ServerFnError {
                     .unwrap_or("Unknown error")
                     .to_string()
             }),
-            code: Some(value.status.as_u16()),
+            code: value.status.as_u16(),
             details: None,
         }
     }
@@ -159,7 +180,63 @@ impl From<HttpError> for ServerFnError {
 
 impl IntoResponse for ServerFnError {
     fn into_response(self) -> axum_core::response::Response {
-        todo!()
+        match self {
+            Self::ServerError {
+                message,
+                code,
+                details,
+            } => {
+                let status =
+                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                let body = if let Some(details) = details {
+                    serde_json::json!({
+                        "error": message,
+                        "details": details,
+                    })
+                } else {
+                    serde_json::json!({
+                        "error": message,
+                    })
+                };
+                let body = axum_core::body::Body::from(
+                    serde_json::to_string(&body)
+                        .unwrap_or_else(|_| "{\"error\":\"Internal Server Error\"}".to_string()),
+                );
+                axum_core::response::Response::builder()
+                    .status(status)
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .unwrap_or_else(|_| {
+                        axum_core::response::Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(axum_core::body::Body::from(
+                                "{\"error\":\"Internal Server Error\"}",
+                            ))
+                            .unwrap()
+                    })
+            }
+            _ => {
+                let status: StatusCode = self.clone().into();
+                let body = axum_core::body::Body::from(
+                    serde_json::json!({
+                        "error": self.to_string(),
+                    })
+                    .to_string(),
+                );
+                axum_core::response::Response::builder()
+                    .status(status)
+                    .header("Content-Type", "application/json")
+                    .body(body)
+                    .unwrap_or_else(|_| {
+                        axum_core::response::Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(axum_core::body::Body::from(
+                                "{\"error\":\"Internal Server Error\"}",
+                            ))
+                            .unwrap()
+                    })
+            }
+        }
     }
 }
 

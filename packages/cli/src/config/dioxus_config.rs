@@ -14,7 +14,7 @@ pub(crate) struct DioxusConfig {
     pub(crate) bundle: BundleConfig,
 
     #[serde(default)]
-    pub(crate) component: ComponentConfig,
+    pub(crate) components: ComponentConfig,
 }
 
 impl Default for DioxusConfig {
@@ -23,6 +23,7 @@ impl Default for DioxusConfig {
             application: ApplicationConfig {
                 asset_dir: None,
                 out_dir: None,
+                public_dir: Some("public".into()),
                 tailwind_input: None,
                 tailwind_output: None,
                 ios_info_plist: None,
@@ -58,7 +59,46 @@ impl Default for DioxusConfig {
                 wasm_opt: Default::default(),
             },
             bundle: BundleConfig::default(),
-            component: ComponentConfig::default(),
+            components: ComponentConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn static_dir_defaults_to_public() {
+        let config = DioxusConfig::default();
+        assert_eq!(
+            config.application.public_dir,
+            Some(std::path::PathBuf::from("public"))
+        );
+    }
+
+    #[test]
+    fn static_dir_can_be_overridden() {
+        let source = r#"
+            [application]
+            public_dir = "public2"
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(
+            config.application.public_dir.as_deref(),
+            Some(std::path::Path::new("public2"))
+        );
+    }
+
+    #[test]
+    fn static_dir_can_be_disabled() {
+        let source = r#"
+            [application]
+            public_dir = ""
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert_eq!(config.application.public_dir.as_deref(), None);
     }
 }

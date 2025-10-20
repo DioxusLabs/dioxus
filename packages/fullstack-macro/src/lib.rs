@@ -88,9 +88,9 @@ use syn::{
 /// }
 /// ```
 #[proc_macro_attribute]
-pub fn server(_attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
+pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStream {
     // Parse the attribute list using the old server_fn arg parser.
-    let args = match syn::parse::<ServerFnArgs>(_attr) {
+    let args = match syn::parse::<ServerFnArgs>(attr) {
         Ok(args) => args,
         Err(err) => {
             let err: TokenStream = err.to_compile_error().into();
@@ -202,7 +202,30 @@ fn route_impl_with_route(
     method_from_macro: Option<Method>,
 ) -> syn::Result<TokenStream2> {
     // Parse the route and function
-    let function = syn::parse::<ItemFn>(item)?;
+    let mut function = syn::parse::<ItemFn>(item)?;
+
+    let middleware_attrs = function
+        .attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("middleware"))
+        .cloned()
+        .collect::<Vec<_>>();
+
+    let middleware_inits = middleware_attrs
+        .into_iter()
+        .map(|f| match f.meta {
+            Meta::List(meta_list) => Ok(meta_list.tokens),
+            _ => Err(Error::new(
+                f.span(),
+                "Expected middleware attribute to be a list, e.g. #[middleware(MyLayer::new())]",
+            )),
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    // don't re-emit the middleware attribute on the inner
+    function
+        .attrs
+        .retain(|attr| !attr.path().is_ident("middleware"));
 
     let server_args = route.server_args.clone();
     let mut function_on_server = function.clone();
@@ -259,15 +282,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|attr| attr.path().is_ident("doc"));
 
-    let __axum = quote! { dioxus_fullstack::axum };
-
-    let (aide_ident_docs, _inner_fn_call, _method_router_ty) = {
-        (
-            quote!(),
-            quote! { #__axum::routing::#http_method(__inner__function__ #ty_generics) },
-            quote! { #__axum::routing::MethodRouter },
-        )
-    };
+    let __axum = quote! { dioxus_server::axum };
 
     let output_type = match &function.sig.output {
         syn::ReturnType::Default => parse_quote! { () },
@@ -305,6 +320,14 @@ fn route_impl_with_route(
         })
         .collect::<Vec<_>>();
 
+    let server_types = server_args
+        .iter()
+        .map(|pat_type| match pat_type {
+            FnArg::Receiver(_) => parse_quote! { () },
+            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
+        })
+        .collect::<Vec<_>>();
+
     let body_struct_impl = {
         let tys = body_json_types
             .iter()
@@ -334,28 +357,13 @@ fn route_impl_with_route(
     };
 
     // there's no active request on the server, so we just create a dummy one
-    let server_defaults = server_args.iter().map(|arg| {
-        let name = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(pat_ident) => &pat_ident.ident,
-                _ => panic!("Expected Pat::Ident"),
-            },
-        };
-
-        let ty = match arg {
-            FnArg::Receiver(_) => panic!("Server args cannot be receiver"),
-            FnArg::Typed(pat_type) => (*pat_type.ty).clone(),
-        };
-
+    let server_defaults = if server_args.is_empty() {
+        quote! {}
+    } else {
         quote! {
-            let #name = {
-                use dioxus_fullstack::axum::extract::FromRequest;
-                let __request = dioxus_fullstack::axum::extract::Request::new(dioxus_fullstack::axum::body::Body::empty());
-                <#ty as FromRequest<_, _>>::from_request(__request, &()).await.unwrap()
-            };
+            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
         }
-    });
+    };
 
     let as_axum_path = route.to_axum_path_string();
 
@@ -425,9 +433,40 @@ fn route_impl_with_route(
         }
     };
 
+    let middleware_extra = middleware_inits
+        .iter()
+        .map(|init| {
+            quote! {
+                .layer(#init)
+            }
+        })
+        .collect::<Vec<_>>();
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
+        #[deny(
+            unexpected_cfgs,
+            reason = "
+==========================================================================================
+  Using Dioxus Server Functions requires a `server` feature flag in your `Cargo.toml`.
+  Please add the following to your `Cargo.toml`:
+
+  ```toml
+  [features]
+  server = [\"dioxus/server\"]
+  ```
+
+  To enable better Rust-Analyzer support, you can make `server` a default feature:
+  ```toml
+  [features]
+  default = [\"web\", \"server\"]
+  web = [\"dioxus/web\"]
+  server = [\"dioxus/server\"]
+  ```
+==========================================================================================
+        "
+        )]
         #vis async fn #fn_name #impl_generics(
             #original_inputs
         ) -> #out_ty #where_clause {
@@ -490,7 +529,6 @@ fn route_impl_with_route(
                 #function_on_server
 
                 #[allow(clippy::unused_unit)]
-                #aide_ident_docs
                 #asyncness fn __inner__function__ #impl_generics(
                     ___state: #__axum::extract::State<DioxusServerState>,
                     #path_extractor
@@ -511,15 +549,17 @@ fn route_impl_with_route(
                     return response;
                 }
 
-                dioxus_fullstack::inventory::submit! {
+                dioxus_server::inventory::submit! {
                     ServerFunction::new(
-                        dioxus_fullstack::http::Method::#method_ident,
+                        dioxus_server::http::Method::#method_ident,
                         __ENDPOINT_PATH,
-                        || #__axum::routing::#http_method(__inner__function__ #ty_generics)
+                        || {
+                            #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
+                        }
                     )
                 }
 
-                #(#server_defaults)*
+                #server_defaults
 
                 return #fn_name #ty_generics(
                     #(#extracted_idents,)*
@@ -695,14 +735,14 @@ impl CompiledRoute {
         let idents = path_iter.clone().map(|item| item.0);
         let types = path_iter.clone().map(|item| item.1);
         quote! {
-            dioxus_fullstack::axum::extract::Path((#(#idents,)*)): dioxus_fullstack::axum::extract::Path<(#(#types,)*)>,
+            dioxus_server::axum::extract::Path((#(#idents,)*)): dioxus_server::axum::extract::Path<(#(#types,)*)>,
         }
     }
 
     pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         quote! {
-            dioxus_fullstack::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::axum::extract::Query<__QueryParams__>,
+            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
         }
     }
 
@@ -1210,6 +1250,15 @@ impl PathParam {
                 LitStr::new(str, span),
                 Brace(span),
                 Star(span),
+                Ident::new(str, span),
+                ty,
+                Brace(span),
+            )
+        } else if str.starts_with(':') && str.len() > 1 {
+            let str = str.strip_prefix(':').unwrap();
+            Self::Capture(
+                LitStr::new(str, span),
+                Brace(span),
                 Ident::new(str, span),
                 ty,
                 Brace(span),

@@ -98,6 +98,7 @@ fn merge_profiles(target: &mut Profiles, new: Profiles) {
         }
     }
 
+    #[allow(deprecated)]
     if let Some(new_doc) = new.doc {
         if target.doc.is_none() {
             target.doc = Some(new_doc);

@@ -907,13 +907,13 @@ impl TraceController {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
                 Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
             },
-            Commands::Component(cmd) => match cmd {
+            Commands::Components(cmd) => match cmd {
                 ComponentCommand::Add {
                     component,
                     registry,
                     force,
                 } => (
-                    "component add".to_string(),
+                    "components add".to_string(),
                     json!({
                         "component": component,
                         "registry": registry,
@@ -924,26 +924,26 @@ impl TraceController {
                     component,
                     registry,
                 } => (
-                    "component remove".to_string(),
+                    "components remove".to_string(),
                     json!({
                         "component": component,
                         "registry": registry,
                     }),
                 ),
                 ComponentCommand::Update { registry } => (
-                    "component update".to_string(),
+                    "components update".to_string(),
                     json!({
                         "registry": registry,
                     }),
                 ),
                 ComponentCommand::List { registry } => (
-                    "component list".to_string(),
+                    "components list".to_string(),
                     json!({
                         "registry": registry,
                     }),
                 ),
-                ComponentCommand::Clean => ("component clean".to_string(), json!({})),
-                ComponentCommand::Schema => ("component schema".to_string(), json!({})),
+                ComponentCommand::Clean => ("components clean".to_string(), json!({})),
+                ComponentCommand::Schema => ("components schema".to_string(), json!({})),
             },
         }
     }

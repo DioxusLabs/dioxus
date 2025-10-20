@@ -53,7 +53,7 @@ fn app() -> Element {
             }
         }
         div {
-            match breed.result() {
+            match breed.value() {
                 None => rsx! { div { "Click the button to fetch a dog!" } },
                 Some(Err(_e)) => rsx! { div { "Failed to fetch a dog, please try again." } },
                 Some(Ok(res)) => rsx! {

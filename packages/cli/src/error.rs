@@ -2,8 +2,6 @@ pub(crate) type Result<T, E = Error> = std::result::Result<T, E>;
 pub use anyhow::Error;
 use itertools::Itertools;
 
-use crate::verbosity_or_default;
-
 pub fn log_stacktrace(err: &anyhow::Error, padding: usize) -> String {
     let mut trace = format!("{err}",);
 
@@ -27,7 +25,7 @@ pub fn log_stacktrace(err: &anyhow::Error, padding: usize) -> String {
         ));
     }
 
-    if verbosity_or_default().trace {
+    if crate::verbosity_or_default().trace {
         trace.push_str(&format!("\nBacktrace:\n{}", err.backtrace()));
     }
 

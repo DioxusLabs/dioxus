@@ -3,7 +3,7 @@
 //!
 //! (this example is not really intended to be run as-is, and requires you to fill
 //! in the missing pieces)
-use anyrender_vello::{wgpu_context::WGPUContext, CustomPaintSource, VelloScenePainter};
+use anyrender_vello::VelloScenePainter;
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
@@ -13,13 +13,13 @@ use blitz_traits::{
 use dioxus::prelude::*;
 use dioxus_native_dom::DioxusDocument;
 use pollster::FutureExt as _;
-use rustc_hash::FxHashMap;
 use std::sync::Arc;
 use std::task::Context;
 use vello::{
     peniko::color::AlphaColor, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene,
 };
 use wgpu::TextureFormat;
+use wgpu_context::WGPUContext;
 
 // Constant width, height, scale factor and color schemefor example purposes
 const SCALE_FACTOR: f32 = 1.0;
@@ -102,14 +102,8 @@ fn main() {
     // Poll the vdom
     dioxus_doc.poll(Some(Context::from_waker(&waker)));
 
-    // Create a `VelloScenePainter` to paint into
-    let mut custom_paint_sources =
-        FxHashMap::<u64, Box<dyn CustomPaintSource + 'static>>::default();
-    let mut scene_painter = VelloScenePainter {
-        inner: Scene::new(),
-        renderer: &mut vello_renderer,
-        custom_paint_sources: &mut custom_paint_sources,
-    };
+    // Create a `vello::Scene` to paint into
+    let mut scene = Scene::new();
 
     // Paint the document using `blitz_paint::paint_scene`
     //
@@ -117,15 +111,12 @@ fn main() {
     // so you could also write your own implementation if you want more control over rendering
     // (i.e. to render a custom renderer instead of Vello)
     paint_scene(
-        &mut scene_painter,
+        &mut VelloScenePainter::new(&mut scene),
         &dioxus_doc,
         SCALE_FACTOR as f64,
         WIDTH,
         HEIGHT,
     );
-
-    // Extract the `vello::Scene` from the `VelloScenePainter`
-    let scene = scene_painter.finish();
 
     // Render the `vello::Scene` to the Texture using the `VelloRenderer`
     vello_renderer

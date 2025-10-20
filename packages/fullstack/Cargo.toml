@@ -37,7 +37,7 @@ serde_json = { workspace = true }
 pin-project = { workspace = true }
 serde_qs = { workspace = true, default-features = true}
 mime = "0.3.17"
-reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream"] }
+reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream", "multipart"] }
 url = { workspace =  true }
 serde_urlencoded = { workspace = true }
 form_urlencoded = { workspace = true }
