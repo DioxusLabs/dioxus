@@ -4733,7 +4733,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(assets, wasm_path, &mut html)?;
+        self.inject_resources(assets, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(assets, &mut html);
@@ -4752,12 +4752,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        assets: &AssetManifest,
-        wasm_path: &str,
-        html: &mut String,
-    ) -> Result<()> {
+    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
         use std::fmt::Write;
 
         // Collect all resources into a list of styles and scripts
@@ -4829,7 +4824,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
         // And if they do not match then Safari downloads the wasm file twice.
         // See https://github.com/wasm-bindgen/wasm-bindgen/blob/ac51055a4c39fa0affe02f7b63fb1d4c9b3ddfaf/crates/cli-support/src/js/mod.rs#L967
-        
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
