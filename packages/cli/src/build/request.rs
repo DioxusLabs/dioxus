@@ -1521,7 +1521,7 @@ impl BuildRequest {
         // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
         // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
         // all assets.
-        let version_file = self.asset_optimizer_version_file();
+        let version_file = self.app_manifest();
         let clear_cache = std::fs::read_to_string(&version_file)
             .ok()
             .filter(|s| s == crate::VERSION.as_str())
@@ -1534,20 +1534,6 @@ impl BuildRequest {
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-
-        // use walkdir::WalkDir;
-        // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
-        //     // If this asset is in the manifest, we don't need to remove it
-        //     let canonicalized = dunce::canonicalize(item.path())?;
-        //     if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
-        //         // Remove empty dirs, remove files not in the manifest
-        //         if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
-        //             std::fs::remove_dir(item.path())?;
-        //         } else {
-        //             std::fs::remove_file(item.path())?;
-        //         }
-        //     }
-        // }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -1613,7 +1599,7 @@ impl BuildRequest {
         }
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
+        std::fs::write(self.app_manifest(), crate::VERSION.as_str())?;
 
         Ok(())
     }
@@ -3140,8 +3126,18 @@ impl BuildRequest {
         }
     }
 
+    /// Create a workdir for the given platform
+    /// This can be used as a temporary directory for the build, but in an observable way such that
+    /// you can see the files in the directory via `target`
+    ///
+    /// target/dx/build/app/web/
+    /// target/dx/build/app/web/public/
+    /// target/dx/build/app/web/server.exe
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.bundle, self.release)
+        self.internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join(self.bundle.build_folder_name())
     }
 
     fn platform_exe_name(&self) -> String {
@@ -3438,20 +3434,6 @@ impl BuildRequest {
         let dir = self.target_dir.join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    /// Create a workdir for the given platform
-    /// This can be used as a temporary directory for the build, but in an observable way such that
-    /// you can see the files in the directory via `target`
-    ///
-    /// target/dx/build/app/web/
-    /// target/dx/build/app/web/public/
-    /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, bundle: BundleFormat, release: bool) -> PathBuf {
-        self.internal_out_dir()
-            .join(&self.main_target)
-            .join(if release { "release" } else { "debug" })
-            .join(bundle.build_folder_name())
     }
 
     /// target/dx/bundle/app/
@@ -4141,7 +4123,7 @@ impl BuildRequest {
         self.write_index_html(assets)?;
 
         // Sync the public directory if it exists
-        self.sync_public_dir(&self.root_dir())?;
+        self.sync_public_dir()?;
 
         Ok(())
     }
@@ -4509,9 +4491,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .with_extension("wasm")
     }
 
-    /// Get the path to the asset optimizer version file
-    pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
+    /// Get the path to the app manifest file
+    ///
+    /// This includes metadata about the build such as the bundle format, target triple, features, etc.
+    /// Manifests are only written by the `PRIMARY` build.
+    pub(crate) fn app_manifest(&self) -> PathBuf {
+        self.platform_dir().join(".manifest.json")
     }
 
     /// Check for tooling that might be required for this build.
@@ -4909,7 +4894,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    fn sync_public_dir(&self, root: &Path) -> Result<()> {
+    pub(crate) fn sync_public_dir(&self) -> Result<()> {
+        let root = &self.root_dir();
+
         let Some(source) = self.static_dir_source() else {
             return Ok(());
         };
@@ -5012,7 +4999,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
         if !removals.is_empty() {
-            Self::remove_manifest_entries(root, &removals);
+            Self::remove_manifest_entries(&root, &removals);
         }
 
         if new_entries.is_empty() {
