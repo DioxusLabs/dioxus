@@ -379,6 +379,12 @@ impl AppServer {
                 }
             }
 
+            // If it's in the public dir, we sync it and trigger a full rebuild
+            if self.client.build.path_is_in_public_dir(path) {
+                needs_full_rebuild = true;
+                continue;
+            }
+
             // If it's a rust file, we want to hotreload it using the filemap
             if ext == "rs" {
                 // And grabout the contents
@@ -1027,6 +1033,15 @@ impl AppServer {
         // This will end up being dependencies in the workspace and non-workspace dependencies on the user's computer.
         let mut watched_crates = self.local_dependencies(crate_package);
         watched_crates.push(crate_dir);
+
+        // Watch the `public` directory if this is the client crate
+        if self.client.build.crate_package == crate_package {
+            if let Some(public_dir) = self.client.build.user_public_dir() {
+                if public_dir.exists() {
+                    watched_paths.push(public_dir);
+                }
+            }
+        }
 
         // Now, watch all the folders in the crates, but respecting their respective ignore files
         for krate_root in watched_crates {

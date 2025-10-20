@@ -6,6 +6,10 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) out_dir: Option<PathBuf>,
 
+    #[serde(default = "public_dir_default")]
+    #[serde(deserialize_with = "empty_string_is_none")]
+    pub(crate) public_dir: Option<PathBuf>,
+
     #[serde(default)]
     pub(crate) tailwind_input: Option<PathBuf>,
 
@@ -42,4 +46,20 @@ pub(crate) struct ApplicationConfig {
     /// Specified minimum sdk version for gradle to build the app with.
     #[serde(default)]
     pub(crate) android_min_sdk_version: Option<u32>,
+}
+
+fn public_dir_default() -> Option<PathBuf> {
+    Some("public".into())
+}
+
+fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<PathBuf>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let opt: Option<String> = Option::deserialize(deserializer)?;
+    match opt {
+        Some(s) if s.is_empty() => Ok(None),
+        Some(s) => Ok(Some(PathBuf::from(s))),
+        None => Ok(None),
+    }
 }

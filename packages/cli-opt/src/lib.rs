@@ -3,7 +3,7 @@ use manganis::AssetOptions;
 use manganis_core::BundledAsset;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
@@ -25,7 +25,7 @@ pub use hash::add_hash_to_asset;
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct AssetManifest {
     /// Map of bundled asset name to the asset itself
-    assets: HashMap<PathBuf, HashSet<BundledAsset>>,
+    assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
 }
 
 impl AssetManifest {

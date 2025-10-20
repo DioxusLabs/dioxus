@@ -320,9 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen,
-    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
+    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -333,8 +333,8 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::AssetOptions;
-use manganis_core::AssetVariant;
+use manganis::{AssetOptions, BundledAsset};
+use manganis_core::{AssetOptionsBuilder, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -1295,13 +1295,40 @@ impl BuildRequest {
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
     async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if !self.skip_assets {
-            ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe).await?;
+        if self.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        ctx.status_extracting_assets();
+
+        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+
+        // If the user has a public dir, we submit all the entries there as assets too
+        //
+        // These don't receive a hash in their filename, since they're user-provided static assets
+        // We only do this for web builds
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        AssetOptionsBuilder::new()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
+                }
+            }
         }
 
         Ok(manifest)
@@ -1494,14 +1521,13 @@ impl BuildRequest {
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
-        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
-        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
-        // all assets.
-        let version_file = self.asset_optimizer_version_file();
-        let clear_cache = std::fs::read_to_string(&version_file)
-            .ok()
-            .filter(|s| s == crate::VERSION.as_str())
-            .is_none();
+        // The CLI creates a .manifest.json file in the asset dir to keep track of the assets and
+        // other build metadata. If we can't parse this file (or the CLI version changed), then we
+        // want to re-copy all the assets rather than trying to do an incremental update.
+        let clear_cache = self
+            .load_manifest()
+            .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
+            .unwrap_or(true);
         if clear_cache {
             keep_bundled_output_paths.clear();
         }
@@ -1510,20 +1536,6 @@ impl BuildRequest {
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-
-        // use walkdir::WalkDir;
-        // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
-        //     // If this asset is in the manifest, we don't need to remove it
-        //     let canonicalized = dunce::canonicalize(item.path())?;
-        //     if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
-        //         // Remove empty dirs, remove files not in the manifest
-        //         if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
-        //             std::fs::remove_dir(item.path())?;
-        //         } else {
-        //             std::fs::remove_file(item.path())?;
-        //         }
-        //     }
-        // }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -1589,7 +1601,7 @@ impl BuildRequest {
         }
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
+        self.write_app_manifest(assets).await?;
 
         Ok(())
     }
@@ -3116,8 +3128,18 @@ impl BuildRequest {
         }
     }
 
+    /// Create a workdir for the given platform
+    /// This can be used as a temporary directory for the build, but in an observable way such that
+    /// you can see the files in the directory via `target`
+    ///
+    /// target/dx/build/app/web/
+    /// target/dx/build/app/web/public/
+    /// target/dx/build/app/web/server.exe
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.bundle, self.release)
+        self.internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join(self.bundle.build_folder_name())
     }
 
     fn platform_exe_name(&self) -> String {
@@ -3414,20 +3436,6 @@ impl BuildRequest {
         let dir = self.target_dir.join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    /// Create a workdir for the given platform
-    /// This can be used as a temporary directory for the build, but in an observable way such that
-    /// you can see the files in the directory via `target`
-    ///
-    /// target/dx/build/app/web/
-    /// target/dx/build/app/web/public/
-    /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, bundle: BundleFormat, release: bool) -> PathBuf {
-        self.internal_out_dir()
-            .join(&self.main_target)
-            .join(if release { "release" } else { "debug" })
-            .join(bundle.build_folder_name())
     }
 
     /// target/dx/bundle/app/
@@ -4422,12 +4430,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("main")
                 .join("assets"),
 
+            // We put assets in public/assets for server apps
+            BundleFormat::Server => self.root_dir().join("public").join("assets"),
+
             // everyone else is soooo normal, just app/assets :)
-            BundleFormat::Web
-            | BundleFormat::Ios
-            | BundleFormat::Windows
-            | BundleFormat::Linux
-            | BundleFormat::Server => self.root_dir().join("assets"),
+            BundleFormat::Web | BundleFormat::Ios | BundleFormat::Windows | BundleFormat::Linux => {
+                self.root_dir().join("assets")
+            }
         }
     }
 
@@ -4482,9 +4491,21 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .with_extension("wasm")
     }
 
-    /// Get the path to the asset optimizer version file
-    pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
+    /// Get the path to the app manifest file
+    ///
+    /// This includes metadata about the build such as the bundle format, target triple, features, etc.
+    /// Manifests are only written by the `PRIMARY` build.
+    pub(crate) fn app_manifest(&self) -> PathBuf {
+        self.platform_dir().join(".manifest.json")
+    }
+
+    pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
+        let manifest_path = self.app_manifest();
+        let manifest_data = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+        let manifest: AppManifest = serde_json::from_str(&manifest_data)
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+        Ok(manifest)
     }
 
     /// Check for tooling that might be required for this build.
@@ -4880,6 +4901,34 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         } else if let Some(pos) = content.find(or_insert_before) {
             content.insert_str(pos, with);
         }
+    }
+
+    /// Resolve the configured public directory relative to the crate, if any.
+    pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
+        let path = self.config.application.public_dir.as_ref()?;
+
+        if path.as_os_str().is_empty() {
+            return None;
+        }
+
+        Some(if path.is_absolute() {
+            path.clone()
+        } else {
+            self.crate_dir().join(path)
+        })
+    }
+
+    pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
+        let Some(static_dir) = self.user_public_dir() else {
+            return false;
+        };
+
+        // Canonicalize when possible so we work with editors that use tmp files
+        let canonical_static =
+            dunce::canonicalize(&static_dir).unwrap_or_else(|_| static_dir.clone());
+        let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        canonical_path.starts_with(&canonical_static)
     }
 
     /// Get the base path from the config or None if this is not a web or server build
@@ -5288,5 +5337,18 @@ We checked the folders:
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         ))
+    }
+
+    async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {
+        let manifest = AppManifest {
+            assets: assets.clone(),
+            cli_version: crate::VERSION.to_string(),
+            rust_version: self.workspace.rustc_version.clone(),
+        };
+
+        let manifest_path = self.app_manifest();
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+
+        Ok(())
     }
 }
