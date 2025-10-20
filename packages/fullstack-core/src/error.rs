@@ -1,6 +1,7 @@
 use axum_core::response::IntoResponse;
 use futures_util::TryStreamExt;
 use http::StatusCode;
+use miette::MietteDiagnostic;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
@@ -121,6 +122,23 @@ impl From<anyhow::Error> for ServerFnError {
         ServerFnError::ServerError {
             message: value.to_string(),
             details: None,
+            code: 500,
+        }
+    }
+}
+
+impl From<miette::Report> for ServerFnError {
+    fn from(value: miette::Report) -> Self {
+        ServerFnError::ServerError {
+            message: value.to_string(),
+            details: Some(serde_json::json!(MietteDiagnostic {
+                message: value.to_string(),
+                code: value.code().map(|c| c.to_string()),
+                severity: value.severity(),
+                help: value.help().map(|h| h.to_string()),
+                url: value.url().map(|u| u.to_string()),
+                labels: value.labels().map(|labels| labels.collect::<Vec<_>>()),
+            })),
             code: 500,
         }
     }
