@@ -4430,12 +4430,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("main")
                 .join("assets"),
 
+            // We put assets in public/assets for server apps
+            BundleFormat::Server => self.root_dir().join("public").join("assets"),
+
             // everyone else is soooo normal, just app/assets :)
-            BundleFormat::Web
-            | BundleFormat::Ios
-            | BundleFormat::Windows
-            | BundleFormat::Linux
-            | BundleFormat::Server => self.root_dir().join("assets"),
+            BundleFormat::Web | BundleFormat::Ios | BundleFormat::Windows | BundleFormat::Linux => {
+                self.root_dir().join("assets")
+            }
         }
     }
 
