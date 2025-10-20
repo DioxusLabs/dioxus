@@ -320,9 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc, WasmBindgen,
-    WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
+    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -337,7 +337,7 @@ use manganis::AssetOptions;
 use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use serde_json::{from_slice, to_vec};
+use serde_json::to_vec;
 use std::{borrow::Cow, ffi::OsString};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -400,28 +400,6 @@ pub(crate) struct BuildRequest {
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
     pub(crate) session_cache_dir: PathBuf,
-}
-
-#[derive(Default, Serialize, Deserialize)]
-struct StaticManifest {
-    entries: Vec<StaticManifestEntry>,
-}
-
-impl StaticManifest {
-    fn load(path: &Path) -> Self {
-        if let Ok(bytes) = std::fs::read(path) {
-            if let Ok(manifest) = from_slice::<StaticManifest>(&bytes) {
-                return manifest;
-            }
-        }
-        Self::default()
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-struct StaticManifestEntry {
-    path: PathBuf,
-    is_dir: bool,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -4499,6 +4477,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.platform_dir().join(".manifest.json")
     }
 
+    pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
+        let manifest_path = self.app_manifest();
+        let manifest_data = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+        let manifest: AppManifest = serde_json::from_str(&manifest_data)
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+        Ok(manifest)
+    }
+
     /// Check for tooling that might be required for this build.
     ///
     /// This should generally be only called on the first build since it takes time to verify the tooling
@@ -4901,23 +4888,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             return Ok(());
         };
 
-        let manifest_path = self.static_manifest_path();
-        let mut previous_manifest = StaticManifest::load(&manifest_path);
+        let manifest_path = self.app_manifest();
+        let mut previous_manifest = std::fs::read_to_string(&manifest_path)
+            .ok()
+            .and_then(|data| serde_json::from_str::<AppManifest>(&data).ok())
+            .unwrap_or_default();
+        // let mut previous_manifest = AppManifest::load(&manifest_path);
 
         if !source.exists() {
             tracing::trace!(
-                "Static directory {:?} does not exist, clearing previous static assets if any",
+                "public directory {:?} does not exist, clearing previous static assets if any",
                 source
             );
-            Self::remove_manifest_entries(root, &previous_manifest.entries);
-            previous_manifest.entries.clear();
+            Self::remove_manifest_entries(root, &previous_manifest.public_items);
+            previous_manifest.public_items.clear();
             let _ = std::fs::remove_file(&manifest_path);
             return Ok(());
         }
 
         if !source.is_dir() {
             tracing::warn!(
-                "Configured static directory {:?} is not a directory",
+                "Configured public directory {:?} is not a directory",
                 source
             );
             return Ok(());
@@ -4927,14 +4918,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let canonical_dest = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
         if canonical_source == canonical_dest {
             tracing::warn!(
-                "Static directory {:?} points to the build output; skipping to avoid recursion",
+                "public directory {:?} points to the build output; skipping to avoid recursion",
                 source
             );
             return Ok(());
         }
 
         tracing::debug!(
-            "Syncing static directory {:?} -> {:?}",
+            "Syncing public directory {:?} -> {:?}",
             canonical_source,
             canonical_dest
         );
@@ -4946,7 +4937,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 Ok(entry) => entry,
                 Err(err) => {
                     tracing::error!(
-                        "Failed to walk static directory {:?}: {err}",
+                        "Failed to walk public directory {:?}: {err}",
                         canonical_source
                     );
                     continue;
@@ -4968,7 +4959,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
             if is_dir {
                 if let Err(err) = std::fs::create_dir_all(&destination) {
-                    tracing::error!("Failed to create static directory {:?}: {err}", destination);
+                    tracing::error!("Failed to create public directory {:?}: {err}", destination);
                 }
                 continue;
             }
@@ -4993,8 +4984,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         let mut removals = Vec::new();
-        for entry in previous_manifest.entries.iter() {
-            if !new_entries.contains_key(&entry.path) {
+        for entry in previous_manifest.public_items.iter() {
+            if !new_entries.contains_key(entry.as_path()) {
                 removals.push(entry.clone());
             }
         }
@@ -5003,31 +4994,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         if new_entries.is_empty() {
-            previous_manifest.entries.clear();
+            previous_manifest.public_items.clear();
             let _ = std::fs::remove_file(&manifest_path);
         } else {
-            let mut next_entries: Vec<StaticManifestEntry> = new_entries
-                .into_iter()
-                .map(|(path, is_dir)| StaticManifestEntry { path, is_dir })
-                .collect();
-            next_entries.sort_by(|a, b| a.path.cmp(&b.path));
-            previous_manifest.entries = next_entries;
+            let mut next_entries: Vec<PathBuf> =
+                new_entries.into_iter().map(|(path, is_dir)| path).collect();
+            next_entries.sort_by(|a, b| a.cmp(&b));
+            previous_manifest.public_items = next_entries;
             std::fs::write(&manifest_path, to_vec(&previous_manifest)?)?;
         }
 
         tracing::debug!(
-            "Finished syncing static directory {:?} into public output",
+            "Finished syncing public directory {:?} into public output",
             canonical_source
         );
 
         Ok(())
     }
 
-    fn static_manifest_path(&self) -> PathBuf {
-        self.platform_dir().join(".dx-static-manifest.json")
-    }
-
-    fn remove_manifest_entries(root: &Path, entries: &[StaticManifestEntry]) {
+    fn remove_manifest_entries(root: &Path, entries: &[PathBuf]) {
         if entries.is_empty() {
             return;
         }
@@ -5038,8 +5023,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let mut dir_paths = Vec::new();
 
         for entry in entries {
-            let path = canonical_root.join(&entry.path);
-            if entry.is_dir {
+            let path = canonical_root.join(&entry);
+            if entry.is_dir() {
                 dir_paths.push(path);
             } else {
                 file_paths.push(path);
@@ -5055,12 +5040,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         dir_paths.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
         for path in dir_paths {
             if let Err(err) = std::fs::remove_dir_all(&path) {
-                tracing::trace!("Failed to remove static directory {:?}: {err}", path);
+                tracing::trace!("Failed to remove public directory {:?}: {err}", path);
             }
         }
     }
 
-    /// Resolve the configured static directory relative to the crate, if any.
+    /// Resolve the configured public directory relative to the crate, if any.
     pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
         self.config
             .application
