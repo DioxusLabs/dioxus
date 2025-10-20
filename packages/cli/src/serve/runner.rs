@@ -372,7 +372,7 @@ impl AppServer {
                 .and_then(|v| v.to_str())
                 .unwrap_or_default();
 
-            if self.client.build.path_is_in_static_dir(path) {
+            if self.client.build.path_is_in_public_dir(path) {
                 needs_full_rebuild = true;
                 needs_static_rebuild = true;
                 continue;

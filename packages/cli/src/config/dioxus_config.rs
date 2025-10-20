@@ -74,13 +74,13 @@ mod tests {
     fn static_dir_can_be_overridden() {
         let source = r#"
             [application]
-            static_dir = "static"
+            public_dir = "public2"
         "#;
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(
             config.application.public_dir.as_deref(),
-            Some(std::path::Path::new("static"))
+            Some(std::path::Path::new("public2"))
         );
     }
 }
