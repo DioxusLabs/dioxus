@@ -1496,14 +1496,14 @@ impl BuildRequest {
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
-        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
-        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
-        // all assets.
-        let version_file = self.app_manifest();
-        let clear_cache = std::fs::read_to_string(&version_file)
-            .ok()
-            .filter(|s| s == crate::VERSION.as_str())
-            .is_none();
+        // The CLI creates a .manifest.json file in the asset dir to keep track of the assets and
+        // other build metadata. If we can't parse this file (or the CLI version changed), then we
+        // want to re-copy all the assets rather than trying to do an incremental update.
+        let clear_cache = self
+            .load_manifest()
+            .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
+            .unwrap_or(true);
+
         if clear_cache {
             keep_bundled_output_paths.clear();
         }
@@ -1577,7 +1577,7 @@ impl BuildRequest {
         }
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(self.app_manifest(), crate::VERSION.as_str())?;
+        self.write_app_manifest(assets).await?;
 
         Ok(())
     }
@@ -4882,18 +4882,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     pub(crate) fn sync_public_dir(&self) -> Result<()> {
-        let root = &self.root_dir();
-
         let Some(source) = self.user_public_dir() else {
             return Ok(());
         };
 
+        let root = &self.root_dir();
         let manifest_path = self.app_manifest();
         let mut previous_manifest = std::fs::read_to_string(&manifest_path)
             .ok()
             .and_then(|data| serde_json::from_str::<AppManifest>(&data).ok())
             .unwrap_or_default();
-        // let mut previous_manifest = AppManifest::load(&manifest_path);
 
         if !source.exists() {
             tracing::trace!(
@@ -5047,21 +5045,17 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
     /// Resolve the configured public directory relative to the crate, if any.
     pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
-        self.config
-            .application
-            .public_dir
-            .as_ref()
-            .and_then(|path| {
-                if path.as_os_str().is_empty() {
-                    return None;
-                }
+        let path = self.config.application.public_dir.as_ref()?;
 
-                Some(if path.is_absolute() {
-                    path.clone()
-                } else {
-                    self.crate_dir().join(path)
-                })
-            })
+        if path.as_os_str().is_empty() {
+            return None;
+        }
+
+        Some(if path.is_absolute() {
+            path.clone()
+        } else {
+            self.crate_dir().join(path)
+        })
     }
 
     pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
@@ -5483,5 +5477,19 @@ We checked the folders:
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         ))
+    }
+
+    async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {
+        let manifest = AppManifest {
+            assets: assets.clone(),
+            cli_version: crate::VERSION.to_string(),
+            rust_version: self.workspace.rustc_version.clone(),
+            public_items: vec![],
+        };
+
+        let manifest_path = self.app_manifest();
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+
+        Ok(())
     }
 }
