@@ -10,7 +10,17 @@ homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog"]
+default = [
+  "accessibility",
+  "hot-reload",
+  "net",
+  "html",
+  "svg",
+  "system-fonts",
+  "clipboard",
+  "file_dialog",
+  "vello",
+]
 clipboard = ["blitz-shell/clipboard"]
 file_dialog = ["blitz-shell/file_dialog"]
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
@@ -22,10 +32,16 @@ hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
 system-fonts = ["blitz-dom/system_fonts"]
 autofocus = []
 
+# Renderers
+vello = ["dep:anyrender_vello"]
+vello_cpu_pixels = ["dep:anyrender_vello_cpu", "anyrender_vello_cpu/pixels_window_renderer"]
+vello_cpu_softbuffer = ["dep:anyrender_vello_cpu", "anyrender_vello_cpu/softbuffer_window_renderer"]
+
 [dependencies]
 # Blitz dependencies
 anyrender = { workspace = true }
-anyrender_vello = { workspace = true }
+anyrender_vello = { workspace = true, optional = true }
+anyrender_vello_cpu = { workspace = true,  features = ["multithreading"], optional = true }
 blitz-dom = { workspace = true }
 blitz-html = { workspace = true, optional = true }
 blitz-net = { workspace = true, optional = true }

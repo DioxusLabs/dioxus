@@ -18,16 +18,19 @@ mod link_handler;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
+#[cfg(feature = "vello")]
 pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
+#[cfg(feature = "vello")]
+pub use dioxus_renderer::{use_wgpu, Features, Limits};
+
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
+pub use dioxus_renderer::DioxusNativeWindowRenderer;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-#[cfg(feature = "html")]
 use std::sync::Arc;
 use winit::window::WindowAttributes;
 
@@ -69,13 +72,18 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     }
 
     // Read config values
+    #[cfg(feature = "vello")]
     let mut features = None;
+    #[cfg(feature = "vello")]
     let mut limits = None;
     let mut window_attributes = None;
     let mut _config = None;
     for mut cfg in configs {
-        cfg = try_read_config!(cfg, features, Features);
-        cfg = try_read_config!(cfg, limits, Limits);
+        #[cfg(feature = "vello")]
+        {
+            cfg = try_read_config!(cfg, features, Features);
+            cfg = try_read_config!(cfg, limits, Limits);
+        }
         cfg = try_read_config!(cfg, window_attributes, WindowAttributes);
         cfg = try_read_config!(cfg, _config, Config);
         let _ = cfg;
@@ -143,7 +151,10 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             ..Default::default()
         },
     );
+    #[cfg(feature = "vello")]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    #[cfg(not(feature = "vello"))]
+    let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
         renderer.clone(),
