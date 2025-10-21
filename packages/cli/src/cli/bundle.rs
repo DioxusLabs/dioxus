@@ -208,10 +208,7 @@ impl Bundle {
             };
 
             if windows_icon.is_none() {
-                let default = krate
-                    .build_dir(BundleFormat::Windows, krate.release)
-                    .join("winres")
-                    .join("icon.ico");
+                let default = krate.platform_dir().join("winres").join("icon.ico");
                 tracing::info!("Windows icon not set. Using default icon.");
 
                 let path = default.to_string_lossy().to_string();

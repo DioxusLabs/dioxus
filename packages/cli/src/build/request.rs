@@ -3182,7 +3182,7 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    fn platform_dir(&self) -> PathBuf {
+    pub(crate) fn platform_dir(&self) -> PathBuf {
         self.internal_out_dir()
             .join(&self.main_target)
             .join(if self.release { "release" } else { "debug" })
@@ -5291,9 +5291,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             None => bundle.long_description.as_ref().unwrap_or(&binding),
         };
 
-        let output_dir = self
-            .build_dir(BundleFormat::Windows, self.release)
-            .join("winres");
+        let output_dir = self.platform_dir().join("winres");
         std::fs::create_dir_all(&output_dir)?;
 
         let mut winres = WindowsResource::new();
