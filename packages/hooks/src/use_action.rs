@@ -3,7 +3,7 @@ use dioxus_core::{use_hook, Callback, CapturedError, Result, Task};
 use dioxus_signals::{ReadSignal, ReadableBoxExt, ReadableExt, Signal, WritableExt};
 use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
-use std::{marker::PhantomData, prelude::rust_2024::Future};
+use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
 
 pub fn use_action<E, C, M>(mut user_fn: C) -> Action<C::Input, C::Output>
 where
@@ -82,15 +82,7 @@ pub struct Action<I, T: 'static> {
 }
 
 impl<I: 'static, O: 'static> Action<I, O> {
-    pub fn value(&self) -> Option<ReadSignal<O>> {
-        if self.value.read().is_none() {
-            return None;
-        }
-
-        Some(self.reader)
-    }
-
-    pub fn result(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
+    pub fn value(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
         if !matches!(
             *self.state.read(),
             ActionState::Ready | ActionState::Errored
@@ -109,7 +101,7 @@ impl<I: 'static, O: 'static> Action<I, O> {
         Some(Ok(self.reader))
     }
 
-    pub fn is_pending(&self) -> bool {
+    pub fn pending(&self) -> bool {
         *self.state.read() == ActionState::Pending
     }
 
@@ -162,13 +154,10 @@ impl<T> Dispatching<T> {
 impl<T> std::future::Future for Dispatching<T> {
     type Output = ();
 
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
+    fn poll(mut self: Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
         match self.receiver.poll_unpin(_cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+            Poll::Ready(_) => Poll::Ready(()),
+            Poll::Pending => Poll::Pending,
         }
     }
 }
@@ -281,6 +270,7 @@ impl<A: 'static, B: 'static, O> Action<(A, B), O> {
         Dispatching::new((self.callback).call((_a, _b)))
     }
 }
+
 impl<A: 'static, B: 'static, C: 'static, O> Action<(A, B, C), O> {
     pub fn call(&mut self, _a: A, _b: B, _c: C) -> Dispatching<()> {
         Dispatching::new((self.callback).call((_a, _b, _c)))

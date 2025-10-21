@@ -27,6 +27,7 @@ wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }
 dioxus-cli-telemetry = { workspace =  true }
+dioxus-component-manifest = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
@@ -78,6 +79,7 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
+git2 = "0.20.2"
 
 # path lookup
 which = { version = "8.0.0" }
@@ -184,5 +186,3 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]

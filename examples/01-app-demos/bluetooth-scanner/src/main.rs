@@ -43,11 +43,11 @@ fn app() -> Element {
                     h2 { class: "text-2xl font-bold", "Scan for Bluetooth Devices" }
                     button {
                         class: "inline-block w-full md:w-auto px-6 py-3 font-medium text-white bg-indigo-500 hover:bg-indigo-600 rounded transition duration-200",
-                        disabled: scan.is_pending(),
+                        disabled: scan.pending(),
                         onclick: move |_| {
                             scan.call();
                         },
-                        if scan.is_pending() { "Scanning" } else { "Scan" }
+                        if scan.pending() { "Scanning" } else { "Scan" }
                     }
                 }
             }
@@ -64,8 +64,8 @@ fn app() -> Element {
                                     th { class: "pb-3 px-2 font-medium", "Security" }
                                 }
                             }
-                            match scan.result() {
-                                None if scan.is_pending() => rsx! { "Scanning..." },
+                            match scan.value() {
+                                None if scan.pending() => rsx! { "Scanning..." },
                                 None => rsx! { "Press Scan to start scanning" },
                                 Some(Err(_err)) => rsx! { "Failed to scan" },
                                 Some(Ok(peripherals)) => rsx! {

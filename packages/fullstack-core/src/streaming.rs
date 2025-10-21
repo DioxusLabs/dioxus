@@ -1,42 +1,41 @@
-use crate::ServerFnError;
+use crate::{HttpError, ServerFnError};
 use axum_core::{extract::FromRequest, response::IntoResponse};
-use dioxus_core::try_consume_context;
+use dioxus_core::{try_consume_context, CapturedError};
 use dioxus_signals::{ReadableExt, Signal, WritableExt};
-use http::request::Parts;
+use http::StatusCode;
+use http::{request::Parts, HeaderMap};
 use std::{cell::RefCell, rc::Rc};
 
-/// The status of the streaming response
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum StreamingStatus {
-    /// The initial chunk is still being rendered. The http response parts can still be modified at this point.
-    RenderingInitialChunk,
-
-    /// The initial chunk has been committed and the response is now streaming. The http response parts
-    /// have already been sent to the client and can no longer be modified.
-    InitialChunkCommitted,
-}
-
-/// The context dioxus fullstack provides for the status of streaming responses on the server
+/// The context provided by dioxus fullstack for server-side rendering.
+///
+/// This context will only be set on the server during a streaming response.
 #[derive(Clone, Debug)]
-pub struct StreamingContext {
+pub struct FullstackContext {
     current_status: Signal<StreamingStatus>,
     request_headers: Rc<RefCell<http::request::Parts>>,
+    response_headers: Rc<RefCell<Option<HeaderMap>>>,
+    route_http_status: Signal<HttpError>,
 }
 
-impl PartialEq for StreamingContext {
+impl PartialEq for FullstackContext {
     fn eq(&self, other: &Self) -> bool {
         self.current_status == other.current_status
             && Rc::ptr_eq(&self.request_headers, &other.request_headers)
     }
 }
 
-impl StreamingContext {
+impl FullstackContext {
     /// Create a new streaming context. You should not need to call this directly. Dioxus fullstack will
     /// provide this context for you.
     pub fn new(parts: Parts) -> Self {
         Self {
             current_status: Signal::new(StreamingStatus::RenderingInitialChunk),
             request_headers: Rc::new(RefCell::new(parts)),
+            route_http_status: Signal::new(HttpError {
+                status: http::StatusCode::OK,
+                message: None,
+            }),
+            response_headers: Rc::new(RefCell::new(Some(HeaderMap::new()))),
         }
     }
 
@@ -52,7 +51,7 @@ impl StreamingContext {
 
     /// Get the current status of the streaming response. This method is reactive and will cause
     /// the current reactive context to rerun when the status changes.
-    pub fn current_status(&self) -> StreamingStatus {
+    pub fn streaming_state(&self) -> StreamingStatus {
         *self.current_status.read()
     }
 
@@ -65,7 +64,7 @@ impl StreamingContext {
     /// since it's assumed that rendering the app is done under a `GET` request.
     pub async fn extract<T: FromRequest<(), M>, M>() -> Result<T, ServerFnError> {
         let this = Self::current()
-            .ok_or_else(|| ServerFnError::new("No StreamingContext found".to_string()))?;
+            .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
 
         let parts = this.request_headers.borrow_mut().clone();
         let request =
@@ -79,18 +78,83 @@ impl StreamingContext {
         }
     }
 
-    /// Get the current `StreamingContext` if it exists. This will return `None` if called on the client
+    /// Get the current `FullstackContext` if it exists. This will return `None` if called on the client
     /// or outside of a streaming response on the server.
     pub fn current() -> Option<Self> {
         if let Some(rt) = dioxus_core::Runtime::try_current() {
             let id = rt.try_current_scope_id()?;
-            if let Some(ctx) = rt.consume_context::<StreamingContext>(id) {
+            if let Some(ctx) = rt.consume_context::<FullstackContext>(id) {
                 return Some(ctx);
             }
         }
 
         None
     }
+
+    /// Get the current HTTP status for the route. This will default to 200 OK, but can be modified
+    /// by calling `FullstackContext::commit_error_status` with an error.
+    pub fn current_http_status(&self) -> HttpError {
+        self.route_http_status.read().clone()
+    }
+
+    pub fn set_current_http_status(&mut self, status: HttpError) {
+        self.route_http_status.set(status);
+    }
+
+    /// Add a header to the response. This will be sent to the client when the response is committed.
+    pub fn add_response_header(
+        &self,
+        key: impl Into<http::header::HeaderName>,
+        value: impl Into<http::header::HeaderValue>,
+    ) {
+        if let Some(headers) = self.response_headers.borrow_mut().as_mut() {
+            headers.insert(key.into(), value.into());
+        }
+    }
+
+    /// Take the response headers out of the context. This will leave the context without any headers,
+    /// so it should only be called once when the response is being committed.
+    pub fn take_response_headers(&self) -> Option<HeaderMap> {
+        self.response_headers.borrow_mut().take()
+    }
+
+    /// Set the current HTTP status for the route. This will be used when committing the response
+    /// to the client.
+    pub fn commit_http_status(status: StatusCode, message: Option<String>) {
+        if let Some(mut ctx) = Self::current() {
+            ctx.set_current_http_status(HttpError { status, message });
+        }
+    }
+
+    /// Commit the CapturedError as the current HTTP status for the route.
+    /// This will attempt to downcast the error to known types and set the appropriate
+    /// status code. If the error type is unknown, it will default to
+    /// `StatusCode::INTERNAL_SERVER_ERROR`.
+    pub fn commit_error_status(error: impl Into<CapturedError>) -> HttpError {
+        let error = error.into();
+        let status = status_code_from_error(&error);
+        let http_error = HttpError {
+            status,
+            message: Some(error.to_string()),
+        };
+
+        if let Some(mut ctx) = Self::current() {
+            ctx.set_current_http_status(http_error.clone());
+        }
+
+        http_error
+    }
+}
+
+/// The status of the streaming response
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StreamingStatus {
+    /// The initial chunk is still being rendered. The http response parts can still be modified at this point.
+    RenderingInitialChunk,
+
+    /// The initial chunk has been committed and the response is now streaming. The http response parts
+    /// have already been sent to the client and can no longer be modified.
+    InitialChunkCommitted,
 }
 
 /// Commit the initial chunk of the response. This will be called automatically if you are using the
@@ -113,7 +177,7 @@ impl StreamingContext {
 /// ```
 pub fn commit_initial_chunk() {
     crate::history::finalize_route();
-    if let Some(mut streaming) = try_consume_context::<StreamingContext>() {
+    if let Some(mut streaming) = try_consume_context::<FullstackContext>() {
         streaming.commit_initial_chunk();
     }
 }
@@ -141,9 +205,34 @@ pub fn commit_initial_chunk() {
 /// }
 /// ```
 pub fn current_status() -> StreamingStatus {
-    if let Some(streaming) = try_consume_context::<StreamingContext>() {
-        streaming.current_status()
+    if let Some(streaming) = try_consume_context::<FullstackContext>() {
+        streaming.streaming_state()
     } else {
         StreamingStatus::InitialChunkCommitted
     }
+}
+
+/// Convert a `CapturedError` into an appropriate HTTP status code.
+///
+/// This will attempt to downcast the error to known types and return a corresponding status code.
+/// If the error type is unknown, it will default to `StatusCode::INTERNAL_SERVER_ERROR`.
+pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
+    if let Some(err) = error.downcast_ref::<ServerFnError>() {
+        match err {
+            ServerFnError::ServerError { code, .. } => {
+                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+            _ => return StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+
+    if let Some(err) = error.downcast_ref::<StatusCode>() {
+        return *err;
+    }
+
+    if let Some(err) = error.downcast_ref::<HttpError>() {
+        return err.status;
+    }
+
+    StatusCode::INTERNAL_SERVER_ERROR
 }

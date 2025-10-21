@@ -70,6 +70,7 @@ async fn main() -> ExitCode {
             Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
             Commands::Print(opts) => opts.print().await,
+            Commands::Components(opts) => opts.run().await,
         }
     });
 

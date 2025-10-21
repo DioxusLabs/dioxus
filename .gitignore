@@ -31,6 +31,8 @@ node_modules/
 /packages/playwright-report/
 /packages/playwright/.cache/
 
+# Zed
+.zed/
 
 # ignore the output of tmps
 tmp/

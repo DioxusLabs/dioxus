@@ -69,13 +69,13 @@ fn app() -> Element {
             }
             button {
                 class: "button is-primary",
-                class: if image.is_pending() { "is-loading" },
+                class: if image.pending() { "is-loading" },
                 onclick: move |_| {
                     image.call();
                 },
                 "Generate image"
             }
-            if let Some(image) = image.value() {
+            if let Some(Ok(image)) = image.value() {
                 for image in image.read().data.as_slice() {
                     section { class: "is-flex",
                         div { class: "container is-fluid",

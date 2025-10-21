@@ -290,24 +290,7 @@ impl HotpatchModuleCache {
     }
 }
 
-/// Create a jump table for the given original and patch files.
-pub fn create_jump_table(
-    patch: &Path,
-    triple: &Triple,
-    cache: &HotpatchModuleCache,
-) -> Result<JumpTable> {
-    // Symbols are stored differently based on the platform, so we need to handle them differently.
-    // - Wasm requires the walrus crate and actually modifies the patch file
-    // - windows requires the pdb crate and pdb files
-    // - nix requires the object crate
-    match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(patch, cache),
-        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache),
-        _ => create_native_jump_table(patch, triple, cache),
-    }
-}
-
-fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
     let old_name_to_addr = &cache.symbol_table;
 
@@ -361,7 +344,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(
+pub fn create_native_jump_table(
     patch: &Path,
     triple: &Triple,
     cache: &HotpatchModuleCache,
@@ -416,7 +399,7 @@ fn create_native_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
-fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
     let old_symbols =
@@ -1326,6 +1309,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || name.contains("wasm_bindgen4__rt8wbg_")
 }
 
 /// Manually parse the data section from a wasm module
@@ -1387,10 +1371,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         };
 
         data_symbol_map.insert(*name, index);
-
-        if symbol.size == 0 {
-            continue;
-        }
 
         let data_segment = segments
             .get(symbol.index as usize)

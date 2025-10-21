@@ -29,6 +29,7 @@
 //! - set `dx config set disable-telemetry true`
 //!
 
+use crate::component::ComponentCommand;
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
 use anyhow::{bail, Context, Error, Result};
@@ -67,6 +68,10 @@ const LOG_ENV: &str = "DIOXUS_LOG";
 const DX_SRC_FLAG: &str = "dx_src";
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
+
+pub fn verbosity_or_default() -> Verbosity {
+    crate::VERBOSITY.get().cloned().unwrap_or_default()
+}
 
 fn reset_cursor() {
     use std::io::IsTerminal;
@@ -901,6 +906,44 @@ impl TraceController {
             Commands::Print(print) => match print {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
                 Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
+            },
+            Commands::Components(cmd) => match cmd {
+                ComponentCommand::Add {
+                    component,
+                    registry,
+                    force,
+                } => (
+                    "components add".to_string(),
+                    json!({
+                        "component": component,
+                        "registry": registry,
+                        "force": force,
+                    }),
+                ),
+                ComponentCommand::Remove {
+                    component,
+                    registry,
+                } => (
+                    "components remove".to_string(),
+                    json!({
+                        "component": component,
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::Update { registry } => (
+                    "components update".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::List { registry } => (
+                    "components list".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::Clean => ("components clean".to_string(), json!({})),
+                ComponentCommand::Schema => ("components schema".to_string(), json!({})),
             },
         }
     }

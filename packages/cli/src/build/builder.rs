@@ -1,6 +1,6 @@
 use crate::{
-    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
-    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context};
 use dioxus_cli_opt::process_file_to;
@@ -489,11 +489,7 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY
-            .get()
-            .map(|f| f.verbose)
-            .unwrap_or_default()
-        {
+        if verbosity_or_default().verbose {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
@@ -644,7 +640,6 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
         // Hotpatch asset!() calls
@@ -692,23 +687,13 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
+        let mut jump_table = self.build.create_jump_table(&new, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {
             jump_table.lib = self
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib =
-                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap())
         }
 
         let changed_files = match &res.mode {

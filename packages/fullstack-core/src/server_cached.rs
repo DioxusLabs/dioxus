@@ -1,6 +1,5 @@
-use crate::transport::SerializeContextEntry;
+use crate::{transport::SerializeContextEntry, Transportable};
 use dioxus_core::use_hook;
-use serde::{de::DeserializeOwned, Serialize};
 
 /// This allows you to send data from the server to the client *during hydration*.
 /// - When compiled as server, the closure is ran and the resulting data is serialized on the server and sent to the client.
@@ -24,26 +23,35 @@ use serde::{de::DeserializeOwned, Serialize};
 /// }
 /// ```
 #[track_caller]
-pub fn use_server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
-    server_fn: impl Fn() -> O,
-) -> O {
+pub fn use_server_cached<O, M>(server_fn: impl Fn() -> O) -> O
+where
+    O: Transportable<M> + Clone,
+    M: 'static,
+{
     let location = std::panic::Location::caller();
     use_hook(|| server_cached(server_fn, location))
 }
 
-pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
+pub(crate) fn server_cached<O, M>(
     value: impl FnOnce() -> O,
     #[allow(unused)] location: &'static std::panic::Location<'static>,
-) -> O {
-    let serialize = crate::serialize_context();
+) -> O
+where
+    O: Transportable<M> + Clone,
+    M: 'static,
+{
+    let serialize = crate::transport::serialize_context();
+
     #[allow(unused)]
     let entry: SerializeContextEntry<O> = serialize.create_entry();
+
     #[cfg(feature = "server")]
     {
         let data = value();
         entry.insert(&data, location);
         data
     }
+
     #[cfg(all(not(feature = "server"), feature = "web"))]
     {
         match entry.get() {
@@ -51,51 +59,9 @@ pub(crate) fn server_cached<O: 'static + Clone + Serialize + DeserializeOwned>(
             Err(_) => value(),
         }
     }
+
     #[cfg(not(any(feature = "server", feature = "web")))]
     {
         value()
     }
 }
-
-// pub fn use_server_cached<O, M>(server_fn: impl Fn() -> O) -> O
-// where
-//     O: Transportable<M> + Clone,
-//     M: 'static,
-// {
-//     let location = std::panic::Location::caller();
-//     use_hook(|| server_cached(server_fn, location))
-// }
-
-// pub(crate) fn server_cached<O, M>(
-//     value: impl FnOnce() -> O,
-//     #[allow(unused)] location: &'static std::panic::Location<'static>,
-// ) -> O
-// where
-//     O: Transportable<M> + Clone,
-//     M: 'static,
-// {
-//     let serialize = crate::transport::serialize_context();
-
-//     #[allow(unused)]
-//     let entry: SerializeContextEntry<O> = serialize.create_entry();
-
-//     #[cfg(feature = "server")]
-//     {
-//         let data = value();
-//         entry.insert(&data, location);
-//         data
-//     }
-
-//     #[cfg(all(not(feature = "server"), feature = "web"))]
-//     {
-//         match entry.get() {
-//             Ok(value) => value,
-//             Err(_) => value(),
-//         }
-//     }
-
-//     #[cfg(not(any(feature = "server", feature = "web")))]
-//     {
-//         value()
-//     }
-// }

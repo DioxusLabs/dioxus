@@ -22,7 +22,7 @@
 //!
 //! Try running requests against the endpoints directly with `curl` or `postman` to see the actual HTTP responses!
 
-use dioxus::fullstack::{Json, StatusCode};
+use dioxus::fullstack::{AsStatusCode, Json, StatusCode};
 use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 
@@ -72,12 +72,12 @@ fn main() {
                 pre { "Dog data: {dog_data.value():#?}" }
                 pre { "IP data: {ip_data.value():#?}" }
                 pre { "Custom encoded data: {custom_data.value():#?}" }
-                pre { "Error data: {error_data.result():#?}" }
-                pre { "Typed error data: {typed_error_data.result():#?}" }
-                pre { "HTTP 400 data: {http_error_data.result():#?}" }
-                pre { "HTTP 400 (context) data: {http_error_context_data.result():#?}" }
-                pre { "Dog error data: {dog_data_err.result():#?}" }
-                pre { "Throws ok data: {throws_ok_data.result():#?}" }
+                pre { "Error data: {error_data.value():#?}" }
+                pre { "Typed error data: {typed_error_data.value():#?}" }
+                pre { "HTTP 400 data: {http_error_data.value():#?}" }
+                pre { "HTTP 400 (context) data: {http_error_context_data.value():#?}" }
+                pre { "Dog error data: {dog_data_err.value():#?}" }
+                pre { "Throws ok data: {throws_ok_data.value():#?}" }
             }
         }
     });
@@ -164,10 +164,32 @@ enum MyCustomError {
     ServerFnError(#[from] ServerFnError),
 }
 
+impl AsStatusCode for MyCustomError {
+    fn as_status_code(&self) -> StatusCode {
+        match self {
+            MyCustomError::BadRequest { .. } => StatusCode::BAD_REQUEST,
+            MyCustomError::NotFound => StatusCode::NOT_FOUND,
+            MyCustomError::ServerFnError(e) => e.as_status_code(),
+        }
+    }
+}
+
 /// Returns a custom typed error (serializable) so clients can handle specific cases.
+///
+/// Our custom error must implement `AsStatusCode` so it can properly set the outgoing HTTP status code.
 #[get("/api/typed-error")]
 async fn get_throws_typed_error() -> Result<(), MyCustomError> {
     Err(MyCustomError::BadRequest {
         custom_name: "Invalid input".into(),
+    })
+}
+
+/// Simple POST endpoint used to show a successful server function that returns `StatusCode`.
+#[post("/api/data")]
+async fn get_throws_serverfn_error() -> Result<(), ServerFnError> {
+    Err(ServerFnError::ServerError {
+        message: "Unauthorized access".to_string(),
+        code: StatusCode::UNAUTHORIZED.as_u16(),
+        details: None,
     })
 }

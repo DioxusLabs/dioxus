@@ -2,7 +2,7 @@ use super::*;
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
-use std::path::Path;
+use std::{fs, path::Path};
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
@@ -61,9 +61,11 @@ impl Create {
             self.name = Some(create::name_from_path(&self.path)?);
         }
 
+        check_path(&self.path).await?;
+
         // Perform a connectivity check so we just don't it around doing nothing if there's a network error
         if self.template.is_none() {
-            connectivity_check().await?;
+            check_connectivity().await?;
         }
 
         // If no template is specified, use the default one and set the branch to the latest release.
@@ -232,14 +234,23 @@ fn remove_triple_newlines(string: &str) -> String {
     new_string
 }
 
+/// Check if the requested project can be created in the filesystem
+pub(crate) async fn check_path(path: &std::path::PathBuf) -> Result<()> {
+    match fs::metadata(path) {
+        Ok(_metadata) => {
+            bail!(
+                "A file or directory with the given project name \"{}\" already exists.",
+                path.to_string_lossy()
+            )
+        }
+        Err(_err) => Ok(()),
+    }
+}
+
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
-pub(crate) async fn connectivity_check() -> Result<()> {
-    if crate::VERBOSITY
-        .get()
-        .map(|f| f.offline)
-        .unwrap_or_default()
-    {
+pub(crate) async fn check_connectivity() -> Result<()> {
+    if crate::verbosity_or_default().offline {
         return Ok(());
     }
 
