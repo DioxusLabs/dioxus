@@ -238,80 +238,93 @@ pub trait ReadableExt: Readable {
     {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
-
-    /// Casts this [`Readable`] into a closure which defers to [read](ReadableExt::read).
-    #[doc(hidden)]
-    fn deref_impl(&self) -> &(impl Fn() -> Self::Target + use<Self>)
-    where
-        Self: Sized,
-        Self::Target: Clone + 'static,
-    {
-        // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-        /// Helper function to transmute `src` from a `&Source` into a `&Donor`.
-        /// Unlike [transmute](core::mem::transmute), this method uses a reference to
-        /// the `Donor` value to allow inferring the destination type.
-        /// This allows transmuting into an unnameable type (e.g., a closure).
-        ///
-        /// Note that the lifetime of `src`, `'a`, is unmodified by this operation.
-        /// This can only be used to change the type a reference points to; it **cannot**
-        /// extend the lifetime of a reference.
-        ///
-        /// # Safety
-        ///
-        /// **All** safety invariants of [transmute](core::mem::transmute) **must** be upheld by the
-        /// caller of this function.
-        const unsafe fn transmute_ref_by_value<'a, Source, Donor>(
-            src: &'a Source,
-            _: &Donor,
-        ) -> &'a Donor {
-            // SAFETY: Caller is responsible for upholding all invariants of transmute.
-            unsafe { ::core::mem::transmute::<&'a Source, &Donor>(src) }
-        }
-
-        // The real closure that we will never use.
-        let uninit_closure = const {
-            // First we create a closure that captures something with the same
-            // in memory layout as Self (MaybeUninit<Self>).
-            let uninit_callable = ::core::mem::MaybeUninit::<Self>::uninit();
-
-            // Then move that value into the closure.
-            let uninit_closure = move || {
-                // SAFETY: Initialization comes from transposing `self` into the position of `uninit_callable`.
-                let this: &Self = unsafe { uninit_callable.assume_init_ref() };
-                Self::read(this).clone()
-            };
-
-            // We assume that the closure now has a in memory layout of Self.
-            // const-compatible alternative to:
-            // assert_eq!(::core::alloc::Layout::new::<Self>(), ::core::alloc::Layout::for_value(&uninit_closure));
-            {
-                // FIXME: PartialEq::ne is not stable in const contexts, so must manually
-                //        compare all components of `Layout`.
-                let layout_self = ::core::alloc::Layout::new::<Self>();
-                let layout_closure = ::core::alloc::Layout::for_value(&uninit_closure);
-
-                if layout_self.align() != layout_closure.align()
-                    || layout_self.size() != layout_closure.size()
-                {
-                    // This panic will be cause evaluation of the const block to fail at compile time
-                    // if the assumption above is not valid.
-                    panic!("assumed layout of closures capturing a single value proven false!");
-                }
-            }
-
-            uninit_closure
-        };
-
-        // We transmute self into a reference to the closure.
-        // SAFETY: uninit_closure is ensured to have the same Layout as self by the above assertion,
-        //         and is known to contain a single value of type Self.
-        //         Therefore, uninit_closure must be equivalent to self.
-        unsafe { transmute_ref_by_value::<Self, _>(self, &uninit_closure) }
-    }
 }
 
 impl<R: Readable + ?Sized> ReadableExt for R {}
+
+/// Casts this [`Readable`] into a closure which defers to [read](ReadableExt::read).
+#[doc(hidden)]
+pub const fn readable_deref_impl<T>(readable: &T) -> &impl Fn() -> T::Target
+where
+    T: Readable,
+    T::Target: Clone + 'static,
+{
+    // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+    use ::core::{
+        alloc::Layout,
+        marker::PhantomData,
+        mem::{transmute, MaybeUninit},
+    };
+
+    /// Asserts at compile-time that the [Layout] of `A` and `B` are equal.
+    /// This will panic during const evaluation if the types are not layout-compatible.
+    /// Thus, causing a compile-time error.
+    #[inline(always)]
+    const fn const_assert_layout<A, B>(_: PhantomData<A>, _: PhantomData<B>) {
+        const {
+            let a = Layout::new::<A>();
+            let b = Layout::new::<B>();
+
+            if a.align() != b.align() || a.size() != b.size() {
+                panic!("incompatible layout!");
+            }
+        }
+    }
+
+    /// Helper function to transmute `a` from a `&'a A` into a `&'a B`.
+    /// Unlike [transmute], this method uses a reference to
+    /// the `B` value to allow inferring the destination type.
+    /// This allows transmuting into an unnameable type (e.g., a closure).
+    ///
+    /// Note that the lifetime of `a`, `'a`, is unmodified by this operation.
+    /// This can only be used to change the type a reference points to; it **cannot**
+    /// extend the lifetime of a reference.
+    ///
+    /// # Safety
+    ///
+    /// The [Layout](core::alloc::Layout) of `A` and `B` is compile-time checked
+    /// by this function, however this only validates alignment and size.
+    /// **All** other safety invariants of [transmute] **must** be upheld by the
+    /// caller of this function.
+    #[inline(always)]
+    const unsafe fn transmute_ref_by_phantom<'a, A, B>(a: &'a A, _: PhantomData<B>) -> &'a B {
+        const_assert_layout::<A, B>(PhantomData, PhantomData);
+
+        unsafe { transmute::<&'a A, &B>(a) }
+    }
+
+    /// Returns a [PhantomData] value representing the provided type `T`.
+    /// This can be helpful for referring to the type of anonymous items
+    /// (e.g., closures) without keeping the original value in scope.
+    const fn sacrifice<T: ?Sized>(_: &T) -> PhantomData<T> {
+        PhantomData
+    }
+
+    // A PhantomData<...> of the real closure that we will never use.
+    // Storing a PhantomData ensures even in unoptimized builds that no
+    // operations are generated for e.g. copying in a closure constant.
+    let uninit_closure = const {
+        // First we create a closure that captures something with the same
+        // in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<T>::uninit();
+
+        // Then move that value into the closure.
+        // sacrifice(...) is used to ensure the uninit_closure constant is
+        // zero-sized, avoiding redundant operations in unoptimized builds.
+        sacrifice(&move || {
+            // SAFETY: Initialization comes from transposing `self` into the position of `uninit_callable`.
+            let this: &T = unsafe { uninit_callable.assume_init_ref() };
+            T::read(this).clone()
+        })
+    };
+
+    // We transmute self into a reference to the closure.
+    // SAFETY: uninit_closure is known to contain a single value of type Self.
+    //         transmute_ref_by_phantom ensures both types have identical Layout.
+    //         Therefore, uninit_closure must be equivalent to self.
+    unsafe { transmute_ref_by_phantom::<T, _>(readable, uninit_closure) }
+}
 
 /// An extension trait for `Readable` types that can be boxed into a trait object.
 pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
