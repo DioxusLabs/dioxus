@@ -49,10 +49,12 @@ impl ClientRequest {
         .parse()
         .unwrap();
 
+        let headers = get_request_headers();
+
         ClientRequest {
             method,
             url,
-            headers: HeaderMap::new(),
+            headers,
             extensions: Extensions::new(),
         }
     }
@@ -487,6 +489,18 @@ pub fn get_server_url() -> &'static str {
 }
 
 static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
+
+/// Set the extra request headers for all servers functions.
+pub fn set_request_headers(headers: HeaderMap) {
+    REQUEST_HEADERS.set(headers).unwrap();
+}
+
+/// Returns the extra request headers for all servers functions.
+pub fn get_request_headers() -> HeaderMap {
+    REQUEST_HEADERS.get().cloned().unwrap_or(HeaderMap::new())
+}
+
+static REQUEST_HEADERS: OnceLock<HeaderMap> = OnceLock::new();
 
 pub trait ClientResponseDriver {
     fn status(&self) -> StatusCode;
