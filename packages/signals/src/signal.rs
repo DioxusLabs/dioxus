@@ -1,6 +1,6 @@
 use crate::{
-    default_impl, fmt_impls, read::*, write::*, write_impls, CopyValue, Global, GlobalMemo,
-    GlobalSignal, Memo, ReadableRef, WritableRef,
+    default_impl, derived_signal::derived_signal, fmt_impls, read::*, write::*, write_impls,
+    CopyValue, Global, GlobalMemo, GlobalSignal, Memo, ReadableRef, WritableRef,
 };
 use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
@@ -120,22 +120,39 @@ impl<T: PartialEq + 'static> Signal<T> {
         GlobalMemo::new(constructor)
     }
 
-    /// Creates a new unsync Selector. The selector will be run immediately and whenever any signal it reads changes.
+    /// Creates a new unsync Memo. The memo will be run immediately and whenever any signal it reads changes.
     ///
-    /// Selectors can be used to efficiently compute derived data from signals.
+    /// Memos can be used to efficiently compute derived data from signals.
     #[track_caller]
     pub fn memo(f: impl FnMut() -> T + 'static) -> Memo<T> {
         Memo::new(f)
     }
 
-    /// Creates a new unsync Selector with an explicit location. The selector will be run immediately and whenever any signal it reads changes.
+    /// Creates a new unsync Memo with an explicit location. The memo will be run immediately and whenever any signal it reads changes.
     ///
-    /// Selectors can be used to efficiently compute derived data from signals.
+    /// Memos can be used to efficiently compute derived data from signals.
     pub fn memo_with_location(
         f: impl FnMut() -> T + 'static,
         location: &'static std::panic::Location<'static>,
     ) -> Memo<T> {
         Memo::new_with_location(f, location)
+    }
+}
+
+impl<T: 'static> Signal<T> {
+    /// Creates a new derived Signal. The signal will contain the result of the provided function and will automatically update after the
+    /// next async tick whenever any signal read during the function changes.
+    pub fn derived_signal(f: impl FnMut() -> T + 'static) -> Self {
+        derived_signal(f, std::panic::Location::caller())
+    }
+
+    /// Creates a new derived Signal with an explicit location. The signal will contain the result of the provided function and will automatically update after the
+    /// next async tick whenever any signal read during the function changes.
+    pub fn derived_signal_with_location(
+        f: impl FnMut() -> T + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Self {
+        derived_signal(f, location)
     }
 }
 
