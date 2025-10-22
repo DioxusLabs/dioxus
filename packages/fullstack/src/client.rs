@@ -9,7 +9,8 @@ use headers::{ContentType, Header};
 use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
+use std::sync::{LazyLock, Mutex, OnceLock};
+use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future};
 use url::Url;
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -490,17 +491,22 @@ pub fn get_server_url() -> &'static str {
 
 static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
 
+/// Delete the extra request headers for all servers functions.
+pub fn clear_request_headers() {
+    REQUEST_HEADERS.lock().unwrap().clear();
+}
+
 /// Set the extra request headers for all servers functions.
 pub fn set_request_headers(headers: HeaderMap) {
-    REQUEST_HEADERS.set(headers).unwrap();
+    *REQUEST_HEADERS.lock().unwrap() = headers;
 }
 
 /// Returns the extra request headers for all servers functions.
 pub fn get_request_headers() -> HeaderMap {
-    REQUEST_HEADERS.get().cloned().unwrap_or(HeaderMap::new())
+    REQUEST_HEADERS.lock().unwrap().clone()
 }
 
-static REQUEST_HEADERS: OnceLock<HeaderMap> = OnceLock::new();
+static REQUEST_HEADERS: LazyLock<Mutex<HeaderMap>> = LazyLock::new(|| Mutex::new(HeaderMap::new()));
 
 pub trait ClientResponseDriver {
     fn status(&self) -> StatusCode;
