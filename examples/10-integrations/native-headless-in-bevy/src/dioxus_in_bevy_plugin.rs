@@ -320,7 +320,6 @@ fn update_ui(
                 _ => {}
             },
             DioxusMessage::CreateHeadElement(el) => {
-                println!("ACTUALLY CREATE");
                 dioxus_doc.create_head_element(&el.name, &el.attributes, &el.contents);
                 dioxus_doc.poll(Some(std::task::Context::from_waker(&waker)));
             }
@@ -607,7 +606,6 @@ impl dioxus::document::Document for DioxusDocumentProxy {
         attributes: &[(&str, String)],
         contents: Option<String>,
     ) {
-        println!("CREATE HEAD ELEMENT");
         self.sender
             .send(DioxusMessage::CreateHeadElement(HeadElement {
                 name: name.to_string(),
