@@ -742,7 +742,7 @@ impl CompiledRoute {
     pub fn query_extractor(&self) -> TokenStream2 {
         let idents = self.query_params.iter().map(|item| &item.0);
         quote! {
-            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
+            dioxus_server::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::extract::Query<__QueryParams__>,
         }
     }
 
