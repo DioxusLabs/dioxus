@@ -2977,9 +2977,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-dom"
-version = "0.2.2"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "961605e9c4cc60eb93bc54172650d3f7b868d15a6e3345419f5e76d1df367b45"
+checksum = "c81d0f520bad6798a54cc4360bcabd245dc0aba2ce5917217d1d82ac5ee6bfed"
 dependencies = [
  "accesskit 0.17.1",
  "app_units",
