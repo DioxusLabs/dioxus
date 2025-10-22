@@ -336,6 +336,7 @@ inventory = { version = "0.3" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2"
+data-url = "0.3.2"
 separator = "0.4.1"
 pretty_assertions = "1"
 serde_repr = "0.1"

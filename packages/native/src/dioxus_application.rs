@@ -80,7 +80,7 @@ impl DioxusNativeApplication {
                                 doc.reload_resource_by_href(url);
                             }
                         }
-    
+
                         window.poll();
                     }
                 }
