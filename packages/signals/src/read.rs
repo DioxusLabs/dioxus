@@ -436,7 +436,7 @@ pub trait ReadableStringExt: Readable<Target = String> {
         /// Get the length of the string.
         fn len(&self) -> usize = str::len;
 
-        /// Check if the string contains the given pattren.
+        /// Check if the string contains the given pattern.
         fn contains(&self, pat: &str) -> bool = str::contains;
 
         /// Check the capacity of the string.
@@ -455,7 +455,7 @@ pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
         /// Get the length of the string.
         fn len(&self) -> usize = |s: &Self::Target| s.deref().len();
 
-        /// Check if the string contains the given pattren.
+        /// Check if the string contains the given pattern.
         fn contains(&self, pat: &str) -> bool = |s: &Self::Target, pat| s.deref().contains(pat);
     }
 }
