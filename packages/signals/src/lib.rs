@@ -56,7 +56,8 @@ macro_rules! ext_methods {
         $(
             $(#[$meta])*
             #[track_caller]
-            fn $name$(<$($gen),*>)? (& $($self)+ $(, $arg_name: $arg_type )* ) $(-> $ret)? {
+            fn $name$(<$($gen),*>)? (& $($self)+ $(, $arg_name: $arg_type )* ) $(-> $ret)?
+            {
                 ext_methods!(@with $($self)+, $($arg_name),*; $expr)
             }
         )*
