@@ -2254,10 +2254,12 @@ impl BuildRequest {
         }
 
         // We want to go through wasm-ld directly, so we need to remove the -flavor flag
-        if self.is_wasm_or_wasi() {
-            let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
+        if let Some(flavor_idx) = args.iter().position(|arg| *arg == "-flavor") {
+            tracing::trace!("Removing redundant '-flavor' linker flag for direct wasm-ld run.");
             args.remove(flavor_idx + 1);
             args.remove(flavor_idx);
+        } else {
+            tracing::trace!("WASM/WASI target detected, but expected linker '-flavor' flag was not found. Continuing link directly.");
         }
 
         // Set the output file
