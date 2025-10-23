@@ -430,15 +430,6 @@ impl<T, E, R> ReadableResultExt<T, E> for R where R: Readable<Target = Result<T,
 /// An extension trait for [`Readable<String>`] that provides some convenience methods.
 pub trait ReadableStringExt: Readable<Target = String> {
     ext_methods! {
-        /// Check if the string is empty.
-        fn is_empty(&self) -> bool = str::is_empty;
-
-        /// Get the length of the string.
-        fn len(&self) -> usize = str::len;
-
-        /// Check if the string contains the given pattern.
-        fn contains(&self, pat: &str) -> bool = str::contains;
-
         /// Check the capacity of the string.
         fn capacity(&self) -> usize = String::capacity;
     }
