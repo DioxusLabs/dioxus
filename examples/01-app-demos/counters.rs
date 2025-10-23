@@ -46,7 +46,7 @@ fn app() -> Element {
                         }
                     }
                 }
-                button { onclick: move |_| *counters.get_mut(i) += 1, "+1" }
+                button { onclick: move |_| counters.write()[i] += 1, "+1" }
                 button { onclick: move |_| { counters.remove(i); }, "x" }
             }
         }
