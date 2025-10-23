@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut, IndexMut};
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
+use crate::{ext_methods, read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
@@ -59,7 +59,7 @@ pub trait Writable: Readable {
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut value = use_signal(|| String::from("hello"));
-///     
+///
 ///     rsx! {
 ///         button {
 ///             onclick: move |_| {
@@ -578,4 +578,42 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     }
 }
 
-impl<T, W> WritableVecExt<T> for W where W: Writable<Target = Vec<T>> {}
+impl<W> WritableStringExt for W where W: Writable<Target = String> {}
+
+/// An extension trait for [`Writable<String>`] that provides some convenience methods.
+pub trait WritableStringExt: Writable<Target = String> {
+    ext_methods! {
+        /// Pushes a character to the end of the string.
+        fn push_str(&mut self, s: &str) = String::push_str;
+
+        /// Pushes a character to the end of the string.
+        fn push(&mut self, c: char) = String::push;
+
+        /// Pops a character from the end of the string.
+        fn pop(&mut self) -> Option<char> = String::pop;
+
+        /// Inserts a string at the given index.
+        fn insert_str(&mut self, idx: usize, s: &str) = String::insert_str;
+
+        /// Inserts a character at the given index.
+        fn insert(&mut self, idx: usize, c: char) = String::insert;
+
+        /// Remove a character at the given index
+        fn remove(&mut self, idx: usize) -> char = String::remove;
+
+        /// Replace a range of the string with the given string.
+        fn replace_range(&mut self, range: impl std::ops::RangeBounds<usize>, replace_with: &str) = String::replace_range;
+
+        /// Clears the string, removing all characters.
+        fn clear(&mut self) = String::clear;
+
+        /// Extends the string with the given iterator of characters.
+        fn extend(&mut self, iter: impl IntoIterator<Item = char>) = String::extend;
+
+        /// Truncates the string to the given length.
+        fn truncate(&mut self, len: usize) = String::truncate;
+
+        /// Splits the string off at the given index, returning the tail as a new string.
+        fn split_off(&mut self, at: usize) -> String = String::split_off;
+    }
+}

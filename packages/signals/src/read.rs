@@ -1,9 +1,12 @@
-use std::{mem::MaybeUninit, ops::Index};
+use std::{
+    mem::MaybeUninit,
+    ops::{Deref, Index},
+};
 
 use dioxus_core::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{MappedSignal, ReadSignal};
+use crate::{ext_methods, MappedSignal, ReadSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
@@ -423,3 +426,38 @@ pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
 }
 
 impl<T, E, R> ReadableResultExt<T, E> for R where R: Readable<Target = Result<T, E>> {}
+
+/// An extension trait for [`Readable<String>`] that provides some convenience methods.
+pub trait ReadableStringExt: Readable<Target = String> {
+    ext_methods! {
+        /// Check if the string is empty.
+        fn is_empty(&self) -> bool = str::is_empty;
+
+        /// Get the length of the string.
+        fn len(&self) -> usize = str::len;
+
+        /// Check if the string contains the given pattren.
+        fn contains(&self, pat: &str) -> bool = str::contains;
+
+        /// Check the capacity of the string.
+        fn capacity(&self) -> usize = String::capacity;
+    }
+}
+
+impl<W> ReadableStringExt for W where W: Readable<Target = String> {}
+
+/// An extension trait for [`Readable<String>`] and [`Readable<str>`] that provides some convenience methods.
+pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
+    ext_methods! {
+        /// Check if the string is empty.
+        fn is_empty(&self) -> bool = |s: &Self::Target| s.deref().is_empty();
+
+        /// Get the length of the string.
+        fn len(&self) -> usize = |s: &Self::Target| s.deref().len();
+
+        /// Check if the string contains the given pattren.
+        fn contains(&self, pat: &str) -> bool = |s: &Self::Target, pat| s.deref().contains(pat);
+    }
+}
+
+impl<W> ReadableStrExt for W where W: Readable<Target: Deref<Target = str> + 'static> {}
