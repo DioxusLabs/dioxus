@@ -204,7 +204,7 @@ mod field_info {
                 // children field is automatically defaulted to None
                 if name == "children" {
                     builder_attr.default =
-                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
+                        Some(syn::parse(quote!(::dioxus_core::VNode::empty()).into()).unwrap());
                 }
 
                 // String fields automatically use impl Display
@@ -1023,7 +1023,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 );
                 quote! {
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    impl #impl_generics dioxus_elements::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
+                    impl #impl_generics ::dioxus_html::extensions::#marker_name for #builder_name < #( #ty_generics ),* > #where_clause {}
                 }
             });
 
@@ -1152,9 +1152,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());
                 marker = Some(marker_ident.clone());
                 (
-                    quote!(impl dioxus_core::SuperInto<#arg_type, #marker_ident>),
+                    quote!(impl ::dioxus_core::SuperInto<#arg_type, #marker_ident>),
                     // If this looks like a signal type, we automatically convert it with SuperInto and use the props struct as the owner
-                    quote!(dioxus_core::with_owner(self.owner.clone(), move || dioxus_core::SuperInto::super_into(#field_name))),
+                    quote!(::dioxus_core::with_owner(self.owner.clone(), move || ::dioxus_core::SuperInto::super_into(#field_name))),
                 )
             } else if field.builder_attr.auto_into || field.builder_attr.strip_option {
                 let marker_ident = syn::Ident::new("__Marker", proc_macro2::Span::call_site());

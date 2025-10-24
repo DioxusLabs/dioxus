@@ -96,11 +96,11 @@ impl ToTokens for Component {
         let diagnostics = &self.diagnostics;
 
         tokens.append_all(quote! {
-            dioxus_core::DynamicNode::Component({
+            ::dioxus_core::DynamicNode::Component({
 
                 // todo: ensure going through the trait actually works
                 // we want to avoid importing traits
-                use dioxus_core::Properties;
+                use ::dioxus_core::Properties;
                 let __comp = ({
                     #props
                 }).into_vcomponent(
@@ -222,7 +222,7 @@ impl Component {
             // we only want to span the name and generics, not the `fc_to_builder` call so jump-to-def
             // only finds the single entry (#name)
             let spanned = quote_spanned! { self.name.span() => #name #generics };
-            quote! { dioxus_core::fc_to_builder(#spanned) }
+            quote! { ::dioxus_core::fc_to_builder(#spanned) }
         };
 
         tokens.append_all(self.add_fields_to_builder(
@@ -306,7 +306,7 @@ impl Component {
                         ).emit_as_expr_tokens());
                     } else {
                         // tokens = quote! {
-                        //     dioxus_core::HasAttributes::push_attribute(
+                        //     ::dioxus_core::HasAttributes::push_attribute(
                         //         #tokens,
                         //         #name,
                         //         None,

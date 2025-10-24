@@ -682,7 +682,7 @@ impl RouteEnum {
                     #(#site_map,)*
                 ];
 
-                fn render(&self, level: usize) -> dioxus_core::Element {
+                fn render(&self, level: usize) -> ::dioxus_core::Element {
                     let myself = self.clone();
                     match (level, myself) {
                         #(#matches)*

@@ -112,7 +112,7 @@ impl ToTokens for Element {
         let el_name = &el.name;
 
         let ns = |name| match el_name {
-            ElementName::Ident(i) => quote! { dioxus_elements::#i::#name },
+            ElementName::Ident(i) => quote! { ::dioxus_html::#i::#name },
             ElementName::Custom(_) => quote! { None },
         };
 
@@ -124,7 +124,7 @@ impl ToTokens for Element {
                 // Early return for dynamic attributes
                 let Some((name, value)) = attr.as_static_str_literal() else {
                     let id = attr.dyn_idx.get();
-                    return quote! { dioxus_core::TemplateAttribute::Dynamic { id: #id  } };
+                    return quote! { ::dioxus_core::TemplateAttribute::Dynamic { id: #id  } };
                 };
 
                 let ns = match name {
@@ -137,7 +137,7 @@ impl ToTokens for Element {
 
                 let name = match (el_name, name) {
                     (ElementName::Ident(_), AttributeName::BuiltIn(_)) => {
-                        quote! { dioxus_elements::#el_name::#name.0 }
+                        quote! { ::dioxus_html::#el_name::#name.0 }
                     }
                     //hmmmm I think we could just totokens this, but the to_string might be inserting quotes
                     _ => {
@@ -149,7 +149,7 @@ impl ToTokens for Element {
                 let value = value.to_static().unwrap();
 
                 quote! {
-                    dioxus_core::TemplateAttribute::Static {
+                    ::dioxus_core::TemplateAttribute::Static {
                         name: #name,
                         namespace: #ns,
                         value: #value,
@@ -163,27 +163,27 @@ impl ToTokens for Element {
             BodyNode::Element(el) => quote! { #el },
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+                quote! { ::dioxus_core::TemplateNode::Text { text: #text } }
             }
             BodyNode::Text(text) => {
                 let id = text.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::ForLoop(floop) => {
                 let id = floop.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::RawExpr(exp) => {
                 let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::Component(exp) => {
                 let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
             BodyNode::IfChain(exp) => {
                 let id = exp.dyn_idx.get();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
         });
 
@@ -199,7 +199,7 @@ impl ToTokens for Element {
 
                 #diagnostics
 
-                dioxus_core::TemplateNode::Element {
+                ::dioxus_core::TemplateNode::Element {
                     tag: #el_name,
                     namespace: #ns,
                     attrs: &[ #(#static_attrs),* ],
@@ -323,7 +323,7 @@ impl Element {
                 #[doc(hidden)]
                 mod __completions {
                     fn ignore() {
-                        super::dioxus_elements::elements::completions::CompleteWithBraces::#name
+                        ::dioxus_html::elements::completions::CompleteWithBraces::#name
                     }
                 }
             }
@@ -368,7 +368,7 @@ impl Parse for ElementName {
 impl ElementName {
     pub(crate) fn tag_name(&self) -> TokenStream2 {
         match self {
-            ElementName::Ident(i) => quote! { dioxus_elements::elements::#i::TAG_NAME },
+            ElementName::Ident(i) => quote! { ::dioxus_html::elements::#i::TAG_NAME },
             ElementName::Custom(s) => quote! { #s },
         }
     }

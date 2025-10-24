@@ -135,13 +135,13 @@ impl ToTokens for TemplateBody {
         let hot_reload_mapping = node.hot_reload_mapping();
 
         tokens.append_all(quote! {
-            dioxus_core::Element::Ok({
+            ::dioxus_core::Element::Ok({
                 #diagnostics
 
                 // Components pull in the dynamic literal pool and template in debug mode, so they need to be defined before dynamic nodes
                 #[cfg(debug_assertions)]
-                fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
-                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
+                fn __original_template() -> &'static ::dioxus_core::internal::HotReloadedTemplate {
+                    static __ORIGINAL_TEMPLATE: ::std::sync::OnceLock<::dioxus_core::internal::HotReloadedTemplate> = ::std::sync::OnceLock::new();
                     if __ORIGINAL_TEMPLATE.get().is_none() {
                         _ = __ORIGINAL_TEMPLATE.set(#hot_reload_mapping);
                     }
@@ -150,21 +150,24 @@ impl ToTokens for TemplateBody {
                 #[cfg(debug_assertions)]
                 let __template_read = {
                     static __NORMALIZED_FILE: &'static str = {
-                        const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
-                        dioxus_core::const_format::str_replace!(PATH, '\\', "/")
+                        const PATH: &str = ::dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+                        ::dioxus_core::const_format::str_replace!(PATH, '\\', "/")
                     };
 
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
-                    static __TEMPLATE: GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = GlobalSignal::with_location(
-                        || None::<dioxus_core::internal::HotReloadedTemplate>,
+                    static __TEMPLATE: ::dioxus_signals::GlobalSignal<Option<::dioxus_core::internal::HotReloadedTemplate>> = ::dioxus_signals::GlobalSignal::with_location(
+                        || None::<::dioxus_core::internal::HotReloadedTemplate>,
                         __NORMALIZED_FILE,
                         line!(),
                         column!(),
                         #index
                     );
 
-                    dioxus_core::Runtime::current().ok().map(|_| __TEMPLATE.read())
+                    ::dioxus_core::Runtime::current().ok().map(|_| {
+                        use ::dioxus_signals::ReadableExt;
+                        __TEMPLATE.read()
+                    })
                 };
                 // If the template has not been hot reloaded, we always use the original template
                 // Templates nested within macros may be merged because they have the same file-line-column-index
@@ -175,7 +178,7 @@ impl ToTokens for TemplateBody {
                     _ => __original_template(),
                 };
                 #[cfg(debug_assertions)]
-                let mut __dynamic_literal_pool = dioxus_core::internal::DynamicLiteralPool::new(
+                let mut __dynamic_literal_pool = ::dioxus_core::internal::DynamicLiteralPool::new(
                     vec![ #( #dynamic_text.to_string() ),* ],
                 );
 
@@ -184,14 +187,14 @@ impl ToTokens for TemplateBody {
                 let __key = #key_tokens;
                 // These items are used in both the debug and release expansions of rsx. Pulling them out makes the expansion
                 // slightly smaller and easier to understand. Rust analyzer also doesn't autocomplete well when it sees an ident show up twice in the expansion
-                let __dynamic_nodes: [dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
-                let __dynamic_attributes: [Box<[dioxus_core::Attribute]>; #dynamic_attr_len] = [ #( #dyn_attr_printer ),* ];
+                let __dynamic_nodes: [::dioxus_core::DynamicNode; #dynamic_nodes_len] = [ #( #dynamic_nodes ),* ];
+                let __dynamic_attributes: [Box<[::dioxus_core::Attribute]>; #dynamic_attr_len] = [ #( #dyn_attr_printer ),* ];
                 #[doc(hidden)]
-                static __TEMPLATE_ROOTS: &[dioxus_core::TemplateNode] = &[ #( #roots ),* ];
+                static __TEMPLATE_ROOTS: &[::dioxus_core::TemplateNode] = &[ #( #roots ),* ];
 
                 #[cfg(debug_assertions)]
                 {
-                    let mut __dynamic_value_pool = dioxus_core::internal::DynamicValuePool::new(
+                    let mut __dynamic_value_pool = ::dioxus_core::internal::DynamicValuePool::new(
                         Vec::from(__dynamic_nodes),
                         Vec::from(__dynamic_attributes),
                         __dynamic_literal_pool
@@ -201,7 +204,7 @@ impl ToTokens for TemplateBody {
                 #[cfg(not(debug_assertions))]
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
-                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
+                    static ___TEMPLATE: ::dioxus_core::Template = ::dioxus_core::Template {
                         roots: __TEMPLATE_ROOTS,
                         node_paths: &[ #( #node_paths ),* ],
                         attr_paths: &[ #( #attr_paths ),* ],
@@ -209,7 +212,7 @@ impl ToTokens for TemplateBody {
 
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]
-                    let __vnodes = dioxus_core::VNode::new(
+                    let __vnodes = ::dioxus_core::VNode::new(
                         __key,
                         ___TEMPLATE,
                         Box::new(__dynamic_nodes),
@@ -332,11 +335,11 @@ impl TemplateBody {
             BodyNode::Element(el) => quote! { #el },
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.input.to_static().unwrap();
-                quote! { dioxus_core::TemplateNode::Text { text: #text } }
+                quote! { ::dioxus_core::TemplateNode::Text { text: #text } }
             }
             _ => {
                 let id = node.get_dyn_idx();
-                quote! { dioxus_core::TemplateNode::Dynamic { id: #id } }
+                quote! { ::dioxus_core::TemplateNode::Dynamic { id: #id } }
             }
         })
     }
@@ -372,17 +375,17 @@ impl TemplateBody {
         };
         let dynamic_nodes = self.dynamic_nodes().map(|node| {
             let id = node.get_dyn_idx();
-            quote! { dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
+            quote! { ::dioxus_core::internal::HotReloadDynamicNode::Dynamic(#id) }
         });
         let dyn_attr_printer = self.dynamic_attributes().map(|attr| {
             let id = attr.get_dyn_idx();
-            quote! { dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) }
+            quote! { ::dioxus_core::internal::HotReloadDynamicAttribute::Dynamic(#id) }
         });
         let component_values = self
             .literal_component_properties()
             .map(|literal| literal.quote_as_hot_reload_literal());
         quote! {
-            dioxus_core::internal::HotReloadedTemplate::new(
+            ::dioxus_core::internal::HotReloadedTemplate::new(
                 #key,
                 vec![ #( #dynamic_nodes ),* ],
                 vec![ #( #dyn_attr_printer ),* ],

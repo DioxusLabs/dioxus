@@ -183,21 +183,21 @@ impl Attribute {
 
         let ns = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
-                quote! { dioxus_elements::#i::#name.1 }
+                quote! { ::dioxus_html::#i::#name.1 }
             }
             _ => quote! { None },
         };
 
         let volatile = |name: &AttributeName| match (el_name, name) {
             (ElementName::Ident(i), AttributeName::BuiltIn(_)) => {
-                quote! { dioxus_elements::#i::#name.2 }
+                quote! { ::dioxus_html::#i::#name.2 }
             }
             _ => quote! { false },
         };
 
         let attribute = |name: &AttributeName| match name {
             AttributeName::BuiltIn(name) => match el_name {
-                ElementName::Ident(_) => quote! { dioxus_elements::#el_name::#name.0 },
+                ElementName::Ident(_) => quote! { ::dioxus_html::#el_name::#name.0 },
                 ElementName::Custom(_) => {
                     let as_string = name.to_string();
                     quote!(#as_string)
@@ -226,7 +226,7 @@ impl Attribute {
                     let value = quote! { #value };
 
                     quote! {
-                        dioxus_core::Attribute::new(
+                        ::dioxus_core::Attribute::new(
                             #attribute,
                             #value,
                             #ns,
@@ -268,7 +268,7 @@ impl Attribute {
                         AttributeName::BuiltIn(name) => {
                             let event_tokens_is_closure = check_tokens_is_closure(&tokens);
                             let function_name =
-                                quote_spanned! { span => dioxus_elements::events::#name };
+                                quote_spanned! { span => ::dioxus_html::events::#name };
                             let function = if event_tokens_is_closure {
                                 // If we see an explicit closure, we can call the `call_with_explicit_closure` version of the event for better type inference
                                 quote_spanned! { span => #function_name::call_with_explicit_closure }
@@ -284,7 +284,7 @@ impl Attribute {
                     }
                 }
                 _ => {
-                    quote_spanned! { value.span() => dioxus_elements::events::#name(#value) }
+                    quote_spanned! { value.span() => ::dioxus_html::events::#name(#value) }
                 }
             }
         };
@@ -360,9 +360,9 @@ impl Attribute {
                 #[doc(hidden)]
                 mod __completions {
                     // Autocomplete as an attribute
-                    pub use super::dioxus_elements::#el::*;
+                    pub use ::dioxus_html::#el::*;
                     // Autocomplete as an element
-                    pub use super::dioxus_elements::elements::completions::CompleteWithBraces::*;
+                    pub use ::dioxus_html::elements::completions::CompleteWithBraces::*;
                     fn ignore() {
                         #name;
                     }

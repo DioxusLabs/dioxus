@@ -47,12 +47,14 @@ pub enum HotLiteral {
 impl HotLiteral {
     pub fn quote_as_hot_reload_literal(&self) -> TokenStream2 {
         match &self {
-            HotLiteral::Fmted(f) => quote! { dioxus_core::internal::HotReloadLiteral::Fmted(#f) },
+            HotLiteral::Fmted(f) => quote! { ::dioxus_core::internal::HotReloadLiteral::Fmted(#f) },
             HotLiteral::Float(f) => {
-                quote! { dioxus_core::internal::HotReloadLiteral::Float(#f as _) }
+                quote! { ::dioxus_core::internal::HotReloadLiteral::Float(#f as _) }
             }
-            HotLiteral::Int(f) => quote! { dioxus_core::internal::HotReloadLiteral::Int(#f as _) },
-            HotLiteral::Bool(f) => quote! { dioxus_core::internal::HotReloadLiteral::Bool(#f) },
+            HotLiteral::Int(f) => {
+                quote! { ::dioxus_core::internal::HotReloadLiteral::Int(#f as _) }
+            }
+            HotLiteral::Bool(f) => quote! { ::dioxus_core::internal::HotReloadLiteral::Bool(#f) },
         }
     }
 }
@@ -194,21 +196,21 @@ impl ToTokens for HotReloadFormattedSegment {
         let mut idx = 0_usize;
         let segments = self.segments.iter().map(|s| match s {
             Segment::Literal(lit) => quote! {
-                dioxus_core::internal::FmtSegment::Literal { value: #lit }
+                ::dioxus_core::internal::FmtSegment::Literal { value: #lit }
             },
             Segment::Formatted(_fmt) => {
                 // increment idx for the dynamic segment so we maintain the mapping
                 let _idx = self.dynamic_node_indexes[idx].get();
                 idx += 1;
                 quote! {
-                   dioxus_core::internal::FmtSegment::Dynamic { id: #_idx }
+                   ::dioxus_core::internal::FmtSegment::Dynamic { id: #_idx }
                 }
             }
         });
 
         // The static segments with idxs for locations
         tokens.extend(quote! {
-            dioxus_core::internal::FmtedSegments::new( vec![ #(#segments),* ], )
+            ::dioxus_core::internal::FmtedSegments::new( vec![ #(#segments),* ], )
         });
     }
 }
