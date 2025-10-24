@@ -252,7 +252,9 @@ impl AndroidTools {
 
         match output {
             Ok(Ok(out)) => match out.trim() {
-                "armv7l" | "armv8l" => triple.architecture = Architecture::Arm(ArmArchitecture::Arm),
+                "armv7l" | "armv8l" => {
+                    triple.architecture = Architecture::Arm(ArmArchitecture::Arm)
+                }
                 "aarch64" => {
                     triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64)
                 }
