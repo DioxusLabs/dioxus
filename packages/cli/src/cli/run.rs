@@ -119,6 +119,7 @@ impl RunArgs {
                             BuildStage::Restarting => {}
                             BuildStage::CompressingAssets => {}
                             BuildStage::ExtractingAssets => {}
+                            BuildStage::ExtractingPermissions => {}
                             BuildStage::Prerendering => {
                                 tracing::info!("[{bundle_format}] Prerendering app")
                             }

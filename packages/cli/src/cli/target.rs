@@ -89,6 +89,11 @@ pub(crate) struct TargetArgs {
     #[serde(default)]
     pub(crate) skip_assets: bool,
 
+    /// Skip collecting permissions from dependencies [default: false]
+    #[clap(long, help_heading = HELP_HEADING)]
+    #[serde(default)]
+    pub(crate) skip_permissions: bool,
+
     /// Inject scripts to load the wasm and js files for your dioxus app if they are not already present [default: true]
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) inject_loading_scripts: bool,

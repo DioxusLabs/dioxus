@@ -62,6 +62,9 @@ members = [
     "packages/rsx-hotreload",
     "packages/const-serialize",
     "packages/const-serialize-macro",
+    "packages/permissions/permissions-core",
+    "packages/permissions/permissions-macro",
+    "packages/permissions/permissions",
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
@@ -199,6 +202,11 @@ dioxus-cli-config = { path = "packages/cli-config", version = "=0.7.0-rc.3" }
 # const-serializea
 const-serialize = { path = "packages/const-serialize", version = "=0.7.0-rc.3" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0.7.0-rc.3" }
+
+# permissions
+permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.0-rc.3" }
+permissions-macro = { path = "packages/permissions/permissions-macro", version = "=0.7.0-rc.3" }
+permissions = { path = "packages/permissions/permissions", version = "=0.7.0-rc.3" }
 
 # subsecond
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "=0.7.0-rc.3" }

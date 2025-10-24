@@ -1,6 +1,6 @@
 [package]
 name = "permissions-macro"
-version = "0.1.0"
+version = "0.7.0-rc.3"
 edition = "2021"
 description = "Procedural macro for declaring permissions with linker embedding"
 authors = ["DioxusLabs"]

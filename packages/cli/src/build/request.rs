@@ -390,6 +390,7 @@ pub(crate) struct BuildRequest {
     pub(crate) no_default_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
+    pub(crate) skip_permissions: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
@@ -451,6 +452,7 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
+    pub(crate) permissions: super::permissions::PermissionManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -991,6 +993,7 @@ impl BuildRequest {
             should_codesign,
             session_cache_dir,
             skip_assets: args.skip_assets,
+            skip_permissions: args.skip_permissions,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -1269,6 +1272,11 @@ impl BuildRequest {
         }
 
         let assets = self.collect_assets(&exe, ctx).await?;
+        let permissions = self.collect_permissions(&exe, ctx).await?;
+
+        // Update platform manifests with permissions
+        self.update_manifests_with_permissions(&permissions)?;
+
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
@@ -1285,6 +1293,7 @@ impl BuildRequest {
             direct_rustc,
             time_start,
             assets,
+            permissions,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1333,6 +1342,193 @@ impl BuildRequest {
         }
 
         Ok(manifest)
+    }
+
+    /// Collect permissions from the final executable
+    async fn collect_permissions(
+        &self,
+        exe: &Path,
+        ctx: &BuildContext,
+    ) -> Result<super::permissions::PermissionManifest> {
+        if self.skip_permissions {
+            return Ok(super::permissions::PermissionManifest::default());
+        }
+
+        ctx.status_extracting_permissions();
+
+        let manifest = super::permissions::extract_permissions_from_file(exe)?;
+
+        // Log permissions found for platforms that need them
+        let platform = match self.bundle {
+            BundleFormat::Android => Some(permissions_core::Platform::Android),
+            BundleFormat::Ios => Some(permissions_core::Platform::Ios),
+            BundleFormat::MacOS => Some(permissions_core::Platform::Macos),
+            _ => None,
+        };
+
+        if let Some(platform) = platform {
+            let perms = manifest.permissions_for_platform(platform);
+            if !perms.is_empty() {
+                tracing::info!(
+                    "Found {} permissions for {:?} - will be included in manifest",
+                    perms.len(),
+                    platform
+                );
+            }
+        } else {
+            tracing::debug!(
+                "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
+                self.bundle
+            );
+        }
+
+        Ok(manifest)
+    }
+
+    /// Update platform manifests with permissions after they're collected
+    pub(crate) fn update_manifests_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        match self.bundle {
+            BundleFormat::Android => self.update_android_manifest_with_permissions(permissions),
+            BundleFormat::Ios => self.update_ios_manifest_with_permissions(permissions),
+            BundleFormat::MacOS => self.update_macos_manifest_with_permissions(permissions),
+            _ => {
+                tracing::debug!(
+                    "Skipping manifest update for {:?} - uses runtime-only permissions",
+                    self.bundle
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn update_android_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let android_permissions = super::permissions::get_android_permissions(permissions);
+        if android_permissions.is_empty() {
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+        if !manifest_path.exists() {
+            tracing::warn!("AndroidManifest.xml not found, skipping permission update");
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Find the position after the INTERNET permission
+        let internet_permission =
+            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+        if let Some(pos) = manifest_content.find(internet_permission) {
+            let insert_pos = pos + internet_permission.len();
+
+            // Generate permission declarations
+            let mut permission_declarations = String::new();
+            for perm in &android_permissions {
+                permission_declarations.push_str(&format!(
+                    "\n    <uses-permission android:name=\"{}\" />",
+                    perm.name
+                ));
+            }
+
+            manifest_content.insert_str(insert_pos, &permission_declarations);
+            std::fs::write(&manifest_path, manifest_content)?;
+
+            tracing::info!(
+                "Updated AndroidManifest.xml with {} permissions",
+                android_permissions.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    fn update_ios_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let ios_permissions = super::permissions::get_ios_permissions(permissions);
+        if ios_permissions.is_empty() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Info.plist");
+        if !plist_path.exists() {
+            tracing::warn!("Info.plist not found, skipping permission update");
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &ios_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::info!(
+                "Updated Info.plist with {} permissions",
+                ios_permissions.len()
+            );
+        }
+
+        Ok(())
+    }
+
+    fn update_macos_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let macos_permissions = super::permissions::get_macos_permissions(permissions);
+        if macos_permissions.is_empty() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Info.plist");
+        if !plist_path.exists() {
+            tracing::warn!("Info.plist not found, skipping permission update");
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &macos_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::info!(
+                "Updated Info.plist with {} permissions",
+                macos_permissions.len()
+            );
+        }
+
+        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle

@@ -101,6 +101,7 @@ pub enum BuildStage {
     Linking,
     Hotpatching,
     ExtractingAssets,
+    ExtractingPermissions,
     CopyingAssets {
         current: usize,
         total: usize,

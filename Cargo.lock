@@ -5403,6 +5403,7 @@ dependencies = [
  "open",
  "path-absolutize",
  "pdb",
+ "permissions-core",
  "plist",
  "posthog-rs",
  "prettyplease",
@@ -12565,7 +12566,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "permissions"
-version = "0.1.0"
+version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
  "permissions-core",
@@ -12574,7 +12575,7 @@ dependencies = [
 
 [[package]]
 name = "permissions-core"
-version = "0.1.0"
+version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
  "const-serialize-macro",
@@ -12583,7 +12584,7 @@ dependencies = [
 
 [[package]]
 name = "permissions-macro"
-version = "0.1.0"
+version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
  "permissions-core",
