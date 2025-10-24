@@ -872,7 +872,12 @@ impl BuildRequest {
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
-        if matches!(bundle, BundleFormat::Ios) {
+        if matches!(bundle, BundleFormat::Ios)
+            && matches!(
+                triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            )
+        {
             let xcode_path = Workspace::get_xcode_path()
                 .await
                 .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
@@ -1272,6 +1277,8 @@ impl BuildRequest {
         }
 
         let assets = self.collect_assets(&exe, ctx).await?;
+
+        // Extract permissions from the binary (same pattern as assets)
         let permissions = self.collect_permissions(&exe, ctx).await?;
 
         // Update platform manifests with permissions
@@ -1369,13 +1376,25 @@ impl BuildRequest {
         if let Some(platform) = platform {
             let perms = manifest.permissions_for_platform(platform);
             if !perms.is_empty() {
-                tracing::info!(
-                    "Found {} permissions for {:?} - will be included in manifest",
-                    perms.len(),
-                    platform
-                );
+                println!("🔍 Found {} permissions for {:?}:", perms.len(), platform);
+                for perm in &perms {
+                    println!("  • {:?} - {}", perm.kind(), perm.description());
+                }
+                println!("  Will be included in platform manifest");
+                tracing::info!("🔍 Found {} permissions for {:?}:", perms.len(), platform);
+                for perm in &perms {
+                    tracing::info!("  • {:?} - {}", perm.kind(), perm.description());
+                }
+                tracing::info!("  Will be included in platform manifest");
+            } else {
+                println!("No permissions found for {:?}", platform);
+                tracing::debug!("No permissions found for {:?}", platform);
             }
         } else {
+            println!(
+                "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
+                self.bundle
+            );
             tracing::debug!(
                 "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
                 self.bundle
@@ -1410,6 +1429,7 @@ impl BuildRequest {
     ) -> Result<()> {
         let android_permissions = super::permissions::get_android_permissions(permissions);
         if android_permissions.is_empty() {
+            tracing::debug!("No Android permissions found to add to manifest");
             return Ok(());
         }
 
@@ -1445,9 +1465,12 @@ impl BuildRequest {
             std::fs::write(&manifest_path, manifest_content)?;
 
             tracing::info!(
-                "Updated AndroidManifest.xml with {} permissions",
+                "📱 Added {} Android permissions to AndroidManifest.xml:",
                 android_permissions.len()
             );
+            for perm in &android_permissions {
+                tracing::info!("  • {} - {}", perm.name, perm.description);
+            }
         }
 
         Ok(())
@@ -1459,6 +1482,7 @@ impl BuildRequest {
     ) -> Result<()> {
         let ios_permissions = super::permissions::get_ios_permissions(permissions);
         if ios_permissions.is_empty() {
+            tracing::debug!("No iOS permissions found to add to manifest");
             return Ok(());
         }
 
@@ -1484,9 +1508,12 @@ impl BuildRequest {
             std::fs::write(&plist_path, plist_content)?;
 
             tracing::info!(
-                "Updated Info.plist with {} permissions",
+                "🍎 Added {} iOS permissions to Info.plist:",
                 ios_permissions.len()
             );
+            for perm in &ios_permissions {
+                tracing::info!("  • {} - {}", perm.key, perm.description);
+            }
         }
 
         Ok(())
@@ -1498,6 +1525,7 @@ impl BuildRequest {
     ) -> Result<()> {
         let macos_permissions = super::permissions::get_macos_permissions(permissions);
         if macos_permissions.is_empty() {
+            tracing::debug!("No macOS permissions found to add to manifest");
             return Ok(());
         }
 
@@ -1523,9 +1551,12 @@ impl BuildRequest {
             std::fs::write(&plist_path, plist_content)?;
 
             tracing::info!(
-                "Updated Info.plist with {} permissions",
+                "🖥️ Added {} macOS permissions to Info.plist:",
                 macos_permissions.len()
             );
+            for perm in &macos_permissions {
+                tracing::info!("  • {} - {}", perm.key, perm.description);
+            }
         }
 
         Ok(())
@@ -2075,7 +2106,11 @@ impl BuildRequest {
                         || *arg == "-arch"
                         || *arg == "-L"
                         || *arg == "-target"
-                        || *arg == "-isysroot"
+                        || (*arg == "-isysroot"
+                            && matches!(
+                                self.triple.operating_system,
+                                target_lexicon::OperatingSystem::IOS(_)
+                            ))
                     {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
@@ -2162,8 +2197,13 @@ impl BuildRequest {
         }
 
         if let Some(vale) = extract_value("-isysroot") {
-            out_args.push("-isysroot".to_string());
-            out_args.push(vale);
+            if matches!(
+                self.triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            ) {
+                out_args.push("-isysroot".to_string());
+                out_args.push(vale);
+            }
         }
 
         Ok(out_args)

@@ -12,23 +12,16 @@ pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -
 
     quote::quote! {
         // First serialize the permission into a constant sized buffer
-        const __BUFFER: const_serialize::ConstVec<u8> =
-            const_serialize::serialize_const(&#permission, const_serialize::ConstVec::new());
+        const __BUFFER: permissions::macro_helpers::ConstVec<u8, 4096> =
+            permissions::macro_helpers::serialize_permission(&#permission);
         // Then pull out the byte slice
         const __BYTES: &[u8] = __BUFFER.as_ref();
         // And the length of the byte slice
         const __LEN: usize = __BYTES.len();
 
         // Now that we have the size of the permission, copy the bytes into a static array
+        #[used]
         #[unsafe(export_name = #export_name)]
-        static __LINK_SECTION: [u8; __LEN] = {
-            let mut out = [0; __LEN];
-            let mut i = 0;
-            while i < __LEN {
-                out[i] = __BYTES[i];
-                i += 1;
-            }
-            out
-        };
+        static __LINK_SECTION: [u8; __LEN] = permissions::macro_helpers::copy_bytes(__BYTES);
     }
 }

@@ -88,9 +88,6 @@ impl ToTokens for PermissionParser {
 
                     #link_section
 
-                    // Force reference to prevent dead code elimination
-                    static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
-
                     // Return the actual permission (not from embedded data for now)
                     __PERMISSION
                 }

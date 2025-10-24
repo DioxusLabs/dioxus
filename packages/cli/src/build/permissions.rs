@@ -307,6 +307,9 @@ pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<Pe
     let object_file = object::File::parse(&read_cache)?;
     let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
+    println!("🔍 Searching for permission symbols in: {:?}", path);
+    println!("🔍 Found {} permission symbol offsets", offsets.len());
+
     let mut permissions = Vec::new();
 
     for offset in offsets.iter().copied() {
@@ -317,18 +320,30 @@ pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<Pe
         let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
         if let Some((_, permission)) = const_serialize::deserialize_const!(Permission, buffer) {
+            println!(
+                "  ✅ Found permission at offset {offset}: {:?} - {}",
+                permission.kind(),
+                permission.description()
+            );
             tracing::debug!(
                 "Found permission at offset {offset}: {:?}",
                 permission.kind()
             );
             permissions.push(permission);
         } else {
+            println!(
+                "  ❌ Found permission symbol at offset {offset} that could not be deserialized"
+            );
             tracing::warn!(
                 "Found permission symbol at offset {offset} that could not be deserialized"
             );
         }
     }
 
+    println!(
+        "🔍 Permission extraction complete: found {} permissions",
+        permissions.len()
+    );
     Ok(PermissionManifest::new(permissions))
 }
 
