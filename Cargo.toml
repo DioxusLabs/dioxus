@@ -85,6 +85,9 @@ members = [
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-macro",
+    "packages/permissions/permissions",
+    "packages/permissions/permissions-core",
+    "packages/permissions/permissions-macro",
 
     # wasm-split
     "packages/wasm-split/wasm-split",

@@ -1,0 +1,24 @@
+[package]
+name = "permissions-macro"
+version = "0.1.0"
+edition = "2021"
+description = "Procedural macro for declaring permissions with linker embedding"
+authors = ["DioxusLabs"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus"
+homepage = "https://dioxuslabs.com"
+documentation = "https://docs.rs/permissions-macro"
+keywords = ["permissions", "macro", "linker"]
+categories = ["development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+permissions-core = { path = "../permissions-core" }
+const-serialize = { path = "../../const-serialize" }
+
+[dev-dependencies]

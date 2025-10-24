@@ -12564,6 +12564,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "permissions"
+version = "0.1.0"
+dependencies = [
+ "const-serialize",
+ "permissions-core",
+ "permissions-macro",
+]
+
+[[package]]
+name = "permissions-core"
+version = "0.1.0"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "serde",
+]
+
+[[package]]
+name = "permissions-macro"
+version = "0.1.0"
+dependencies = [
+ "const-serialize",
+ "permissions-core",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
 name = "pest"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
