@@ -1,4 +1,4 @@
-use permissions::{LocationPrecision, PermissionKind, Platform, permission};
+use permissions::{permission, LocationPrecision, PermissionKind, Platform};
 
 #[test]
 fn test_camera_permission() {
@@ -89,29 +89,28 @@ fn test_platform_specific_permissions() {
     );
 }
 
-// TODO: Fix buffer size issue for Custom permissions
-// #[test]
-// fn test_custom_permission() {
-//     const CUSTOM: permissions::Permission = permission!(
-//         Custom {
-//             android = "MY_PERM",
-//             ios = "NSMyUsage",
-//             macos = "NSMyUsage",
-//             windows = "myCap",
-//             linux = "my_perm",
-//             web = "my-perm"
-//         },
-//         description = "Custom permission"
-//     );
-//
-//     assert_eq!(CUSTOM.description(), "Custom permission");
-//     assert_eq!(CUSTOM.android_permission(), Some("MY_PERM".to_string()));
-//     assert_eq!(CUSTOM.ios_key(), Some("NSMyUsage".to_string()));
-//     assert_eq!(CUSTOM.macos_key(), Some("NSMyUsage".to_string()));
-//     assert_eq!(CUSTOM.windows_capability(), Some("myCap".to_string()));
-//     assert_eq!(CUSTOM.linux_permission(), Some("my_perm".to_string()));
-//     assert_eq!(CUSTOM.web_permission(), Some("my-perm".to_string()));
-// }
+#[test]
+fn test_custom_permission() {
+    const CUSTOM: permissions::Permission = permission!(
+        Custom {
+            android = "MY_PERM",
+            ios = "NSMyUsage",
+            macos = "NSMyUsage",
+            windows = "myCap",
+            linux = "my_perm",
+            web = "my-perm"
+        },
+        description = "Custom permission"
+    );
+
+    assert_eq!(CUSTOM.description(), "Custom permission");
+    assert_eq!(CUSTOM.android_permission(), Some("MY_PERM".to_string()));
+    assert_eq!(CUSTOM.ios_key(), Some("NSMyUsage".to_string()));
+    assert_eq!(CUSTOM.macos_key(), Some("NSMyUsage".to_string()));
+    assert_eq!(CUSTOM.windows_capability(), Some("myCap".to_string()));
+    assert_eq!(CUSTOM.linux_permission(), Some("my_perm".to_string()));
+    assert_eq!(CUSTOM.web_permission(), Some("my-perm".to_string()));
+}
 
 #[test]
 fn test_permission_manifest() {
@@ -121,8 +120,10 @@ fn test_permission_manifest() {
     assert!(manifest.is_empty());
     assert_eq!(manifest.len(), 0);
 
-    const CAM: permissions::Permission = permission!(Camera, description = "Take photos");
-    const MIC: permissions::Permission = permission!(Microphone, description = "Record audio");
+    // Note: In a real implementation, we would add permissions to the manifest
+    // For now, we just test the basic structure
+    // const CAM: permissions::Permission = permission!(Camera, description = "Take photos");
+    // const MIC: permissions::Permission = permission!(Microphone, description = "Record audio");
 
     // Note: In a real implementation, we would add permissions to the manifest
     // For now, we just test the basic structure

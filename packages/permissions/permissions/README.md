@@ -17,7 +17,7 @@ This crate provides a unified API for declaring permissions across all platforms
 ### Basic Permission Declaration
 
 ```rust
-use permissions::permission;
+use permissions::{permission, Permission};
 
 // Declare a camera permission
 const CAMERA: Permission = permission!(Camera, description = "Take photos");
@@ -32,7 +32,7 @@ const MICROPHONE: Permission = permission!(Microphone, description = "Record aud
 ### Custom Permissions
 
 ```rust
-use permissions::permission;
+use permissions::{permission, Permission};
 
 // Declare a custom permission with platform-specific identifiers
 const CUSTOM: Permission = permission!(
@@ -51,7 +51,7 @@ const CUSTOM: Permission = permission!(
 ### Using Permissions
 
 ```rust
-use permissions::{permission, Platform};
+use permissions::{permission, Permission, Platform};
 
 const CAMERA: Permission = permission!(Camera, description = "Take photos");
 

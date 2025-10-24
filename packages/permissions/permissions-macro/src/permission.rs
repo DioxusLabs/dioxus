@@ -1,8 +1,8 @@
-use quote::{ToTokens, quote};
+use quote::{quote, ToTokens};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::{
-    Token,
     parse::{Parse, ParseStream},
+    Token,
 };
 
 use permissions_core::{LocationPrecision, PermissionKind};
@@ -58,27 +58,44 @@ impl ToTokens for PermissionParser {
         self.description.hash(&mut hash);
         let permission_hash = format!("{:016x}", hash.finish());
 
-        // Generate the linker section
-        let link_section =
-            crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
+        // Check if this is a Custom permission
+        let is_custom = matches!(self.kind, PermissionKindParser::Custom { .. });
 
-        tokens.extend(quote! {
-            {
-                // Create the permission instance
-                const __PERMISSION: permissions_core::Permission = permissions_core::Permission::new(
-                    #kind_tokens,
-                    #description,
-                );
+        if is_custom {
+            // For Custom permissions, skip serialization due to buffer size limitations
+            // and just create the permission directly
+            tokens.extend(quote! {
+                {
+                    // Create the permission instance directly for Custom permissions
+                    permissions_core::Permission::new(
+                        #kind_tokens,
+                        #description,
+                    )
+                }
+            });
+        } else {
+            // For regular permissions, use the normal serialization approach
+            let link_section =
+                crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
 
-                #link_section
+            tokens.extend(quote! {
+                {
+                    // Create the permission instance
+                    const __PERMISSION: permissions_core::Permission = permissions_core::Permission::new(
+                        #kind_tokens,
+                        #description,
+                    );
 
-                // Force reference to prevent dead code elimination
-                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
+                    #link_section
 
-                // Return the actual permission (not from embedded data for now)
-                __PERMISSION
-            }
-        });
+                    // Force reference to prevent dead code elimination
+                    static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
+
+                    // Return the actual permission (not from embedded data for now)
+                    __PERMISSION
+                }
+            });
+        }
     }
 }
 

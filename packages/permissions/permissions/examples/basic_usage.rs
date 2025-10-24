@@ -2,7 +2,7 @@
 //!
 //! This example demonstrates how to declare and use permissions across different platforms.
 
-use permissions::{Platform, permission};
+use permissions::{permission, Platform};
 
 fn main() {
     // Declare various permissions
@@ -14,18 +14,17 @@ fn main() {
     const NOTIFICATIONS: permissions::Permission =
         permission!(Notifications, description = "Send push notifications");
 
-    // TODO: Fix buffer size issue for Custom permissions
-    // const CUSTOM: permissions::Permission = permission!(
-    //     Custom {
-    //         android = "MY_CUSTOM",
-    //         ios = "NSMyCustom",
-    //         macos = "NSMyCustom",
-    //         windows = "myCustom",
-    //         linux = "my_custom",
-    //         web = "my-custom"
-    //     },
-    //     description = "Custom permission"
-    // );
+    const CUSTOM: permissions::Permission = permission!(
+        Custom {
+            android = "MY_CUSTOM",
+            ios = "NSMyCustom",
+            macos = "NSMyCustom",
+            windows = "myCustom",
+            linux = "my_custom",
+            web = "my-custom"
+        },
+        description = "Custom permission"
+    );
 
     println!("=== Permission Information ===");
 
@@ -59,16 +58,15 @@ fn main() {
     println!("  iOS: {:?}", NOTIFICATIONS.ios_key());
     println!("  Web: {:?}", NOTIFICATIONS.web_permission());
 
-    // TODO: Fix buffer size issue for Custom permissions
-    // // Display custom permission info
-    // println!("\n🔧 Custom Permission:");
-    // println!("  Description: {}", CUSTOM.description());
-    // println!("  Android: {:?}", CUSTOM.android_permission());
-    // println!("  iOS: {:?}", CUSTOM.ios_key());
-    // println!("  macOS: {:?}", CUSTOM.macos_key());
-    // println!("  Windows: {:?}", CUSTOM.windows_capability());
-    // println!("  Linux: {:?}", CUSTOM.linux_permission());
-    // println!("  Web: {:?}", CUSTOM.web_permission());
+    // Display custom permission info
+    println!("\n🔧 Custom Permission:");
+    println!("  Description: {}", CUSTOM.description());
+    println!("  Android: {:?}", CUSTOM.android_permission());
+    println!("  iOS: {:?}", CUSTOM.ios_key());
+    println!("  macOS: {:?}", CUSTOM.macos_key());
+    println!("  Windows: {:?}", CUSTOM.windows_capability());
+    println!("  Linux: {:?}", CUSTOM.linux_permission());
+    println!("  Web: {:?}", CUSTOM.web_permission());
 
     // Check platform support
     println!("\n=== Platform Support ===");
@@ -91,8 +89,7 @@ fn main() {
             "  Notifications: {}",
             NOTIFICATIONS.supports_platform(platform)
         );
-        // TODO: Fix buffer size issue for Custom permissions
-        // println!("  Custom: {}", CUSTOM.supports_platform(platform));
+        println!("  Custom: {}", CUSTOM.supports_platform(platform));
     }
 
     // Demonstrate permission manifest

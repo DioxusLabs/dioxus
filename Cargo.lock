@@ -12589,7 +12589,7 @@ dependencies = [
  "permissions-core",
  "proc-macro2",
  "quote",
- "syn 2.0.104",
+ "syn 2.0.107",
 ]
 
 [[package]]
