@@ -163,8 +163,13 @@ impl AndroidTools {
             ""
         };
 
+        let target = match triple.architecture {
+            Architecture::Arm(_) => "armv7a-linux-androideabi",
+            _ => &triple.to_string(),
+        };
+
         self.android_tools_dir()
-            .join(format!("{}{}-clang{}", triple, sdk_version, suffix))
+            .join(format!("{}{}-clang{}", target, sdk_version, suffix))
     }
 
     pub(crate) fn sysroot(&self) -> PathBuf {
@@ -247,7 +252,9 @@ impl AndroidTools {
 
         match output {
             Ok(Ok(out)) => match out.trim() {
-                "armv7l" => triple.architecture = Architecture::Arm(ArmArchitecture::Arm),
+                "armv7l" | "armv8l" => {
+                    triple.architecture = Architecture::Arm(ArmArchitecture::Arm)
+                }
                 "aarch64" => {
                     triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64)
                 }
