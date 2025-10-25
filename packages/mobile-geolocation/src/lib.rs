@@ -80,11 +80,64 @@ pub const BACKGROUND_LOCATION: Permission = permission!(
     description = "Background location access"
 );
 
+/// Internal function to ensure permission constants are linked into the binary.
+/// This prevents the linker from optimizing them away as dead code.
+/// DO NOT REMOVE - this is required for the permission system to work.
+#[doc(hidden)]
+#[inline(never)]
+pub fn __ensure_permissions_linked() {
+    #[cfg(feature = "location-fine")]
+    {
+        let _ = &LOCATION_FINE;
+    }
+    #[cfg(feature = "location-coarse")]
+    {
+        let _ = &LOCATION_COARSE;
+    }
+    #[cfg(feature = "background-location")]
+    {
+        let _ = &BACKGROUND_LOCATION;
+    }
+}
+
 #[cfg(target_os = "android")]
 mod android;
 
 #[cfg(target_os = "ios")]
 mod ios;
+
+/// Request location permissions at runtime.
+///
+/// This function triggers the system permission dialog for location access.
+/// Returns `true` if the permission request was sent successfully, `false` otherwise.
+///
+/// ## Platform behavior
+///
+/// - **Android**: Calls `ActivityCompat.requestPermissions()` via JNI
+/// - **iOS**: Calls `CLLocationManager.requestWhenInUseAuthorization()` via Objective-C
+/// - **Other platforms**: Always returns `false`
+///
+/// ## Usage
+///
+/// Call this function before `last_known_location()` to ensure permissions are granted.
+/// The user will see a system dialog asking for location permission.
+pub fn request_location_permission() -> bool {
+    // Ensure permissions are linked (prevents dead code elimination)
+    __ensure_permissions_linked();
+    
+    #[cfg(target_os = "android")]
+    {
+        return android::request_permission();
+    }
+
+    #[cfg(target_os = "ios")]
+    {
+        return ios::request_permission();
+    }
+
+    #[allow(unreachable_code)]
+    false
+}
 
 /// Get the last known location from the device.
 ///
@@ -103,12 +156,14 @@ mod ios;
 /// The compile-time permissions are automatically embedded when you enable
 /// the `location-coarse` or `location-fine` features.
 ///
-/// On Android, you should request permissions using the standard Android
-/// permission request flow before calling this function.
-///
-/// On iOS, you should call `CLLocationManager.requestWhenInUseAuthorization()`
+/// On Android, you should request permissions using `request_location_permission()`
 /// before calling this function.
+///
+/// On iOS, permissions are handled via Info.plist configuration.
 pub fn last_known_location() -> Option<(f64, f64)> {
+    // Ensure permissions are linked (prevents dead code elimination)
+    __ensure_permissions_linked();
+    
     #[cfg(target_os = "android")]
     {
         return android::last_known();

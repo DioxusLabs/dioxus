@@ -18,7 +18,7 @@
 use dioxus::prelude::*;
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
-use dioxus_mobile_geolocation::last_known_location;
+use dioxus_mobile_geolocation::{last_known_location, request_location_permission};
 
 fn main() {
     launch(app);
@@ -95,13 +95,24 @@ fn app() -> Element {
                         // Get location
                         #[cfg(any(target_os = "android", target_os = "ios"))]
                         {
+                            println!("Attempting to get location...");
+                            
+                            // First try to get location directly
                             match last_known_location() {
                                 Some((lat, lon)) => {
+                                    println!("Location retrieved: lat={}, lon={}", lat, lon);
                                     location.set(Some((lat, lon)));
                                     status_message.set("Location retrieved successfully!".to_string());
                                 }
                                 None => {
-                                    status_message.set("No location available. Please check permissions.".to_string());
+                                    println!("No location available - requesting permissions...");
+                                    
+                                    // Request permissions and try again
+                                    if request_location_permission() {
+                                        status_message.set("Permission request sent. Please grant location permission in the dialog that appears, then try again.".to_string());
+                                    } else {
+                                        status_message.set("Failed to request permissions. Please check your device settings and ensure location services are enabled.".to_string());
+                                    }
                                 }
                             }
                         }
@@ -147,18 +158,20 @@ fn app() -> Element {
                 div { class: "info-item",
                     p { class: "info-title", "How it works" }
                     ul { class: "info-list",
-                        li { "Android: Uses LocationManager via Kotlin shim" }
+                        li { "Android: Uses LocationManager.getLastKnownLocation() via Kotlin shim" }
                         li { "iOS: Uses CoreLocation via Swift shim" }
-                        li { "Permissions: Automatically managed by Dioxus CLI" }
+                        li { "Permissions: Automatically checked by Kotlin/Swift shims before accessing location" }
+                        li { "First time: You'll be prompted to grant location permission" }
                     }
                 }
                 
                 div { class: "info-item",
                     p { class: "info-title", "Troubleshooting" }
                     ul { class: "info-list",
-                        li { "Make sure location services are enabled" }
-                        li { "Grant location permission when prompted" }
-                        li { "Try using Maps app first to get initial location fix" }
+                        li { "Make sure location services are enabled in device settings" }
+                        li { "Grant location permission when the system dialog appears" }
+                        li { "If permission was denied, go to Settings > Apps > Geolocation Demo > Permissions" }
+                        li { "Try using Maps app first to get an initial location fix on the device" }
                     }
                 }
             }

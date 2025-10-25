@@ -1078,6 +1078,12 @@ impl BuildRequest {
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
+                
+                // Update platform manifests with permissions AFTER writing metadata
+                // to avoid having them overwritten by the template
+                self.update_manifests_with_permissions(&artifacts.permissions)
+                    .context("Failed to update manifests with permissions")?;
+                
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
@@ -1281,8 +1287,8 @@ impl BuildRequest {
         // Extract permissions from the binary (same pattern as assets)
         let permissions = self.collect_permissions(&exe, ctx).await?;
 
-        // Update platform manifests with permissions
-        self.update_manifests_with_permissions(&permissions)?;
+        // Note: We'll update platform manifests with permissions AFTER write_metadata()
+        // to avoid having them overwritten by the template
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1487,8 +1493,12 @@ impl BuildRequest {
         }
 
         let plist_path = self.root_dir().join("Info.plist");
+        println!("🔍 Looking for Info.plist at: {:?}", plist_path);
+        tracing::info!("🔍 Looking for Info.plist at: {:?}", plist_path);
+        
         if !plist_path.exists() {
-            tracing::warn!("Info.plist not found, skipping permission update");
+            println!("❌ Info.plist not found at {:?}", plist_path);
+            tracing::warn!("Info.plist not found at {:?}, skipping permission update", plist_path);
             return Ok(());
         }
 

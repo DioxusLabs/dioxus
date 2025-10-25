@@ -42,6 +42,58 @@ impl Manager {
     }
 }
 
+/// Request location permissions
+pub fn request_permission() -> bool {
+    use jni::objects::JObject;
+    
+    // Get JNI environment from ndk_context
+    let ctx = ndk_context::android_context();
+    let vm = match unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) } {
+        Ok(vm) => vm,
+        Err(e) => {
+            eprintln!("Failed to get JavaVM: {:?}", e);
+            return false;
+        }
+    };
+    
+    let mut env = match vm.attach_current_thread() {
+        Ok(env) => env,
+        Err(e) => {
+            eprintln!("Failed to attach to current thread: {:?}", e);
+            return false;
+        }
+    };
+    
+    // Get the Android Activity
+    let activity = unsafe { JObject::from_raw(ctx.context().cast()) };
+    
+    // Call GeolocationShim.requestPermission() from the Kotlin shim
+    let shim_class = match env.find_class("com/dioxus/geoloc/GeolocationShim") {
+        Ok(class) => class,
+        Err(e) => {
+            eprintln!("Failed to find GeolocationShim class: {:?}", e);
+            return false;
+        }
+    };
+    
+    // Call the static method requestPermission(Activity, int, boolean): void
+    match env.call_static_method(
+        shim_class,
+        "requestPermission",
+        "(Landroid/app/Activity;IZ)V",
+        &[(&activity).into(), 1000.into(), true.into()], // requestCode=1000, fine=true
+    ) {
+        Ok(_) => {
+            eprintln!("Permission request sent to Android system");
+            true
+        }
+        Err(e) => {
+            eprintln!("Failed to request permission: {:?}", e);
+            false
+        }
+    }
+}
+
 /// Get the last known location (public API)
 pub fn last_known() -> Option<(f64, f64)> {
     use jni::objects::JObject;
@@ -55,36 +107,71 @@ pub fn last_known() -> Option<(f64, f64)> {
     let activity = unsafe { JObject::from_raw(ctx.context().cast()) };
     
     // Call GeolocationShim.lastKnown() from the Kotlin shim
-    let shim_class = env.find_class("com/dioxus/geoloc/GeolocationShim").ok()?;
+    let shim_class = match env.find_class("com/dioxus/geoloc/GeolocationShim") {
+        Ok(class) => class,
+        Err(e) => {
+            eprintln!("Failed to find GeolocationShim class: {:?}", e);
+            return None;
+        }
+    };
     
     // Call the static method lastKnown(Activity): DoubleArray?
-    let result = env
-        .call_static_method(
-            shim_class,
-            "lastKnown",
-            "(Landroid/app/Activity;)[D",
-            &[activity.into()],
-        )
-        .ok()?;
+    let result = match env.call_static_method(
+        shim_class,
+        "lastKnown",
+        "(Landroid/app/Activity;)[D",
+        &[(&activity).into()],
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Failed to call lastKnown method: {:?}", e);
+            return None;
+        }
+    };
     
     // Get the double array result
-    let double_array = result.l().ok()?;
+    let double_array = match result.l() {
+        Ok(array) => array,
+        Err(e) => {
+            eprintln!("Failed to get array from result: {:?}", e);
+            return None;
+        }
+    };
+    
     if double_array.is_null() {
+        eprintln!("GeolocationShim.lastKnown() returned null - no location available or permissions denied");
         return None;
     }
+    
+    // Convert to JDoubleArray
+    let array: jni::objects::JDoubleArray = double_array.into();
     
     // Get array length
-    let len = env.get_array_length(double_array).ok()?;
+    let len = match env.get_array_length(&array) {
+        Ok(length) => length,
+        Err(e) => {
+            eprintln!("Failed to get array length: {:?}", e);
+            return None;
+        }
+    };
+    
     if len < 2 {
+        eprintln!("Array length is less than 2: {}", len);
         return None;
     }
     
-    // Get the latitude and longitude from the array
-    // Note: get_double_array_elements might not be available, so we'll get individual elements
-    let latitude = env.get_double_array_element(double_array, 0).ok()?;
-    let longitude = env.get_double_array_element(double_array, 1).ok()?;
-    
-    Some((latitude, longitude))
+    // Get elements from the double array
+    let mut buf = vec![0.0; len as usize];
+    match env.get_double_array_region(&array, 0, &mut buf) {
+        Ok(_) => {
+            eprintln!("Successfully retrieved location: lat={}, lon={}", buf[0], buf[1]);
+            Some((buf[0], buf[1]))
+        }
+        Err(e) => {
+            eprintln!("Failed to get array elements: {:?}", e);
+            None
+        }
+    }
 }
 
 impl Drop for Manager {
