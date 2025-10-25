@@ -1,14 +1,13 @@
 //! Cross-platform geolocation for Dioxus mobile apps
 //!
 //! This crate provides geolocation functionality for Android and iOS platforms
-//! by compiling Kotlin and Swift shims during the build process. Permissions
-//! are automatically embedded via linker symbols and injected into platform
-//! manifests by the Dioxus CLI.
+//! using clean, direct bindings without external build tools. Android uses JNI
+//! with a single Java file compiled to DEX, while iOS uses objc2 for direct
+//! Objective-C bindings. Permissions are automatically embedded via linker symbols
+//! and injected into platform manifests by the Dioxus CLI.
 //!
 //! ## Features
 //!
-//! - `android-kotlin`: Enable Android support with Kotlin shim (default)
-//! - `ios-swift`: Enable iOS support with Swift shim (default)
 //! - `location-coarse`: Request coarse location permission (default)
 //! - `location-fine`: Request fine/precise location permission
 //! - `background-location`: Request background location access
@@ -34,7 +33,12 @@
 //!
 //! No manual manifest editing required!
 
+mod error;
+mod sys;
+
 use permissions::{permission, Permission};
+
+pub use error::{Error, Result};
 
 /// Represents a geographic coordinate
 #[derive(Debug, Clone, Copy)]
@@ -42,16 +46,6 @@ pub struct Coordinates {
     pub latitude: f64,
     pub longitude: f64,
 }
-
-/// Error types for geolocation operations
-#[derive(Debug, Clone, Copy)]
-pub enum Error {
-    NotSupported,
-    Unknown,
-}
-
-/// Result type for geolocation operations
-pub type Result<T> = std::result::Result<T, Error>;
 
 // Embed location permissions as linker symbols when features are enabled
 #[cfg(feature = "location-fine")]
@@ -100,12 +94,6 @@ pub fn __ensure_permissions_linked() {
     }
 }
 
-#[cfg(target_os = "android")]
-mod android;
-
-#[cfg(target_os = "ios")]
-mod ios;
-
 /// Request location permissions at runtime.
 ///
 /// This function triggers the system permission dialog for location access.
@@ -114,7 +102,7 @@ mod ios;
 /// ## Platform behavior
 ///
 /// - **Android**: Calls `ActivityCompat.requestPermissions()` via JNI
-/// - **iOS**: Calls `CLLocationManager.requestWhenInUseAuthorization()` via Objective-C
+/// - **iOS**: Calls `CLLocationManager.requestWhenInUseAuthorization()` via objc2
 /// - **Other platforms**: Always returns `false`
 ///
 /// ## Usage
@@ -124,19 +112,8 @@ mod ios;
 pub fn request_location_permission() -> bool {
     // Ensure permissions are linked (prevents dead code elimination)
     __ensure_permissions_linked();
-    
-    #[cfg(target_os = "android")]
-    {
-        return android::request_permission();
-    }
 
-    #[cfg(target_os = "ios")]
-    {
-        return ios::request_permission();
-    }
-
-    #[allow(unreachable_code)]
-    false
+    sys::request_permission()
 }
 
 /// Get the last known location from the device.
@@ -147,7 +124,7 @@ pub fn request_location_permission() -> bool {
 /// ## Platform behavior
 ///
 /// - **Android**: Queries `LocationManager.getLastKnownLocation()` via JNI
-/// - **iOS**: Queries `CLLocationManager.location` via Swift FFI
+/// - **iOS**: Queries `CLLocationManager.location` via objc2
 /// - **Other platforms**: Always returns `None`
 ///
 /// ## Permissions
@@ -163,17 +140,6 @@ pub fn request_location_permission() -> bool {
 pub fn last_known_location() -> Option<(f64, f64)> {
     // Ensure permissions are linked (prevents dead code elimination)
     __ensure_permissions_linked();
-    
-    #[cfg(target_os = "android")]
-    {
-        return android::last_known();
-    }
 
-    #[cfg(target_os = "ios")]
-    {
-        return ios::last_known();
-    }
-
-    #[allow(unreachable_code)]
-    None
+    sys::last_known()
 }

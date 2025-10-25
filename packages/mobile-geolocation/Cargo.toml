@@ -3,15 +3,13 @@ name = "dioxus-mobile-geolocation"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Cross-platform geolocation for Dioxus mobile apps with Kotlin/Swift shims"
+description = "Cross-platform geolocation for Dioxus mobile apps"
 repository = "https://github.com/DioxusLabs/dioxus"
 keywords = ["dioxus", "geolocation", "mobile", "android", "ios"]
 categories = ["gui", "mobile"]
 
 [features]
-default = ["android-kotlin", "ios-swift", "location-coarse"]
-android-kotlin = []
-ios-swift = []
+default = ["location-coarse"]
 location-fine = []
 location-coarse = []
 background-location = []
@@ -19,15 +17,18 @@ background-location = []
 [dependencies]
 permissions = { workspace = true }
 permissions-core = { workspace = true }
+cfg-if = "1.0"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 ndk-context = "0.1.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]
-libc = "0.2"
+objc2 = "0.6.3"
+objc2-core-location = { version = "0.3.2", features = ["CLLocationManager", "CLLocation"] }
 
 [build-dependencies]
+android-build = "0.1.3"
 
 [package.metadata.docs.rs]
 default-target = "x86_64-unknown-linux-gnu"

@@ -3686,6 +3686,7 @@ impl BuildRequest {
     fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
         let mut kotlin_dir = self
             .root_dir()
+            .join("app")
             .join("src")
             .join("main")
             .join("kotlin");

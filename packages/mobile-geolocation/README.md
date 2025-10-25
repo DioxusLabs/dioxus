@@ -1,16 +1,18 @@
 # dioxus-mobile-geolocation
 
-Cross-platform geolocation for Dioxus mobile apps with automatic permission management.
+Cross-platform geolocation for Dioxus mobile apps with clean, direct platform bindings.
 
-This crate provides geolocation functionality for Android and iOS by compiling platform-specific shims (Kotlin for Android, Swift for iOS) during the build process. Permissions are automatically embedded via linker symbols and injected into platform manifests by the Dioxus CLI.
+This crate provides geolocation functionality for Android and iOS using:
+- **Android**: Single Java file compiled to DEX via `android-build` 
+- **iOS**: Direct `objc2-core-location` bindings (no compilation needed)
+- **Permissions**: Automatically embedded via linker symbols and injected by Dioxus CLI
 
 ## Features
 
-- **Automatic permission management**: Permissions are embedded as linker symbols and automatically injected into AndroidManifest.xml and Info.plist by the Dioxus CLI
-- **Zero-config manifests**: No manual editing of platform manifests required
-- **Kotlin/Swift shims**: Native platform code compiled during `cargo build`
-- **Robius-compatible**: Uses `robius-android-env` for Android context/JNI access
-- **Feature-gated**: Enable only the permissions you need
+- **Clean architecture**: No external build tools (Gradle/Swift Package Manager)
+- **Automatic permissions**: Embedded as linker symbols, injected into manifests by CLI
+- **Simple implementation**: Android uses one `.java` file, iOS uses `objc2` crate
+- **Zero-config manifests**: No manual editing of AndroidManifest.xml or Info.plist required
 
 ## Installation
 
