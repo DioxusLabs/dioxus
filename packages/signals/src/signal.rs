@@ -493,7 +493,7 @@ impl<T: Clone + 'static, S: Storage<SignalData<T>> + 'static> Deref for Signal<T
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+        readable_deref_impl(self)
     }
 }
 
