@@ -143,8 +143,19 @@ impl ClientRequest {
 
     #[cfg(feature = "web")]
     pub fn new_gloo_request(&self) -> gloo_net::http::RequestBuilder {
-        let mut builder =
-            gloo_net::http::RequestBuilder::new(self.url.path()).method(self.method.clone());
+        let mut builder = gloo_net::http::RequestBuilder::new(
+            format!(
+                "{path}{query_string}",
+                path = self.url.path(),
+                query_string = self
+                    .url
+                    .query()
+                    .map(|query| format!("?{query}"))
+                    .unwrap_or_default()
+            )
+            .as_str(),
+        )
+        .method(self.method.clone());
 
         for (key, value) in self.headers.iter() {
             let value = match value.to_str() {
