@@ -33,14 +33,17 @@ unsafe extern "C" fn rust_callback<'a>(
     #[cfg(not(target_pointer_width = "64"))]
     compile_error!("Only 64-bit Android targets are supported");
 
-    let handler_ptr_raw: usize = ((handler_ptr_high as u64) << 32 | handler_ptr_low as u64) as usize;
+    let handler_ptr_raw: usize =
+        ((handler_ptr_high as u64) << 32 | handler_ptr_low as u64) as usize;
 
     // Convert to our callback function pointer
     let callback: fn(&mut JNIEnv, JObject) = unsafe { std::mem::transmute(handler_ptr_raw) };
 
     // Create a global reference to the location object
     if let Ok(global_location) = env.new_global_ref(&location) {
-        callback(&mut env, unsafe { JObject::from_raw(global_location.as_obj().as_raw()) });
+        callback(&mut env, unsafe {
+            JObject::from_raw(global_location.as_obj().as_raw())
+        });
     }
 }
 
