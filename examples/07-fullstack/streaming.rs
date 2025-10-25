@@ -31,23 +31,23 @@ fn app() -> Element {
     let mut json_responses = use_signal(Vec::new);
 
     let mut start_text_stream = use_action(move || async move {
-        text_responses.write().clear();
+        text_responses.clear();
         let mut stream = text_stream(Some(100)).await?;
 
         while let Some(Ok(text)) = stream.next().await {
-            text_responses.write().push_str(&text);
-            text_responses.write().push('\n');
+            text_responses.push_str(&text);
+            text_responses.push('\n');
         }
 
         dioxus::Ok(())
     });
 
     let mut start_json_stream = use_action(move || async move {
-        json_responses.write().clear();
+        json_responses.clear();
         let mut stream = json_stream().await?;
 
         while let Some(Ok(dog)) = stream.next().await {
-            json_responses.write().push(dog);
+            json_responses.push(dog);
         }
 
         dioxus::Ok(())

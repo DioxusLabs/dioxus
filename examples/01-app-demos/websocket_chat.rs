@@ -46,7 +46,7 @@ fn app() -> Element {
     use_future(move || async move {
         while let Ok(msg) = socket.recv().await {
             match msg {
-                ServerEvent::ReceiveMessage(message) => message_list.write().push(message),
+                ServerEvent::ReceiveMessage(message) => message_list.push(message),
                 ServerEvent::Connected { messages } => message_list.set(messages),
             }
         }

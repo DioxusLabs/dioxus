@@ -34,15 +34,15 @@ fn app() -> Element {
         if val() == "0" {
             val.set(String::new());
         }
-        val.write().push_str(num.as_str());
+        val.push_str(num.as_str());
     };
 
-    let mut input_operator = move |key: &str| val.write().push_str(key);
+    let mut input_operator = move |key: &str| val.push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
         Key::Backspace => {
             if !val().is_empty() {
-                val.write().pop();
+                val.pop();
             }
         }
         Key::Character(character) => match character.as_str() {
@@ -104,7 +104,7 @@ fn app() -> Element {
                                 }
                                 button {
                                     class: "calculator-key key-dot",
-                                    onclick: move |_| val.write().push('.'),
+                                    onclick: move |_| val.push('.'),
                                     "●"
                                 }
                                 for k in 1..10 {
