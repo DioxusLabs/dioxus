@@ -44,3 +44,5 @@ pub mod warnings;
 
 mod boxed;
 pub use boxed::*;
+
+mod derived_signal;

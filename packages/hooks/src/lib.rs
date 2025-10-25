@@ -104,3 +104,6 @@ pub use use_action::*;
 
 mod use_waker;
 pub use use_waker::*;
+
+mod use_derived_signal;
+pub use use_derived_signal::*;
