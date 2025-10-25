@@ -61,7 +61,7 @@ use {
 pub fn use_websocket<
     In: 'static,
     Out: 'static,
-    E: Into<dioxus_core::Error> + 'static,
+    E: Into<CapturedError> + 'static,
     F: Future<Output = Result<Websocket<In, Out, Enc>, E>> + 'static,
     Enc: Encoding,
 >(
@@ -72,7 +72,7 @@ pub fn use_websocket<
     let status_read = use_hook(|| ReadSignal::new(status));
 
     let connection = use_resource(move || {
-        let connection = connect_to_websocket().map_err(|e| CapturedError::from(e.into()));
+        let connection = connect_to_websocket().map_err(|e| e.into());
         async move {
             let connection = connection.await;
 

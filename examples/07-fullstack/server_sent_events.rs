@@ -41,7 +41,7 @@ fn app() -> Element {
             events.write().push(event);
         }
 
-        anyhow::Ok(())
+        dioxus::Ok(())
     });
 
     rsx! {

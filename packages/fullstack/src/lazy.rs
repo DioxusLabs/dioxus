@@ -1,5 +1,6 @@
 #![allow(clippy::needless_return)]
 
+use dioxus_core::CapturedError;
 use std::{hint::black_box, prelude::rust_2024::Future, sync::atomic::AtomicBool};
 
 /// `Lazy` is a thread-safe, lazily-initialized global variable.
@@ -14,7 +15,7 @@ use std::{hint::black_box, prelude::rust_2024::Future, sync::atomic::AtomicBool}
 pub struct Lazy<T> {
     value: std::sync::OnceLock<T>,
     started_initialization: AtomicBool,
-    constructor: Option<fn() -> Result<T, dioxus_core::Error>>,
+    constructor: Option<fn() -> Result<T, CapturedError>>,
     _phantom: std::marker::PhantomData<T>,
 }
 
@@ -36,7 +37,7 @@ impl<T: Send + Sync + 'static> Lazy<T> {
     where
         F: Fn() -> G + Copy,
         G: Future<Output = Result<T, E>> + Send + 'static,
-        E: Into<dioxus_core::Error>,
+        E: Into<CapturedError>,
     {
         if std::mem::size_of::<F>() != 0 {
             panic!("The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables.");
@@ -57,10 +58,10 @@ impl<T: Send + Sync + 'static> Lazy<T> {
     ///
     /// This should only be called once during the server setup phase, typically inside `dioxus::serve`.
     /// Future calls to this method will return an error containing the provided value.
-    pub fn set(&self, pool: T) -> Result<(), dioxus_core::Error> {
+    pub fn set(&self, pool: T) -> Result<(), CapturedError> {
         let res = self.value.set(pool);
         if res.is_err() {
-            return Err(anyhow::anyhow!("Lazy value is already initialized."));
+            return Err(anyhow::anyhow!("Lazy value is already initialized.").into());
         }
 
         Ok(())
@@ -71,7 +72,7 @@ impl<T: Send + Sync + 'static> Lazy<T> {
     }
 
     /// Initialize the value of the `Lazy` instance if it hasn't been initialized yet.
-    pub fn initialize(&self) -> Result<(), dioxus_core::Error> {
+    pub fn initialize(&self) -> Result<(), CapturedError> {
         if let Some(constructor) = self.constructor {
             // If we're already initializing this value, wait on the receiver.
             if self
@@ -115,12 +116,12 @@ impl<T: Send + Sync + 'static> std::ops::Deref for Lazy<T> {
 ///
 /// We call the `rust-call` method of the zero-sized constructor function. This is safe because we're
 /// not actually dereferencing any unsafe data, just calling its vtable entry to get the future.
-fn blocking_initialize<T, F, G, E>() -> Result<T, dioxus_core::Error>
+fn blocking_initialize<T, F, G, E>() -> Result<T, CapturedError>
 where
     T: Send + Sync + 'static,
     F: Fn() -> G + Copy,
     G: Future<Output = Result<T, E>> + Send + 'static,
-    E: Into<dioxus_core::Error>,
+    E: Into<CapturedError>,
 {
     assert_eq!(std::mem::size_of::<F>(), 0, "The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables.");
 
