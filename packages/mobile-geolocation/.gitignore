@@ -1,0 +1,24 @@
+# Android build artifacts
+android-shim/build/
+android-shim/.gradle/
+android-shim/local.properties
+android-shim/*.iml
+android-shim/.idea/
+
+# iOS build artifacts
+ios-shim/.build/
+ios-shim/DerivedData/
+ios-shim/*.xcodeproj/xcuserdata/
+ios-shim/*.xcworkspace/xcuserdata/
+
+# Gradle wrapper JAR (will be downloaded on first build)
+# Note: We need to include this file in git for the wrapper to work
+# android-shim/gradle/wrapper/gradle-wrapper.jar
+
+# Build outputs
+*.aar
+*.jar
+*.a
+*.so
+*.dylib
+

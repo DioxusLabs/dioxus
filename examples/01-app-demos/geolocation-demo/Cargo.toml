@@ -1,0 +1,15 @@
+[package]
+name = "geolocation-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+dioxus-mobile-geolocation = { path = "../../../packages/mobile-geolocation" }
+
+[features]
+default = ["mobile"]
+server = ["dioxus/server"]
+web = ["dioxus/web"]
+mobile = ["dioxus/mobile"]

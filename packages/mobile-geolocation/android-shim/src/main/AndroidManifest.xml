@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permissions are declared via linker symbols and injected by Dioxus CLI -->
+    <!-- No need to manually add uses-permission here -->
+</manifest>
+

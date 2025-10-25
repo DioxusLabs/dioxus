@@ -92,6 +92,9 @@ members = [
     "packages/permissions/permissions-core",
     "packages/permissions/permissions-macro",
 
+    # mobile-geolocation
+    "packages/mobile-geolocation",
+
     # wasm-split
     "packages/wasm-split/wasm-split",
     "packages/wasm-split/wasm-split-macro",
@@ -111,6 +114,7 @@ members = [
     "examples/01-app-demos/bluetooth-scanner",
     "examples/01-app-demos/file-explorer",
     "examples/01-app-demos/hotdog",
+    "examples/01-app-demos/geolocation-demo",
 
     # Fullstack examples
     "examples/07-fullstack/hello-world",

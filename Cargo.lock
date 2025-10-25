@@ -6001,6 +6001,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-mobile-geolocation"
+version = "0.1.0"
+dependencies = [
+ "jni 0.21.1",
+ "libc",
+ "ndk-context",
+ "permissions",
+ "permissions-core",
+]
+
+[[package]]
 name = "dioxus-native"
 version = "0.7.0-rc.3"
 dependencies = [
@@ -7734,6 +7745,14 @@ checksum = "985a5578ebdb02351d484a77fb27e7cb79272f1ba9bc24692d8243c3cfe40660"
 dependencies = [
  "rustversion",
  "typenum",
+]
+
+[[package]]
+name = "geolocation-demo"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "dioxus-mobile-geolocation",
 ]
 
 [[package]]

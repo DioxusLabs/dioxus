@@ -3272,7 +3272,16 @@ impl BuildRequest {
             ),
             (
                 "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
-                self.wry_android_kotlin_files_out_dir().into_os_string(),
+                {
+                    let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                    // Ensure the directory exists for WRY's canonicalize check
+                    if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                        tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                        return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                    }
+                    tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                    kotlin_dir.into_os_string()
+                },
             ),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
@@ -3461,12 +3470,14 @@ impl BuildRequest {
         let app = root.join("app");
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
+        let app_java = app_main.join("java");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
         let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
+        create_dir_all(&app_java)?;
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
         create_dir_all(&app_kotlin_out)?;
@@ -3571,6 +3582,9 @@ impl BuildRequest {
             main_activity,
         )?;
 
+        // Copy Java sources from dependencies (for platform shims)
+        self.copy_dependency_java_sources(&app_java)?;
+
         // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
@@ -3662,7 +3676,6 @@ impl BuildRequest {
     fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
         let mut kotlin_dir = self
             .root_dir()
-            .join("app")
             .join("src")
             .join("main")
             .join("kotlin");
@@ -3672,6 +3685,54 @@ impl BuildRequest {
         }
 
         kotlin_dir
+    }
+
+    fn copy_dependency_java_sources(&self, app_java_dir: &Path) -> Result<()> {
+        use std::fs::read_dir;
+        
+        // Get workspace path
+        let workspace_root = self.workspace.workspace_root();
+        let packages_dir = workspace_root.join("packages");
+        
+        // Scan packages directory for android-shim subdirectories
+        if let Ok(entries) = read_dir(&packages_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let shim_dir = entry.path().join("android-shim/src/main/java");
+                    if shim_dir.exists() {
+                        tracing::debug!("Found Java shim directory: {:?}", shim_dir);
+                        self.copy_dir_all(&shim_dir, app_java_dir)?;
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+    
+    fn copy_dir_all(&self, from: &Path, to: &Path) -> Result<()> {
+        use std::fs::{copy, create_dir_all, read_dir};
+        
+        if !from.exists() {
+            return Ok(());
+        }
+        
+        for entry in read_dir(from)? {
+            let entry = entry?;
+            let path = entry.path();
+            let file_name = entry.file_name();
+            let dest = to.join(&file_name);
+            
+            if path.is_dir() {
+                create_dir_all(&dest)?;
+                self.copy_dir_all(&path, &dest)?;
+            } else if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("java") {
+                tracing::debug!("Copying Java file: {:?} -> {:?}", path, dest);
+                copy(&path, &dest)?;
+            }
+        }
+        
+        Ok(())
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable

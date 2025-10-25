@@ -1,0 +1,35 @@
+[package]
+name = "dioxus-mobile-geolocation"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Cross-platform geolocation for Dioxus mobile apps with Kotlin/Swift shims"
+repository = "https://github.com/DioxusLabs/dioxus"
+keywords = ["dioxus", "geolocation", "mobile", "android", "ios"]
+categories = ["gui", "mobile"]
+
+[features]
+default = ["android-kotlin", "ios-swift", "location-coarse"]
+android-kotlin = []
+ios-swift = []
+location-fine = []
+location-coarse = []
+background-location = []
+
+[dependencies]
+permissions = { workspace = true }
+permissions-core = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1.1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+libc = "0.2"
+
+[build-dependencies]
+
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["aarch64-linux-android", "aarch64-apple-ios"]
+

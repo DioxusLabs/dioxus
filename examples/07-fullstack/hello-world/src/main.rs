@@ -13,18 +13,6 @@
 
 use dioxus::prelude::*;
 use dioxus_fullstack::get;
-use permissions::{permission, Permission};
-
-// Declare iOS permissions for camera and location access
-const CAMERA_PERMISSION: Permission = permission!(
-    Camera,
-    description = "Access camera to take photos and videos for the app"
-);
-
-const LOCATION_PERMISSION: Permission = permission!(
-    Location(Fine),
-    description = "Access location to provide location-based features"
-);
 
 fn main() {
     dioxus::launch(app);
