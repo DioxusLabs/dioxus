@@ -138,6 +138,20 @@ mod macro_tests {
         store.check();
     }
 
+    fn derive_generic_struct_transposed_passthrough() {
+        #[derive(Store)]
+        struct Item<const COUNT: usize, T> {
+            contents: T,
+        }
+
+        let mut store = use_store(|| Item::<0, _> {
+            contents: "Learn about stores".to_string(),
+        });
+
+        let Item { contents } = store.transpose();
+        let contents: String = contents();
+    }
+
     fn derive_tuple() {
         #[derive(Store, PartialEq, Clone, Debug)]
         struct Item(bool, String);
@@ -339,6 +353,30 @@ mod macro_tests {
             }
             BarFoo { foo } => {
                 let foo: &'static str = foo();
+            }
+        }
+    }
+
+    fn derive_generic_enum_transpose_passthrough() {
+        #[derive(Store, PartialEq, Clone, Debug)]
+        #[non_exhaustive]
+        enum Enum<const COUNT: usize, T> {
+            Foo,
+            Bar(T),
+            BarFoo { foo: T },
+        }
+
+        let mut store = use_store(|| Enum::<0, _>::Bar("Hello".to_string()));
+
+        let transposed = store.transpose();
+        use Enum::*;
+        match transposed {
+            Enum::Foo => {}
+            Bar(bar) => {
+                let bar: String = bar();
+            }
+            BarFoo { foo } => {
+                let foo: String = foo();
             }
         }
     }
