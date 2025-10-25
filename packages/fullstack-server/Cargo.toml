@@ -79,6 +79,8 @@ chrono = { workspace = true }
 rustc-hash = { workspace = true }
 lru  = { workspace = true }
 walkdir = { workspace = true }
+axum-core.workspace = true
+serde_core = "1.0.221"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
