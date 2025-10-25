@@ -16,6 +16,7 @@
 //! ```
 
 use dioxus::prelude::*;
+use std::time::Duration;
 
 #[cfg(any(target_os = "android", target_os = "ios"))]
 use dioxus_mobile_geolocation::{last_known_location, request_location_permission};
@@ -103,15 +104,43 @@ fn app() -> Element {
                                     println!("Location retrieved: lat={}, lon={}", lat, lon);
                                     location.set(Some((lat, lon)));
                                     status_message.set("Location retrieved successfully!".to_string());
+                                    is_loading.set(false);
                                 }
                                 None => {
                                     println!("No location available - requesting permissions...");
                                     
-                                    // Request permissions and try again
+                                    // Request permissions
                                     if request_location_permission() {
-                                        status_message.set("Permission request sent. Please grant location permission in the dialog that appears, then try again.".to_string());
+                                        status_message.set("Permission requested. Checking for location...".to_string());
+                                        
+                                        // Use spawn to retry in the background
+                                        spawn(async move {
+                                            // Try multiple times with delays
+                                            for attempt in 1..=10 {
+                                                std::thread::sleep(Duration::from_millis(500));
+                                                println!("Retry attempt {} to get location...", attempt);
+                                                
+                                                match last_known_location() {
+                                                    Some((lat, lon)) => {
+                                                        println!("Location retrieved on retry: lat={}, lon={}", lat, lon);
+                                                        location.set(Some((lat, lon)));
+                                                        status_message.set("Location retrieved successfully!".to_string());
+                                                        is_loading.set(false);
+                                                        return;
+                                                    }
+                                                    None => {
+                                                        // Continue retrying
+                                                    }
+                                                }
+                                            }
+                                            
+                                            // If we get here, all retries failed
+                                            status_message.set("Could not get location. Please ensure you granted permission and location services are enabled, then try again.".to_string());
+                                            is_loading.set(false);
+                                        });
                                     } else {
                                         status_message.set("Failed to request permissions. Please check your device settings and ensure location services are enabled.".to_string());
+                                        is_loading.set(false);
                                     }
                                 }
                             }
@@ -120,9 +149,8 @@ fn app() -> Element {
                         #[cfg(not(any(target_os = "android", target_os = "ios")))]
                         {
                             status_message.set("Geolocation only works on Android/iOS".to_string());
+                            is_loading.set(false);
                         }
-                        
-                        is_loading.set(false);
                     },
                     if is_loading() {
                         "⏳ Getting Location..."
