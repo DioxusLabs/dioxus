@@ -344,10 +344,12 @@ impl PermissionManifest {
         Self { permissions }
     }
 
+    #[allow(dead_code)]
     pub fn permissions(&self) -> &[Permission] {
         &self.permissions
     }
 
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.permissions.is_empty()
     }
@@ -404,6 +406,7 @@ pub(crate) fn get_macos_permissions(manifest: &PermissionManifest) -> Vec<MacosP
 }
 
 /// Check if permissions are needed for the platform
+#[allow(dead_code)]
 pub(crate) fn needs_permission_manifest(platform: Platform) -> bool {
     matches!(
         platform,

@@ -6,7 +6,7 @@
 //! used by the Gradle build process.
 
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::Result;
 use anyhow::Context;

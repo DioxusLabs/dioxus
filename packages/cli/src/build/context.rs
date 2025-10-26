@@ -197,9 +197,4 @@ impl BuildContext {
             stage: BuildStage::ExtractingAssets,
         });
     }
-    pub(crate) fn status_extracting_permissions(&self) {
-        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
-            stage: BuildStage::ExtractingPermissions,
-        });
-    }
 }

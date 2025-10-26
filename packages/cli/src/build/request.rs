@@ -1372,13 +1372,11 @@ impl BuildRequest {
     async fn collect_permissions(
         &self,
         exe: &Path,
-        ctx: &BuildContext,
+        _ctx: &BuildContext,
     ) -> Result<super::permissions::PermissionManifest> {
         if self.skip_permissions {
             return Ok(super::permissions::PermissionManifest::default());
         }
-
-        ctx.status_extracting_permissions();
 
         let manifest = super::permissions::extract_permissions_from_file(exe)?;
 
@@ -1393,25 +1391,14 @@ impl BuildRequest {
         if let Some(platform) = platform {
             let perms = manifest.permissions_for_platform(platform);
             if !perms.is_empty() {
-                println!("🔍 Found {} permissions for {:?}:", perms.len(), platform);
+                tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
                 for perm in &perms {
-                    println!("  • {:?} - {}", perm.kind(), perm.description());
+                    tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
                 }
-                println!("  Will be included in platform manifest");
-                tracing::info!("🔍 Found {} permissions for {:?}:", perms.len(), platform);
-                for perm in &perms {
-                    tracing::info!("  • {:?} - {}", perm.kind(), perm.description());
-                }
-                tracing::info!("  Will be included in platform manifest");
             } else {
-                println!("No permissions found for {:?}", platform);
                 tracing::debug!("No permissions found for {:?}", platform);
             }
         } else {
-            println!(
-                "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
-                self.bundle
-            );
             tracing::debug!(
                 "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
                 self.bundle
@@ -1434,20 +1421,18 @@ impl BuildRequest {
         let manifest = super::android_java::extract_java_sources_from_file(exe)?;
 
         if !manifest.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "Found {} Java source declarations for Android",
                 manifest.sources().len()
             );
             for source in manifest.sources() {
-                tracing::info!(
+                tracing::debug!(
                     "  Plugin: {}, Package: {}, Files: {}",
                     source.plugin_name.as_str(),
                     source.package_name.as_str(),
                     source.files.len()
                 );
             }
-        } else {
-            tracing::debug!("No Java sources found in binary");
         }
 
         Ok(manifest)
@@ -1608,12 +1593,12 @@ impl BuildRequest {
             manifest_content.insert_str(insert_pos, &permission_declarations);
             std::fs::write(&manifest_path, manifest_content)?;
 
-            tracing::info!(
-                "📱 Added {} Android permissions to AndroidManifest.xml:",
+            tracing::debug!(
+                "Added {} Android permissions to AndroidManifest.xml",
                 android_permissions.len()
             );
             for perm in &android_permissions {
-                tracing::info!("  • {} - {}", perm.name, perm.description);
+                tracing::debug!("  • {} - {}", perm.name, perm.description);
             }
         }
 
@@ -1631,12 +1616,9 @@ impl BuildRequest {
         }
 
         let plist_path = self.root_dir().join("Info.plist");
-        println!("🔍 Looking for Info.plist at: {:?}", plist_path);
-        tracing::info!("🔍 Looking for Info.plist at: {:?}", plist_path);
 
         if !plist_path.exists() {
-            println!("❌ Info.plist not found at {:?}", plist_path);
-            tracing::warn!(
+            tracing::debug!(
                 "Info.plist not found at {:?}, skipping permission update",
                 plist_path
             );
@@ -1658,12 +1640,12 @@ impl BuildRequest {
             plist_content.insert_str(pos, &permission_entries);
             std::fs::write(&plist_path, plist_content)?;
 
-            tracing::info!(
-                "🍎 Added {} iOS permissions to Info.plist:",
+            tracing::debug!(
+                "Added {} iOS permissions to Info.plist",
                 ios_permissions.len()
             );
             for perm in &ios_permissions {
-                tracing::info!("  • {} - {}", perm.key, perm.description);
+                tracing::debug!("  • {} - {}", perm.key, perm.description);
             }
         }
 
