@@ -94,6 +94,7 @@ members = [
 
     # mobile-geolocation
     "packages/mobile-geolocation",
+    "packages/mobile-core",
 
     # wasm-split
     "packages/wasm-split/wasm-split",
@@ -211,6 +212,10 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0
 permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.0-rc.3" }
 permissions-macro = { path = "packages/permissions/permissions-macro", version = "=0.7.0-rc.3" }
 permissions = { path = "packages/permissions/permissions", version = "=0.7.0-rc.3" }
+
+# mobile
+dioxus-mobile-core = { path = "packages/mobile-core", version = "=0.7.0-rc.3" }
+dioxus-mobile-geolocation = { path = "packages/mobile-geolocation", version = "=0.7.0-rc.3" }
 
 # subsecond
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "=0.7.0-rc.3" }

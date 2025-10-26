@@ -6010,11 +6010,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-mobile-core"
+version = "0.7.0-rc.3"
+dependencies = [
+ "android-build",
+ "jni 0.21.1",
+ "ndk-context",
+ "objc2 0.6.3",
+ "thiserror 2.0.17",
+]
+
+[[package]]
 name = "dioxus-mobile-geolocation"
 version = "0.1.0"
 dependencies = [
  "android-build",
  "cfg-if",
+ "dioxus-mobile-core",
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.6.3",

@@ -1,0 +1,29 @@
+[package]
+name = "dioxus-mobile-core"
+version = "0.7.0-rc.3"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Core utilities and abstractions for Dioxus mobile platform APIs"
+repository = "https://github.com/DioxusLabs/dioxus"
+keywords = ["dioxus", "mobile", "android", "ios", "jni", "objc"]
+categories = ["gui", "mobile"]
+
+[features]
+default = []
+
+[dependencies]
+thiserror = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1.1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6.3"
+
+[build-dependencies]
+android-build = "0.1.3"
+
+[package.metadata.docs.rs]
+default-target = "x86_64-unknown-linux-gnu"
+targets = ["aarch64-linux-android", "aarch64-apple-ios"]
