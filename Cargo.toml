@@ -95,9 +95,6 @@ members = [
     # platform-bridge
     "packages/platform-bridge",
     "packages/platform-bridge-macro",
-    
-    # mobile-geolocation
-    "packages/mobile-geolocation",
 
     # wasm-split
     "packages/wasm-split/wasm-split",
@@ -218,7 +215,6 @@ permissions = { path = "packages/permissions/permissions", version = "=0.7.0-rc.
 
 # platform bridge
 dioxus-platform-bridge = { path = "packages/platform-bridge", version = "=0.7.0-rc.3" }
-dioxus-mobile-geolocation = { path = "packages/mobile-geolocation", version = "=0.7.0-rc.3" }
 
 # subsecond
 subsecond-types = { path = "packages/subsecond/subsecond-types", version = "=0.7.0-rc.3" }

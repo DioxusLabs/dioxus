@@ -6,7 +6,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true }
-dioxus-mobile-geolocation = { path = "../../../packages/mobile-geolocation", features = ["location-fine"] }
+dioxus-mobile-geolocation = { git = "https://github.com/wheregmis/mobile-geolocation.git", features = ["location-fine"] }
 
 [features]
 default = ["mobile"]
