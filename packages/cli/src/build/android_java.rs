@@ -235,7 +235,7 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
 }
 
 /// Metadata about Java sources that need to be compiled to DEX
-/// This mirrors the struct from mobile-core
+/// This mirrors the struct from platform-bridge
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JavaSourceMetadata {
     /// File paths relative to crate root
@@ -247,7 +247,7 @@ pub struct JavaSourceMetadata {
 }
 
 impl JavaSourceMetadata {
-    /// Create from the mobile-core SerializeConst version
+    /// Create from the platform-bridge SerializeConst version
     fn from_const_serialize(
         package_name: const_serialize::ConstStr,
         plugin_name: const_serialize::ConstStr,

@@ -21,7 +21,7 @@ use java_plugin::JavaPluginParser;
 /// Basic plugin declaration:
 /// ```rust,no_run
 /// #[cfg(target_os = "ios")]
-/// dioxus_mobile_core::ios_plugin!(
+/// dioxus_platform_bridge::ios_plugin!(
 ///     plugin = "geolocation",
 ///     frameworks = ["CoreLocation", "Foundation"]
 /// );
@@ -60,7 +60,7 @@ pub fn ios_plugin(input: TokenStream) -> TokenStream {
 /// Basic plugin declaration with full relative paths:
 /// ```rust,no_run
 /// #[cfg(target_os = "android")]
-/// dioxus_mobile_core::java_plugin!(
+/// dioxus_platform_bridge::java_plugin!(
 ///     package = "dioxus.mobile.geolocation",
 ///     plugin = "geolocation",
 ///     files = [

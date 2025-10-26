@@ -46,7 +46,7 @@ unsafe impl<T> Sync for MainThreadCell<T> {}
 /// # Example
 ///
 /// ```rust,no_run
-/// use dioxus_mobile_core::ios::get_or_init_manager;
+/// use dioxus_platform_bridge::ios::get_or_init_manager;
 /// use objc2_core_location::CLLocationManager;
 ///
 /// let manager = get_or_init_manager(|| {

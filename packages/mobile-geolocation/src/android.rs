@@ -1,4 +1,4 @@
-use dioxus_mobile_core::android::{
+use dioxus_platform_bridge::android::{
     check_self_permission, load_class_from_classloader, new_object_array, new_string,
     request_permissions_via_helper, set_object_array_element, with_activity,
 };

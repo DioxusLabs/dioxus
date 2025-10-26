@@ -1,14 +1,14 @@
 [package]
-name = "mobile-core-macro"
+name = "platform-bridge-macro"
 version = "0.7.0-rc.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Procedural macro for declaring Java plugins with linker embedding"
+description = "Procedural macro for declaring platform plugins with linker embedding"
 authors = ["DioxusLabs"]
 repository = "https://github.com/DioxusLabs/dioxus"
 homepage = "https://dioxuslabs.com"
-documentation = "https://docs.rs/mobile-core-macro"
-keywords = ["mobile", "java", "macro", "linker", "android"]
+documentation = "https://docs.rs/platform-bridge-macro"
+keywords = ["platform", "bridge", "macro", "linker", "android", "ios"]
 categories = ["development-tools::procedural-macro-helpers"]
 
 [lib]

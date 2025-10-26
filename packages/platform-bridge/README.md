@@ -1,8 +1,8 @@
-# dioxus-mobile-core
+# dioxus-platform-bridge
 
-Core utilities and abstractions for Dioxus mobile platform APIs.
+Cross-platform FFI utilities and plugin metadata for Dioxus platform APIs.
 
-This crate provides common patterns and utilities for implementing cross-platform mobile APIs in Dioxus applications. It handles the boilerplate for JNI (Android) and objc2 (iOS) bindings, build scripts, and platform-specific resource management.
+This crate provides common patterns and utilities for implementing cross-platform platform APIs in Dioxus applications. It handles the boilerplate for JNI (Android) and objc2 (iOS) bindings, build scripts, and platform-specific resource management.
 
 ## Features
 
@@ -16,7 +16,7 @@ This crate provides common patterns and utilities for implementing cross-platfor
 ### Android APIs
 
 ```rust
-use dioxus_mobile_core::android::with_activity;
+use dioxus_platform_bridge::android::with_activity;
 
 // Execute JNI operations with cached activity reference
 let result = with_activity(|env, activity| {
@@ -28,7 +28,7 @@ let result = with_activity(|env, activity| {
 ### iOS APIs
 
 ```rust
-use dioxus_mobile_core::ios::get_or_init_manager;
+use dioxus_platform_bridge::ios::get_or_init_manager;
 use objc2_core_location::CLLocationManager;
 
 // Get or create a manager with main thread safety
@@ -42,7 +42,7 @@ let manager = get_or_init_manager(|| {
 No build scripts needed! Declare Java sources and iOS frameworks in your code:
 
 ```rust
-use dioxus_mobile_core::JavaSourceMetadata;
+use dioxus_platform_bridge::JavaSourceMetadata;
 
 // Declare Java sources (embedded in binary, collected by dx CLI)
 #[cfg(target_os = "android")]
@@ -59,6 +59,14 @@ The crate is organized into platform-specific modules:
 
 - `android/` - JNI utilities, activity management, callback systems, Java source metadata
 - `ios/` - Main thread utilities, manager caching, iOS framework metadata
+
+## Extensibility
+
+While currently focused on mobile platforms (Android and iOS), this crate is designed to be extensible to other platforms:
+- **Desktop**: Windows API, macOS Cocoa, Linux APIs
+- **Web**: WASM bindings and JavaScript interop
+
+The plugin system allows clean declaration of platform-specific resources across all platforms.
 
 ## License
 

@@ -6001,25 +6001,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-mobile-core"
-version = "0.7.0-rc.3"
-dependencies = [
- "const-serialize",
- "const-serialize-macro",
- "jni 0.21.1",
- "mobile-core-macro",
- "ndk-context",
- "objc2 0.6.3",
- "thiserror 2.0.17",
-]
-
-[[package]]
 name = "dioxus-mobile-geolocation"
 version = "0.1.0"
 dependencies = [
  "cfg-if",
  "const-serialize",
- "dioxus-mobile-core",
+ "dioxus-platform-bridge",
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.6.3",
@@ -6070,6 +6057,19 @@ dependencies = [
  "keyboard-types",
  "rustc-hash 2.1.1",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-platform-bridge"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "jni 0.21.1",
+ "ndk-context",
+ "objc2 0.6.3",
+ "platform-bridge-macro",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -11057,17 +11057,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mobile-core-macro"
-version = "0.7.0-rc.3"
-dependencies = [
- "const-serialize",
- "const-serialize-macro",
- "proc-macro2",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
 name = "mozjpeg"
 version = "0.10.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13021,6 +13010,17 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "platform-bridge-macro"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
+]
 
 [[package]]
 name = "plist"

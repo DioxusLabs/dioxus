@@ -1,26 +1,26 @@
 [package]
-name = "dioxus-mobile-core"
+name = "dioxus-platform-bridge"
 version = "0.7.0-rc.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Core utilities and abstractions for Dioxus mobile platform APIs"
+description = "Cross-platform FFI utilities and plugin metadata for Dioxus platform APIs"
 repository = "https://github.com/DioxusLabs/dioxus"
-keywords = ["dioxus", "mobile", "android", "ios", "jni", "objc"]
-categories = ["gui", "mobile"]
+keywords = ["dioxus", "platform", "bridge", "ffi", "android", "ios", "jni", "objc"]
+categories = ["gui", "platform-support"]
 
 [features]
 default = []
 metadata = [
     "dep:const-serialize",
     "dep:const-serialize-macro",
-    "dep:mobile-core-macro",
+    "dep:platform-bridge-macro",
 ]
 
 [dependencies]
 thiserror = { workspace = true }
 const-serialize = { path = "../const-serialize", optional = true }
 const-serialize-macro = { path = "../const-serialize-macro", optional = true }
-mobile-core-macro = { path = "../mobile-core-macro", optional = true }
+platform-bridge-macro = { path = "../platform-bridge-macro", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

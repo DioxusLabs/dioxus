@@ -1,7 +1,7 @@
-//! Core utilities and abstractions for Dioxus mobile platform APIs
+//! Cross-platform FFI utilities and plugin metadata for Dioxus platform APIs
 //!
 //! This crate provides common patterns and utilities for implementing
-//! cross-platform mobile APIs in Dioxus applications. It handles the
+//! cross-platform platform APIs in Dioxus applications. It handles the
 //! boilerplate for JNI (Android) and objc2 (iOS) bindings, build scripts,
 //! and platform-specific resource management.
 
@@ -26,8 +26,8 @@ pub use objc2;
 
 /// Re-export the java_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", target_os = "android"))]
-pub use mobile_core_macro::java_plugin;
+pub use platform_bridge_macro::java_plugin;
 
 /// Re-export the ios_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", target_os = "ios"))]
-pub use mobile_core_macro::ios_plugin;
+pub use platform_bridge_macro::ios_plugin;

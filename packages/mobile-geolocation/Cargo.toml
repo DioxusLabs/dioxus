@@ -18,7 +18,7 @@ background-location = []
 permissions = { workspace = true }
 permissions-core = { workspace = true }
 cfg-if = "1.0"
-dioxus-mobile-core = { workspace = true, features = ["metadata"] }
+dioxus-platform-bridge = { workspace = true, features = ["metadata"] }
 const-serialize = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]

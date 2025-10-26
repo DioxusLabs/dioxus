@@ -23,7 +23,7 @@ static JAVA_VM: OnceLock<JavaVM> = OnceLock::new();
 /// # Example
 ///
 /// ```rust,no_run
-/// use dioxus_mobile_core::android::with_activity;
+/// use dioxus_platform_bridge::android::with_activity;
 ///
 /// let result = with_activity(|env, activity| {
 ///     // Your JNI operations here

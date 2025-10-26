@@ -1,6 +1,6 @@
-# mobile-core-macro
+# platform-bridge-macro
 
-Procedural macro for declaring Java plugins with linker-based embedding for Dioxus Android builds.
+Procedural macro for declaring platform plugins with linker-based embedding for Dioxus platform builds.
 
 ## Overview
 
@@ -11,11 +11,11 @@ This crate provides the `java_plugin!()` macro which reduces Java source declara
 ### Basic Example
 
 ```rust
-use dioxus_mobile_core::java_plugin;
+use dioxus_platform_bridge::java_plugin;
 
 // Declare Java sources for Android
 #[cfg(target_os = "android")]
-dioxus_mobile_core::java_plugin!(
+dioxus_platform_bridge::java_plugin!(
     package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
     files = ["LocationCallback.java", "PermissionsHelper.java"]
@@ -112,7 +112,7 @@ static JAVA_SOURCE_METADATA: [u8; 4096] = JAVA_META_BYTES;
 
 **After** (3 lines):
 ```rust
-dioxus_mobile_core::java_plugin!(
+dioxus_platform_bridge::java_plugin!(
     package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
     files = ["LocationCallback.java", "PermissionsHelper.java"]
@@ -134,5 +134,5 @@ error: Java file 'LocationCallback.java' not found. Searched in:
 
 - [`permissions-macro`](../permissions/permissions-macro/): Similar macro for permission declarations
 - [`manganis-macro`](../manganis/manganis-macro/): Similar macro for asset bundling
-- [`mobile-core`](../mobile-core/): Core utilities and Android utilities
+- [`platform-bridge`](../platform-bridge/): Core utilities and Android utilities
 

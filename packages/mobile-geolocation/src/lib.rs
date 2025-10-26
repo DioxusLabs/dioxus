@@ -48,14 +48,14 @@ use permissions::{static_permission, Permission};
 // Declare Java sources for Android using the macro system
 // This embeds absolute paths and generates linker symbols automatically
 #[cfg(target_os = "android")]
-dioxus_mobile_core::java_plugin!(
+dioxus_platform_bridge::java_plugin!(
     package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
     files = ["src/android/PermissionsHelper.java"]
 );
 
 #[cfg(target_os = "ios")]
-dioxus_mobile_core::ios_plugin!(
+dioxus_platform_bridge::ios_plugin!(
     plugin = "geolocation",
     frameworks = ["CoreLocation", "Foundation"]
 );
