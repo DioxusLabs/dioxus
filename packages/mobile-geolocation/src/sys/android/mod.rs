@@ -3,7 +3,12 @@ mod callback;
 use dioxus_mobile_core::android::{
     new_object_array, new_string, set_object_array_element, with_activity,
 };
-use jni::objects::JValue;
+use jni::{
+    objects::{JObject, JValue},
+    JNIEnv,
+};
+
+const PERMISSION_GRANTED: i32 = 0;
 
 /// Request location permission at runtime
 pub fn request_permission() -> bool {
@@ -82,6 +87,10 @@ pub fn request_permission() -> bool {
 /// Get the last known location
 pub fn last_known() -> Option<(f64, f64)> {
     with_activity(|env, activity| {
+        if !has_location_permission(env, activity).unwrap_or(false) {
+            return None;
+        }
+
         let service_name = new_string(env, "location").ok()?;
         let location_manager = env
             .call_method(
@@ -95,29 +104,11 @@ pub fn last_known() -> Option<(f64, f64)> {
             .ok()?;
 
         let provider = new_string(env, "gps").ok()?;
-        let mut location = env
-            .call_method(
-                &location_manager,
-                "getLastKnownLocation",
-                "(Ljava/lang/String;)Landroid/location/Location;",
-                &[JValue::Object(&provider)],
-            )
-            .ok()?
-            .l()
-            .ok()?;
+        let mut location = get_last_known_location(env, &location_manager, &provider)?;
 
         if location.is_null() {
             let fused_provider = new_string(env, "fused").ok()?;
-            location = env
-                .call_method(
-                    &location_manager,
-                    "getLastKnownLocation",
-                    "(Ljava/lang/String;)Landroid/location/Location;",
-                    &[JValue::Object(&fused_provider)],
-                )
-                .ok()?
-                .l()
-                .ok()?;
+            location = get_last_known_location(env, &location_manager, &fused_provider)?;
         }
 
         if location.is_null() {
@@ -137,4 +128,65 @@ pub fn last_known() -> Option<(f64, f64)> {
 
         Some((latitude, longitude))
     })
+}
+
+fn has_location_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>) -> Option<bool> {
+    #[allow(unused_mut)]
+    let mut has_permission = false;
+
+    #[cfg(feature = "location-fine")]
+    {
+        has_permission |= check_permission(env, activity, "android.permission.ACCESS_FINE_LOCATION")?;
+    }
+
+    #[cfg(feature = "location-coarse")]
+    {
+        has_permission |= check_permission(env, activity, "android.permission.ACCESS_COARSE_LOCATION")?;
+    }
+
+    #[cfg(not(any(feature = "location-fine", feature = "location-coarse")))]
+    {
+        has_permission = true;
+    }
+
+    Some(has_permission)
+}
+
+fn check_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>, permission: &str) -> Option<bool> {
+    let permission = new_string(env, permission).ok()?;
+    let status = match env.call_method(
+        activity,
+        "checkSelfPermission",
+        "(Ljava/lang/String;)I",
+        &[JValue::Object(&permission)],
+    ) {
+        Ok(result) => result.i().ok()?,
+        Err(_) => {
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
+            return Some(false);
+        }
+    };
+
+    Some(status == PERMISSION_GRANTED)
+}
+
+fn get_last_known_location<'env>(
+    env: &mut JNIEnv<'env>,
+    manager: &JObject<'env>,
+    provider: &JObject<'env>,
+) -> Option<JObject<'env>> {
+    match env.call_method(
+        manager,
+        "getLastKnownLocation",
+        "(Ljava/lang/String;)Landroid/location/Location;",
+        &[JValue::Object(provider)],
+    ) {
+        Ok(value) => value.l().ok(),
+        Err(_) => {
+            let _ = env.exception_describe();
+            let _ = env.exception_clear();
+            None
+        }
+    }
 }
