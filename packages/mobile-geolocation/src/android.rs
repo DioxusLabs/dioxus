@@ -1,7 +1,6 @@
-mod callback;
-
 use dioxus_mobile_core::android::{
-    new_object_array, new_string, set_object_array_element, with_activity,
+    check_self_permission, load_class_from_classloader, new_object_array, new_string,
+    request_permissions_via_helper, set_object_array_element, with_activity,
 };
 use jni::{
     objects::{JObject, JValue},
@@ -52,7 +51,7 @@ pub fn request_permission() -> bool {
         }
 
         const REQUEST_CODE: i32 = 3;
-        let helper_class = match callback::load_permissions_helper_class(env) {
+        let helper_class = match load_class_from_classloader(env, "dioxus.mobile.geolocation.PermissionsHelper") {
             Ok(class) => class,
             Err(_) => {
                 let _ = env.exception_describe();
@@ -61,19 +60,7 @@ pub fn request_permission() -> bool {
             }
         };
 
-        if env
-            .call_static_method(
-                helper_class,
-                "requestPermissionsOnUiThread",
-                "(Landroid/app/Activity;[Ljava/lang/String;I)V",
-                &[
-                    JValue::Object(activity),
-                    JValue::Object(&permissions_array),
-                    JValue::Int(REQUEST_CODE),
-                ],
-            )
-            .is_err()
-        {
+        if request_permissions_via_helper(env, &helper_class, activity, permissions_array, REQUEST_CODE).is_err() {
             let _ = env.exception_describe();
             let _ = env.exception_clear();
             return Some(false);
@@ -87,7 +74,25 @@ pub fn request_permission() -> bool {
 /// Get the last known location
 pub fn last_known() -> Option<(f64, f64)> {
     with_activity(|env, activity| {
-        if !has_location_permission(env, activity).unwrap_or(false) {
+        // Check permission inline to avoid lifetime issues
+        let mut has_permission = false;
+        
+        #[cfg(feature = "location-fine")]
+        {
+            has_permission |= check_self_permission(env, activity, "android.permission.ACCESS_FINE_LOCATION").unwrap_or(false);
+        }
+        
+        #[cfg(feature = "location-coarse")]
+        {
+            has_permission |= check_self_permission(env, activity, "android.permission.ACCESS_COARSE_LOCATION").unwrap_or(false);
+        }
+
+        #[cfg(not(any(feature = "location-fine", feature = "location-coarse")))]
+        {
+            has_permission = true;
+        }
+
+        if !has_permission {
             return None;
         }
 
@@ -130,53 +135,6 @@ pub fn last_known() -> Option<(f64, f64)> {
     })
 }
 
-fn has_location_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>) -> Option<bool> {
-    #[allow(unused_mut)]
-    let mut has_permission = false;
-
-    #[cfg(feature = "location-fine")]
-    {
-        has_permission |=
-            check_permission(env, activity, "android.permission.ACCESS_FINE_LOCATION")?;
-    }
-
-    #[cfg(feature = "location-coarse")]
-    {
-        has_permission |=
-            check_permission(env, activity, "android.permission.ACCESS_COARSE_LOCATION")?;
-    }
-
-    #[cfg(not(any(feature = "location-fine", feature = "location-coarse")))]
-    {
-        has_permission = true;
-    }
-
-    Some(has_permission)
-}
-
-fn check_permission(
-    env: &mut JNIEnv<'_>,
-    activity: &JObject<'_>,
-    permission: &str,
-) -> Option<bool> {
-    let permission = new_string(env, permission).ok()?;
-    let status = match env.call_method(
-        activity,
-        "checkSelfPermission",
-        "(Ljava/lang/String;)I",
-        &[JValue::Object(&permission)],
-    ) {
-        Ok(result) => result.i().ok()?,
-        Err(_) => {
-            let _ = env.exception_describe();
-            let _ = env.exception_clear();
-            return Some(false);
-        }
-    };
-
-    Some(status == PERMISSION_GRANTED)
-}
-
 fn get_last_known_location<'env>(
     env: &mut JNIEnv<'env>,
     manager: &JObject<'env>,
@@ -196,3 +154,4 @@ fn get_last_known_location<'env>(
         }
     }
 }
+

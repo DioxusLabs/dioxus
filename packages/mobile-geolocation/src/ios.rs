@@ -123,3 +123,4 @@ pub fn last_known() -> Option<(f64, f64)> {
         (coordinate.latitude, coordinate.longitude)
     })
 }
+

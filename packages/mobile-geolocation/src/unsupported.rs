@@ -7,3 +7,4 @@ pub fn request_permission() -> bool {
 pub fn last_known() -> Option<(f64, f64)> {
     None
 }
+
