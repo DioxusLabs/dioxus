@@ -233,6 +233,20 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         result
     }
 
+    /// Set the WebSocket connection.
+    ///
+    /// This method takes a `Result<Websocket<In, Out, E>, Err>`, allowing you to drive the connection
+    /// into an errored state manually.
+    pub fn set<Err: Into<CapturedError>>(&mut self, socket: Result<Websocket<In, Out, E>, Err>) {
+        match socket {
+            Ok(_) => self.status.set(WebsocketState::Open),
+            Err(_) => self.status.set(WebsocketState::FailedToConnect),
+        }
+
+        self.connection.set(Some(socket.map_err(|e| e.into())));
+        self.waker.wake(());
+    }
+
     /// Mark the WebSocket as closed. This is called internally when the connection is closed.
     fn received_shutdown(&self) {
         let mut _self = *self;

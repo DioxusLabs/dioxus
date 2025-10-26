@@ -234,7 +234,7 @@ depinfo = { path = "packages/depinfo", version = "=0.7.0-rc.3" }
 warnings = { version = "0.2.1" }
 
 # blitz
-blitz-dom = { version = "0.2", default-features = false }
+blitz-dom = { version = "0.2.4", default-features = false }
 blitz-net = { version = "0.2" }
 blitz-html = { version = "0.2" }
 blitz-paint = { version = "0.2" }
@@ -354,6 +354,7 @@ inventory = { version = "0.3" }
 macro-string = "0.1.4"
 walkdir = "2.5.0"
 url = "2"
+data-url = "0.3.2"
 separator = "0.4.1"
 pretty_assertions = "1"
 serde_repr = "0.1"

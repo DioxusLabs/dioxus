@@ -110,7 +110,7 @@ pub fn ui(props: UIProps) -> Element {
     println!("rgba({r}, {g}, {b}, {a})");
 
     rsx! {
-        style { {include_str!("./ui.css")} }
+        document::Stylesheet { href: asset!("/src/ui.css") }
         div {
             id: "panel",
             class: "catch-events",
