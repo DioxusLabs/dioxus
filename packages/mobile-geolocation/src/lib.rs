@@ -38,6 +38,48 @@ mod sys;
 
 use permissions::{static_permission, Permission};
 
+// Declare Java sources for Android - these will be collected by dx CLI via linker symbols
+#[cfg(target_os = "android")]
+use dioxus_mobile_core::android::JavaSourceMetadata;
+
+#[cfg(target_os = "android")]
+const JAVA_META: JavaSourceMetadata = JavaSourceMetadata::new(
+    "dioxus.mobile.geolocation",
+    "geolocation",
+    &["LocationCallback.java", "PermissionsHelper.java"],
+);
+
+// Serialize and embed in linker section
+#[cfg(target_os = "android")]
+const JAVA_META_BYTES: [u8; JavaSourceMetadata::SERIALIZED_SIZE] = {
+    use const_serialize::{serialize_const, ConstVec};
+    // Serialize with a buffer sized to the metadata, then pad to SERIALIZED_SIZE
+    let serialized = serialize_const(
+        &JAVA_META,
+        ConstVec::<u8, { JavaSourceMetadata::SERIALIZED_SIZE }>::new_with_max_size(),
+    );
+    let mut data = [0u8; JavaSourceMetadata::SERIALIZED_SIZE];
+    let mut i = 0;
+    let bytes = serialized.as_ref();
+    while i < bytes.len() && i < JavaSourceMetadata::SERIALIZED_SIZE {
+        data[i] = bytes[i];
+        i += 1;
+    }
+    data
+};
+
+#[cfg(target_os = "android")]
+#[link_section = "__DATA,__java_source"]
+#[used]
+#[export_name = "__JAVA_SOURCE__dioxus_mobile_geolocation"]
+static JAVA_SOURCE_METADATA: [u8; JavaSourceMetadata::SERIALIZED_SIZE] = JAVA_META_BYTES;
+
+#[cfg(target_os = "ios")]
+#[link_section = "__DATA,__ios_framework"]
+#[used]
+#[export_name = "__IOS_FRAMEWORK__dioxus_mobile_geolocation"]
+static IOS_FRAMEWORK_METADATA: (&str, &[&str]) = ("geolocation", &["CoreLocation", "Foundation"]);
+
 pub use error::{Error, Result};
 
 /// Represents a geographic coordinate
@@ -94,6 +136,16 @@ pub fn __ensure_permissions_linked() {
     }
 }
 
+/// Ensure metadata is linked into the binary
+#[inline(never)]
+#[doc(hidden)]
+fn __ensure_metadata_linked() {
+    #[cfg(target_os = "android")]
+    let _ = &JAVA_SOURCE_METADATA;
+    #[cfg(target_os = "ios")]
+    let _ = &IOS_FRAMEWORK_METADATA;
+}
+
 /// Request location permissions at runtime.
 ///
 /// This function triggers the system permission dialog for location access.
@@ -110,8 +162,9 @@ pub fn __ensure_permissions_linked() {
 /// Call this function before `last_known_location()` to ensure permissions are granted.
 /// The user will see a system dialog asking for location permission.
 pub fn request_location_permission() -> bool {
-    // Ensure permissions are linked (prevents dead code elimination)
+    // Ensure permissions and metadata are linked (prevents dead code elimination)
     __ensure_permissions_linked();
+    __ensure_metadata_linked();
 
     sys::request_permission()
 }
@@ -138,8 +191,9 @@ pub fn request_location_permission() -> bool {
 ///
 /// On iOS, permissions are handled via Info.plist configuration.
 pub fn last_known_location() -> Option<(f64, f64)> {
-    // Ensure permissions are linked (prevents dead code elimination)
+    // Ensure permissions and metadata are linked (prevents dead code elimination)
     __ensure_permissions_linked();
+    __ensure_metadata_linked();
 
     sys::last_known()
 }

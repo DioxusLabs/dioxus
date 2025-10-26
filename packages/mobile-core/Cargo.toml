@@ -10,10 +10,15 @@ categories = ["gui", "mobile"]
 
 [features]
 default = []
+metadata = [
+    "dep:const-serialize",
+    "dep:const-serialize-macro",
+]
 
 [dependencies]
 thiserror = { workspace = true }
-android-build = "0.1.3"
+const-serialize = { path = "../const-serialize", optional = true }
+const-serialize-macro = { path = "../const-serialize-macro", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

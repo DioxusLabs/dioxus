@@ -11,8 +11,6 @@ pub mod android;
 #[cfg(target_os = "ios")]
 pub mod ios;
 
-pub mod build;
-
 #[cfg(target_os = "android")]
 pub use android::*;
 

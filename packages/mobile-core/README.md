@@ -8,7 +8,7 @@ This crate provides common patterns and utilities for implementing cross-platfor
 
 - **Android Support**: JNI utilities, activity caching, DEX loading, callback registration
 - **iOS Support**: Main thread utilities, manager caching, objc2 integration
-- **Build Scripts**: Java→DEX compilation, iOS framework linking
+- **Metadata System**: Declare Java sources and iOS frameworks in code (collected by dx CLI)
 - **Cross-platform**: Automatic platform detection and appropriate build steps
 
 ## Usage
@@ -37,30 +37,28 @@ let manager = get_or_init_manager(|| {
 });
 ```
 
-### Build Scripts
+### Declaring Platform Resources
+
+No build scripts needed! Declare Java sources and iOS frameworks in your code:
 
 ```rust
-// In your build.rs
-use dioxus_mobile_core::build::auto_build;
-use std::path::PathBuf;
+use dioxus_mobile_core::JavaSourceMetadata;
 
-fn main() {
-    let java_files = vec![PathBuf::from("src/LocationCallback.java")];
-    auto_build(
-        &java_files,
-        "com.example.api",
-        &["CoreLocation", "Foundation"]
-    ).unwrap();
-}
+// Declare Java sources (embedded in binary, collected by dx CLI)
+#[cfg(target_os = "android")]
+const JAVA_SOURCES: JavaSourceMetadata = JavaSourceMetadata::new(
+    &["src/android/LocationCallback.java"],
+    "com.example.api",
+    "example"
+);
 ```
 
 ## Architecture
 
 The crate is organized into platform-specific modules:
 
-- `android/` - JNI utilities, activity management, callback systems
-- `ios/` - Main thread utilities, manager caching
-- `build/` - Build script helpers for Java compilation and framework linking
+- `android/` - JNI utilities, activity management, callback systems, Java source metadata
+- `ios/` - Main thread utilities, manager caching, iOS framework metadata
 
 ## License
 

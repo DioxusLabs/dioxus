@@ -5,8 +5,8 @@ edition = "2021"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
-dioxus-mobile-geolocation = { path = "../../../packages/mobile-geolocation" }
+dioxus = { workspace = true }
+dioxus-mobile-geolocation = { path = "../../../packages/mobile-geolocation", features = ["location-fine"] }
 
 [features]
 default = ["mobile"]

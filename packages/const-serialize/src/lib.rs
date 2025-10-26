@@ -585,11 +585,11 @@ fn fuzz_utf8_byte_to_char_len() {
 }
 
 /// Serialize a struct that is stored at the pointer passed in
-const fn serialize_const_struct(
+const fn serialize_const_struct<const MAX_SIZE: usize>(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    mut to: ConstVec<u8, MAX_SIZE>,
     layout: &StructLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     let mut i = 0;
     while i < layout.data.len() {
         // Serialize the field at the offset pointer in the struct
@@ -602,11 +602,11 @@ const fn serialize_const_struct(
 }
 
 /// Serialize an enum that is stored at the pointer passed in
-const fn serialize_const_enum(
+const fn serialize_const_enum<const MAX_SIZE: usize>(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    mut to: ConstVec<u8, MAX_SIZE>,
     layout: &EnumLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     let mut discriminant = 0;
 
     let byte_ptr = ptr as *const u8;
@@ -642,11 +642,11 @@ const fn serialize_const_enum(
 }
 
 /// Serialize a primitive type that is stored at the pointer passed in
-const fn serialize_const_primitive(
+const fn serialize_const_primitive<const MAX_SIZE: usize>(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    mut to: ConstVec<u8, MAX_SIZE>,
     layout: &PrimitiveLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     let ptr = ptr as *const u8;
     let mut offset = 0;
     while offset < layout.size {
@@ -665,11 +665,11 @@ const fn serialize_const_primitive(
 }
 
 /// Serialize a constant sized array that is stored at the pointer passed in
-const fn serialize_const_list(
+const fn serialize_const_list<const MAX_SIZE: usize>(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    mut to: ConstVec<u8, MAX_SIZE>,
     layout: &ListLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     let len = layout.len;
     let mut i = 0;
     while i < len {
@@ -681,7 +681,11 @@ const fn serialize_const_list(
 }
 
 /// Serialize a pointer to a type that is stored at the pointer passed in
-const fn serialize_const_ptr(ptr: *const (), to: ConstVec<u8>, layout: &Layout) -> ConstVec<u8> {
+const fn serialize_const_ptr<const MAX_SIZE: usize>(
+    ptr: *const (),
+    to: ConstVec<u8, MAX_SIZE>,
+    layout: &Layout,
+) -> ConstVec<u8, MAX_SIZE> {
     match layout {
         Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
         Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
@@ -714,7 +718,10 @@ const fn serialize_const_ptr(ptr: *const (), to: ConstVec<u8>, layout: &Layout) 
 /// assert_eq!(buf.as_ref(), &[0x11, 0x11, 0x11, 0x11, 0x22, 0x33, 0x33, 0x33, 0x33]);
 /// ```
 #[must_use = "The data is serialized into the returned buffer"]
-pub const fn serialize_const<T: SerializeConst>(data: &T, to: ConstVec<u8>) -> ConstVec<u8> {
+pub const fn serialize_const<T: SerializeConst, const MAX_SIZE: usize>(
+    data: &T,
+    to: ConstVec<u8, MAX_SIZE>,
+) -> ConstVec<u8, MAX_SIZE> {
     let ptr = data as *const T as *const ();
     serialize_const_ptr(ptr, to, &T::MEMORY_LAYOUT)
 }

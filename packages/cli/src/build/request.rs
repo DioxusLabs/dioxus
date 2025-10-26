@@ -453,6 +453,7 @@ pub struct BuildArtifacts {
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
     pub(crate) permissions: super::permissions::PermissionManifest,
+    pub(crate) java_sources: super::android_java::JavaSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1078,12 +1079,18 @@ impl BuildRequest {
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
-                
+
+                // Copy Java sources to Gradle directory for Android
+                if self.bundle == BundleFormat::Android && !artifacts.java_sources.is_empty() {
+                    self.copy_java_sources_to_gradle(&artifacts.java_sources)
+                        .context("Failed to copy Java sources to Gradle directory")?;
+                }
+
                 // Update platform manifests with permissions AFTER writing metadata
                 // to avoid having them overwritten by the template
                 self.update_manifests_with_permissions(&artifacts.permissions)
                     .context("Failed to update manifests with permissions")?;
-                
+
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
@@ -1287,6 +1294,9 @@ impl BuildRequest {
         // Extract permissions from the binary (same pattern as assets)
         let permissions = self.collect_permissions(&exe, ctx).await?;
 
+        // Extract Java sources for Android builds
+        let java_sources = self.collect_java_sources(&exe, ctx).await?;
+
         // Note: We'll update platform manifests with permissions AFTER write_metadata()
         // to avoid having them overwritten by the template
 
@@ -1307,6 +1317,7 @@ impl BuildRequest {
             time_start,
             assets,
             permissions,
+            java_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1410,6 +1421,133 @@ impl BuildRequest {
         Ok(manifest)
     }
 
+    /// Collect Java sources for Android builds
+    async fn collect_java_sources(
+        &self,
+        exe: &Path,
+        _ctx: &BuildContext,
+    ) -> Result<super::android_java::JavaSourceManifest> {
+        if self.bundle != BundleFormat::Android {
+            return Ok(super::android_java::JavaSourceManifest::default());
+        }
+
+        let manifest = super::android_java::extract_java_sources_from_file(exe)?;
+
+        if !manifest.is_empty() {
+            tracing::info!(
+                "Found {} Java source declarations for Android",
+                manifest.sources().len()
+            );
+            for source in manifest.sources() {
+                tracing::info!(
+                    "  Plugin: {}, Package: {}, Files: {}",
+                    source.plugin_name.as_str(),
+                    source.package_name.as_str(),
+                    source.files.len()
+                );
+            }
+        } else {
+            tracing::debug!("No Java sources found in binary");
+        }
+
+        Ok(manifest)
+    }
+
+    /// Copy collected Java source files to the Gradle app directory
+    fn copy_java_sources_to_gradle(
+        &self,
+        java_sources: &super::android_java::JavaSourceManifest,
+    ) -> Result<()> {
+        let app_java_dir = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("java");
+
+        for source_metadata in java_sources.sources() {
+            let package_path = source_metadata.package_name.as_str().replace('.', "/");
+            let plugin_java_dir = app_java_dir.join(&package_path);
+            std::fs::create_dir_all(&plugin_java_dir)?;
+
+            for file_path_str in source_metadata.files.iter() {
+                let file_path = PathBuf::from(file_path_str.as_str());
+                let dest_file = plugin_java_dir.join(file_path.file_name().unwrap());
+
+                // Try to find the source file by searching through workspace dependencies
+                let source_file =
+                    self.find_java_source_in_workspace(&source_metadata.plugin_name, &file_path)?;
+
+                tracing::debug!(
+                    "Copying Java file: {} -> {}",
+                    source_file.display(),
+                    dest_file.display()
+                );
+                std::fs::copy(&source_file, &dest_file)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Find a Java source file in the workspace by searching through dependencies
+    fn find_java_source_in_workspace(
+        &self,
+        plugin_name: &str,
+        file_path: &Path,
+    ) -> Result<PathBuf> {
+        // Search through all packages in the workspace to find the one matching the plugin
+        for krate in self.workspace.krates.krates() {
+            let krate_name = krate.name.as_str();
+
+            // Look for packages that match the plugin name pattern
+            // e.g., "dioxus-mobile-geolocation" matches plugin "geolocation"
+            if krate_name.contains(&format!("mobile-{}", plugin_name))
+                || krate_name == format!("dioxus-mobile-{}", plugin_name)
+            {
+                // Get the package's manifest directory
+                let package_dir = krate
+                    .manifest_path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid manifest path for {}", krate_name))?;
+
+                // If file_path is just a filename, search in src/sys/android/
+                let filename = file_path
+                    .file_name()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid file path: {:?}", file_path))?
+                    .to_str()
+                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename: {:?}", file_path))?;
+
+                // Try common Android Java locations
+                let search_paths = [
+                    package_dir.join("src/sys/android").join(filename),
+                    package_dir.join("src/android").join(filename),
+                    package_dir.join(file_path.to_str().unwrap_or("")), // Try as-is if it's a relative path
+                ];
+
+                for source_file in search_paths {
+                    if source_file.exists() {
+                        tracing::debug!(
+                            "Found Java source for plugin '{}' in package '{}': {}",
+                            plugin_name,
+                            krate_name,
+                            source_file
+                        );
+                        return Ok(source_file.into_std_path_buf());
+                    }
+                }
+            }
+        }
+
+        Err(anyhow::anyhow!(
+            "Could not find Java source file '{}' for plugin '{}' in any workspace dependency. \
+            Searched through {} packages.",
+            file_path.display(),
+            plugin_name,
+            self.workspace.krates.len()
+        ))
+    }
+
     /// Update platform manifests with permissions after they're collected
     pub(crate) fn update_manifests_with_permissions(
         &self,
@@ -1495,10 +1633,13 @@ impl BuildRequest {
         let plist_path = self.root_dir().join("Info.plist");
         println!("🔍 Looking for Info.plist at: {:?}", plist_path);
         tracing::info!("🔍 Looking for Info.plist at: {:?}", plist_path);
-        
+
         if !plist_path.exists() {
             println!("❌ Info.plist not found at {:?}", plist_path);
-            tracing::warn!("Info.plist not found at {:?}, skipping permission update", plist_path);
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
             return Ok(());
         }
 
@@ -3280,19 +3421,16 @@ impl BuildRequest {
                 "WRY_ANDROID_LIBRARY".to_string(),
                 "dioxusmain".to_string().into(),
             ),
-            (
-                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
-                {
-                    let kotlin_dir = self.wry_android_kotlin_files_out_dir();
-                    // Ensure the directory exists for WRY's canonicalize check
-                    if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
-                        tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
-                        return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
-                    }
-                    tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
-                    kotlin_dir.into_os_string()
-                },
-            ),
+            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
+                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                // Ensure the directory exists for WRY's canonicalize check
+                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                }
+                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                kotlin_dir.into_os_string()
+            }),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
             // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
@@ -3700,11 +3838,11 @@ impl BuildRequest {
 
     fn copy_dependency_java_sources(&self, app_java_dir: &Path) -> Result<()> {
         use std::fs::read_dir;
-        
+
         // Get workspace path
         let workspace_root = self.workspace.workspace_root();
         let packages_dir = workspace_root.join("packages");
-        
+
         // Scan packages directory for android-shim subdirectories
         if let Ok(entries) = read_dir(&packages_dir) {
             for entry in entries {
@@ -3717,23 +3855,23 @@ impl BuildRequest {
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     fn copy_dir_all(&self, from: &Path, to: &Path) -> Result<()> {
         use std::fs::{copy, create_dir_all, read_dir};
-        
+
         if !from.exists() {
             return Ok(());
         }
-        
+
         for entry in read_dir(from)? {
             let entry = entry?;
             let path = entry.path();
             let file_name = entry.file_name();
             let dest = to.join(&file_name);
-            
+
             if path.is_dir() {
                 create_dir_all(&dest)?;
                 self.copy_dir_all(&path, &dest)?;
@@ -3742,7 +3880,7 @@ impl BuildRequest {
                 copy(&path, &dest)?;
             }
         }
-        
+
         Ok(())
     }
 
