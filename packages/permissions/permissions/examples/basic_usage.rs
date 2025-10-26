@@ -8,11 +8,11 @@ fn main() {
     // Declare various permissions
     const CAMERA: permissions::Permission = static_permission!(Camera, description = "Take photos");
     const LOCATION: permissions::Permission =
-    static_permission!(Location(Fine), description = "Track your runs");
+        static_permission!(Location(Fine), description = "Track your runs");
     const MICROPHONE: permissions::Permission =
-    static_permission!(Microphone, description = "Record audio");
+        static_permission!(Microphone, description = "Record audio");
     const NOTIFICATIONS: permissions::Permission =
-    static_permission!(Notifications, description = "Send push notifications");
+        static_permission!(Notifications, description = "Send push notifications");
 
     const CUSTOM: permissions::Permission = static_permission!(
         Custom {

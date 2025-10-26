@@ -67,7 +67,8 @@ fn test_platform_specific_permissions() {
     );
 
     // iOS-specific permission
-    const FACE_ID: permissions::Permission = static_permission!(FaceId, description = "Use Face ID");
+    const FACE_ID: permissions::Permission =
+        static_permission!(FaceId, description = "Use Face ID");
     assert!(!FACE_ID.supports_platform(Platform::Android));
     assert!(FACE_ID.supports_platform(Platform::Ios));
     assert!(FACE_ID.supports_platform(Platform::Macos));

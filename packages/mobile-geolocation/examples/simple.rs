@@ -40,7 +40,10 @@ fn main() {
             println!("✅ Location found!");
             println!("   Latitude:  {:.6}°", lat);
             println!("   Longitude: {:.6}°", lon);
-            println!("\n📍 View on map: https://www.google.com/maps?q={},{}", lat, lon);
+            println!(
+                "\n📍 View on map: https://www.google.com/maps?q={},{}",
+                lat, lon
+            );
         }
         None => {
             println!("❌ No location available");
@@ -59,4 +62,3 @@ fn main() {
 
     println!("\n✨ Example complete!");
 }
-

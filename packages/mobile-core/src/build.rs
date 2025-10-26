@@ -1,4 +1,7 @@
-use std::{env, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -63,21 +66,37 @@ pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result
         return Err(BuildError::JavaCompilationFailed);
     }
 
-    // Find the compiled class file
+    // Locate compiled class directory (may contain multiple helper classes)
     let package_path = package_name.replace('.', "/");
-    let class_file = out_dir.join(&package_path).join("LocationCallback.class");
+    let class_dir = out_dir.join(&package_path);
+    let class_files = collect_class_files(&class_dir)?;
 
     let d8_jar_path = android_build::android_d8_jar(None).ok_or(BuildError::D8JarNotFound)?;
 
     // Compile .class -> .dex
-    let dex_success = android_build::JavaRun::new()
+    let android_jar_str = android_jar_path.to_string_lossy().to_string();
+    let out_dir_str = out_dir.to_string_lossy().to_string();
+
+    let mut binding = android_build::JavaRun::new();
+    let mut d8 = binding
         .class_path(d8_jar_path)
         .main_class("com.android.tools.r8.D8")
-        .arg("--classpath")
-        .arg(android_jar_path)
-        .arg("--output")
-        .arg(&out_dir)
-        .arg(&class_file)
+        .args([
+            "--classpath",
+            &android_jar_str.clone(),
+            "--classpath",
+            &out_dir_str.clone(),
+            "--lib",
+            &android_jar_str.clone(),
+            "--output",
+            &out_dir_str.clone(),
+        ]);
+
+    for class_file in &class_files {
+        d8 = d8.arg(class_file);
+    }
+
+    let dex_success = d8
         .run()
         .map_err(|_| BuildError::DexCompilationFailed)?
         .success();
@@ -92,6 +111,38 @@ pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result
     }
 
     Ok(())
+}
+
+fn collect_class_files(dir: &Path) -> Result<Vec<PathBuf>, BuildError> {
+    if !dir.exists() {
+        return Err(BuildError::JavaCompilationFailed);
+    }
+
+    let mut class_files = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+
+    while let Some(path) = stack.pop() {
+        for entry in fs::read_dir(&path)? {
+            let entry = entry?;
+            let entry_path = entry.path();
+            if entry_path.is_dir() {
+                stack.push(entry_path);
+            } else if entry_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("class"))
+                .unwrap_or(false)
+            {
+                class_files.push(entry_path);
+            }
+        }
+    }
+
+    if class_files.is_empty() {
+        return Err(BuildError::JavaCompilationFailed);
+    }
+
+    Ok(class_files)
 }
 
 /// Link iOS frameworks
