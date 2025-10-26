@@ -1458,7 +1458,7 @@ impl BuildRequest {
             for file_path_str in source_metadata.files.iter() {
                 let file_path = PathBuf::from(file_path_str.as_str());
 
-                // Get filename for destination, handling both absolute and relative paths
+                // Get filename for destination
                 let filename = file_path.file_name().ok_or_else(|| {
                     anyhow::anyhow!(
                         "Java source path has no filename: {} (for plugin '{}')",
@@ -1468,90 +1468,25 @@ impl BuildRequest {
                 })?;
                 let dest_file = plugin_java_dir.join(filename);
 
-                // Check if path is absolute (new macro system) or relative (legacy)
-                let source_file = if file_path.is_absolute() {
-                    // Fast path: Use embedded absolute path directly
-                    if !file_path.exists() {
-                        anyhow::bail!(
-                            "Java source not found at embedded path: {} (for plugin '{}')",
-                            file_path.display(),
-                            source_metadata.plugin_name
-                        );
-                    }
-                    file_path
-                } else {
-                    // Legacy path: Search workspace (for old manual declarations)
-                    self.find_java_source_in_workspace(&source_metadata.plugin_name, &file_path)?
-                };
+                // Use embedded absolute path directly
+                if !file_path.exists() {
+                    anyhow::bail!(
+                        "Java source not found at embedded path: {} (for plugin '{}')",
+                        file_path.display(),
+                        source_metadata.plugin_name
+                    );
+                }
 
                 tracing::debug!(
                     "Copying Java file: {} -> {}",
-                    source_file.display(),
+                    file_path.display(),
                     dest_file.display()
                 );
-                std::fs::copy(&source_file, &dest_file)?;
+                std::fs::copy(&file_path, &dest_file)?;
             }
         }
 
         Ok(())
-    }
-
-    /// Find a Java source file in the workspace by searching through dependencies
-    fn find_java_source_in_workspace(
-        &self,
-        plugin_name: &str,
-        file_path: &Path,
-    ) -> Result<PathBuf> {
-        // Search through all packages in the workspace to find the one matching the plugin
-        for krate in self.workspace.krates.krates() {
-            let krate_name = krate.name.as_str();
-
-            // Look for packages that match the plugin name pattern
-            // e.g., "dioxus-mobile-geolocation" matches plugin "geolocation"
-            if krate_name.contains(&format!("mobile-{}", plugin_name))
-                || krate_name == format!("dioxus-mobile-{}", plugin_name)
-            {
-                // Get the package's manifest directory
-                let package_dir = krate
-                    .manifest_path
-                    .parent()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid manifest path for {}", krate_name))?;
-
-                // If file_path is just a filename, search in src/sys/android/
-                let filename = file_path
-                    .file_name()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid file path: {:?}", file_path))?
-                    .to_str()
-                    .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename: {:?}", file_path))?;
-
-                // Try common Android Java locations
-                let search_paths = [
-                    package_dir.join("src/sys/android").join(filename),
-                    package_dir.join("src/android").join(filename),
-                    package_dir.join(file_path.to_str().unwrap_or("")), // Try as-is if it's a relative path
-                ];
-
-                for source_file in search_paths {
-                    if source_file.exists() {
-                        tracing::debug!(
-                            "Found Java source for plugin '{}' in package '{}': {}",
-                            plugin_name,
-                            krate_name,
-                            source_file
-                        );
-                        return Ok(source_file.into_std_path_buf());
-                    }
-                }
-            }
-        }
-
-        Err(anyhow::anyhow!(
-            "Could not find Java source file '{}' for plugin '{}' in any workspace dependency. \
-            Searched through {} packages.",
-            file_path.display(),
-            plugin_name,
-            self.workspace.krates.len()
-        ))
     }
 
     /// Update platform manifests with permissions after they're collected

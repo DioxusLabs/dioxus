@@ -147,7 +147,7 @@ impl ToTokens for JavaPluginParser {
             
             // Create the Java source metadata with full paths
             const __JAVA_META: dioxus_mobile_core::android::JavaSourceMetadata =
-                dioxus_mobile_core::android::JavaSourceMetadata::new_with_paths(
+                dioxus_mobile_core::android::JavaSourceMetadata::new(
                     #package_name,
                     #plugin_name,
                     __FILE_PATHS,
