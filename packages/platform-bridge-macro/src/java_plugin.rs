@@ -155,8 +155,10 @@ impl ToTokens for JavaPluginParser {
                 );
 
             // Serialize the metadata
-            const __BUFFER: const_serialize::ConstVec<u8, 4096> =
-                const_serialize::serialize_const(&__JAVA_META, const_serialize::ConstVec::new_with_max_size());
+            const __BUFFER: const_serialize::ConstVec<u8, 4096> = {
+                const EMPTY: const_serialize::ConstVec<u8, 4096> = const_serialize::ConstVec::new_with_max_size();
+                const_serialize::serialize_const(&__JAVA_META, EMPTY)
+            };
             const __BYTES: &[u8] = __BUFFER.as_ref();
             const __LEN: usize = __BYTES.len();
 
