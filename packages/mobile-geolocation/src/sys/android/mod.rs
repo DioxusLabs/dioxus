@@ -136,12 +136,14 @@ fn has_location_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>) -> Opti
 
     #[cfg(feature = "location-fine")]
     {
-        has_permission |= check_permission(env, activity, "android.permission.ACCESS_FINE_LOCATION")?;
+        has_permission |=
+            check_permission(env, activity, "android.permission.ACCESS_FINE_LOCATION")?;
     }
 
     #[cfg(feature = "location-coarse")]
     {
-        has_permission |= check_permission(env, activity, "android.permission.ACCESS_COARSE_LOCATION")?;
+        has_permission |=
+            check_permission(env, activity, "android.permission.ACCESS_COARSE_LOCATION")?;
     }
 
     #[cfg(not(any(feature = "location-fine", feature = "location-coarse")))]
@@ -152,7 +154,11 @@ fn has_location_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>) -> Opti
     Some(has_permission)
 }
 
-fn check_permission(env: &mut JNIEnv<'_>, activity: &JObject<'_>, permission: &str) -> Option<bool> {
+fn check_permission(
+    env: &mut JNIEnv<'_>,
+    activity: &JObject<'_>,
+    permission: &str,
+) -> Option<bool> {
     let permission = new_string(env, permission).ok()?;
     let status = match env.call_method(
         activity,
