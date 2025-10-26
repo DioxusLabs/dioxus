@@ -39,7 +39,6 @@ pub enum BuildError {
 /// let java_files = vec![PathBuf::from("src/LocationCallback.java")];
 /// compile_java_to_dex(&java_files, "dioxus.mobile.geolocation")?;
 /// ```
-#[cfg(target_os = "android")]
 pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result<(), BuildError> {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
@@ -49,7 +48,7 @@ pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result
     }
 
     let android_jar_path =
-        android_build::android_jar(None).map_err(|_| BuildError::AndroidJarNotFound)?;
+        android_build::android_jar(None).ok_or(BuildError::AndroidJarNotFound)?;
 
     // Compile .java -> .class
     let compilation_success = android_build::JavaBuild::new()
@@ -68,7 +67,7 @@ pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result
     let package_path = package_name.replace('.', "/");
     let class_file = out_dir.join(&package_path).join("LocationCallback.class");
 
-    let d8_jar_path = android_build::android_d8_jar(None).map_err(|_| BuildError::D8JarNotFound)?;
+    let d8_jar_path = android_build::android_d8_jar(None).ok_or(BuildError::D8JarNotFound)?;
 
     // Compile .class -> .dex
     let dex_success = android_build::JavaRun::new()
@@ -87,12 +86,11 @@ pub fn compile_java_to_dex(java_files: &[PathBuf], package_name: &str) -> Result
         return Err(BuildError::DexCompilationFailed);
     }
 
-    Ok(())
-}
+    let dex_output = out_dir.join("classes.dex");
+    if !dex_output.exists() {
+        return Err(BuildError::DexCompilationFailed);
+    }
 
-#[cfg(not(target_os = "android"))]
-pub fn compile_java_to_dex(_java_files: &[PathBuf], _package_name: &str) -> Result<(), BuildError> {
-    // No-op for non-Android targets
     Ok(())
 }
 

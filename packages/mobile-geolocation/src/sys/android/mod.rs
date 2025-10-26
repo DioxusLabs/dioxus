@@ -1,13 +1,9 @@
 mod callback;
 
 use dioxus_mobile_core::android::{
-    call_method, call_static_method, find_class, new_object_array, new_string,
-    set_object_array_element, with_activity,
+    find_class, new_object_array, new_string, set_object_array_element, with_activity,
 };
-use jni::{
-    objects::{JObject, JValue},
-    JNIEnv,
-};
+use jni::objects::JValue;
 
 /// Request location permission at runtime
 pub fn request_permission() -> bool {
@@ -19,9 +15,8 @@ pub fn request_permission() -> bool {
         const REQUEST_CODE: i32 = 3;
         let activity_class = find_class(env, "androidx/core/app/ActivityCompat").ok()?;
 
-        call_static_method(
-            env,
-            &activity_class,
+        env.call_static_method(
+            activity_class,
             "requestPermissions",
             "(Landroid/app/Activity;[Ljava/lang/String;I)V",
             &[
@@ -41,52 +36,54 @@ pub fn request_permission() -> bool {
 pub fn last_known() -> Option<(f64, f64)> {
     with_activity(|env, activity| {
         let service_name = new_string(env, "location").ok()?;
-        let location_manager = call_method(
-            env,
-            activity,
-            "getSystemService",
-            "(Ljava/lang/String;)Ljava/lang/Object;",
-            &[JValue::Object(&service_name)],
-        )
-        .ok()?
-        .l()
-        .ok()?;
-
-        let provider = new_string(env, "gps").ok()?;
-        let mut location = call_method(
-            env,
-            &location_manager,
-            "getLastKnownLocation",
-            "(Ljava/lang/String;)Landroid/location/Location;",
-            &[JValue::Object(&provider)],
-        )
-        .ok()?
-        .l()
-        .ok()?;
-
-        if location.is_null() {
-            let fused_provider = new_string(env, "fused").ok()?;
-            location = call_method(
-                env,
-                &location_manager,
-                "getLastKnownLocation",
-                "(Ljava/lang/String;)Landroid/location/Location;",
-                &[JValue::Object(&fused_provider)],
+        let location_manager = env
+            .call_method(
+                activity,
+                "getSystemService",
+                "(Ljava/lang/String;)Ljava/lang/Object;",
+                &[JValue::Object(&service_name)],
             )
             .ok()?
             .l()
             .ok()?;
+
+        let provider = new_string(env, "gps").ok()?;
+        let mut location = env
+            .call_method(
+                &location_manager,
+                "getLastKnownLocation",
+                "(Ljava/lang/String;)Landroid/location/Location;",
+                &[JValue::Object(&provider)],
+            )
+            .ok()?
+            .l()
+            .ok()?;
+
+        if location.is_null() {
+            let fused_provider = new_string(env, "fused").ok()?;
+            location = env
+                .call_method(
+                    &location_manager,
+                    "getLastKnownLocation",
+                    "(Ljava/lang/String;)Landroid/location/Location;",
+                    &[JValue::Object(&fused_provider)],
+                )
+                .ok()?
+                .l()
+                .ok()?;
         }
 
         if location.is_null() {
             return None;
         }
 
-        let latitude = call_method(&location, "getLatitude", "()D", &[])
+        let latitude = env
+            .call_method(&location, "getLatitude", "()D", &[])
             .ok()?
             .d()
             .ok()?;
-        let longitude = call_method(&location, "getLongitude", "()D", &[])
+        let longitude = env
+            .call_method(&location, "getLongitude", "()D", &[])
             .ok()?
             .d()
             .ok()?;

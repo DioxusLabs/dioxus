@@ -13,6 +13,7 @@ default = []
 
 [dependencies]
 thiserror = { workspace = true }
+android-build = "0.1.3"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
@@ -20,9 +21,6 @@ ndk-context = "0.1.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.6.3"
-
-[build-dependencies]
-android-build = "0.1.3"
 
 [package.metadata.docs.rs]
 default-target = "x86_64-unknown-linux-gnu"

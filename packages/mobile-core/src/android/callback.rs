@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use jni::{
     objects::{GlobalRef, JClass, JObject, JValue},
     sys::jlong,

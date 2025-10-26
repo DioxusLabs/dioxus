@@ -1,5 +1,5 @@
 use jni::{
-    objects::{JObject, JValue},
+    objects::{JClass, JObject, JObjectArray, JString, JValue, JValueOwned},
     JNIEnv,
 };
 
@@ -8,63 +8,63 @@ pub type Result<T> = std::result::Result<T, jni::errors::Error>;
 
 /// Helper functions for common JNI operations
 
-/// Create a new Java string
-pub fn new_string(env: &mut JNIEnv<'_>, s: &str) -> Result<jni::objects::JString<'_>> {
+/// Create a new Java string tied to the current JNI frame
+pub fn new_string<'env>(env: &mut JNIEnv<'env>, s: &str) -> Result<JString<'env>> {
     env.new_string(s)
 }
 
 /// Create a new object array
-pub fn new_object_array(
-    env: &mut JNIEnv<'_>,
+pub fn new_object_array<'env>(
+    env: &mut JNIEnv<'env>,
     len: i32,
     element_class: &str,
-) -> Result<jni::objects::JObjectArray<'_>> {
+) -> Result<JObjectArray<'env>> {
     env.new_object_array(len, element_class, &JObject::null())
 }
 
 /// Set an element in an object array
-pub fn set_object_array_element(
-    env: &mut JNIEnv<'_>,
-    array: &jni::objects::JObjectArray<'_>,
+pub fn set_object_array_element<'env>(
+    env: &mut JNIEnv<'env>,
+    array: &JObjectArray<'env>,
     index: i32,
-    element: jni::objects::JString<'_>,
+    element: JString<'env>,
 ) -> Result<()> {
     env.set_object_array_element(array, index, element)
 }
 
 /// Call a static method on a class
-pub fn call_static_method(
-    env: &mut JNIEnv<'_>,
-    class: &jni::objects::JClass<'_>,
+pub fn call_static_method<'env, 'obj>(
+    env: &mut JNIEnv<'env>,
+    class: &JClass<'env>,
     method_name: &str,
     signature: &str,
-    args: &[JValue<'_>],
-) -> Result<jni::objects::JValue<'_>> {
+    args: &[JValue<'env, 'obj>],
+) -> Result<JValueOwned<'env>> {
     env.call_static_method(class, method_name, signature, args)
 }
 
 /// Call an instance method on an object
-pub fn call_method(
-    env: &mut JNIEnv<'_>,
-    obj: &JObject<'_>,
+pub fn call_method<'env, 'obj>(
+    env: &mut JNIEnv<'env>,
+    obj: &JObject<'env>,
     method_name: &str,
     signature: &str,
-    args: &[JValue<'_>],
-) -> Result<jni::objects::JValue<'_>> {
+    args: &[JValue<'env, 'obj>],
+) -> Result<JValueOwned<'env>> {
     env.call_method(obj, method_name, signature, args)
 }
 
 /// Find a Java class by name
-pub fn find_class(env: &mut JNIEnv<'_>, class_name: &str) -> Result<jni::objects::JClass<'_>> {
+pub fn find_class<'env>(env: &mut JNIEnv<'env>, class_name: &str) -> Result<JClass<'env>> {
     env.find_class(class_name)
 }
 
 /// Create a new object instance
-pub fn new_object(
-    env: &mut JNIEnv<'_>,
+pub fn new_object<'env, 'obj>(
+    env: &mut JNIEnv<'env>,
     class_name: &str,
     signature: &str,
-    args: &[JValue<'_>],
-) -> Result<jni::objects::JObject<'_>> {
+    args: &[JValue<'env, 'obj>],
+) -> Result<JObject<'env>> {
     env.new_object(class_name, signature, args)
 }
