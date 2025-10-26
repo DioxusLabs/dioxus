@@ -16,13 +16,16 @@ use java_plugin::JavaPluginParser;
 ///
 /// # Syntax
 ///
-/// Basic plugin declaration:
+/// Basic plugin declaration with full relative paths:
 /// ```rust,no_run
 /// #[cfg(target_os = "android")]
 /// dioxus_mobile_core::java_plugin!(
 ///     package = "dioxus.mobile.geolocation",
 ///     plugin = "geolocation",
-///     files = ["LocationCallback.java", "PermissionsHelper.java"]
+///     files = [
+///         "src/sys/android/LocationCallback.java",
+///         "src/sys/android/PermissionsHelper.java"
+///     ]
 /// );
 /// ```
 ///
@@ -30,16 +33,17 @@ use java_plugin::JavaPluginParser;
 ///
 /// - `package`: The Java package name (e.g., "dioxus.mobile.geolocation")
 /// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
-/// - `files`: Array of Java filenames relative to your crate's `src/sys/android/` or `src/android/` directory
+/// - `files`: Array of Java file paths relative to `CARGO_MANIFEST_DIR` (e.g., "src/sys/android/File.java")
 ///
-/// # File Resolution
+/// # File Paths
 ///
-/// The macro searches for Java files in the following locations relative to `CARGO_MANIFEST_DIR`:
-/// - `src/sys/android/` (recommended)
+/// File paths should be specified relative to your crate's manifest directory (`CARGO_MANIFEST_DIR`).
+/// Common directory structures include:
+/// - `src/sys/android/`
 /// - `src/android/`
-/// - Root directory (last resort)
+/// - Any other directory structure you prefer
 ///
-/// If a file is not found, the macro will emit a compile error with details about where it searched.
+/// The macro will resolve these paths at compile time using `env!("CARGO_MANIFEST_DIR")`.
 ///
 /// # Embedding
 ///

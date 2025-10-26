@@ -127,10 +127,11 @@ impl ToTokens for JavaPluginParser {
 
         // Generate the link section - we'll serialize the metadata inline
         // Build file paths dynamically by concatenating
+        // Now accepts full relative paths without hard-coding directory structure
         let file_path_consts: Vec<_> = file_path_lits.iter().enumerate().map(|(i, file_lit)| {
             let const_name = syn::Ident::new(&format!("__FILE_PATH{}", i), proc_macro2::Span::call_site());
             quote! {
-                const #const_name: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/src/sys/android/", #file_lit);
+                const #const_name: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/", #file_lit);
             }
         }).collect();
         

@@ -44,7 +44,10 @@ use permissions::{static_permission, Permission};
 dioxus_mobile_core::java_plugin!(
     package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
-    files = ["LocationCallback.java", "PermissionsHelper.java"]
+    files = [
+        "src/sys/android/LocationCallback.java",
+        "src/sys/android/PermissionsHelper.java"
+    ]
 );
 
 #[cfg(target_os = "ios")]
