@@ -1,15 +1,16 @@
-//! A simple hello world example for Dioxus fullstack with iOS permissions
+//! A simple hello world example for Dioxus fullstack
 //!
 //! Run with:
 //!
 //! ```sh
 //! dx serve --web
-//! dx build --target ios
 //! ```
 //!
 //! This example demonstrates a simple Dioxus fullstack application with a client-side counter
-//! and a server function that returns a greeting message. It also includes iOS permissions
-//! for camera and location access to demonstrate the permissions system.
+//! and a server function that returns a greeting message.
+//!
+//! The `use_action` hook makes it easy to call async work (like server functions) from the client side
+//! and handle loading and error states.
 
 use dioxus::prelude::*;
 use dioxus_fullstack::get;
@@ -24,20 +25,7 @@ fn app() -> Element {
 
     rsx! {
         div { style: "padding: 2rem; font-family: Arial, sans-serif;",
-            h1 { "Hello, Dioxus Fullstack with iOS Permissions!" }
-
-            // Display permission information
-            div { style: "margin: 1rem 0; padding: 1rem; background-color: #f0f0f0; border-radius: 8px;",
-                h2 { "📱 iOS Permissions" }
-                p { "This app requests the following permissions:" }
-                ul {
-                    li { "📷 Camera: {CAMERA_PERMISSION.description()}" }
-                    li { "📍 Location: {LOCATION_PERMISSION.description()}" }
-                }
-                p { style: "font-size: 0.9em; color: #666; margin-top: 0.5rem;",
-                    "When you build this app for iOS, these permissions will be automatically added to Info.plist"
-                }
-            }
+            h1 { "Hello, Dioxus Fullstack!" }
 
             // Client-side counter - you can use any client functionality in your app!
             div { style: "margin: 1rem 0;",
