@@ -5,8 +5,49 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
 
+mod ios_plugin;
 mod java_plugin;
+use ios_plugin::IosPluginParser;
 use java_plugin::JavaPluginParser;
+
+/// Declare an iOS framework plugin that will be embedded in the binary
+///
+/// This macro declares which iOS frameworks your crate requires. While the frameworks
+/// are linked automatically by objc2 at compile time, this macro allows you to declare
+/// framework dependencies in a clean, declarative way similar to `java_plugin!`.
+///
+/// # Syntax
+///
+/// Basic plugin declaration:
+/// ```rust,no_run
+/// #[cfg(target_os = "ios")]
+/// dioxus_mobile_core::ios_plugin!(
+///     plugin = "geolocation",
+///     frameworks = ["CoreLocation", "Foundation"]
+/// );
+/// ```
+///
+/// # Parameters
+///
+/// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
+/// - `frameworks`: Array of iOS framework names (e.g., ["CoreLocation", "Foundation"])
+///
+/// # Embedding
+///
+/// The macro embeds framework metadata into the binary using linker symbols with the
+/// `__IOS_FRAMEWORK__` prefix. This allows documentation and tooling to understand
+/// which frameworks your crate requires.
+///
+/// # Note
+///
+/// This macro is primarily for documentation and metadata purposes. The actual framework
+/// linking is handled automatically by objc2 when you use its APIs.
+#[proc_macro]
+pub fn ios_plugin(input: TokenStream) -> TokenStream {
+    let ios_plugin = parse_macro_input!(input as IosPluginParser);
+    
+    quote! { #ios_plugin }.into()
+}
 
 /// Declare a Java plugin that will be embedded in the binary
 ///

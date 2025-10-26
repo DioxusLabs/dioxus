@@ -27,3 +27,7 @@ pub use objc2;
 /// Re-export the java_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", target_os = "android"))]
 pub use mobile_core_macro::java_plugin;
+
+/// Re-export the ios_plugin! macro when metadata feature is enabled
+#[cfg(all(feature = "metadata", target_os = "ios"))]
+pub use mobile_core_macro::ios_plugin;

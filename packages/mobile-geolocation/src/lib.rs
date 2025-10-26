@@ -51,10 +51,10 @@ dioxus_mobile_core::java_plugin!(
 );
 
 #[cfg(target_os = "ios")]
-#[link_section = "__DATA,__ios_framework"]
-#[used]
-#[export_name = "__IOS_FRAMEWORK__dioxus_mobile_geolocation"]
-static IOS_FRAMEWORK_METADATA: (&str, &[&str]) = ("geolocation", &["CoreLocation", "Foundation"]);
+dioxus_mobile_core::ios_plugin!(
+    plugin = "geolocation",
+    frameworks = ["CoreLocation", "Foundation"]
+);
 
 pub use error::{Error, Result};
 
