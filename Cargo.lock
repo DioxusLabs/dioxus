@@ -4168,33 +4168,15 @@ dependencies = [
 name = "const-serialize"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "const-serialize-macro 0.7.0-rc.3",
+ "const-serialize",
+ "const-serialize-macro",
  "rand 0.9.2",
  "serde",
 ]
 
 [[package]]
-name = "const-serialize"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
-]
-
-[[package]]
 name = "const-serialize-macro"
 version = "0.7.0-rc.3"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
-name = "const-serialize-macro"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5369,7 +5351,7 @@ dependencies = [
  "clap",
  "console 0.16.1",
  "console-subscriber",
- "const-serialize 0.7.0-rc.3",
+ "const-serialize",
  "convert_case 0.8.0",
  "crossterm 0.29.0",
  "ctrlc",
@@ -5421,7 +5403,7 @@ dependencies = [
  "open",
  "path-absolutize",
  "pdb",
- "permissions-core 0.7.0-rc.3",
+ "permissions-core",
  "plist",
  "posthog-rs",
  "prettyplease",
@@ -5484,7 +5466,7 @@ dependencies = [
  "browserslist-rs 0.19.0",
  "built 0.8.0",
  "codemap",
- "const-serialize 0.7.0-rc.3",
+ "const-serialize",
  "grass",
  "image",
  "imagequant",
@@ -6019,22 +6001,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-mobile-geolocation"
-version = "0.1.0"
-source = "git+https://github.com/wheregmis/mobile-geolocation.git#6d0c6525f4204958b2b26cd66b72c35f2dbaf58e"
-dependencies = [
- "cfg-if",
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "dioxus-platform-bridge 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "jni 0.21.1",
- "ndk-context",
- "objc2 0.6.3",
- "objc2-core-location 0.3.2",
- "permissions 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "permissions-core 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
-]
-
-[[package]]
 name = "dioxus-native"
 version = "0.7.0-rc.3"
 dependencies = [
@@ -6082,26 +6048,12 @@ dependencies = [
 name = "dioxus-platform-bridge"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "const-serialize-macro 0.7.0-rc.3",
+ "const-serialize",
+ "const-serialize-macro",
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.6.3",
- "platform-bridge-macro 0.7.0-rc.3",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "dioxus-platform-bridge"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "const-serialize-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "jni 0.21.1",
- "ndk-context",
- "objc2 0.6.3",
- "platform-bridge-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
+ "platform-bridge-macro",
  "thiserror 2.0.17",
 ]
 
@@ -7795,14 +7747,6 @@ checksum = "985a5578ebdb02351d484a77fb27e7cb79272f1ba9bc24692d8243c3cfe40660"
 dependencies = [
  "rustversion",
  "typenum",
-]
-
-[[package]]
-name = "geolocation-demo"
-version = "0.1.0"
-dependencies = [
- "dioxus",
- "dioxus-mobile-geolocation",
 ]
 
 [[package]]
@@ -10804,7 +10748,7 @@ dependencies = [
 name = "manganis"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
+ "const-serialize",
  "manganis-core",
  "manganis-macro",
 ]
@@ -10813,7 +10757,7 @@ dependencies = [
 name = "manganis-core"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
+ "const-serialize",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core-types",
@@ -11766,7 +11710,7 @@ dependencies = [
  "bitflags 2.9.4",
  "block2 0.5.1",
  "objc2 0.5.2",
- "objc2-core-location 0.2.2",
+ "objc2-core-location",
  "objc2-foundation 0.2.2",
 ]
 
@@ -11779,16 +11723,6 @@ dependencies = [
  "block2 0.5.1",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
-]
-
-[[package]]
-name = "objc2-contacts"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b034b578389f89a85c055eacc8d8b368be5f04a6c1b07f672bf3aec21d0ef621"
-dependencies = [
- "objc2 0.6.3",
- "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -11858,21 +11792,8 @@ checksum = "000cfee34e683244f284252ee206a27953279d370e309649dc3ee317b37e5781"
 dependencies = [
  "block2 0.5.1",
  "objc2 0.5.2",
- "objc2-contacts 0.2.2",
+ "objc2-contacts",
  "objc2-foundation 0.2.2",
-]
-
-[[package]]
-name = "objc2-core-location"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca347214e24bc973fc025fd0d36ebb179ff30536ed1f80252706db19ee452009"
-dependencies = [
- "block2 0.6.2",
- "dispatch2",
- "objc2 0.6.3",
- "objc2-contacts 0.3.2",
- "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -12005,7 +11926,7 @@ dependencies = [
  "objc2-cloud-kit",
  "objc2-core-data",
  "objc2-core-image",
- "objc2-core-location 0.2.2",
+ "objc2-core-location",
  "objc2-foundation 0.2.2",
  "objc2-link-presentation",
  "objc2-quartz-core",
@@ -12046,7 +11967,7 @@ dependencies = [
  "bitflags 2.9.4",
  "block2 0.5.1",
  "objc2 0.5.2",
- "objc2-core-location 0.2.2",
+ "objc2-core-location",
  "objc2-foundation 0.2.2",
 ]
 
@@ -12660,37 +12581,17 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "permissions"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "permissions-core 0.7.0-rc.3",
- "permissions-macro 0.7.0-rc.3",
-]
-
-[[package]]
-name = "permissions"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "permissions-core 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "permissions-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
+ "const-serialize",
+ "permissions-core",
+ "permissions-macro",
 ]
 
 [[package]]
 name = "permissions-core"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "const-serialize-macro 0.7.0-rc.3",
- "serde",
-]
-
-[[package]]
-name = "permissions-core"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "const-serialize-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
+ "const-serialize",
+ "const-serialize-macro",
  "serde",
 ]
 
@@ -12698,20 +12599,8 @@ dependencies = [
 name = "permissions-macro"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "permissions-core 0.7.0-rc.3",
- "proc-macro2",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
-name = "permissions-macro"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "permissions-core 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
+ "const-serialize",
+ "permissions-core",
  "proc-macro2",
  "quote",
  "syn 2.0.107",
@@ -13080,20 +12969,8 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 name = "platform-bridge-macro"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize 0.7.0-rc.3",
- "const-serialize-macro 0.7.0-rc.3",
- "proc-macro2",
- "quote",
- "syn 2.0.107",
-]
-
-[[package]]
-name = "platform-bridge-macro"
-version = "0.7.0-rc.3"
-source = "git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing#22a258c344bd8a384f469d06b851453f6a4f1e5f"
-dependencies = [
- "const-serialize 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
- "const-serialize-macro 0.7.0-rc.3 (git+https://github.com/wheregmis/dioxus.git?branch=native_api_testing)",
+ "const-serialize",
+ "const-serialize-macro",
  "proc-macro2",
  "quote",
  "syn 2.0.107",
