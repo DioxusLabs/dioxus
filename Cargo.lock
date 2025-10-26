@@ -6007,6 +6007,7 @@ dependencies = [
  "const-serialize",
  "const-serialize-macro",
  "jni 0.21.1",
+ "mobile-core-macro",
  "ndk-context",
  "objc2 0.6.3",
  "thiserror 2.0.17",
@@ -11053,6 +11054,17 @@ dependencies = [
  "log",
  "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "mobile-core-macro"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
 ]
 
 [[package]]

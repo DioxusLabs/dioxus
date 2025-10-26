@@ -23,3 +23,7 @@ pub use jni;
 
 #[cfg(target_os = "ios")]
 pub use objc2;
+
+/// Re-export the java_plugin! macro when metadata feature is enabled
+#[cfg(all(feature = "metadata", target_os = "android"))]
+pub use mobile_core_macro::java_plugin;

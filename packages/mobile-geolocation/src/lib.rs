@@ -38,41 +38,14 @@ mod sys;
 
 use permissions::{static_permission, Permission};
 
-// Declare Java sources for Android - these will be collected by dx CLI via linker symbols
+// Declare Java sources for Android using the macro system
+// This embeds absolute paths and generates linker symbols automatically
 #[cfg(target_os = "android")]
-use dioxus_mobile_core::android::JavaSourceMetadata;
-
-#[cfg(target_os = "android")]
-const JAVA_META: JavaSourceMetadata = JavaSourceMetadata::new(
-    "dioxus.mobile.geolocation",
-    "geolocation",
-    &["LocationCallback.java", "PermissionsHelper.java"],
+dioxus_mobile_core::java_plugin!(
+    package = "dioxus.mobile.geolocation",
+    plugin = "geolocation",
+    files = ["LocationCallback.java", "PermissionsHelper.java"]
 );
-
-// Serialize and embed in linker section
-#[cfg(target_os = "android")]
-const JAVA_META_BYTES: [u8; JavaSourceMetadata::SERIALIZED_SIZE] = {
-    use const_serialize::{serialize_const, ConstVec};
-    // Serialize with a buffer sized to the metadata, then pad to SERIALIZED_SIZE
-    let serialized = serialize_const(
-        &JAVA_META,
-        ConstVec::<u8, { JavaSourceMetadata::SERIALIZED_SIZE }>::new_with_max_size(),
-    );
-    let mut data = [0u8; JavaSourceMetadata::SERIALIZED_SIZE];
-    let mut i = 0;
-    let bytes = serialized.as_ref();
-    while i < bytes.len() && i < JavaSourceMetadata::SERIALIZED_SIZE {
-        data[i] = bytes[i];
-        i += 1;
-    }
-    data
-};
-
-#[cfg(target_os = "android")]
-#[link_section = "__DATA,__java_source"]
-#[used]
-#[export_name = "__JAVA_SOURCE__dioxus_mobile_geolocation"]
-static JAVA_SOURCE_METADATA: [u8; JavaSourceMetadata::SERIALIZED_SIZE] = JAVA_META_BYTES;
 
 #[cfg(target_os = "ios")]
 #[link_section = "__DATA,__ios_framework"]
@@ -140,8 +113,8 @@ pub fn __ensure_permissions_linked() {
 #[inline(never)]
 #[doc(hidden)]
 fn __ensure_metadata_linked() {
-    #[cfg(target_os = "android")]
-    let _ = &JAVA_SOURCE_METADATA;
+    // Metadata is automatically linked via the macro-generated static
+    // The #[link_section] and #[used] attributes ensure the data is included
     #[cfg(target_os = "ios")]
     let _ = &IOS_FRAMEWORK_METADATA;
 }

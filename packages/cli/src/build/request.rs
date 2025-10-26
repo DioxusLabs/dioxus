@@ -1457,11 +1457,32 @@ impl BuildRequest {
 
             for file_path_str in source_metadata.files.iter() {
                 let file_path = PathBuf::from(file_path_str.as_str());
-                let dest_file = plugin_java_dir.join(file_path.file_name().unwrap());
 
-                // Try to find the source file by searching through workspace dependencies
-                let source_file =
-                    self.find_java_source_in_workspace(&source_metadata.plugin_name, &file_path)?;
+                // Get filename for destination, handling both absolute and relative paths
+                let filename = file_path.file_name().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Java source path has no filename: {} (for plugin '{}')",
+                        file_path.display(),
+                        source_metadata.plugin_name
+                    )
+                })?;
+                let dest_file = plugin_java_dir.join(filename);
+
+                // Check if path is absolute (new macro system) or relative (legacy)
+                let source_file = if file_path.is_absolute() {
+                    // Fast path: Use embedded absolute path directly
+                    if !file_path.exists() {
+                        anyhow::bail!(
+                            "Java source not found at embedded path: {} (for plugin '{}')",
+                            file_path.display(),
+                            source_metadata.plugin_name
+                        );
+                    }
+                    file_path
+                } else {
+                    // Legacy path: Search workspace (for old manual declarations)
+                    self.find_java_source_in_workspace(&source_metadata.plugin_name, &file_path)?
+                };
 
                 tracing::debug!(
                     "Copying Java file: {} -> {}",

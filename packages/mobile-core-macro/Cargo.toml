@@ -1,0 +1,25 @@
+[package]
+name = "mobile-core-macro"
+version = "0.7.0-rc.3"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Procedural macro for declaring Java plugins with linker embedding"
+authors = ["DioxusLabs"]
+repository = "https://github.com/DioxusLabs/dioxus"
+homepage = "https://dioxuslabs.com"
+documentation = "https://docs.rs/mobile-core-macro"
+keywords = ["mobile", "java", "macro", "linker", "android"]
+categories = ["development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+const-serialize = { path = "../const-serialize" }
+const-serialize-macro = { path = "../const-serialize-macro" }
+
+[dev-dependencies]
+
