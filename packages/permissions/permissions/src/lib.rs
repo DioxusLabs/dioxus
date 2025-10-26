@@ -12,13 +12,13 @@
 //! ## Usage
 //!
 //! ```rust
-//! use permissions::{permission, Permission};
+//! use permissions::{static_permission, Permission};
 //!
-//! // Declare a camera permission
-//! const CAMERA: Permission = permission!(Camera, description = "Take photos");
+//! // Declare a camera permission (static / compile-time)
+//! const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
 //!
 //! // Declare a location permission with precision
-//! const LOCATION: Permission = permission!(Location(Fine), description = "Track your runs");
+//! const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
 //!
 //! // Use the permission
 //! println!("Camera permission: {}", CAMERA.description());
@@ -26,18 +26,21 @@
 //!     println!("Android permission: {}", android_perm);
 //! }
 //! ```
+//!
+//! > **Note:** `permission!` remains available as an alias for `static_permission!`
+//! > to preserve backward compatibility with existing code.
 
 pub use permissions_core::{
     LocationPrecision, Permission, PermissionKind, PermissionManifest, Platform, PlatformFlags,
     PlatformIdentifiers,
 };
-pub use permissions_macro::permission;
+pub use permissions_macro::{permission, static_permission};
 
 #[doc(hidden)]
 pub mod macro_helpers {
     //! Helper functions for macro expansion
     //!
-    //! These functions are used internally by the `permission!()` macro
+    //! These functions are used internally by the `static_permission!()` macro (and its `permission!()` alias)
     //! and should not be used directly.
 
     pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};

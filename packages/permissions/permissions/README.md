@@ -17,25 +17,25 @@ This crate provides a unified API for declaring permissions across all platforms
 ### Basic Permission Declaration
 
 ```rust
-use permissions::{permission, Permission};
+use permissions::{static_permission, Permission};
 
 // Declare a camera permission
-const CAMERA: Permission = permission!(Camera, description = "Take photos");
+const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
 
 // Declare a location permission with precision
-const LOCATION: Permission = permission!(Location(Fine), description = "Track your runs");
+const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
 
 // Declare a microphone permission
-const MICROPHONE: Permission = permission!(Microphone, description = "Record audio");
+const MICROPHONE: Permission = static_permission!(Microphone, description = "Record audio");
 ```
 
 ### Custom Permissions
 
 ```rust
-use permissions::{permission, Permission};
+use permissions::{static_permission, Permission};
 
 // Declare a custom permission with platform-specific identifiers
-const CUSTOM: Permission = permission!(
+const CUSTOM: Permission = static_permission!(
     Custom { 
         android = "android.permission.MY_PERMISSION",
         ios = "NSMyUsageDescription",
@@ -51,9 +51,9 @@ const CUSTOM: Permission = permission!(
 ### Using Permissions
 
 ```rust
-use permissions::{permission, Permission, Platform};
+use permissions::{static_permission, Permission, Platform};
 
-const CAMERA: Permission = permission!(Camera, description = "Take photos");
+const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
 
 // Get the description
 println!("Description: {}", CAMERA.description());
@@ -124,7 +124,7 @@ Each permission kind automatically maps to the appropriate platform-specific req
 
 ## How It Works
 
-1. **Declaration**: Use the `permission!()` macro to declare permissions in your code
+1. **Declaration**: Use the `static_permission!()` macro (or legacy `permission!()`) to declare permissions in your code
 2. **Embedding**: The macro embeds permission data in linker sections with `__PERMISSION__*` symbols
 3. **Collection**: Build tools can extract permissions by scanning the binary for these symbols
 4. **Injection**: Permissions can be injected into platform-specific configuration files

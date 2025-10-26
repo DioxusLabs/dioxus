@@ -7,7 +7,7 @@ use syn::{
 
 use permissions_core::{LocationPrecision, PermissionKind};
 
-/// Parser for the permission!() macro syntax
+/// Parser for the `static_permission!()` macro syntax (and `permission!()` alias)
 pub struct PermissionParser {
     /// The permission kind being declared
     kind: PermissionKindParser,

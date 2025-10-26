@@ -2,19 +2,19 @@
 //!
 //! This example demonstrates how to declare and use permissions across different platforms.
 
-use permissions::{permission, Platform};
+use permissions::{static_permission, Platform};
 
 fn main() {
     // Declare various permissions
-    const CAMERA: permissions::Permission = permission!(Camera, description = "Take photos");
+    const CAMERA: permissions::Permission = static_permission!(Camera, description = "Take photos");
     const LOCATION: permissions::Permission =
-        permission!(Location(Fine), description = "Track your runs");
+    static_permission!(Location(Fine), description = "Track your runs");
     const MICROPHONE: permissions::Permission =
-        permission!(Microphone, description = "Record audio");
+    static_permission!(Microphone, description = "Record audio");
     const NOTIFICATIONS: permissions::Permission =
-        permission!(Notifications, description = "Send push notifications");
+    static_permission!(Notifications, description = "Send push notifications");
 
-    const CUSTOM: permissions::Permission = permission!(
+    const CUSTOM: permissions::Permission = static_permission!(
         Custom {
             android = "MY_CUSTOM",
             ios = "NSMyCustom",

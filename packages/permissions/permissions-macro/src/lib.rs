@@ -17,22 +17,22 @@ use permission::PermissionParser;
 /// Basic permission declaration:
 /// ```rust
 /// use permissions_core::Permission;
-/// use permissions_macro::permission;
-/// const CAMERA: Permission = permission!(Camera, description = "Take photos");
+/// use permissions_macro::static_permission;
+/// const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
 /// ```
 ///
 /// Location permission with precision:
 /// ```rust
 /// use permissions_core::Permission;
-/// use permissions_macro::permission;
-/// const LOCATION: Permission = permission!(Location(Fine), description = "Track your runs");
+/// use permissions_macro::static_permission;
+/// const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
 /// ```
 ///
 /// Microphone permission:
 /// ```rust
 /// use permissions_core::Permission;
-/// use permissions_macro::permission;
-/// const MICROPHONE: Permission = permission!(Microphone, description = "Record audio");
+/// use permissions_macro::static_permission;
+/// const MICROPHONE: Permission = static_permission!(Microphone, description = "Record audio");
 /// ```
 ///
 /// # Supported Permission Kinds
@@ -62,8 +62,14 @@ use permission::PermissionParser;
 /// - `ScreenWakeLock` - Screen wake lock (Web only)
 /// - `Custom { ... }` - Custom permission with platform-specific identifiers (not shown in doctests due to buffer size limitations)
 #[proc_macro]
-pub fn permission(input: TokenStream) -> TokenStream {
+pub fn static_permission(input: TokenStream) -> TokenStream {
     let permission = parse_macro_input!(input as PermissionParser);
 
     quote! { #permission }.into()
+}
+
+/// Backward compatible alias for [`static_permission!`].
+#[proc_macro]
+pub fn permission(input: TokenStream) -> TokenStream {
+    static_permission(input)
 }

@@ -1,8 +1,8 @@
-use permissions::{permission, LocationPrecision, PermissionKind, Platform};
+use permissions::{static_permission, LocationPrecision, PermissionKind, Platform};
 
 #[test]
 fn test_camera_permission() {
-    const CAM: permissions::Permission = permission!(Camera, description = "For selfies");
+    const CAM: permissions::Permission = static_permission!(Camera, description = "For selfies");
 
     assert_eq!(CAM.description(), "For selfies");
     assert!(CAM.supports_platform(Platform::Android));
@@ -28,9 +28,9 @@ fn test_camera_permission() {
 #[test]
 fn test_location_permission() {
     const LOCATION_FINE: permissions::Permission =
-        permission!(Location(Fine), description = "Track your runs");
+        static_permission!(Location(Fine), description = "Track your runs");
     const LOCATION_COARSE: permissions::Permission =
-        permission!(Location(Coarse), description = "Find nearby places");
+        static_permission!(Location(Coarse), description = "Find nearby places");
 
     assert_eq!(LOCATION_FINE.description(), "Track your runs");
     assert_eq!(LOCATION_COARSE.description(), "Find nearby places");
@@ -57,7 +57,7 @@ fn test_location_permission() {
 #[test]
 fn test_platform_specific_permissions() {
     // Android-specific permission
-    const SMS: permissions::Permission = permission!(Sms, description = "Read SMS messages");
+    const SMS: permissions::Permission = static_permission!(Sms, description = "Read SMS messages");
     assert!(SMS.supports_platform(Platform::Android));
     assert!(!SMS.supports_platform(Platform::Ios));
     assert!(!SMS.supports_platform(Platform::Web));
@@ -67,7 +67,7 @@ fn test_platform_specific_permissions() {
     );
 
     // iOS-specific permission
-    const FACE_ID: permissions::Permission = permission!(FaceId, description = "Use Face ID");
+    const FACE_ID: permissions::Permission = static_permission!(FaceId, description = "Use Face ID");
     assert!(!FACE_ID.supports_platform(Platform::Android));
     assert!(FACE_ID.supports_platform(Platform::Ios));
     assert!(FACE_ID.supports_platform(Platform::Macos));
@@ -79,7 +79,7 @@ fn test_platform_specific_permissions() {
 
     // Web-specific permission
     const CLIPBOARD: permissions::Permission =
-        permission!(Clipboard, description = "Access clipboard");
+        static_permission!(Clipboard, description = "Access clipboard");
     assert!(!CLIPBOARD.supports_platform(Platform::Android));
     assert!(!CLIPBOARD.supports_platform(Platform::Ios));
     assert!(CLIPBOARD.supports_platform(Platform::Web));
@@ -91,7 +91,7 @@ fn test_platform_specific_permissions() {
 
 #[test]
 fn test_custom_permission() {
-    const CUSTOM: permissions::Permission = permission!(
+    const CUSTOM: permissions::Permission = static_permission!(
         Custom {
             android = "MY_PERM",
             ios = "NSMyUsage",
@@ -122,8 +122,8 @@ fn test_permission_manifest() {
 
     // Note: In a real implementation, we would add permissions to the manifest
     // For now, we just test the basic structure
-    // const CAM: permissions::Permission = permission!(Camera, description = "Take photos");
-    // const MIC: permissions::Permission = permission!(Microphone, description = "Record audio");
+    // const CAM: permissions::Permission = static_permission!(Camera, description = "Take photos");
+    // const MIC: permissions::Permission = static_permission!(Microphone, description = "Record audio");
 
     // Note: In a real implementation, we would add permissions to the manifest
     // For now, we just test the basic structure

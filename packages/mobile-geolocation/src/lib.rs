@@ -36,7 +36,7 @@
 mod error;
 mod sys;
 
-use permissions::{permission, Permission};
+use permissions::{static_permission, Permission};
 
 pub use error::{Error, Result};
 
@@ -49,20 +49,20 @@ pub struct Coordinates {
 
 // Embed location permissions as linker symbols when features are enabled
 #[cfg(feature = "location-fine")]
-pub const LOCATION_FINE: Permission = permission!(
+pub const LOCATION_FINE: Permission = static_permission!(
     Location(Fine),
     description = "Precise location for geolocation features"
 );
 
 #[cfg(feature = "location-coarse")]
-pub const LOCATION_COARSE: Permission = permission!(
+pub const LOCATION_COARSE: Permission = static_permission!(
     Location(Coarse),
     description = "Approximate location for geolocation features"
 );
 
 // Optional background location (Android + iOS)
 #[cfg(feature = "background-location")]
-pub const BACKGROUND_LOCATION: Permission = permission!(
+pub const BACKGROUND_LOCATION: Permission = static_permission!(
     Custom {
         android = "android.permission.ACCESS_BACKGROUND_LOCATION",
         ios = "NSLocationAlwaysAndWhenInUseUsageDescription",

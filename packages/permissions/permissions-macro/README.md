@@ -2,21 +2,24 @@
 
 Procedural macro for declaring permissions with linker embedding.
 
-This crate provides the `permission!()` macro that allows you to declare permissions
+This crate provides the `permission!()` and `static_permission!()` macros that allow you to declare permissions
 that will be embedded in the binary using linker sections, similar to how Manganis
-embeds assets.
+embeds assets. Use `static_permission!()` when you want to make it explicit that a
+permission is a compile-time (linker) declaration that should be emitted into
+platform manifests (Info.plist, AndroidManifest.xml, etc.). The `permission!()`
+alias is kept for backward compatibility.
 
 ## Usage
 
 ```rust
 use permissions_core::Permission;
-use permissions_macro::permission;
+use permissions_macro::static_permission;
 
 // Basic permission
-const CAMERA: Permission = permission!(Camera, description = "Take photos");
+const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
 
 // Location with precision
-const LOCATION: Permission = permission!(Location(Fine), description = "Track your runs");
+const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
 
 // Custom permission (not shown in doctests due to buffer size limitations)
 // const CUSTOM: Permission = permission!(
