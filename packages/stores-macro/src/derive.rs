@@ -60,7 +60,7 @@ fn derive_store_struct(
 
     let generics = &input.generics;
     let (_, ty_generics, _) = generics.split_for_impl();
-    let (extension_impl_generics, extension_generics, extension_where_clause) =
+    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
         extension_generics.split_for_impl();
 
     // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed struct
@@ -85,7 +85,7 @@ fn derive_store_struct(
     let definition = quote! {
         fn transpose(
             self,
-        ) -> #transposed_name #extension_generics where Self: ::std::marker::Copy;
+        ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let field_names = fields
@@ -108,7 +108,7 @@ fn derive_store_struct(
     let implementation = quote! {
         fn transpose(
             self,
-        ) -> #transposed_name #extension_generics where Self: ::std::marker::Copy {
+        ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
             // Convert each field into the corresponding store
             #(
                 let #field_names = self.#field_names();
@@ -121,12 +121,11 @@ fn derive_store_struct(
     // Generate the transposed struct definition
     let transposed_struct = transposed_struct(
         visibility,
-        &struct_name,
+        struct_name,
         &transposed_name,
         structure,
-        &generics,
-        &extension_impl_generics,
-        extension_where_clause,
+        generics,
+        &extension_generics,
         &transposed_fields,
     );
 
@@ -138,7 +137,7 @@ fn derive_store_struct(
             )*
         }
 
-        impl #extension_impl_generics #extension_trait_name #extension_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
+        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
             #(
                 #implementations
             )*
@@ -160,10 +159,10 @@ fn transposed_struct(
     transposed_name: &Ident,
     structure: &DataStruct,
     generics: &syn::Generics,
-    extension_impl_generics: &syn::ImplGenerics,
-    extension_where_clause: Option<&syn::WhereClause>,
-    transposed_fields: &Vec<TokenStream2>,
+    extension_generics: &syn::Generics,
+    transposed_fields: &[TokenStream2],
 ) -> TokenStream2 {
+    let (extension_impl_generics, _, extension_where_clause) = extension_generics.split_for_impl();
     // Only use a type alias if:
     // - There are no bounds on the type generics
     // - All fields are generic types
