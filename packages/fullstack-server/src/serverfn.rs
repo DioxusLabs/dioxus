@@ -2,7 +2,8 @@ use axum::body::Body;
 use axum::routing::MethodRouter;
 use axum::Router;
 use dashmap::DashMap;
-use dioxus_fullstack_core::DioxusServerState;
+use dioxus_fullstack_core::{DioxusServerState, FullstackContext};
+use dioxus_signals::SyncStorage;
 use http::Method;
 use std::{marker::PhantomData, sync::LazyLock};
 
@@ -76,9 +77,39 @@ impl ServerFunction {
         //     }
         // }
 
+        async fn server_context_middleware(
+            request: axum::extract::Request,
+            next: axum::middleware::Next,
+        ) -> axum::response::Response {
+            let (parts, body) = request.into_parts();
+            let server_context = FullstackContext::new(parts.clone());
+            let request = axum::extract::Request::from_parts(parts, body);
+
+            server_context
+                .scope(async move {
+                    // Run the next middleware / handler inside the server context
+                    let mut response = next.run(request).await;
+
+                    let server_context = FullstackContext::current().expect(
+                        "Server context should be available inside the server context scope",
+                    );
+
+                    // Get the extra response headers set during the handler and add them to the response
+                    let headers = server_context.take_response_headers();
+                    if let Some(headers) = headers {
+                        response.headers_mut().extend(headers);
+                    }
+
+                    response
+                })
+                .await
+        }
+
         router.route(
             self.path(),
-            ((self.handler)()).with_state(DioxusServerState {}),
+            ((self.handler)())
+                .with_state(DioxusServerState {})
+                .layer(axum::middleware::from_fn(server_context_middleware)),
         )
     }
 }
