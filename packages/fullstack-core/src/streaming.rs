@@ -1,5 +1,5 @@
 use crate::{HttpError, ServerFnError};
-use axum_core::extract::{FromRequest, FromRequestParts};
+use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
