@@ -1,5 +1,5 @@
 use crate::{HttpError, ServerFnError};
-use axum_core::extract::FromRequestParts;
+use axum_core::extract::{FromRequest, FromRequestParts};
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
@@ -111,12 +111,16 @@ impl FullstackContext {
     }
 
     /// Extract an axum extractor from the current request.
-    pub async fn extract<T: FromRequestParts<()>>() -> Result<T, ServerFnError> {
+    ///
+    /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
+    /// function extractors.
+    pub async fn extract<T: FromRequest<(), M>, M>() -> Result<T, ServerFnError> {
         let this = Self::current()
             .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
 
-        let mut parts = this.request_headers.read().clone();
-        match T::from_request_parts(&mut parts, &()).await {
+        let parts = this.request_headers.read().clone();
+        let request = axum_core::extract::Request::from_parts(parts, Default::default());
+        match T::from_request(request, &()).await {
             Ok(res) => Ok(res),
             Err(err) => {
                 let resp = err.into_response();
@@ -251,9 +255,9 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequestParts<()>>(
+pub fn extract<T: FromRequest<(), M>, M>(
 ) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
-    FullstackContext::extract::<T>()
+    FullstackContext::extract::<T, M>()
 }
 
 /// Get the current status of the streaming response. This method is reactive and will cause
