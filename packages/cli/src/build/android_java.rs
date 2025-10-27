@@ -11,7 +11,6 @@ use std::path::Path;
 use crate::Result;
 use anyhow::Context;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
-use pdb::FallibleIterator;
 
 const JAVA_SOURCE_SYMBOL_PREFIX: &str = "__JAVA_SOURCE__";
 
@@ -34,91 +33,17 @@ fn java_source_symbols<'a, 'b, R: ReadRef<'a>>(
         })
 }
 
-fn looks_like_java_source_symbol(name: &str) -> bool {
-    name.contains(JAVA_SOURCE_SYMBOL_PREFIX)
-}
 
 /// Find the offsets of any Java source symbols in the given file
+/// 
+/// This is only used for Android builds, so we only need to handle native object files
+/// (ELF format for Android targets).
 fn find_symbol_offsets<'a, R: ReadRef<'a>>(
-    path: &Path,
-    file_contents: &[u8],
+    _path: &Path,
+    _file_contents: &[u8],
     file: &File<'a, R>,
 ) -> Result<Vec<u64>> {
-    let pdb_file = find_pdb_file(path);
-
-    match file.format() {
-        // We need to handle dynamic offsets in wasm files differently
-        object::BinaryFormat::Wasm => find_wasm_symbol_offsets(file_contents, file),
-        // Windows puts the symbol information in a PDB file alongside the executable.
-        object::BinaryFormat::Pe if pdb_file.is_some() => {
-            find_pdb_symbol_offsets(&pdb_file.unwrap())
-        }
-        // Otherwise, look for Java source symbols in the object file.
-        _ => find_native_symbol_offsets(file),
-    }
-}
-
-/// Find the pdb file matching the executable file
-fn find_pdb_file(path: &Path) -> Option<std::path::PathBuf> {
-    let mut pdb_file = path.with_extension("pdb");
-    if let Some(file_name) = pdb_file.file_name() {
-        let new_file_name = file_name.to_string_lossy().replace('-', "_");
-        let altrnate_pdb_file = pdb_file.with_file_name(new_file_name);
-        match (pdb_file.metadata(), altrnate_pdb_file.metadata()) {
-            (Ok(pdb_metadata), Ok(alternate_metadata)) => {
-                if let (Ok(pdb_modified), Ok(alternate_modified)) =
-                    (pdb_metadata.modified(), alternate_metadata.modified())
-                {
-                    if pdb_modified < alternate_modified {
-                        pdb_file = altrnate_pdb_file;
-                    }
-                }
-            }
-            (Err(_), Ok(_)) => pdb_file = altrnate_pdb_file,
-            _ => {}
-        }
-    }
-    if pdb_file.exists() {
-        Some(pdb_file)
-    } else {
-        None
-    }
-}
-
-/// Find the offsets of any Java source symbols in a pdb file
-fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
-    let pdb_file_handle = std::fs::File::open(pdb_file)?;
-    let mut pdb_file = pdb::PDB::open(pdb_file_handle).context("Failed to open PDB file")?;
-    let Ok(Some(sections)) = pdb_file.sections() else {
-        tracing::error!("Failed to read sections from PDB file");
-        return Ok(Vec::new());
-    };
-    let global_symbols = pdb_file
-        .global_symbols()
-        .context("Failed to read global symbols from PDB file")?;
-    let address_map = pdb_file
-        .address_map()
-        .context("Failed to read address map from PDB file")?;
-    let mut symbols = global_symbols.iter();
-    let mut addresses = Vec::new();
-    while let Ok(Some(symbol)) = symbols.next() {
-        let Ok(pdb::SymbolData::Public(data)) = symbol.parse() else {
-            continue;
-        };
-        let Some(rva) = data.offset.to_section_offset(&address_map) else {
-            continue;
-        };
-
-        let name = data.name.to_string();
-        if name.contains(JAVA_SOURCE_SYMBOL_PREFIX) {
-            let section = sections
-                .get(rva.section as usize - 1)
-                .expect("Section index out of bounds");
-
-            addresses.push((section.pointer_to_raw_data + rva.offset) as u64);
-        }
-    }
-    Ok(addresses)
+    find_native_symbol_offsets(file)
 }
 
 /// Find the offsets of any Java source symbols in a native object file
@@ -144,94 +69,6 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
     }
 
     Ok(offsets)
-}
-
-/// Find the offsets of any Java source symbols in the wasm file
-fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
-    file_contents: &[u8],
-    file: &File<'a, R>,
-) -> Result<Vec<u64>> {
-    let Some(section) = file
-        .sections()
-        .find(|section| section.name() == Ok("<data>"))
-    else {
-        tracing::error!("Failed to find <data> section in WASM file");
-        return Ok(Vec::new());
-    };
-    let Some((_, section_range_end)) = section.file_range() else {
-        tracing::error!("Failed to find file range for <data> section in WASM file");
-        return Ok(Vec::new());
-    };
-    let section_size = section.data()?.len() as u64;
-    let section_start = section_range_end - section_size;
-
-    // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
-    let mut offsets = Vec::new();
-
-    // Find the main memory offset
-    let main_memory = module
-        .data
-        .iter()
-        .next()
-        .context("Failed to find main memory in WASM module")?;
-
-    let walrus::DataKind::Active {
-        offset: main_memory_offset,
-        ..
-    } = main_memory.kind
-    else {
-        tracing::error!("Failed to find main memory offset in WASM module");
-        return Ok(Vec::new());
-    };
-
-    // Evaluate the global expression if possible
-    let main_memory_offset =
-        eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
-
-    for export in module.exports.iter() {
-        if !looks_like_java_source_symbol(&export.name) {
-            continue;
-        }
-
-        let walrus::ExportItem::Global(global) = export.item else {
-            continue;
-        };
-
-        let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
-            continue;
-        };
-
-        let Some(virtual_address) = eval_walrus_global_expr(&module, &pointer) else {
-            continue;
-        };
-
-        let section_relative_address: u64 = ((virtual_address as i128)
-            - main_memory_offset as i128)
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
-        let file_offset = section_start + section_relative_address;
-
-        offsets.push(file_offset);
-    }
-
-    Ok(offsets)
-}
-
-fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) -> Option<u64> {
-    match expr {
-        walrus::ConstExpr::Value(walrus::ir::Value::I32(value)) => Some(*value as u64),
-        walrus::ConstExpr::Value(walrus::ir::Value::I64(value)) => Some(*value as u64),
-        walrus::ConstExpr::Global(id) => {
-            let global = module.globals.get(*id);
-            if let walrus::GlobalKind::Local(pointer) = &global.kind {
-                eval_walrus_global_expr(module, pointer)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    }
 }
 
 /// Metadata about Java sources that need to be compiled to DEX
