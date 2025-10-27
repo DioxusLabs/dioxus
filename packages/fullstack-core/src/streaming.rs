@@ -1,6 +1,6 @@
 use crate::{HttpError, ServerFnError};
 use axum_core::extract::FromRequestParts;
-use axum_core::{extract::FromRequest, response::IntoResponse};
+use axum_core::response::IntoResponse;
 use dioxus_core::{try_consume_context, CapturedError, ReactiveContext};
 use http::StatusCode;
 use http::{request::Parts, HeaderMap};
@@ -108,10 +108,8 @@ impl FullstackContext {
         let this = Self::current()
             .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
 
-        let parts = this.request_headers.read().clone();
-        let request =
-            axum_core::extract::Request::from_parts(parts, axum_core::body::Body::empty());
-        match T::from_request(request, &()).await {
+        let mut parts = this.request_headers.read().clone();
+        match T::from_request_parts(&mut parts, &()).await {
             Ok(res) => Ok(res),
             Err(err) => {
                 let resp = err.into_response();
@@ -123,10 +121,12 @@ impl FullstackContext {
     /// Get the current `FullstackContext` if it exists. This will return `None` if called on the client
     /// or outside of a streaming response on the server or server function.
     pub fn current() -> Option<Self> {
+        // Try to get the context from the task local (for server functions)
         if let Ok(context) = FULLSTACK_CONTEXT.try_get() {
             return Some(context);
         }
 
+        // Otherwise, try to get it from the dioxus runtime context (for streaming SSR)
         if let Some(rt) = dioxus_core::Runtime::try_current() {
             let id = rt.try_current_scope_id()?;
             if let Some(ctx) = rt.consume_context::<FullstackContext>(id) {

@@ -3,7 +3,6 @@ use axum::routing::MethodRouter;
 use axum::Router;
 use dashmap::DashMap;
 use dioxus_fullstack_core::{DioxusServerState, FullstackContext};
-use dioxus_signals::SyncStorage;
 use http::Method;
 use std::{marker::PhantomData, sync::LazyLock};
 

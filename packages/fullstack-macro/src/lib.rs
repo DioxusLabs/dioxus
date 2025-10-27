@@ -361,7 +361,7 @@ fn route_impl_with_route(
         quote! {}
     } else {
         quote! {
-            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
+            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*)>().await?;
         }
     };
 
