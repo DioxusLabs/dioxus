@@ -70,7 +70,17 @@ impl DioxusNativeApplication {
                 dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
                     for window in self.inner.windows.values_mut() {
                         let doc = window.downcast_doc_mut::<DioxusDocument>();
+
+                        // Apply changes to vdom
                         dioxus_devtools::apply_changes(&doc.vdom, hotreload_message);
+
+                        // Reload changed assets
+                        for asset_path in &hotreload_message.assets {
+                            if let Some(url) = asset_path.to_str() {
+                                doc.reload_resource_by_href(url);
+                            }
+                        }
+
                         window.poll();
                     }
                 }
