@@ -60,7 +60,7 @@ pub fn ErrorFallbackButton() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
-    use_server_future(server_error)?.unwrap()?;
+    use_server_future(server_error)?()?;
     rsx! {
         "success"
     }

@@ -40,7 +40,7 @@ fn app() -> Element {
         res
     });
 
-    match future.value().as_ref() {
+    match future.as_ref() {
         Some(v) => rsx!( p { "{v}" } ),
         _ => rsx!( p { "waiting.." } ),
     }

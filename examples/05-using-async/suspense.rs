@@ -36,7 +36,7 @@ fn Doggo() -> Element {
     //
     // During SSR, `use_loader` will serialize the contents of the fetch, and during hydration, the client will
     // use the pre-fetched data instead of re-fetching to render.
-    let mut dog = use_loader(move || async move {
+    let dog = use_loader(move || async move {
         #[derive(serde::Deserialize, serde::Serialize, PartialEq)]
         struct DogApi {
             message: String,

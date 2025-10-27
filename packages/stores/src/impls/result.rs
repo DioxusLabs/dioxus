@@ -118,10 +118,7 @@ where
     ///     None => panic!("Expected Err"),
     /// }
     /// ```
-    pub fn err(self) -> Option<MappedStore<E, Lens>>
-    where
-        Lens: Writable<Target = Result<T, E>> + 'static,
-    {
+    pub fn err(self) -> Option<MappedStore<E, Lens>> {
         self.is_err().then(|| {
             let map: fn(&Result<T, E>) -> &E = |value| match value {
                 Ok(_) => panic!("Tried to access `err` on an Ok value"),
@@ -149,10 +146,7 @@ where
     /// }
     /// ```
     #[allow(clippy::result_large_err)]
-    pub fn transpose(self) -> Result<MappedStore<T, Lens>, MappedStore<E, Lens>>
-    where
-        Lens: Writable<Target = Result<T, E>> + 'static,
-    {
+    pub fn transpose(self) -> Result<MappedStore<T, Lens>, MappedStore<E, Lens>> {
         if self.is_ok() {
             let map: fn(&Result<T, E>) -> &T = |value| match value {
                 Ok(t) => t,
@@ -188,7 +182,6 @@ where
     /// ```
     pub fn unwrap(self) -> MappedStore<T, Lens>
     where
-        Lens: Writable<Target = Result<T, E>> + 'static,
         E: Debug,
     {
         self.transpose().unwrap()

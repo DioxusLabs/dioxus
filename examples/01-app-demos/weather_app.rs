@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use dioxus::{fullstack::Loading, prelude::*};
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -36,17 +36,17 @@ fn app() -> Element {
                                         }
                                         Forecast { weather: weather.cloned() }
                                         div { height: "20px", margin_top: "10px",
-                                            if weather.loading() {
+                                            if weather.running() {
                                                 "Fetching weather data..."
                                             }
                                         }
                                     },
-                                    Err(Loading::Pending(_)) => rsx! {
+                                    Err(RenderError::Error(_)) => rsx! {
+                                        div { "Failed to load weather data." }
+                                    },
+                                    Err(RenderError::Suspended(_)) => rsx! {
                                         div { "Loading weather data..." }
                                     },
-                                    Err(Loading::Failed(_)) => rsx! {
-                                        div { "Failed to load weather data." }
-                                    }
                                 }
                             }
                         }
@@ -162,16 +162,16 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                                 }
                             }
                         },
-                        Err(Loading::Pending(_)) => rsx! {
+                        Err(RenderError::Error(error)) => rsx! {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
+                                "Failed to search: {error:?}"
+                            }
+                        },
+                        Err(RenderError::Suspended(_)) => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "Searching..."
                             }
                         },
-                        Err(Loading::Failed(handle)) => rsx! {
-                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
-                                "Failed to search: {handle.error():?}"
-                            }
-                        }
                     }
                 }
             }
