@@ -77,8 +77,11 @@ pub(crate) mod innerlude {
 
     pub use anyhow::anyhow;
     pub use anyhow::Context as AnyhowContext;
-    pub use anyhow::Error;
-    pub use anyhow::Result;
+    // pub use anyhow::Error as AnyhowError;
+    // pub type Error = CapturedError;
+
+    /// A result type with a default error of [`CapturedError`].
+    pub type Result<T, E = CapturedError> = std::result::Result<T, E>;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
@@ -97,7 +100,7 @@ pub use crate::innerlude::{
     suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
     use_hook, use_hook_with_cleanup, with_owner, AnyValue, AnyhowContext, Attribute,
     AttributeValue, Callback, CapturedError, Component, ComponentFunction, DynamicNode, Element,
-    ElementId, Error, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
+    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
     Mutations, NoOpMutations, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
     Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
@@ -106,5 +109,27 @@ pub use crate::innerlude::{
     VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
-pub use anyhow::Ok;
+/// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
+///
+/// This simplifies creation of an `dioxus::Result` in places where type
+/// inference cannot deduce the `E` type of the result &mdash; without needing
+/// to write`Ok::<_, dioxus::CapturedError>(value)`.
+///
+/// One might think that `dioxus::Result::Ok(value)` would work in such cases
+/// but it does not.
+///
+/// ```console
+/// error[E0282]: type annotations needed for `std::result::Result<i32, E>`
+///   --> src/main.rs:11:13
+///    |
+/// 11 |     let _ = dioxus::Result::Ok(1);
+///    |         -   ^^^^^^^^^^^^^^^^^^ cannot infer type for type parameter `E` declared on the enum `Result`
+///    |         |
+///    |         consider giving this pattern the explicit type `std::result::Result<i32, E>`, where the type parameter `E` is specified
+/// ```
+#[allow(non_snake_case)]
+pub fn Ok<T>(value: T) -> Result<T, CapturedError> {
+    Result::Ok(value)
+}
+
 pub use const_format;

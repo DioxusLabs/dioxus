@@ -42,7 +42,7 @@ pub fn NavBar() -> Element {
 #[component]
 pub fn DogView() -> Element {
     let mut img_src = use_loader(|| async move {
-        anyhow::Ok(
+        dioxus::Ok(
             reqwest::get("https://dog.ceo/api/breeds/image/random")
                 .await?
                 .json::<serde_json::Value>()
