@@ -1,7 +1,7 @@
 //! Darwin framework metadata collection from compiled binaries
 //!
 //! This module extracts framework metadata from embedded linker symbols for both
-//! iOS and macOS targets. It finds `__DARWIN_FRAMEWORK__` symbols in the binary
+//! iOS and macOS targets. It finds `__DARWIN_FW__` symbols in the binary
 //! and deserializes them into metadata that can be used for documentation and
 //! tooling purposes.
 //!
@@ -13,7 +13,7 @@ use std::path::Path;
 
 use crate::Result;
 
-const DARWIN_FRAMEWORK_SYMBOL_PREFIX: &str = "__DARWIN_FRAMEWORK__";
+const DARWIN_FRAMEWORK_SYMBOL_PREFIX: &str = "__DARWIN_FW__";
 
 use super::linker_symbols;
 

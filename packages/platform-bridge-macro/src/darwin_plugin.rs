@@ -97,13 +97,15 @@ impl ToTokens for DarwinPluginParser {
             })
             .collect();
 
-        // Generate the export name using __DARWIN_FRAMEWORK__ prefix
-        let export_name = format!("__DARWIN_FRAMEWORK__{}", plugin_name);
+        // Generate the export name using __DARWIN_FW__ prefix
+        let export_name = format!("__DARWIN_FW__{}", plugin_name);
 
         // Generate the linker section attributes
-        // Use __DATA,__darwin_framework for unified extraction
+        // Use __DATA,__darwin_fw for unified extraction
+        // Note: Mach-O section names are max 16 chars, this is 18 including "__DATA,"
+        // but __DATA segment prefix is added automatically, so we use "__darwin_fw" (12 chars)
         let link_section = quote! {
-            #[link_section = "__DATA,__darwin_framework"]
+            #[link_section = "__DATA,__darwin_fw"]
             #[used]
             #[export_name = #export_name]
             static DARWIN_FRAMEWORK_METADATA: (&str, &[&str]) = (#plugin_name, &[#(#framework_literals),*]);
