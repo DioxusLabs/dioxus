@@ -367,24 +367,7 @@ fn route_impl_with_route(
 
     let as_axum_path = route.to_axum_path_string();
 
-    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
-        let prefix = route
-            .prefix
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
-            .value();
-        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
-        let full_url = format!(
-            "{}{}{}",
-            prefix,
-            if url_without_queries.starts_with("/") {
-                ""
-            } else {
-                "/"
-            },
-            url_without_queries
-        );
+    let query_endpoint = if let Some(full_url) = route.url_without_queries_for_format() {
         quote! { format!(#full_url, #( #path_param_args)*) }
     } else {
         quote! { __ENDPOINT_PATH.to_string() }
@@ -607,10 +590,6 @@ impl CompiledRoute {
                 }
                 PathParam::Static(lit) => path.push_str(&lit.value()),
             }
-            // if colon.is_some() {
-            //     path.push(':');
-            // }
-            // path.push_str(&ident.value());
         }
 
         path
@@ -1117,6 +1096,51 @@ impl CompiledRoute {
         quote!(
             #[doc = #doc]
         )
+    }
+
+    fn url_without_queries_for_format(&self) -> Option<String> {
+        // If there's no explicit route, we can't generate a format string this way.
+        let _lit = self.route_lit.as_ref()?;
+
+        let url_without_queries =
+            self.path_params
+                .iter()
+                .fold(String::new(), |mut acc, (_slash, param)| {
+                    acc.push('/');
+                    match param {
+                        PathParam::Capture(lit, _brace_1, _, _, _brace_2) => {
+                            acc.push_str(&format!("{{{}}}", lit.value()));
+                        }
+                        PathParam::WildCard(lit, _brace_1, _, _, _, _brace_2) => {
+                            // no `*` since we want to use the argument *as the wildcard* when making requests
+                            // it's not super applicable to server functions, moreso for general route generation
+                            acc.push_str(&format!("{{{}}}", lit.value()));
+                        }
+                        PathParam::Static(lit) => {
+                            acc.push_str(&lit.value());
+                        }
+                    }
+                    acc
+                });
+
+        let prefix = self
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
+            .value();
+        let full_url = format!(
+            "{}{}{}",
+            prefix,
+            if url_without_queries.starts_with("/") {
+                ""
+            } else {
+                "/"
+            },
+            url_without_queries
+        );
+
+        Some(full_url)
     }
 }
 
