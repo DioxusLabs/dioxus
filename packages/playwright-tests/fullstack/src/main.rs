@@ -20,6 +20,7 @@ fn main() {
 
         Ok(router)
     });
+    #[cfg(not(feature = "server"))]
     launch(app);
 }
 
@@ -80,9 +81,9 @@ fn DefaultServerFnCodec() -> Element {
 
 #[cfg(feature = "server")]
 async fn assert_server_context_provided() {
-    use dioxus::{fullstack::extract, server::axum::Extension};
+    use dioxus::{fullstack::FullstackContext, server::axum::Extension};
     // Just make sure the server context is provided
-    let Extension(id): Extension<u32> = extract().await.unwrap();
+    let Extension(id): Extension<u32> = FullstackContext::extract().await.unwrap();
     assert_eq!(id, 1234u32);
 }
 
