@@ -165,6 +165,9 @@ fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
 nucleo = "0.5.0"
 
+# 0.5.12 rust-version is too high
+home = "=0.5.11"
+
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }
 
