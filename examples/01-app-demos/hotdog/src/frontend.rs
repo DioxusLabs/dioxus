@@ -7,7 +7,7 @@ use crate::{
 
 #[component]
 pub fn Favorites() -> Element {
-    let mut favorites = use_loader(list_dogs)?;
+    let favorites = use_loader(list_dogs)?;
 
     rsx! {
         div { id: "favorites",
@@ -41,7 +41,7 @@ pub fn NavBar() -> Element {
 
 #[component]
 pub fn DogView() -> Element {
-    let mut img_src = use_loader(|| async move {
+    let img_src = use_loader(|| async move {
         anyhow::Ok(
             reqwest::get("https://dog.ceo/api/breeds/image/random")
                 .await?

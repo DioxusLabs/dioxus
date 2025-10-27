@@ -14,7 +14,7 @@ use dioxus_signals::{
 use std::marker::PhantomData;
 
 /// A type alias for a store that has been mapped with a function
-pub(crate) type MappedStore<
+pub type MappedStore<
     T,
     Lens,
     F = fn(&<Lens as Readable>::Target) -> &T,

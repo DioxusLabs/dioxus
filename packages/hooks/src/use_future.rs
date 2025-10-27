@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 use crate::{use_callback, use_hook_did_run, use_signal};
 use dioxus_core::{use_hook, Callback, Subscribers, Task};
 use dioxus_signals::*;

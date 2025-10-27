@@ -62,8 +62,7 @@ fn SuspendedComponent(id: i32) -> Element {
     let resolved_on = use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         ResolvedOn::CURRENT
-    })?()
-    .unwrap();
+    })?();
 
     let mut count = use_signal(|| 0);
 
@@ -93,8 +92,8 @@ fn NestedSuspendedComponent(id: i32) -> Element {
     let resolved_on = use_server_future(move || async move {
         async_std::task::sleep(std::time::Duration::from_secs(1)).await;
         ResolvedOn::CURRENT
-    })?()
-    .unwrap();
+    })?();
+
     let mut count = use_signal(|| 0);
     rsx! {
         div {

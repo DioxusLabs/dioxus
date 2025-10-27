@@ -40,9 +40,7 @@ fn MessageWithLoader(id: usize) -> Element {
 
 #[component]
 fn LoadTitle() -> Element {
-    let title = use_server_future(move || server_content(0))?()
-        .unwrap()
-        .unwrap();
+    let title = use_server_future(move || server_content(0))?().unwrap();
 
     rsx! {
         "title loaded"
@@ -52,9 +50,7 @@ fn LoadTitle() -> Element {
 
 #[component]
 fn Message(id: usize) -> Element {
-    let message = use_server_future(move || server_content(id))?()
-        .unwrap()
-        .unwrap();
+    let message = use_server_future(move || server_content(id))?().unwrap();
 
     rsx! {
         h2 {
