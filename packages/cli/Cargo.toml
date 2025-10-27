@@ -138,6 +138,7 @@ walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
 tauri-utils = { workspace = true }
+tauri-macos-sign = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
