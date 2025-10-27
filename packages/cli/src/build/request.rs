@@ -4419,9 +4419,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
-        static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static PRIMARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static SECONDARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
-        let success = INITIALIZED.get_or_init(|| {
+        let initializer = if ctx.is_primary_build() {
+            &PRIMARY_INITIALIZED
+        } else {
+            &SECONDARY_INITIALIZED
+        };
+
+        let success = initializer.get_or_init(|| {
             if ctx.is_primary_build() {
                 _ = remove_dir_all(self.exe_dir());
             }
