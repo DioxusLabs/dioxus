@@ -19,7 +19,7 @@ tokio::task_local! {
 /// and inside server functions.
 #[derive(Clone, Debug)]
 pub struct FullstackContext {
-    // We expose the lock for request headers directly so it needs to be in a seperate lock
+    // We expose the lock for request headers directly so it needs to be in a separate lock
     request_headers: Arc<RwLock<http::request::Parts>>,
     // The rest of the fields are only held internally, so we can group them together
     lock: Arc<RwLock<FullstackContextInner>>,
