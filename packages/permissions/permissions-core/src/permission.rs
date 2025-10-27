@@ -75,27 +75,6 @@ impl Permission {
             .map(|s| s.as_str().to_string())
     }
 
-    /// Get the Windows capability string, if supported
-    pub fn windows_capability(&self) -> Option<String> {
-        self.platform_identifiers()
-            .windows
-            .map(|s| s.as_str().to_string())
-    }
-
-    /// Get the Linux permission string, if supported
-    pub fn linux_permission(&self) -> Option<String> {
-        self.platform_identifiers()
-            .linux
-            .map(|s| s.as_str().to_string())
-    }
-
-    /// Get the Web API permission string, if supported
-    pub fn web_permission(&self) -> Option<String> {
-        self.platform_identifiers()
-            .web
-            .map(|s| s.as_str().to_string())
-    }
-
     /// Create a permission from embedded data (used by the macro)
     ///
     /// This function is used internally by the macro to create a Permission

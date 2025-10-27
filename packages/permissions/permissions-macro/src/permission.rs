@@ -107,9 +107,6 @@ enum PermissionKindParser {
         android: String,
         ios: String,
         macos: String,
-        windows: String,
-        linux: String,
-        web: String,
     },
 }
 
@@ -138,16 +135,13 @@ impl Parse for PermissionKindParser {
             "Microphone" => Ok(Self::Microphone),
             "Notifications" => Ok(Self::Notifications),
             "Custom" => {
-                // Parse Custom { android = "...", ios = "...", ... }
+                // Parse Custom { android = "...", ios = "...", macos = "..." }
                 let content;
                 syn::braced!(content in input);
 
                 let mut android = String::new();
                 let mut ios = String::new();
                 let mut macos = String::new();
-                let mut windows = String::new();
-                let mut linux = String::new();
-                let mut web = String::new();
 
                 while !content.is_empty() {
                     let field_ident = content.parse::<syn::Ident>()?;
@@ -159,9 +153,6 @@ impl Parse for PermissionKindParser {
                         "android" => android = field_value.value(),
                         "ios" => ios = field_value.value(),
                         "macos" => macos = field_value.value(),
-                        "windows" => windows = field_value.value(),
-                        "linux" => linux = field_value.value(),
-                        "web" => web = field_value.value(),
                         _ => {
                             return Err(syn::Error::new(
                                 field_ident.span(),
@@ -175,9 +166,6 @@ impl Parse for PermissionKindParser {
                     android,
                     ios,
                     macos,
-                    windows,
-                    linux,
-                    web,
                 })
             }
             _ => Err(syn::Error::new(
@@ -211,16 +199,10 @@ impl ToTokens for PermissionKindParser {
                 android,
                 ios,
                 macos,
-                windows,
-                linux,
-                web,
             } => quote!(permissions_core::PermissionKind::Custom {
                 android: permissions_core::ConstStr::new(#android),
                 ios: permissions_core::ConstStr::new(#ios),
                 macos: permissions_core::ConstStr::new(#macos),
-                windows: permissions_core::ConstStr::new(#windows),
-                linux: permissions_core::ConstStr::new(#linux),
-                web: permissions_core::ConstStr::new(#web),
             }),
         };
         tokens.extend(kind_tokens);
@@ -238,16 +220,10 @@ impl From<PermissionKindParser> for PermissionKind {
                 android,
                 ios,
                 macos,
-                windows,
-                linux,
-                web,
             } => PermissionKind::Custom {
                 android: permissions_core::ConstStr::new(&android),
                 ios: permissions_core::ConstStr::new(&ios),
                 macos: permissions_core::ConstStr::new(&macos),
-                windows: permissions_core::ConstStr::new(&windows),
-                linux: permissions_core::ConstStr::new(&linux),
-                web: permissions_core::ConstStr::new(&web),
             },
         }
     }
