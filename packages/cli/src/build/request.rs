@@ -1606,6 +1606,7 @@ impl BuildRequest {
             return Ok(());
         }
 
+        // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
         let plist_path = self.root_dir().join("Info.plist");
 
         if !plist_path.exists() {
@@ -1653,9 +1654,13 @@ impl BuildRequest {
             return Ok(());
         }
 
-        let plist_path = self.root_dir().join("Info.plist");
+        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
         if !plist_path.exists() {
-            tracing::warn!("Info.plist not found, skipping permission update");
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
             return Ok(());
         }
 
