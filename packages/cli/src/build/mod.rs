@@ -12,6 +12,7 @@ mod android_java;
 mod assets;
 mod builder;
 mod context;
+mod linker_symbols;
 mod manifest;
 mod patch;
 mod permissions;
