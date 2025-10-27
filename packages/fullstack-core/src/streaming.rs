@@ -78,6 +78,8 @@ impl FullstackContext {
     pub fn commit_initial_chunk(&mut self) {
         let mut lock = self.lock.write();
         lock.current_status = StreamingStatus::InitialChunkCommitted;
+        // The key type is mutable, but the hash is stable through mutations because we hash by pointer
+        #[allow(clippy::mutable_key_type)]
         let subscribers = std::mem::take(&mut lock.current_status_subscribers);
         for subscriber in subscribers {
             subscriber.mark_dirty();
@@ -156,6 +158,8 @@ impl FullstackContext {
     pub fn set_current_http_status(&mut self, status: HttpError) {
         let mut lock = self.lock.write();
         lock.route_http_status = status;
+        // The key type is mutable, but the hash is stable through mutations because we hash by pointer
+        #[allow(clippy::mutable_key_type)]
         let subscribers = std::mem::take(&mut lock.route_http_status_subscribers);
         for subscriber in subscribers {
             subscriber.mark_dirty();
