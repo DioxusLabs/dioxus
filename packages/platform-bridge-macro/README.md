@@ -6,8 +6,6 @@ Procedural macro for declaring platform plugins with linker-based embedding for 
 
 This crate provides macros for declaring platform plugins with linker-based embedding:
 - `android_plugin!()` - Android Java sources
-- `ios_plugin!()` - iOS framework requirements
-- `macos_plugin!()` - macOS framework requirements
 
 These macros reduce declaration boilerplate from ~30 lines to ~3 lines while providing compile-time validation and automatic path embedding.
 
@@ -69,17 +67,10 @@ If a file is not found, the macro emits a compile error with details about where
 
 ### Build Time (Dioxus CLI)
 
-#### For `android_plugin!()`:
 1. **Extraction**: Parses binary to find `__JAVA_SOURCE__*` symbols
 2. **Path Handling**: Uses embedded absolute paths directly (fast path) or searches workspace (legacy)
 3. **Copying**: Copies Java files to Gradle structure: `app/src/main/java/{package}/`
 4. **Compilation**: Gradle compiles Java sources to DEX bytecode
-
-#### For `ios_plugin!()` and `macos_plugin!()`:
-1. **Extraction**: Parses binary to find `__DARWIN_FRAMEWORK__*` symbols (shared prefix)
-2. **Metadata Collection**: Extracts framework names for documentation/logging
-3. **Linking**: Frameworks are automatically linked by objc2 at compile time
-4. **No build changes**: This is metadata-only for tooling/documentation purposes
 
 ## Comparison with Similar Systems
 
@@ -141,27 +132,6 @@ error: Java file 'LocationCallback.java' not found. Searched in:
   - /path/to/crate/src/android/LocationCallback.java
   - /path/to/crate/LocationCallback.java
 ```
-
-## iOS/macOS Framework Examples
-
-```rust
-// Declare iOS framework requirements
-#[cfg(target_os = "ios")]
-dioxus_platform_bridge::ios_plugin!(
-    plugin = "geolocation",
-    frameworks = ["CoreLocation", "Foundation"]
-);
-
-// Declare macOS framework requirements
-#[cfg(target_os = "macos")]
-dioxus_platform_bridge::macos_plugin!(
-    plugin = "notifications",
-    frameworks = ["UserNotifications", "AppKit"]
-);
-```
-
-Both macros use the shared `__DARWIN_FRAMEWORK__` prefix for unified extraction,
-allowing the CLI to collect framework metadata for both iOS and macOS builds.
 
 ## See Also
 

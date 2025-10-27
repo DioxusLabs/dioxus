@@ -27,7 +27,3 @@ pub use objc2;
 /// Re-export the android_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", target_os = "android"))]
 pub use platform_bridge_macro::android_plugin;
-
-/// Re-export the darwin_plugin! macro when metadata feature is enabled
-#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
-pub use platform_bridge_macro::darwin_plugin;

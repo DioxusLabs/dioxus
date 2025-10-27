@@ -454,7 +454,6 @@ pub struct BuildArtifacts {
     pub(crate) assets: AssetManifest,
     pub(crate) permissions: super::permissions::PermissionManifest,
     pub(crate) java_sources: super::android_java::JavaSourceManifest,
-    pub(crate) darwin_frameworks: super::darwin_frameworks::DarwinFrameworkManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1298,9 +1297,6 @@ impl BuildRequest {
         // Extract Java sources for Android builds
         let java_sources = self.collect_java_sources(&exe, ctx).await?;
 
-        // Extract Darwin frameworks for iOS/macOS builds
-        let darwin_frameworks = self.collect_darwin_frameworks(&exe, ctx).await?;
-
         // Note: We'll update platform manifests with permissions AFTER write_metadata()
         // to avoid having them overwritten by the template
 
@@ -1322,7 +1318,6 @@ impl BuildRequest {
             assets,
             permissions,
             java_sources,
-            darwin_frameworks,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1441,36 +1436,6 @@ impl BuildRequest {
                     source.plugin_name.as_str(),
                     source.package_name.as_str(),
                     source.files.len()
-                );
-            }
-        }
-
-        Ok(manifest)
-    }
-
-    /// Collect Darwin framework metadata for iOS/macOS builds
-    async fn collect_darwin_frameworks(
-        &self,
-        exe: &Path,
-        _ctx: &BuildContext,
-    ) -> Result<super::darwin_frameworks::DarwinFrameworkManifest> {
-        // Only collect for iOS and macOS builds
-        if self.bundle != BundleFormat::Ios && self.bundle != BundleFormat::MacOS {
-            return Ok(super::darwin_frameworks::DarwinFrameworkManifest::default());
-        }
-
-        let manifest = super::darwin_frameworks::extract_darwin_frameworks_from_file(exe)?;
-
-        if !manifest.is_empty() {
-            tracing::debug!(
-                "Found {} Darwin framework declarations",
-                manifest.frameworks().len()
-            );
-            for framework in manifest.frameworks() {
-                tracing::debug!(
-                    "  Plugin: {}, Frameworks: {:?}",
-                    framework.plugin_name.as_str(),
-                    framework.frameworks
                 );
             }
         }
