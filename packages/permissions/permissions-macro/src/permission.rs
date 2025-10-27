@@ -102,26 +102,7 @@ enum PermissionKindParser {
     Camera,
     Location(LocationPrecision),
     Microphone,
-    PhotoLibrary,
-    Contacts,
-    Calendar,
-    Bluetooth,
     Notifications,
-    FileSystem,
-    Network,
-    Sms,
-    PhoneState,
-    PhoneCall,
-    SystemAlertWindow,
-    UserTracking,
-    FaceId,
-    LocalNetwork,
-    Appointments,
-    WindowsPhoneCall,
-    EnterpriseAuth,
-    Clipboard,
-    Payment,
-    ScreenWakeLock,
     Custom {
         android: String,
         ios: String,
@@ -155,26 +136,7 @@ impl Parse for PermissionKindParser {
                 }
             }
             "Microphone" => Ok(Self::Microphone),
-            "PhotoLibrary" => Ok(Self::PhotoLibrary),
-            "Contacts" => Ok(Self::Contacts),
-            "Calendar" => Ok(Self::Calendar),
-            "Bluetooth" => Ok(Self::Bluetooth),
             "Notifications" => Ok(Self::Notifications),
-            "FileSystem" => Ok(Self::FileSystem),
-            "Network" => Ok(Self::Network),
-            "Sms" => Ok(Self::Sms),
-            "PhoneState" => Ok(Self::PhoneState),
-            "PhoneCall" => Ok(Self::PhoneCall),
-            "SystemAlertWindow" => Ok(Self::SystemAlertWindow),
-            "UserTracking" => Ok(Self::UserTracking),
-            "FaceId" => Ok(Self::FaceId),
-            "LocalNetwork" => Ok(Self::LocalNetwork),
-            "Appointments" => Ok(Self::Appointments),
-            "WindowsPhoneCall" => Ok(Self::WindowsPhoneCall),
-            "EnterpriseAuth" => Ok(Self::EnterpriseAuth),
-            "Clipboard" => Ok(Self::Clipboard),
-            "Payment" => Ok(Self::Payment),
-            "ScreenWakeLock" => Ok(Self::ScreenWakeLock),
             "Custom" => {
                 // Parse Custom { android = "...", ios = "...", ... }
                 let content;
@@ -242,47 +204,8 @@ impl ToTokens for PermissionKindParser {
             PermissionKindParser::Microphone => {
                 quote!(permissions_core::PermissionKind::Microphone)
             }
-            PermissionKindParser::PhotoLibrary => {
-                quote!(permissions_core::PermissionKind::PhotoLibrary)
-            }
-            PermissionKindParser::Contacts => quote!(permissions_core::PermissionKind::Contacts),
-            PermissionKindParser::Calendar => quote!(permissions_core::PermissionKind::Calendar),
-            PermissionKindParser::Bluetooth => quote!(permissions_core::PermissionKind::Bluetooth),
             PermissionKindParser::Notifications => {
                 quote!(permissions_core::PermissionKind::Notifications)
-            }
-            PermissionKindParser::FileSystem => {
-                quote!(permissions_core::PermissionKind::FileSystem)
-            }
-            PermissionKindParser::Network => quote!(permissions_core::PermissionKind::Network),
-            PermissionKindParser::Sms => quote!(permissions_core::PermissionKind::Sms),
-            PermissionKindParser::PhoneState => {
-                quote!(permissions_core::PermissionKind::PhoneState)
-            }
-            PermissionKindParser::PhoneCall => quote!(permissions_core::PermissionKind::PhoneCall),
-            PermissionKindParser::SystemAlertWindow => {
-                quote!(permissions_core::PermissionKind::SystemAlertWindow)
-            }
-            PermissionKindParser::UserTracking => {
-                quote!(permissions_core::PermissionKind::UserTracking)
-            }
-            PermissionKindParser::FaceId => quote!(permissions_core::PermissionKind::FaceId),
-            PermissionKindParser::LocalNetwork => {
-                quote!(permissions_core::PermissionKind::LocalNetwork)
-            }
-            PermissionKindParser::Appointments => {
-                quote!(permissions_core::PermissionKind::Appointments)
-            }
-            PermissionKindParser::WindowsPhoneCall => {
-                quote!(permissions_core::PermissionKind::WindowsPhoneCall)
-            }
-            PermissionKindParser::EnterpriseAuth => {
-                quote!(permissions_core::PermissionKind::EnterpriseAuth)
-            }
-            PermissionKindParser::Clipboard => quote!(permissions_core::PermissionKind::Clipboard),
-            PermissionKindParser::Payment => quote!(permissions_core::PermissionKind::Payment),
-            PermissionKindParser::ScreenWakeLock => {
-                quote!(permissions_core::PermissionKind::ScreenWakeLock)
             }
             PermissionKindParser::Custom {
                 android,
@@ -310,26 +233,7 @@ impl From<PermissionKindParser> for PermissionKind {
             PermissionKindParser::Camera => PermissionKind::Camera,
             PermissionKindParser::Location(precision) => PermissionKind::Location(precision),
             PermissionKindParser::Microphone => PermissionKind::Microphone,
-            PermissionKindParser::PhotoLibrary => PermissionKind::PhotoLibrary,
-            PermissionKindParser::Contacts => PermissionKind::Contacts,
-            PermissionKindParser::Calendar => PermissionKind::Calendar,
-            PermissionKindParser::Bluetooth => PermissionKind::Bluetooth,
             PermissionKindParser::Notifications => PermissionKind::Notifications,
-            PermissionKindParser::FileSystem => PermissionKind::FileSystem,
-            PermissionKindParser::Network => PermissionKind::Network,
-            PermissionKindParser::Sms => PermissionKind::Sms,
-            PermissionKindParser::PhoneState => PermissionKind::PhoneState,
-            PermissionKindParser::PhoneCall => PermissionKind::PhoneCall,
-            PermissionKindParser::SystemAlertWindow => PermissionKind::SystemAlertWindow,
-            PermissionKindParser::UserTracking => PermissionKind::UserTracking,
-            PermissionKindParser::FaceId => PermissionKind::FaceId,
-            PermissionKindParser::LocalNetwork => PermissionKind::LocalNetwork,
-            PermissionKindParser::Appointments => PermissionKind::Appointments,
-            PermissionKindParser::WindowsPhoneCall => PermissionKind::WindowsPhoneCall,
-            PermissionKindParser::EnterpriseAuth => PermissionKind::EnterpriseAuth,
-            PermissionKindParser::Clipboard => PermissionKind::Clipboard,
-            PermissionKindParser::Payment => PermissionKind::Payment,
-            PermissionKindParser::ScreenWakeLock => PermissionKind::ScreenWakeLock,
             PermissionKindParser::Custom {
                 android,
                 ios,

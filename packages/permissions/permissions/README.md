@@ -29,24 +29,31 @@ const LOCATION: Permission = static_permission!(Location(Fine), description = "T
 const MICROPHONE: Permission = static_permission!(Microphone, description = "Record audio");
 ```
 
-### Custom Permissions
+### Custom Permissions (For Untested or Special Use Cases)
+
+For permissions that aren't yet tested or for special use cases, use the `Custom` variant 
+with platform-specific identifiers:
 
 ```rust
 use permissions::{static_permission, Permission};
 
-// Declare a custom permission with platform-specific identifiers
-const CUSTOM: Permission = static_permission!(
+// Example: Request storage permission
+const STORAGE: Permission = static_permission!(
     Custom { 
-        android = "android.permission.MY_PERMISSION",
-        ios = "NSMyUsageDescription",
-        macos = "NSMyUsageDescription", 
-        windows = "myCapability",
-        linux = "my_permission",
-        web = "my-permission"
+        android = "android.permission.READ_EXTERNAL_STORAGE",
+        ios = "NSPhotoLibraryUsageDescription",
+        macos = "NSPhotoLibraryUsageDescription", 
+        windows = "broadFileSystemAccess",
+        linux = "",
+        web = "file-system-access"
     },
-    description = "Custom permission for my app"
+    description = "Access files on your device"
 );
 ```
+
+> **💡 Contributing Back**: If you test a custom permission and verify it works across platforms, 
+> please consider creating a PR to add it as an officially tested permission! This helps the 
+> entire Dioxus community.
 
 ### Using Permissions
 
@@ -76,41 +83,19 @@ println!("Web: {:?}", identifiers.web);
 
 ## Supported Permission Kinds
 
-### Cross-Platform Permissions
+Only tested and verified permissions are included. For all other permissions,
+use the `Custom` variant.
 
-- `Camera` - Camera access
-- `Location(Fine)` / `Location(Coarse)` - Location access with precision
-- `Microphone` - Microphone access
-- `PhotoLibrary` - Photo library access
-- `Contacts` - Contact list access
-- `Calendar` - Calendar access
-- `Bluetooth` - Bluetooth access
-- `Notifications` - Push notifications
-- `FileSystem` - File system access
-- `Network` - Network access
+### ✅ Available Permissions
 
-### Platform-Specific Permissions
+- **`Camera`** - Camera access (tested across all platforms)
+- **`Location(Fine)` / `Location(Coarse)`** - Location access with precision (tested across all platforms)
+- **`Microphone`** - Microphone access (tested across all platforms)
+- **`Notifications`** - Push notifications (tested on Android and Web)
+- **`Custom { ... }`** - Custom permission with platform-specific identifiers
 
-#### Android-only
-- `Sms` - SMS access
-- `PhoneState` - Phone state access
-- `PhoneCall` - Phone call access
-- `SystemAlertWindow` - System alert window
-
-#### iOS/macOS-only
-- `UserTracking` - User tracking
-- `FaceId` - Face ID access
-- `LocalNetwork` - Local network access
-
-#### Windows-only
-- `Appointments` - Appointments access
-- `WindowsPhoneCall` - Phone call access
-- `EnterpriseAuth` - Enterprise authentication
-
-#### Web-only
-- `Clipboard` - Clipboard access
-- `Payment` - Payment handling
-- `ScreenWakeLock` - Screen wake lock
+For examples of untested permissions (like `PhotoLibrary`, `Contacts`, `Calendar`, `Bluetooth`, etc.),
+see the Custom Permissions section below.
 
 ## Platform Mappings
 

@@ -55,38 +55,74 @@ fn test_location_permission() {
 }
 
 #[test]
-fn test_platform_specific_permissions() {
-    // Android-specific permission
-    const SMS: permissions::Permission = static_permission!(Sms, description = "Read SMS messages");
-    assert!(SMS.supports_platform(Platform::Android));
-    assert!(!SMS.supports_platform(Platform::Ios));
-    assert!(!SMS.supports_platform(Platform::Web));
-    assert_eq!(
-        SMS.android_permission(),
-        Some("android.permission.READ_SMS".to_string())
-    );
+fn test_microphone_permission() {
+    const MIC: permissions::Permission =
+        static_permission!(Microphone, description = "Record audio");
 
-    // iOS-specific permission
-    const FACE_ID: permissions::Permission =
-        static_permission!(FaceId, description = "Use Face ID");
-    assert!(!FACE_ID.supports_platform(Platform::Android));
-    assert!(FACE_ID.supports_platform(Platform::Ios));
-    assert!(FACE_ID.supports_platform(Platform::Macos));
-    assert!(!FACE_ID.supports_platform(Platform::Web));
-    assert_eq!(
-        FACE_ID.ios_key(),
-        Some("NSFaceIDUsageDescription".to_string())
-    );
+    assert_eq!(MIC.description(), "Record audio");
+    assert!(MIC.supports_platform(Platform::Android));
+    assert!(MIC.supports_platform(Platform::Ios));
+    assert!(MIC.supports_platform(Platform::Macos));
+    assert!(MIC.supports_platform(Platform::Windows));
+    assert!(MIC.supports_platform(Platform::Web));
+    assert!(!MIC.supports_platform(Platform::Linux));
 
-    // Web-specific permission
-    const CLIPBOARD: permissions::Permission =
-        static_permission!(Clipboard, description = "Access clipboard");
-    assert!(!CLIPBOARD.supports_platform(Platform::Android));
-    assert!(!CLIPBOARD.supports_platform(Platform::Ios));
-    assert!(CLIPBOARD.supports_platform(Platform::Web));
     assert_eq!(
-        CLIPBOARD.web_permission(),
-        Some("clipboard-read".to_string())
+        MIC.android_permission(),
+        Some("android.permission.RECORD_AUDIO".to_string())
+    );
+    assert_eq!(MIC.ios_key(), Some("NSMicrophoneUsageDescription".to_string()));
+    assert_eq!(
+        MIC.macos_key(),
+        Some("NSMicrophoneUsageDescription".to_string())
+    );
+    assert_eq!(MIC.windows_capability(), Some("microphone".to_string()));
+    assert_eq!(MIC.web_permission(), Some("microphone".to_string()));
+}
+
+#[test]
+fn test_notifications_permission() {
+    const NOTIF: permissions::Permission =
+        static_permission!(Notifications, description = "Send you notifications");
+
+    assert_eq!(NOTIF.description(), "Send you notifications");
+    assert!(NOTIF.supports_platform(Platform::Android));
+    assert!(!NOTIF.supports_platform(Platform::Ios)); // Runtime only
+    assert!(!NOTIF.supports_platform(Platform::Macos)); // Runtime only
+    assert!(NOTIF.supports_platform(Platform::Web));
+
+    assert_eq!(
+        NOTIF.android_permission(),
+        Some("android.permission.POST_NOTIFICATIONS".to_string())
+    );
+    assert_eq!(NOTIF.ios_key(), None); // No build-time permission
+    assert_eq!(NOTIF.web_permission(), Some("notifications".to_string()));
+}
+
+#[test]
+fn test_custom_for_platform_specific_permissions() {
+    // Example: Accessing contacts on Android/iOS/macOS using Custom
+    // (This is not in the tested set, so we use Custom)
+    const CONTACTS: permissions::Permission = static_permission!(
+        Custom {
+            android = "android.permission.READ_CONTACTS",
+            ios = "NSContactsUsageDescription",
+            macos = "NSContactsUsageDescription",
+            windows = "contacts",
+            linux = "",
+            web = "contacts"
+        },
+        description = "Access your contacts"
+    );
+    
+    assert!(CONTACTS.supports_platform(Platform::Android));
+    assert_eq!(
+        CONTACTS.android_permission(),
+        Some("android.permission.READ_CONTACTS".to_string())
+    );
+    assert_eq!(
+        CONTACTS.ios_key(),
+        Some("NSContactsUsageDescription".to_string())
     );
 }
 

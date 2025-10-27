@@ -37,30 +37,19 @@ use permission::PermissionParser;
 ///
 /// # Supported Permission Kinds
 ///
-/// - `Camera` - Camera access
-/// - `Location(Fine)` / `Location(Coarse)` - Location access with precision
-/// - `Microphone` - Microphone access
-/// - `PhotoLibrary` - Photo library access
-/// - `Contacts` - Contact list access
-/// - `Calendar` - Calendar access
-/// - `Bluetooth` - Bluetooth access
-/// - `Notifications` - Push notifications
-/// - `FileSystem` - File system access
-/// - `Network` - Network access
-/// - `Sms` - SMS access (Android only)
-/// - `PhoneState` - Phone state access (Android only)
-/// - `PhoneCall` - Phone call access (Android/Windows)
-/// - `SystemAlertWindow` - System alert window (Android only)
-/// - `UserTracking` - User tracking (iOS/macOS/Web)
-/// - `FaceId` - Face ID access (iOS/macOS)
-/// - `LocalNetwork` - Local network access (iOS/macOS)
-/// - `Appointments` - Appointments access (Windows only)
-/// - `WindowsPhoneCall` - Phone call access (Windows only)
-/// - `EnterpriseAuth` - Enterprise authentication (Windows only)
-/// - `Clipboard` - Clipboard access (Web only)
-/// - `Payment` - Payment handling (Web only)
-/// - `ScreenWakeLock` - Screen wake lock (Web only)
-/// - `Custom { ... }` - Custom permission with platform-specific identifiers (not shown in doctests due to buffer size limitations)
+/// Only tested and verified permissions are included. For any other permissions,
+/// use the `Custom` variant with platform-specific identifiers.
+///
+/// ## ✅ Tested Permissions (Only for requesting permissions)
+///
+/// - `Camera` - Camera access (tested across all platforms)
+/// - `Location(Fine)` / `Location(Coarse)` - Location access with precision (tested across all platforms)
+/// - `Microphone` - Microphone access (tested across all platforms)
+/// - `Notifications` - Push notifications (tested on Android and Web)
+/// - `Custom { ... }` - Custom permission with platform-specific identifiers
+///
+/// See the main documentation for examples of using `Custom` permissions
+/// for untested or special use cases.
 #[proc_macro]
 pub fn static_permission(input: TokenStream) -> TokenStream {
     let permission = parse_macro_input!(input as PermissionParser);
