@@ -258,6 +258,7 @@ prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.22.1" }
 tauri-utils = { version = "=2.5.0" }
+tauri-macos-sign = { version = "=2.2.0" }
 tauri-bundler = { version = "=2.5.0" }
 lru = "0.16.0"
 async-trait = "0.1.88"
