@@ -2,14 +2,44 @@ use objc2::MainThreadMarker;
 use std::cell::UnsafeCell;
 
 /// A cell that stores values only accessible on the main thread.
-struct MainThreadCell<T>(UnsafeCell<Option<T>>);
+///
+/// This type is useful for caching singleton-like objects that must only be
+/// accessed on the main thread on Darwin platforms (iOS/macOS).
+///
+/// # Safety
+///
+/// Access is guarded by requiring a `MainThreadMarker`, ensuring this cell
+/// is only touched from the main thread.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use dioxus_platform_bridge::darwin::MainThreadCell;
+/// use objc2::MainThreadMarker;
+///
+/// let mtm = MainThreadMarker::new().unwrap();
+/// let cell = MainThreadCell::new();
+/// let value = cell.get_or_init_with(mtm, || "initialized");
+/// ```
+pub struct MainThreadCell<T>(UnsafeCell<Option<T>>);
 
 impl<T> MainThreadCell<T> {
-    const fn new() -> Self {
+    /// Create a new empty cell.
+    pub const fn new() -> Self {
         Self(UnsafeCell::new(None))
     }
 
-    fn get_or_init_with<F>(&self, _mtm: MainThreadMarker, init: F) -> &T
+    /// Get or initialize the value in this cell.
+    ///
+    /// Requires a `MainThreadMarker` to ensure we're on the main thread.
+    /// The `init` closure is only called if the cell is currently empty.
+    ///
+    /// # Panics
+    ///
+    /// This will panic if the value has not been initialized after calling
+    /// the init closure. This should not happen in practice but is a safety
+    /// check to ensure thread safety.
+    pub fn get_or_init_with<F>(&self, _mtm: MainThreadMarker, init: F) -> &T
     where
         F: FnOnce() -> T,
     {
@@ -26,7 +56,8 @@ impl<T> MainThreadCell<T> {
 }
 
 // SAFETY: `MainThreadCell` enforces main-thread-only access through
-// `MainThreadMarker`.
+// `MainThreadMarker`. Multiple threads can hold references to the same cell,
+// but all access must happen on the main thread through the `MainThreadMarker`.
 unsafe impl<T> Sync for MainThreadCell<T> {}
 
 /// Generic manager caching utility for Darwin (iOS and macOS) APIs
@@ -53,7 +84,7 @@ unsafe impl<T> Sync for MainThreadCell<T> {}
 ///     unsafe { CLLocationManager::new() }
 /// });
 /// ```
-pub fn get_or_init_manager<T, F>(init: F) -> Option<&'static T>
+pub fn get_or_init_manager<T, F>(_init: F) -> Option<&'static T>
 where
     F: FnOnce() -> T,
 {
@@ -73,7 +104,7 @@ where
 ///
 /// This is a more specific version that works with objc2 manager types.
 /// It requires the manager to implement Clone or be Retained.
-pub fn get_or_init_objc_manager<T, F>(init: F) -> Option<&'static T>
+pub fn get_or_init_objc_manager<T, F>(_init: F) -> Option<&'static T>
 where
     F: FnOnce() -> T,
     T: 'static,

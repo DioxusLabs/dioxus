@@ -7,3 +7,6 @@
 pub mod manager;
 
 pub use manager::*;
+
+/// Re-export MainThreadMarker for convenience
+pub use objc2::MainThreadMarker;
