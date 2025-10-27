@@ -26,10 +26,7 @@ const LOCATION: Permission = static_permission!(Location(Fine), description = "T
 //     Custom { 
 //         android = "android.permission.MY_PERMISSION",
 //         ios = "NSMyUsageDescription",
-//         macos = "NSMyUsageDescription", 
-//         windows = "myCapability",
-//         linux = "my_permission",
-//         web = "my-permission"
+//         macos = "NSMyUsageDescription"
 //     },
 //     description = "Custom permission"
 // );

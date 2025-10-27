@@ -2,7 +2,7 @@
 
 A cross-platform permission management system with linker-based collection, inspired by Manganis.
 
-This crate provides a unified API for declaring permissions across all platforms (Android, iOS, macOS, Windows, Linux, Web) and embeds them in the binary for extraction by build tools.
+This crate provides a unified API for declaring permissions across supported platforms (Android, iOS, macOS) and embeds them in the binary for extraction by build tools.
 
 ## Features
 
@@ -42,10 +42,7 @@ const STORAGE: Permission = static_permission!(
     Custom { 
         android = "android.permission.READ_EXTERNAL_STORAGE",
         ios = "NSPhotoLibraryUsageDescription",
-        macos = "NSPhotoLibraryUsageDescription", 
-        windows = "broadFileSystemAccess",
-        linux = "",
-        web = "file-system-access"
+        macos = "NSPhotoLibraryUsageDescription"
     },
     description = "Access files on your device"
 );
@@ -78,7 +75,7 @@ if CAMERA.supports_platform(Platform::Ios) {
 let identifiers = CAMERA.platform_identifiers();
 println!("Android: {:?}", identifiers.android);
 println!("iOS: {:?}", identifiers.ios);
-println!("Web: {:?}", identifiers.web);
+println!("macOS: {:?}", identifiers.macos);
 ```
 
 ## Supported Permission Kinds
@@ -88,10 +85,10 @@ use the `Custom` variant.
 
 ### ✅ Available Permissions
 
-- **`Camera`** - Camera access (tested across all platforms)
-- **`Location(Fine)` / `Location(Coarse)`** - Location access with precision (tested across all platforms)
-- **`Microphone`** - Microphone access (tested across all platforms)
-- **`Notifications`** - Push notifications (tested on Android and Web)
+- **`Camera`** - Camera access (tested on Android, iOS, macOS)
+- **`Location(Fine)` / `Location(Coarse)`** - Location access with precision (tested on Android, iOS, macOS)
+- **`Microphone`** - Microphone access (tested on Android, iOS, macOS)
+- **`Notifications`** - Push notifications (tested on Android, iOS, macOS)
 - **`Custom { ... }`** - Custom permission with platform-specific identifiers
 
 For examples of untested permissions (like `PhotoLibrary`, `Contacts`, `Calendar`, `Bluetooth`, etc.),
@@ -101,11 +98,11 @@ see the Custom Permissions section below.
 
 Each permission kind automatically maps to the appropriate platform-specific requirements:
 
-| Permission | Android | iOS | macOS | Windows | Linux | Web |
-|------------|---------|-----|-------|---------|-------|-----|
-| Camera | `android.permission.CAMERA` | `NSCameraUsageDescription` | `NSCameraUsageDescription` | `webcam` | None | `camera` |
-| Location(Fine) | `android.permission.ACCESS_FINE_LOCATION` | `NSLocationAlwaysAndWhenInUseUsageDescription` | `NSLocationUsageDescription` | `location` | None | `geolocation` |
-| Microphone | `android.permission.RECORD_AUDIO` | `NSMicrophoneUsageDescription` | `NSMicrophoneUsageDescription` | `microphone` | None | `microphone` |
+| Permission | Android | iOS | macOS |
+|------------|---------|-----|-------|
+| Camera | `android.permission.CAMERA` | `NSCameraUsageDescription` | `NSCameraUsageDescription` |
+| Location(Fine) | `android.permission.ACCESS_FINE_LOCATION` | `NSLocationAlwaysAndWhenInUseUsageDescription` | `NSLocationUsageDescription` |
+| Microphone | `android.permission.RECORD_AUDIO` | `NSMicrophoneUsageDescription` | `NSMicrophoneUsageDescription` |
 
 ## How It Works
 

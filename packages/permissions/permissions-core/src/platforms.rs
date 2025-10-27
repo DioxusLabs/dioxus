@@ -57,7 +57,7 @@ pub enum LocationPrecision {
 }
 
 /// Core permission kinds that map to platform-specific requirements
-/// 
+///
 /// Only tested and verified permissions are included. For untested permissions,
 /// use the `Custom` variant with platform-specific identifiers.
 #[repr(C, u8)]
@@ -107,8 +107,8 @@ impl PermissionKind {
             },
             PermissionKind::Notifications => PlatformIdentifiers {
                 android: Some(ConstStr::new("android.permission.POST_NOTIFICATIONS")),
-                ios: None,     // Runtime request only
-                macos: None,   // Runtime request only
+                ios: None,   // Runtime request only
+                macos: None, // Runtime request only
             },
             PermissionKind::Custom {
                 android,

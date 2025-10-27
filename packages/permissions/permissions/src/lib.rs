@@ -5,9 +5,8 @@
 //!
 //! A cross-platform permission management system with linker-based collection.
 //!
-//! This crate provides a unified API for declaring permissions across all platforms
-//! (Android, iOS, macOS, Windows, Linux, Web) and embeds them in the binary for
-//! extraction by build tools.
+//! This crate provides a unified API for declaring permissions across supported platforms
+//! (Android, iOS, macOS) and embeds them in the binary for extraction by build tools.
 //!
 //! ## Usage
 //!
