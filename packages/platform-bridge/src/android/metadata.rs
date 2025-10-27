@@ -28,9 +28,9 @@ impl JavaSourceMetadata {
     /// Create new Java source metadata with absolute file paths
     ///
     /// Takes full absolute paths to Java source files. The paths are embedded at compile time
-    /// using the `java_plugin!()` macro, which uses `env!("CARGO_MANIFEST_DIR")` to resolve
+    /// using the `android_plugin!()` macro, which uses `env!("CARGO_MANIFEST_DIR")` to resolve
     /// paths relative to the calling crate.
-    /// 
+    ///
     /// # Example
     /// ```rust,no_run
     /// JavaSourceMetadata::new(

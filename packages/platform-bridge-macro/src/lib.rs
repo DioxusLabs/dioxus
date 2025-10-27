@@ -5,23 +5,22 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::parse_macro_input;
 
-mod ios_plugin;
-mod java_plugin;
-use ios_plugin::IosPluginParser;
-use java_plugin::JavaPluginParser;
+mod android_plugin;
+mod darwin_plugin;
+use darwin_plugin::DarwinPluginParser;
 
-/// Declare an iOS framework plugin that will be embedded in the binary
+/// Declare a Darwin (iOS/macOS) framework plugin that will be embedded in the binary
 ///
-/// This macro declares which iOS frameworks your crate requires. While the frameworks
+/// This macro declares which frameworks your crate requires for iOS or macOS. While the frameworks
 /// are linked automatically by objc2 at compile time, this macro allows you to declare
-/// framework dependencies in a clean, declarative way similar to `java_plugin!`.
+/// framework dependencies in a clean, declarative way similar to `android_plugin!`.
 ///
 /// # Syntax
 ///
 /// Basic plugin declaration:
 /// ```rust,no_run
-/// #[cfg(target_os = "ios")]
-/// dioxus_platform_bridge::ios_plugin!(
+/// #[cfg(any(target_os = "ios", target_os = "macos"))]
+/// dioxus_platform_bridge::darwin_plugin!(
 ///     plugin = "geolocation",
 ///     frameworks = ["CoreLocation", "Foundation"]
 /// );
@@ -30,12 +29,12 @@ use java_plugin::JavaPluginParser;
 /// # Parameters
 ///
 /// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
-/// - `frameworks`: Array of iOS framework names (e.g., ["CoreLocation", "Foundation"])
+/// - `frameworks`: Array of framework names (e.g., ["CoreLocation", "Foundation", "AppKit"])
 ///
 /// # Embedding
 ///
 /// The macro embeds framework metadata into the binary using linker symbols with the
-/// `__IOS_FRAMEWORK__` prefix. This allows documentation and tooling to understand
+/// `__DARWIN_FRAMEWORK__` prefix. This allows documentation and tooling to understand
 /// which frameworks your crate requires.
 ///
 /// # Note
@@ -43,13 +42,13 @@ use java_plugin::JavaPluginParser;
 /// This macro is primarily for documentation and metadata purposes. The actual framework
 /// linking is handled automatically by objc2 when you use its APIs.
 #[proc_macro]
-pub fn ios_plugin(input: TokenStream) -> TokenStream {
-    let ios_plugin = parse_macro_input!(input as IosPluginParser);
-    
-    quote! { #ios_plugin }.into()
+pub fn darwin_plugin(input: TokenStream) -> TokenStream {
+    let darwin_plugin = parse_macro_input!(input as DarwinPluginParser);
+
+    quote! { #darwin_plugin }.into()
 }
 
-/// Declare a Java plugin that will be embedded in the binary
+/// Declare an Android plugin that will be embedded in the binary
 ///
 /// This macro collects Java source files and embeds their metadata into the compiled
 /// binary using linker symbols. The Dioxus CLI will extract this metadata and copy the
@@ -60,7 +59,7 @@ pub fn ios_plugin(input: TokenStream) -> TokenStream {
 /// Basic plugin declaration with full relative paths:
 /// ```rust,no_run
 /// #[cfg(target_os = "android")]
-/// dioxus_platform_bridge::java_plugin!(
+/// dioxus_platform_bridge::android_plugin!(
 ///     package = "dioxus.mobile.geolocation",
 ///     plugin = "geolocation",
 ///     files = [
@@ -97,16 +96,15 @@ pub fn ios_plugin(input: TokenStream) -> TokenStream {
 /// ```text
 /// your-plugin-crate/
 /// └── src/
-///     ├── lib.rs                  # Contains java_plugin!() macro invocation
+///     ├── lib.rs                  # Contains android_plugin!() macro invocation
 ///     └── sys/
 ///         └── android/
 ///             ├── LocationCallback.java    # Java plugin sources
 ///             └── PermissionsHelper.java
 /// ```
 #[proc_macro]
-pub fn java_plugin(input: TokenStream) -> TokenStream {
-    let java_plugin = parse_macro_input!(input as JavaPluginParser);
-    
-    quote! { #java_plugin }.into()
-}
+pub fn android_plugin(input: TokenStream) -> TokenStream {
+    let android_plugin = parse_macro_input!(input as android_plugin::AndroidPluginParser);
 
+    quote! { #android_plugin }.into()
+}

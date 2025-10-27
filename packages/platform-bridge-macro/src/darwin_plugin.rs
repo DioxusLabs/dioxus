@@ -4,15 +4,15 @@ use syn::{
     ExprArray, ExprLit, Lit, Token,
 };
 
-/// Parser for the `ios_plugin!()` macro syntax
-pub struct IosPluginParser {
+/// Parser for Darwin (iOS/macOS) plugin macro syntax
+pub struct DarwinPluginParser {
     /// Plugin identifier (e.g., "geolocation")
     plugin_name: String,
-    /// List of iOS framework names (e.g., ["CoreLocation", "Foundation"])
+    /// List of framework names (e.g., ["CoreLocation", "Foundation"])
     frameworks: Vec<String>,
 }
 
-impl Parse for IosPluginParser {
+impl Parse for DarwinPluginParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut plugin_name = None;
         let mut frameworks = None;
@@ -63,19 +63,11 @@ impl Parse for IosPluginParser {
             }
         }
 
-        let plugin_name = plugin_name.ok_or_else(|| {
-            syn::Error::new(
-                input.span(),
-                "Missing required field 'plugin'",
-            )
-        })?;
+        let plugin_name = plugin_name
+            .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'plugin'"))?;
 
-        let frameworks = frameworks.ok_or_else(|| {
-            syn::Error::new(
-                input.span(),
-                "Missing required field 'frameworks'",
-            )
-        })?;
+        let frameworks = frameworks
+            .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'frameworks'"))?;
 
         if frameworks.is_empty() {
             return Err(syn::Error::new(
@@ -91,7 +83,7 @@ impl Parse for IosPluginParser {
     }
 }
 
-impl ToTokens for IosPluginParser {
+impl ToTokens for DarwinPluginParser {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         let plugin_name = &self.plugin_name;
 
@@ -105,18 +97,18 @@ impl ToTokens for IosPluginParser {
             })
             .collect();
 
-        // Generate the export name
-        let export_name = format!("__IOS_FRAMEWORK__{}", plugin_name);
+        // Generate the export name using __DARWIN_FRAMEWORK__ prefix
+        let export_name = format!("__DARWIN_FRAMEWORK__{}", plugin_name);
 
         // Generate the linker section attributes
+        // Use __DATA,__darwin_framework for unified extraction
         let link_section = quote! {
-            #[link_section = "__DATA,__ios_framework"]
+            #[link_section = "__DATA,__darwin_framework"]
             #[used]
             #[export_name = #export_name]
-            static IOS_FRAMEWORK_METADATA: (&str, &[&str]) = (#plugin_name, &[#(#framework_literals),*]);
+            static DARWIN_FRAMEWORK_METADATA: (&str, &[&str]) = (#plugin_name, &[#(#framework_literals),*]);
         };
 
         tokens.extend(link_section);
     }
 }
-

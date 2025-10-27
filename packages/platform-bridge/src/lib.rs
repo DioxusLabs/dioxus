@@ -8,26 +8,26 @@
 #[cfg(target_os = "android")]
 pub mod android;
 
-#[cfg(target_os = "ios")]
-pub mod ios;
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub mod darwin;
 
 #[cfg(target_os = "android")]
 pub use android::*;
 
-#[cfg(target_os = "ios")]
-pub use ios::*;
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub use darwin::*;
 
 /// Re-export commonly used types for convenience
 #[cfg(target_os = "android")]
 pub use jni;
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub use objc2;
 
-/// Re-export the java_plugin! macro when metadata feature is enabled
+/// Re-export the android_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", target_os = "android"))]
-pub use platform_bridge_macro::java_plugin;
+pub use platform_bridge_macro::android_plugin;
 
-/// Re-export the ios_plugin! macro when metadata feature is enabled
-#[cfg(all(feature = "metadata", target_os = "ios"))]
-pub use platform_bridge_macro::ios_plugin;
+/// Re-export the darwin_plugin! macro when metadata feature is enabled
+#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
+pub use platform_bridge_macro::darwin_plugin;

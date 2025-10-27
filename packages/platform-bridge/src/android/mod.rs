@@ -9,7 +9,7 @@ pub mod metadata;
 pub mod macro_helpers {
     //! Helper functions for macro expansion
     //!
-    //! These functions are used internally by the `java_plugin!()` macro
+    //! These functions are used internally by the `android_plugin!()` macro
     //! and should not be used directly.
 
     /// Copy a slice into a constant sized buffer at compile time

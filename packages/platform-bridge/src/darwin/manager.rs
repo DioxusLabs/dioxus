@@ -29,9 +29,9 @@ impl<T> MainThreadCell<T> {
 // `MainThreadMarker`.
 unsafe impl<T> Sync for MainThreadCell<T> {}
 
-/// Generic manager caching utility for iOS APIs
+/// Generic manager caching utility for Darwin (iOS and macOS) APIs
 ///
-/// This function provides a pattern for caching iOS manager objects that
+/// This function provides a pattern for caching manager objects that
 /// must be accessed only on the main thread. It handles the boilerplate
 /// of main thread checking and thread-safe initialization.
 ///
@@ -46,7 +46,7 @@ unsafe impl<T> Sync for MainThreadCell<T> {}
 /// # Example
 ///
 /// ```rust,no_run
-/// use dioxus_platform_bridge::ios::get_or_init_manager;
+/// use dioxus_platform_bridge::darwin::get_or_init_manager;
 /// use objc2_core_location::CLLocationManager;
 ///
 /// let manager = get_or_init_manager(|| {
@@ -57,11 +57,10 @@ pub fn get_or_init_manager<T, F>(init: F) -> Option<&'static T>
 where
     F: FnOnce() -> T,
 {
-    let Some(mtm) = MainThreadMarker::new() else {
-        return None;
-    };
+    let _mtm = MainThreadMarker::new()?;
 
     // Use a static cell to cache the manager
+    #[allow(dead_code)]
     static MANAGER_CELL: MainThreadCell<()> = MainThreadCell::new();
 
     // For now, we'll use a simple approach. In a real implementation,
@@ -79,9 +78,7 @@ where
     F: FnOnce() -> T,
     T: 'static,
 {
-    let Some(mtm) = MainThreadMarker::new() else {
-        return None;
-    };
+    let _mtm = MainThreadMarker::new()?;
 
     // This is a simplified implementation. In practice, you'd need
     // a more sophisticated caching mechanism that can handle different
