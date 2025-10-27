@@ -1383,6 +1383,11 @@ impl BuildRequest {
             return Ok(super::permissions::PermissionManifest::default());
         }
 
+        // Skip permission extraction for web builds - permissions are runtime-only
+        if self.bundle == BundleFormat::Web {
+            return Ok(super::permissions::PermissionManifest::default());
+        }
+
         let manifest = super::permissions::extract_permissions_from_file(exe)?;
 
         // Log permissions found for platforms that need them

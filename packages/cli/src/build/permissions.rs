@@ -46,7 +46,18 @@ pub struct MacosPermission {
 /// Extract all permissions from the given file
 pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<PermissionManifest> {
     let path = path.as_ref();
-    let offsets = linker_symbols::find_symbol_offsets_from_path(path, PERMISSION_SYMBOL_PREFIX)?;
+    let offsets = match linker_symbols::find_symbol_offsets_from_path(path, PERMISSION_SYMBOL_PREFIX) {
+        Ok(offsets) => offsets,
+        Err(_) => {
+            tracing::debug!("No permission symbols found");
+            return Ok(PermissionManifest::default());
+        }
+    };
+
+    // If no symbols found, return empty manifest
+    if offsets.is_empty() {
+        return Ok(PermissionManifest::default());
+    }
 
     let mut file = std::fs::File::open(path)?;
     let mut permissions = Vec::new();
