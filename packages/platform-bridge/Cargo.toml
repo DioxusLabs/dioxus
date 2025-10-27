@@ -3,7 +3,7 @@ name = "dioxus-platform-bridge"
 version = "0.7.0-rc.3"
 edition = "2021"
 license = "MIT OR Apache-2.0"
-description = "Cross-platform FFI utilities and plugin metadata for Dioxus platform APIs"
+description = "FFI utilities and plugin metadata for Dioxus mobile platform APIs"
 repository = "https://github.com/DioxusLabs/dioxus"
 keywords = ["dioxus", "platform", "bridge", "ffi", "android", "ios", "macos", "jni", "objc"]
 categories = ["gui", "platform-support"]
@@ -33,5 +33,4 @@ objc2 = "0.6.3"
 objc2 = "0.6.3"
 
 [package.metadata.docs.rs]
-default-target = "x86_64-unknown-linux-gnu"
 targets = ["aarch64-linux-android", "aarch64-apple-ios"]

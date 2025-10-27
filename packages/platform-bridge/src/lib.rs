@@ -1,8 +1,8 @@
-//! Cross-platform FFI utilities and plugin metadata for Dioxus platform APIs
+//! FFI utilities and plugin metadata for Dioxus mobile platform APIs
 //!
 //! This crate provides common patterns and utilities for implementing
-//! cross-platform platform APIs in Dioxus applications. It handles the
-//! boilerplate for JNI (Android) and objc2 (iOS) bindings, build scripts,
+//! mobile platform APIs in Dioxus applications. It handles the
+//! boilerplate for JNI (Android) and objc2 (iOS/macOS) bindings, build scripts,
 //! and platform-specific resource management.
 
 #[cfg(target_os = "android")]

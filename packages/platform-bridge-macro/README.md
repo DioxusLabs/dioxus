@@ -1,13 +1,10 @@
 # platform-bridge-macro
 
-Procedural macro for declaring platform plugins with linker-based embedding for Dioxus platform builds.
+Procedural macro for declaring Android Java sources with linker-based embedding for Dioxus builds.
 
 ## Overview
 
-This crate provides macros for declaring platform plugins with linker-based embedding:
-- `android_plugin!()` - Android Java sources
-
-These macros reduce declaration boilerplate from ~30 lines to ~3 lines while providing compile-time validation and automatic path embedding.
+This crate provides the `android_plugin!()` macro for declaring Android Java sources that need to be compiled into the APK.
 
 ## Usage
 
@@ -72,55 +69,8 @@ If a file is not found, the macro emits a compile error with details about where
 3. **Copying**: Copies Java files to Gradle structure: `app/src/main/java/{package}/`
 4. **Compilation**: Gradle compiles Java sources to DEX bytecode
 
-## Comparison with Similar Systems
+The macro uses linker-based binary embedding with compile-time validation, similar to the `static_permission!()` and `asset!()` macros.
 
-This macro follows the same pattern as:
-- **permissions**: `static_permission!()` for runtime permissions
-- **Manganis**: `asset!()` for static asset bundling
-
-All three use linker-based binary embedding with compile-time validation.
-
-## Benefits
-
-### Developer Experience
-- **90% less boilerplate**: ~30 lines → 3 lines
-- **Compile-time validation**: Catch missing files immediately
-- **Clear error messages**: Shows where files were searched
-- **Consistent API**: Same pattern as permissions and Manganis
-
-### Build Performance
-- **No workspace search**: Direct file access via embedded paths
-- **Faster builds**: ~50-100ms saved per plugin on large workspaces
-- **Deterministic**: Paths are known at compile time
-
-## Migration from Manual Approach
-
-**Before** (30+ lines):
-```rust
-const JAVA_META: JavaSourceMetadata = JavaSourceMetadata::new(
-    "dioxus.mobile.geolocation",
-    "geolocation",
-    &["LocationCallback.java", "PermissionsHelper.java"],
-);
-
-const JAVA_META_BYTES: [u8; 4096] = {
-    // Manual serialization...
-};
-
-#[link_section = "__DATA,__java_source"]
-#[used]
-#[export_name = "__JAVA_SOURCE__..."]
-static JAVA_SOURCE_METADATA: [u8; 4096] = JAVA_META_BYTES;
-```
-
-**After** (3 lines):
-```rust
-dioxus_platform_bridge::android_plugin!(
-    package = "dioxus.mobile.geolocation",
-    plugin = "geolocation",
-    files = ["LocationCallback.java", "PermissionsHelper.java"]
-);
-```
 
 ## Error Messages
 
@@ -135,7 +85,5 @@ error: Java file 'LocationCallback.java' not found. Searched in:
 
 ## See Also
 
-- [`permissions-macro`](../permissions/permissions-macro/): Similar macro for permission declarations
-- [`manganis-macro`](../manganis/manganis-macro/): Similar macro for asset bundling
-- [`platform-bridge`](../platform-bridge/): Core utilities for Android, iOS, and macOS
+- [`platform-bridge`](../platform-bridge/): Core utilities for Android and iOS/macOS
 

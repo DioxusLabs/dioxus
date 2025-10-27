@@ -28,7 +28,15 @@ impl<T> MainThreadCell<T> {
     pub const fn new() -> Self {
         Self(UnsafeCell::new(None))
     }
+}
 
+impl<T> Default for MainThreadCell<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> MainThreadCell<T> {
     /// Get or initialize the value in this cell.
     ///
     /// Requires a `MainThreadMarker` to ensure we're on the main thread.
@@ -59,60 +67,3 @@ impl<T> MainThreadCell<T> {
 // `MainThreadMarker`. Multiple threads can hold references to the same cell,
 // but all access must happen on the main thread through the `MainThreadMarker`.
 unsafe impl<T> Sync for MainThreadCell<T> {}
-
-/// Generic manager caching utility for Darwin (iOS and macOS) APIs
-///
-/// This function provides a pattern for caching manager objects that
-/// must be accessed only on the main thread. It handles the boilerplate
-/// of main thread checking and thread-safe initialization.
-///
-/// # Arguments
-///
-/// * `init` - A closure that creates the manager instance
-///
-/// # Returns
-///
-/// Returns a reference to the cached manager, or `None` if not on the main thread
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use dioxus_platform_bridge::darwin::get_or_init_manager;
-/// use objc2_core_location::CLLocationManager;
-///
-/// let manager = get_or_init_manager(|| {
-///     unsafe { CLLocationManager::new() }
-/// });
-/// ```
-pub fn get_or_init_manager<T, F>(_init: F) -> Option<&'static T>
-where
-    F: FnOnce() -> T,
-{
-    let _mtm = MainThreadMarker::new()?;
-
-    // Use a static cell to cache the manager
-    #[allow(dead_code)]
-    static MANAGER_CELL: MainThreadCell<()> = MainThreadCell::new();
-
-    // For now, we'll use a simple approach. In a real implementation,
-    // you'd want to use a generic static or a registry pattern.
-    // This is a simplified version for demonstration.
-    None
-}
-
-/// Get or create a manager with a specific type
-///
-/// This is a more specific version that works with objc2 manager types.
-/// It requires the manager to implement Clone or be Retained.
-pub fn get_or_init_objc_manager<T, F>(_init: F) -> Option<&'static T>
-where
-    F: FnOnce() -> T,
-    T: 'static,
-{
-    let _mtm = MainThreadMarker::new()?;
-
-    // This is a simplified implementation. In practice, you'd need
-    // a more sophisticated caching mechanism that can handle different
-    // manager types generically.
-    None
-}
