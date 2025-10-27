@@ -1,7 +1,7 @@
 use crate::{HttpError, ServerFnError};
 use axum_core::extract::FromRequestParts;
 use axum_core::response::IntoResponse;
-use dioxus_core::{try_consume_context, CapturedError, ReactiveContext};
+use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
 use http::{request::Parts, HeaderMap};
 use parking_lot::RwLock;
@@ -17,21 +17,27 @@ tokio::task_local! {
 ///
 /// This context will only be set on the server during the initial streaming response
 /// and inside server functions.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FullstackContext {
-    current_status: Arc<RwLock<StreamingStatus>>,
-    current_status_subscribers: Arc<RwLock<HashSet<ReactiveContext>>>,
+    // We expose the lock for request headers directly so it needs to be in a seperate lock
     request_headers: Arc<RwLock<http::request::Parts>>,
-    response_headers: Arc<RwLock<Option<HeaderMap>>>,
-    route_http_status: Arc<RwLock<HttpError>>,
-    route_http_status_subscribers: Arc<RwLock<HashSet<ReactiveContext>>>,
+    // The rest of the fields are only held internally, so we can group them together
+    lock: Arc<RwLock<FullstackContextInner>>,
 }
 
-impl Debug for FullstackContext {
+pub struct FullstackContextInner {
+    current_status: StreamingStatus,
+    current_status_subscribers: HashSet<ReactiveContext>,
+    response_headers: Option<HeaderMap>,
+    route_http_status: HttpError,
+    route_http_status_subscribers: HashSet<ReactiveContext>,
+}
+
+impl Debug for FullstackContextInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FullstackContext")
+        f.debug_struct("FullstackContextInner")
             .field("current_status", &self.current_status)
-            .field("request_headers", &self.request_headers)
+            .field("response_headers", &self.response_headers)
             .field("route_http_status", &self.route_http_status)
             .finish()
     }
@@ -39,18 +45,8 @@ impl Debug for FullstackContext {
 
 impl PartialEq for FullstackContext {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.current_status, &other.current_status)
+        Arc::ptr_eq(&self.lock, &other.lock)
             && Arc::ptr_eq(&self.request_headers, &other.request_headers)
-            && Arc::ptr_eq(&self.route_http_status, &other.route_http_status)
-            && Arc::ptr_eq(&self.response_headers, &other.response_headers)
-            && Arc::ptr_eq(
-                &self.current_status_subscribers,
-                &other.current_status_subscribers,
-            )
-            && Arc::ptr_eq(
-                &self.route_http_status_subscribers,
-                &other.route_http_status_subscribers,
-            )
     }
 }
 
@@ -59,15 +55,18 @@ impl FullstackContext {
     /// provide this context for you.
     pub fn new(parts: Parts) -> Self {
         Self {
-            current_status: Arc::new(RwLock::new(StreamingStatus::RenderingInitialChunk)),
-            current_status_subscribers: Default::default(),
             request_headers: RwLock::new(parts).into(),
-            route_http_status: Arc::new(RwLock::new(HttpError {
-                status: http::StatusCode::OK,
-                message: None,
-            })),
-            route_http_status_subscribers: Default::default(),
-            response_headers: RwLock::new(Some(HeaderMap::new())).into(),
+            lock: RwLock::new(FullstackContextInner {
+                current_status: StreamingStatus::RenderingInitialChunk,
+                current_status_subscribers: Default::default(),
+                route_http_status: HttpError {
+                    status: http::StatusCode::OK,
+                    message: None,
+                },
+                route_http_status_subscribers: Default::default(),
+                response_headers: Some(HeaderMap::new()),
+            })
+            .into(),
         }
     }
 
@@ -77,8 +76,9 @@ impl FullstackContext {
     ///
     /// Once this method has been called, the http response parts can no longer be modified.
     pub fn commit_initial_chunk(&mut self) {
-        *self.current_status.write() = StreamingStatus::InitialChunkCommitted;
-        let subscribers = std::mem::take(&mut *self.current_status_subscribers.write());
+        let mut lock = self.lock.write();
+        lock.current_status = StreamingStatus::InitialChunkCommitted;
+        let subscribers = std::mem::take(&mut lock.current_status_subscribers);
         for subscriber in subscribers {
             subscriber.mark_dirty();
         }
@@ -87,7 +87,12 @@ impl FullstackContext {
     /// Get the current status of the streaming response. This method is reactive and will cause
     /// the current reactive context to rerun when the status changes.
     pub fn streaming_state(&self) -> StreamingStatus {
-        *self.current_status.read()
+        let mut lock = self.lock.write();
+        // Register the current reactive context as a subscriber to changes in the streaming status
+        if let Some(ctx) = ReactiveContext::current() {
+            lock.current_status_subscribers.insert(ctx);
+        }
+        lock.current_status
     }
 
     /// Access the http request parts mutably. This will allow you to modify headers and other parts of the request.
@@ -140,12 +145,18 @@ impl FullstackContext {
     /// Get the current HTTP status for the route. This will default to 200 OK, but can be modified
     /// by calling `FullstackContext::commit_error_status` with an error.
     pub fn current_http_status(&self) -> HttpError {
-        self.route_http_status.read().clone()
+        let mut lock = self.lock.write();
+        // Register the current reactive context as a subscriber to changes in the http status
+        if let Some(ctx) = ReactiveContext::current() {
+            lock.route_http_status_subscribers.insert(ctx);
+        }
+        lock.route_http_status.clone()
     }
 
     pub fn set_current_http_status(&mut self, status: HttpError) {
-        *self.route_http_status.write() = status;
-        let subscribers = std::mem::take(&mut *self.route_http_status_subscribers.write());
+        let mut lock = self.lock.write();
+        lock.route_http_status = status;
+        let subscribers = std::mem::take(&mut lock.route_http_status_subscribers);
         for subscriber in subscribers {
             subscriber.mark_dirty();
         }
@@ -157,7 +168,8 @@ impl FullstackContext {
         key: impl Into<http::header::HeaderName>,
         value: impl Into<http::header::HeaderValue>,
     ) {
-        if let Some(headers) = self.response_headers.write().as_mut() {
+        let mut lock = self.lock.write();
+        if let Some(headers) = lock.response_headers.as_mut() {
             headers.insert(key.into(), value.into());
         }
     }
@@ -165,7 +177,8 @@ impl FullstackContext {
     /// Take the response headers out of the context. This will leave the context without any headers,
     /// so it should only be called once when the response is being committed.
     pub fn take_response_headers(&self) -> Option<HeaderMap> {
-        self.response_headers.write().take()
+        let mut lock = self.lock.write();
+        lock.response_headers.take()
     }
 
     /// Set the current HTTP status for the route. This will be used when committing the response
@@ -227,12 +240,13 @@ pub enum StreamingStatus {
 /// ```
 pub fn commit_initial_chunk() {
     crate::history::finalize_route();
-    if let Some(mut streaming) = try_consume_context::<FullstackContext>() {
+    if let Some(mut streaming) = FullstackContext::current() {
         streaming.commit_initial_chunk();
     }
 }
 
 /// Extract an axum extractor from the current request.
+#[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
 pub fn extract<T: FromRequestParts<()>>(
 ) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T>()
@@ -261,7 +275,7 @@ pub fn extract<T: FromRequestParts<()>>(
 /// }
 /// ```
 pub fn current_status() -> StreamingStatus {
-    if let Some(streaming) = try_consume_context::<FullstackContext>() {
+    if let Some(streaming) = FullstackContext::current() {
         streaming.streaming_state()
     } else {
         StreamingStatus::InitialChunkCommitted
