@@ -56,7 +56,7 @@ fn app() -> Element {
                 input {
                     r#type: "number",
                     value: "{i}",
-                    onmounted: move |cx| elements.write().push(cx.data()),
+                    onmounted: move |cx| elements.push(cx.data()),
                     oninput: move |_| running.set(false),
                 }
             }
