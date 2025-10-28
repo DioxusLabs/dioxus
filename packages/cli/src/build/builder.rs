@@ -591,7 +591,7 @@ impl AppBuilder {
 
             BundleFormat::Ios => {
                 if let Some(device) = self.build.device_name.as_deref() {
-                    self.open_ios_device(device).await?
+                    self.open_ios_device(&device.to_string()).await?
                 } else {
                     self.open_ios_sim(envs).await?
                 }
@@ -937,10 +937,10 @@ impl AppBuilder {
     }
 
     /// Upload the app to the device and launch it
-    async fn open_ios_device(&self, device_query: &str) -> Result<()> {
+    async fn open_ios_device(&mut self, device_query: &str) -> Result<()> {
         let device_query = device_query.to_string();
         let root_dir = self.build.root_dir().clone();
-        tokio::task::spawn(async move {
+        self.spawn_handle = Some(tokio::task::spawn(async move {
             // 1. Find an active device
             let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
@@ -953,7 +953,7 @@ impl AppBuilder {
             Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
 
             Result::Ok(()) as Result<()>
-        });
+        }));
 
         Ok(())
     }
@@ -1297,7 +1297,7 @@ impl AppBuilder {
                 .await?;
 
             // Write the env vars to a .env file in our session cache
-            let env_file = session_cache.clone().join(".env");
+            let env_file = session_cache.join(".env");
             _ = std::fs::write(
                 &env_file,
                 envs.iter()
