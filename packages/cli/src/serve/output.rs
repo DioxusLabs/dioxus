@@ -343,8 +343,12 @@ impl Output {
             // First char is the priority level (V, D, I, W, E, F)
             let logcat_level = msg.chars().next().unwrap_or('I');
             
-            // If not tracing, filter out DEBUG/INFO/VERBOSE
-            if !self.trace && matches!(logcat_level, 'D' | 'I' | 'V') {
+            // Always show RustStdoutStderr logs (from tracing::info!, etc.)
+            let is_rust_log = msg.contains("RustStdoutStderr");
+            
+            // If not tracing, filter out DEBUG/INFO/VERBOSE from system logs
+            // But always show Rust logs regardless of trace flag
+            if !self.trace && !is_rust_log && matches!(logcat_level, 'D' | 'I' | 'V') {
                 return;
             }
         }

@@ -1371,14 +1371,11 @@ impl AppBuilder {
         let pid = pid.context("Failed to get app PID")?;
 
         // Spawn logcat with filtering
-        // Filter by app package name to show only app-specific logs
-        // This avoids noisy system logs from chromium, HWUI, MESA, etc.
-        // Extract a simplified tag from the package ID (e.g., "com.example.MyApp" -> "MyApp")
-        let app_tag = application_id_for_logcat
-            .split('.')
-            .last()
-            .unwrap_or(&application_id_for_logcat);
-
+        // Use --pid to filter by process, then suppress common noisy system tags
+        // This shows app logs while filtering out framework noise
+        // Key tags to look for:
+        // - RustStdoutStderr: Rust tracing/logging output
+        // - App package name tags: app-specific logs
         let mut child = Command::new(&adb_for_logcat)
             .args(&transport_id_args)
             .arg("logcat")
@@ -1386,12 +1383,18 @@ impl AppBuilder {
             .arg("brief")
             .arg("--pid")
             .arg(&pid)
-            // Show logs from the app's tag at DEBUG level (filtered in Rust by trace flag)
-            // Also show any AndroidRuntime (crashes) and DEBUG tags (Rust panic logs)
-            .arg(format!("{}:D", app_tag))
-            .arg("AndroidRuntime:E") // Fatal crashes
-            .arg("DEBUG:I") // Native crashes/signals
-            .arg("*:S") // Suppress everything else
+            // Show most logs at DEBUG level, suppress specific noisy tags
+            .arg("RustStdoutStderr:V") // Ensure Rust tracing logs are always shown
+            .arg("*:D")
+            .arg("chromium:S")
+            .arg("HWUI:S")
+            .arg("MESA:S")
+            .arg("libc:S")
+            .arg("cr_media:S")
+            .arg("EGL:S")
+            .arg("chatty:S")
+            .arg("Choreographer:S") // Frame skip warnings
+            .arg("vulkan:S") // Vulkan driver logs
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)
