@@ -891,20 +891,19 @@ impl BuildRequest {
         }
 
         // On windows, we pass /SUBSYSTbEM:WINDOWS to prevent a console from appearing
-        if matches!(bundle, BundleFormat::Windows) {
-            if !rustflags
+        if matches!(bundle, BundleFormat::Windows)
+            && !rustflags
                 .flags
                 .iter()
                 .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
-            {
-                let subsystem = args
-                    .windows_subsystem
-                    .clone()
-                    .unwrap_or_else(|| "WINDOWS".to_string());
-                rustflags
-                    .flags
-                    .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
-            }
+        {
+            let subsystem = args
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
+            rustflags
+                .flags
+                .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
