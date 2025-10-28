@@ -1373,6 +1373,7 @@ impl AppBuilder {
         // Spawn logcat with filtering
         // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
         // With tracing enabled: show all logs from the app process
+        // Note: We always capture at DEBUG level, then filter in Rust based on trace flag
         let mut child = Command::new(&adb_for_logcat)
             .args(&transport_id_args)
             .arg("logcat")
@@ -1380,11 +1381,7 @@ impl AppBuilder {
             .arg("brief")
             .arg("--pid")
             .arg(&pid)
-            // Always show Rust app logs and fatal crashes
-            .arg("RustStdoutStderr:V") // All Rust tracing output
-            .arg("AndroidRuntime:F") // Fatal crashes
-            .arg("DEBUG:F") // Native fatal signals
-            .arg("*:S") // Suppress everything else (filtered in Rust by trace flag)
+            .arg("*:D") // Capture all logs at DEBUG level (filtered in Rust)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)
