@@ -465,13 +465,28 @@ fn route_impl_with_route(
                 MakeAxumResponse, MakeAxumError,
             };
 
-            _ = dioxus_fullstack::assert_is_result::<#out_ty>();
 
             #query_params_struct
 
             #body_struct_impl
 
             const __ENDPOINT_PATH: &str = #endpoint_path;
+
+
+            {
+                _ = dioxus_fullstack::assert_is_result::<#out_ty>();
+
+                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                    .verify_can_serialize();
+
+                dioxus_fullstack::assert_can_encode(verify_token);
+
+                let decode_token = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                    .verify_can_deserialize();
+
+                dioxus_fullstack::assert_can_decode(decode_token);
+            };
+
 
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
@@ -483,11 +498,6 @@ fn route_impl_with_route(
                     #query_endpoint,
                     &__QueryParams__ { #(#query_param_names,)* },
                 );
-
-                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .verify_can_serialize();
-
-                dioxus_fullstack::assert_can_encode(verify_token);
 
                 let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
                     .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)

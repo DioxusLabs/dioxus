@@ -172,7 +172,7 @@ pub mod req_to {
     impl<T, O, R> EncodeRequest<T, O, R> for &&&&&&&&&ServerFnEncoder<T, O>
     where
         T: 'static,
-        O: FromRequest<DioxusServerState> + IntoRequest<R>,
+        O: IntoRequest<R>,
     {
         type VerifyEncode = EncodeIsVerified;
         fn fetch_client(
@@ -214,6 +214,8 @@ pub mod req_to {
 pub use decode_ok::*;
 mod decode_ok {
 
+    use crate::{CantDecode, DecodeIsVerified};
+
     use super::*;
 
     /// Convert the reqwest response into the desired type, in place.
@@ -222,13 +224,16 @@ mod decode_ok {
     /// This is because FromResponse types are more specialized and can handle things like websockets and files.
     /// DeserializeOwned types are more general and can handle things like JSON responses.
     pub trait RequestDecodeResult<T, R> {
+        type VerifyDecode;
         fn decode_client_response(
             &self,
             res: Result<R, RequestError>,
         ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send;
+        fn verify_can_deserialize(&self) -> Self::VerifyDecode;
     }
 
     impl<T: FromResponse<R>, E, R> RequestDecodeResult<T, R> for &&&ServerFnDecoder<Result<T, E>> {
+        type VerifyDecode = DecodeIsVerified;
         fn decode_client_response(
             &self,
             res: Result<R, RequestError>,
@@ -240,11 +245,15 @@ mod decode_ok {
                 }
             })
         }
+        fn verify_can_deserialize(&self) -> Self::VerifyDecode {
+            DecodeIsVerified
+        }
     }
 
     impl<T: DeserializeOwned, E> RequestDecodeResult<T, ClientResponse>
         for &&ServerFnDecoder<Result<T, E>>
     {
+        type VerifyDecode = DecodeIsVerified;
         fn decode_client_response(
             &self,
             res: Result<ClientResponse, RequestError>,
@@ -303,6 +312,24 @@ mod decode_ok {
                     }
                 }
             })
+        }
+        fn verify_can_deserialize(&self) -> Self::VerifyDecode {
+            DecodeIsVerified
+        }
+    }
+
+    impl<T, R, E> RequestDecodeResult<T, R> for &ServerFnDecoder<Result<T, E>> {
+        type VerifyDecode = CantDecode;
+
+        fn decode_client_response(
+            &self,
+            _res: Result<R, RequestError>,
+        ) -> impl Future<Output = Result<Result<T, ServerFnError>, RequestError>> + Send {
+            async move { unimplemented!() }
+        }
+
+        fn verify_can_deserialize(&self) -> Self::VerifyDecode {
+            CantDecode
         }
     }
 

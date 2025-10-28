@@ -1,4 +1,4 @@
-use crate::{HttpError, ServerFnError};
+use crate::{DioxusServerState, HttpError, ServerFnError};
 use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
@@ -114,13 +114,15 @@ impl FullstackContext {
     ///
     /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
     /// function extractors.
-    pub async fn extract<T: FromRequest<(), M>, M>() -> Result<T, ServerFnError> {
+    pub async fn extract<T: FromRequest<DioxusServerState, M>, M>() -> Result<T, ServerFnError> {
+        let state = DioxusServerState {};
+
         let this = Self::current()
             .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
 
         let parts = this.request_headers.read().clone();
         let request = axum_core::extract::Request::from_parts(parts, Default::default());
-        match T::from_request(request, &()).await {
+        match T::from_request(request, &state).await {
             Ok(res) => Ok(res),
             Err(err) => {
                 let resp = err.into_response();
@@ -255,7 +257,7 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<(), M>, M>(
+pub fn extract<T: FromRequest<DioxusServerState, M>, M>(
 ) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T, M>()
 }

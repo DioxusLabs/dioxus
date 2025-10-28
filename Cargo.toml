@@ -704,6 +704,11 @@ path = "examples/06-routing/flat_router.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "query_params"
+path = "examples/07-fullstack/query_params.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "server_functions"
 path = "examples/07-fullstack/server_functions.rs"
 doc-scrape-examples = true

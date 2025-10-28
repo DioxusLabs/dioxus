@@ -107,7 +107,7 @@ impl ServerFunction {
         router.route(
             self.path(),
             ((self.handler)())
-                .with_state(DioxusServerState {})
+                .with_state(DioxusServerState::default())
                 .layer(axum::middleware::from_fn(server_context_middleware)),
         )
     }
