@@ -149,7 +149,7 @@ impl<T, E> std::future::Future for ServerFnRequest<Result<T, E>> {
 #[diagnostic::on_unimplemented(
     message = "The return type of a server function must be `Result<T, E>`",
     note = "`T` is either `impl IntoResponse` *or* `impl Serialize`",
-    note = "`E` is either `From<ServerFnError> + Serialize`, `dioxus::Error` or `StatusCode`."
+    note = "`E` is either `From<ServerFnError> + Serialize`, `dioxus::CapturedError` or `StatusCode`."
 )]
 pub trait AssertIsResult {}
 impl<T, E> AssertIsResult for Result<T, E> {}

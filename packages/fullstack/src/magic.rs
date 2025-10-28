@@ -566,6 +566,7 @@ mod resp {
 
     use super::*;
     use axum::response::Response;
+    use dioxus_core::CapturedError;
     use http::HeaderValue;
 
     /// A trait for converting the result of the Server Function into an Axum response.
@@ -655,6 +656,71 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = status_code;
+                    Err(resp)
+                }
+            }
+        }
+    }
+
+    impl<T> MakeAxumError<CapturedError> for &&ServerFnDecoder<Result<T, CapturedError>> {
+        fn make_axum_error(
+            self,
+            result: Result<Response, CapturedError>,
+        ) -> Result<Response, Response> {
+            match result {
+                Ok(res) => Ok(res),
+
+                // Optimize the case where we have sole ownership of the error
+                Err(errr) if errr._strong_count() == 1 => {
+                    let err = errr.into_inner().unwrap();
+                    <&&ServerFnDecoder<Result<T, anyhow::Error>> as MakeAxumError<anyhow::Error>>::make_axum_error(
+                        &&ServerFnDecoder::new(),
+                        Err(err),
+                    )
+                }
+
+                Err(errr) => {
+                    // The `WithHttpError` trait emits ServerFnErrors so we can downcast them here
+                    // to create richer responses.
+                    let payload = match errr.downcast_ref::<ServerFnError>() {
+                        Some(ServerFnError::ServerError {
+                            message,
+                            code,
+                            details,
+                        }) => ErrorPayload {
+                            message: message.clone(),
+                            code: *code,
+                            data: details.clone(),
+                        },
+                        Some(other) => ErrorPayload {
+                            message: other.to_string(),
+                            code: 500,
+                            data: None,
+                        },
+                        None => match errr.downcast_ref::<HttpError>() {
+                            Some(http_err) => ErrorPayload {
+                                message: http_err
+                                    .message
+                                    .clone()
+                                    .unwrap_or_else(|| http_err.status.to_string()),
+                                code: http_err.status.as_u16(),
+                                data: None,
+                            },
+                            None => ErrorPayload {
+                                code: 500,
+                                message: errr.to_string(),
+                                data: None,
+                            },
+                        },
+                    };
+
+                    let body = serde_json::to_string(&payload).unwrap();
+                    let mut resp = Response::new(body.into());
+                    resp.headers_mut().insert(
+                        http::header::CONTENT_TYPE,
+                        HeaderValue::from_static("application/json"),
+                    );
+                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                     Err(resp)
                 }
             }

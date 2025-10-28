@@ -38,10 +38,10 @@ fn app() -> Element {
 
         // And then poll it for new events, adding them to our signal
         while let Some(Ok(event)) = stream.recv().await {
-            events.write().push(event);
+            events.push(event);
         }
 
-        anyhow::Ok(())
+        dioxus::Ok(())
     });
 
     rsx! {

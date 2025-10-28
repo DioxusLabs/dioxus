@@ -2589,8 +2589,7 @@ impl BuildRequest {
         }
 
         // We want to go through wasm-ld directly, so we need to remove the -flavor flag
-        if self.is_wasm_or_wasi() {
-            let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
+        if let Some(flavor_idx) = args.iter().position(|arg| *arg == "-flavor") {
             args.remove(flavor_idx + 1);
             args.remove(flavor_idx);
         }
@@ -4814,9 +4813,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
-        static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static PRIMARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static SECONDARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
-        let success = INITIALIZED.get_or_init(|| {
+        let initializer = if ctx.is_primary_build() {
+            &PRIMARY_INITIALIZED
+        } else {
+            &SECONDARY_INITIALIZED
+        };
+
+        let success = initializer.get_or_init(|| {
             if ctx.is_primary_build() {
                 _ = remove_dir_all(self.exe_dir());
             }
