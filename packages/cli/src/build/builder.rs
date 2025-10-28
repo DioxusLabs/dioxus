@@ -22,6 +22,7 @@ use tokio::{
     process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
 
@@ -79,8 +80,10 @@ pub(crate) struct AppBuilder {
     pub stderr: Option<Lines<BufReader<ChildStderr>>>,
 
     // Android logcat stream (treated as stderr for error/warn levels)
-    pub adb_logcat: Option<Child>,
-    pub adb_logcat_stdout: Option<Lines<BufReader<ChildStdout>>>,
+    pub adb_logcat_stdout: Option<UnboundedReceiverStream<String>>,
+
+    /// Handle to the task that's monitoring the child process
+    pub spawn_handle: Option<JoinHandle<Result<()>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -150,8 +153,8 @@ impl AppBuilder {
             child: None,
             stderr: None,
             stdout: None,
-            adb_logcat: None,
             adb_logcat_stdout: None,
+            spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
             patch_cache: None,
@@ -206,13 +209,20 @@ impl AppBuilder {
             Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(|f| f.next_line())) => {
                 StderrReceived {  msg }
             },
-            Some(Ok(Some(msg))) = OptionFuture::from(self.adb_logcat_stdout.as_mut().map(|f| f.next_line())) => {
-                // Parse logcat line to determine level
-                // Format: "I/TAG(12345): message"
-                let level = Self::parse_logcat_level(&msg);
-
+            Some(msg) = OptionFuture::from(self.spawn_handle.as_mut()) => {
+                match msg {
+                    Ok(Ok(_)) => StdoutReceived { msg: "Finished launching app".to_string() },
+                    Ok(Err(err)) => StderrReceived { msg: err.to_string() },
+                    Err(err) => StderrReceived { msg: err.to_string() }
+                }
+            },
+            Some(Some(msg)) = OptionFuture::from(self.adb_logcat_stdout.as_mut().map(|s| s.next())) => {
                 // Send as stderr for errors/warnings, stdout for info/debug
-                if matches!(level, 'E' | 'W' | 'F') {
+                // Parse the priority level from a logcat line
+                //
+                // Logcat brief format: "I/TAG(12345): message"
+                // Returns the priority char (V, D, I, W, E, F)
+                if matches!(msg.chars().next().unwrap_or('I'), 'E' | 'W' | 'F') {
                     StderrReceived { msg }
                 } else {
                     StdoutReceived { msg }
@@ -650,9 +660,9 @@ impl AppBuilder {
             _ = std::fs::remove_file(entropy_app_exe);
         }
 
-        // Kill logcat process
-        if let Some(mut logcat) = self.adb_logcat.take() {
-            _ = logcat.kill().await;
+        // Abort the spawn handle monitoring task if it exists
+        if let Some(spawn_handle) = self.spawn_handle.take() {
+            spawn_handle.abort();
         }
     }
 
@@ -1218,15 +1228,15 @@ impl AppBuilder {
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
-        let application_id_for_task = self.build.bundle_identifier();
-        let adb_for_task = self.build.workspace.android_tools()?.adb.clone();
-        let device_name_query_for_task = device_name_query.clone();
+        let application_id = self.build.bundle_identifier();
+        let adb = self.build.workspace.android_tools()?.adb.clone();
+        let (stdout_tx, stdout_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        tokio::task::spawn(async move {
+        let task = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
-                if let Err(e) = Command::new(&adb_for_task).arg("root").output().await {
+                if let Err(e) = Command::new(&adb).arg("root").output().await {
                     tracing::error!("Failed to run `adb root`: {e}");
                 }
             }
@@ -1234,11 +1244,10 @@ impl AppBuilder {
             // Try to get the transport ID for the device in case there are multiple specified devices
             // All future commands should use this since its the most recent.
             let transport_id_args =
-                Self::get_android_device_transport_id(&adb_for_task, device_name_query_for_task)
-                    .await;
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
 
             // Wait for device to be ready
-            let cmd = Command::new(&adb_for_task)
+            let cmd = Command::new(&adb)
                 .args(transport_id_args)
                 .arg("wait-for-device")
                 .arg("shell")
@@ -1255,7 +1264,7 @@ impl AppBuilder {
             }
 
             let port = devserver_socket.port();
-            if let Err(e) = Command::new(&adb_for_task)
+            if let Err(e) = Command::new(&adb)
                 .arg("reverse")
                 .arg(format!("tcp:{port}"))
                 .arg(format!("tcp:{port}"))
@@ -1267,7 +1276,7 @@ impl AppBuilder {
 
             // Install
             // adb install -r app-debug.apk
-            let res = Command::new(&adb_for_task)
+            let res = Command::new(&adb)
                 .arg("install")
                 .arg("-r")
                 .arg(apk_path)
@@ -1279,7 +1288,7 @@ impl AppBuilder {
             }
 
             // Clear the session cache dir on the device
-            Command::new(&adb_for_task)
+            Command::new(&adb)
                 .arg("shell")
                 .arg("rm")
                 .arg("-rf")
@@ -1298,7 +1307,7 @@ impl AppBuilder {
             );
 
             // Push the env file to the device
-            Command::new(&adb_for_task)
+            Command::new(&adb)
                 .arg("push")
                 .arg(env_file)
                 .arg(dioxus_cli_config::android_session_cache_dir().join(".env"))
@@ -1307,8 +1316,8 @@ impl AppBuilder {
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-            let activity_name = format!("{application_id_for_task}/dev.dioxus.main.MainActivity");
-            let res = Command::new(&adb_for_task)
+            let activity_name = format!("{application_id}/dev.dioxus.main.MainActivity");
+            let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
                 .arg("start")
@@ -1321,75 +1330,65 @@ impl AppBuilder {
                 tracing::error!("Failed to start app with `adb`: {std_err}");
             }
 
+            // Try to get the transport ID for the device
+            let transport_id_args =
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
+
+            // Get the app's PID with retries
+            // Retry up to 10 times (10 seconds total) since app launch is asynchronous
+            let mut pid: Option<String> = None;
+            for attempt in 1..=10 {
+                match Self::get_android_app_pid(&adb, &application_id, &transport_id_args).await {
+                    Ok(p) => {
+                        pid = Some(p);
+                        break;
+                    }
+                    Err(_) if attempt < 10 => {
+                        tracing::debug!(
+                            "App PID not found yet, retrying in 1 second... (attempt {}/10)",
+                            attempt
+                        );
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    Err(e) => {
+                        return Err(e).context(
+                            "Failed to get app PID after 10 attempts - app may not have started",
+                        );
+                    }
+                }
+            }
+
+            let pid = pid.context("Failed to get app PID")?;
+
+            // Spawn logcat with filtering
+            // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
+            // With tracing enabled: show all logs from the app process
+            // Note: We always capture at DEBUG level, then filter in Rust based on trace flag
+            let mut child = Command::new(&adb)
+                .args(&transport_id_args)
+                .arg("logcat")
+                .arg("-v")
+                .arg("brief")
+                .arg("--pid")
+                .arg(&pid)
+                .arg("*:D") // Capture all logs at DEBUG level (filtered in Rust)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = child.stdout.take().unwrap();
+            let mut reader = BufReader::new(stdout).lines();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                _ = stdout_tx.send(line);
+            }
+
             Ok::<(), Error>(())
         });
 
-        // Wait for the app to start, then spawn logcat
-        // Retry multiple times since the app can take a while to launch
-        tokio::time::sleep(Duration::from_millis(1000)).await;
-
-        // Get new references for spawning logcat
-        let adb_for_logcat = self.build.workspace.android_tools()?.adb.clone();
-        let application_id_for_logcat = self.build.bundle_identifier();
-        let device_name_query_for_logcat = device_name_query.clone();
-
-        // Try to get the transport ID for the device
-        let transport_id_args =
-            Self::get_android_device_transport_id(&adb_for_logcat, device_name_query_for_logcat)
-                .await;
-
-        // Get the app's PID with retries
-        // Retry up to 10 times (10 seconds total) since app launch is asynchronous
-        let mut pid: Option<String> = None;
-        for attempt in 1..=10 {
-            match Self::get_android_app_pid(
-                &adb_for_logcat,
-                &application_id_for_logcat,
-                &transport_id_args,
-            )
-            .await
-            {
-                Ok(p) => {
-                    pid = Some(p);
-                    break;
-                }
-                Err(_) if attempt < 10 => {
-                    tracing::debug!(
-                        "App PID not found yet, retrying in 1 second... (attempt {}/10)",
-                        attempt
-                    );
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                }
-                Err(e) => {
-                    return Err(e).context(
-                        "Failed to get app PID after 10 attempts - app may not have started",
-                    );
-                }
-            }
-        }
-
-        let pid = pid.context("Failed to get app PID")?;
-
-        // Spawn logcat with filtering
-        // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
-        // With tracing enabled: show all logs from the app process
-        // Note: We always capture at DEBUG level, then filter in Rust based on trace flag
-        let mut child = Command::new(&adb_for_logcat)
-            .args(&transport_id_args)
-            .arg("logcat")
-            .arg("-v")
-            .arg("brief")
-            .arg("--pid")
-            .arg(&pid)
-            .arg("*:D") // Capture all logs at DEBUG level (filtered in Rust)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true)
-            .spawn()?;
-
-        let stdout = BufReader::new(child.stdout.take().unwrap());
-        self.adb_logcat = Some(child);
-        self.adb_logcat_stdout = Some(stdout.lines());
+        self.spawn_handle = Some(task);
+        self.adb_logcat_stdout = Some(UnboundedReceiverStream::new(stdout_rx));
 
         Ok(())
     }
@@ -1662,7 +1661,7 @@ impl AppBuilder {
 
     async fn get_android_device_transport_id(
         adb: &PathBuf,
-        device_name_query: Option<String>,
+        device_name_query: Option<&str>,
     ) -> Vec<String> {
         // If there are multiple devices, we pick the one matching the query
         let mut device_specifier_args = vec![];
@@ -1735,13 +1734,5 @@ impl AppBuilder {
         }
 
         Ok(pid)
-    }
-
-    /// Parse the priority level from a logcat line
-    ///
-    /// Logcat brief format: "I/TAG(12345): message"
-    /// Returns the priority char (V, D, I, W, E, F)
-    fn parse_logcat_level(line: &str) -> char {
-        line.chars().next().unwrap_or('I')
     }
 }

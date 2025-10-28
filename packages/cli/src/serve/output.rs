@@ -337,52 +337,43 @@ impl Output {
     /// This will queue the stderr message as a TraceMsg and print it on the next render
     /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
     pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
-        // For Android logs, filter based on trace flag
-        if bundle == BundleFormat::Android {
-            // If tracing is enabled, show everything (full verbose logging)
-            if self.trace {
-                self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
-                return;
-            }
+        match bundle {
+            // If tracing is disabled, we need to filter out all the noise from Android logcat
+            BundleFormat::Android if !self.trace => {
+                // By default (trace off): only show RustStdoutStderr logs with proper log levels
+                // Filter out raw output like GL bindings, WebView internals, etc.
+                let is_rust_log = msg.contains("RustStdoutStderr");
+                let is_fatal = msg.contains("AndroidRuntime") || msg.starts_with('F');
+                let mut rendered_msg = None;
 
-            // By default (trace off): only show RustStdoutStderr logs with proper log levels
-            // Filter out raw output like GL bindings, WebView internals, etc.
-            let is_rust_log = msg.contains("RustStdoutStderr");
-            let is_fatal = msg.contains("AndroidRuntime") || msg.starts_with('F');
-
-            if is_rust_log {
+                // If we're not in trace mode, then we need to filter out non-log messages and clean them up
                 // Only show logs with standard tracing level prefixes (check in the message after the colon)
-                if let Some(colon_pos) = msg.find(':') {
-                    let content = &msg[colon_pos + 1..];
-                    let has_log_level = content.contains(" TRACE ")
-                        || content.contains(" DEBUG ")
-                        || content.contains(" INFO ")
-                        || content.contains(" WARN ")
-                        || content.contains(" ERROR ");
-
-                    if has_log_level {
-                        // Strip logcat metadata prefix, keeping only the message content
-                        self.push_log(TraceMsg::text(
-                            TraceSrc::App(bundle),
-                            level,
-                            content.to_string(),
-                        ));
-                        return;
+                if is_rust_log {
+                    if let Some(colon_pos) = msg.find(':') {
+                        let content = &msg[colon_pos + 1..];
+                        if content.contains(" TRACE ")
+                            || content.contains(" DEBUG ")
+                            || content.contains(" INFO ")
+                            || content.contains(" WARN ")
+                            || content.contains(" ERROR ")
+                        {
+                            rendered_msg = Some(content.trim().to_string());
+                        }
                     }
                 }
-                // If no colon found or no log level, filter it out
-                return;
-            } else if is_fatal {
-                // Show fatal errors
-                self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
-                return;
+
+                // Always show fatal errors, even if they don't come from Rust logging
+                if is_fatal {
+                    rendered_msg = Some(msg);
+                }
+
+                if let Some(msg) = rendered_msg {
+                    self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
+                }
             }
 
-            // Filter out everything else when tracing is off
-            return;
+            _ => self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg)),
         }
-
-        self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
     }
 
     /// Push a message from the websocket to the logs
