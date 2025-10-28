@@ -4,7 +4,7 @@
 use base64::Engine;
 use dioxus_core::CapturedError;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use std::{cell::RefCell, io::Cursor, rc::Rc, sync::Arc};
+use std::{cell::RefCell, io::Cursor, rc::Rc};
 
 #[cfg(feature = "web")]
 thread_local! {
@@ -429,15 +429,15 @@ pub fn head_element_hydration_entry() -> SerializeContextEntry<bool> {
 
 /// A `Transportable` type can be safely transported from the server to the client, and be used for
 /// hydration. Not all types can sensibly be transported, but many can. This trait makes it possible
-/// to customize how types are transported which helps for non-serializable types like `dioxus_core::Error`.
+/// to customize how types are transported which helps for non-serializable types like `dioxus_core::CapturedError`.
 ///
 /// By default, all types that implement `Serialize` and `DeserializeOwned` are transportable.
 ///
-/// You can also implement `Transportable` for `Result<T, dioxus_core::Error>` where `T` is
+/// You can also implement `Transportable` for `Result<T, dioxus_core::CapturedError>` where `T` is
 /// `Serialize` and `DeserializeOwned` to allow transporting results that may contain errors.
 ///
-/// Note that transporting a `Result<T, dioxus_core::Error>` will lose various aspects of the original
-/// `dioxus_core::Error` such as backtraces and source errors, but will preserve the error message.
+/// Note that transporting a `Result<T, dioxus_core::CapturedError>` will lose various aspects of the original
+/// `dioxus_core::CapturedError` such as backtraces and source errors, but will preserve the error message.
 pub trait Transportable<M = ()>: 'static {
     /// Serialize the type to a byte vector for transport
     fn transport_to_bytes(&self) -> Vec<u8>;
@@ -474,7 +474,7 @@ struct TransportResultErr<T> {
 #[doc(hidden)]
 pub struct TransportViaErrMarker;
 
-impl<T> Transportable<TransportViaErrMarker> for Result<T, dioxus_core::Error>
+impl<T> Transportable<TransportViaErrMarker> for Result<T, anyhow::Error>
 where
     T: Serialize + DeserializeOwned + 'static,
 {
@@ -497,7 +497,7 @@ where
         let err: TransportResultErr<T> = ciborium::from_reader(Cursor::new(bytes))?;
         match err.error {
             Ok(value) => Ok(Ok(value)),
-            Err(captured) => Ok(Err(dioxus_core::Error::msg(captured.to_string()))),
+            Err(captured) => Ok(Err(anyhow::Error::msg(captured.to_string()))),
         }
     }
 }
@@ -525,8 +525,6 @@ impl Transportable<TransportCapturedError> for CapturedError {
         Self: Sized,
     {
         let err: TransportError = ciborium::from_reader(Cursor::new(bytes))?;
-        Ok(CapturedError(Arc::new(dioxus_core::Error::msg::<String>(
-            err.error,
-        ))))
+        Ok(dioxus_core::CapturedError::msg::<String>(err.error))
     }
 }

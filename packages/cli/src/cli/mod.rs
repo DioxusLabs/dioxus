@@ -116,7 +116,7 @@ pub(crate) enum Commands {
     #[clap(subcommand)]
     Tools(BuildTools),
 
-    /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
+    /// Manage components from the `dioxus-component` registry.
     #[clap(name = "components")]
     #[clap(subcommand)]
     Components(component::ComponentCommand),

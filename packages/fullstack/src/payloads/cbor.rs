@@ -21,7 +21,7 @@ use serde::{de::DeserializeOwned, Serialize};
 /// *last* if there are multiple extractors in a handler.
 /// See ["the order of extractors"][order-of-extractors]
 ///
-/// [order-of-extractors]: crate::extract#the-order-of-extractors
+/// [order-of-extractors]: mod@crate::extract#the-order-of-extractors
 #[must_use]
 pub struct Cbor<T>(pub T);
 
