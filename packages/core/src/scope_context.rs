@@ -389,7 +389,10 @@ impl Scope {
     ///
     ///     rsx! {
     ///         button {
-    ///             onclick: move |_| *count.borrow_mut() += 1,
+    ///             onclick: {
+    ///                 let count = count.clone(); // Rc doesn't implement copy, so we need to clone
+    ///                 move |_| *count.borrow_mut() += 1
+    ///             },
     ///             "{count.borrow()}"
     ///         }
     ///     }
