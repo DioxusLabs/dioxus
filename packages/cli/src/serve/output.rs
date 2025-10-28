@@ -344,35 +344,44 @@ impl Output {
                 self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
                 return;
             }
-            
+
             // By default (trace off): only show RustStdoutStderr logs with proper log levels
             // Filter out raw output like GL bindings, WebView internals, etc.
             let is_rust_log = msg.contains("RustStdoutStderr");
             let is_fatal = msg.contains("AndroidRuntime") || msg.starts_with('F');
-            
+
             if is_rust_log {
-                // Only show logs with standard tracing level prefixes
-                let has_log_level = msg.contains(" TRACE ") 
-                    || msg.contains(" DEBUG ") 
-                    || msg.contains(" INFO ")
-                    || msg.contains(" WARN ")
-                    || msg.contains(" ERROR ");
-                
-                if !has_log_level {
-                    return;
-                }
-                
-                // Strip logcat metadata prefix, keeping only the message content
+                // Only show logs with standard tracing level prefixes (check in the message after the colon)
                 if let Some(colon_pos) = msg.find(':') {
-                    let clean_msg = msg[colon_pos + 1..].to_string();
-                    self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, clean_msg));
-                    return;
+                    let content = &msg[colon_pos + 1..];
+                    let has_log_level = content.contains(" TRACE ")
+                        || content.contains(" DEBUG ")
+                        || content.contains(" INFO ")
+                        || content.contains(" WARN ")
+                        || content.contains(" ERROR ");
+
+                    if has_log_level {
+                        // Strip logcat metadata prefix, keeping only the message content
+                        self.push_log(TraceMsg::text(
+                            TraceSrc::App(bundle),
+                            level,
+                            content.to_string(),
+                        ));
+                        return;
+                    }
                 }
-            } else if !is_fatal {
+                // If no colon found or no log level, filter it out
+                return;
+            } else if is_fatal {
+                // Show fatal errors
+                self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
                 return;
             }
+
+            // Filter out everything else when tracing is off
+            return;
         }
-        
+
         self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
     }
 
