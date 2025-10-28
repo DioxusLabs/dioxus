@@ -890,7 +890,7 @@ impl BuildRequest {
             ]);
         }
 
-        // On windows, we pass /SUBSYTEM:WINDOWS to prevent a console from appearing
+        // On windows, we pass /SUBSYSTbEM:WINDOWS to prevent a console from appearing
         if matches!(bundle, BundleFormat::Windows) {
             if !rustflags
                 .flags
