@@ -66,6 +66,24 @@ pub fn asset(input: TokenStream) -> TokenStream {
     quote! { #asset }.into_token_stream().into()
 }
 
+/// Resolve an asset at compile time, returning `None` if the asset does not exist.
+///
+/// This behaves like the `asset!` macro when the asset can be resolved, but mirrors
+/// [`option_env!`](core::option_env) by returning an `Option` instead of emitting a compile error
+/// when the asset is missing.
+///
+/// ```rust
+/// # use manganis::{asset, option_asset, Asset};
+/// const REQUIRED: Asset = asset!("/assets/style.css");
+/// const OPTIONAL: Option<Asset> = option_asset!("/assets/maybe.css");
+/// ```
+#[proc_macro]
+pub fn option_asset(input: TokenStream) -> TokenStream {
+    let asset = parse_macro_input!(input as asset::AssetParser);
+
+    asset.expand_option_tokens().into()
+}
+
 /// Generate type-safe and globally-unique CSS identifiers from a CSS module.
 ///
 /// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is a CSS file with the `.module.css` file extension.
