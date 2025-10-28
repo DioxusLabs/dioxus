@@ -337,6 +337,18 @@ impl Output {
     /// This will queue the stderr message as a TraceMsg and print it on the next render
     /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
     pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
+        // For Android logs, filter based on trace flag
+        if bundle == BundleFormat::Android {
+            // Parse logcat format: "I/TAG(12345): message"
+            // First char is the priority level (V, D, I, W, E, F)
+            let logcat_level = msg.chars().next().unwrap_or('I');
+            
+            // If not tracing, filter out DEBUG/INFO/VERBOSE
+            if !self.trace && matches!(logcat_level, 'D' | 'I' | 'V') {
+                return;
+            }
+        }
+        
         self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
     }
 
