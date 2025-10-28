@@ -302,6 +302,29 @@ impl Workspace {
             return Ok(self.krates.nid_for_kid(kid).unwrap());
         };
 
+        // if we have default members specified, try them first
+        if let Some(ws) = &self.cargo_toml.workspace {
+            for default in &ws.default_members {
+                let mut workspace_members = self.krates.workspace_members();
+                let default_member_path = std::fs::canonicalize(default).unwrap();
+
+                let found = workspace_members.find_map(|node| {
+                    if let krates::Node::Krate { id, krate, .. } = node {
+                        let member_path =
+                            std::fs::canonicalize(krate.manifest_path.parent().unwrap()).unwrap();
+                        if member_path == default_member_path {
+                            return Some(id);
+                        }
+                    }
+                    None
+                });
+
+                if let Some(kid) = found {
+                    return Ok(self.krates.nid_for_kid(kid).unwrap());
+                }
+            }
+        }
+
         // Otherwise find the package that is the closest parent of the current directory
         let current_dir = std::env::current_dir()?;
         let current_dir = current_dir.as_path();
@@ -532,6 +555,24 @@ impl Workspace {
 
     pub(crate) fn global_settings_file() -> PathBuf {
         Self::dioxus_data_dir().join("settings.toml")
+    }
+
+    /// The path where components downloaded from git are cached
+    pub(crate) fn component_cache_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("components")
+    }
+
+    /// Get the path to a specific component in the cache
+    pub(crate) fn component_cache_path(git: &str, rev: Option<&str>) -> PathBuf {
+        use std::hash::Hasher;
+
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(git, &mut hasher);
+        if let Some(rev) = rev {
+            std::hash::Hash::hash(rev, &mut hasher);
+        }
+        let hash = hasher.finish();
+        Self::component_cache_dir().join(format!("{hash:016x}"))
     }
 }
 

@@ -33,7 +33,7 @@ pub fn use_loader<F, T, E>(mut future: impl FnMut() -> F + 'static) -> Result<Lo
 where
     F: Future<Output = Result<T, E>> + 'static,
     T: 'static + PartialEq + Serialize + DeserializeOwned,
-    E: Into<dioxus_core::Error> + 'static,
+    E: Into<CapturedError> + 'static,
 {
     let serialize_context = use_hook(crate::transport::serialize_context);
 
@@ -101,8 +101,8 @@ where
             // Remap the error to the captured error type so it's cheap to clone and pass out, just
             // slightly more cumbersome to access the inner error.
             let out = out.map_err(|e| {
-                let anyhow_err: anyhow::Error = e.into();
-                anyhow_err.into()
+                let anyhow_err: CapturedError = e.into();
+                anyhow_err
             });
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it

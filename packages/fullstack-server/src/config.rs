@@ -11,11 +11,9 @@ use crate::{IncrementalRendererConfig, IndexHtml};
 pub(crate) type ContextProviders = Arc<Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>>>;
 
 /// A ServeConfig is used to configure how to serve a Dioxus application. It contains information about how to serve static assets, and what content to render with [`dioxus_ssr`].
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct ServeConfig {
-    pub(crate) root_id: Option<&'static str>,
     pub(crate) index: IndexHtml,
-    pub(crate) index_html_override: Option<String>,
     pub(crate) incremental: Option<IncrementalRendererConfig>,
     pub(crate) context_providers: Vec<Arc<dyn Fn() -> Box<dyn Any> + Send + Sync + 'static>>,
     pub(crate) streaming_mode: StreamingMode,
@@ -35,6 +33,12 @@ pub enum StreamingMode {
 
 impl LaunchConfig for ServeConfig {}
 
+impl Default for ServeConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ServeConfig {
     /// Create a new ServeConfig with incremental static generation disabled and the default index.html settings.
     pub fn builder() -> Self {
@@ -42,14 +46,51 @@ impl ServeConfig {
     }
 
     /// Create a new ServeConfig with incremental static generation disabled and the default index.html settings
+    ///
+    /// This will automatically use the `index.html` file in the `/public` directory if it exists.
+    /// The `/public` folder is meant located next to the current executable. If no `index.html` file is found,
+    /// a default index.html will be used, which will not include any JavaScript or WASM initialization code.
+    ///
+    /// To provide an alternate `index.html`, you can use `with_index_html` method instead.
     pub fn new() -> Self {
+        let index = if let Some(public_path) = crate::public_path() {
+            let index_html_path = public_path.join("index.html");
+
+            if index_html_path.exists() {
+                let index_html = std::fs::read_to_string(index_html_path)
+                    .expect("Failed to read index.html from public directory");
+
+                IndexHtml::new(&index_html, "main")
+                    .expect("Failed to parse index.html from public directory")
+            } else {
+                tracing::warn!("No index.html found in public directory, using default index.html");
+                IndexHtml::ssr_only()
+            }
+        } else {
+            tracing::warn!(
+                "Cannot identify public directory, using default index.html. If you need client-side scripts (like JS + WASM), please provide an explicit public directory."
+            );
+            IndexHtml::ssr_only()
+        };
+
         Self {
-            root_id: None,
+            index,
             incremental: None,
-            index: IndexHtml::default(),
-            index_html_override: None,
             context_providers: Default::default(),
             streaming_mode: StreamingMode::default(),
+        }
+    }
+
+    /// Create a new ServeConfig with the given parsed `IndexHtml` structure.
+    ///
+    /// You can create the `IndexHtml` structure by using `IndexHtml::new` method, or manually from
+    /// a string or file.
+    pub fn with_index_html(index: IndexHtml) -> Self {
+        Self {
+            index,
+            incremental: Default::default(),
+            context_providers: Default::default(),
+            streaming_mode: Default::default(),
         }
     }
 
@@ -68,56 +109,6 @@ impl ServeConfig {
     /// ```
     pub fn incremental(mut self, cfg: IncrementalRendererConfig) -> Self {
         self.incremental = Some(cfg);
-        self
-    }
-
-    /// Set the contents of the index.html file to be served.
-    pub fn index_html(mut self, index_html: String) -> Self {
-        self.index_html_override = Some(index_html);
-        self
-    }
-
-    /// Set the id of the root element in the index.html file to place the prerendered content into. (defaults to main)
-    ///
-    /// # Example
-    ///
-    /// If your index.html file looks like this:
-    /// ```html
-    /// <!DOCTYPE html>
-    /// <html>
-    ///     <head>
-    ///         <title>My App</title>
-    ///     </head>
-    ///     <body>
-    ///         <div id="my-custom-root"></div>
-    ///     </body>
-    /// </html>
-    /// ```
-    ///
-    /// You can set the root id to `"my-custom-root"` to render the app into that element:
-    ///
-    /// ```rust, no_run
-    /// # fn app() -> Element { unimplemented!() }
-    /// use dioxus::prelude::*;
-    ///
-    /// // Finally, launch the app with the config
-    /// LaunchBuilder::new()
-    ///     // Only set the server config if the server feature is enabled
-    ///     .with_cfg(server_only! {
-    ///         dioxus_server::ServeConfig::default().root_id("app")
-    ///     })
-    ///     // You also need to set the root id in your web config
-    ///     .with_cfg(web! {
-    ///         dioxus::web::Config::default().rootname("app")
-    ///     })
-    ///     // And desktop config
-    ///     .with_cfg(desktop! {
-    ///         dioxus::desktop::Config::default().with_root_name("app")
-    ///     })
-    ///     .launch(app);
-    /// ```
-    pub fn root_id(mut self, root_id: &'static str) -> Self {
-        self.root_id = Some(root_id);
         self
     }
 

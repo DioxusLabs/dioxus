@@ -1,3 +1,5 @@
+use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Instant;
 
 use bevy::asset::RenderAssetUsages;
@@ -25,9 +27,13 @@ use blitz_paint::paint_scene;
 use blitz_traits::events::{
     BlitzKeyEvent, BlitzMouseButtonEvent, KeyState, MouseEventButton, MouseEventButtons, UiEvent,
 };
+use blitz_traits::net::{NetCallback, NetProvider};
 use blitz_traits::shell::{ColorScheme, Viewport};
+use bytes::Bytes;
 use crossbeam_channel::{Receiver, Sender};
+use data_url::DataUrl;
 use dioxus::prelude::*;
+use dioxus_devtools::DevserverMsg;
 use dioxus_native_dom::DioxusDocument;
 use vello::{
     peniko::color::AlphaColor, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene,
@@ -51,12 +57,24 @@ impl<UIProps: std::marker::Send + std::marker::Sync + std::clone::Clone + 'stati
 {
     fn build(&self, app: &mut App) {
         let epoch = AnimationTime(Instant::now());
+        let (s, r) = crossbeam_channel::unbounded();
 
         // Create the dioxus virtual dom and the dioxus-native document
         // The viewport will be set in setup_ui after we get the window size
         let vdom = VirtualDom::new_with_props(self.ui, self.props.clone());
         // FIXME add a NetProvider
         let mut dioxus_doc = DioxusDocument::new(vdom, DocumentConfig::default());
+
+        // Setup NetProvider
+        let net_provider = BevyNetProvider::shared(s.clone());
+        dioxus_doc.set_net_provider(net_provider);
+
+        // Setup DocumentProxy to process CreateHeadElement messages
+        let proxy = Rc::new(DioxusDocumentProxy::new(s.clone()));
+        dioxus_doc.vdom.in_scope(ScopeId::ROOT, move || {
+            provide_context(proxy as Rc<dyn dioxus::document::Document>);
+        });
+
         dioxus_doc.initial_build();
         dioxus_doc.resolve(0.0);
 
@@ -67,9 +85,14 @@ impl<UIProps: std::marker::Send + std::marker::Sync + std::clone::Clone + 'stati
         }
         let waker = std::task::Waker::from(std::sync::Arc::new(NullWake));
 
+        // Setup devtools listener for hot-reloading
+        dioxus_devtools::connect(move |msg| s.send(DioxusMessage::Devserver(msg)).unwrap());
+        app.insert_resource(DioxusMessages(r));
+
         app.insert_non_send_resource(dioxus_doc);
         app.insert_non_send_resource(waker);
         app.insert_resource(epoch);
+
         app.add_systems(Startup, setup_ui);
         app.add_systems(
             PreUpdate,
@@ -201,6 +224,21 @@ fn extract_texture_image(
     }
 }
 
+struct HeadElement {
+    name: String,
+    attributes: Vec<(String, String)>,
+    contents: Option<String>,
+}
+
+enum DioxusMessage {
+    Devserver(DevserverMsg),
+    CreateHeadElement(HeadElement),
+    ResourceLoad(blitz_dom::net::Resource),
+}
+
+#[derive(Resource, Deref)]
+struct DioxusMessages(Receiver<DioxusMessage>);
+
 #[derive(Component)]
 pub struct DioxusUiQuad;
 
@@ -255,6 +293,7 @@ fn setup_ui(
 #[allow(clippy::too_many_arguments)]
 fn update_ui(
     mut dioxus_doc: NonSendMut<DioxusDocument>,
+    dioxus_messages: Res<DioxusMessages>,
     waker: NonSendMut<std::task::Waker>,
     vello_renderer: Option<NonSendMut<VelloRenderer>>,
     render_device: Res<RenderDevice>,
@@ -263,6 +302,33 @@ fn update_ui(
     animation_epoch: Res<AnimationTime>,
     mut cached_texture: Local<Option<RenderTexture>>,
 ) {
+    while let Ok(msg) = dioxus_messages.0.try_recv() {
+        match msg {
+            DioxusMessage::Devserver(devserver_msg) => match devserver_msg {
+                dioxus_devtools::DevserverMsg::HotReload(hotreload_message) => {
+                    // Apply changes to vdom
+                    dioxus_devtools::apply_changes(&dioxus_doc.vdom, &hotreload_message);
+
+                    // Reload changed assets
+                    for asset_path in &hotreload_message.assets {
+                        if let Some(url) = asset_path.to_str() {
+                            dioxus_doc.reload_resource_by_href(url);
+                        }
+                    }
+                }
+                dioxus_devtools::DevserverMsg::FullReloadStart => {}
+                _ => {}
+            },
+            DioxusMessage::CreateHeadElement(el) => {
+                dioxus_doc.create_head_element(&el.name, &el.attributes, &el.contents);
+                dioxus_doc.poll(Some(std::task::Context::from_waker(&waker)));
+            }
+            DioxusMessage::ResourceLoad(resource) => {
+                dioxus_doc.load_resource(resource);
+            }
+        };
+    }
+
     while let Ok(texture) = receiver.try_recv() {
         *cached_texture = Some(texture);
     }
@@ -517,6 +583,140 @@ fn handle_keyboard_events(
     }
 
     // dioxus_doc.resolve();
+}
+
+pub struct DioxusDocumentProxy {
+    sender: Sender<DioxusMessage>,
+}
+
+impl DioxusDocumentProxy {
+    fn new(sender: Sender<DioxusMessage>) -> Self {
+        Self { sender }
+    }
+}
+
+impl dioxus::document::Document for DioxusDocumentProxy {
+    fn eval(&self, _js: String) -> dioxus::document::Eval {
+        dioxus::document::NoOpDocument.eval(_js)
+    }
+
+    fn create_head_element(
+        &self,
+        name: &str,
+        attributes: &[(&str, String)],
+        contents: Option<String>,
+    ) {
+        self.sender
+            .send(DioxusMessage::CreateHeadElement(HeadElement {
+                name: name.to_string(),
+                attributes: attributes
+                    .iter()
+                    .map(|(name, value)| (name.to_string(), value.clone()))
+                    .collect(),
+                contents,
+            }))
+            .unwrap();
+    }
+
+    fn set_title(&self, title: String) {
+        self.create_head_element("title", &[], Some(title));
+    }
+
+    fn create_meta(&self, props: dioxus::document::MetaProps) {
+        let attributes = props.attributes();
+        self.create_head_element("meta", &attributes, None);
+    }
+
+    fn create_script(&self, props: dioxus::document::ScriptProps) {
+        let attributes = props.attributes();
+        self.create_head_element("script", &attributes, props.script_contents().ok());
+    }
+
+    fn create_style(&self, props: dioxus::document::StyleProps) {
+        let attributes = props.attributes();
+        self.create_head_element("style", &attributes, props.style_contents().ok());
+    }
+
+    fn create_link(&self, props: dioxus::document::LinkProps) {
+        let attributes = props.attributes();
+        self.create_head_element("link", &attributes, None);
+    }
+
+    fn create_head_component(&self) -> bool {
+        true
+    }
+}
+
+struct BevyNetCallback {
+    sender: Sender<DioxusMessage>,
+}
+
+use blitz_dom::net::Resource as BlitzResource;
+use blitz_traits::net::NetHandler;
+
+impl NetCallback<BlitzResource> for BevyNetCallback {
+    fn call(&self, _doc_id: usize, result: core::result::Result<BlitzResource, Option<String>>) {
+        if let Ok(res) = result {
+            self.sender.send(DioxusMessage::ResourceLoad(res)).unwrap();
+        }
+    }
+}
+
+pub struct BevyNetProvider {
+    callback: Arc<dyn NetCallback<BlitzResource> + 'static>,
+}
+impl BevyNetProvider {
+    fn shared(sender: Sender<DioxusMessage>) -> Arc<dyn NetProvider<BlitzResource>> {
+        Arc::new(Self::new(sender)) as _
+    }
+
+    fn new(sender: Sender<DioxusMessage>) -> Self {
+        Self {
+            callback: Arc::new(BevyNetCallback { sender }) as _,
+        }
+    }
+}
+
+impl NetProvider<BlitzResource> for BevyNetProvider {
+    fn fetch(
+        &self,
+        doc_id: usize,
+        request: blitz_traits::net::Request,
+        handler: Box<dyn NetHandler<BlitzResource>>,
+    ) {
+        match request.url.scheme() {
+            // Load Dioxus assets
+            "dioxus" => match dioxus_asset_resolver::native::serve_asset(request.url.path()) {
+                Ok(res) => handler.bytes(doc_id, res.into_body().into(), self.callback.clone()),
+                Err(_) => {
+                    self.callback.call(
+                        doc_id,
+                        Err(Some(String::from("Error loading Dioxus asset"))),
+                    );
+                }
+            },
+            // Decode data URIs
+            "data" => {
+                let Ok(data_url) = DataUrl::process(request.url.as_str()) else {
+                    self.callback
+                        .call(doc_id, Err(Some(String::from("Failed to parse data uri"))));
+                    return;
+                };
+                let Ok(decoded) = data_url.decode_to_vec() else {
+                    self.callback
+                        .call(doc_id, Err(Some(String::from("Failed to decode data uri"))));
+                    return;
+                };
+                let bytes = Bytes::from(decoded.0);
+                handler.bytes(doc_id, bytes, Arc::clone(&self.callback));
+            }
+            // TODO: support http requests
+            _ => {
+                self.callback
+                    .call(doc_id, Err(Some(String::from("UnsupportedScheme"))));
+            }
+        }
+    }
 }
 
 fn bevy_key_to_blitz_key(key: &BevyKey) -> Key {

@@ -51,7 +51,7 @@ impl From<CapturedError> for RenderError {
     }
 }
 
-impl<E: Into<Error>> From<E> for RenderError {
+impl<E: Into<anyhow::Error>> From<E> for RenderError {
     fn from(e: E) -> Self {
         let anyhow_err = e.into();
 
@@ -69,12 +69,43 @@ impl<E: Into<Error>> From<E> for RenderError {
 
 /// An `anyhow::Error` wrapped in an `Arc` so it can be cheaply cloned and passed around.
 #[derive(Debug, Clone)]
-pub struct CapturedError(pub Arc<Error>);
+pub struct CapturedError(pub Arc<anyhow::Error>);
 
 impl CapturedError {
     /// Create a `CapturedError` from anything that implements `Display`.
     pub fn from_display(t: impl Display) -> Self {
         Self(Arc::new(anyhow::anyhow!(t.to_string())))
+    }
+
+    /// Create a `CapturedError` from anything that implements `std::error::Error`.
+    pub fn new<E>(error: E) -> Self
+    where
+        E: std::error::Error + Send + Sync + 'static,
+    {
+        anyhow::Error::new(error).into()
+    }
+
+    /// Create a `CapturedError` from anything that implements `Display` and `Debug`.
+    pub fn msg<M>(t: M) -> Self
+    where
+        M: Display + Debug + Send + Sync + 'static,
+    {
+        anyhow::Error::msg(t).into()
+    }
+
+    /// Create a `CapturedError` from a boxed `std::error::Error`.
+    pub fn from_boxed(boxed_error: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self {
+        anyhow::Error::from_boxed(boxed_error).into()
+    }
+
+    /// Returns the strong count of the underlying error.
+    pub fn _strong_count(&self) -> usize {
+        std::sync::Arc::strong_count(&self.0)
+    }
+
+    /// Try to unwrap the underlying error if this is the only reference to it.
+    pub fn into_inner(self) -> Option<anyhow::Error> {
+        Arc::try_unwrap(self.0).ok()
     }
 }
 
@@ -100,14 +131,14 @@ impl<'de> serde::Deserialize<'de> for CapturedError {
 }
 
 impl std::ops::Deref for CapturedError {
-    type Target = Error;
+    type Target = anyhow::Error;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl<E: Into<Error>> From<E> for CapturedError {
+impl<E: Into<anyhow::Error>> From<E> for CapturedError {
     fn from(e: E) -> Self {
         Self(Arc::new(e.into()))
     }

@@ -250,11 +250,7 @@ pub(crate) async fn check_path(path: &std::path::PathBuf) -> Result<()> {
 /// Perform a health check against github itself before we attempt to download any templates hosted
 /// on github.
 pub(crate) async fn check_connectivity() -> Result<()> {
-    if crate::VERBOSITY
-        .get()
-        .map(|f| f.offline)
-        .unwrap_or_default()
-    {
+    if crate::verbosity_or_default().offline {
         return Ok(());
     }
 

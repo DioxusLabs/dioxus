@@ -1,8 +1,11 @@
-use std::ops::{Deref, DerefMut, IndexMut};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut, IndexMut},
+};
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
+use crate::{ext_methods, read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
@@ -59,7 +62,7 @@ pub trait Writable: Readable {
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut value = use_signal(|| String::from("hello"));
-///     
+///
 ///     rsx! {
 ///         button {
 ///             onclick: move |_| {
@@ -578,4 +581,148 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     }
 }
 
-impl<T, W> WritableVecExt<T> for W where W: Writable<Target = Vec<T>> {}
+impl<W, T> WritableVecExt<T> for W where W: Writable<Target = Vec<T>> {}
+
+/// An extension trait for [`Writable<String>`] that provides some convenience methods.
+pub trait WritableStringExt: Writable<Target = String> {
+    ext_methods! {
+        /// Pushes a character to the end of the string.
+        fn push_str(&mut self, s: &str) = String::push_str;
+
+        /// Pushes a character to the end of the string.
+        fn push(&mut self, c: char) = String::push;
+
+        /// Pops a character from the end of the string.
+        fn pop(&mut self) -> Option<char> = String::pop;
+
+        /// Inserts a string at the given index.
+        fn insert_str(&mut self, idx: usize, s: &str) = String::insert_str;
+
+        /// Inserts a character at the given index.
+        fn insert(&mut self, idx: usize, c: char) = String::insert;
+
+        /// Remove a character at the given index
+        fn remove(&mut self, idx: usize) -> char = String::remove;
+
+        /// Replace a range of the string with the given string.
+        fn replace_range(&mut self, range: impl std::ops::RangeBounds<usize>, replace_with: &str) = String::replace_range;
+
+        /// Clears the string, removing all characters.
+        fn clear(&mut self) = String::clear;
+
+        /// Extends the string with the given iterator of characters.
+        fn extend(&mut self, iter: impl IntoIterator<Item = char>) = String::extend;
+
+        /// Truncates the string to the given length.
+        fn truncate(&mut self, len: usize) = String::truncate;
+
+        /// Splits the string off at the given index, returning the tail as a new string.
+        fn split_off(&mut self, at: usize) -> String = String::split_off;
+    }
+}
+
+impl<W> WritableStringExt for W where W: Writable<Target = String> {}
+
+/// An extension trait for [`Writable<HashMap<K, V, H>>`] that provides some convenience methods.
+pub trait WritableHashMapExt<K: 'static, V: 'static, H: 'static>:
+    Writable<Target = HashMap<K, V, H>>
+{
+    ext_methods! {
+        /// Clears the map, removing all key-value pairs.
+        fn clear(&mut self) = HashMap::clear;
+
+        /// Retains only the key-value pairs that match the given predicate.
+        fn retain(&mut self, f: impl FnMut(&K, &mut V) -> bool) = HashMap::retain;
+    }
+
+    /// Inserts a key-value pair into the map. If the key was already present, the old value is returned.
+    #[track_caller]
+    fn insert(&mut self, k: K, v: V) -> Option<V>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.insert(k, v))
+    }
+
+    /// Extends the map with the key-value pairs from the given iterator.
+    #[track_caller]
+    fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>)
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.extend(iter))
+    }
+
+    /// Removes a key from the map, returning the value at the key if the key was previously in the map.
+    #[track_caller]
+    fn remove(&mut self, k: &K) -> Option<V>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.remove(k))
+    }
+
+    /// Get a mutable reference to the value at the given key.
+    #[track_caller]
+    fn get_mut(&mut self, k: &K) -> Option<WritableRef<'_, Self, V>>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        WriteLock::filter_map(self.write(), |map: &mut HashMap<K, V, H>| map.get_mut(k))
+    }
+}
+
+impl<K: 'static, V: 'static, H: 'static, R> WritableHashMapExt<K, V, H> for R where
+    R: Writable<Target = HashMap<K, V, H>>
+{
+}
+
+/// An extension trait for [`Writable<HashSet<V, H>>`] that provides some convenience methods.
+pub trait WritableHashSetExt<V: 'static, H: 'static>: Writable<Target = HashSet<V, H>> {
+    ext_methods! {
+        /// Clear the hash set.
+        fn clear(&mut self) = HashSet::clear;
+
+        /// Retain only the elements specified by the predicate.
+        fn retain(&mut self, f: impl FnMut(&V) -> bool) = HashSet::retain;
+    }
+
+    /// Inserts a value into the set. Returns true if the value was not already present.
+    #[track_caller]
+    fn insert(&mut self, k: V) -> bool
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.insert(k))
+    }
+
+    /// Extends the set with the values from the given iterator.
+    #[track_caller]
+    fn extend(&mut self, iter: impl IntoIterator<Item = V>)
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.extend(iter))
+    }
+
+    /// Removes a value from the set. Returns true if the value was present.
+    #[track_caller]
+    fn remove(&mut self, k: &V) -> bool
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.remove(k))
+    }
+}
+
+impl<V: 'static, H: 'static, R> WritableHashSetExt<V, H> for R where
+    R: Writable<Target = HashSet<V, H>>
+{
+}

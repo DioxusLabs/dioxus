@@ -3,6 +3,7 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod doctor;
@@ -114,6 +115,11 @@ pub(crate) enum Commands {
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
+
+    /// Manage components from the `dioxus-component` registry.
+    #[clap(name = "components")]
+    #[clap(subcommand)]
+    Components(component::ComponentCommand),
 }
 
 #[allow(clippy::large_enum_variant)]
