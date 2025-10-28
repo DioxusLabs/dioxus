@@ -24,7 +24,7 @@ pub enum ComponentCommand {
 
         /// The registry to use
         #[clap(flatten)]
-        registry: Option<ComponentRegistry>,
+        registry: ComponentRegistry,
 
         /// Overwrite the component if it already exists
         #[clap(long)]
@@ -38,7 +38,7 @@ pub enum ComponentCommand {
 
         /// The registry to use
         #[clap(flatten)]
-        registry: Option<ComponentRegistry>,
+        registry: ComponentRegistry,
     },
 
     /// Update a component registry
@@ -52,7 +52,7 @@ pub enum ComponentCommand {
     List {
         /// The registry to list components in
         #[clap(flatten)]
-        registry: Option<ComponentRegistry>,
+        registry: ComponentRegistry,
     },
 
     /// Clear the component registry cache
@@ -108,6 +108,9 @@ impl ComponentCommand {
 
                 // Resolve the registry
                 let registry = Self::resolve_registry(registry, &config)?;
+
+                // Get the registry root. Components can't copy files outside of this path
+                let registry_root = registry.resolve().await?;
 
                 // Read all components from the registry
                 let components = registry.read_components().await?;
@@ -183,6 +186,7 @@ impl ComponentCommand {
                 // Once we have all required components, add them
                 for (component, mode) in required_components {
                     add_component(
+                        &registry_root,
                         component_args.global_assets_path.as_deref(),
                         component_args.module_path.as_deref(),
                         &component,
@@ -244,7 +248,7 @@ impl ComponentCommand {
     /// Remove a component from the managed component module
     async fn remove_component(
         component_args: &ComponentArgs,
-        registry: Option<ComponentRegistry>,
+        registry: ComponentRegistry,
     ) -> Result<()> {
         let config = Self::resolve_config().await?;
         let registry = Self::resolve_registry(registry, &config)?;
@@ -294,10 +298,10 @@ impl ComponentCommand {
 
     /// Resolve a registry from the config if none is provided
     fn resolve_registry(
-        registry: Option<ComponentRegistry>,
+        registry: ComponentRegistry,
         config: &DioxusConfig,
     ) -> Result<ComponentRegistry> {
-        if let Some(registry) = registry {
+        if !registry.is_default() {
             return Ok(registry);
         }
 
@@ -397,6 +401,14 @@ impl RemoteComponentRegistry {
                 // If a rev is provided, checkout that rev
                 if let Some(rev) = &rev {
                     Self::checkout_rev(&repo, &git, rev)?;
+                }
+                // Otherwise, just checkout the latest commit on the default branch
+                else {
+                    let head = repo.head()?;
+                    let branch = head.shorthand().unwrap_or("main");
+                    let oid = repo.refname_to_id(&format!("refs/remotes/origin/{branch}"))?;
+                    let object = repo.find_object(oid, None).unwrap();
+                    repo.reset(&object, git2::ResetType::Hard, None)?;
                 }
                 anyhow::Ok(())
             }
@@ -560,6 +572,7 @@ enum ComponentExistsBehavior {
 
 /// Add a component to the managed component module
 async fn add_component(
+    registry_root: &Path,
     assets_path: Option<&Path>,
     component_path: Option<&Path>,
     component: &ResolvedComponent,
@@ -585,7 +598,7 @@ async fn add_component(
 
     // Copy any global assets
     let assets_root = global_assets_root(assets_path, config).await?;
-    copy_global_assets(&assets_root, component).await?;
+    copy_global_assets(registry_root, &assets_root, component).await?;
 
     // Add the module to the components mod.rs
     let mod_rs_path = components_root.join("mod.rs");
@@ -739,8 +752,9 @@ async fn read_component(path: &Path) -> Result<ResolvedComponent> {
     })?;
 
     let component = serde_json::from_slice(&bytes)?;
+    let absolute_path = dunce::canonicalize(path)?;
     Ok(ResolvedComponent {
-        path: path.to_path_buf(),
+        path: absolute_path,
         component,
     })
 }
@@ -771,9 +785,12 @@ async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComp
 }
 
 /// Copy any global assets for the component
-async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -> Result<()> {
-    let cache_dir = Workspace::component_cache_dir();
-
+async fn copy_global_assets(
+    registry_root: &Path,
+    assets_root: &Path,
+    component: &ResolvedComponent,
+) -> Result<()> {
+    let cononical_registry_root = dunce::canonicalize(registry_root)?;
     for path in &component.global_assets {
         let src = component.path.join(path);
         let absolute_source = dunce::canonicalize(&src).with_context(|| {
@@ -785,11 +802,12 @@ async fn copy_global_assets(assets_root: &Path, component: &ResolvedComponent) -
         })?;
 
         // Make sure the source is inside the component registry somewhere
-        if !absolute_source.starts_with(&cache_dir) {
+        if !absolute_source.starts_with(&cononical_registry_root) {
             bail!(
-                "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry",
-                src.display(),
-                component.name
+                "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry '{}'",
+                absolute_source.display(),
+                component.name,
+                cononical_registry_root.display()
             );
         }
 
