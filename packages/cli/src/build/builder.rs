@@ -590,8 +590,8 @@ impl AppBuilder {
             }
 
             BundleFormat::Ios => {
-                if let Some(device) = self.build.device_name.as_deref() {
-                    self.open_ios_device(&device.to_string()).await?
+                if let Some(device) = self.build.device_name.to_owned() {
+                    self.open_ios_device(&device).await?
                 } else {
                     self.open_ios_sim(envs).await?
                 }
