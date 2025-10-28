@@ -790,7 +790,7 @@ async fn copy_global_assets(
     assets_root: &Path,
     component: &ResolvedComponent,
 ) -> Result<()> {
-    let cononical_registry_root = dunce::canonicalize(registry_root)?;
+    let canonical_registry_root = dunce::canonicalize(registry_root)?;
     for path in &component.global_assets {
         let src = component.path.join(path);
         let absolute_source = dunce::canonicalize(&src).with_context(|| {
@@ -802,12 +802,12 @@ async fn copy_global_assets(
         })?;
 
         // Make sure the source is inside the component registry somewhere
-        if !absolute_source.starts_with(&cononical_registry_root) {
+        if !absolute_source.starts_with(&canonical_registry_root) {
             bail!(
                 "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry '{}'",
                 absolute_source.display(),
                 component.name,
-                cononical_registry_root.display()
+                canonical_registry_root.display()
             );
         }
 
