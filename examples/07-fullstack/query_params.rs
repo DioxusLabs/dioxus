@@ -4,7 +4,7 @@
 //! - can rename parameters in the function signature with `?age=age_in_years` where `age_in_years` is Rust variable name
 //! - can absorb all query params with `?{object}` directly into a struct implementing `Deserialize`
 
-use dioxus::{fullstack::DioxusServerState, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::launch(|| {
@@ -13,7 +13,7 @@ fn main() {
         rsx! {
             h1 { "Server says: "}
             pre { "{message:?}"}
-            button { onclick: move |_| message.call("world".into(), 30), "Click me!" }
+            button { onclick: move |_| message.call(Params { age: 30, name: "world".into() }), "Click me!" }
         }
     });
 }
@@ -21,28 +21,37 @@ fn main() {
 // #[cfg(feature = "server")]
 // use {axum::extract::State, dioxus::server::axum, fullstack::DioxusServerState};
 
-#[get("/api/:name/?age", state: dioxus_fullstack::extract::State<MyCustomServerState>)]
-// #[get("/api/:name/?age", state: State<MyCustomServerState>)]
-async fn get_message(name: String, age: i32) -> Result<()> {
-    todo!()
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+struct Params {
+    age: i32,
+    name: String,
+}
+
+#[get("/api/?:query")]
+async fn get_message(query: Params) -> Result<()> {
+    println!("Custom server state abc: {:?}", query);
+    Ok(())
     // Ok(format!("Hello {}, you are {} years old!", name, age))
 }
 
-#[derive(Debug)]
-struct MyReturnType;
+// async fn get_message(query: Params) -> Reasult<()> {
 
-#[derive(Clone)]
-struct MyCustomServerState {
-    abc: i32,
-}
+// #[get("/api/:name/?age", state: State<MyCustomServerState>)]
+// #[derive(Debug)]
+// struct MyReturnType;
 
-// #[cfg(feature = "server")]
-use dioxus_fullstack::axum;
-impl axum::extract::FromRef<DioxusServerState> for MyCustomServerState {
-    fn from_ref(state: &DioxusServerState) -> Self {
-        MyCustomServerState { abc: 123 }
-    }
-}
+// #[derive(Clone)]
+// struct MyCustomServerState {
+//     abc: i32,
+// }
+
+// // #[cfg(feature = "server")]
+// use dioxus_fullstack::axum;
+// impl axum::extract::FromRef<DioxusServerState> for MyCustomServerState {
+//     fn from_ref(state: &DioxusServerState) -> Self {
+//         MyCustomServerState { abc: 123 }
+//     }
+// }
 
 // #[get("/api/")]
 // async fn get_message2(item: MyThing) -> Result<()> {

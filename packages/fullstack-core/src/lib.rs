@@ -26,5 +26,5 @@ pub use error::*;
 pub mod httperror;
 pub use httperror::*;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct DioxusServerState {}

@@ -289,7 +289,11 @@ fn route_impl_with_route(
         syn::ReturnType::Type(_, ty) => (*ty).clone(),
     };
 
-    let query_param_names = route.query_params.iter().map(|(ident, _)| ident);
+    let query_param_names = route
+        .query_params
+        .iter()
+        .filter(|c| !c.catch_all)
+        .map(|param| &param.name);
 
     let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
         PathParam::Capture(_lit, _brace_1, ident, _ty, _brace_2) => {
@@ -300,6 +304,24 @@ fn route_impl_with_route(
         }
         PathParam::Static(_lit) => None,
     });
+
+    let catch_all_query_extractors = {
+        let params = route
+        .query_params
+        .iter()
+        .filter(|c| c.catch_all)
+        .map(|param| {
+            let name = &param.name;
+            let ty = &param.ty;
+            quote! {
+                dioxus_server::axum::extract::Query(#name): dioxus_server::axum::extract::Query<#ty>
+            }
+        });
+
+        quote! {
+            #(#params,)*
+        }
+    };
 
     let out_ty = match output_type.as_ref() {
         Type::Tuple(tuple) if tuple.elems.is_empty() => parse_quote! { () },
@@ -465,13 +487,11 @@ fn route_impl_with_route(
                 MakeAxumResponse, MakeAxumError,
             };
 
-
             #query_params_struct
 
             #body_struct_impl
 
             const __ENDPOINT_PATH: &str = #endpoint_path;
-
 
             {
                 _ = dioxus_fullstack::assert_is_result::<#out_ty>();
@@ -526,6 +546,7 @@ fn route_impl_with_route(
                     ___state: #__axum::extract::State<DioxusServerState>,
                     #path_extractor
                     #query_extractor
+                    #catch_all_query_extractors
                     request: #__axum::extract::Request,
                 ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
                     let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
@@ -573,11 +594,17 @@ struct CompiledRoute {
     method: Method,
     #[allow(clippy::type_complexity)]
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<(Ident, Box<Type>)>,
+    query_params: Vec<QueryParam>,
     state: Type,
     route_lit: Option<LitStr>,
     prefix: Option<LitStr>,
     oapi_options: Option<OapiOptions>,
+}
+
+struct QueryParam {
+    name: Ident,
+    catch_all: bool,
+    ty: Box<Type>,
 }
 
 impl CompiledRoute {
@@ -671,7 +698,7 @@ impl CompiledRoute {
         }
 
         let mut query_params = Vec::new();
-        for ident in route.query_params {
+        for (ident, catch_all) in route.query_params {
             let (ident, ty) = arg_map.remove_entry(&ident).ok_or_else(|| {
                 syn::Error::new(
                     ident.span(),
@@ -681,7 +708,11 @@ impl CompiledRoute {
                     ),
                 )
             })?;
-            query_params.push((ident, ty));
+            query_params.push(QueryParam {
+                name: ident,
+                catch_all,
+                ty,
+            });
         }
 
         if let Some(options) = route.oapi_options.as_mut() {
@@ -729,15 +760,27 @@ impl CompiledRoute {
     }
 
     pub fn query_extractor(&self) -> TokenStream2 {
-        let idents = self.query_params.iter().map(|item| &item.0);
+        let idents = self
+            .query_params
+            .iter()
+            .filter(|c| !c.catch_all)
+            .map(|item| &item.name)
+            .collect::<Vec<_>>();
         quote! {
-            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
+            dioxus_fullstack::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::Query<__QueryParams__>,
         }
     }
 
     pub fn query_params_struct(&self, with_aide: bool) -> TokenStream2 {
-        let idents = self.query_params.iter().map(|item| &item.0);
-        let types = self.query_params.iter().map(|item| &item.1);
+        let fields = self.query_params.iter().map(|item| {
+            let name = &item.name;
+            let ty = &item.ty;
+            if item.catch_all {
+                quote! {}
+            } else {
+                quote! { #name: #ty, }
+            }
+        });
         let derive = match with_aide {
             true => quote! {
                 #[derive(serde::Deserialize, serde::Serialize, ::schemars::JsonSchema)]
@@ -751,7 +794,7 @@ impl CompiledRoute {
         quote! {
             #derive
             struct __QueryParams__ {
-                #(#idents: #types,)*
+                #(#fields)*
             }
         }
     }
@@ -763,8 +806,8 @@ impl CompiledRoute {
                 idents.push(ident.clone());
             }
         }
-        for (ident, _ty) in &self.query_params {
-            idents.push(ident.clone());
+        for param in &self.query_params {
+            idents.push(param.name.clone());
         }
         idents
     }
@@ -786,7 +829,7 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|(query_ident, _)| query_ident == &pat_ident.ident)
+                            .any(|query| query.name == pat_ident.ident)
                         {
                             return None;
                         }
@@ -820,7 +863,7 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|(query_ident, _)| query_ident == &pat_ident.ident)
+                            .any(|query| query.name == pat_ident.ident)
                         {
                             return None;
                         }
@@ -1178,7 +1221,7 @@ fn guess_state_type(sig: &syn::Signature) -> Type {
 
 struct RouteParser {
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<Ident>,
+    query_params: Vec<(Ident, bool)>,
 }
 
 impl RouteParser {
@@ -1232,7 +1275,26 @@ impl RouteParser {
         if split_route.len() == 2 {
             let query = split_route[1];
             for query_param in query.split('&') {
-                query_params.push(Ident::new(query_param, span));
+                if query_param.starts_with(":") {
+                    query_params.push((
+                        Ident::new(query_param.strip_prefix(":").unwrap(), span),
+                        true,
+                    ));
+                } else if query_param.starts_with("{") && query_param.ends_with("}") {
+                    query_params.push((
+                        Ident::new(
+                            query_param
+                                .strip_prefix("{")
+                                .unwrap()
+                                .strip_suffix("}")
+                                .unwrap(),
+                            span,
+                        ),
+                        true,
+                    ));
+                } else {
+                    query_params.push((Ident::new(query_param, span), false));
+                }
             }
         }
 
@@ -1493,7 +1555,7 @@ fn doc_iter(attrs: &[Attribute]) -> impl Iterator<Item = &LitStr> + '_ {
 struct Route {
     method: Option<Method>,
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<Ident>,
+    query_params: Vec<(Ident, bool)>,
     state: Option<Type>,
     route_lit: Option<LitStr>,
     prefix: Option<LitStr>,
