@@ -27,7 +27,7 @@ struct Params {
     name: String,
 }
 
-#[get("/api/?:query")]
+#[get("/api/1/?:query")]
 async fn get_message(query: Params) -> Result<()> {
     println!("Custom server state abc: {:?}", query);
     Ok(())
@@ -61,13 +61,10 @@ async fn get_message(query: Params) -> Result<()> {
 
 // struct MyThing;
 
-// #[get("/api/:name/?age={age_in_years}")]
-// async fn get_message2(name: String, age_in_years: i32) -> Result<String> {
-//     Ok(format!(
-//         "Hello {}, you are {} years old!",
-//         name, age_in_years
-//     ))
-// }
+#[get("/api/2/?age=age_in_years")]
+async fn get_message2(age_in_years: i32) -> Result<String> {
+    Ok(format!("You are {} years old!", age_in_years))
+}
 
 // #[derive(serde::Deserialize)]
 // struct Params {

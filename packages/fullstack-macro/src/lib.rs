@@ -293,7 +293,7 @@ fn route_impl_with_route(
         .query_params
         .iter()
         .filter(|c| !c.catch_all)
-        .map(|param| &param.name);
+        .map(|param| &param.binding);
 
     let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
         PathParam::Capture(_lit, _brace_1, ident, _ty, _brace_2) => {
@@ -311,7 +311,7 @@ fn route_impl_with_route(
         .iter()
         .filter(|c| c.catch_all)
         .map(|param| {
-            let name = &param.name;
+            let name = &param.binding;
             let ty = &param.ty;
             quote! {
                 dioxus_server::axum::extract::Query(#name): dioxus_server::axum::extract::Query<#ty>
@@ -602,7 +602,8 @@ struct CompiledRoute {
 }
 
 struct QueryParam {
-    name: Ident,
+    name: String,
+    binding: Ident,
     catch_all: bool,
     ty: Box<Type>,
 }
@@ -698,19 +699,20 @@ impl CompiledRoute {
         }
 
         let mut query_params = Vec::new();
-        for (ident, catch_all) in route.query_params {
-            let (ident, ty) = arg_map.remove_entry(&ident).ok_or_else(|| {
+        for param in route.query_params {
+            let (ident, ty) = arg_map.remove_entry(&param.binding).ok_or_else(|| {
                 syn::Error::new(
-                    ident.span(),
+                    param.binding.span(),
                     format!(
                         "query parameter `{}` not found in function arguments",
-                        ident
+                        param.binding
                     ),
                 )
             })?;
             query_params.push(QueryParam {
-                name: ident,
-                catch_all,
+                binding: ident,
+                name: param.name,
+                catch_all: param.catch_all,
                 ty,
             });
         }
@@ -764,7 +766,7 @@ impl CompiledRoute {
             .query_params
             .iter()
             .filter(|c| !c.catch_all)
-            .map(|item| &item.name)
+            .map(|item| &item.binding)
             .collect::<Vec<_>>();
         quote! {
             dioxus_fullstack::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::Query<__QueryParams__>,
@@ -774,11 +776,17 @@ impl CompiledRoute {
     pub fn query_params_struct(&self, with_aide: bool) -> TokenStream2 {
         let fields = self.query_params.iter().map(|item| {
             let name = &item.name;
+            let binding = &item.binding;
             let ty = &item.ty;
             if item.catch_all {
                 quote! {}
+            } else if item.name != item.binding.to_string() {
+                quote! {
+                    #[serde(rename = #name)]
+                    #binding: #ty,
+                }
             } else {
-                quote! { #name: #ty, }
+                quote! { #binding: #ty, }
             }
         });
         let derive = match with_aide {
@@ -807,7 +815,7 @@ impl CompiledRoute {
             }
         }
         for param in &self.query_params {
-            idents.push(param.name.clone());
+            idents.push(param.binding.clone());
         }
         idents
     }
@@ -829,7 +837,7 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|query| query.name == pat_ident.ident)
+                            .any(|query| query.binding == pat_ident.ident)
                         {
                             return None;
                         }
@@ -863,7 +871,7 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|query| query.name == pat_ident.ident)
+                            .any(|query| query.binding == pat_ident.ident)
                         {
                             return None;
                         }
@@ -1221,7 +1229,7 @@ fn guess_state_type(sig: &syn::Signature) -> Type {
 
 struct RouteParser {
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<(Ident, bool)>,
+    query_params: Vec<QueryParam>,
 }
 
 impl RouteParser {
@@ -1276,24 +1284,48 @@ impl RouteParser {
             let query = split_route[1];
             for query_param in query.split('&') {
                 if query_param.starts_with(":") {
-                    query_params.push((
-                        Ident::new(query_param.strip_prefix(":").unwrap(), span),
-                        true,
-                    ));
+                    let ident = Ident::new(query_param.strip_prefix(":").unwrap(), span);
+
+                    query_params.push(QueryParam {
+                        name: ident.to_string(),
+                        binding: ident,
+                        catch_all: true,
+                        ty: parse_quote!(()),
+                    });
                 } else if query_param.starts_with("{") && query_param.ends_with("}") {
-                    query_params.push((
-                        Ident::new(
-                            query_param
-                                .strip_prefix("{")
-                                .unwrap()
-                                .strip_suffix("}")
-                                .unwrap(),
-                            span,
-                        ),
-                        true,
-                    ));
+                    let ident = Ident::new(
+                        query_param
+                            .strip_prefix("{")
+                            .unwrap()
+                            .strip_suffix("}")
+                            .unwrap(),
+                        span,
+                    );
+
+                    query_params.push(QueryParam {
+                        name: ident.to_string(),
+                        binding: ident,
+                        catch_all: true,
+                        ty: parse_quote!(()),
+                    });
                 } else {
-                    query_params.push((Ident::new(query_param, span), false));
+                    // if there's an `=` in the query param, we only take the left side as the name, and the right side is the binding
+                    let name;
+                    let binding;
+                    if let Some((n, b)) = query_param.split_once('=') {
+                        name = n;
+                        binding = Ident::new(b, span);
+                    } else {
+                        name = query_param;
+                        binding = Ident::new(query_param, span);
+                    }
+
+                    query_params.push(QueryParam {
+                        name: name.to_string(),
+                        binding,
+                        catch_all: false,
+                        ty: parse_quote!(()),
+                    });
                 }
             }
         }
@@ -1555,7 +1587,7 @@ fn doc_iter(attrs: &[Attribute]) -> impl Iterator<Item = &LitStr> + '_ {
 struct Route {
     method: Option<Method>,
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<(Ident, bool)>,
+    query_params: Vec<QueryParam>,
     state: Option<Type>,
     route_lit: Option<LitStr>,
     prefix: Option<LitStr>,
