@@ -254,7 +254,14 @@ impl WebviewInstance {
                 asset_handlers,
                 edits
             ];
+
+            #[cfg(feature = "tokio_runtime")]
+            let tokio_rt = tokio::runtime::Handle::current();
+
             move |_id: WebViewId, request, responder: RequestAsyncResponder| {
+                #[cfg(feature = "tokio_runtime")]
+                let _guard = tokio_rt.enter();
+
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -375,11 +382,25 @@ impl WebviewInstance {
         }
 
         for (name, handler) in cfg.protocols.drain(..) {
-            webview = webview.with_custom_protocol(name, handler);
+            #[cfg(feature = "tokio_runtime")]
+            let tokio_rt = tokio::runtime::Handle::current();
+
+            webview = webview.with_custom_protocol(name, move |a, b| {
+                #[cfg(feature = "tokio_runtime")]
+                let _guard = tokio_rt.enter();
+                handler(a, b)
+            });
         }
 
         for (name, handler) in cfg.asynchronous_protocols.drain(..) {
-            webview = webview.with_asynchronous_custom_protocol(name, handler);
+            #[cfg(feature = "tokio_runtime")]
+            let tokio_rt = tokio::runtime::Handle::current();
+
+            webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
+                #[cfg(feature = "tokio_runtime")]
+                let _guard = tokio_rt.enter();
+                handler(a, b, c)
+            });
         }
 
         const INITIALIZATION_SCRIPT: &str = r#"
