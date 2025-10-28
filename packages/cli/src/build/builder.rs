@@ -2,7 +2,7 @@ use crate::{
     serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
     BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
-use anyhow::{bail, Context};
+use anyhow::{bail, Context, Error};
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -1223,7 +1223,7 @@ impl AppBuilder {
         let device_name_query_for_task = device_name_query.clone();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        let _: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb_for_task).arg("root").output().await {
@@ -1321,10 +1321,11 @@ impl AppBuilder {
                 tracing::error!("Failed to start app with `adb`: {std_err}");
             }
 
-            Ok(())
+            Ok::<(), Error>(())
         });
 
         // Wait for the app to start, then spawn logcat
+        // Retry multiple times since the app can take a while to launch
         tokio::time::sleep(Duration::from_millis(1000)).await;
 
         // Get new references for spawning logcat
@@ -1337,16 +1338,47 @@ impl AppBuilder {
             Self::get_android_device_transport_id(&adb_for_logcat, device_name_query_for_logcat)
                 .await;
 
-        // Get the app's PID
-        let pid = Self::get_android_app_pid(
-            &adb_for_logcat,
-            &application_id_for_logcat,
-            &transport_id_args,
-        )
-        .await
-        .context("Failed to get app PID - app may not have started yet")?;
+        // Get the app's PID with retries
+        // Retry up to 10 times (10 seconds total) since app launch is asynchronous
+        let mut pid: Option<String> = None;
+        for attempt in 1..=10 {
+            match Self::get_android_app_pid(
+                &adb_for_logcat,
+                &application_id_for_logcat,
+                &transport_id_args,
+            )
+            .await
+            {
+                Ok(p) => {
+                    pid = Some(p);
+                    break;
+                }
+                Err(_) if attempt < 10 => {
+                    tracing::debug!(
+                        "App PID not found yet, retrying in 1 second... (attempt {}/10)",
+                        attempt
+                    );
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Err(e) => {
+                    return Err(e).context(
+                        "Failed to get app PID after 10 attempts - app may not have started",
+                    );
+                }
+            }
+        }
 
-        // Spawn logcat with debug level (filtered in Rust based on trace flag)
+        let pid = pid.context("Failed to get app PID")?;
+
+        // Spawn logcat with filtering
+        // Filter by app package name to show only app-specific logs
+        // This avoids noisy system logs from chromium, HWUI, MESA, etc.
+        // Extract a simplified tag from the package ID (e.g., "com.example.MyApp" -> "MyApp")
+        let app_tag = application_id_for_logcat
+            .split('.')
+            .last()
+            .unwrap_or(&application_id_for_logcat);
+
         let mut child = Command::new(&adb_for_logcat)
             .args(&transport_id_args)
             .arg("logcat")
@@ -1354,7 +1386,12 @@ impl AppBuilder {
             .arg("brief")
             .arg("--pid")
             .arg(&pid)
-            .arg("*:D")
+            // Show logs from the app's tag at DEBUG level (filtered in Rust by trace flag)
+            // Also show any AndroidRuntime (crashes) and DEBUG tags (Rust panic logs)
+            .arg(format!("{}:D", app_tag))
+            .arg("AndroidRuntime:E") // Fatal crashes
+            .arg("DEBUG:I") // Native crashes/signals
+            .arg("*:S") // Suppress everything else
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)
