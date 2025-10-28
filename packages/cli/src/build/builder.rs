@@ -1371,11 +1371,8 @@ impl AppBuilder {
         let pid = pid.context("Failed to get app PID")?;
 
         // Spawn logcat with filtering
-        // Use --pid to filter by process, then suppress common noisy system tags
-        // This shows app logs while filtering out framework noise
-        // Key tags to look for:
-        // - RustStdoutStderr: Rust tracing/logging output
-        // - App package name tags: app-specific logs
+        // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
+        // With tracing enabled: show all logs from the app process
         let mut child = Command::new(&adb_for_logcat)
             .args(&transport_id_args)
             .arg("logcat")
@@ -1383,18 +1380,11 @@ impl AppBuilder {
             .arg("brief")
             .arg("--pid")
             .arg(&pid)
-            // Show most logs at DEBUG level, suppress specific noisy tags
-            .arg("RustStdoutStderr:V") // Ensure Rust tracing logs are always shown
-            .arg("*:D")
-            .arg("chromium:S")
-            .arg("HWUI:S")
-            .arg("MESA:S")
-            .arg("libc:S")
-            .arg("cr_media:S")
-            .arg("EGL:S")
-            .arg("chatty:S")
-            .arg("Choreographer:S") // Frame skip warnings
-            .arg("vulkan:S") // Vulkan driver logs
+            // Always show Rust app logs and fatal crashes
+            .arg("RustStdoutStderr:V") // All Rust tracing output
+            .arg("AndroidRuntime:F") // Fatal crashes
+            .arg("DEBUG:F") // Native fatal signals
+            .arg("*:S") // Suppress everything else (filtered in Rust by trace flag)
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .kill_on_drop(true)

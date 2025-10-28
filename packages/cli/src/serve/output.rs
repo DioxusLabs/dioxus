@@ -339,16 +339,36 @@ impl Output {
     pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
         // For Android logs, filter based on trace flag
         if bundle == BundleFormat::Android {
-            // Parse logcat format: "I/TAG(12345): message"
-            // First char is the priority level (V, D, I, W, E, F)
-            let logcat_level = msg.chars().next().unwrap_or('I');
+            // If tracing is enabled, show everything (full verbose logging)
+            if self.trace {
+                self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
+                return;
+            }
             
-            // Always show RustStdoutStderr logs (from tracing::info!, etc.)
+            // By default (trace off): only show RustStdoutStderr logs with proper log levels
+            // Filter out raw output like GL bindings, WebView internals, etc.
             let is_rust_log = msg.contains("RustStdoutStderr");
+            let is_fatal = msg.contains("AndroidRuntime") || msg.starts_with('F');
             
-            // If not tracing, filter out DEBUG/INFO/VERBOSE from system logs
-            // But always show Rust logs regardless of trace flag
-            if !self.trace && !is_rust_log && matches!(logcat_level, 'D' | 'I' | 'V') {
+            if is_rust_log {
+                // Only show logs with standard tracing level prefixes
+                let has_log_level = msg.contains(" TRACE ") 
+                    || msg.contains(" DEBUG ") 
+                    || msg.contains(" INFO ")
+                    || msg.contains(" WARN ")
+                    || msg.contains(" ERROR ");
+                
+                if !has_log_level {
+                    return;
+                }
+                
+                // Strip logcat metadata prefix, keeping only the message content
+                if let Some(colon_pos) = msg.find(':') {
+                    let clean_msg = msg[colon_pos + 1..].to_string();
+                    self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, clean_msg));
+                    return;
+                }
+            } else if !is_fatal {
                 return;
             }
         }
