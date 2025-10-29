@@ -2770,13 +2770,16 @@ impl BuildRequest {
     }
 
     fn app_icon_path(&self) -> Result<PathBuf> {
-        match self.config.bundle.icon.as_ref()
+        match self
+            .config
+            .bundle
+            .icon
+            .as_ref()
             .and_then(|v| v.iter().find(|s| !s.to_lowercase().ends_with(".svg")))
-            {
-                Some(value) => self.absolute_icon_path(value),
-                None => Err(anyhow::anyhow!("No icon set in Dioxus.toml"))
-            }
-
+        {
+            Some(value) => self.absolute_icon_path(value),
+            None => Err(anyhow::anyhow!("No icon set in Dioxus.toml")),
+        }
     }
 
     pub(crate) fn cargo_build_env_vars(
@@ -2808,7 +2811,7 @@ impl BuildRequest {
         {
             match self.app_icon_path() {
                 Ok(icon_path) => env_vars.push((APP_ICON_ENV.into(), icon_path.into())),
-                Err(err) => tracing::warn!("{:?}", err)
+                Err(err) => tracing::warn!("{:?}", err),
             }
         }
 
