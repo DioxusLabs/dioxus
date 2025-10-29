@@ -37,7 +37,7 @@ impl DefaultIcon for DioxusMenuIcon {
     where
         Self: Sized,
     {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, not(target_os = "windows")))]
         let default = DioxusMenuIcon::from_rgba(ICON.to_vec(), 460, 460);
         #[cfg(all(not(debug_assertions), target_os = "windows"))]
         let default = DioxusMenuIcon::from_resource(32512, None);
@@ -56,7 +56,7 @@ impl DefaultIcon for Icon {
     where
         Self: Sized,
     {
-        #[cfg(debug_assertions)]
+        #[cfg(any(debug_assertions, not(target_os = "windows")))]
         let default = Icon::from_rgba(ICON.to_vec(), 460, 460);
 
         #[cfg(all(not(debug_assertions), target_os = "windows"))]
