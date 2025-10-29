@@ -26,7 +26,7 @@ mod shortcut;
 mod waker;
 mod webview;
 
-pub use default_icon::default_icon;
+pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]

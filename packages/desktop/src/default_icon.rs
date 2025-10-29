@@ -4,7 +4,8 @@ use image::GenericImageView;
 use image::ImageReader;
 use std::path::Path;
 
-pub trait DefaultIcon {
+/// Trait that creates icons for various types
+pub trait DioxusIconTrait {
     fn get_icon() -> Self
     where
         Self: Sized;
@@ -16,8 +17,7 @@ pub trait DefaultIcon {
         Self: Sized;
 }
 
-// TODO this should probably just be an assets path and then loaded with from_path OR include_bytes and image crate
-// preferably it would load from the bundle icon for every platform not just windows
+// preferably this would have platform specific implementations, not just for windows
 #[cfg(any(debug_assertions, not(target_os = "windows")))]
 static DEFAULT_ICON: &[u8] = include_bytes!(env!("DIOXUS_APP_ICON"));
 
@@ -39,7 +39,7 @@ fn load_image_from_path<P: AsRef<Path>>(path: P) -> Result<(Vec<u8>, u32, u32)> 
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-impl DefaultIcon for DioxusTrayIcon {
+impl DioxusIconTrait for DioxusTrayIcon {
     fn get_icon() -> Self
     where
         Self: Sized,
@@ -78,7 +78,7 @@ impl DefaultIcon for DioxusTrayIcon {
 use crate::menubar::DioxusMenuIcon;
 
 #[cfg(not(any(target_os = "ios", target_os = "android")))]
-impl DefaultIcon for DioxusMenuIcon {
+impl DioxusIconTrait for DioxusMenuIcon {
     fn get_icon() -> Self
     where
         Self: Sized,
@@ -118,7 +118,7 @@ use tao::window::Icon;
 #[cfg(all(not(debug_assertions), target_os = "windows"))]
 use tao::platform::windows::IconExtWindows;
 
-impl DefaultIcon for Icon {
+impl DioxusIconTrait for Icon {
     fn get_icon() -> Self
     where
         Self: Sized,
@@ -154,16 +154,17 @@ impl DefaultIcon for Icon {
 }
 
 /// Provides the default icon of the app
-/// NOTE only implemented for windows --release, otherwise it will be just a classic dioxus icon
-pub fn default_icon<T: DefaultIcon>() -> T {
+pub fn default_icon<T: DioxusIconTrait>() -> T {
     T::get_icon()
 }
 
-pub fn icon_from_memory<T: DefaultIcon>(value: &[u8]) -> T {
+/// Helper function to load image from include_bytes!("image.png")
+pub fn icon_from_memory<T: DioxusIconTrait>(value: &[u8]) -> T {
     T::from_memory(value)
 }
 
-pub fn icon_from_path<T: DefaultIcon, P: AsRef<Path>>(
+/// Helper function to load image from path
+pub fn icon_from_path<T: DioxusIconTrait, P: AsRef<Path>>(
     path: P,
     size: Option<(u32, u32)>,
 ) -> Result<T> {
