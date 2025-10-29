@@ -55,60 +55,61 @@ impl ServerFunction {
     where
         S: Send + Sync + Clone + 'static,
     {
-        // // store Accepts and Referrer in case we need them for redirect (below)
-        // let referrer = req.headers().get(REFERER).cloned();
-        // let accepts_html = req
-        //     .headers()
-        //     .get(ACCEPT)
-        //     .and_then(|v| v.to_str().ok())
-        //     .map(|v| v.contains("text/html"))
-        //     .unwrap_or(false);
-
-        // // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-        // // Location set, then redirect to Referer
-        // if accepts_html {
-        //     if let Some(referrer) = referrer {
-        //         let has_location = res.headers().get(LOCATION).is_some();
-        //         if !has_location {
-        //             *res.status_mut() = StatusCode::FOUND;
-        //             res.headers_mut().insert(LOCATION, referrer);
-        //         }
-        //     }
-        // }
-
-        async fn server_context_middleware(
-            request: axum::extract::Request,
-            next: axum::middleware::Next,
-        ) -> axum::response::Response {
-            let (parts, body) = request.into_parts();
-            let server_context = FullstackContext::new(parts.clone());
-            let request = axum::extract::Request::from_parts(parts, body);
-
-            server_context
-                .scope(async move {
-                    // Run the next middleware / handler inside the server context
-                    let mut response = next.run(request).await;
-
-                    let server_context = FullstackContext::current().expect(
-                        "Server context should be available inside the server context scope",
-                    );
-
-                    // Get the extra response headers set during the handler and add them to the response
-                    let headers = server_context.take_response_headers();
-                    if let Some(headers) = headers {
-                        response.headers_mut().extend(headers);
-                    }
-
-                    response
-                })
-                .await
-        }
+        use axum::{extract::Request, middleware::Next};
 
         router.route(
             self.path(),
             ((self.handler)())
                 .with_state(DioxusServerState {})
-                .layer(axum::middleware::from_fn(server_context_middleware)),
+                .layer(axum::middleware::from_fn(
+                    |request: Request, next: Next| async move {
+                        use http::header::{ACCEPT, LOCATION, REFERER};
+                        use http::StatusCode;
+
+                        let (parts, body) = request.into_parts();
+                        let server_context = FullstackContext::new(parts.clone());
+                        let request = axum::extract::Request::from_parts(parts, body);
+
+                        // store Accepts and Referrer in case we need them for redirect (below)
+                        let referrer = request.headers().get(REFERER).cloned();
+                        let accepts_html = request
+                            .headers()
+                            .get(ACCEPT)
+                            .and_then(|v| v.to_str().ok())
+                            .map(|v| v.contains("text/html"))
+                            .unwrap_or(false);
+
+                        server_context
+                            .scope(async move {
+                                // Run the next middleware / handler inside the server context
+                                let mut response = next.run(request).await;
+
+                                let server_context = FullstackContext::current().expect("Server context should be available inside the server context scope",);
+
+                                // Get the extra response headers set during the handler and add them to the response
+                                let headers = server_context.take_response_headers();
+                                if let Some(headers) = headers {
+                                    response.headers_mut().extend(headers);
+                                }
+
+                                // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
+                                // Location set, then redirect to Referer
+                                if accepts_html {
+                                    if let Some(referrer) = referrer {
+                                        let has_location =
+                                            response.headers().get(LOCATION).is_some();
+                                        if !has_location {
+                                            *response.status_mut() = StatusCode::FOUND;
+                                            response.headers_mut().insert(LOCATION, referrer);
+                                        }
+                                    }
+                                }
+
+                                response
+                            })
+                            .await
+                    },
+                )),
         )
     }
 }

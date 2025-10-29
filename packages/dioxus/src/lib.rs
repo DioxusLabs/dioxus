@@ -211,9 +211,7 @@ pub mod prelude {
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{
-        self, serve, DioxusRouterExt, DioxusRouterFnExt, ServeConfig, ServerFunction,
-    };
+    pub use dioxus_server::{self, serve, DioxusRouterExt, ServeConfig, ServerFunction};
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]

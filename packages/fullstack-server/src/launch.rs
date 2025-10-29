@@ -9,10 +9,9 @@ use axum::{
     Router,
 };
 use dioxus_cli_config::base_path;
-use dioxus_core::Element;
-#[cfg(not(target_arch = "wasm32"))]
-use dioxus_core::{RenderError, VNode};
-use dioxus_devtools::DevserverMsg;
+use dioxus_core::{ComponentFunction, Element};
+
+use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_util::{stream::FusedStream, StreamExt};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
@@ -20,14 +19,19 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     service::TowerToHyperService,
 };
-use std::sync::Arc;
-use std::{any::Any, collections::HashMap, net::SocketAddr, prelude::rust_2024::Future};
-use tokio::net::TcpStream;
-use tokio_util::task::LocalPoolHandle;
+use std::{any::Any, net::SocketAddr, prelude::rust_2024::Future};
+use std::{pin::Pin, sync::Arc};
+use subsecond::HotFn;
+use tokio_util::{either::Either, task::LocalPoolHandle};
 use tower::{Service, ServiceExt as _};
 
-type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
+#[cfg(not(target_arch = "wasm32"))]
+use {
+    dioxus_core::{RenderError, VNode},
+    tokio::net::TcpListener,
+};
 
+type ContextList = Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>;
 type BaseComp = fn() -> Element;
 
 /// Launch a fullstack app with the given root component.
@@ -52,10 +56,6 @@ async fn serve_server(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) {
-    let (devtools_tx, mut devtools_rx) = futures_channel::mpsc::unbounded();
-
-    dioxus_devtools::connect(move |msg| _ = devtools_tx.unbounded_send(msg));
-
     let mut cfg = platform_config
         .into_iter()
         .find_map(|cfg| cfg.downcast::<ServeConfig>().ok().map(|b| *b))
@@ -67,17 +67,98 @@ async fn serve_server(
         cfg.context_providers.push(arced);
     }
 
-    // Get the address the server should run on. If the CLI is running, the CLI proxies fullstack into the main address
-    // and we use the generated address the CLI gives us
-    let address = dioxus_cli_config::fullstack_address_or_localhost();
+    let cb = move || {
+        let cfg = cfg.clone();
+        Box::pin(async move {
+            Ok(apply_base_path(
+                Router::new().serve_dioxus_application(cfg.clone(), original_root.clone()),
+                original_root.clone(),
+                cfg.clone(),
+                base_path().map(|s| s.to_string()),
+            ))
+        }) as _
+    };
 
-    // Create the router and register the server functions under the basepath.
-    let router = apply_base_path(
-        Router::new().serve_dioxus_application(cfg.clone(), original_root),
-        original_root,
-        cfg.clone(),
+    serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await;
+}
+
+/// Create a router that serves the dioxus application at the appropriate base path.
+///
+/// This method automatically setups up:
+/// - Static asset serving
+/// - Mapping of base paths
+/// - Automatic registration of server functions
+/// - Handler to render the dioxus application
+/// - WebSocket handling for live reload and devtools
+/// - Hot-reloading
+/// - Async Runtime
+/// - Logging
+pub fn router(app: fn() -> Element) -> Router {
+    let cfg = ServeConfig::new();
+    apply_base_path(
+        Router::new().serve_dioxus_application(cfg.clone(), app),
+        app,
+        cfg,
         base_path().map(|s| s.to_string()),
+    )
+}
+
+/// Serve a fullstack dioxus application with a custom axum router.
+///
+/// This function sets up an async runtime, enables the default dioxus logger, runs the provided initializer,
+/// and then starts an axum server with the returned router.
+///
+/// The axum router will be bound to the address specified by the `IP` and `PORT` environment variables,
+/// defaulting to `127.0.0.1:8080` if not set.
+///
+/// This function uses axum to block on serving the application, and will not return.
+pub fn serve<F>(mut serve_it: impl FnMut() -> F) -> !
+where
+    F: Future<Output = Result<Router, anyhow::Error>> + 'static,
+{
+    let cb = move || Box::pin(serve_it()) as _;
+
+    block_on(
+        async move { serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await },
     );
+
+    unreachable!("Serving a fullstack app should never return")
+}
+
+/// Serve a fullstack dioxus application with a custom axum router.
+///
+/// This function enables the dioxus logger and then serves the axum server with hot-reloading support.
+///
+/// To enable hot-reloading of the router, the provided `serve_callback` should return a new `Router`
+/// each time it is called.
+pub async fn serve_router(
+    mut serve_callback: impl FnMut() -> Pin<Box<dyn Future<Output = Result<Router, anyhow::Error>>>>,
+    addr: SocketAddr,
+) {
+    dioxus_logger::initialize_default();
+    let listener = TcpListener::bind(addr)
+        .await
+        .with_context(|| format!("Failed to bind to address {addr}"))
+        .unwrap();
+
+    // If we're not in debug mode, just serve the app normally
+    if !cfg!(debug_assertions) {
+        axum::serve(listener, serve_callback().await.unwrap())
+            .await
+            .unwrap();
+        return;
+    }
+
+    // Wire up the devtools connection. The sender only sends messages in dev.
+    let (devtools_tx, mut devtools_rx) = futures_channel::mpsc::unbounded();
+    dioxus_devtools::connect(move |msg| _ = devtools_tx.unbounded_send(msg));
+
+    let mut hot_serve_callback = HotFn::current(serve_callback);
+    let mut make_service = hot_serve_callback
+        .call(())
+        .await
+        .map(|router| router.into_make_service())
+        .unwrap();
 
     let task_pool = LocalPoolHandle::new(
         std::thread::available_parallelism()
@@ -85,36 +166,21 @@ async fn serve_server(
             .unwrap_or(1),
     );
 
-    let mut make_service = router.into_make_service();
-
-    let listener = tokio::net::TcpListener::bind(address).await.unwrap();
-
-    enum Msg {
-        TcpStream(std::io::Result<(TcpStream, SocketAddr)>),
-        Devtools(DevserverMsg),
-    }
-
-    let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(0);
-    let mut hr_idx = 0;
+    let (shutdown_tx, _) = tokio::sync::broadcast::channel(1);
+    let our_build_id = Some(dioxus_cli_config::build_id());
 
     // Manually loop on accepting connections so we can also respond to devtools messages
     loop {
         let res = tokio::select! {
-            res = listener.accept() => Msg::TcpStream(res),
-            msg = devtools_rx.next(), if !devtools_rx.is_terminated() => {
-                if let Some(msg) = msg {
-                    Msg::Devtools(msg)
-                } else {
-                    continue;
-                }
-            }
+            res = listener.accept() => Either::Left(res),
+            Some(msg) = devtools_rx.next(), if !devtools_rx.is_terminated() => Either::Right(msg),
+            else => continue
         };
 
         match res {
-            Msg::TcpStream(Ok((tcp_stream, _remote_addr))) => {
-                let this_hr_index = hr_idx;
+            Either::Left(Ok((tcp_stream, _remote_addr))) => {
                 let mut make_service = make_service.clone();
-                let mut shutdown_rx = shutdown_rx.clone();
+                let mut shutdown_rx = shutdown_tx.subscribe();
 
                 task_pool.spawn_pinned(move || async move {
                     let tcp_stream = TokioIo::new(tcp_stream);
@@ -126,19 +192,19 @@ async fn serve_server(
                         )
                     })
                     .await
-                    .unwrap();
-
-                    let tower_service = make_service
-                        .call(())
-                        .await
-                        .unwrap()
-                        .map_request(|req: Request<Incoming>| req.map(Body::new));
+                    .expect("Infallible");
 
                     // upgrades needed for websockets
                     let builder = HyperBuilder::new(TokioExecutor::new());
                     let connection = builder.serve_connection_with_upgrades(
                         tcp_stream,
-                        TowerToHyperService::new(tower_service),
+                        TowerToHyperService::new(
+                            make_service
+                                .call(())
+                                .await
+                                .unwrap()
+                                .map_request(|req: Request<Incoming>| req.map(Body::new)),
+                        ),
                     );
 
                     tokio::select! {
@@ -151,91 +217,56 @@ async fn serve_server(
                                 // appear.
                             }
                         }
-                        _res = shutdown_rx.wait_for(|i| *i == this_hr_index + 1) => {}
+                        _res = shutdown_rx.recv() => {}
                     }
                 });
             }
-            Msg::TcpStream(Err(_)) => {}
-            // We need to delete our old router and build a new one
+
+            // Handle just hot-patches for now.
+            // We don't do RSX hot-reload since usually the client handles that once the page is loaded.
             //
-            // one challenge is that the server functions are sitting in the dlopened lib and no longer
-            // accessible by us (the original process)
-            //
-            // We need to somehow get them out... ?
-            //
-            // for now we just support editing existing server functions
-            Msg::Devtools(devserver_msg) => {
-                match devserver_msg {
-                    DevserverMsg::HotReload(hot_reload_msg) => {
-                        if hot_reload_msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                            if let Some(table) = hot_reload_msg.jump_table {
-                                use crate::ServerFunction;
+            // todo(jon): I *believe* SSR is resilient to RSX changes, but we should verify that...
+            Either::Right(DevserverMsg::HotReload(HotReloadMsg {
+                jump_table: Some(table),
+                for_build_id,
+                ..
+            })) if for_build_id == our_build_id => {
+                // Apply the hot-reload patch to the dioxus devtools first
+                unsafe { dioxus_devtools::subsecond::apply_patch(table).unwrap() };
 
-                                unsafe { dioxus_devtools::subsecond::apply_patch(table).unwrap() };
+                // Now recreate the router
+                // We panic here because we don't want their app to continue in a maybe-corrupted state
+                make_service = hot_serve_callback
+                    .call(())
+                    .await
+                    .expect("Failed to create new router after hot-patch!")
+                    .into_make_service();
 
-                                let mut new_router = Router::new().serve_static_assets();
-                                let new_cfg = ServeConfig::new();
-
-                                let server_fn_iter = ServerFunction::collect();
-
-                                // de-duplicate iteratively by preferring the most recent (first, since it's linked)
-                                let mut server_fn_map: HashMap<_, _> = HashMap::new();
-                                for f in server_fn_iter.into_iter().rev() {
-                                    server_fn_map.insert(f.path(), f);
-                                }
-
-                                for (_, fn_) in server_fn_map {
-                                    tracing::trace!(
-                                        "Registering server function: {:?} {:?}",
-                                        fn_.path(),
-                                        fn_.method()
-                                    );
-                                    new_router = fn_.register_server_fn_on_router(new_router);
-                                }
-
-                                let hot_root = subsecond::HotFn::current(original_root);
-                                let new_root_addr = hot_root.ptr_address().0 as usize as *const ();
-                                let new_root = unsafe {
-                                    std::mem::transmute::<*const (), fn() -> Element>(new_root_addr)
-                                };
-
-                                crate::document::reset_renderer();
-
-                                let state = RenderHandleState::new(new_cfg.clone(), new_root);
-
-                                let fallback_handler =
-                                    axum::routing::get(RenderHandleState::render_handler)
-                                        .with_state(state);
-
-                                make_service = apply_base_path(
-                                    new_router.fallback(fallback_handler),
-                                    new_root,
-                                    new_cfg.clone(),
-                                    base_path().map(|s| s.to_string()),
-                                )
-                                .into_make_service();
-
-                                shutdown_tx.send_modify(|i| {
-                                    *i += 1;
-                                    hr_idx += 1;
-                                });
-                            }
-                        }
-                    }
-                    DevserverMsg::FullReloadStart => {}
-                    DevserverMsg::FullReloadFailed => {}
-                    DevserverMsg::FullReloadCommand => {}
-                    DevserverMsg::Shutdown => {}
-                    _ => {}
-                }
+                _ = shutdown_tx.send(());
             }
+
+            // Explicitly don't handle RSX hot-reloads on the server
+            // The client will handle that once the page is loaded. If we handled it here,
+            _ => {}
         }
     }
 }
 
-fn apply_base_path(
+fn block_on<T>(app_future: impl Future<Output = T>) {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.block_on(app_future);
+    } else {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(app_future);
+    }
+}
+
+fn apply_base_path<M: 'static>(
     mut router: Router,
-    root: fn() -> Element,
+    root: impl ComponentFunction<(), M> + 'static + Send + Sync + Clone,
     cfg: ServeConfig,
     base_path: Option<String>,
 ) -> Router {
@@ -258,64 +289,4 @@ fn apply_base_path(
     }
 
     router
-}
-
-/// Serve a fullstack dioxus application with a custom axum router.
-///
-/// This function sets up an async runtime, enables the default dioxus logger, runs the provided initializer,
-/// and then starts an axum server with the returned router.
-///
-/// The axum router will be bound to the address specified by the `IP` and `PORT` environment variables,
-/// defaulting to `127.0.0.1:8080` if not set.
-pub fn serve<F>(mut serve_it: impl FnMut() -> F) -> !
-where
-    F: Future<Output = Result<Router, anyhow::Error>>,
-{
-    dioxus_logger::initialize_default();
-
-    let app_future = async move {
-        let router = serve_it().await.expect("Failed to create axum router");
-        let address = dioxus_cli_config::fullstack_address_or_localhost();
-        let listener = tokio::net::TcpListener::bind(address)
-            .await
-            .with_context(|| format!("Failed to bind app to given address: {address}"))
-            .unwrap();
-        tracing::trace!("Listening on {address}");
-        axum::serve::serve(listener, router)
-            .await
-            .expect("Failed to serve axum app");
-    };
-
-    if let Ok(handle) = tokio::runtime::Handle::try_current() {
-        handle.block_on(app_future);
-    } else {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(app_future);
-    }
-
-    unreachable!("Serving a fullstack app should never return")
-}
-
-/// Create a router that serves the dioxus application at the appropriate base path.
-///
-/// This method automatically setups up:
-/// - Static asset serving
-/// - Mapping of base paths
-/// - Automatic registration of server functions
-/// - Handler to render the dioxus application
-/// - WebSocket handling for live reload and devtools
-/// - Hot-reloading
-/// - Async Runtime
-/// - Logging
-pub fn router(app: fn() -> Element) -> Router {
-    let cfg = ServeConfig::new();
-    apply_base_path(
-        Router::new().serve_dioxus_application(cfg.clone(), app),
-        app,
-        cfg,
-        base_path().map(|s| s.to_string()),
-    )
 }

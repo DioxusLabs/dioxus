@@ -283,8 +283,8 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// dom.rebuild_in_place();
     /// ```
-    pub fn new_with_props<P: Clone + 'static, M: 'static>(
-        root: impl ComponentFunction<P, M>,
+    pub fn new_with_props<P: Clone + 'static, Marker: 'static>(
+        root: impl ComponentFunction<P, Marker>,
         root_props: P,
     ) -> Self {
         let render_fn = root.fn_ptr();
