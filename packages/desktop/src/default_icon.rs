@@ -8,7 +8,7 @@ pub trait DefaultIcon {
 // TODO this should probably just be an assets path and then loaded with from_path OR include_bytes and image crate
 // preferably it would load from the bundle icon for every platform not just windows
 #[cfg(any(debug_assertions, not(target_os = "windows")))]
-static ICON: &[u8] = include_bytes!(env!("DIOXUS_APP_ICON"));
+static ICON: &[u8] = include_bytes!("./assets/default_icon.bin");
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::trayicon::DioxusTrayIcon;

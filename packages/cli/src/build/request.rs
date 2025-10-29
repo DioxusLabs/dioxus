@@ -5322,7 +5322,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             None => bundle.long_description.as_ref().unwrap_or(&binding),
         };
 
-        let output_dir = self.platform_dir().join("winres");
+        // platform dir gets cleared on bundle
+        let mut output_dir = self.platform_dir();
+        output_dir.pop();
+        output_dir.push("winres");
+
         std::fs::create_dir_all(&output_dir)?;
 
         let mut winres = WindowsResource::new();
