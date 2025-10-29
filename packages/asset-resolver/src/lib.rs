@@ -83,9 +83,9 @@ pub enum AssetPathError {
 /// assert_eq!(json["key"].as_str(), Some("value"));
 /// ```
 ///
-/// ## Loading assets from a folder
+/// ## Resolving assets from a folder
 ///
-/// To load an asset from a folder, you can pass the path of the file joined with your folder asset as a string:
+/// To resolve an asset from a folder, you can pass the path of the file joined with your folder asset as a string:
 /// ```rust
 /// # async fn asset_example() {
 /// use dioxus::prelude::*;
