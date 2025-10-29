@@ -71,12 +71,9 @@ fn app() -> Element {
                                 button {
                                     class: "calculator-key key-clear",
                                     onclick: move |_| {
-                                        val.set(String::new());
-                                        if !val.cloned().is_empty() {
-                                            val.set("0".into());
-                                        }
+                                        val.set("0".into());
                                     },
-                                    if val.cloned().is_empty() { "C" } else { "AC" }
+                                    "AC"
                                 }
                                 button {
                                     class: "calculator-key key-sign",
