@@ -1,6 +1,17 @@
-// TODO only implemented for windows --release, otherwise it will provide dioxus icon instead of user defined icon, needs implementation for other platforms
+use anyhow::Result;
+use image::load_from_memory;
+use image::GenericImageView;
+use image::ImageReader;
+use std::path::Path;
+
 pub trait DefaultIcon {
     fn get_icon() -> Self
+    where
+        Self: Sized;
+    fn from_memory(value: &[u8]) -> Self
+    where
+        Self: Sized;
+    fn path<P: AsRef<Path>>(path: P, size: Option<(u32, u32)>) -> Result<Self>
     where
         Self: Sized;
 }
@@ -8,10 +19,24 @@ pub trait DefaultIcon {
 // TODO this should probably just be an assets path and then loaded with from_path OR include_bytes and image crate
 // preferably it would load from the bundle icon for every platform not just windows
 #[cfg(any(debug_assertions, not(target_os = "windows")))]
-static ICON: &[u8] = include_bytes!("./assets/default_icon.bin");
+static DEFAULT_ICON: &[u8] = include_bytes!(env!("DIOXUS_APP_ICON"));
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::trayicon::DioxusTrayIcon;
+
+fn load_image_from_memory(value: &[u8]) -> (Vec<u8>, u32, u32) {
+    let img = load_from_memory(value).expect("MISSING DEFAULT ICON");
+    let rgba = img.to_rgba8();
+    let (width, height) = img.dimensions();
+    (rgba.to_vec(), width, height)
+}
+
+fn load_image_from_path<P: AsRef<Path>>(path: P) -> Result<(Vec<u8>, u32, u32)> {
+    let img = ImageReader::open(path)?.decode()?;
+    let rgba = img.to_rgba8();
+    let (width, height) = img.dimensions();
+    Ok((rgba.to_vec(), width, height))
+}
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 impl DefaultIcon for DioxusTrayIcon {
@@ -20,11 +45,32 @@ impl DefaultIcon for DioxusTrayIcon {
         Self: Sized,
     {
         #[cfg(any(debug_assertions, target_os = "linux", target_os = "macos"))]
-        let default = DioxusTrayIcon::from_rgba(ICON.to_vec(), 460, 460);
+        {
+            let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
+            DioxusTrayIcon::from_rgba(img, width, height).expect("image parse failed")
+        }
         #[cfg(all(not(debug_assertions), target_os = "windows"))]
-        let default = DioxusTrayIcon::from_resource(32512, None);
+        DioxusTrayIcon::from_resource(32512, None).expect("image parse failed")
+    }
 
-        default.expect("image parse failed")
+    fn from_memory(value: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        let (icon, width, height) = load_image_from_memory(value);
+        DioxusTrayIcon::from_rgba(icon, width, height).expect("image parse failed")
+    }
+
+    fn path<P: AsRef<Path>>(path: P, size: Option<(u32, u32)>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let (img, width, height) = load_image_from_path(path)?;
+        if let Some((width, height)) = size {
+            Ok(DioxusTrayIcon::from_rgba(img, width, height)?)
+        } else {
+            Ok(DioxusTrayIcon::from_rgba(img, width, height)?)
+        }
     }
 }
 
@@ -38,11 +84,32 @@ impl DefaultIcon for DioxusMenuIcon {
         Self: Sized,
     {
         #[cfg(any(debug_assertions, not(target_os = "windows")))]
-        let default = DioxusMenuIcon::from_rgba(ICON.to_vec(), 460, 460);
+        {
+            let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
+            DioxusMenuIcon::from_rgba(img, width, height).expect("image parse failed")
+        }
         #[cfg(all(not(debug_assertions), target_os = "windows"))]
-        let default = DioxusMenuIcon::from_resource(32512, None);
+        DioxusMenuIcon::from_resource(32512, None).expect("image parse failed")
+    }
 
-        default.expect("image parse failed")
+    fn from_memory(value: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        let (icon, width, height) = load_image_from_memory(value);
+        DioxusMenuIcon::from_rgba(icon, width, height).expect("image parse failed")
+    }
+
+    fn path<P: AsRef<Path>>(path: P, size: Option<(u32, u32)>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let (img, width, height) = load_image_from_path(path)?;
+        if let Some((width, height)) = size {
+            Ok(DioxusMenuIcon::from_rgba(img, width, height)?)
+        } else {
+            Ok(DioxusMenuIcon::from_rgba(img, width, height)?)
+        }
     }
 }
 
@@ -57,12 +124,32 @@ impl DefaultIcon for Icon {
         Self: Sized,
     {
         #[cfg(any(debug_assertions, not(target_os = "windows")))]
-        let default = Icon::from_rgba(ICON.to_vec(), 460, 460);
-
+        {
+            let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
+            Icon::from_rgba(img, width, height).expect("image parse failed")
+        }
         #[cfg(all(not(debug_assertions), target_os = "windows"))]
-        let default = Icon::from_resource(32512, None);
+        Icon::from_resource(32512, None).expect("image parse failed")
+    }
 
-        default.expect("image parse failed")
+    fn from_memory(value: &[u8]) -> Self
+    where
+        Self: Sized,
+    {
+        let (icon, width, height) = load_image_from_memory(value);
+        Icon::from_rgba(icon, width, height).expect("image parse failed")
+    }
+
+    fn path<P: AsRef<Path>>(path: P, size: Option<(u32, u32)>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        let (img, width, height) = load_image_from_path(path)?;
+        if let Some((width, height)) = size {
+            Ok(Icon::from_rgba(img, width, height)?)
+        } else {
+            Ok(Icon::from_rgba(img, width, height)?)
+        }
     }
 }
 
@@ -70,4 +157,15 @@ impl DefaultIcon for Icon {
 /// NOTE only implemented for windows --release, otherwise it will be just a classic dioxus icon
 pub fn default_icon<T: DefaultIcon>() -> T {
     T::get_icon()
+}
+
+pub fn icon_from_memory<T: DefaultIcon>(value: &[u8]) -> T {
+    T::from_memory(value)
+}
+
+pub fn icon_from_path<T: DefaultIcon, P: AsRef<Path>>(
+    path: P,
+    size: Option<(u32, u32)>,
+) -> Result<T> {
+    T::path(path, size)
 }
