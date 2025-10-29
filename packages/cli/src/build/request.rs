@@ -329,7 +329,7 @@ use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{APP_ICON_ENV, APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
@@ -2659,13 +2659,15 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
+            OperatingSystem::Windows => {
+                if self.release {
+                    let res = self.write_winres().expect("Winres file");
+                    cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
+                }
+            }
             _ => {}
         }
 
-        if self.triple.operating_system == OperatingSystem::Windows {
-            let res = self.write_winres().expect("Winres file");
-            cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
-        }
         // Our fancy hot-patching engine needs a lot of customization to work properly.
         //
         // These args are mostly intended to be passed when *fat* linking but are generally fine to
@@ -2751,6 +2753,28 @@ impl BuildRequest {
         cargo_args
     }
 
+    fn absolute_icon_path(&self, path: &str) -> Result<PathBuf> {
+        let icon_path = PathBuf::from(path);
+        let workspace_icon = self.workspace_dir().join(path);
+        let crate_icon = self.crate_dir().join(path);
+
+        if icon_path.is_absolute() && icon_path.is_file() {
+            Ok(dunce::canonicalize(icon_path)?)
+        } else if workspace_icon.is_file() {
+            Ok(dunce::canonicalize(workspace_icon)?)
+        } else if crate_icon.is_file() {
+            Ok(dunce::canonicalize(crate_icon)?)
+        } else {
+            Err(anyhow::anyhow!("Could not find icon from path {}", path))
+        }
+    }
+
+    fn app_icon_path(&self) -> Result<OsString> {
+        // TODO See desktop/src/default_icon.rs for comment
+
+        Ok("./assets/default_icon.bin".into())
+    }
+
     pub(crate) fn cargo_build_env_vars(
         &self,
         build_mode: &BuildMode,
@@ -2773,6 +2797,12 @@ impl BuildRequest {
                 self.config.web.app.title.clone().into(),
             ));
             env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
+        }
+
+        if self.triple.operating_system == OperatingSystem::Windows && !self.release
+            || self.triple.operating_system != OperatingSystem::Windows
+        {
+            env_vars.push((APP_ICON_ENV.into(), self.app_icon_path()?));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -3181,7 +3211,7 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    pub(crate) fn platform_dir(&self) -> PathBuf {
+    fn platform_dir(&self) -> PathBuf {
         self.internal_out_dir()
             .join(&self.main_target)
             .join(if self.release { "release" } else { "debug" })
@@ -5259,11 +5289,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    #[allow(dead_code)]
-    fn winres_icon_path(&self) -> crate::winres::WindowsResourceLinker {
-        todo!()
-    }
-
     // needs to only run when tomls are updated
     fn write_winres(&self) -> Result<crate::winres::WindowsResourceLinker> {
         use crate::winres::*;
@@ -5342,24 +5367,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         if let Some(icons) = bundle.icon.as_ref() {
             for (id, icon) in icons.iter().enumerate() {
                 if icon.ends_with(".ico") {
+                    let icon_path = self.absolute_icon_path(icon)?.to_string_lossy().to_string();
                     if !default {
-                        winres.set_icon(icon);
+                        winres.set_icon(&icon_path);
                         default = true;
                     } else {
-                        winres.set_icon_with_id(icon, &id.to_string());
+                        winres.set_icon_with_id(&icon_path, &id.to_string());
                     };
                 }
             }
-        }
-
-        if !default {
-            const DEFAULT_ICON: &[u8] = include_bytes!("../../assets/icon.ico");
-
-            let icon = output_dir.join("icon.ico");
-            winres.linker.default_icon = Some(icon.to_string_lossy().to_string());
-            let mut file = std::fs::File::create(&icon)?;
-            file.write_all(DEFAULT_ICON)?;
-            winres.set_icon(icon.to_str().unwrap());
         }
 
         winres.compile()?;

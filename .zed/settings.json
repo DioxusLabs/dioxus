@@ -9,5 +9,33 @@
     "JavaScript": {
       "format_on_save": "off"
     }
+  },
+
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "diagnostics": {
+          "experimental": {
+            "enable": true
+          }
+        },
+
+        "cargo": {
+          "allTargets": false
+        },
+        "check": {
+          "workspace": false
+        }
+      },
+      "settings": {
+        "linkedProjects": ["packages/cli"],
+        "cargo": {
+          "allTargets": false
+        },
+        "check": {
+          "workspace": false
+        }
+      }
+    }
   }
 }
