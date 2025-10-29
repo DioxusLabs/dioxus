@@ -715,10 +715,10 @@ impl WindowsResource {
         };
 
         if cfg!(target_env = "msvc") {
-            tracing::info!("Compiling Windows resource file with msvc toolkit");
+            tracing::debug!("Compiling Windows resource file with msvc toolkit");
             self.compile_with_toolkit_msvc(rc.as_str())
         } else if cfg!(target_env = "gnu") {
-            tracing::info!("Compiling Windows resource file with gnu toolkit");
+            tracing::debug!("Compiling Windows resource file with gnu toolkit");
             self.compile_with_toolkit_gnu(rc.as_str())
         } else {
             Err(io::Error::new(
