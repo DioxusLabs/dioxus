@@ -88,6 +88,20 @@ impl<T: Send + Sync + 'static> Lazy<T> {
         }
         Ok(())
     }
+
+    /// Get a reference to the value of the `Lazy` instance. This will block the current thread if the
+    /// value is not yet initialized.
+    pub fn get(&self) -> &T {
+        if self.constructor.is_none() {
+            return self.value.get().expect("Lazy value is not initialized. Make sure to call `initialize` before dereferencing.");
+        };
+
+        if self.value.get().is_none() {
+            self.initialize().expect("Failed to initialize lazy value");
+        }
+
+        self.value.get().unwrap()
+    }
 }
 
 impl<T: Send + Sync + 'static> Default for Lazy<T> {
@@ -100,15 +114,13 @@ impl<T: Send + Sync + 'static> std::ops::Deref for Lazy<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        if self.constructor.is_none() {
-            return self.value.get().expect("Lazy value is not initialized. Make sure to call `initialize` before dereferencing.");
-        };
+        self.get()
+    }
+}
 
-        if self.value.get().is_none() {
-            self.initialize().expect("Failed to initialize lazy value");
-        }
-
-        self.value.get().unwrap()
+impl<T: std::fmt::Debug + Send + Sync + 'static> std::fmt::Debug for Lazy<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Lazy").field("value", self.get()).finish()
     }
 }
 
@@ -129,10 +141,16 @@ where
     {
         let ptr: F = unsafe { std::mem::zeroed() };
         let fut = ptr();
-        let rt = tokio::runtime::Handle::current();
-        return std::thread::spawn(move || rt.block_on(fut).map_err(|e| e.into()))
-            .join()
-            .unwrap();
+        return std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(fut)
+                .map_err(|e| e.into())
+        })
+        .join()
+        .unwrap();
     }
 
     // todo: technically we can support constructors in wasm with the same tricks inventory uses with `__wasm_call_ctors`
