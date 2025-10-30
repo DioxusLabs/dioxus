@@ -1,5 +1,5 @@
 use axum::extract::FromRequest;
-use dioxus_fullstack_core::{DioxusServerState, RequestError, ServerFnError};
+use dioxus_fullstack_core::{RequestError, ServerFnError, FullstackContext};
 #[cfg(feature = "server")]
 use headers::Header;
 use http::response::Parts;
@@ -26,7 +26,7 @@ use crate::{ClientRequest, ClientResponse};
 /// websockets, the response needs to retain an initial connection from the request. Here, you can use
 ///  the `R` generic to specify a concrete response type. The resulting type that implements `FromResponse`
 /// must also be generic over the same `R` type.
-pub trait IntoRequest<R = ClientResponse>: Sized + FromRequest<DioxusServerState> {
+pub trait IntoRequest<R = ClientResponse>: Sized {
     fn into_request(
         self,
         req: ClientRequest,
@@ -35,7 +35,7 @@ pub trait IntoRequest<R = ClientResponse>: Sized + FromRequest<DioxusServerState
 
 impl<A, R> IntoRequest<R> for (A,)
 where
-    A: IntoRequest<R> + 'static + FromRequest<DioxusServerState> + Send,
+    A: IntoRequest<R> + 'static + Send,
 {
     fn into_request(
         self,

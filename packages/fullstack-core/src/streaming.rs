@@ -1,5 +1,5 @@
-use crate::{DioxusServerState, HttpError, ServerFnError};
-use axum_core::extract::FromRequest;
+use crate::{HttpError, ServerFnError, ServerFnState};
+use axum_core::extract::{FromRef, FromRequest};
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
@@ -21,6 +21,7 @@ tokio::task_local! {
 pub struct FullstackContext {
     // We expose the lock for request headers directly so it needs to be in a separate lock
     request_headers: Arc<RwLock<http::request::Parts>>,
+
     // The rest of the fields are only held internally, so we can group them together
     lock: Arc<RwLock<FullstackContextInner>>,
 }
@@ -78,6 +79,7 @@ impl FullstackContext {
     pub fn commit_initial_chunk(&mut self) {
         let mut lock = self.lock.write();
         lock.current_status = StreamingStatus::InitialChunkCommitted;
+
         // The key type is mutable, but the hash is stable through mutations because we hash by pointer
         #[allow(clippy::mutable_key_type)]
         let subscribers = std::mem::take(&mut lock.current_status_subscribers);
@@ -114,8 +116,8 @@ impl FullstackContext {
     ///
     /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
     /// function extractors.
-    pub async fn extract<T: FromRequest<DioxusServerState, M>, M>() -> Result<T, ServerFnError> {
-        let state = DioxusServerState {};
+    pub async fn extract<T: FromRequest<ServerFnState, M>, M>() -> Result<T, ServerFnError> {
+        let state = ServerFnState::new();
 
         let this = Self::current()
             .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
@@ -257,7 +259,7 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<DioxusServerState, M>, M>(
+pub fn extract<T: FromRequest<ServerFnState, M>, M>(
 ) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T, M>()
 }

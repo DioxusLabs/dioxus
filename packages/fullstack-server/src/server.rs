@@ -11,6 +11,8 @@ use axum::{
     routing::*,
 };
 use dioxus_core::{ComponentFunction, VirtualDom};
+#[cfg(not(target_arch = "wasm32"))]
+use dioxus_fullstack_core::ServerFnState;
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,7 +21,7 @@ use tower::ServiceExt;
 use tower_http::services::fs::ServeFileSystemResponseBody;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
-pub trait DioxusRouterExt<S> {
+pub trait DioxusRouterExt {
     /// Serves the static WASM for your Dioxus application (except the generated index.html).
     ///
     /// # Example
@@ -132,10 +134,7 @@ pub trait DioxusRouterExt<S> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl<S> DioxusRouterExt<S> for Router<S>
-where
-    S: Send + Sync + Clone + 'static,
-{
+impl DioxusRouterExt for Router<ServerFnState> {
     fn serve_static_assets(self) -> Self {
         let Some(public_path) = public_path() else {
             return self;
@@ -158,6 +157,7 @@ where
     }
 
     fn register_server_functions(mut self) -> Self {
+        use axum::{extract::Request, middleware::Next};
         use std::collections::HashSet;
 
         let mut seen = HashSet::new();
@@ -170,9 +170,62 @@ where
                     func.path()
                 );
 
-                self = func.register_server_fn_on_router(self);
+                self = self.route(func.path(), func.handler())
             }
         }
+
+        self = self.route_layer(axum::middleware::from_fn(
+            |request: Request, next: Next| async move {
+                use dioxus_fullstack_core::FullstackContext;
+                use http::header::{ACCEPT, LOCATION, REFERER};
+                use http::StatusCode;
+
+                let (parts, body) = request.into_parts();
+                let server_context = FullstackContext::new(parts.clone());
+                let request = axum::extract::Request::from_parts(parts, body);
+
+                // store Accepts and Referrer in case we need them for redirect (below)
+                let referrer = request.headers().get(REFERER).cloned();
+                let accepts_html = request
+                    .headers()
+                    .get(ACCEPT)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v.contains("text/html"))
+                    .unwrap_or(false);
+
+                server_context
+                    .scope(async move {
+                        // Run the next middleware / handler inside the server context
+                        let mut response = next.run(request).await;
+
+                        let server_context = FullstackContext::current().expect(
+                            "Server context should be available inside the server context scope",
+                        );
+
+                        // Get the extra response headers set during the handler and add them to the response
+                        let headers = server_context.take_response_headers();
+                        if let Some(headers) = headers {
+                            response.headers_mut().extend(headers);
+                        }
+
+                        // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
+                        // Location set, then redirect to Referer
+                        if accepts_html {
+                            if let Some(referrer) = referrer {
+                                let has_location = response.headers().get(LOCATION).is_some();
+                                if !has_location {
+                                    *response.status_mut() = StatusCode::FOUND;
+                                    response.headers_mut().insert(LOCATION, referrer);
+                                }
+                            }
+                        }
+
+                        response
+                    })
+                    .await
+            },
+        ));
+
         self
     }
 

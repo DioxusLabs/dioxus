@@ -42,7 +42,7 @@ use crate::{
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
-use dioxus_fullstack_core::{DioxusServerState, RequestError};
+use dioxus_fullstack_core::{RequestError, ServerFnState};
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -491,7 +491,7 @@ pub mod req_from {
     pub trait ExtractRequest<In, Out, H, M = ()> {
         fn extract_axum(
             &self,
-            state: DioxusServerState,
+            state: ServerFnState,
             request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static;
@@ -501,11 +501,11 @@ pub mod req_from {
     /// This sits above priority in the combined headers on server / body on client case.
     impl<In, M, H> ExtractRequest<In, (), H, M> for &&&&&&&&&&&ServerFnEncoder<In, ()>
     where
-        H: FromRequest<DioxusServerState, M> + 'static,
+        H: FromRequest<ServerFnState, M> + 'static,
     {
         fn extract_axum(
             &self,
-            state: DioxusServerState,
+            state: ServerFnState,
             request: Request,
             _map: fn(In) -> (),
         ) -> impl Future<Output = Result<(H, ()), Response>> + 'static {
@@ -523,11 +523,11 @@ pub mod req_from {
     where
         In: DeserializeOwned + 'static,
         Out: 'static,
-        H: FromRequestParts<DioxusServerState>,
+        H: FromRequestParts<ServerFnState>,
     {
         fn extract_axum(
             &self,
-            _state: DioxusServerState,
+            _state: ServerFnState,
             request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
@@ -560,12 +560,12 @@ pub mod req_from {
     /// We skip the BodySerialize wrapper and just go for the output type directly.
     impl<In, Out, M, H> ExtractRequest<In, Out, H, M> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
-        Out: FromRequest<DioxusServerState, M> + 'static,
-        H: FromRequestParts<DioxusServerState>,
+        Out: FromRequest<ServerFnState, M> + 'static,
+        H: FromRequestParts<ServerFnState>,
     {
         fn extract_axum(
             &self,
-            state: DioxusServerState,
+            state: ServerFnState,
             request: Request,
             _map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {

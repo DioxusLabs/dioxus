@@ -12,6 +12,7 @@ use dioxus_cli_config::base_path;
 use dioxus_core::{ComponentFunction, Element};
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
+use dioxus_fullstack_core::ServerFnState;
 use futures_util::{stream::FusedStream, StreamExt};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
@@ -70,8 +71,12 @@ async fn serve_server(
     let cb = move || {
         let cfg = cfg.clone();
         Box::pin(async move {
+            use dioxus_fullstack_core::ServerFnState;
+
             Ok(apply_base_path(
-                Router::new().serve_dioxus_application(cfg.clone(), original_root.clone()),
+                Router::new()
+                    .serve_dioxus_application(cfg.clone(), original_root.clone())
+                    .with_state(ServerFnState::new()),
                 original_root.clone(),
                 cfg.clone(),
                 base_path().map(|s| s.to_string()),
@@ -96,7 +101,9 @@ async fn serve_server(
 pub fn router(app: fn() -> Element) -> Router {
     let cfg = ServeConfig::new();
     apply_base_path(
-        Router::new().serve_dioxus_application(cfg.clone(), app),
+        Router::new()
+            .serve_dioxus_application(cfg.clone(), app)
+            .with_state(ServerFnState::new()),
         app,
         cfg,
         base_path().map(|s| s.to_string()),
@@ -241,6 +248,9 @@ pub async fn serve_router(
                     .await
                     .expect("Failed to create new router after hot-patch!")
                     .into_make_service();
+
+                // Make sure to wipe out the renderer state so we don't have stale elements
+                crate::document::reset_renderer();
 
                 _ = shutdown_tx.send(());
             }
