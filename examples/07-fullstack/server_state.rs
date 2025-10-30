@@ -1,5 +1,7 @@
 //! This example shows how to use global state to maintain state between server functions.
 
+use std::rc::Rc;
+
 use axum_core::extract::{FromRef, FromRequest};
 use dioxus::{
     fullstack::{ServerState, extract::State},
@@ -81,7 +83,11 @@ type BroadcastExtension = axum::Extension<tokio::sync::broadcast::Sender<String>
 
 #[post("/api/broadcast", ext: BroadcastExtension)]
 async fn broadcast_message() -> Result<()> {
+    let rt = Rc::new("asdasd".to_string());
     ext.send("New broadcast message".to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    println!("rt: {}", rt);
+
     Ok(())
 }
 

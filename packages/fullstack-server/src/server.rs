@@ -16,6 +16,7 @@ use dioxus_fullstack_core::ServerState;
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio_util::task::LocalPoolHandle;
 use tower::util::MapResponse;
 use tower::ServiceExt;
 use tower_http::services::fs::ServeFileSystemResponseBody;
@@ -292,6 +293,7 @@ pub struct RenderHandleState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
     renderers: Arc<SsrRendererPool>,
+    rt: LocalPoolHandle,
 }
 
 impl RenderHandleState {
@@ -300,10 +302,17 @@ impl RenderHandleState {
         config: ServeConfig,
         root: impl ComponentFunction<(), M> + Send + Sync + 'static + Clone,
     ) -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
         Self {
             renderers: Arc::new(SsrRendererPool::new(4, config.incremental.clone())),
             build_virtual_dom: Arc::new(move || VirtualDom::new_with_props(root.clone(), ())),
             config,
+            rt,
         }
     }
 
@@ -313,10 +322,17 @@ impl RenderHandleState {
         config: ServeConfig,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
         Self {
             renderers: Arc::new(SsrRendererPool::new(4, config.incremental.clone())),
             config,
             build_virtual_dom: Arc::new(build_virtual_dom),
+            rt,
         }
     }
 
