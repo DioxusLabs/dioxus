@@ -478,7 +478,7 @@ fn route_impl_with_route(
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
                 // concrete types
-                ServerFnEncoder, ServerFnDecoder, ServerFnState,
+                ServerFnEncoder, ServerFnDecoder, ServerState,
 
                 // "magic" traits for encoding/decoding on the client
                 ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
@@ -543,7 +543,7 @@ fn route_impl_with_route(
 
                 #[allow(clippy::unused_unit)]
                 #asyncness fn __inner__function__ #impl_generics(
-                    ___state: #__axum::extract::State<ServerFnState>,
+                    ___state: #__axum::extract::State<ServerState>,
                     #path_extractor
                     #query_extractor
                     #catch_all_query_extractors

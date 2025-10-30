@@ -1,5 +1,5 @@
 use axum::routing::MethodRouter;
-use dioxus_fullstack_core::ServerFnState;
+use dioxus_fullstack_core::ServerState;
 use http::Method;
 
 /// A function endpoint that can be called from the client.
@@ -7,7 +7,7 @@ use http::Method;
 pub struct ServerFunction {
     path: &'static str,
     method: Method,
-    handler: fn() -> MethodRouter<ServerFnState>,
+    handler: fn() -> MethodRouter<ServerState>,
 }
 
 impl ServerFunction {
@@ -15,7 +15,7 @@ impl ServerFunction {
     pub const fn new(
         method: Method,
         path: &'static str,
-        handler: fn() -> MethodRouter<ServerFnState>,
+        handler: fn() -> MethodRouter<ServerState>,
     ) -> Self {
         Self {
             path,
@@ -40,9 +40,9 @@ impl ServerFunction {
     }
 
     /// The handler for the server function. Note that this cannot be used directly since it does
-    /// not included the required middleware to make `ServerFnState` populated nor `FullstackContext`
+    /// not included the required middleware to make `ServerState` populated nor `FullstackContext`
     /// available via tokio's `task_local`
-    pub fn handler(&self) -> MethodRouter<ServerFnState> {
+    pub fn handler(&self) -> MethodRouter<ServerState> {
         (self.handler)()
     }
 }

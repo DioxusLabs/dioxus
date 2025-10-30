@@ -1,5 +1,5 @@
-use crate::{HttpError, ServerFnError, ServerFnState};
-use axum_core::extract::{FromRef, FromRequest};
+use crate::{HttpError, ServerFnError, ServerState};
+use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
@@ -8,10 +8,6 @@ use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::fmt::Debug;
 use std::sync::Arc;
-
-tokio::task_local! {
-    static FULLSTACK_CONTEXT: FullstackContext;
-}
 
 /// The context provided by dioxus fullstack for server-side rendering.
 ///
@@ -24,6 +20,13 @@ pub struct FullstackContext {
 
     // The rest of the fields are only held internally, so we can group them together
     lock: Arc<RwLock<FullstackContextInner>>,
+}
+
+// `FullstackContext` is always set when either
+// 1. rendering the app via SSR
+// 2. handling a server function request
+tokio::task_local! {
+    static FULLSTACK_CONTEXT: FullstackContext;
 }
 
 pub struct FullstackContextInner {
@@ -116,8 +119,8 @@ impl FullstackContext {
     ///
     /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
     /// function extractors.
-    pub async fn extract<T: FromRequest<ServerFnState, M>, M>() -> Result<T, ServerFnError> {
-        let state = ServerFnState::new();
+    pub async fn extract<T: FromRequest<ServerState, M>, M>() -> Result<T, ServerFnError> {
+        let state = ServerState::new();
 
         let this = Self::current()
             .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
@@ -259,7 +262,7 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<ServerFnState, M>, M>(
+pub fn extract<T: FromRequest<ServerState, M>, M>(
 ) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T, M>()
 }

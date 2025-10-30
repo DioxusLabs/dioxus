@@ -92,8 +92,8 @@
 //! take a `State<T>` extractor cannot be automatically added to the router since the dioxus router
 //! type does not know how to construct the `T` type.
 //!
-//! These server functions will be registered once the `ServerFnState<T>` layer is added to the app with
-//! `router = router.layer(ServerFnState::new(your_state))`.
+//! These server functions will be registered once the `ServerState<T>` layer is added to the app with
+//! `router = router.layer(ServerState::new(your_state))`.
 //!
 //! ## Middleware
 //!

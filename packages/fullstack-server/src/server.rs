@@ -12,7 +12,7 @@ use axum::{
 };
 use dioxus_core::{ComponentFunction, VirtualDom};
 #[cfg(not(target_arch = "wasm32"))]
-use dioxus_fullstack_core::ServerFnState;
+use dioxus_fullstack_core::ServerState;
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -134,7 +134,7 @@ pub trait DioxusRouterExt {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl DioxusRouterExt for Router<ServerFnState> {
+impl DioxusRouterExt for Router<ServerState> {
     fn serve_static_assets(self) -> Self {
         let Some(public_path) = public_path() else {
             return self;
@@ -180,6 +180,10 @@ impl DioxusRouterExt for Router<ServerFnState> {
                 use http::header::{ACCEPT, LOCATION, REFERER};
                 use http::StatusCode;
 
+                // todo: we're copying the parts here, but it'd be ideal if we didn't.
+                // We can probably just pass the URI in so the matching logic can work and then
+                // in the server function, do all extraction via FullstackContext. This ensures
+                // calls to `.remove()` work as expected.
                 let (parts, body) = request.into_parts();
                 let server_context = FullstackContext::new(parts.clone());
                 let request = axum::extract::Request::from_parts(parts, body);

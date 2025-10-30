@@ -1,8 +1,8 @@
 //! This example shows how to use global state to maintain state between server functions.
 
-use axum_core::extract::{FromRef, FromRequest, FromRequestParts};
+use axum_core::extract::{FromRef, FromRequest};
 use dioxus::{
-    fullstack::{FullstackContext, ServerFnState, extract::State},
+    fullstack::{ServerState, extract::State},
     prelude::*,
 };
 
@@ -90,22 +90,22 @@ Option 4:
 
 You can use Axum's `State` extractor to provide custom application state to your server functions.
 
-All ServerFunctions pull in `ServerFnState`, so you need to implement `FromRef<ServerFnState>` for your
+All ServerFunctions pull in `ServerState`, so you need to implement `FromRef<ServerState>` for your
 custom state type. To add your state to your app, you can use `.register_server_functions()` on a router
-for a given state type, which will automatically add your state into the `ServerFnState` used by your server functions.
+for a given state type, which will automatically add your state into the `ServerState` used by your server functions.
 
 There are two details to note here:
 
-- You need to implement `FromRef<ServerFnState>` for your custom state type.
-- Custom extractors need to implement `FromRequest<S>` where `S` is the state type that implements `FromRef<ServerFnState>`.
+- You need to implement `FromRef<ServerState>` for your custom state type.
+- Custom extractors need to implement `FromRequest<S>` where `S` is the state type that implements `FromRef<ServerState>`.
 */
 #[derive(Clone)]
 struct MyAppState {
     abc: i32,
 }
 
-impl FromRef<ServerFnState> for MyAppState {
-    fn from_ref(state: &ServerFnState) -> Self {
+impl FromRef<ServerState> for MyAppState {
+    fn from_ref(state: &ServerState) -> Self {
         state.get()
     }
 }
@@ -119,15 +119,19 @@ where
     type Rejection = ();
 
     fn from_request(
-        req: axum::extract::Request,
+        _req: axum::extract::Request,
         state: &S,
     ) -> impl Future<Output = std::result::Result<Self, Self::Rejection>> + Send {
-        async move { todo!() }
+        async move {
+            let state = MyAppState::from_ref(state);
+            todo!()
+        }
     }
 }
 
 #[post("/api/stateful", state: State<MyAppState>, ex: CustomExtractor)]
 async fn app_state() -> Result<()> {
+    println!("abc: {}", state.abc);
     Ok(())
 }
 

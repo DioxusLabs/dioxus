@@ -12,7 +12,7 @@ use dioxus_cli_config::base_path;
 use dioxus_core::{ComponentFunction, Element};
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use dioxus_fullstack_core::ServerFnState;
+use dioxus_fullstack_core::ServerState;
 use futures_util::{stream::FusedStream, StreamExt};
 use hyper::body::Incoming;
 use hyper_util::server::conn::auto::Builder as HyperBuilder;
@@ -71,12 +71,12 @@ async fn serve_server(
     let cb = move || {
         let cfg = cfg.clone();
         Box::pin(async move {
-            use dioxus_fullstack_core::ServerFnState;
+            use dioxus_fullstack_core::ServerState;
 
             Ok(apply_base_path(
                 Router::new()
                     .serve_dioxus_application(cfg.clone(), original_root.clone())
-                    .with_state(ServerFnState::new()),
+                    .with_state(ServerState::new()),
                 original_root.clone(),
                 cfg.clone(),
                 base_path().map(|s| s.to_string()),
@@ -103,7 +103,7 @@ pub fn router(app: fn() -> Element) -> Router {
     apply_base_path(
         Router::new()
             .serve_dioxus_application(cfg.clone(), app)
-            .with_state(ServerFnState::new()),
+            .with_state(ServerState::new()),
         app,
         cfg,
         base_path().map(|s| s.to_string()),
