@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-native"
-version = { workspace = true }
+version = "0.7.1"
 authors = ["Jonathan Kelley", "Nico Burns"]
 edition = "2021"
 description = "Native renderer for Dioxus based on blitz"

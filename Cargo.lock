@@ -6106,7 +6106,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-native"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "anyrender",
  "anyrender_vello",
