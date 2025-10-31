@@ -10,15 +10,15 @@ use resvg::{tiny_skia, usvg};
 use xml::writer::{EmitterConfig, XmlEvent};
 
 use std::{
-    fs::{create_dir_all, write, File},
+    fs::{copy, create_dir_all, write, File},
     io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
-use crate::{error::Result, Error};
+use crate::error::Result;
 
 enum Source {
-    Svg(resvg::usvg::Tree),
+    Svg(Box<resvg::usvg::Tree>),
     DynamicImage(DynamicImage),
 }
 
@@ -40,18 +40,16 @@ impl Source {
     fn resize_exact(&self, size: u32) -> Result<DynamicImage> {
         match self {
             Self::Svg(svg) => {
-                let mut pixmap = tiny_skia::Pixmap::new(size, size)
-                    .ok_or_else(|| Error::Other(anyhow::anyhow!("Failed to create pixmap")))?;
+                let mut pixmap =
+                    tiny_skia::Pixmap::new(size, size).context("Failed to create pixmap")?;
                 let scale = size as f32 / svg.size().height();
                 resvg::render(
                     svg,
                     tiny_skia::Transform::from_scale(scale, scale),
                     &mut pixmap.as_mut(),
                 );
-                let img_buffer =
-                    ImageBuffer::from_raw(size, size, pixmap.take()).ok_or_else(|| {
-                        Error::Other(anyhow::anyhow!("Failed to create image buffer"))
-                    })?;
+                let img_buffer = ImageBuffer::from_raw(size, size, pixmap.take())
+                    .context("Failed to create image buffer from pixmap")?;
                 Ok(DynamicImage::ImageRgba8(img_buffer))
             }
             Self::DynamicImage(i) => Ok(i.resize_exact(size, size, FilterType::Lanczos3)),
@@ -154,12 +152,41 @@ fn write_png<W: Write>(image_data: &[u8], w: W, size: u32) -> Result<()> {
     Ok(())
 }
 
+// Copy Android VectorDrawable XML.
+// This is used for Android 8.0+ (API 26+) to support vector drawables.
+// Currently we only use one icon as the foreground and background at the same time
+fn copy_android_vector_drawable_xml(path: &Path, out_dir: &Path) -> Result<()> {
+    create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
+    write(
+        out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
+        include_bytes!(
+            "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+        ),
+    )?;
+
+    create_dir_all(out_dir.join("drawable"))?;
+    copy(
+        path,
+        out_dir.join("drawable").join("ic_launcher_background.xml"),
+    )?;
+    create_dir_all(out_dir.join("drawable-v24"))?;
+    copy(
+        path,
+        out_dir
+            .join("drawable-v24")
+            .join("ic_launcher_foreground.xml"),
+    )?;
+    Ok(())
+}
+
 // Generate Android VectorDrawable XML from SVG data.
 // This is used for Android 8.0+ (API 26+) to support vector drawables.
 // Now only supports simple SVG
-// Because adaptive icons seem to be scaled up to a certain extent, margins need to be reserved
+// SVG file should follow the icon design specifications:
+// https://developer.android.com/distribute/google-play/resources/icon-design-specifications
+// Otherwise the generated VectorDrawable may not look as expected(scaled up).
 // Currently we only use one icon as the foreground and background at the same time
-fn android_vector_drawable(tree: &resvg::usvg::Tree, out_dir: &Path) -> Result<()> {
+fn gen_android_vector_drawable(tree: &resvg::usvg::Tree, out_dir: &Path) -> Result<()> {
     create_dir_all(out_dir.join("mipmap-anydpi-v26"))?;
     write(
         out_dir.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
@@ -188,7 +215,7 @@ fn android_vector_drawable(tree: &resvg::usvg::Tree, out_dir: &Path) -> Result<(
             .attr("android:viewportWidth", &width)
             .attr("android:viewportHeight", &height),
     )
-    .map_err(|e| Error::Other(anyhow::anyhow!(e)))?;
+    .context("Failed to write XML start element")?;
 
     // Here the recursive conversion node
     for node in tree.root().children() {
@@ -196,7 +223,7 @@ fn android_vector_drawable(tree: &resvg::usvg::Tree, out_dir: &Path) -> Result<(
     }
 
     xml.write(XmlEvent::end_element())
-        .map_err(|e| Error::Other(anyhow::anyhow!(e)))?;
+        .context("Failed to write XML end element")?;
 
     create_dir_all(out_dir.join("drawable"))?;
     write(
@@ -283,9 +310,9 @@ fn usvg_node_to_vector_drawable<W: Write>(
             }
 
             xml.write(elem)
-                .map_err(|e| Error::Other(anyhow::anyhow!(e)))?;
+                .context("Failed to write XML path element")?;
             xml.write(XmlEvent::end_element())
-                .map_err(|e| Error::Other(anyhow::anyhow!(e)))?;
+                .context("Failed to write XML end element")?;
         }
         usvg::Node::Group(group) => {
             for child in group.children() {
@@ -315,36 +342,99 @@ fn svg_path_to_string(path: &tiny_skia::Path) -> String {
 }
 
 // Generate Android icons from a given icon path and output directory.
-pub fn gen_android_icons(icon_path: &Path, out_dir: &Path) -> Result<()> {
-    tracing::info!("Generating Android icons");
-    // Currently we only use one icon as the foreground and background at the same time for SVG.
-    let source = if icon_path.extension().and_then(|s| s.to_str()) == Some("svg") {
-        let svg_data = std::fs::read(icon_path)?;
-        let mut fontdb = usvg::fontdb::Database::new();
-        fontdb.load_system_fonts();
-        let opt = usvg::Options {
-            fontdb: std::sync::Arc::new(fontdb),
-            ..Default::default()
-        };
-        let tree = usvg::Tree::from_data(&svg_data, &opt).context("Failed to parse SVG")?;
-        Source::Svg(tree)
-    } else {
-        Source::DynamicImage(open(icon_path).context("Failed to open image")?)
+pub fn gen_android_icons(icon: &[String], out_dir: &Path) -> Result<()> {
+    tracing::info!("Generating Android icons Started");
+
+    let mut source: Option<Source> = None;
+    // Looking for Android VectorDrawable XML (highest priority)
+    for p in icon.iter() {
+        let path = Path::new(p);
+        if !path.exists() {
+            continue;
+        }
+        if path
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| s.eq_ignore_ascii_case("xml"))
+            .unwrap_or(false)
+        {
+            copy_android_vector_drawable_xml(path, out_dir)?;
+            tracing::info!(
+                "Found Android VectorDrawable XML icon: {}. Copy finished",
+                p
+            );
+            return Ok(());
+        }
+    }
+    // Looking for SVG if no XML
+    if source.is_none() {
+        for p in icon.iter() {
+            let path = Path::new(p);
+            if !path.exists() {
+                continue;
+            }
+            if path
+                .extension()
+                .and_then(|s| s.to_str())
+                .map(|s| s.eq_ignore_ascii_case("svg"))
+                .unwrap_or(false)
+            {
+                let svg_data = std::fs::read(path)?;
+                let mut fontdb = usvg::fontdb::Database::new();
+                fontdb.load_system_fonts();
+                let opt = usvg::Options {
+                    fontdb: std::sync::Arc::new(fontdb),
+                    ..Default::default()
+                };
+                let tree = usvg::Tree::from_data(&svg_data, &opt).context("Failed to parse SVG")?;
+                source = Some(Source::Svg(Box::new(tree)));
+                break;
+            }
+        }
+    }
+    // fallback to first existing file (PNG/JPG/Others)
+    if source.is_none() {
+        for p in icon.iter() {
+            let path = Path::new(p);
+            if path.exists() {
+                source = Some(Source::DynamicImage(
+                    open(path).context("Failed to open image")?,
+                ));
+                break;
+            }
+        }
+    }
+
+    let source = match source {
+        Some(s) => s,
+        None => {
+            return Err(anyhow::anyhow!(
+                "No valid icon file found for Android icons"
+            ));
+        }
     };
 
     if source.width() != source.height() {
-        return Err(Error::Other(anyhow::anyhow!("Icon must be square")));
+        return Err(anyhow::anyhow!("Icon must be square"));
     }
 
     // For SVG generate Android VectorDrawable XML
     if let Source::Svg(tree) = &source {
-        android_vector_drawable(tree, out_dir)?;
+        gen_android_vector_drawable(tree, out_dir)?;
+        tracing::info!("Found SVG icon. Generated Android VectorDrawable XML.");
     }
 
     // For any icon file, generate PNG icons
     let entries = android_png_entries(out_dir)?;
     for entry in entries {
         resize_and_save_png(&source, entry.size, &entry.out_path, None)?;
+        tracing::info!(
+            "Generated Android PNG icon: {} ({}x{})",
+            entry.out_path.display(),
+            entry.size,
+            entry.size
+        );
     }
+    tracing::info!("Generating Android icons Finished");
     Ok(())
 }

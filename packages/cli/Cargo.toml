@@ -116,10 +116,10 @@ ratatui = { workspace = true, features = ["crossterm", "unstable"] }
 shell-words = { workspace = true }
 
 # Image format/conversion
-image = { version = "0.25" }
+image = "0.25"
 resvg = "0.45.0"
 # for Android VectorDrawable
-xml-rs = "0.8"
+xml-rs = "1.0.0"
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
 log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
