@@ -390,6 +390,7 @@ pub(crate) struct BuildRequest {
     pub(crate) no_default_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
+    pub(crate) skip_permissions: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
@@ -451,6 +452,8 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
+    pub(crate) permissions: super::permissions::PermissionManifest,
+    pub(crate) java_sources: super::android_java::JavaSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -925,7 +928,12 @@ impl BuildRequest {
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
-        if matches!(bundle, BundleFormat::Ios) {
+        if matches!(bundle, BundleFormat::Ios)
+            && matches!(
+                triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            )
+        {
             let xcode_path = Workspace::get_xcode_path()
                 .await
                 .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
@@ -1027,6 +1035,7 @@ impl BuildRequest {
             should_codesign,
             session_cache_dir,
             skip_assets: args.skip_assets,
+            skip_permissions: args.skip_permissions,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -1106,6 +1115,18 @@ impl BuildRequest {
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
+
+                // Copy Java sources to Gradle directory for Android
+                if self.bundle == BundleFormat::Android && !artifacts.java_sources.is_empty() {
+                    self.copy_java_sources_to_gradle(&artifacts.java_sources)
+                        .context("Failed to copy Java sources to Gradle directory")?;
+                }
+
+                // Update platform manifests with permissions AFTER writing metadata
+                // to avoid having them overwritten by the template
+                self.update_manifests_with_permissions(&artifacts.permissions)
+                    .context("Failed to update manifests with permissions")?;
+
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
@@ -1305,6 +1326,16 @@ impl BuildRequest {
         }
 
         let assets = self.collect_assets(&exe, ctx).await?;
+
+        // Extract permissions from the binary (same pattern as assets)
+        let permissions = self.collect_permissions(&exe, ctx).await?;
+
+        // Extract Java sources for Android builds
+        let java_sources = self.collect_java_sources(&exe, ctx).await?;
+
+        // Note: We'll update platform manifests with permissions AFTER write_metadata()
+        // to avoid having them overwritten by the template
+
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
@@ -1321,6 +1352,8 @@ impl BuildRequest {
             direct_rustc,
             time_start,
             assets,
+            permissions,
+            java_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1369,6 +1402,299 @@ impl BuildRequest {
         }
 
         Ok(manifest)
+    }
+
+    /// Collect permissions from the final executable
+    async fn collect_permissions(
+        &self,
+        exe: &Path,
+        _ctx: &BuildContext,
+    ) -> Result<super::permissions::PermissionManifest> {
+        if self.skip_permissions {
+            return Ok(super::permissions::PermissionManifest::default());
+        }
+
+        // Skip permission extraction for web builds - permissions are runtime-only
+        if self.bundle == BundleFormat::Web {
+            return Ok(super::permissions::PermissionManifest::default());
+        }
+
+        let manifest = super::permissions::extract_permissions_from_file(exe)?;
+
+        // Log permissions found for platforms that need them
+        let platform = match self.bundle {
+            BundleFormat::Android => Some(permissions_core::Platform::Android),
+            BundleFormat::Ios => Some(permissions_core::Platform::Ios),
+            BundleFormat::MacOS => Some(permissions_core::Platform::Macos),
+            _ => None,
+        };
+
+        if let Some(platform) = platform {
+            let perms = manifest.permissions_for_platform(platform);
+            if !perms.is_empty() {
+                tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
+                for perm in &perms {
+                    tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
+                }
+            } else {
+                tracing::debug!("No permissions found for {:?}", platform);
+            }
+        } else {
+            tracing::debug!(
+                "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
+                self.bundle
+            );
+        }
+
+        Ok(manifest)
+    }
+
+    /// Collect Java sources for Android builds
+    async fn collect_java_sources(
+        &self,
+        exe: &Path,
+        _ctx: &BuildContext,
+    ) -> Result<super::android_java::JavaSourceManifest> {
+        if self.bundle != BundleFormat::Android {
+            return Ok(super::android_java::JavaSourceManifest::default());
+        }
+
+        let manifest = super::android_java::extract_java_sources_from_file(exe)?;
+
+        if !manifest.is_empty() {
+            tracing::debug!(
+                "Found {} Java source declarations for Android",
+                manifest.sources().len()
+            );
+            for source in manifest.sources() {
+                tracing::debug!(
+                    "  Plugin: {}, Package: {}, Files: {}",
+                    source.plugin_name.as_str(),
+                    source.package_name.as_str(),
+                    source.files.len()
+                );
+            }
+        }
+
+        Ok(manifest)
+    }
+
+    /// Copy collected Java source files to the Gradle app directory
+    fn copy_java_sources_to_gradle(
+        &self,
+        java_sources: &super::android_java::JavaSourceManifest,
+    ) -> Result<()> {
+        let app_java_dir = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("java");
+
+        for source_metadata in java_sources.sources() {
+            let package_path = source_metadata.package_name.as_str().replace('.', "/");
+            let plugin_java_dir = app_java_dir.join(&package_path);
+            std::fs::create_dir_all(&plugin_java_dir)?;
+
+            for file_path_str in source_metadata.files.iter() {
+                let file_path = PathBuf::from(file_path_str.as_str());
+
+                // Get filename for destination
+                let filename = file_path.file_name().ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Java source path has no filename: {} (for plugin '{}')",
+                        file_path.display(),
+                        source_metadata.plugin_name
+                    )
+                })?;
+                let dest_file = plugin_java_dir.join(filename);
+
+                // Use embedded absolute path directly
+                if !file_path.exists() {
+                    anyhow::bail!(
+                        "Java source not found at embedded path: {} (for plugin '{}')",
+                        file_path.display(),
+                        source_metadata.plugin_name
+                    );
+                }
+
+                tracing::debug!(
+                    "Copying Java file: {} -> {}",
+                    file_path.display(),
+                    dest_file.display()
+                );
+                std::fs::copy(&file_path, &dest_file)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Update platform manifests with permissions after they're collected
+    pub(crate) fn update_manifests_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        match self.bundle {
+            BundleFormat::Android => self.update_android_manifest_with_permissions(permissions),
+            BundleFormat::Ios => self.update_ios_manifest_with_permissions(permissions),
+            BundleFormat::MacOS => self.update_macos_manifest_with_permissions(permissions),
+            _ => {
+                tracing::debug!(
+                    "Skipping manifest update for {:?} - uses runtime-only permissions",
+                    self.bundle
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn update_android_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let android_permissions = super::permissions::get_android_permissions(permissions);
+        if android_permissions.is_empty() {
+            tracing::debug!("No Android permissions found to add to manifest");
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+        if !manifest_path.exists() {
+            tracing::warn!("AndroidManifest.xml not found, skipping permission update");
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Find the position after the INTERNET permission
+        let internet_permission =
+            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+        if let Some(pos) = manifest_content.find(internet_permission) {
+            let insert_pos = pos + internet_permission.len();
+
+            // Generate permission declarations
+            let mut permission_declarations = String::new();
+            for perm in &android_permissions {
+                permission_declarations.push_str(&format!(
+                    "\n    <uses-permission android:name=\"{}\" />",
+                    perm.name
+                ));
+            }
+
+            manifest_content.insert_str(insert_pos, &permission_declarations);
+            std::fs::write(&manifest_path, manifest_content)?;
+
+            tracing::debug!(
+                "Added {} Android permissions to AndroidManifest.xml",
+                android_permissions.len()
+            );
+            for perm in &android_permissions {
+                tracing::debug!("  • {} - {}", perm.name, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_ios_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let ios_permissions = super::permissions::get_ios_permissions(permissions);
+        if ios_permissions.is_empty() {
+            tracing::debug!("No iOS permissions found to add to manifest");
+            return Ok(());
+        }
+
+        // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::debug!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &ios_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} iOS permissions to Info.plist",
+                ios_permissions.len()
+            );
+            for perm in &ios_permissions {
+                tracing::debug!("  • {} - {}", perm.key, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_macos_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let macos_permissions = super::permissions::get_macos_permissions(permissions);
+        if macos_permissions.is_empty() {
+            tracing::debug!("No macOS permissions found to add to manifest");
+            return Ok(());
+        }
+
+        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+        if !plist_path.exists() {
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &macos_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::info!(
+                "🖥️ Added {} macOS permissions to Info.plist:",
+                macos_permissions.len()
+            );
+            for perm in &macos_permissions {
+                tracing::info!("  • {} - {}", perm.key, perm.description);
+            }
+        }
+
+        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1915,7 +2241,11 @@ impl BuildRequest {
                         || *arg == "-arch"
                         || *arg == "-L"
                         || *arg == "-target"
-                        || *arg == "-isysroot"
+                        || (*arg == "-isysroot"
+                            && matches!(
+                                self.triple.operating_system,
+                                target_lexicon::OperatingSystem::IOS(_)
+                            ))
                     {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
@@ -2002,8 +2332,13 @@ impl BuildRequest {
         }
 
         if let Some(vale) = extract_value("-isysroot") {
-            out_args.push("-isysroot".to_string());
-            out_args.push(vale);
+            if matches!(
+                self.triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            ) {
+                out_args.push("-isysroot".to_string());
+                out_args.push(vale);
+            }
         }
 
         Ok(out_args)
@@ -3069,10 +3404,16 @@ impl BuildRequest {
                 "WRY_ANDROID_LIBRARY".to_string(),
                 "dioxusmain".to_string().into(),
             ),
-            (
-                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
-                self.wry_android_kotlin_files_out_dir().into_os_string(),
-            ),
+            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
+                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                // Ensure the directory exists for WRY's canonicalize check
+                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                }
+                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                kotlin_dir.into_os_string()
+            }),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
             // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
@@ -3260,12 +3601,14 @@ impl BuildRequest {
         let app = root.join("app");
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
+        let app_java = app_main.join("java");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
         let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
+        create_dir_all(&app_java)?;
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
         create_dir_all(&app_kotlin_out)?;
@@ -3370,6 +3713,9 @@ impl BuildRequest {
             main_activity,
         )?;
 
+        // Copy Java sources from dependencies (for platform shims)
+        self.copy_dependency_java_sources(&app_java)?;
+
         // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
@@ -3471,6 +3817,54 @@ impl BuildRequest {
         }
 
         kotlin_dir
+    }
+
+    fn copy_dependency_java_sources(&self, app_java_dir: &Path) -> Result<()> {
+        use std::fs::read_dir;
+
+        // Get workspace path
+        let workspace_root = self.workspace.workspace_root();
+        let packages_dir = workspace_root.join("packages");
+
+        // Scan packages directory for android-shim subdirectories
+        if let Ok(entries) = read_dir(&packages_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let shim_dir = entry.path().join("android-shim/src/main/java");
+                    if shim_dir.exists() {
+                        tracing::debug!("Found Java shim directory: {:?}", shim_dir);
+                        self.copy_dir_all(&shim_dir, app_java_dir)?;
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn copy_dir_all(&self, from: &Path, to: &Path) -> Result<()> {
+        use std::fs::{copy, create_dir_all, read_dir};
+
+        if !from.exists() {
+            return Ok(());
+        }
+
+        for entry in read_dir(from)? {
+            let entry = entry?;
+            let path = entry.path();
+            let file_name = entry.file_name();
+            let dest = to.join(&file_name);
+
+            if path.is_dir() {
+                create_dir_all(&dest)?;
+                self.copy_dir_all(&path, &dest)?;
+            } else if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("java") {
+                tracing::debug!("Copying Java file: {:?} -> {:?}", path, dest);
+                copy(&path, &dest)?;
+            }
+        }
+
+        Ok(())
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable

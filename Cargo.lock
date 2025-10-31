@@ -5412,6 +5412,7 @@ dependencies = [
  "open",
  "path-absolutize",
  "pdb",
+ "permissions-core",
  "plist",
  "posthog-rs",
  "prettyplease",
@@ -6053,6 +6054,19 @@ dependencies = [
  "keyboard-types",
  "rustc-hash 2.1.1",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-platform-bridge"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "jni 0.21.1",
+ "ndk-context",
+ "objc2 0.6.3",
+ "platform-bridge-macro",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -12591,6 +12605,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "permissions"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "permissions-core",
+ "permissions-macro",
+]
+
+[[package]]
+name = "permissions-core"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "serde",
+]
+
+[[package]]
+name = "permissions-macro"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "permissions-core",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
+]
+
+[[package]]
 name = "pest"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12948,6 +12991,17 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
+
+[[package]]
+name = "platform-bridge-macro"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "const-serialize-macro",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
+]
 
 [[package]]
 name = "plist"
