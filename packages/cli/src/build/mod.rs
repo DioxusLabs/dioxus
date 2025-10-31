@@ -11,6 +11,7 @@
 mod assets;
 mod builder;
 mod context;
+mod icon;
 mod manifest;
 mod patch;
 mod pre_render;
