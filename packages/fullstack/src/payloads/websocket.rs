@@ -307,11 +307,11 @@ impl<I, O, E> Websocket<I, O, E> {
             match msg {
                 Message::Text(text) => {
                     let e: O =
-                        E::from_bytes(text.into()).ok_or_else(WebsocketError::deserialization)?;
+                        E::decode(text.into()).ok_or_else(WebsocketError::deserialization)?;
                     return Ok(e);
                 }
                 Message::Binary(bytes) => {
-                    let e: O = E::from_bytes(bytes).ok_or_else(WebsocketError::deserialization)?;
+                    let e: O = E::decode(bytes).ok_or_else(WebsocketError::deserialization)?;
                     return Ok(e);
                 }
                 Message::Close { code, reason } => {
@@ -707,13 +707,12 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
             match res {
                 Ok(res) => match res {
                     AxumMessage::Text(utf8_bytes) => {
-                        let e: In = E::from_bytes(utf8_bytes.into())
+                        let e: In = E::decode(utf8_bytes.into())
                             .ok_or_else(WebsocketError::deserialization)?;
                         return Ok(e);
                     }
                     AxumMessage::Binary(bytes) => {
-                        let e: In =
-                            E::from_bytes(bytes).ok_or_else(WebsocketError::deserialization)?;
+                        let e: In = E::decode(bytes).ok_or_else(WebsocketError::deserialization)?;
                         return Ok(e);
                     }
 

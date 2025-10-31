@@ -129,10 +129,14 @@ impl ClientRequest {
     }
 
     /// Creates a new reqwest request builder with the method, url, and headers set from this ClientRequest
+    ///
+    /// Using this method attaches `X-Request-Client: dioxus` header to the request.
     pub fn new_reqwest_request(&self) -> reqwest::RequestBuilder {
         let client = GLOBAL_REQUEST_CLIENT.get_or_init(Self::new_reqwest_client);
 
-        let mut req = client.request(self.method.clone(), self.url.clone());
+        let mut req = client
+            .request(self.method.clone(), self.url.clone())
+            .header("X-Request-Client", "dioxus");
 
         for (key, value) in self.headers.iter() {
             req = req.header(key, value);
@@ -141,6 +145,7 @@ impl ClientRequest {
         req
     }
 
+    /// Using this method attaches `X-Request-Client-Dioxus` header to the request.
     #[cfg(feature = "web")]
     pub fn new_gloo_request(&self) -> gloo_net::http::RequestBuilder {
         let mut builder = gloo_net::http::RequestBuilder::new(
@@ -155,6 +160,7 @@ impl ClientRequest {
             )
             .as_str(),
         )
+        .header("X-Request-Client", "dioxus")
         .method(self.method.clone());
 
         for (key, value) in self.headers.iter() {

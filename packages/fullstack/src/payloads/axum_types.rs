@@ -18,7 +18,7 @@ impl<T: From<String>> FromResponse for Html<T> {
 
 impl<T> IntoRequest for Json<T>
 where
-    T: Serialize + 'static,
+    T: Serialize + 'static + DeserializeOwned,
 {
     fn into_request(self, request: ClientRequest) -> impl Future<Output = ClientResult> + 'static {
         async move { request.send_json(&self.0).await }
