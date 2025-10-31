@@ -71,8 +71,8 @@ async fn serve_server(
         let cfg = cfg.clone();
         Box::pin(async move {
             Ok(apply_base_path(
-                Router::new().serve_dioxus_application(cfg.clone(), original_root.clone()),
-                original_root.clone(),
+                Router::new().serve_dioxus_application(cfg.clone(), original_root),
+                original_root,
                 cfg.clone(),
                 base_path().map(|s| s.to_string()),
             ))

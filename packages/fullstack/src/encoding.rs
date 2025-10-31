@@ -69,7 +69,7 @@ impl Encoding for PostcardEncoding {
 
     fn encode(data: impl Serialize, mut buf: &mut Vec<u8>) -> Option<usize> {
         let len = buf.len();
-        postcard::to_io(&data, &mut buf);
+        postcard::to_io(&data, &mut buf).ok()?;
         Some(buf.len() - len)
     }
 

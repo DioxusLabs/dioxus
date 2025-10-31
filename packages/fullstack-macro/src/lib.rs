@@ -754,7 +754,7 @@ impl CompiledRoute {
             let ty = &item.ty;
             if item.catch_all {
                 quote! {}
-            } else if item.name != item.binding.to_string() {
+            } else if item.binding != item.name {
                 quote! {
                     #[serde(rename = #name)]
                     #binding: #ty,

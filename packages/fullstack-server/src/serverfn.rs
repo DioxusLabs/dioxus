@@ -60,6 +60,7 @@ impl ServerFunction {
     ///
     /// This is used internally by the `ServerFunction` to create the method router that this
     /// server function uses.
+    #[allow(clippy::type_complexity)]
     pub fn make_handler(
         method: Method,
         handler: fn(State<FullstackContext>, Request) -> Pin<Box<dyn Future<Output = Response>>>,

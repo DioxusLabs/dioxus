@@ -115,6 +115,7 @@ impl FullstackContext {
         FULLSTACK_CONTEXT.scope(self, fut).await
     }
 
+    /// Extract an extension from the current request.
     pub fn extension<T: Clone + Send + Sync + 'static>(&self) -> Option<T> {
         let lock = self.request_headers.read();
         lock.extensions.get::<T>().cloned()

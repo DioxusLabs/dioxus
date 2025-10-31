@@ -7,6 +7,7 @@ use dioxus::{
     fullstack::{FullstackContext, extract::State},
     prelude::*,
 };
+use reqwest::header::HeaderMap;
 
 #[cfg(feature = "server")]
 use {
@@ -116,7 +117,11 @@ impl FromRef<FullstackContext> for MyAppState {
     }
 }
 
-struct CustomExtractor {}
+struct CustomExtractor {
+    abc: i32,
+    headermap: HeaderMap,
+}
+
 impl<S> FromRequest<S> for CustomExtractor
 where
     MyAppState: FromRef<S>,
@@ -124,20 +129,23 @@ where
 {
     type Rejection = ();
 
-    fn from_request(
+    async fn from_request(
         _req: axum::extract::Request,
         state: &S,
-    ) -> impl Future<Output = std::result::Result<Self, Self::Rejection>> + Send {
-        async move {
-            let state = MyAppState::from_ref(state);
-            todo!()
-        }
+    ) -> std::result::Result<Self, Self::Rejection> {
+        let state = MyAppState::from_ref(state);
+        Ok(CustomExtractor {
+            abc: state.abc,
+            headermap: HeaderMap::new(),
+        })
     }
 }
 
 #[post("/api/stateful", state: State<MyAppState>, ex: CustomExtractor)]
 async fn app_state() -> Result<()> {
     println!("abc: {}", state.abc);
+    println!("state abc: {:?}", ex.abc);
+    println!("headermap: {:?}", ex.headermap);
     Ok(())
 }
 
@@ -154,6 +162,10 @@ fn main() {
         // For axum `Extension`s, we can use the `layer` method to add them to our router.
         let router = dioxus::server::router(app)
             .layer(Extension(tokio::sync::broadcast::channel::<String>(16).0));
+
+        // To use our custom app state with `State<MyAppState>`, we need to register it
+        // as an extension since our `FromRef<FullstackContext>` implementation relies on it.
+        let router = router.layer(Extension(MyAppState { abc: 42 }));
 
         Ok(router)
     });
