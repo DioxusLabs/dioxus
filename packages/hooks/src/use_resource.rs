@@ -540,7 +540,7 @@ impl<T: Clone> Deref for Resource<T> {
     type Target = dyn Fn() -> Option<T>;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+        dioxus_signals::readable_deref_impl(self)
     }
 }
 
