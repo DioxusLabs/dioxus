@@ -42,7 +42,7 @@ use crate::{
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
-use dioxus_fullstack_core::{RequestError, ServerState};
+use dioxus_fullstack_core::{FullstackContext as ServerState, RequestError};
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -494,7 +494,7 @@ pub mod req_from {
             state: ServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static;
+        ) -> impl Future<Output = Result<(Out, H), Response>> + 'static;
     }
 
     /// When you're extracting entirely on the server, we need to reject client-consuning request bodies
@@ -508,12 +508,12 @@ pub mod req_from {
             state: ServerState,
             request: Request,
             _map: fn(In) -> (),
-        ) -> impl Future<Output = Result<(H, ()), Response>> + 'static {
+        ) -> impl Future<Output = Result<((), H), Response>> + 'static {
             async move {
                 H::from_request(request, &state)
                     .await
                     .map_err(|e| e.into_response())
-                    .map(|out| (out, ()))
+                    .map(|out| ((), out))
             }
         }
     }
@@ -530,7 +530,7 @@ pub mod req_from {
             _state: ServerState,
             request: Request,
             map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
+        ) -> impl Future<Output = Result<(Out, H), Response>> + 'static {
             async move {
                 let (mut parts, body) = request.into_parts();
                 let headers = H::from_request_parts(&mut parts, &_state)
@@ -552,7 +552,7 @@ pub mod req_from {
                     .map_err(|e| ServerFnError::from(e).into_response())
                     .unwrap();
 
-                Ok((headers, out))
+                Ok((out, headers))
             }
         }
     }
@@ -568,7 +568,7 @@ pub mod req_from {
             state: ServerState,
             request: Request,
             _map: fn(In) -> Out,
-        ) -> impl Future<Output = Result<(H, Out), Response>> + 'static {
+        ) -> impl Future<Output = Result<(Out, H), Response>> + 'static {
             async move {
                 let (mut parts, body) = request.into_parts();
                 let headers = H::from_request_parts(&mut parts, &state)
@@ -581,7 +581,7 @@ pub mod req_from {
                     .await
                     .map_err(|e| e.into_response());
 
-                res.map(|out| (headers, out))
+                res.map(|out| (out, headers))
             }
         }
     }
@@ -643,7 +643,7 @@ mod resp {
 
     #[allow(clippy::result_large_err)]
     pub trait MakeAxumError<E> {
-        fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response>;
+        fn make_axum_error(self, result: Result<Response, E>) -> Response;
     }
 
     /// Get the status code from the error type if possible.
@@ -666,9 +666,9 @@ mod resp {
     where
         E: AsStatusCode + From<ServerFnError> + Serialize + DeserializeOwned + Display,
     {
-        fn make_axum_error(self, result: Result<Response, E>) -> Result<Response, Response> {
+        fn make_axum_error(self, result: Result<Response, E>) -> Response {
             match result {
-                Ok(res) => Ok(res),
+                Ok(res) => res,
                 Err(err) => {
                     let status_code = err.as_status_code();
                     let err = ErrorPayload {
@@ -683,19 +683,16 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = status_code;
-                    Err(resp)
+                    resp
                 }
             }
         }
     }
 
     impl<T> MakeAxumError<CapturedError> for &&ServerFnDecoder<Result<T, CapturedError>> {
-        fn make_axum_error(
-            self,
-            result: Result<Response, CapturedError>,
-        ) -> Result<Response, Response> {
+        fn make_axum_error(self, result: Result<Response, CapturedError>) -> Response {
             match result {
-                Ok(res) => Ok(res),
+                Ok(res) => res,
 
                 // Optimize the case where we have sole ownership of the error
                 Err(errr) if errr._strong_count() == 1 => {
@@ -748,19 +745,16 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    Err(resp)
+                    resp
                 }
             }
         }
     }
 
     impl<T> MakeAxumError<anyhow::Error> for &&ServerFnDecoder<Result<T, anyhow::Error>> {
-        fn make_axum_error(
-            self,
-            result: Result<Response, anyhow::Error>,
-        ) -> Result<Response, Response> {
+        fn make_axum_error(self, result: Result<Response, anyhow::Error>) -> Response {
             match result {
-                Ok(res) => Ok(res),
+                Ok(res) => res,
                 Err(errr) => {
                     // The `WithHttpError` trait emits ServerFnErrors so we can downcast them here
                     // to create richer responses.
@@ -802,19 +796,16 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    Err(resp)
+                    resp
                 }
             }
         }
     }
 
     impl<T> MakeAxumError<StatusCode> for &&ServerFnDecoder<Result<T, StatusCode>> {
-        fn make_axum_error(
-            self,
-            result: Result<Response, StatusCode>,
-        ) -> Result<Response, Response> {
+        fn make_axum_error(self, result: Result<Response, StatusCode>) -> Response {
             match result {
-                Ok(resp) => Ok(resp),
+                Ok(resp) => resp,
                 Err(status) => {
                     let body = serde_json::to_string(&ErrorPayload::<()> {
                         code: status.as_u16(),
@@ -828,19 +819,16 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = status;
-                    Err(resp)
+                    resp
                 }
             }
         }
     }
 
     impl<T> MakeAxumError<HttpError> for &ServerFnDecoder<Result<T, HttpError>> {
-        fn make_axum_error(
-            self,
-            result: Result<Response, HttpError>,
-        ) -> Result<Response, Response> {
+        fn make_axum_error(self, result: Result<Response, HttpError>) -> Response {
             match result {
-                Ok(resp) => Ok(resp),
+                Ok(resp) => resp,
                 Err(http_err) => {
                     let body = serde_json::to_string(&ErrorPayload::<()> {
                         code: http_err.status.as_u16(),
@@ -856,7 +844,7 @@ mod resp {
                         HeaderValue::from_static("application/json"),
                     );
                     *resp.status_mut() = http_err.status;
-                    Err(resp)
+                    resp
                 }
             }
         }

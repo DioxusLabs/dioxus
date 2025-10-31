@@ -28,25 +28,3 @@ pub use error::*;
 pub mod httperror;
 use http::Extensions;
 pub use httperror::*;
-
-#[derive(Clone)]
-pub struct ServerState {
-    _priv: PhantomData<()>,
-}
-
-impl ServerState {
-    pub fn new() -> Self {
-        Self { _priv: PhantomData }
-    }
-
-    pub fn get<T: Send + Sync + Clone + 'static>(&self) -> T {
-        todo!()
-        // self.try_get()
-        //     .expect("Requested type not found in ServerState")
-    }
-
-    pub fn try_get<T: Send + Sync + Clone + 'static>(&self) -> Option<T> {
-        todo!()
-        // self.extensions.get::<T>().cloned()
-    }
-}

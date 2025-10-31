@@ -11,8 +11,6 @@ use axum::{
     routing::*,
 };
 use dioxus_core::{ComponentFunction, VirtualDom};
-#[cfg(not(target_arch = "wasm32"))]
-use dioxus_fullstack_core::ServerState;
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -76,10 +74,8 @@ pub trait DioxusRouterExt {
     fn serve_dioxus_application<M: 'static>(
         self,
         cfg: ServeConfig,
-        app: impl ComponentFunction<(), M> + Send + Sync + 'static + Clone,
-    ) -> Self
-    where
-        Self: Sized;
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()>;
 
     /// Registers server functions with the default handler.
     ///
@@ -99,9 +95,7 @@ pub trait DioxusRouterExt {
     /// }
     /// ```
     #[allow(dead_code)]
-    fn register_server_functions(self) -> Self
-    where
-        Self: Sized;
+    fn register_server_functions(self) -> Router<FullstackState>;
 
     /// Serves a Dioxus application without static assets.
     /// Sets up server function routes and rendering endpoints only.
@@ -128,14 +122,14 @@ pub trait DioxusRouterExt {
     fn serve_api_application(
         self,
         cfg: ServeConfig,
-        app: impl ComponentFunction<()> + Send + Sync + 'static + Clone,
+        app: impl ComponentFunction<()> + Send + Sync,
     ) -> Self
     where
         Self: Sized;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-impl DioxusRouterExt for Router<ServerState> {
+impl DioxusRouterExt for Router<FullstackState> {
     fn serve_static_assets(self) -> Self {
         let Some(public_path) = public_path() else {
             return self;
@@ -145,20 +139,7 @@ impl DioxusRouterExt for Router<ServerState> {
         serve_dir_cached(self, &public_path, &public_path)
     }
 
-    fn serve_dioxus_application<M: 'static>(
-        self,
-        cfg: ServeConfig,
-        app: impl ComponentFunction<(), M> + Send + Sync + 'static + Clone,
-    ) -> Self {
-        self.register_server_functions()
-            .serve_static_assets()
-            .fallback(
-                get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-            )
-    }
-
     fn register_server_functions(mut self) -> Self {
-        use axum::{extract::Request, middleware::Next};
         use std::collections::HashSet;
 
         let mut seen = HashSet::new();
@@ -171,65 +152,9 @@ impl DioxusRouterExt for Router<ServerState> {
                     func.path()
                 );
 
-                self = self.route(func.path(), func.handler())
+                self = self.route(func.path(), func.method_router())
             }
         }
-
-        self = self.route_layer(axum::middleware::from_fn(
-            |request: Request, next: Next| async move {
-                use dioxus_fullstack_core::FullstackContext;
-                use http::header::{ACCEPT, LOCATION, REFERER};
-                use http::StatusCode;
-
-                // todo: we're copying the parts here, but it'd be ideal if we didn't.
-                // We can probably just pass the URI in so the matching logic can work and then
-                // in the server function, do all extraction via FullstackContext. This ensures
-                // calls to `.remove()` work as expected.
-                let (parts, body) = request.into_parts();
-                let server_context = FullstackContext::new(parts.clone());
-                let request = axum::extract::Request::from_parts(parts, body);
-
-                // store Accepts and Referrer in case we need them for redirect (below)
-                let referrer = request.headers().get(REFERER).cloned();
-                let accepts_html = request
-                    .headers()
-                    .get(ACCEPT)
-                    .and_then(|v| v.to_str().ok())
-                    .map(|v| v.contains("text/html"))
-                    .unwrap_or(false);
-
-                server_context
-                    .scope(async move {
-                        // Run the next middleware / handler inside the server context
-                        let mut response = next.run(request).await;
-
-                        let server_context = FullstackContext::current().expect(
-                            "Server context should be available inside the server context scope",
-                        );
-
-                        // Get the extra response headers set during the handler and add them to the response
-                        let headers = server_context.take_response_headers();
-                        if let Some(headers) = headers {
-                            response.headers_mut().extend(headers);
-                        }
-
-                        // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-                        // Location set, then redirect to Referer
-                        if accepts_html {
-                            if let Some(referrer) = referrer {
-                                let has_location = response.headers().get(LOCATION).is_some();
-                                if !has_location {
-                                    *response.status_mut() = StatusCode::FOUND;
-                                    response.headers_mut().insert(LOCATION, referrer);
-                                }
-                            }
-                        }
-
-                        response
-                    })
-                    .await
-            },
-        ));
 
         self
     }
@@ -237,14 +162,24 @@ impl DioxusRouterExt for Router<ServerState> {
     fn serve_api_application(
         self,
         cfg: ServeConfig,
-        app: impl ComponentFunction<()> + Send + Sync + 'static + Clone,
+        app: impl ComponentFunction<()> + Send + Sync,
     ) -> Self
     where
         Self: Sized,
     {
-        self.register_server_functions().fallback(
-            get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-        )
+        self.register_server_functions()
+            .fallback(get(FullstackState::render_handler).with_state(FullstackState::new(cfg, app)))
+    }
+
+    fn serve_dioxus_application<M: 'static>(
+        self,
+        cfg: ServeConfig,
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()> {
+        self.register_server_functions()
+            .serve_static_assets()
+            .fallback(get(FullstackState::render_handler))
+            .with_state(FullstackState::new(cfg, app))
     }
 }
 
@@ -257,7 +192,7 @@ impl DioxusRouterExt for Router<ServerState> {
 ///
 /// use axum::routing::get;
 /// use dioxus::prelude::*;
-/// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
+/// use dioxus_server::{FullstackState, render_handler, ServeConfig};
 ///
 /// fn app() -> Element {
 ///     rsx! {
@@ -274,33 +209,33 @@ impl DioxusRouterExt for Router<ServerState> {
 ///         // to inject the context into server functions running outside
 ///         // of an SSR render context.
 ///         .fallback(get(render_handler))
-///         .with_state(RenderHandleState::new(ServeConfig::new(), app));
+///         .with_state(FullstackState::new(ServeConfig::new(), app));
 ///
 ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 ///     axum::serve(listener, router).await.unwrap();
 /// }
 /// ```
 pub async fn render_handler(
-    State(state): State<RenderHandleState>,
+    State(state): State<FullstackState>,
     request: Request<Body>,
 ) -> impl IntoResponse {
-    RenderHandleState::render_handler(State(state), request).await
+    FullstackState::render_handler(State(state), request).await
 }
 
-/// State used by [`RenderHandleState::render_handler`] to render a dioxus component with axum
+/// State used by [`FullstackState::render_handler`] to render a dioxus component with axum
 #[derive(Clone)]
-pub struct RenderHandleState {
+pub struct FullstackState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
     renderers: Arc<SsrRendererPool>,
-    rt: LocalPoolHandle,
+    pub(crate) rt: LocalPoolHandle,
 }
 
-impl RenderHandleState {
-    /// Create a new [`RenderHandleState`]
+impl FullstackState {
+    /// Create a new [`FullstackState`]
     pub fn new<M: 'static>(
         config: ServeConfig,
-        root: impl ComponentFunction<(), M> + Send + Sync + 'static + Clone,
+        root: impl ComponentFunction<(), M> + Send + Sync + 'static,
     ) -> Self {
         let rt = LocalPoolHandle::new(
             std::thread::available_parallelism()
@@ -316,7 +251,7 @@ impl RenderHandleState {
         }
     }
 
-    /// Create a new [`RenderHandleState`] with a custom [`VirtualDom`] factory. This method can be
+    /// Create a new [`FullstackState`] with a custom [`VirtualDom`] factory. This method can be
     /// used to pass context into the root component of your application.
     pub fn new_with_virtual_dom_factory(
         config: ServeConfig,
@@ -336,7 +271,7 @@ impl RenderHandleState {
         }
     }
 
-    /// Set the [`ServeConfig`] for this [`RenderHandleState`]
+    /// Set the [`ServeConfig`] for this [`FullstackState`]
     pub fn with_config(mut self, config: ServeConfig) -> Self {
         self.config = config;
         self
@@ -351,7 +286,7 @@ impl RenderHandleState {
     ///
     /// use axum::routing::get;
     /// use dioxus::prelude::*;
-    /// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
+    /// use dioxus_server::{FullstackState, render_handler, ServeConfig};
     ///
     /// fn app() -> Element {
     ///     rsx! {
@@ -368,7 +303,7 @@ impl RenderHandleState {
     ///         // to inject the context into server functions running outside
     ///         // of an SSR render context.
     ///         .fallback(get(render_handler))
-    ///         .with_state(RenderHandleState::new(ServeConfig::new(), app))
+    ///         .with_state(FullstackState::new(ServeConfig::new(), app))
     ///         .into_make_service();
     ///
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -381,7 +316,7 @@ impl RenderHandleState {
         let response = state
             .renderers
             .clone()
-            .render_to(parts, &state.config, {
+            .render_to(parts, &state.config, &state.rt, {
                 let build_virtual_dom = state.build_virtual_dom.clone();
                 let context_providers = state.config.context_providers.clone();
                 move || {
