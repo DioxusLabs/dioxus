@@ -548,7 +548,7 @@ fn route_impl_with_route(
                         dioxus_server::http::Method::#method_ident,
                         __ENDPOINT_PATH,
                         || {
-                            ServerFunction::make_handler(dioxus_server::http::Method::#method_ident, __inner__function__ #ty_generics)
+                            dioxus_server::ServerFunction::make_handler(dioxus_server::http::Method::#method_ident, __inner__function__ #ty_generics)
                                 #(#middleware_layers)*
                         }
                     )

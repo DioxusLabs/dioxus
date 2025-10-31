@@ -26,7 +26,7 @@ pub trait DioxusRouterExt {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus::prelude::*;
-    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
+    /// use dioxus_server::DioxusRouterExt;
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
@@ -36,15 +36,13 @@ pub trait DioxusRouterExt {
     ///         .serve_static_assets()
     ///         // Server render the application
     ///         // ...
-    ///         .into_make_service();
+    ///         .with_state(dioxus_server::FullstackState::headless());
     ///     let listener = tokio::net::TcpListener::bind(addr).await?;
     ///     axum::serve(listener, router).await?;
     ///     Ok(())
     /// }
     /// ```
-    fn serve_static_assets(self) -> Self
-    where
-        Self: Sized;
+    fn serve_static_assets(self) -> Router<FullstackState>;
 
     /// Serves the Dioxus application. This will serve a complete server side rendered application.
     /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
@@ -53,15 +51,14 @@ pub trait DioxusRouterExt {
     /// ```rust, no_run
     /// # #![allow(non_snake_case)]
     /// # use dioxus::prelude::*;
-    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt, ServeConfig};
+    /// use dioxus_server::{DioxusRouterExt, ServeConfig};
     ///
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_dioxus_application(ServeConfig::new(), app)
-    ///         .into_make_service();
+    ///         .serve_dioxus_application(ServeConfig::new(), app);
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     ///     axum::serve(listener, router).await.unwrap();
     /// }
@@ -81,14 +78,14 @@ pub trait DioxusRouterExt {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # use dioxus_server::DioxusRouterFnExt;
+    /// # use dioxus_server::DioxusRouterExt;
     /// #[tokio::main]
     /// async fn main() {
     ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
     ///     let router = axum::Router::new()
     ///         // Register server functions routes with the default handler
     ///         .register_server_functions()
-    ///         .into_make_service();
+    ///         .with_state(dioxus_server::FullstackState::headless());
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     ///     axum::serve(listener, router).await.unwrap();
     /// }
@@ -105,7 +102,7 @@ pub trait DioxusRouterExt {
     /// # Example
     /// ```rust, no_run
     /// # use dioxus::prelude::*;
-    /// # use dioxus_server::{DioxusRouterFnExt, ServeConfig};
+    /// # use dioxus_server::{DioxusRouterExt, ServeConfig};
     /// #[tokio::main]
     /// async fn main() {
     ///     let router = axum::Router::new()
@@ -118,27 +115,18 @@ pub trait DioxusRouterExt {
     ///     rsx! { "Hello World" }
     /// }
     /// ```
-    fn serve_api_application(
+    fn serve_api_application<M: 'static>(
         self,
         cfg: ServeConfig,
-        app: impl ComponentFunction<()> + Send + Sync,
-    ) -> Self
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()>
     where
         Self: Sized;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 impl DioxusRouterExt for Router<FullstackState> {
-    fn serve_static_assets(self) -> Self {
-        let Some(public_path) = public_path() else {
-            return self;
-        };
-
-        // Serve all files in public folder except index.html
-        serve_dir_cached(self, &public_path, &public_path)
-    }
-
-    fn register_server_functions(mut self) -> Self {
+    fn register_server_functions(mut self) -> Router<FullstackState> {
         use std::collections::HashSet;
 
         let mut seen = HashSet::new();
@@ -158,16 +146,23 @@ impl DioxusRouterExt for Router<FullstackState> {
         self
     }
 
-    fn serve_api_application(
+    fn serve_static_assets(self) -> Router<FullstackState> {
+        let Some(public_path) = public_path() else {
+            return self;
+        };
+
+        // Serve all files in public folder except index.html
+        serve_dir_cached(self, &public_path, &public_path)
+    }
+
+    fn serve_api_application<M: 'static>(
         self,
         cfg: ServeConfig,
-        app: impl ComponentFunction<()> + Send + Sync,
-    ) -> Self
-    where
-        Self: Sized,
-    {
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()> {
         self.register_server_functions()
-            .fallback(get(FullstackState::render_handler).with_state(FullstackState::new(cfg, app)))
+            .fallback(get(FullstackState::render_handler))
+            .with_state(FullstackState::new(cfg, app))
     }
 
     fn serve_dioxus_application<M: 'static>(
@@ -231,6 +226,26 @@ pub struct FullstackState {
 }
 
 impl FullstackState {
+    /// Create a headless [`FullstackState`] without a root component.
+    ///
+    /// This won't render pages, but can still be used to register server functions and serve static assets.
+    pub fn headless() -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
+        Self {
+            renderers: Arc::new(SsrRendererPool::new(4, None)),
+            build_virtual_dom: Arc::new(|| {
+                panic!("No root component provided for headless FullstackState")
+            }),
+            config: ServeConfig::new(),
+            rt,
+        }
+    }
+
     /// Create a new [`FullstackState`]
     pub fn new<M: 'static>(
         config: ServeConfig,
