@@ -81,18 +81,6 @@ Se você conhece React, então você já conhece o Dioxus.
 - Agendamento assíncrono de canais-múltiplos para suporte de `async` de primera-classe.
 - E mais! Leia as [publicações de lançamento](https://dioxuslabs.com/blog/introducing-dioxus/).
 
-## Começando com...
-
-<table style="width:100%" align="center">
-    <tr>
-        <th><a href="https://dioxuslabs.com/learn/0.7/">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/desktop">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/ssr">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/mobile">Móvel</a></th>
-    <tr>
-</table>
-
 ## Projetos de Exemplo:
 
 | Navegador de Arquivos (Desktop)                                                                                                                                                                  | WiFi Scanner (Desktop)                                                                           | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |

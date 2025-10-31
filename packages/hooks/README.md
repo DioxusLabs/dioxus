@@ -62,7 +62,7 @@ The core hooks library doesn't provide hooks for persistent state, but you can e
 | State                                                                              | Sharable | Example                                                                                           |
 | ---------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------- |
 | [`use_persistent`](https://github.com/DioxusLabs/sdk/tree/master/examples/storage) | ❌        | `use_persistent("unique_key", move \|\| initial_state)`                                           |
-| [`Router<Route> {}`](https://dioxuslabs.com/learn/0.7/router)                      | ✅        | `#[derive(Routable, Clone, PartialEq)] enum Route { #[route("/user/:id")] Homepage { id: u32 } }` |
+| [`Router<Route> {}`](https://dioxuslabs.com/learn/0.7/essentials/router/)          | ✅        | `#[derive(Routable, Clone, PartialEq)] enum Route { #[route("/user/:id")] Homepage { id: u32 } }` |
 
 ## Contributing
 

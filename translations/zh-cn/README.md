@@ -309,7 +309,7 @@ Dioxus 和 Electron 是两个目标相似但完全不同的项目。Electron 使
 
 ## 贡献
 
-- 查看网站上[关于贡献的部分](https://dioxuslabs.com/learn/0.7/contributing).
+- 查看网站上[关于贡献的部分](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - 在我们的 [issues](https://github.com/dioxuslabs/dioxus/issues) 上报告问题.
 - [加入](https://discord.gg/XgGxMSkvUM) Discord 并提问！
 

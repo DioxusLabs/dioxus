@@ -391,7 +391,7 @@ Dioxus ve Electron benzer amaçlara sahip tamamıyla farklı iki projedir. Elect
 
 ## Katkı Sağlama
 
-- [Katkı sağlamayla alakalı kısım](https://dioxuslabs.com/learn/0.7/contributing) için web sitemizi ziyaret edin.
+- [Katkı sağlamayla alakalı kısım](https://dioxuslabs.com/learn/0.7/beyond/contributing) için web sitemizi ziyaret edin.
 - [Issue tracker(sorun takipçisi)](https://github.com/dioxuslabs/dioxus/issues) üzerinden sorunlarınızı raporlayabilirsiniz.
 - Discord'a [katıl](https://discord.gg/XgGxMSkvUM) ve sorularını sor!
 

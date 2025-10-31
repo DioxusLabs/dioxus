@@ -375,7 +375,7 @@ Dioxus와 Electron은 유사한 목표를 가진 완전히 다른 두 프로젝�
 
 ## 기여하기
 
-- 웹사이트의 [기여 섹션](https://dioxuslabs.com/learn/0.7/contributing)을 확인하세요.
+- 웹사이트의 [기여 섹션](https://dioxuslabs.com/learn/0.7/beyond/contributing)을 확인하세요.
 - [이슈 트래커](https://github.com/dioxuslabs/dioxus/issues)에 이슈를 보고하세요.
 - [Discord](https://discord.gg/XgGxMSkvUM)에 참여하여 질문하세요!
 
