@@ -637,6 +637,24 @@ impl BuildRequest {
                     }
                 })
                 .or_else(|| {
+                    // If multiple renderers are enabled, pick the first non-server one
+                    if enabled_renderers.len() == 2
+                        && enabled_renderers
+                            .iter()
+                            .any(|f| matches!(f.0, Renderer::Server))
+                    {
+                        return Some(
+                            enabled_renderers
+                                .iter()
+                                .find(|f| !matches!(f.0, Renderer::Server))
+                                .cloned()
+                                .unwrap(),
+                        );
+                    }
+                    None
+                })
+                .or_else(|| {
+                    // Pick the first non-server feature in the cargo.toml
                     let non_server_features = known_features_as_renderers
                         .iter()
                         .filter(|f| f.1.as_str() != "server")
