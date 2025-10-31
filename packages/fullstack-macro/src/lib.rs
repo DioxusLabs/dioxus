@@ -738,51 +738,13 @@ impl CompiledRoute {
         for param in &self.query_params {
             if param.catch_all {
                 let name = &param.binding;
-                out.push({
-                    parse_quote! {
-                        dioxus_server::axum::extract::Query(#name)
-                    }
+                out.push(parse_quote! {
+                    dioxus_server::axum::extract::Query(#name)
                 });
             }
         }
 
         out
-
-        // Add the path extractors as inputs to the server function
-        // route.server_args.insert(0, {
-        //     let path_iter = route.path_params
-        //         .iter()
-        //         .filter_map(|(_slash, path_param)| path_param.capture());
-        //     let idents = path_iter.clone().map(|item| item.0);
-        //     let types = path_iter.clone().map(|item| item.1);
-        //     parse_quote! {
-        //         dioxus_server::axum::extract::Path((#(#idents,)*)): dioxus_server::axum::extract::Path<(#(#types,)*)>
-        //     }
-        // });
-        // route.server_args.insert(1, {
-        //     let idents = query_params
-        //         .iter()
-        //         .filter(|c| !c.catch_all)
-        //         .map(|item| &item.binding)
-        //         .collect::<Vec<_>>();
-        //     parse_quote! {
-        //         dioxus_fullstack::Query(__QueryParams__ { #(#idents,)* }): dioxus_fullstack::Query<__QueryParams__>
-        //     }
-        // });
-
-        // // Add any catch-all query params as extractors
-        // for param in &query_params {
-        //     if param.catch_all {
-        //         let name = &param.binding;
-        //         let ty = &param.ty;
-        //         route.server_args.insert(
-        //         2,
-        //         parse_quote! {
-        //             dioxus_server::axum::extract::Query(#name): dioxus_server::axum::extract::Query<#ty>
-        //         },
-        //     );
-        //     }
-        // }
     }
 
     pub fn query_params_struct(&self, with_aide: bool) -> TokenStream2 {

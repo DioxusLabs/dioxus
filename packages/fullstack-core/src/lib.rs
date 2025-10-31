@@ -11,8 +11,6 @@ mod server_future;
 mod streaming;
 mod transport;
 
-use std::{hash::Hash, marker::PhantomData, sync::Arc};
-
 pub use crate::errors::*;
 pub use crate::loader::*;
 pub use crate::server_cached::*;
@@ -26,5 +24,4 @@ pub mod error;
 pub use error::*;
 
 pub mod httperror;
-use http::Extensions;
 pub use httperror::*;

@@ -42,7 +42,7 @@ use crate::{
 use axum::response::IntoResponse;
 use axum_core::extract::{FromRequest, Request};
 use bytes::Bytes;
-use dioxus_fullstack_core::{FullstackContext as ServerState, RequestError};
+use dioxus_fullstack_core::RequestError;
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
@@ -487,11 +487,12 @@ pub use req_from::*;
 pub mod req_from {
     use super::*;
     use axum::{extract::FromRequestParts, response::Response};
+    use dioxus_fullstack_core::FullstackContext;
 
     pub trait ExtractRequest<In, Out, H, M = ()> {
         fn extract_axum(
             &self,
-            state: ServerState,
+            state: FullstackContext,
             request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(Out, H), Response>> + 'static;
@@ -501,11 +502,11 @@ pub mod req_from {
     /// This sits above priority in the combined headers on server / body on client case.
     impl<In, M, H> ExtractRequest<In, (), H, M> for &&&&&&&&&&&ServerFnEncoder<In, ()>
     where
-        H: FromRequest<ServerState, M> + 'static,
+        H: FromRequest<FullstackContext, M> + 'static,
     {
         fn extract_axum(
             &self,
-            state: ServerState,
+            state: FullstackContext,
             request: Request,
             _map: fn(In) -> (),
         ) -> impl Future<Output = Result<((), H), Response>> + 'static {
@@ -523,11 +524,11 @@ pub mod req_from {
     where
         In: DeserializeOwned + 'static,
         Out: 'static,
-        H: FromRequestParts<ServerState>,
+        H: FromRequestParts<FullstackContext>,
     {
         fn extract_axum(
             &self,
-            _state: ServerState,
+            _state: FullstackContext,
             request: Request,
             map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(Out, H), Response>> + 'static {
@@ -560,12 +561,12 @@ pub mod req_from {
     /// We skip the BodySerialize wrapper and just go for the output type directly.
     impl<In, Out, M, H> ExtractRequest<In, Out, H, M> for &&&&&&&&&ServerFnEncoder<In, Out>
     where
-        Out: FromRequest<ServerState, M> + 'static,
-        H: FromRequestParts<ServerState>,
+        Out: FromRequest<FullstackContext, M> + 'static,
+        H: FromRequestParts<FullstackContext>,
     {
         fn extract_axum(
             &self,
-            state: ServerState,
+            state: FullstackContext,
             request: Request,
             _map: fn(In) -> Out,
         ) -> impl Future<Output = Result<(Out, H), Response>> + 'static {
