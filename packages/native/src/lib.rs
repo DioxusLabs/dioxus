@@ -21,13 +21,15 @@ pub use dioxus_native_dom::*;
 pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
+pub use dioxus_renderer::{DioxusNativeWindowRenderer, Features, Limits};
+
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
+pub use dioxus_renderer::use_wgpu;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-#[cfg(feature = "html")]
 use std::sync::Arc;
 use winit::window::WindowAttributes;
 
@@ -143,7 +145,10 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             ..Default::default()
         },
     );
+    #[cfg(not(all(target_os = "ios", target_abi = "sim")))]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    #[cfg(all(target_os = "ios", target_abi = "sim"))]
+    let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
         renderer.clone(),
