@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6"> Guia </a>
+    <a href="https://dioxuslabs.com/learn/0.7/"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -85,11 +85,11 @@ Se você conhece React, então você já conhece o Dioxus.
 
 <table style="width:100%" align="center">
     <tr>
-        <th><a href="https://dioxuslabs.com/learn/0.6">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/desktop">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/ssr">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/mobile">Móvel</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.7/">Tutorial</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/web">Web</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/desktop">Desktop</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/ssr">SSR</a></th>
+        <th><a href="https://dioxuslabs.com/learn/0.7/tutorial/mobile">Móvel</a></th>
     <tr>
 </table>
 
@@ -161,7 +161,7 @@ Dioxus é único no ecossistema do Rust por suportar:
 - SSR com `hydration` feito pelo Cliente
 - Suporte à aplicação Desktop
 
-Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.6).
+Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.7/).
 
 ## Projeto dentro do ecossistema Dioxus
 
