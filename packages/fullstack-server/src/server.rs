@@ -6,8 +6,7 @@ use axum::{
     body::Body,
     extract::State,
     http::{Request, StatusCode},
-    response::IntoResponse,
-    response::Response,
+    response::{IntoResponse, Response},
     routing::*,
 };
 use dioxus_core::{ComponentFunction, VirtualDom};

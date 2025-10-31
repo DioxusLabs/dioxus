@@ -901,7 +901,7 @@ impl CompiledRoute {
                         }
                         PathParam::WildCard(lit, _brace_1, _, _, _, _brace_2) => {
                             // no `*` since we want to use the argument *as the wildcard* when making requests
-                            // it's not super applicable to server functions, moreso for general route generation
+                            // it's not super applicable to server functions, more for general route generation
                             acc.push_str(&format!("{{{}}}", lit.value()));
                         }
                         PathParam::Static(lit) => {

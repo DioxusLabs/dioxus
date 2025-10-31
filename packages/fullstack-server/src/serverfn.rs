@@ -5,7 +5,7 @@ use axum::{
     response::Response,
     routing::MethodRouter,
 };
-use dioxus_fullstack_core::FullstackContext as ServerState;
+use dioxus_fullstack_core::FullstackContext;
 use http::{Method, StatusCode};
 use std::{pin::Pin, prelude::rust_2024::Future};
 
@@ -62,7 +62,7 @@ impl ServerFunction {
     /// server function uses.
     pub fn make_handler(
         method: Method,
-        handler: fn(State<ServerState>, Request) -> Pin<Box<dyn Future<Output = Response>>>,
+        handler: fn(State<FullstackContext>, Request) -> Pin<Box<dyn Future<Output = Response>>>,
     ) -> MethodRouter<FullstackState> {
         axum::routing::method_routing::on(
             method

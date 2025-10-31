@@ -136,6 +136,7 @@ pub async fn serve_router(
     addr: SocketAddr,
 ) {
     dioxus_logger::initialize_default();
+
     let listener = TcpListener::bind(addr)
         .await
         .with_context(|| format!("Failed to bind to address {addr}"))
@@ -176,42 +177,44 @@ pub async fn serve_router(
                 let mut make_service = make_service.clone();
                 let mut shutdown_rx = shutdown_tx.subscribe();
 
-                let tcp_stream = TokioIo::new(tcp_stream);
+                tokio::task::spawn(async move {
+                    let tcp_stream = TokioIo::new(tcp_stream);
 
-                std::future::poll_fn(|cx| {
-                    <IntoMakeService<Router> as tower::Service<Request>>::poll_ready(
-                        &mut make_service,
-                        cx,
-                    )
-                })
-                .await
-                .expect("Infallible");
+                    std::future::poll_fn(|cx| {
+                        <IntoMakeService<Router> as tower::Service<Request>>::poll_ready(
+                            &mut make_service,
+                            cx,
+                        )
+                    })
+                    .await
+                    .expect("Infallible");
 
-                // upgrades needed for websockets
-                let builder = HyperBuilder::new(TokioExecutor::new());
-                let connection = builder.serve_connection_with_upgrades(
-                    tcp_stream,
-                    TowerToHyperService::new(
-                        make_service
-                            .call(())
-                            .await
-                            .unwrap()
-                            .map_request(|req: Request<Incoming>| req.map(Body::new)),
-                    ),
-                );
+                    // upgrades needed for websockets
+                    let builder = HyperBuilder::new(TokioExecutor::new());
+                    let connection = builder.serve_connection_with_upgrades(
+                        tcp_stream,
+                        TowerToHyperService::new(
+                            make_service
+                                .call(())
+                                .await
+                                .unwrap()
+                                .map_request(|req: Request<Incoming>| req.map(Body::new)),
+                        ),
+                    );
 
-                tokio::select! {
-                    res = connection => {
-                        if let Err(_err) = res {
-                            // This error only appears when the client doesn't send a request and
-                            // terminate the connection.
-                            //
-                            // If client sends one request then terminate connection whenever, it doesn't
-                            // appear.
+                    tokio::select! {
+                        res = connection => {
+                            if let Err(_err) = res {
+                                // This error only appears when the client doesn't send a request and
+                                // terminate the connection.
+                                //
+                                // If client sends one request then terminate connection whenever, it doesn't
+                                // appear.
+                            }
                         }
+                        _res = shutdown_rx.recv() => {}
                     }
-                    _res = shutdown_rx.recv() => {}
-                }
+                });
             }
 
             // Handle just hot-patches for now.

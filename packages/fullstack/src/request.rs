@@ -1,5 +1,4 @@
-use axum::extract::FromRequest;
-use dioxus_fullstack_core::{RequestError, ServerFnError, FullstackContext};
+use dioxus_fullstack_core::{RequestError, ServerFnError};
 #[cfg(feature = "server")]
 use headers::Header;
 use http::response::Parts;

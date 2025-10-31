@@ -34,7 +34,7 @@ async fn get_message(query: Params) -> Result<()> {
     // Ok(format!("Hello {}, you are {} years old!", name, age))
 }
 
-// async fn get_message(query: Params) -> Reasult<()> {
+// async fn get_message(query: Params) -> Result<()> {
 
 // #[get("/api/:name/?age", state: State<MyCustomServerState>)]
 // #[derive(Debug)]
