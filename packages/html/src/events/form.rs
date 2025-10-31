@@ -297,7 +297,20 @@ mod serialize {
         }
 
         fn values(&self) -> Vec<(String, FormValue)> {
-            todo!()
+            self.values
+                .iter()
+                .map(|v| {
+                    let value = if let Some(text) = &v.text {
+                        FormValue::Text(text.clone())
+                    } else if let Some(_file) = &v.file {
+                        // todo: we lose the file contents here
+                        FormValue::File(None)
+                    } else {
+                        FormValue::File(None)
+                    };
+                    (v.key.clone(), value)
+                })
+                .collect()
         }
 
         fn valid(&self) -> bool {

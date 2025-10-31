@@ -151,30 +151,13 @@ mod ser {
 
     impl From<&DragData> for SerializedDataTransfer {
         fn from(_drag: &DragData) -> Self {
-            todo!()
-            //     let items = vec![]; // drag.data_transfer().items().iter().map(|item| SerializedDataTransferItem {
-            //                         //     kind: item.kind().to_string(),
-            //                         //     type_: item.type_().to_string(),
-            //                         //     data: item.data().unwrap_or_default(),
-            //                         // }).collect();
-
-            //     let files = drag
-            //         .files()
-            //         .iter()
-            //         .map(|f| crate::file_data::SerializedFileData {
-            //             name: f.name().to_string(),
-            //             size: f.size(),
-            //             type_: f.type_().to_string(),
-            //         })
-            //         .collect();
-
-            //     Self {
-            //         items,
-            //         files,
-            //         effect_allowed: drag.effect_allowed().to_string(),
-            //         drop_effect: drag.drop_effect().to_string(),
-            //     }
-            // }
+            // todo!()
+            Self {
+                items: vec![],
+                files: vec![],
+                effect_allowed: "all".into(),
+                drop_effect: "none".into(),
+            }
         }
     }
 }
