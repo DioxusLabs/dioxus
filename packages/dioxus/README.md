@@ -176,7 +176,7 @@ fn App() -> Element {
 }
 ```
 
-Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.7/reference/hooks#rules-of-hooks):
+Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.7/essentials/basics/hooks#rules-of-hooks):
 
 - Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
 - Hooks should start with "use\_"
