@@ -212,12 +212,9 @@ impl<S> FromRequest<S> for FileStream {
             let filename = match disposition.map(|s| s.to_str()) {
                 Some(Ok(dis)) => {
                     let content = content_disposition::parse_content_disposition(dis);
-                    let names = content.filename();
-                    match names {
-                        Some((_name, Some(filename))) => filename.to_string(),
-                        Some((name, None)) => name.to_string(),
-                        None => "file".to_string(),
-                    }
+                    content
+                        .filename_full()
+                        .unwrap_or_else(|| "file".to_string())
                 }
                 _ => "file".to_string(),
             };
