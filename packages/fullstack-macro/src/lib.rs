@@ -244,6 +244,7 @@ fn route_impl_with_route(
             },
         })
         .collect::<Punctuated<_, Token![,]>>();
+    // .collect::<Punctuated<_, Token![,]>>();
 
     let route = CompiledRoute::from_route(route, &function, false, method_from_macro)?;
     let query_params_struct = route.query_params_struct(false);
@@ -405,7 +406,31 @@ fn route_impl_with_route(
     };
 
     let extracted_idents = route.extracted_idents();
-    let extracted_as_server_headers = route.extracted_as_server_headers();
+
+    let query_tokens = if route.query_is_catchall() {
+        let query = route
+            .query_params
+            .iter()
+            .find(|param| param.catch_all)
+            .unwrap();
+        let input = &function.sig.inputs[query.arg_idx];
+        let name = match input {
+            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+                _ => format_ident!("___Arg{}", query.arg_idx),
+            },
+            FnArg::Receiver(_receiver) => panic!(),
+        };
+        quote! {
+            #name
+        }
+    } else {
+        quote! {
+            __QueryParams__ { #(#query_param_names,)* }
+        }
+    };
+
+    let extracted_as_server_headers = route.extracted_as_server_headers(query_tokens.clone());
 
     Ok(quote! {
         #(#fn_docs)*
@@ -474,7 +499,7 @@ fn route_impl_with_route(
                 let client = dioxus_fullstack::ClientRequest::new(
                     dioxus_fullstack::http::Method::#method_ident,
                     #query_endpoint,
-                    &__QueryParams__ { #(#query_param_names,)* },
+                    &#query_tokens,
                 );
 
                 let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
@@ -560,6 +585,7 @@ struct CompiledRoute {
 }
 
 struct QueryParam {
+    arg_idx: usize,
     name: String,
     binding: Ident,
     catch_all: bool,
@@ -620,12 +646,13 @@ impl CompiledRoute {
         let mut arg_map = sig
             .inputs
             .iter()
-            .filter_map(|item| match item {
+            .enumerate()
+            .filter_map(|(i, item)| match item {
                 syn::FnArg::Receiver(_) => None,
-                syn::FnArg::Typed(pat_type) => Some(pat_type),
+                syn::FnArg::Typed(pat_type) => Some((i, pat_type)),
             })
-            .filter_map(|pat_type| match &*pat_type.pat {
-                syn::Pat::Ident(ident) => Some((ident.ident.clone(), pat_type.ty.clone())),
+            .filter_map(|(i, pat_type)| match &*pat_type.pat {
+                syn::Pat::Ident(ident) => Some((ident.ident.clone(), (pat_type.ty.clone(), i))),
                 _ => None,
             })
             .collect::<HashMap<_, _>>();
@@ -640,7 +667,7 @@ impl CompiledRoute {
                         )
                     })?;
                     *ident = new_ident;
-                    *ty = new_ty;
+                    *ty = new_ty.0;
                 }
                 PathParam::WildCard(_lit, _, _star, ident, ty, _) => {
                     let (new_ident, new_ty) = arg_map.remove_entry(ident).ok_or_else(|| {
@@ -650,7 +677,7 @@ impl CompiledRoute {
                         )
                     })?;
                     *ident = new_ident;
-                    *ty = new_ty;
+                    *ty = new_ty.0;
                 }
                 PathParam::Static(_lit) => {}
             }
@@ -671,8 +698,17 @@ impl CompiledRoute {
                 binding: ident,
                 name: param.name,
                 catch_all: param.catch_all,
-                ty,
+                ty: ty.0,
+                arg_idx: ty.1,
             });
+        }
+
+        // Disallow multiple query params if one is a catch-all
+        if query_params.iter().any(|param| param.catch_all) && query_params.len() > 1 {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "Cannot have multiple query parameters when one is a catch-all",
+            ));
         }
 
         if let Some(options) = route.oapi_options.as_mut() {
@@ -707,7 +743,11 @@ impl CompiledRoute {
         })
     }
 
-    pub fn extracted_as_server_headers(&self) -> Vec<Pat> {
+    pub fn query_is_catchall(&self) -> bool {
+        self.query_params.iter().any(|param| param.catch_all)
+    }
+
+    pub fn extracted_as_server_headers(&self, query_tokens: TokenStream2) -> Vec<Pat> {
         let mut out = vec![];
 
         // Add the path extractor
@@ -722,27 +762,9 @@ impl CompiledRoute {
             }
         });
 
-        out.push({
-            let idents = self
-                .query_params
-                .iter()
-                .filter(|c| !c.catch_all)
-                .map(|item| &item.binding)
-                .collect::<Vec<_>>();
-            parse_quote! {
-                dioxus_fullstack::Query(__QueryParams__ { #(#idents,)* })
-            }
-        });
-
-        // Add any catch-all query params as extractors
-        for param in &self.query_params {
-            if param.catch_all {
-                let name = &param.binding;
-                out.push(parse_quote! {
-                    dioxus_server::axum::extract::Query(#name)
-                });
-            }
-        }
+        out.push(parse_quote!(
+            dioxus_server::axum::extract::Query(#query_tokens)
+        ));
 
         out
     }
@@ -996,6 +1018,7 @@ impl RouteParser {
                         binding: ident,
                         catch_all: true,
                         ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
                     });
                 } else if query_param.starts_with("{") && query_param.ends_with("}") {
                     let ident = Ident::new(
@@ -1012,6 +1035,7 @@ impl RouteParser {
                         binding: ident,
                         catch_all: true,
                         ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
                     });
                 } else {
                     // if there's an `=` in the query param, we only take the left side as the name, and the right side is the binding
@@ -1030,6 +1054,7 @@ impl RouteParser {
                         binding,
                         catch_all: false,
                         ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
                     });
                 }
             }
