@@ -851,6 +851,7 @@ impl Output {
             "v: toggle verbose logs",
             "t: toggle tracing logs ",
             "c: clear the screen",
+            "d: attach debugger",
             "/: toggle more commands",
         ];
         let layout: [_; 8] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
