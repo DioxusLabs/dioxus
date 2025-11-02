@@ -252,7 +252,7 @@ impl Doctor {
  {HINT_STYLE}{has_aarch64_apple_darwin}{HINT_STYLE:#} aarch64-apple-darwin {HINT_STYLE}(iOS){HINT_STYLE:#}
 
 Get help: {LINK_STYLE}https://discord.gg/XgGxMSkvUM{LINK_STYLE:#}
-More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
+More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.7/{LINK_STYLE:#}
 "#
         );
 

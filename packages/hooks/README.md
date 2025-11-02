@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.6/) |
+[Guides](https://dioxuslabs.com/learn/0.7/) |
 [API Docs](https://docs.rs/dioxus-hooks/latest/dioxus_hooks) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -29,7 +29,7 @@
 - use_memo
 - use_coroutine
 
-Unlike React, none of these hooks are foundational since they all build off the primitive `use_hook`. You can extend these hooks with [custom hooks](https://dioxuslabs.com/learn/0.6/cookbook/state/custom_hooks) in your own code. If you think they would be useful for the broader community, you can open a PR to add your hook to the [Dioxus Awesome](https://github.com/DioxusLabs/awesome-dioxus) list.
+Unlike React, none of these hooks are foundational since they all build off the primitive `use_hook`. You can extend these hooks with [custom hooks](https://dioxuslabs.com/learn/0.7/essentials/advanced/custom_hooks) in your own code. If you think they would be useful for the broader community, you can open a PR to add your hook to the [Dioxus Awesome](https://github.com/DioxusLabs/awesome-dioxus) list.
 
 ## State Cheat Sheet
 
@@ -62,7 +62,7 @@ The core hooks library doesn't provide hooks for persistent state, but you can e
 | State                                                                              | Sharable | Example                                                                                           |
 | ---------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------- |
 | [`use_persistent`](https://github.com/DioxusLabs/sdk/tree/master/examples/storage) | ❌        | `use_persistent("unique_key", move \|\| initial_state)`                                           |
-| [`Router<Route> {}`](https://dioxuslabs.com/learn/0.6/router)                      | ✅        | `#[derive(Routable, Clone, PartialEq)] enum Route { #[route("/user/:id")] Homepage { id: u32 } }` |
+| [`Router<Route> {}`](https://dioxuslabs.com/learn/0.7/essentials/router/)          | ✅        | `#[derive(Routable, Clone, PartialEq)] enum Route { #[route("/user/:id")] Homepage { id: u32 } }` |
 
 ## Contributing
 

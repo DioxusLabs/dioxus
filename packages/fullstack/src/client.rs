@@ -9,7 +9,8 @@ use headers::{ContentType, Header};
 use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
 use send_wrapper::SendWrapper;
 use serde::{de::DeserializeOwned, Serialize};
-use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future, sync::OnceLock};
+use std::sync::{LazyLock, Mutex, OnceLock};
+use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future};
 use url::Url;
 
 pub static GLOBAL_REQUEST_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
@@ -49,10 +50,12 @@ impl ClientRequest {
         .parse()
         .unwrap();
 
+        let headers = get_request_headers();
+
         ClientRequest {
             method,
             url,
-            headers: HeaderMap::new(),
+            headers,
             extensions: Extensions::new(),
         }
     }
@@ -129,10 +132,14 @@ impl ClientRequest {
     }
 
     /// Creates a new reqwest request builder with the method, url, and headers set from this ClientRequest
+    ///
+    /// Using this method attaches `X-Request-Client: dioxus` header to the request.
     pub fn new_reqwest_request(&self) -> reqwest::RequestBuilder {
         let client = GLOBAL_REQUEST_CLIENT.get_or_init(Self::new_reqwest_client);
 
-        let mut req = client.request(self.method.clone(), self.url.clone());
+        let mut req = client
+            .request(self.method.clone(), self.url.clone())
+            .header("X-Request-Client", "dioxus");
 
         for (key, value) in self.headers.iter() {
             req = req.header(key, value);
@@ -141,6 +148,7 @@ impl ClientRequest {
         req
     }
 
+    /// Using this method attaches `X-Request-Client-Dioxus` header to the request.
     #[cfg(feature = "web")]
     pub fn new_gloo_request(&self) -> gloo_net::http::RequestBuilder {
         let mut builder = gloo_net::http::RequestBuilder::new(
@@ -155,6 +163,7 @@ impl ClientRequest {
             )
             .as_str(),
         )
+        .header("X-Request-Client", "dioxus")
         .method(self.method.clone());
 
         for (key, value) in self.headers.iter() {
@@ -498,6 +507,23 @@ pub fn get_server_url() -> &'static str {
 }
 
 static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
+
+/// Delete the extra request headers for all servers functions.
+pub fn clear_request_headers() {
+    REQUEST_HEADERS.lock().unwrap().clear();
+}
+
+/// Set the extra request headers for all servers functions.
+pub fn set_request_headers(headers: HeaderMap) {
+    *REQUEST_HEADERS.lock().unwrap() = headers;
+}
+
+/// Returns the extra request headers for all servers functions.
+pub fn get_request_headers() -> HeaderMap {
+    REQUEST_HEADERS.lock().unwrap().clone()
+}
+
+static REQUEST_HEADERS: LazyLock<Mutex<HeaderMap>> = LazyLock::new(|| Mutex::new(HeaderMap::new()));
 
 pub trait ClientResponseDriver {
     fn status(&self) -> StatusCode;

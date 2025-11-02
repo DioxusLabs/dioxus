@@ -45,7 +45,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -81,7 +81,7 @@ fn app() -> Element {
 - [인체공학적 상태 관리](https://dioxuslabs.com/blog/release-050)은 React, Solid, Svelte의 장점을 결합했습니다
 - 극도로 높은 성능을 자랑하며 Rust의 가장 빠른 wasm 프레임워크 [sledgehammer](https://dioxuslabs.com/blog/templates-diffing)에 의해 구동됩니다
 - 웹, macOS, Linux, Windows에 배포할 수 있는 통합 번들러
-- 그 외에도 많은 기능! [Dioxus 투어를 살펴보세요](https://dioxuslabs.com/learn/0.6/).
+- 그 외에도 많은 기능! [Dioxus 투어를 살펴보세요](https://dioxuslabs.com/learn/0.7/).
 
 ## 핫 리로딩
 
@@ -93,7 +93,7 @@ fn app() -> Element {
 
 ## 웹 및 데스크톱 배포를 위한 번들러
 
-단순히 `dx bundle`을 실행하면 앱이 빌드되고 최적화된 번들로 패키징됩니다. 웹에서는 [`.avif` 생성, `.wasm` 압축, 최소화](https://dioxuslabs.com/learn/0.6/guides/assets) 등을 활용할 수 있습니다. [50kb 미만](https://github.com/ealmloff/tiny-dioxus/)의 웹앱과 15mb 미만의 데스크톱/모바일 앱을 빌드하세요.
+단순히 `dx bundle`을 실행하면 앱이 빌드되고 최적화된 번들로 패키징됩니다. 웹에서는 [`.avif` 생성, `.wasm` 압축, 최소화](https://dioxuslabs.com/learn/0.7/tutorial/assets) 등을 활용할 수 있습니다. [50kb 미만](https://github.com/ealmloff/tiny-dioxus/)의 웹앱과 15mb 미만의 데스크톱/모바일 앱을 빌드하세요.
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -101,7 +101,7 @@ fn app() -> Element {
 
 ## 환상적인 문서
 
-깨끗하고 읽기 쉽고 포괄적인 문서를 구축하는 데 많은 노력을 기울였습니다. 모든 HTML 요소와 리스너는 MDN 문서로 문서화되었으며, 저희 문서 사이트는 Dioxus 자체와 지속적인 통합을 실행하여 문서가 항상 최신 상태로 유지되도록 합니다. 가이드, 참조, 레시피 등을 보려면 [Dioxus 웹사이트](https://dioxuslabs.com/learn/0.6/)를 확인하세요. 재미있는 사실: 저희는 Dioxus 웹사이트를 새로운 Dioxus 기능의 테스트베드로 사용합니다 - [확인해보세요!](https://github.com/dioxusLabs/docsite)
+깨끗하고 읽기 쉽고 포괄적인 문서를 구축하는 데 많은 노력을 기울였습니다. 모든 HTML 요소와 리스너는 MDN 문서로 문서화되었으며, 저희 문서 사이트는 Dioxus 자체와 지속적인 통합을 실행하여 문서가 항상 최신 상태로 유지되도록 합니다. 가이드, 참조, 레시피 등을 보려면 [Dioxus 웹사이트](https://dioxuslabs.com/learn/0.7/)를 확인하세요. 재미있는 사실: 저희는 Dioxus 웹사이트를 새로운 Dioxus 기능의 테스트베드로 사용합니다 - [확인해보세요!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="../../notes/docs.avif">
@@ -375,7 +375,7 @@ Dioxus와 Electron은 유사한 목표를 가진 완전히 다른 두 프로젝�
 
 ## 기여하기
 
-- 웹사이트의 [기여 섹션](https://dioxuslabs.com/learn/0.6/contributing)을 확인하세요.
+- 웹사이트의 [기여 섹션](https://dioxuslabs.com/learn/0.7/beyond/contributing)을 확인하세요.
 - [이슈 트래커](https://github.com/dioxuslabs/dioxus/issues)에 이슈를 보고하세요.
 - [Discord](https://discord.gg/XgGxMSkvUM)에 참여하여 질문하세요!
 

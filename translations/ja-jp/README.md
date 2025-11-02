@@ -49,7 +49,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -88,7 +88,7 @@ fn app() -> Element {
 - [人間工学に基づいた状態管理](https://dioxuslabs.com/blog/release-050)は、React、Solid、Svelteの長所を組み合わせています
 - Rustの最速のwasmフレームワーク[sledgehammer](https://dioxuslabs.com/blog/templates-diffing)によって駆動される非常に高いパフォーマンス
 - Web、macOS、Linux、Windowsにデプロイするための統合バンドラー
-- そしてもっと！[Dioxusのツアーを見てみましょう](https://dioxuslabs.com/learn/0.6/)。
+- そしてもっと！[Dioxusのツアーを見てみましょう](https://dioxuslabs.com/learn/0.7/)。
 
 ## インスタントホットリロード
 
@@ -109,7 +109,7 @@ Dioxusは、Rustでネイティブモバイルアプリを構築する最速の�
 
 ## Web、デスクトップ、モバイル用のバンドル
 
-単に`dx bundle`を実行すると、アプリがビルドされ、最大化された最適化でバンドルされます。Webでは、[`.avif`生成、`.wasm`圧縮、最小化](https://dioxuslabs.com/learn/0.6/guides/assets)などを活用します。[50kb未満](https://github.com/ealmloff/tiny-dioxus/)のWebアプリや5mb未満のデスクトップ/モバイルアプリを構築します。
+単に`dx bundle`を実行すると、アプリがビルドされ、最大化された最適化でバンドルされます。Webでは、[`.avif`生成、`.wasm`圧縮、最小化](https://dioxuslabs.com/learn/0.7/tutorial/assets)などを活用します。[50kb未満](https://github.com/ealmloff/tiny-dioxus/)のWebアプリや5mb未満のデスクトップ/モバイルアプリを構築します。
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -118,7 +118,7 @@ Dioxusは、Rustでネイティブモバイルアプリを構築する最速の�
 
 ## 素晴らしいドキュメント
 
-私たちは、クリーンで読みやすく包括的なドキュメントを作成するために多大な努力を払いました。すべてのHTML要素とリスナーはMDNドキュメントで記録されており、私たちのドキュメントサイトはDioxus自体と継続的に統合されており、ドキュメントが常に最新であることを保証します。ガイド、リファレンス、レシピなどについては、[Dioxusウェブサイト](https://dioxuslabs.com/learn/0.6/)をご覧ください。面白い事実：私たちはDioxusウェブサイトを新しいDioxus機能のテストベッドとして使用しています - [チェックしてみてください！](https://github.com/dioxusLabs/docsite)
+私たちは、クリーンで読みやすく包括的なドキュメントを作成するために多大な努力を払いました。すべてのHTML要素とリスナーはMDNドキュメントで記録されており、私たちのドキュメントサイトはDioxus自体と継続的に統合されており、ドキュメントが常に最新であることを保証します。ガイド、リファレンス、レシピなどについては、[Dioxusウェブサイト](https://dioxuslabs.com/learn/0.7/)をご覧ください。面白い事実：私たちはDioxusウェブサイトを新しいDioxus機能のテストベッドとして使用しています - [チェックしてみてください！](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="../../notes/docs.avif">
@@ -350,7 +350,7 @@ DioxusとElectronは、目標が似ている完全に異なる2つのプロジ�
 
 ## コントリビュート
 
-- [コントリビュートに関するセクション](https://dioxuslabs.com/learn/0.6/contributing)を参照してください。
+- [コントリビュートに関するセクション](https://dioxuslabs.com/learn/0.7/beyond/contributing)を参照してください。
 - [issue tracker](https://github.com/dioxuslabs/dioxus/issues)で問題を報告してください。
 - Discordに[参加](https://discord.gg/XgGxMSkvUM)して質問してください！
 

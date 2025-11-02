@@ -637,6 +637,24 @@ impl BuildRequest {
                     }
                 })
                 .or_else(|| {
+                    // If multiple renderers are enabled, pick the first non-server one
+                    if enabled_renderers.len() == 2
+                        && enabled_renderers
+                            .iter()
+                            .any(|f| matches!(f.0, Renderer::Server))
+                    {
+                        return Some(
+                            enabled_renderers
+                                .iter()
+                                .find(|f| !matches!(f.0, Renderer::Server))
+                                .cloned()
+                                .unwrap(),
+                        );
+                    }
+                    None
+                })
+                .or_else(|| {
+                    // Pick the first non-server feature in the cargo.toml
                     let non_server_features = known_features_as_renderers
                         .iter()
                         .filter(|f| f.1.as_str() != "server")
@@ -855,6 +873,27 @@ impl BuildRequest {
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
 
+        // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
+        for env in [
+            "RUSTFLAGS".to_string(),
+            format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
+        ] {
+            if let Ok(flags) = std::env::var(env) {
+                rustflags
+                    .flags
+                    .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
+            }
+        }
+
+        // Use the user's linker if the specify it at the target level
+        if let Ok(target) = cargo_config.target(triple.to_string()) {
+            if let Some(flags) = target.rustflags {
+                rustflags.flags.extend(flags.flags);
+            }
+        }
+
+        // When we do android builds we need to make sure we link against the android libraries
+        // We also `--export-dynamic` to make sure we can do shenanigans like `dlsym` the `main` symbol
         if matches!(bundle, BundleFormat::Android) {
             rustflags.flags.extend([
                 "-Clink-arg=-landroid".to_string(),
@@ -867,6 +906,22 @@ impl BuildRequest {
                     workspace.android_tools()?.sysroot().display()
                 ),
             ]);
+        }
+
+        // On windows, we pass /SUBSYSTbEM:WINDOWS to prevent a console from appearing
+        if matches!(bundle, BundleFormat::Windows)
+            && !rustflags
+                .flags
+                .iter()
+                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+        {
+            let subsystem = args
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
+            rustflags
+                .flags
+                .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
@@ -895,25 +950,6 @@ impl BuildRequest {
                 cargo_config2::Flags::from_space_separated(r#"--cfg getrandom_backend="wasm_js""#)
                     .flags,
             );
-        }
-
-        // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
-        for env in [
-            "RUSTFLAGS".to_string(),
-            format!("CARGO_TARGET_{triple}_RUSTFLAGS"),
-        ] {
-            if let Ok(flags) = std::env::var(env) {
-                rustflags
-                    .flags
-                    .extend(cargo_config2::Flags::from_space_separated(&flags).flags);
-            }
-        }
-
-        // Use the user's linker if the specify it at the target level
-        if let Ok(target) = cargo_config.target(triple.to_string()) {
-            if let Some(flags) = target.rustflags {
-                rustflags.flags.extend(flags.flags);
-            }
         }
 
         // If no custom linker is set, then android falls back to us as the linker
@@ -4912,23 +4948,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if css_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
+                        );
                     }
                 }
                 AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
                     }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if js_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
+                        );
                     }
                 }
                 _ => {}

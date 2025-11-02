@@ -1,35 +1,33 @@
-use axum::body::Body;
-use axum::routing::MethodRouter;
-use axum::Router;
-use dashmap::DashMap;
-use dioxus_fullstack_core::{DioxusServerState, FullstackContext};
-use http::Method;
-use std::{marker::PhantomData, sync::LazyLock};
-
-pub type AxumRequest = http::Request<Body>;
-pub type AxumResponse = http::Response<Body>;
+use crate::FullstackState;
+use axum::{
+    body::Body,
+    extract::{Request, State},
+    response::Response,
+    routing::MethodRouter,
+};
+use dioxus_fullstack_core::FullstackContext;
+use http::{Method, StatusCode};
+use std::{pin::Pin, prelude::rust_2024::Future};
 
 /// A function endpoint that can be called from the client.
 #[derive(Clone)]
-pub struct ServerFunction<Caller = ()> {
+pub struct ServerFunction {
     path: &'static str,
     method: Method,
-    handler: fn() -> MethodRouter<DioxusServerState>,
-    _phantom: PhantomData<Caller>,
+    handler: fn() -> MethodRouter<FullstackState>,
 }
 
 impl ServerFunction {
-    /// Create a new server function object.
+    /// Create a new server function object from a MethodRouter
     pub const fn new(
         method: Method,
         path: &'static str,
-        handler: fn() -> MethodRouter<DioxusServerState>,
+        handler: fn() -> MethodRouter<FullstackState>,
     ) -> Self {
         Self {
             path,
             method,
             handler,
-            _phantom: PhantomData,
         }
     }
 
@@ -43,72 +41,103 @@ impl ServerFunction {
         self.method.clone()
     }
 
+    /// Collect all globally registered server functions
     pub fn collect() -> Vec<&'static ServerFunction> {
         inventory::iter::<ServerFunction>().collect()
     }
 
-    pub fn handler(&self) -> fn() -> MethodRouter<DioxusServerState> {
-        self.handler
+    /// Create a `MethodRouter` for this server function that can be mounted on an `axum::Router`.
+    ///
+    /// This runs the handler inside the required `FullstackContext` scope and populates
+    /// `FullstackContext` so that the handler can use those features.
+    ///
+    /// It also runs the server function inside a tokio `LocalPool` to allow !Send futures.
+    pub fn method_router(&self) -> MethodRouter<FullstackState> {
+        (self.handler)()
     }
 
-    pub fn register_server_fn_on_router<S>(&'static self, router: Router<S>) -> Router<S>
-    where
-        S: Send + Sync + Clone + 'static,
-    {
-        // // store Accepts and Referrer in case we need them for redirect (below)
-        // let referrer = req.headers().get(REFERER).cloned();
-        // let accepts_html = req
-        //     .headers()
-        //     .get(ACCEPT)
-        //     .and_then(|v| v.to_str().ok())
-        //     .map(|v| v.contains("text/html"))
-        //     .unwrap_or(false);
+    /// Creates a new `MethodRouter` for the given method and !Send handler.
+    ///
+    /// This is used internally by the `ServerFunction` to create the method router that this
+    /// server function uses.
+    #[allow(clippy::type_complexity)]
+    pub fn make_handler(
+        method: Method,
+        handler: fn(State<FullstackContext>, Request) -> Pin<Box<dyn Future<Output = Response>>>,
+    ) -> MethodRouter<FullstackState> {
+        axum::routing::method_routing::on(
+            method
+                .try_into()
+                .expect("MethodFilter only supports standard HTTP methods"),
+            move |state: State<FullstackState>, request: Request| async move {
+                // Allow !Send futures by running in the render handlers pinned local pool
+                let result = state.rt.spawn_pinned(move || async move {
+                    use dioxus_fullstack_core::FullstackContext;
+                    use http::header::{ACCEPT, LOCATION, REFERER};
+                    use http::StatusCode;
 
-        // // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-        // // Location set, then redirect to Referer
-        // if accepts_html {
-        //     if let Some(referrer) = referrer {
-        //         let has_location = res.headers().get(LOCATION).is_some();
-        //         if !has_location {
-        //             *res.status_mut() = StatusCode::FOUND;
-        //             res.headers_mut().insert(LOCATION, referrer);
-        //         }
-        //     }
-        // }
+                    // todo: we're copying the parts here, but it'd be ideal if we didn't.
+                    // We can probably just pass the URI in so the matching logic can work and then
+                    // in the server function, do all extraction via FullstackContext. This ensures
+                    // calls to `.remove()` work as expected.
+                    let (parts, body) = request.into_parts();
+                    let server_context = FullstackContext::new(parts.clone());
+                    let request = axum::extract::Request::from_parts(parts, body);
 
-        async fn server_context_middleware(
-            request: axum::extract::Request,
-            next: axum::middleware::Next,
-        ) -> axum::response::Response {
-            let (parts, body) = request.into_parts();
-            let server_context = FullstackContext::new(parts.clone());
-            let request = axum::extract::Request::from_parts(parts, body);
+                    // store Accepts and Referrer in case we need them for redirect (below)
+                    let referrer = request.headers().get(REFERER).cloned();
+                    let accepts_html = request
+                        .headers()
+                        .get(ACCEPT)
+                        .and_then(|v| v.to_str().ok())
+                        .map(|v| v.contains("text/html"))
+                        .unwrap_or(false);
 
-            server_context
-                .scope(async move {
-                    // Run the next middleware / handler inside the server context
-                    let mut response = next.run(request).await;
+                    server_context
+                        .clone()
+                        .scope(async move {
+                            // Run the next middleware / handler inside the server context
+                            let mut response = handler(State(server_context), request).await;
 
-                    let server_context = FullstackContext::current().expect(
-                        "Server context should be available inside the server context scope",
-                    );
+                            let server_context = FullstackContext::current().expect(
+                                "Server context should be available inside the server context scope",
+                            );
 
-                    // Get the extra response headers set during the handler and add them to the response
-                    let headers = server_context.take_response_headers();
-                    if let Some(headers) = headers {
-                        response.headers_mut().extend(headers);
-                    }
+                            // Get the extra response headers set during the handler and add them to the response
+                            let headers = server_context.take_response_headers();
+                            if let Some(headers) = headers {
+                                response.headers_mut().extend(headers);
+                            }
 
-                    response
-                })
-                .await
-        }
+                            // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
+                            // Location set, then redirect to Referer
+                            if accepts_html {
+                                if let Some(referrer) = referrer {
+                                    let has_location = response.headers().get(LOCATION).is_some();
+                                    if !has_location {
+                                        *response.status_mut() = StatusCode::FOUND;
+                                        response.headers_mut().insert(LOCATION, referrer);
+                                    }
+                                }
+                            }
 
-        router.route(
-            self.path(),
-            ((self.handler)())
-                .with_state(DioxusServerState {})
-                .layer(axum::middleware::from_fn(server_context_middleware)),
+                            response
+                        })
+                        .await
+                }).await;
+
+                match result {
+                    Ok(response) => response,
+                    Err(err) => Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::new(if cfg!(debug_assertions) {
+                            format!("Server function panicked: {}", err)
+                        } else {
+                            "Internal Server Error".to_string()
+                        }))
+                        .unwrap(),
+                }
+            },
         )
     }
 }
@@ -120,18 +149,3 @@ impl inventory::Collect for ServerFunction {
         &REGISTRY
     }
 }
-
-/// The set of all registered server function paths.
-pub fn server_fn_paths() -> impl Iterator<Item = (&'static str, Method)> {
-    REGISTERED_SERVER_FUNCTIONS
-        .iter()
-        .map(|item| (item.path(), item.method()))
-}
-
-type LazyServerFnMap = LazyLock<DashMap<(String, Method), ServerFunction>>;
-static REGISTERED_SERVER_FUNCTIONS: LazyServerFnMap = std::sync::LazyLock::new(|| {
-    inventory::iter::<ServerFunction>
-        .into_iter()
-        .map(|obj| ((obj.path().to_string(), obj.method()), obj.clone()))
-        .collect()
-});

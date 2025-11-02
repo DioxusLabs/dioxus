@@ -49,7 +49,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -64,7 +64,7 @@
 </div>
 <br>
 <p align="center">
-  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.0">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
+  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0">✨ Dioxus 0.7 is out!!! ✨</a>
 </p>
 <br>
 
@@ -89,7 +89,7 @@ fn app() -> Element {
 - Built-in featureful, type-safe, fullstack web framework
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - Subsecond Rust hot-patching and asset hot-reloading
-- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.7/).
 
 ## Instant hot-reloading
 
@@ -148,7 +148,7 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
 
 ## Bundle for web, desktop, and mobile
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/guides/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.7/tutorial/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
@@ -157,7 +157,7 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.7/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
@@ -257,7 +257,7 @@ cargo run --example <example>
 However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
 
 ```sh
-cargo binstall dioxus-cli@0.7.0-rc.3 --force
+cargo binstall dioxus-cli@0.7.0 --force
 ```
 
 If this CLI is out-of-date, you can install it directly from git
@@ -274,7 +274,7 @@ dx serve --example <example> --platform web -- --no-default-features
 
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

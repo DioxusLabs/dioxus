@@ -21,12 +21,11 @@ use http::{request::Parts, HeaderMap, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
-    future::Future,
     iter::Peekable,
     rc::Rc,
     sync::{Arc, RwLock},
 };
-use tokio::task::JoinHandle;
+use tokio_util::task::LocalPoolHandle;
 
 use crate::StreamingMode;
 
@@ -99,6 +98,7 @@ impl SsrRendererPool {
         self: Arc<Self>,
         parts: Parts,
         cfg: &ServeConfig,
+        rt: &LocalPoolHandle,
         virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
     ) -> Result<
         (
@@ -420,7 +420,8 @@ impl SsrRendererPool {
             myself.renderers.write().unwrap().push(renderer);
         };
 
-        let join_handle = Self::spawn_platform(create_render_future);
+        // Spawn the render future onto the local pool
+        let join_handle = rt.spawn_pinned(create_render_future);
 
         // Wait for the initial result which determines the status code
         let (status, headers) = initial_result_rx
@@ -762,33 +763,5 @@ impl SsrRendererPool {
         to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
-    }
-
-    /// Spawn a task in the background. If wasm is enabled, this will use the single threaded tokio runtime
-    fn spawn_platform<Fut>(f: impl FnOnce() -> Fut + Send + 'static) -> JoinHandle<Fut::Output>
-    where
-        Fut: Future + 'static,
-        Fut::Output: Send + 'static,
-    {
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use tokio_util::task::LocalPoolHandle;
-            static TASK_POOL: std::sync::OnceLock<LocalPoolHandle> = std::sync::OnceLock::new();
-
-            let pool = TASK_POOL.get_or_init(|| {
-                LocalPoolHandle::new(
-                    std::thread::available_parallelism()
-                        .map(usize::from)
-                        .unwrap_or(1),
-                )
-            });
-
-            pool.spawn_pinned(f)
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            tokio::task::spawn_local(f())
-        }
     }
 }

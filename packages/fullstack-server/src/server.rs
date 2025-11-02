@@ -6,17 +6,176 @@ use axum::{
     body::Body,
     extract::State,
     http::{Request, StatusCode},
-    response::IntoResponse,
-    response::Response,
+    response::{IntoResponse, Response},
     routing::*,
 };
-use dioxus_core::{Element, VirtualDom};
+use dioxus_core::{ComponentFunction, VirtualDom};
 use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio_util::task::LocalPoolHandle;
 use tower::util::MapResponse;
 use tower::ServiceExt;
 use tower_http::services::fs::ServeFileSystemResponseBody;
+
+/// A extension trait with utilities for integrating Dioxus with your Axum router.
+pub trait DioxusRouterExt {
+    /// Serves the static WASM for your Dioxus application (except the generated index.html).
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus::prelude::*;
+    /// use dioxus_server::DioxusRouterExt;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> anyhow::Result<()> {
+    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let router = axum::Router::new()
+    ///         // Server side render the application, serve static assets, and register server functions
+    ///         .serve_static_assets()
+    ///         // Server render the application
+    ///         // ...
+    ///         .with_state(dioxus_server::FullstackState::headless());
+    ///     let listener = tokio::net::TcpListener::bind(addr).await?;
+    ///     axum::serve(listener, router).await?;
+    ///     Ok(())
+    /// }
+    /// ```
+    fn serve_static_assets(self) -> Router<FullstackState>;
+
+    /// Serves the Dioxus application. This will serve a complete server side rendered application.
+    /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # #![allow(non_snake_case)]
+    /// # use dioxus::prelude::*;
+    /// use dioxus_server::{DioxusRouterExt, ServeConfig};
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let router = axum::Router::new()
+    ///         // Server side render the application, serve static assets, and register server functions
+    ///         .serve_dioxus_application(ServeConfig::new(), app);
+    ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    ///     axum::serve(listener, router).await.unwrap();
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! { "Hello World" }
+    /// }
+    /// ```
+    fn serve_dioxus_application<M: 'static>(
+        self,
+        cfg: ServeConfig,
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()>;
+
+    /// Registers server functions with the default handler.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::DioxusRouterExt;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
+    ///     let router = axum::Router::new()
+    ///         // Register server functions routes with the default handler
+    ///         .register_server_functions()
+    ///         .with_state(dioxus_server::FullstackState::headless());
+    ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    ///     axum::serve(listener, router).await.unwrap();
+    /// }
+    /// ```
+    #[allow(dead_code)]
+    fn register_server_functions(self) -> Router<FullstackState>;
+
+    /// Serves a Dioxus application without static assets.
+    /// Sets up server function routes and rendering endpoints only.
+    ///
+    /// Useful for WebAssembly environments or when static assets
+    /// are served by another system.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_server::{DioxusRouterExt, ServeConfig};
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let router = axum::Router::new()
+    ///         .serve_api_application(ServeConfig::new(), app)
+    ///         .into_make_service();
+    ///     // ...
+    /// }
+    ///
+    /// fn app() -> Element {
+    ///     rsx! { "Hello World" }
+    /// }
+    /// ```
+    fn serve_api_application<M: 'static>(
+        self,
+        cfg: ServeConfig,
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()>
+    where
+        Self: Sized;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl DioxusRouterExt for Router<FullstackState> {
+    fn register_server_functions(mut self) -> Router<FullstackState> {
+        use std::collections::HashSet;
+
+        let mut seen = HashSet::new();
+
+        for func in ServerFunction::collect() {
+            if seen.insert(format!("{} {}", func.method(), func.path())) {
+                tracing::info!(
+                    "Registering server function: {} {}",
+                    func.method(),
+                    func.path()
+                );
+
+                self = self.route(func.path(), func.method_router())
+            }
+        }
+
+        self
+    }
+
+    fn serve_static_assets(self) -> Router<FullstackState> {
+        let Some(public_path) = public_path() else {
+            return self;
+        };
+
+        // Serve all files in public folder except index.html
+        serve_dir_cached(self, &public_path, &public_path)
+    }
+
+    fn serve_api_application<M: 'static>(
+        self,
+        cfg: ServeConfig,
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()> {
+        self.register_server_functions()
+            .fallback(get(FullstackState::render_handler))
+            .with_state(FullstackState::new(cfg, app))
+    }
+
+    fn serve_dioxus_application<M: 'static>(
+        self,
+        cfg: ServeConfig,
+        app: impl ComponentFunction<(), M> + Send + Sync,
+    ) -> Router<()> {
+        self.register_server_functions()
+            .serve_static_assets()
+            .fallback(get(FullstackState::render_handler))
+            .with_state(FullstackState::new(cfg, app))
+    }
+}
 
 /// SSR renderer handler for Axum with added context injection.
 ///
@@ -27,7 +186,7 @@ use tower_http::services::fs::ServeFileSystemResponseBody;
 ///
 /// use axum::routing::get;
 /// use dioxus::prelude::*;
-/// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
+/// use dioxus_server::{FullstackState, render_handler, ServeConfig};
 ///
 /// fn app() -> Element {
 ///     rsx! {
@@ -44,206 +203,89 @@ use tower_http::services::fs::ServeFileSystemResponseBody;
 ///         // to inject the context into server functions running outside
 ///         // of an SSR render context.
 ///         .fallback(get(render_handler))
-///         .with_state(RenderHandleState::new(ServeConfig::new(), app));
+///         .with_state(FullstackState::new(ServeConfig::new(), app));
 ///
 ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 ///     axum::serve(listener, router).await.unwrap();
 /// }
 /// ```
 pub async fn render_handler(
-    State(state): State<RenderHandleState>,
+    State(state): State<FullstackState>,
     request: Request<Body>,
 ) -> impl IntoResponse {
-    RenderHandleState::render_handler(State(state), request).await
+    FullstackState::render_handler(State(state), request).await
 }
 
-/// A extension trait with utilities for integrating Dioxus with your Axum router.
-pub trait DioxusRouterExt<S>: DioxusRouterFnExt<S> {
-    /// Serves the static WASM for your Dioxus application (except the generated index.html).
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// # #![allow(non_snake_case)]
-    /// # use dioxus::prelude::*;
-    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt};
-    ///
-    /// #[tokio::main]
-    /// async fn main() -> anyhow::Result<()> {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
-    ///     let router = axum::Router::new()
-    ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_static_assets()
-    ///         // Server render the application
-    ///         // ...
-    ///         .into_make_service();
-    ///     let listener = tokio::net::TcpListener::bind(addr).await?;
-    ///     axum::serve(listener, router).await?;
-    ///     Ok(())
-    /// }
-    /// ```
-    fn serve_static_assets(self) -> Self
-    where
-        Self: Sized;
-
-    /// Serves the Dioxus application. This will serve a complete server side rendered application.
-    /// This will serve static assets, server render the application, register server functions, and integrate with hot reloading.
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// # #![allow(non_snake_case)]
-    /// # use dioxus::prelude::*;
-    /// use dioxus_server::{DioxusRouterExt, DioxusRouterFnExt, ServeConfig};
-    ///
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
-    ///     let router = axum::Router::new()
-    ///         // Server side render the application, serve static assets, and register server functions
-    ///         .serve_dioxus_application(ServeConfig::new(), app)
-    ///         .into_make_service();
-    ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    ///     axum::serve(listener, router).await.unwrap();
-    /// }
-    ///
-    /// fn app() -> Element {
-    ///     rsx! { "Hello World" }
-    /// }
-    /// ```
-    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
-    where
-        Self: Sized;
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-impl<S> DioxusRouterExt<S> for Router<S>
-where
-    S: Send + Sync + Clone + 'static,
-{
-    fn serve_static_assets(self) -> Self {
-        let Some(public_path) = public_path() else {
-            return self;
-        };
-
-        // Serve all files in public folder except index.html
-        serve_dir_cached(self, &public_path, &public_path)
-    }
-
-    fn serve_dioxus_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self {
-        self.register_server_functions()
-            .serve_static_assets()
-            .fallback(
-                get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-            )
-    }
-}
-
-/// A extension trait with server function utilities for integrating Dioxus with your Axum router.
-pub trait DioxusRouterFnExt<S> {
-    /// Registers server functions with the default handler.
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::DioxusRouterFnExt;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let addr = dioxus::cli_config::fullstack_address_or_localhost();
-    ///     let router = axum::Router::new()
-    ///         // Register server functions routes with the default handler
-    ///         .register_server_functions()
-    ///         .into_make_service();
-    ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    ///     axum::serve(listener, router).await.unwrap();
-    /// }
-    /// ```
-    #[allow(dead_code)]
-    fn register_server_functions(self) -> Self
-    where
-        Self: Sized;
-
-    /// Serves a Dioxus application without static assets.
-    /// Sets up server function routes and rendering endpoints only.
-    ///
-    /// Useful for WebAssembly environments or when static assets
-    /// are served by another system.
-    ///
-    /// # Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use dioxus_server::{DioxusRouterFnExt, ServeConfig};
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let router = axum::Router::new()
-    ///         .serve_api_application(ServeConfig::new(), app)
-    ///         .into_make_service();
-    ///     // ...
-    /// }
-    ///
-    /// fn app() -> Element {
-    ///     rsx! { "Hello World" }
-    /// }
-    /// ```
-    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
-    where
-        Self: Sized;
-}
-
-impl<S: Send + Sync + Clone + 'static> DioxusRouterFnExt<S> for Router<S> {
-    fn register_server_functions(mut self) -> Self {
-        for func in ServerFunction::collect() {
-            tracing::info!(
-                "Registering server function: {} {}",
-                func.method(),
-                func.path()
-            );
-
-            self = func.register_server_fn_on_router(self);
-        }
-        self
-    }
-
-    fn serve_api_application(self, cfg: ServeConfig, app: fn() -> Element) -> Self
-    where
-        Self: Sized,
-    {
-        self.register_server_functions().fallback(
-            get(RenderHandleState::render_handler).with_state(RenderHandleState::new(cfg, app)),
-        )
-    }
-}
-
-/// State used by [`RenderHandleState::render_handler`] to render a dioxus component with axum
+/// State used by [`FullstackState::render_handler`] to render a dioxus component with axum
 #[derive(Clone)]
-pub struct RenderHandleState {
+pub struct FullstackState {
     config: ServeConfig,
     build_virtual_dom: Arc<dyn Fn() -> VirtualDom + Send + Sync>,
     renderers: Arc<SsrRendererPool>,
+    pub(crate) rt: LocalPoolHandle,
 }
 
-impl RenderHandleState {
-    /// Create a new [`RenderHandleState`]
-    pub fn new(config: ServeConfig, root: fn() -> Element) -> Self {
+impl FullstackState {
+    /// Create a headless [`FullstackState`] without a root component.
+    ///
+    /// This won't render pages, but can still be used to register server functions and serve static assets.
+    pub fn headless() -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
         Self {
-            renderers: Arc::new(SsrRendererPool::new(4, config.incremental.clone())),
-            build_virtual_dom: Arc::new(move || VirtualDom::new(root)),
-            config,
+            renderers: Arc::new(SsrRendererPool::new(4, None)),
+            build_virtual_dom: Arc::new(|| {
+                panic!("No root component provided for headless FullstackState")
+            }),
+            config: ServeConfig::new(),
+            rt,
         }
     }
 
-    /// Create a new [`RenderHandleState`] with a custom [`VirtualDom`] factory. This method can be
+    /// Create a new [`FullstackState`]
+    pub fn new<M: 'static>(
+        config: ServeConfig,
+        root: impl ComponentFunction<(), M> + Send + Sync + 'static,
+    ) -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
+        Self {
+            renderers: Arc::new(SsrRendererPool::new(4, config.incremental.clone())),
+            build_virtual_dom: Arc::new(move || VirtualDom::new_with_props(root.clone(), ())),
+            config,
+            rt,
+        }
+    }
+
+    /// Create a new [`FullstackState`] with a custom [`VirtualDom`] factory. This method can be
     /// used to pass context into the root component of your application.
     pub fn new_with_virtual_dom_factory(
         config: ServeConfig,
         build_virtual_dom: impl Fn() -> VirtualDom + Send + Sync + 'static,
     ) -> Self {
+        let rt = LocalPoolHandle::new(
+            std::thread::available_parallelism()
+                .map(usize::from)
+                .unwrap_or(1),
+        );
+
         Self {
             renderers: Arc::new(SsrRendererPool::new(4, config.incremental.clone())),
             config,
             build_virtual_dom: Arc::new(build_virtual_dom),
+            rt,
         }
     }
 
-    /// Set the [`ServeConfig`] for this [`RenderHandleState`]
+    /// Set the [`ServeConfig`] for this [`FullstackState`]
     pub fn with_config(mut self, config: ServeConfig) -> Self {
         self.config = config;
         self
@@ -258,7 +300,7 @@ impl RenderHandleState {
     ///
     /// use axum::routing::get;
     /// use dioxus::prelude::*;
-    /// use dioxus_server::{RenderHandleState, render_handler, ServeConfig};
+    /// use dioxus_server::{FullstackState, render_handler, ServeConfig};
     ///
     /// fn app() -> Element {
     ///     rsx! {
@@ -275,7 +317,7 @@ impl RenderHandleState {
     ///         // to inject the context into server functions running outside
     ///         // of an SSR render context.
     ///         .fallback(get(render_handler))
-    ///         .with_state(RenderHandleState::new(ServeConfig::new(), app))
+    ///         .with_state(FullstackState::new(ServeConfig::new(), app))
     ///         .into_make_service();
     ///
     ///     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
@@ -288,7 +330,7 @@ impl RenderHandleState {
         let response = state
             .renderers
             .clone()
-            .render_to(parts, &state.config, {
+            .render_to(parts, &state.config, &state.rt, {
                 let build_virtual_dom = state.build_virtual_dom.clone();
                 let context_providers = state.config.context_providers.clone();
                 move || {

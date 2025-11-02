@@ -7,8 +7,13 @@ use serde::{de::DeserializeOwned, Serialize};
 pub trait Encoding {
     fn content_type() -> &'static str;
     fn stream_content_type() -> &'static str;
-    fn to_bytes(data: impl Serialize) -> Option<Bytes>;
-    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O>;
+    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
+        let mut buf = Vec::new();
+        Self::encode(data, &mut buf)?;
+        Some(buf.into())
+    }
+    fn encode(data: impl Serialize, buf: &mut Vec<u8>) -> Option<usize>;
+    fn decode<O: DeserializeOwned>(bytes: Bytes) -> Option<O>;
 }
 
 pub struct JsonEncoding;
@@ -19,11 +24,14 @@ impl Encoding for JsonEncoding {
     fn stream_content_type() -> &'static str {
         "application/stream+json"
     }
-    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
-        serde_json::to_vec(&data).ok().map(Into::into)
+
+    fn encode(data: impl Serialize, mut buf: &mut Vec<u8>) -> Option<usize> {
+        let len = buf.len();
+        serde_json::to_writer(&mut buf, &data).ok()?;
+        Some(buf.len() - len)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+    fn decode<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
         serde_json::from_slice(&bytes).ok()
     }
 }
@@ -36,14 +44,15 @@ impl Encoding for CborEncoding {
     fn stream_content_type() -> &'static str {
         "application/stream+cbor"
     }
-    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
-        let mut buf = Vec::new();
-        ciborium::into_writer(&data, &mut buf).ok()?;
-        Some(buf.into())
+
+    fn decode<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+        ciborium::de::from_reader(bytes.as_ref()).ok()
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
-        ciborium::de::from_reader(bytes.as_ref()).ok()
+    fn encode(data: impl Serialize, mut buf: &mut Vec<u8>) -> Option<usize> {
+        let len = buf.len();
+        ciborium::into_writer(&data, &mut buf).ok()?;
+        Some(buf.len() - len)
     }
 }
 
@@ -57,11 +66,14 @@ impl Encoding for PostcardEncoding {
     fn stream_content_type() -> &'static str {
         "application/stream+postcard"
     }
-    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
-        postcard::to_allocvec(&data).ok().map(Into::into)
+
+    fn encode(data: impl Serialize, mut buf: &mut Vec<u8>) -> Option<usize> {
+        let len = buf.len();
+        postcard::to_io(&data, &mut buf).ok()?;
+        Some(buf.len() - len)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+    fn decode<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
         postcard::from_bytes(bytes.as_ref()).ok()
     }
 }
@@ -76,11 +88,13 @@ impl Encoding for MsgPackEncoding {
     fn stream_content_type() -> &'static str {
         "application/stream+msgpack"
     }
-    fn to_bytes(data: impl Serialize) -> Option<Bytes> {
-        rmp_serde::to_vec(&data).ok().map(Into::into)
+    fn encode(data: impl Serialize, buf: &mut Vec<u8>) -> Option<usize> {
+        let len = buf.len();
+        rmp_serde::encode::write(buf, &data).ok()?;
+        Some(buf.len() - len)
     }
 
-    fn from_bytes<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
+    fn decode<O: DeserializeOwned>(bytes: Bytes) -> Option<O> {
         rmp_serde::from_slice(&bytes).ok()
     }
 }

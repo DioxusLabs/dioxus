@@ -1,6 +1,13 @@
 //! This example shows how to use global state to maintain state between server functions.
 
-use dioxus::prelude::*;
+use std::rc::Rc;
+
+use axum_core::extract::{FromRef, FromRequest};
+use dioxus::{
+    fullstack::{FullstackContext, extract::State},
+    prelude::*,
+};
+use reqwest::header::HeaderMap;
 
 #[cfg(feature = "server")]
 use {
@@ -77,7 +84,68 @@ type BroadcastExtension = axum::Extension<tokio::sync::broadcast::Sender<String>
 
 #[post("/api/broadcast", ext: BroadcastExtension)]
 async fn broadcast_message() -> Result<()> {
+    let rt = Rc::new("asdasd".to_string());
     ext.send("New broadcast message".to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    println!("rt: {}", rt);
+
+    Ok(())
+}
+
+/*
+Option 4:
+
+You can use Axum's `State` extractor to provide custom application state to your server functions.
+
+All ServerFunctions pull in `FullstackContext`, so you need to implement `FromRef<FullstackContext>` for your
+custom state type. To add your state to your app, you can use `.register_server_functions()` on a router
+for a given state type, which will automatically add your state into the `FullstackContext` used by your server functions.
+
+There are two details to note here:
+
+- You need to implement `FromRef<FullstackContext>` for your custom state type.
+- Custom extractors need to implement `FromRequest<S>` where `S` is the state type that implements `FromRef<FullstackContext>`.
+*/
+#[derive(Clone)]
+struct MyAppState {
+    abc: i32,
+}
+
+impl FromRef<FullstackContext> for MyAppState {
+    fn from_ref(state: &FullstackContext) -> Self {
+        state.extension::<MyAppState>().unwrap()
+    }
+}
+
+struct CustomExtractor {
+    abc: i32,
+    headermap: HeaderMap,
+}
+
+impl<S> FromRequest<S> for CustomExtractor
+where
+    MyAppState: FromRef<S>,
+    S: Send + Sync,
+{
+    type Rejection = ();
+
+    async fn from_request(
+        _req: axum::extract::Request,
+        state: &S,
+    ) -> std::result::Result<Self, Self::Rejection> {
+        let state = MyAppState::from_ref(state);
+        Ok(CustomExtractor {
+            abc: state.abc,
+            headermap: HeaderMap::new(),
+        })
+    }
+}
+
+#[post("/api/stateful", state: State<MyAppState>, ex: CustomExtractor)]
+async fn app_state() -> Result<()> {
+    println!("abc: {}", state.abc);
+    println!("state abc: {:?}", ex.abc);
+    println!("headermap: {:?}", ex.headermap);
     Ok(())
 }
 
@@ -94,6 +162,10 @@ fn main() {
         // For axum `Extension`s, we can use the `layer` method to add them to our router.
         let router = dioxus::server::router(app)
             .layer(Extension(tokio::sync::broadcast::channel::<String>(16).0));
+
+        // To use our custom app state with `State<MyAppState>`, we need to register it
+        // as an extension since our `FromRef<FullstackContext>` implementation relies on it.
+        let router = router.layer(Extension(MyAppState { abc: 42 }));
 
         Ok(router)
     });

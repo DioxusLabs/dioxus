@@ -367,28 +367,9 @@ impl NativeFileData for DesktopFileData {
         >,
     > {
         let path = self.0.clone();
-        #[cfg(feature = "tokio_runtime")]
-        {
-            // todo!()
-            // use futures_util::TryFutureExt;
-
-            // futures_util::stream::try_unfold(File::open(path), |mut file| async move {
-            // let mut buf = vec![0; 8192];
-            // let n = file
-            //     .read(&mut buf)
-            //     .await
-            //     .map_err(|e| dioxus_core::CapturedError::from(e))?;
-            // if n == 0 {
-            //     Ok(None)
-            // } else {
-            //     buf.truncate(n);
-            //     Ok(Some((bytes::Bytes::from(buf), file)))
-            // }
-            // })
-            // .map(|res| res.map(bytes::Bytes::from))
-            // .boxed()
-        }
-        todo!()
+        Box::pin(futures_util::stream::once(async move {
+            Ok(bytes::Bytes::from(std::fs::read(&path)?))
+        }))
     }
 
     fn content_type(&self) -> Option<String> {
