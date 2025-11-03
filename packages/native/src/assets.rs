@@ -8,7 +8,8 @@ use winit::event_loop::EventLoopProxy;
 
 pub struct DioxusNativeNetProvider {
     callback: Arc<dyn NetCallback<Resource> + 'static>,
-    inner_net_provider: Option<Arc<dyn NetProvider<Resource> + 'static>>,
+    #[cfg(feature = "net")]
+    inner_net_provider: Arc<dyn NetProvider<Resource> + 'static>,
 }
 impl DioxusNativeNetProvider {
     pub fn shared(proxy: EventLoopProxy<BlitzShellEvent>) -> Arc<dyn NetProvider<Resource>> {
@@ -19,12 +20,11 @@ impl DioxusNativeNetProvider {
         let net_callback = BlitzShellNetCallback::shared(proxy);
 
         #[cfg(feature = "net")]
-        let net_provider = Some(blitz_net::Provider::shared(net_callback.clone()));
-        #[cfg(not(feature = "net"))]
-        let net_provider = None;
+        let net_provider = blitz_net::Provider::shared(net_callback.clone());
 
         Self {
             callback: net_callback,
+            #[cfg(feature = "net")]
             inner_net_provider: net_provider,
         }
     }
@@ -50,12 +50,11 @@ impl NetProvider<Resource> for DioxusNativeNetProvider {
                 }
             }
         } else {
-            if let Some(inner_net_provider) = &self.inner_net_provider {
-                inner_net_provider.fetch(doc_id, request, handler);
-            } else {
-                #[cfg(feature = "tracing")]
-                tracing::warn!("net feature not enabled, cannot fetch {request:#?}");
-            }
+            #[cfg(feature = "net")]
+            self.inner_net_provider.fetch(doc_id, request, handler);
+
+            #[cfg(all(not(feature = "net"), feature = "tracing"))]
+            tracing::warn!("net feature not enabled, cannot fetch {request:#?}");
         }
     }
 }
