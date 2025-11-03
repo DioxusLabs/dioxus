@@ -310,14 +310,24 @@ unsafe fn commit_patch(table: JumpTable) {
         Box::into_raw(Box::new(table)),
         std::sync::atomic::Ordering::Relaxed,
     );
-    HOTRELOAD_HANDLERS
-        .lock()
-        .unwrap()
-        .clone()
-        .iter()
-        .for_each(|handler| {
+    let handlers = HOTRELOAD_HANDLERS.lock().unwrap().clone();
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        for handler in handlers {
+            // run after the current Task::run has unwound
+            wasm_bindgen_futures::spawn_local(async move {
+                handler();
+            });
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        for handler in handlers {
             handler();
-        });
+        }
+    }
 }
 
 /// A panic issued by the [`call`] function if the caller would be stale if called. This causes
