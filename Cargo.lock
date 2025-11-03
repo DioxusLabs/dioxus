@@ -5586,6 +5586,7 @@ dependencies = [
  "tracing-fluent-assertions",
  "tracing-subscriber",
  "warnings",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

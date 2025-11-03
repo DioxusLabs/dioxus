@@ -771,7 +771,10 @@ impl VirtualDom {
     fn register_subsecond_handler(&self) {
         let sender = self.runtime().sender.clone();
         subsecond::register_handler(std::sync::Arc::new(move || {
-            _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+            let sender = sender.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                _ = sender.unbounded_send(SchedulerMsg::AllDirty);
+            });
         }));
     }
 }
