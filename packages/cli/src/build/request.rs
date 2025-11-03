@@ -908,7 +908,7 @@ impl BuildRequest {
             ]);
         }
 
-        // On windows, we pass /SUBSYSTbEM:WINDOWS to prevent a console from appearing
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
         if matches!(bundle, BundleFormat::Windows)
             && !rustflags
                 .flags
@@ -922,6 +922,11 @@ impl BuildRequest {
             rustflags
                 .flags
                 .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            rustflags
+                .flags
+                .push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
