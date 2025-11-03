@@ -27,7 +27,6 @@ use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConf
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-#[cfg(feature = "html")]
 use std::sync::Arc;
 use winit::window::WindowAttributes;
 
@@ -117,14 +116,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         vdom.insert_any_root_context(context());
     }
 
-    #[cfg(feature = "net")]
-    let net_provider = {
-        let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
-        Some(net_provider)
-    };
-    #[cfg(not(feature = "net"))]
-    let net_provider = None;
+    let net_provider = Some(DioxusNativeNetProvider::shared(event_loop.create_proxy()));
 
     #[cfg(feature = "html")]
     let html_parser_provider = Some(Arc::new(blitz_html::HtmlProvider) as _);
