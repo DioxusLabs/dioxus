@@ -162,6 +162,20 @@ impl From<RequestError> for ServerFnError {
     }
 }
 
+impl From<ServerFnError> for HttpError {
+    fn from(value: ServerFnError) -> Self {
+        let status = StatusCode::from_u16(match &value {
+            ServerFnError::ServerError { code, .. } => *code,
+            _ => 500,
+        })
+        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+        HttpError {
+            status,
+            message: Some(value.to_string()),
+        }
+    }
+}
+
 impl From<HttpError> for ServerFnError {
     fn from(value: HttpError) -> Self {
         ServerFnError::ServerError {

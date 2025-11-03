@@ -4,6 +4,7 @@
 #[doc(hidden)]
 pub mod macro_helpers;
 pub use manganis_macro::asset;
+pub use manganis_macro::option_asset;
 
 #[doc(hidden)]
 pub use manganis_macro::css_module;

@@ -13,8 +13,7 @@ use syn::{
     parse::ParseStream,
     punctuated::Punctuated,
     token::{Comma, Slash},
-    Error, ExprTuple, FnArg, GenericArgument, Meta, PathArguments, PathSegment, Signature, Token,
-    Type, TypePath,
+    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath,
 };
 use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr, Path};
 use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
@@ -104,7 +103,6 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
         method: None,
         path_params: vec![],
         query_params: vec![],
-        state: None,
         route_lit: args.fn_path,
         oapi_options: None,
         server_args: Default::default(),
@@ -204,17 +202,16 @@ fn route_impl_with_route(
     // Parse the route and function
     let mut function = syn::parse::<ItemFn>(item)?;
 
-    let middleware_attrs = function
+    // Collect the middleware initializers
+    let middleware_layers = function
         .attrs
         .iter()
         .filter(|attr| attr.path().is_ident("middleware"))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    let middleware_inits = middleware_attrs
-        .into_iter()
-        .map(|f| match f.meta {
-            Meta::List(meta_list) => Ok(meta_list.tokens),
+        .map(|f| match &f.meta {
+            Meta::List(meta_list) => Ok({
+                let tokens = &meta_list.tokens;
+                quote! { .layer(#tokens) }
+            }),
             _ => Err(Error::new(
                 f.span(),
                 "Expected middleware attribute to be a list, e.g. #[middleware(MyLayer::new())]",
@@ -227,54 +224,48 @@ fn route_impl_with_route(
         .attrs
         .retain(|attr| !attr.path().is_ident("middleware"));
 
-    let server_args = route.server_args.clone();
-    let mut function_on_server = function.clone();
-    function_on_server.sig.inputs.extend(server_args.clone());
-
-    // Now we can compile the route
-    let original_inputs = function
+    // Attach `#[allow(unused_mut)]` to all original inputs to avoid warnings
+    let outer_inputs = function
         .sig
         .inputs
         .iter()
-        .map(|arg| match arg {
+        .enumerate()
+        .map(|(i, arg)| match arg {
             FnArg::Receiver(_receiver) => panic!("Self type is not supported"),
-            FnArg::Typed(pat_type) => {
-                quote! {
-                    #[allow(unused_mut)]
-                    #pat_type
+            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                Pat::Ident(_) => {
+                    quote! { #[allow(unused_mut)] #pat_type }
                 }
-            }
+                _ => {
+                    let ident = format_ident!("___Arg{}", i);
+                    let ty = &pat_type.ty;
+                    quote! { #[allow(unused_mut)] #ident: #ty }
+                }
+            },
         })
         .collect::<Punctuated<_, Token![,]>>();
+    // .collect::<Punctuated<_, Token![,]>>();
 
     let route = CompiledRoute::from_route(route, &function, false, method_from_macro)?;
-    let path_extractor = route.path_extractor();
-    let query_extractor = route.query_extractor();
     let query_params_struct = route.query_params_struct(false);
-    let _state_type = &route.state;
     let method_ident = &route.method;
-    let http_method = route.method.to_axum_method_name();
-    let _remaining_numbered_pats = route.remaining_pattypes_numbered(&function.sig.inputs);
     let body_json_args = route.remaining_pattypes_named(&function.sig.inputs);
     let body_json_names = body_json_args
         .iter()
-        .enumerate()
         .map(|(i, pat_type)| match &*pat_type.pat {
             Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
-            _ => format_ident!("___arg{}", i),
+            _ => format_ident!("___Arg{}", i),
         })
         .collect::<Vec<_>>();
     let body_json_types = body_json_args
         .iter()
-        .map(|pat_type| &pat_type.ty)
+        .map(|pat_type| &pat_type.1.ty)
         .collect::<Vec<_>>();
-    let extracted_idents = route.extracted_idents();
     let route_docs = route.to_doc_comments();
 
     // Get the variables we need for code generation
-    let fn_name = &function.sig.ident;
+    let fn_on_server_name = &function.sig.ident;
     let vis = &function.vis;
-    let asyncness = &function.sig.asyncness;
     let (impl_generics, ty_generics, where_clause) = &function.sig.generics.split_for_impl();
     let ty_generics = ty_generics.as_turbofish();
     let fn_docs = function
@@ -289,7 +280,11 @@ fn route_impl_with_route(
         syn::ReturnType::Type(_, ty) => (*ty).clone(),
     };
 
-    let query_param_names = route.query_params.iter().map(|(ident, _)| ident);
+    let query_param_names = route
+        .query_params
+        .iter()
+        .filter(|c| !c.catch_all)
+        .map(|param| &param.binding);
 
     let path_param_args = route.path_params.iter().map(|(_slash, param)| match param {
         PathParam::Capture(_lit, _brace_1, ident, _ty, _brace_2) => {
@@ -306,21 +301,24 @@ fn route_impl_with_route(
         _ => output_type.clone(),
     };
 
-    let server_names = server_args
+    let mut function_on_server = function.clone();
+    function_on_server
+        .sig
+        .inputs
+        .extend(route.server_args.clone());
+
+    let server_names = route
+        .server_args
         .iter()
-        .map(|pat_type| match pat_type {
-            FnArg::Receiver(_) => quote! { () },
-            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(pat_ident) => {
-                    let name = &pat_ident.ident;
-                    quote! { #name }
-                }
-                _ => panic!("Expected Pat::Ident"),
-            },
+        .enumerate()
+        .map(|(i, pat_type)| match pat_type {
+            FnArg::Typed(_pat_type) => format_ident!("___sarg___{}", i),
+            FnArg::Receiver(_) => panic!("Self type is not supported"),
         })
         .collect::<Vec<_>>();
 
-    let server_types = server_args
+    let server_types = route
+        .server_args
         .iter()
         .map(|pat_type| match pat_type {
             FnArg::Receiver(_) => parse_quote! { () },
@@ -349,42 +347,16 @@ fn route_impl_with_route(
     };
 
     // This unpacks the body struct into the individual variables that get scoped
-    let unpack = {
+    let unpack_closure = {
         let unpack_args = body_json_names.iter().map(|name| quote! { data.#name });
         quote! {
             |data| { ( #(#unpack_args,)* ) }
         }
     };
 
-    // there's no active request on the server, so we just create a dummy one
-    let server_defaults = if server_args.is_empty() {
-        quote! {}
-    } else {
-        quote! {
-            let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
-        }
-    };
-
     let as_axum_path = route.to_axum_path_string();
 
-    let query_endpoint = if let Some(route_lit) = route.route_lit.as_ref() {
-        let prefix = route
-            .prefix
-            .as_ref()
-            .cloned()
-            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
-            .value();
-        let url_without_queries = route_lit.value().split('?').next().unwrap().to_string();
-        let full_url = format!(
-            "{}{}{}",
-            prefix,
-            if url_without_queries.starts_with("/") {
-                ""
-            } else {
-                "/"
-            },
-            url_without_queries
-        );
+    let query_endpoint = if let Some(full_url) = route.url_without_queries_for_format() {
         quote! { format!(#full_url, #( #path_param_args)*) }
     } else {
         quote! { __ENDPOINT_PATH.to_string() }
@@ -403,7 +375,7 @@ fn route_impl_with_route(
             quote! {
                 concat!(
                     "/",
-                    stringify!(#fn_name)
+                    stringify!(#fn_on_server_name)
                 )
             }
         };
@@ -433,14 +405,32 @@ fn route_impl_with_route(
         }
     };
 
-    let middleware_extra = middleware_inits
-        .iter()
-        .map(|init| {
-            quote! {
-                .layer(#init)
-            }
-        })
-        .collect::<Vec<_>>();
+    let extracted_idents = route.extracted_idents();
+
+    let query_tokens = if route.query_is_catchall() {
+        let query = route
+            .query_params
+            .iter()
+            .find(|param| param.catch_all)
+            .unwrap();
+        let input = &function.sig.inputs[query.arg_idx];
+        let name = match input {
+            FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
+                Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+                _ => format_ident!("___Arg{}", query.arg_idx),
+            },
+            FnArg::Receiver(_receiver) => panic!(),
+        };
+        quote! {
+            #name
+        }
+    } else {
+        quote! {
+            __QueryParams__ { #(#query_param_names,)* }
+        }
+    };
+
+    let extracted_as_server_headers = route.extracted_as_server_headers(query_tokens.clone());
 
     Ok(quote! {
         #(#fn_docs)*
@@ -467,13 +457,11 @@ fn route_impl_with_route(
 ==========================================================================================
         "
         )]
-        #vis async fn #fn_name #impl_generics(
-            #original_inputs
-        ) -> #out_ty #where_clause {
+        #vis async fn #fn_on_server_name #impl_generics( #outer_inputs ) -> #out_ty #where_clause {
             use dioxus_fullstack::serde as serde;
             use dioxus_fullstack::{
                 // concrete types
-                ServerFnEncoder, ServerFnDecoder, DioxusServerState,
+                ServerFnEncoder, ServerFnDecoder, FullstackContext,
 
                 // "magic" traits for encoding/decoding on the client
                 ExtractRequest, EncodeRequest, RequestDecodeResult, RequestDecodeErr,
@@ -482,13 +470,26 @@ fn route_impl_with_route(
                 MakeAxumResponse, MakeAxumError,
             };
 
-            _ = dioxus_fullstack::assert_is_result::<#out_ty>();
-
             #query_params_struct
 
             #body_struct_impl
 
             const __ENDPOINT_PATH: &str = #endpoint_path;
+
+            {
+                _ = dioxus_fullstack::assert_is_result::<#out_ty>();
+
+                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
+                    .verify_can_serialize();
+
+                dioxus_fullstack::assert_can_encode(verify_token);
+
+                let decode_token = (&&&&&ServerFnDecoder::<#out_ty>::new())
+                    .verify_can_deserialize();
+
+                dioxus_fullstack::assert_can_decode(decode_token);
+            };
+
 
             // On the client, we make the request to the server
             // We want to support extremely flexible error types and return types, making this more complex than it should
@@ -498,16 +499,11 @@ fn route_impl_with_route(
                 let client = dioxus_fullstack::ClientRequest::new(
                     dioxus_fullstack::http::Method::#method_ident,
                     #query_endpoint,
-                    &__QueryParams__ { #(#query_param_names,)* },
+                    &#query_tokens,
                 );
 
-                let verify_token = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .verify_can_serialize();
-
-                dioxus_fullstack::assert_can_encode(verify_token);
-
                 let response = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                    .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack)
+                    .fetch_client(client, ___Body_Serialize___ { #(#body_json_names,)* }, #unpack_closure)
                     .await;
 
                 let decoded = (&&&&&ServerFnDecoder::<#out_ty>::new())
@@ -523,45 +519,46 @@ fn route_impl_with_route(
 
             // On the server, we expand the tokens and submit the function to inventory
             #[cfg(feature = "server")] {
-                use #__axum::response::IntoResponse;
-                use dioxus_server::ServerFunction;
-
                 #function_on_server
 
                 #[allow(clippy::unused_unit)]
-                #asyncness fn __inner__function__ #impl_generics(
-                    ___state: #__axum::extract::State<DioxusServerState>,
-                    #path_extractor
-                    #query_extractor
-                    request: #__axum::extract::Request,
-                ) -> Result<#__axum::response::Response, #__axum::response::Response> #where_clause {
-                    let ((#(#server_names,)*), (  #(#body_json_names,)* )) = (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new())
-                        .extract_axum(___state.0, request, #unpack).await?;
+                fn __inner__function__ #impl_generics(
+                    ___state: #__axum::extract::State<FullstackContext>,
+                    ___request: #__axum::extract::Request,
+                ) -> std::pin::Pin<Box<dyn std::future::Future<Output = #__axum::response::Response>>> #where_clause {
+                    Box::pin(async move {
+                         match (&&&&&&&&&&&&&&ServerFnEncoder::<___Body_Serialize___<#(#body_json_types,)*>, (#(#body_json_types,)*)>::new()).extract_axum(___state.0, ___request, #unpack_closure).await {
+                            Ok(((#(#body_json_names,)* ), (#(#extracted_as_server_headers,)* #(#server_names,)*) )) => {
+                                // Call the user function
+                                let res = #fn_on_server_name #ty_generics(#(#extracted_idents,)* #(#body_json_names,)* #(#server_names,)*).await;
 
-                    let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_response(
-                            #fn_name #ty_generics(#(#extracted_idents,)*  #(#body_json_names,)* #(#server_names,)*).await
-                        );
+                                // Encode the response Into a `Result<T, E>`
+                                let encoded = (&&&&&&ServerFnDecoder::<#out_ty>::new()).make_axum_response(res);
 
-                    let response = (&&&&&ServerFnDecoder::<#out_ty>::new())
-                        .make_axum_error(encoded);
-
-                    return response;
+                                // And then encode `Result<T, E>` into `Response`
+                                (&&&&&ServerFnDecoder::<#out_ty>::new()).make_axum_error(encoded)
+                            },
+                            Err(res) => res,
+                        }
+                    })
                 }
 
                 dioxus_server::inventory::submit! {
-                    ServerFunction::new(
+                    dioxus_server::ServerFunction::new(
                         dioxus_server::http::Method::#method_ident,
                         __ENDPOINT_PATH,
                         || {
-                            #__axum::routing::#http_method(__inner__function__ #ty_generics) #(#middleware_extra)*
+                            dioxus_server::ServerFunction::make_handler(dioxus_server::http::Method::#method_ident, __inner__function__ #ty_generics)
+                                #(#middleware_layers)*
                         }
                     )
                 }
 
-                #server_defaults
+                // Extract the server arguments from the context
+                let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
 
-                return #fn_name #ty_generics(
+                // Call the function directly
+                return #fn_on_server_name #ty_generics(
                     #(#extracted_idents,)*
                     #(#body_json_names,)*
                     #(#server_names,)*
@@ -580,11 +577,19 @@ struct CompiledRoute {
     method: Method,
     #[allow(clippy::type_complexity)]
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<(Ident, Box<Type>)>,
-    state: Type,
+    query_params: Vec<QueryParam>,
     route_lit: Option<LitStr>,
     prefix: Option<LitStr>,
     oapi_options: Option<OapiOptions>,
+    server_args: Punctuated<FnArg, Comma>,
+}
+
+struct QueryParam {
+    arg_idx: usize,
+    name: String,
+    binding: Ident,
+    catch_all: bool,
+    ty: Box<Type>,
 }
 
 impl CompiledRoute {
@@ -607,10 +612,6 @@ impl CompiledRoute {
                 }
                 PathParam::Static(lit) => path.push_str(&lit.value()),
             }
-            // if colon.is_some() {
-            //     path.push(':');
-            // }
-            // path.push_str(&ident.value());
         }
 
         path
@@ -645,12 +646,13 @@ impl CompiledRoute {
         let mut arg_map = sig
             .inputs
             .iter()
-            .filter_map(|item| match item {
+            .enumerate()
+            .filter_map(|(i, item)| match item {
                 syn::FnArg::Receiver(_) => None,
-                syn::FnArg::Typed(pat_type) => Some(pat_type),
+                syn::FnArg::Typed(pat_type) => Some((i, pat_type)),
             })
-            .filter_map(|pat_type| match &*pat_type.pat {
-                syn::Pat::Ident(ident) => Some((ident.ident.clone(), pat_type.ty.clone())),
+            .filter_map(|(i, pat_type)| match &*pat_type.pat {
+                syn::Pat::Ident(ident) => Some((ident.ident.clone(), (pat_type.ty.clone(), i))),
                 _ => None,
             })
             .collect::<HashMap<_, _>>();
@@ -665,7 +667,7 @@ impl CompiledRoute {
                         )
                     })?;
                     *ident = new_ident;
-                    *ty = new_ty;
+                    *ty = new_ty.0;
                 }
                 PathParam::WildCard(_lit, _, _star, ident, ty, _) => {
                     let (new_ident, new_ty) = arg_map.remove_entry(ident).ok_or_else(|| {
@@ -675,24 +677,38 @@ impl CompiledRoute {
                         )
                     })?;
                     *ident = new_ident;
-                    *ty = new_ty;
+                    *ty = new_ty.0;
                 }
                 PathParam::Static(_lit) => {}
             }
         }
 
         let mut query_params = Vec::new();
-        for ident in route.query_params {
-            let (ident, ty) = arg_map.remove_entry(&ident).ok_or_else(|| {
+        for param in route.query_params {
+            let (ident, ty) = arg_map.remove_entry(&param.binding).ok_or_else(|| {
                 syn::Error::new(
-                    ident.span(),
+                    param.binding.span(),
                     format!(
                         "query parameter `{}` not found in function arguments",
-                        ident
+                        param.binding
                     ),
                 )
             })?;
-            query_params.push((ident, ty));
+            query_params.push(QueryParam {
+                binding: ident,
+                name: param.name,
+                catch_all: param.catch_all,
+                ty: ty.0,
+                arg_idx: ty.1,
+            });
+        }
+
+        // Disallow multiple query params if one is a catch-all
+        if query_params.iter().any(|param| param.catch_all) && query_params.len() > 1 {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "Cannot have multiple query parameters when one is a catch-all",
+            ));
         }
 
         if let Some(options) = route.oapi_options.as_mut() {
@@ -721,34 +737,54 @@ impl CompiledRoute {
             route_lit: route.route_lit,
             path_params: route.path_params,
             query_params,
-            state: route.state.unwrap_or_else(|| guess_state_type(sig)),
             oapi_options: route.oapi_options,
             prefix: route.prefix,
+            server_args: route.server_args,
         })
     }
 
-    pub fn path_extractor(&self) -> TokenStream2 {
-        let path_iter = self
-            .path_params
-            .iter()
-            .filter_map(|(_slash, path_param)| path_param.capture());
-        let idents = path_iter.clone().map(|item| item.0);
-        let types = path_iter.clone().map(|item| item.1);
-        quote! {
-            dioxus_server::axum::extract::Path((#(#idents,)*)): dioxus_server::axum::extract::Path<(#(#types,)*)>,
-        }
+    pub fn query_is_catchall(&self) -> bool {
+        self.query_params.iter().any(|param| param.catch_all)
     }
 
-    pub fn query_extractor(&self) -> TokenStream2 {
-        let idents = self.query_params.iter().map(|item| &item.0);
-        quote! {
-            dioxus_server::axum::extract::Query(__QueryParams__ { #(#idents,)* }): dioxus_server::axum::extract::Query<__QueryParams__>,
-        }
+    pub fn extracted_as_server_headers(&self, query_tokens: TokenStream2) -> Vec<Pat> {
+        let mut out = vec![];
+
+        // Add the path extractor
+        out.push({
+            let path_iter = self
+                .path_params
+                .iter()
+                .filter_map(|(_slash, path_param)| path_param.capture());
+            let idents = path_iter.clone().map(|item| item.0);
+            parse_quote! {
+                dioxus_server::axum::extract::Path((#(#idents,)*))
+            }
+        });
+
+        out.push(parse_quote!(
+            dioxus_server::axum::extract::Query(#query_tokens)
+        ));
+
+        out
     }
 
     pub fn query_params_struct(&self, with_aide: bool) -> TokenStream2 {
-        let idents = self.query_params.iter().map(|item| &item.0);
-        let types = self.query_params.iter().map(|item| &item.1);
+        let fields = self.query_params.iter().map(|item| {
+            let name = &item.name;
+            let binding = &item.binding;
+            let ty = &item.ty;
+            if item.catch_all {
+                quote! {}
+            } else if item.binding != item.name {
+                quote! {
+                    #[serde(rename = #name)]
+                    #binding: #ty,
+                }
+            } else {
+                quote! { #binding: #ty, }
+            }
+        });
         let derive = match with_aide {
             true => quote! {
                 #[derive(serde::Deserialize, serde::Serialize, ::schemars::JsonSchema)]
@@ -762,7 +798,7 @@ impl CompiledRoute {
         quote! {
             #derive
             struct __QueryParams__ {
-                #(#idents: #types,)*
+                #(#fields)*
             }
         }
     }
@@ -774,49 +810,13 @@ impl CompiledRoute {
                 idents.push(ident.clone());
             }
         }
-        for (ident, _ty) in &self.query_params {
-            idents.push(ident.clone());
+        for param in &self.query_params {
+            idents.push(param.binding.clone());
         }
         idents
     }
 
-    fn remaining_pattypes_named(
-        &self,
-        args: &Punctuated<FnArg, Comma>,
-    ) -> Punctuated<PatType, Comma> {
-        args.iter()
-            .filter_map(|item| {
-                if let FnArg::Typed(pat_type) = item {
-                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                        if self.path_params.iter().any(|(_slash, path_param)| {
-                            if let Some((path_ident, _ty)) = path_param.capture() {
-                                path_ident == &pat_ident.ident
-                            } else {
-                                false
-                            }
-                        }) || self
-                            .query_params
-                            .iter()
-                            .any(|(query_ident, _)| query_ident == &pat_ident.ident)
-                        {
-                            return None;
-                        }
-                    }
-
-                    Some(pat_type.clone())
-                } else {
-                    unimplemented!("Self type is not supported")
-                }
-            })
-            .collect()
-    }
-
-    /// The arguments not used in the route.
-    /// Map the identifier to `___arg___{i}: Type`.
-    pub fn remaining_pattypes_numbered(
-        &self,
-        args: &Punctuated<FnArg, Comma>,
-    ) -> Punctuated<PatType, Comma> {
+    fn remaining_pattypes_named(&self, args: &Punctuated<FnArg, Comma>) -> Vec<(usize, PatType)> {
         args.iter()
             .enumerate()
             .filter_map(|(i, item)| {
@@ -831,16 +831,13 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|(query_ident, _)| query_ident == &pat_ident.ident)
+                            .any(|query| query.binding == pat_ident.ident)
                         {
                             return None;
                         }
                     }
 
-                    let mut new_pat_type = pat_type.clone();
-                    let ident = format_ident!("___arg___{}", i);
-                    new_pat_type.pat = Box::new(parse_quote!(#ident));
-                    Some(new_pat_type)
+                    Some((i, pat_type.clone()))
                 } else {
                     unimplemented!("Self type is not supported")
                 }
@@ -848,224 +845,16 @@ impl CompiledRoute {
             .collect()
     }
 
-    #[allow(dead_code)]
-    fn aide() {
-        // let http_method = format_ident!("{}_with", http_method);
-        // let summary = route
-        //     .get_oapi_summary()
-        //     .map(|summary| quote! { .summary(#summary) });
-        // let description = route
-        //     .get_oapi_description()
-        //     .map(|description| quote! { .description(#description) });
-        // let hidden = route
-        //     .get_oapi_hidden()
-        //     .map(|hidden| quote! { .hidden(#hidden) });
-        // let tags = route.get_oapi_tags();
-        // let id = route
-        //     .get_oapi_id(&function.sig)
-        //     .map(|id| quote! { .id(#id) });
-        // let transform = route.get_oapi_transform()?;
-        // let responses = route.get_oapi_responses();
-        // let response_code = responses.iter().map(|response| &response.0);
-        // let response_type = responses.iter().map(|response| &response.1);
-        // let security = route.get_oapi_security();
-        // let schemes = security.iter().map(|sec| &sec.0);
-        // let scopes = security.iter().map(|sec| &sec.1);
-
-        // (
-        //     route.ide_documentation_for_aide_methods(),
-        //     quote! {
-        //         ::aide::axum::routing::#http_method(
-        //             __inner__function__ #ty_generics,
-        //             |__op__| {
-        //                 let __op__ = __op__
-        //                     #summary
-        //                     #description
-        //                     #hidden
-        //                     #id
-        //                     #(.tag(#tags))*
-        //                     #(.security_requirement_scopes::<Vec<&'static str>, _>(#schemes, vec![#(#scopes),*]))*
-        //                     #(.response::<#response_code, #response_type>())*
-        //                     ;
-        //                 #transform
-        //                 __op__
-        //             }
-        //         )
-        //     },
-        //     quote! { ::aide::axum::routing::ApiMethodRouter },
-        // )
-    }
-
-    #[allow(dead_code)]
-    pub fn ide_documentation_for_aide_methods(&self) -> TokenStream2 {
-        let Some(options) = &self.oapi_options else {
-            return quote! {};
-        };
-        let summary = options.summary.as_ref().map(|(ident, _)| {
-            let method = Ident::new("summary", ident.span());
-            quote!( let x = x.#method(""); )
-        });
-        let description = options.description.as_ref().map(|(ident, _)| {
-            let method = Ident::new("description", ident.span());
-            quote!( let x = x.#method(""); )
-        });
-        let id = options.id.as_ref().map(|(ident, _)| {
-            let method = Ident::new("id", ident.span());
-            quote!( let x = x.#method(""); )
-        });
-        let hidden = options.hidden.as_ref().map(|(ident, _)| {
-            let method = Ident::new("hidden", ident.span());
-            quote!( let x = x.#method(false); )
-        });
-        let tags = options.tags.as_ref().map(|(ident, _)| {
-            let method = Ident::new("tag", ident.span());
-            quote!( let x = x.#method(""); )
-        });
-        let security = options.security.as_ref().map(|(ident, _)| {
-            let method = Ident::new("security_requirement_scopes", ident.span());
-            quote!( let x = x.#method("", [""]); )
-        });
-        let responses = options.responses.as_ref().map(|(ident, _)| {
-            let method = Ident::new("response", ident.span());
-            quote!( let x = x.#method::<0, String>(); )
-        });
-        let transform = options.transform.as_ref().map(|(ident, _)| {
-            let method = Ident::new("with", ident.span());
-            quote!( let x = x.#method(|x|x); )
-        });
-
-        quote! {
-            #[allow(unused)]
-            #[allow(clippy::no_effect)]
-            fn ____ide_documentation_for_aide____(x: ::aide::transform::TransformOperation) {
-                #summary
-                #description
-                #id
-                #hidden
-                #tags
-                #security
-                #responses
-                #transform
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_summary(&self) -> Option<LitStr> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(summary) = &oapi_options.summary {
-                return Some(summary.1.clone());
-            }
-        }
-        None
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_description(&self) -> Option<LitStr> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(description) = &oapi_options.description {
-                return Some(description.1.clone());
-            }
-        }
-        None
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_hidden(&self) -> Option<LitBool> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(hidden) = &oapi_options.hidden {
-                return Some(hidden.1.clone());
-            }
-        }
-        None
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_tags(&self) -> Vec<LitStr> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(tags) = &oapi_options.tags {
-                return tags.1 .0.clone();
-            }
-        }
-        Vec::new()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_id(&self, sig: &Signature) -> Option<LitStr> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(id) = &oapi_options.id {
-                return Some(id.1.clone());
-            }
-        }
-        Some(LitStr::new(&sig.ident.to_string(), sig.ident.span()))
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_transform(&self) -> syn::Result<Option<TokenStream2>> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some(transform) = &oapi_options.transform {
-                if transform.1.inputs.len() != 1 {
-                    return Err(syn::Error::new(
-                        transform.1.span(),
-                        "expected a single identifier",
-                    ));
-                }
-
-                let pat = transform.1.inputs.first().unwrap();
-                let body = &transform.1.body;
-
-                if let Pat::Ident(pat_ident) = pat {
-                    let ident = &pat_ident.ident;
-                    return Ok(Some(quote! {
-                        let #ident = __op__;
-                        let __op__ = #body;
-                    }));
-                } else {
-                    return Err(syn::Error::new(
-                        pat.span(),
-                        "expected a single identifier without type",
-                    ));
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_responses(&self) -> Vec<(LitInt, Type)> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some((_ident, Responses(responses))) = &oapi_options.responses {
-                return responses.clone();
-            }
-        }
-        Default::default()
-    }
-
-    #[allow(dead_code)]
-    pub fn get_oapi_security(&self) -> Vec<(LitStr, Vec<LitStr>)> {
-        if let Some(oapi_options) = &self.oapi_options {
-            if let Some((_ident, Security(security))) = &oapi_options.security {
-                return security
-                    .iter()
-                    .map(|(scheme, StrArray(scopes))| (scheme.clone(), scopes.clone()))
-                    .collect();
-            }
-        }
-        Default::default()
-    }
-
     pub(crate) fn to_doc_comments(&self) -> TokenStream2 {
         let mut doc = format!(
             "# Handler information
 - Method: `{}`
-- Path: `{}`
-- State: `{}`",
+- Path: `{}`",
             self.method.to_axum_method_name(),
             self.route_lit
                 .as_ref()
                 .map(|lit| lit.value())
                 .unwrap_or_else(|| "<auto>".into()),
-            self.state.to_token_stream(),
         );
 
         if let Some(options) = &self.oapi_options {
@@ -1118,33 +907,56 @@ impl CompiledRoute {
             #[doc = #doc]
         )
     }
-}
 
-fn guess_state_type(sig: &syn::Signature) -> Type {
-    for arg in &sig.inputs {
-        if let FnArg::Typed(pat_type) = arg {
-            // Returns `T` if the type of the last segment is exactly `State<T>`.
-            if let Type::Path(ty) = &*pat_type.ty {
-                let last_segment = ty.path.segments.last().unwrap();
-                if last_segment.ident == "State" {
-                    if let PathArguments::AngleBracketed(args) = &last_segment.arguments {
-                        if args.args.len() == 1 {
-                            if let GenericArgument::Type(ty) = args.args.first().unwrap() {
-                                return ty.clone();
-                            }
+    fn url_without_queries_for_format(&self) -> Option<String> {
+        // If there's no explicit route, we can't generate a format string this way.
+        let _lit = self.route_lit.as_ref()?;
+
+        let url_without_queries =
+            self.path_params
+                .iter()
+                .fold(String::new(), |mut acc, (_slash, param)| {
+                    acc.push('/');
+                    match param {
+                        PathParam::Capture(lit, _brace_1, _, _, _brace_2) => {
+                            acc.push_str(&format!("{{{}}}", lit.value()));
+                        }
+                        PathParam::WildCard(lit, _brace_1, _, _, _, _brace_2) => {
+                            // no `*` since we want to use the argument *as the wildcard* when making requests
+                            // it's not super applicable to server functions, more for general route generation
+                            acc.push_str(&format!("{{{}}}", lit.value()));
+                        }
+                        PathParam::Static(lit) => {
+                            acc.push_str(&lit.value());
                         }
                     }
-                }
-            }
-        }
-    }
+                    acc
+                });
 
-    parse_quote! { () }
+        let prefix = self
+            .prefix
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| LitStr::new("", Span::call_site()))
+            .value();
+        let full_url = format!(
+            "{}{}{}",
+            prefix,
+            if url_without_queries.starts_with("/") {
+                ""
+            } else {
+                "/"
+            },
+            url_without_queries
+        );
+
+        Some(full_url)
+    }
 }
 
 struct RouteParser {
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<Ident>,
+    query_params: Vec<QueryParam>,
 }
 
 impl RouteParser {
@@ -1198,7 +1010,53 @@ impl RouteParser {
         if split_route.len() == 2 {
             let query = split_route[1];
             for query_param in query.split('&') {
-                query_params.push(Ident::new(query_param, span));
+                if query_param.starts_with(":") {
+                    let ident = Ident::new(query_param.strip_prefix(":").unwrap(), span);
+
+                    query_params.push(QueryParam {
+                        name: ident.to_string(),
+                        binding: ident,
+                        catch_all: true,
+                        ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
+                    });
+                } else if query_param.starts_with("{") && query_param.ends_with("}") {
+                    let ident = Ident::new(
+                        query_param
+                            .strip_prefix("{")
+                            .unwrap()
+                            .strip_suffix("}")
+                            .unwrap(),
+                        span,
+                    );
+
+                    query_params.push(QueryParam {
+                        name: ident.to_string(),
+                        binding: ident,
+                        catch_all: true,
+                        ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
+                    });
+                } else {
+                    // if there's an `=` in the query param, we only take the left side as the name, and the right side is the binding
+                    let name;
+                    let binding;
+                    if let Some((n, b)) = query_param.split_once('=') {
+                        name = n;
+                        binding = Ident::new(b, span);
+                    } else {
+                        name = query_param;
+                        binding = Ident::new(query_param, span);
+                    }
+
+                    query_params.push(QueryParam {
+                        name: name.to_string(),
+                        binding,
+                        catch_all: false,
+                        ty: parse_quote!(()),
+                        arg_idx: usize::MAX,
+                    });
+                }
             }
         }
 
@@ -1459,8 +1317,7 @@ fn doc_iter(attrs: &[Attribute]) -> impl Iterator<Item = &LitStr> + '_ {
 struct Route {
     method: Option<Method>,
     path_params: Vec<(Slash, PathParam)>,
-    query_params: Vec<Ident>,
-    state: Option<Type>,
+    query_params: Vec<QueryParam>,
     route_lit: Option<LitStr>,
     prefix: Option<LitStr>,
     oapi_options: Option<OapiOptions>,
@@ -1485,13 +1342,6 @@ impl Parse for Route {
             query_params,
         } = RouteParser::new(route_lit.clone())?;
 
-        // todo: maybe let the user include `State<T>` here, eventually?
-        // let state = match input.parse::<kw::with>() {
-        //     Ok(_) => Some(input.parse::<Type>()?),
-        //     Err(_) => None,
-        // };
-
-        let state = None;
         let oapi_options = input
             .peek(Brace)
             .then(|| {
@@ -1512,7 +1362,6 @@ impl Parse for Route {
             method,
             path_params,
             query_params,
-            state,
             route_lit: Some(route_lit),
             oapi_options,
             server_args,

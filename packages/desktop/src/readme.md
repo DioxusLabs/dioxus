@@ -47,4 +47,4 @@ To configure the webview, menubar, and other important desktop-specific features
 
 ## Future Steps
 
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/learn/0.6/) if you already haven't!
+Make sure to read the [Dioxus Guide](https://dioxuslabs.com/learn/0.7/) if you already haven't!

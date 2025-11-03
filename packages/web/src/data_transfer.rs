@@ -1,3 +1,4 @@
+use crate::WebFileData;
 use dioxus_html::{FileData, NativeDataTransfer};
 
 /// A wrapper around the web_sys::DataTransfer to implement NativeDataTransfer
@@ -49,6 +50,17 @@ impl NativeDataTransfer for WebDataTransfer {
     }
 
     fn files(&self) -> Vec<FileData> {
-        todo!()
+        let mut result = Vec::new();
+        if let Some(file_list) = self.data.files() {
+            for i in 0..file_list.length() {
+                if let Some(file) = file_list.item(i) {
+                    result.push(FileData::new(WebFileData::new(
+                        file,
+                        web_sys::FileReader::new().unwrap(),
+                    )));
+                }
+            }
+        }
+        result
     }
 }

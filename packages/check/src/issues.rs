@@ -162,11 +162,11 @@ impl Display for IssueReport {
 #[allow(clippy::enum_variant_names)] // we'll add non-hook ones in the future
 /// Issues that might be found via static analysis of a Dioxus file.
 pub enum Issue {
-    /// <https://dioxuslabs.com/learn/0.6/reference/hooks#no-hooks-in-conditionals>
+    /// <https://dioxuslabs.com/learn/0.7/reference/hooks#no-hooks-in-conditionals>
     HookInsideConditional(HookInfo, ConditionalInfo),
-    /// <https://dioxuslabs.com/learn/0.6/reference/hooks#no-hooks-in-loops>
+    /// <https://dioxuslabs.com/learn/0.7/reference/hooks#no-hooks-in-loops>
     HookInsideLoop(HookInfo, AnyLoopInfo),
-    /// <https://dioxuslabs.com/learn/0.6/reference/hooks#no-hooks-in-closures>
+    /// <https://dioxuslabs.com/learn/0.7/reference/hooks#no-hooks-in-closures>
     HookInsideClosure(HookInfo, ClosureInfo),
     HookInsideAsync(HookInfo, AsyncInfo),
     HookOutsideComponent(HookInfo),

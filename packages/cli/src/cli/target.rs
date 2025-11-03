@@ -153,6 +153,14 @@ pub(crate) struct TargetArgs {
     /// Automatically pass `--features=js_cfg` when building for wasm targets. This is enabled by default.
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) wasm_js_cfg: bool,
+
+    /// The Windows subsystem to use when building for Windows targets. This can be either `CONSOLE` or `WINDOWS`.
+    ///
+    /// By default, DX uses `WINDOWS` since it assumes a GUI application, but you can override this behavior with this flag.
+    ///
+    /// See <https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170> for more information.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) windows_subsystem: Option<String>,
 }
 
 impl Anonymized for TargetArgs {
