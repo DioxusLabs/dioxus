@@ -9,6 +9,7 @@
 //!  - `menu`: Enables the [`muda`](https://docs.rs/muda/latest/muda/) menubar.
 //!  - `tracing`: Enables tracing support.
 
+#[cfg(feature = "net")]
 mod assets;
 mod contexts;
 mod dioxus_application;
@@ -19,7 +20,6 @@ mod link_handler;
 pub use dioxus_native_dom::*;
 
 pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
-use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
 pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
 
@@ -120,7 +120,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     #[cfg(feature = "net")]
     let net_provider = {
         let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
+        let net_provider = assets::DioxusNativeNetProvider::shared(proxy);
         Some(net_provider)
     };
     #[cfg(not(feature = "net"))]
