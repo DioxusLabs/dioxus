@@ -27,7 +27,6 @@ use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConf
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-#[cfg(feature = "html")]
 use std::sync::Arc;
 use winit::window::WindowAttributes;
 
