@@ -70,6 +70,8 @@ impl ServerFunction {
                 .try_into()
                 .expect("MethodFilter only supports standard HTTP methods"),
             move |state: State<FullstackState>, request: Request| async move {
+                use tracing::Instrument;
+                let current_span = tracing::Span::current();
                 // Allow !Send futures by running in the render handlers pinned local pool
                 let result = state.rt.spawn_pinned(move || async move {
                     use dioxus_fullstack_core::FullstackContext;
@@ -97,7 +99,9 @@ impl ServerFunction {
                         .clone()
                         .scope(async move {
                             // Run the next middleware / handler inside the server context
-                            let mut response = handler(State(server_context), request).await;
+                            let mut response = handler(State(server_context), request)
+                                .instrument(current_span)
+                                .await;
 
                             let server_context = FullstackContext::current().expect(
                                 "Server context should be available inside the server context scope",
