@@ -432,6 +432,15 @@ fn route_impl_with_route(
 
     let extracted_as_server_headers = route.extracted_as_server_headers(query_tokens.clone());
 
+    // Generate extraction code based on whether there are server extractors
+    let extraction_code = if route.server_args.is_empty() {
+        quote! { Default::default() }
+    } else {
+        quote! {
+            dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?
+        }
+    };
+
     Ok(quote! {
         #(#fn_docs)*
         #route_docs
@@ -554,18 +563,12 @@ fn route_impl_with_route(
                     )
                 }
 
-                // Extract the server arguments from the context if available.
-                // When called from an HTTP handler, the context will be available and extractors work normally.
-                // When called directly from server-side code, the context won't exist,
-                // so we use Default::default() to provide empty/default values for extractors.
-                // This matches the behavior of the old server_fn and allows server functions to be called from both contexts.
-                let (#(#server_names,)*) = if dioxus_fullstack::FullstackContext::current().is_some() {
-                    // We're in an HTTP request context - extract normally
-                    dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?
-                } else {
-                    // We're in a direct server-side call - use defaults
-                    Default::default()
-                };
+                // Extract the server arguments from the context if needed.
+                // If there are no server extractors, use Default::default() which allows
+                // the function to be called from backend code without HTTP context.
+                // If there are server extractors, extraction will fail with a clear error
+                // when called from backend code without HTTP context.
+                let (#(#server_names,)*) = #extraction_code;
 
                 // Call the function directly
                 return #fn_on_server_name #ty_generics(
