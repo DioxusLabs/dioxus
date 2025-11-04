@@ -554,8 +554,18 @@ fn route_impl_with_route(
                     )
                 }
 
-                // Extract the server arguments from the context
-                let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
+                // Extract the server arguments from the context if available.
+                // When called from an HTTP handler, the context will be available and extractors work normally.
+                // When called directly from server-side code, the context won't exist,
+                // so we use Default::default() to provide empty/default values for extractors.
+                // This matches the behavior of the old server_fn and allows server functions to be called from both contexts.
+                let (#(#server_names,)*) = if dioxus_fullstack::FullstackContext::current().is_some() {
+                    // We're in an HTTP request context - extract normally
+                    dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?
+                } else {
+                    // We're in a direct server-side call - use defaults
+                    Default::default()
+                };
 
                 // Call the function directly
                 return #fn_on_server_name #ty_generics(
