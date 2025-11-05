@@ -16,7 +16,7 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -200,7 +200,7 @@ pub(crate) struct WebviewInstance {
 impl WebviewInstance {
     pub(crate) fn new(
         mut cfg: Config,
-        dom: VirtualDom,
+        mut dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
@@ -228,7 +228,10 @@ impl WebviewInstance {
             ));
         }
 
-        let window = window.build(&shared.target).unwrap();
+        let window = Arc::new(window.build(&shared.target).unwrap());
+        if let Some(on_build) = cfg.on_window.as_mut() {
+            on_build(window.clone(), &mut dom);
+        }
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -484,6 +487,9 @@ impl WebviewInstance {
             provide_context(provider);
             provide_context(history_provider);
         });
+
+        // Request an initial redraw
+        desktop_context.window.request_redraw();
 
         WebviewInstance {
             dom,

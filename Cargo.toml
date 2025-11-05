@@ -485,6 +485,7 @@ futures = { workspace = true }
 axum-core = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
+pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
