@@ -11,25 +11,63 @@ alias is kept for backward compatibility.
 
 ## Usage
 
+The macro accepts any expression that evaluates to a `Permission`. There are two patterns:
+
+### Builder Pattern (for Location and Custom permissions)
+
+Location and custom permissions use the builder pattern:
+
 ```rust
-use permissions_core::Permission;
+use permissions_core::{Permission, PermissionBuilder, LocationPrecision};
 use permissions_macro::static_permission;
 
-// Basic permission
-const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
+// Location permission with fine precision
+const LOCATION_FINE: Permission = static_permission!(
+    PermissionBuilder::location(LocationPrecision::Fine)
+        .with_description("Track your runs")
+        .build()
+);
 
-// Location with precision
-const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
+// Location permission with coarse precision
+const LOCATION_COARSE: Permission = static_permission!(
+    PermissionBuilder::location(LocationPrecision::Coarse)
+        .with_description("Approximate location")
+        .build()
+);
 
-// Custom permission (not shown in doctests due to buffer size limitations)
-// const CUSTOM: Permission = permission!(
-//     Custom { 
-//         android = "android.permission.MY_PERMISSION",
-//         ios = "NSMyUsageDescription",
-//         macos = "NSMyUsageDescription"
-//     },
-//     description = "Custom permission"
-// );
+// Custom permission
+const CUSTOM: Permission = static_permission!(
+    PermissionBuilder::custom()
+        .with_android("android.permission.MY_PERMISSION")
+        .with_ios("NSMyUsageDescription")
+        .with_macos("NSMyUsageDescription")
+        .with_description("Custom permission")
+        .build()
+);
+```
+
+### Direct Construction (for simple permissions)
+
+Simple permissions like Camera, Microphone, and Notifications use direct construction:
+
+```rust
+use permissions_core::{Permission, PermissionKind};
+use permissions_macro::static_permission;
+
+// Camera permission
+const CAMERA: Permission = static_permission!(
+    Permission::new(PermissionKind::Camera, "Take photos")
+);
+
+// Microphone permission
+const MICROPHONE: Permission = static_permission!(
+    Permission::new(PermissionKind::Microphone, "Record audio")
+);
+
+// Notifications permission
+const NOTIFICATIONS: Permission = static_permission!(
+    Permission::new(PermissionKind::Notifications, "Send notifications")
+);
 ```
 
 ## How it works

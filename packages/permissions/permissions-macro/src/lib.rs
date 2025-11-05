@@ -14,25 +14,58 @@ use permission::PermissionParser;
 ///
 /// # Syntax
 ///
-/// Basic permission declaration:
+/// The macro accepts any expression that evaluates to a `Permission`. There are two patterns:
+///
+/// ## Builder Pattern (for Location and Custom permissions)
+///
+/// Location permissions use the builder pattern:
 /// ```rust
-/// use permissions_core::Permission;
+/// use permissions_core::{Permission, PermissionBuilder, LocationPrecision};
 /// use permissions_macro::static_permission;
-/// const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
+///
+/// // Fine location
+/// const LOCATION_FINE: Permission = static_permission!(
+///     PermissionBuilder::location(LocationPrecision::Fine)
+///         .with_description("Track your runs")
+///         .build()
+/// );
+///
+/// // Coarse location
+/// const LOCATION_COARSE: Permission = static_permission!(
+///     PermissionBuilder::location(LocationPrecision::Coarse)
+///         .with_description("Approximate location")
+///         .build()
+/// );
+///
+/// // Custom permission
+/// const CUSTOM: Permission = static_permission!(
+///     PermissionBuilder::custom()
+///         .with_android("android.permission.MY_PERMISSION")
+///         .with_ios("NSMyUsageDescription")
+///         .with_macos("NSMyUsageDescription")
+///         .with_description("Custom permission")
+///         .build()
+/// );
 /// ```
 ///
-/// Location permission with precision:
-/// ```rust
-/// use permissions_core::Permission;
-/// use permissions_macro::static_permission;
-/// const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
-/// ```
+/// ## Direct Construction (for simple permissions)
 ///
-/// Microphone permission:
+/// Simple permissions like Camera, Microphone, and Notifications use direct construction:
 /// ```rust
-/// use permissions_core::Permission;
+/// use permissions_core::{Permission, PermissionKind};
 /// use permissions_macro::static_permission;
-/// const MICROPHONE: Permission = static_permission!(Microphone, description = "Record audio");
+///
+/// const CAMERA: Permission = static_permission!(
+///     Permission::new(PermissionKind::Camera, "Take photos")
+/// );
+///
+/// const MICROPHONE: Permission = static_permission!(
+///     Permission::new(PermissionKind::Microphone, "Record audio")
+/// );
+///
+/// const NOTIFICATIONS: Permission = static_permission!(
+///     Permission::new(PermissionKind::Notifications, "Send notifications")
+/// );
 /// ```
 ///
 /// # Supported Permission Kinds
@@ -46,7 +79,7 @@ use permission::PermissionParser;
 /// - `Location(Fine)` / `Location(Coarse)` - Location access with precision (tested across all platforms)
 /// - `Microphone` - Microphone access (tested across all platforms)
 /// - `Notifications` - Push notifications (tested on Android and Web)
-/// - `Custom { ... }` - Custom permission with platform-specific identifiers
+/// - `Custom` - Custom permission with platform-specific identifiers
 ///
 /// See the main documentation for examples of using `Custom` permissions
 /// for untested or special use cases.

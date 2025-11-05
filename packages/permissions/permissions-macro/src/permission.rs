@@ -1,230 +1,73 @@
+use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use syn::{
-    parse::{Parse, ParseStream},
-    Token,
-};
-
-use permissions_core::{LocationPrecision, PermissionKind};
+use syn::parse::Parse;
 
 /// Parser for the `static_permission!()` macro syntax (and `permission!()` alias)
+///
+/// This parser accepts any expression that evaluates to a `Permission`:
+/// - Builder pattern: `PermissionBuilder::location(...).with_description(...).build()`
+/// - Direct construction: `Permission::new(PermissionKind::Camera, "...")`
 pub struct PermissionParser {
-    /// The permission kind being declared
-    kind: PermissionKindParser,
-    /// The user-facing description
-    description: String,
+    /// The permission expression (either builder or direct)
+    expr: TokenStream2,
 }
 
 impl Parse for PermissionParser {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        // Parse the permission kind
-        let kind = input.parse::<PermissionKindParser>()?;
-
-        // Parse the comma separator
-        let _comma = input.parse::<Token![,]>()?;
-
-        // Parse the description keyword
-        let _description_keyword = input.parse::<syn::Ident>()?;
-        if _description_keyword != "description" {
-            return Err(syn::Error::new(
-                _description_keyword.span(),
-                "Expected 'description' keyword",
-            ));
-        }
-
-        // Parse the equals sign
-        let _equals = input.parse::<Token![=]>()?;
-
-        // Parse the description string
-        let description_lit = input.parse::<syn::LitStr>()?;
-        let description = description_lit.value();
-
-        Ok(Self {
-            kind: kind.into(),
-            description,
-        })
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // Parse the entire expression as a token stream
+        // This accepts either:
+        // - PermissionBuilder::location(...).with_description(...).build()
+        // - Permission::new(PermissionKind::Camera, "...")
+        let expr = input.parse::<TokenStream2>()?;
+        Ok(Self { expr })
     }
 }
 
 impl ToTokens for PermissionParser {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        // Generate the kind expression tokens directly
-        let kind_tokens = self.kind.to_token_stream();
-        let description = &self.description;
-
         // Generate a hash for unique symbol naming
+        // Hash the expression tokens to create a unique identifier
         let mut hash = DefaultHasher::new();
-        self.kind.hash(&mut hash);
-        self.description.hash(&mut hash);
+        self.expr.to_string().hash(&mut hash);
         let permission_hash = format!("{:016x}", hash.finish());
 
-        // Check if this is a Custom permission
-        let is_custom = matches!(self.kind, PermissionKindParser::Custom { .. });
+        // Check if this is a Custom permission by examining the expression
+        // Custom permissions are built via PermissionBuilder::custom() or contain PermissionKind::Custom
+        let expr_str = self.expr.to_string();
+        let is_custom = expr_str.contains("custom()")
+            || expr_str.contains("Custom {")
+            || expr_str.contains("PermissionKind::Custom");
+
+        let expr = &self.expr;
 
         if is_custom {
-            // For Custom permissions, skip serialization due to buffer size limitations
-            // and just create the permission directly
+            // For Custom permissions, skip linker section generation due to buffer size limitations
+            // Custom permissions can exceed the 4096 byte buffer limit when serialized
             tokens.extend(quote! {
                 {
                     // Create the permission instance directly for Custom permissions
-                    permissions_core::Permission::new(
-                        #kind_tokens,
-                        #description,
-                    )
+                    // Skip linker section generation due to buffer size limitations
+                    const __PERMISSION: permissions_core::Permission = #expr;
+                    __PERMISSION
                 }
             });
         } else {
-            // For regular permissions, use the normal serialization approach
+            // For regular permissions, use the normal serialization approach with linker sections
             let link_section =
                 crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
 
             tokens.extend(quote! {
                 {
-                    // Create the permission instance
-                    const __PERMISSION: permissions_core::Permission = permissions_core::Permission::new(
-                        #kind_tokens,
-                        #description,
-                    );
+                    // Create the permission instance from the expression
+                    const __PERMISSION: permissions_core::Permission = #expr;
 
                     #link_section
 
-                    // Return the actual permission (not from embedded data for now)
+                    // Return the permission
                     __PERMISSION
                 }
             });
-        }
-    }
-}
-
-/// Parser for permission kinds in the macro syntax
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-enum PermissionKindParser {
-    Camera,
-    Location(LocationPrecision),
-    Microphone,
-    Notifications,
-    Custom {
-        android: String,
-        ios: String,
-        macos: String,
-    },
-}
-
-impl Parse for PermissionKindParser {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let ident = input.parse::<syn::Ident>()?;
-        let name = ident.to_string();
-
-        match name.as_str() {
-            "Camera" => Ok(Self::Camera),
-            "Location" => {
-                // Parse Location(Fine) or Location(Coarse)
-                let content;
-                syn::parenthesized!(content in input);
-                let precision_ident = content.parse::<syn::Ident>()?;
-
-                match precision_ident.to_string().as_str() {
-                    "Fine" => Ok(Self::Location(LocationPrecision::Fine)),
-                    "Coarse" => Ok(Self::Location(LocationPrecision::Coarse)),
-                    _ => Err(syn::Error::new(
-                        precision_ident.span(),
-                        "Expected 'Fine' or 'Coarse' for Location precision",
-                    )),
-                }
-            }
-            "Microphone" => Ok(Self::Microphone),
-            "Notifications" => Ok(Self::Notifications),
-            "Custom" => {
-                // Parse Custom { android = "...", ios = "...", macos = "..." }
-                let content;
-                syn::braced!(content in input);
-
-                let mut android = String::new();
-                let mut ios = String::new();
-                let mut macos = String::new();
-
-                while !content.is_empty() {
-                    let field_ident = content.parse::<syn::Ident>()?;
-                    let _colon = content.parse::<syn::Token![=]>()?;
-                    let field_value = content.parse::<syn::LitStr>()?;
-                    let _comma = content.parse::<Option<syn::Token![,]>>()?;
-
-                    match field_ident.to_string().as_str() {
-                        "android" => android = field_value.value(),
-                        "ios" => ios = field_value.value(),
-                        "macos" => macos = field_value.value(),
-                        _ => {
-                            return Err(syn::Error::new(
-                                field_ident.span(),
-                                "Unknown field in Custom permission",
-                            ));
-                        }
-                    }
-                }
-
-                Ok(Self::Custom {
-                    android,
-                    ios,
-                    macos,
-                })
-            }
-            _ => Err(syn::Error::new(
-                ident.span(),
-                format!("Unknown permission kind: {}", name),
-            )),
-        }
-    }
-}
-
-impl ToTokens for PermissionKindParser {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let kind_tokens = match self {
-            PermissionKindParser::Camera => quote!(permissions_core::PermissionKind::Camera),
-            PermissionKindParser::Location(precision) => {
-                let precision_tokens = match precision {
-                    LocationPrecision::Fine => quote!(permissions_core::LocationPrecision::Fine),
-                    LocationPrecision::Coarse => {
-                        quote!(permissions_core::LocationPrecision::Coarse)
-                    }
-                };
-                quote!(permissions_core::PermissionKind::Location(#precision_tokens))
-            }
-            PermissionKindParser::Microphone => {
-                quote!(permissions_core::PermissionKind::Microphone)
-            }
-            PermissionKindParser::Notifications => {
-                quote!(permissions_core::PermissionKind::Notifications)
-            }
-            PermissionKindParser::Custom {
-                android,
-                ios,
-                macos,
-            } => quote!(permissions_core::PermissionKind::Custom {
-                android: permissions_core::ConstStr::new(#android),
-                ios: permissions_core::ConstStr::new(#ios),
-                macos: permissions_core::ConstStr::new(#macos),
-            }),
-        };
-        tokens.extend(kind_tokens);
-    }
-}
-
-impl From<PermissionKindParser> for PermissionKind {
-    fn from(parser: PermissionKindParser) -> Self {
-        match parser {
-            PermissionKindParser::Camera => PermissionKind::Camera,
-            PermissionKindParser::Location(precision) => PermissionKind::Location(precision),
-            PermissionKindParser::Microphone => PermissionKind::Microphone,
-            PermissionKindParser::Notifications => PermissionKind::Notifications,
-            PermissionKindParser::Custom {
-                android,
-                ios,
-                macos,
-            } => PermissionKind::Custom {
-                android: permissions_core::ConstStr::new(&android),
-                ios: permissions_core::ConstStr::new(&ios),
-                macos: permissions_core::ConstStr::new(&macos),
-            },
         }
     }
 }
