@@ -62,6 +62,7 @@ pub enum LocationPrecision {
 /// use the `Custom` variant with platform-specific identifiers.
 #[repr(C, u8)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, SerializeConst)]
+#[allow(clippy::large_enum_variant)] // Custom variant contains large ConstStr fields needed for const serialization
 pub enum PermissionKind {
     /// Camera access
     Camera,

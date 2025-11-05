@@ -3833,13 +3833,11 @@ impl BuildRequest {
 
         // Scan packages directory for android-shim subdirectories
         if let Ok(entries) = read_dir(&packages_dir) {
-            for entry in entries {
-                if let Ok(entry) = entry {
-                    let shim_dir = entry.path().join("android-shim/src/main/java");
-                    if shim_dir.exists() {
-                        tracing::debug!("Found Java shim directory: {:?}", shim_dir);
-                        self.copy_dir_all(&shim_dir, app_java_dir)?;
-                    }
+            for entry in entries.flatten() {
+                let shim_dir = entry.path().join("android-shim/src/main/java");
+                if shim_dir.exists() {
+                    tracing::debug!("Found Java shim directory: {:?}", shim_dir);
+                    self.copy_dir_all(&shim_dir, app_java_dir)?;
                 }
             }
         }
@@ -3847,6 +3845,7 @@ impl BuildRequest {
         Ok(())
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn copy_dir_all(&self, from: &Path, to: &Path) -> Result<()> {
         use std::fs::{copy, create_dir_all, read_dir};
 
