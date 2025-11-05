@@ -5,16 +5,33 @@
 //!
 //! To use this feature set `with_as_child_window()` on your desktop config which will then let you
 
-use dioxus::desktop::{
-    Config, DesktopContext,
-    tao::{event::Event as WryEvent, window::WindowBuilder},
-    use_wry_event_handler, window,
-};
+use std::sync::Arc;
+
 use dioxus::prelude::*;
+use dioxus::{
+    desktop::tao::window::Window,
+    desktop::{Config, tao::window::WindowBuilder, use_wry_event_handler, window},
+};
 
 fn main() {
     let config = Config::new()
         .with_window(WindowBuilder::new().with_transparent(true))
+        .with_on_window_build(|window, dom| {
+            let resources = Arc::new(pollster::block_on(async {
+                let resource = GraphicsContextAsyncBuilder {
+                    desktop: window,
+                    resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx)),
+                }
+                .build()
+                .await;
+
+                resource.with_resources(|resources| resources.render());
+
+                resource
+            }));
+
+            dom.provide_root_context(resources);
+        })
         .with_as_child_window();
 
     dioxus::LaunchBuilder::desktop()
@@ -23,14 +40,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let graphics_resources = use_resource(move || async {
-        GraphicsContextAsyncBuilder {
-            desktop: window(),
-            resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx)),
-        }
-        .build()
-        .await
-    });
+    let graphics_resources = consume_context::<Arc<GraphicsContext>>();
 
     // on first render request a redraw
     use_effect(|| {
@@ -40,30 +50,24 @@ fn app() -> Element {
     use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::WindowEvent;
 
-        if let WryEvent::RedrawRequested(_id) = event {
-            let resources = graphics_resources.read();
-            if let Some(resources) = resources.as_ref() {
-                resources.with_resources(|resources| resources.render());
-            }
-        }
+        // if let WryEvent::RedrawRequested(_id) = event {
+        //     graphics_resources.with_resources(|resources| resources.render());
+        // }
 
-        if let WryEvent::WindowEvent {
-            event: WindowEvent::Resized(new_size),
-            ..
-        } = event
-        {
-            let ctx = graphics_resources.value();
-            if let Some(ctx_ref) = ctx.as_ref() {
-                ctx_ref.with_resources(|srcs| {
-                    let mut cfg = srcs.config.clone();
-                    cfg.width = new_size.width;
-                    cfg.height = new_size.height;
-                    srcs.surface.configure(&srcs.device, &cfg);
-                });
-            }
+        // if let WryEvent::WindowEvent {
+        //     event: WindowEvent::Resized(new_size),
+        //     ..
+        // } = event
+        // {
+        //     graphics_resources.with_resources(|srcs| {
+        //         let mut cfg = srcs.config.clone();
+        //         cfg.width = new_size.width;
+        //         cfg.height = new_size.height;
+        //         srcs.surface.configure(&srcs.device, &cfg);
+        //     });
 
-            window().window.request_redraw();
-        }
+        //     window().window.request_redraw();
+        // }
     });
 
     rsx! {
@@ -84,7 +88,7 @@ fn app() -> Element {
 /// to be able to borrow the window for the wgpu::Surface
 #[ouroboros::self_referencing]
 struct GraphicsContext {
-    desktop: DesktopContext,
+    desktop: Arc<Window>,
     #[borrows(desktop)]
     #[not_covariant]
     resources: GraphicsResources<'this>,
@@ -99,8 +103,8 @@ struct GraphicsResources<'a> {
 }
 
 impl<'a> GraphicsResources<'a> {
-    async fn new(context: &'a DesktopContext) -> Self {
-        let window = &context.window;
+    async fn new(window: &'a Arc<Window>) -> Self {
+        let window = &*window;
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();

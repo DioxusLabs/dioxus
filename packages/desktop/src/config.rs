@@ -1,8 +1,11 @@
-use dioxus_core::LaunchConfig;
-use std::borrow::Cow;
+use dioxus_core::{LaunchConfig, VirtualDom};
 use std::path::PathBuf;
-use tao::event_loop::{EventLoop, EventLoopWindowTarget};
+use std::{borrow::Cow, sync::Arc};
 use tao::window::{Icon, WindowBuilder};
+use tao::{
+    event_loop::{EventLoop, EventLoopWindowTarget},
+    window::Window,
+};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
@@ -64,6 +67,7 @@ pub struct Config {
     pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
     pub(crate) disable_file_drop_handler: bool,
+    pub(crate) on_window_build: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -111,6 +115,7 @@ impl Config {
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             custom_event_handler: None,
             disable_file_drop_handler: false,
+            on_window_build: None,
         }
     }
 
@@ -294,6 +299,17 @@ impl Config {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }
+        self
+    }
+
+    /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
+    ///
+    /// This is important for z-ordering textures in child windows.
+    pub fn with_on_window_build(
+        mut self,
+        f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static,
+    ) -> Self {
+        self.on_window_build = Some(Box::new(f));
         self
     }
 }
