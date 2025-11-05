@@ -99,6 +99,10 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
     };
 
     let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
+    let prefix = args
+        .prefix
+        .unwrap_or_else(|| LitStr::new("/api", Span::call_site()));
+
     let route: Route = Route {
         method: None,
         path_params: vec![],
@@ -106,10 +110,7 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
         route_lit: args.fn_path,
         oapi_options: None,
         server_args: Default::default(),
-        prefix: Some(
-            args.prefix
-                .unwrap_or_else(|| LitStr::new("/api", Span::call_site())),
-        ),
+        prefix: Some(prefix),
         _input_encoding: args.input,
         _output_encoding: args.output,
     };
@@ -369,23 +370,24 @@ fn route_impl_with_route(
             .cloned()
             .unwrap_or_else(|| LitStr::new("", Span::call_site()));
 
-        let route_lit = if !as_axum_path.is_empty() {
-            quote! { #as_axum_path }
+        let route_lit = if let Some(lit) = as_axum_path {
+            quote! { #lit }
         } else {
+            let name =
+                route.route_lit.as_ref().cloned().unwrap_or_else(|| {
+                    LitStr::new(&fn_on_server_name.to_string(), Span::call_site())
+                });
             quote! {
                 concat!(
                     "/",
-                    stringify!(#fn_on_server_name)
+                    #name
                 )
             }
         };
 
-        let hash = match route.route_lit.as_ref() {
-            // Explicit route lit, no need to hash
-            Some(_) => quote! { "" },
-
+        let hash = match route.prefix.as_ref() {
             // Implicit route lit, we need to hash the function signature to avoid collisions
-            None => {
+            Some(_) if route.route_lit.is_none() => {
                 // let enable_hash = option_env!("DISABLE_SERVER_FN_HASH").is_none();
                 let key_env_var = match option_env!("SERVER_FN_OVERRIDE_KEY") {
                     Some(_) => "SERVER_FN_OVERRIDE_KEY",
@@ -398,6 +400,9 @@ fn route_impl_with_route(
                     )
                 }
             }
+
+            // Explicit route lit, no need to hash
+            _ => quote! { "" },
         };
 
         quote! {
@@ -593,7 +598,11 @@ struct QueryParam {
 }
 
 impl CompiledRoute {
-    fn to_axum_path_string(&self) -> String {
+    fn to_axum_path_string(&self) -> Option<String> {
+        if self.prefix.is_some() {
+            return None;
+        }
+
         let mut path = String::new();
 
         for (_slash, param) in &self.path_params {
@@ -614,7 +623,7 @@ impl CompiledRoute {
             }
         }
 
-        path
+        Some(path)
     }
 
     /// Removes the arguments in `route` from `args`, and merges them in the output.
@@ -909,6 +918,11 @@ impl CompiledRoute {
     }
 
     fn url_without_queries_for_format(&self) -> Option<String> {
+        // If there's a prefix, then it's an old-style route, and we can't generate a format string.
+        if self.prefix.is_some() {
+            return None;
+        }
+
         // If there's no explicit route, we can't generate a format string this way.
         let _lit = self.route_lit.as_ref()?;
 
