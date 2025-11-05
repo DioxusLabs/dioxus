@@ -5,22 +5,21 @@
 //!
 //! To use this feature set `with_as_child_window()` on your desktop config which will then let you
 
-use std::sync::Arc;
-
 use dioxus::prelude::*;
 use dioxus::{
-    desktop::tao::window::Window,
+    desktop::tao::{event::Event as WryEvent, window::Window},
     desktop::{Config, tao::window::WindowBuilder, use_wry_event_handler, window},
 };
+use std::sync::Arc;
 
 fn main() {
     let config = Config::new()
         .with_window(WindowBuilder::new().with_transparent(true))
-        .with_on_window_build(|window, dom| {
+        .with_on_window(|window, dom| {
             let resources = Arc::new(pollster::block_on(async {
                 let resource = GraphicsContextAsyncBuilder {
                     desktop: window,
-                    resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx)),
+                    resources_builder: |ctx| Box::pin(GraphicsResources::new(ctx.clone())),
                 }
                 .build()
                 .await;
@@ -50,24 +49,20 @@ fn app() -> Element {
     use_wry_event_handler(move |event, _| {
         use dioxus::desktop::tao::event::WindowEvent;
 
-        // if let WryEvent::RedrawRequested(_id) = event {
-        //     graphics_resources.with_resources(|resources| resources.render());
-        // }
+        if let WryEvent::WindowEvent {
+            event: WindowEvent::Resized(new_size),
+            ..
+        } = event
+        {
+            graphics_resources.with_resources(|srcs| {
+                let mut cfg = srcs.config.clone();
+                cfg.width = new_size.width;
+                cfg.height = new_size.height;
+                srcs.surface.configure(&srcs.device, &cfg);
+            });
 
-        // if let WryEvent::WindowEvent {
-        //     event: WindowEvent::Resized(new_size),
-        //     ..
-        // } = event
-        // {
-        //     graphics_resources.with_resources(|srcs| {
-        //         let mut cfg = srcs.config.clone();
-        //         cfg.width = new_size.width;
-        //         cfg.height = new_size.height;
-        //         srcs.surface.configure(&srcs.device, &cfg);
-        //     });
-
-        //     window().window.request_redraw();
-        // }
+            window().window.request_redraw();
+        }
     });
 
     rsx! {
@@ -103,8 +98,7 @@ struct GraphicsResources<'a> {
 }
 
 impl<'a> GraphicsResources<'a> {
-    async fn new(window: &'a Arc<Window>) -> Self {
-        let window = &*window;
+    async fn new(window: Arc<Window>) -> Self {
         let size = window.inner_size();
 
         let instance = wgpu::Instance::default();

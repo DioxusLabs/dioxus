@@ -16,12 +16,9 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
+use std::sync::{atomic::AtomicBool, Arc};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
-use std::{
-    sync::{atomic::AtomicBool, Arc},
-    time::SystemTime,
-};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 
 #[derive(Clone)]
@@ -61,8 +58,6 @@ impl WebviewEdits {
     ) -> Result<Vec<u8>, serde_json::Error> {
         use serde::de::Error;
 
-        let a = SystemTime::now();
-
         // todo(jon):
         //
         // I'm a small bit worried about the size of the header being too big on some platforms.
@@ -85,11 +80,7 @@ impl WebviewEdits {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
                 let _lock = crate::android_sync_lock::android_runtime_lock();
-                let res = self.handle_html_event(event);
-
-                // println!("processing took: {}us", a.elapsed().unwrap().as_micros());
-
-                res
+                self.handle_html_event(event)
             }
             Err(err) => {
                 tracing::error!(
@@ -108,8 +99,6 @@ impl WebviewEdits {
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
-        let now = SystemTime::now();
-
         let HtmlEvent {
             element,
             name,
@@ -182,11 +171,6 @@ impl WebviewEdits {
             _ => data.into_any(),
         };
 
-        // println!(
-        //     "constructing took: {}us",
-        //     now.elapsed().unwrap().as_micros()
-        // );
-
         let event = dioxus_core::Event::new(as_any, bubbles);
         self.runtime.handle_event(&name, event.clone(), element);
 
@@ -245,8 +229,7 @@ impl WebviewInstance {
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
-
-        if let Some(mut on_build) = cfg.on_window_build.take() {
+        if let Some(on_build) = cfg.on_window.as_mut() {
             on_build(window.clone(), &mut dom);
         }
 
@@ -289,9 +272,7 @@ impl WebviewInstance {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
 
-                let a = SystemTime::now();
-
-                let r = protocol::desktop_handler(
+                protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
                     responder,
@@ -300,9 +281,7 @@ impl WebviewInstance {
                     custom_index.clone(),
                     &root_name,
                     headless,
-                );
-
-                r
+                )
             }
         };
 
@@ -509,6 +488,7 @@ impl WebviewInstance {
             provide_context(history_provider);
         });
 
+        // Request an initial redraw
         desktop_context.window.request_redraw();
 
         WebviewInstance {
@@ -647,7 +627,6 @@ impl PendingWebview {
         let cx = window
             .dom
             .in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
-
         _ = self.sender.send(cx);
 
         window

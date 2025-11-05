@@ -67,7 +67,9 @@ pub struct Config {
     pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
     pub(crate) disable_file_drop_handler: bool,
-    pub(crate) on_window_build: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
+
+    #[allow(clippy::type_complexity)]
+    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -115,7 +117,7 @@ impl Config {
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             custom_event_handler: None,
             disable_file_drop_handler: false,
-            on_window_build: None,
+            on_window: None,
         }
     }
 
@@ -304,12 +306,10 @@ impl Config {
 
     /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
     ///
-    /// This is important for z-ordering textures in child windows.
-    pub fn with_on_window_build(
-        mut self,
-        f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static,
-    ) -> Self {
-        self.on_window_build = Some(Box::new(f));
+    /// This is important for z-ordering textures in child windows. Note that this callback runs on
+    /// every window creation, so it's up to you to
+    pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
+        self.on_window = Some(Box::new(f));
         self
     }
 }
