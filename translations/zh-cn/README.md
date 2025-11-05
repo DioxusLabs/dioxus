@@ -49,7 +49,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> 示例 </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> 指南 </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> 指南 </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -88,7 +88,7 @@ fn app() -> Element {
 - [符合人体工程学的状态管理](https://dioxuslabs.com/blog/release-050)，结合了 React、Solid 和 Svelte 的优点
 - 类型安全的路由和服务器函数，由 Rust 强大的编译时能力保证
 - 集成 Web、MacOS、Linux 和 Windows 的打包工具
-- 还有更多！ [开启 Dioxus 之旅](https://dioxuslabs.com/learn/0.6/).
+- 还有更多！ [开启 Dioxus 之旅](https://dioxuslabs.com/learn/0.7/).
 
 ## 即时热重载
 
@@ -110,8 +110,8 @@ Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx
 
 ## 为 Web、桌面和移动端打包
 
-只需运行 `dx bundle`，你的应用将被构建和打包，并进行最大优化。  
-在 Web 端，得益于 [`.avif` 生成, `.wasm` 压缩, 代码最小化](https://dioxuslabs.com/learn/0.6/guides/assets)等功能， Web 端的构建[体积小于 50kb](https://github.com/ealmloff/tiny-dioxus/) ，桌面/移动端体积小于 5mb。
+只需运行 `dx bundle`，你的应用将被构建和打包，并进行最大优化。
+在 Web 端，得益于 [`.avif` 生成, `.wasm` 压缩, 代码最小化](https://dioxuslabs.com/learn/0.7/tutorial/assets)等功能， Web 端的构建[体积小于 50kb](https://github.com/ealmloff/tiny-dioxus/) ，桌面/移动端体积小于 5mb。
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -119,7 +119,7 @@ Dioxus 是使用 Rust 构建原生移动应用的最快方式。只需运行 `dx
 
 ## 出色的文档
 
-我们投入了大量精力来构建清晰、易读且全面的文档。所有 HTML 元素和监听器都附有 MDN 文档，并且我们的文档网站与 Dioxus 本身进行持续集成，以确保文档始终保持最新。请查看 [Dioxus 网站](https://dioxuslabs.com/learn/0.6/) 获取指南、参考、示例代码等。  
+我们投入了大量精力来构建清晰、易读且全面的文档。所有 HTML 元素和监听器都附有 MDN 文档，并且我们的文档网站与 Dioxus 本身进行持续集成，以确保文档始终保持最新。请查看 [Dioxus 网站](https://dioxuslabs.com/learn/0.7/) 获取指南、参考、示例代码等。
 有趣的是：我们使用 Dioxus 网站来测试 Dioxus 的新功能 - [快来看看吧!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
@@ -309,7 +309,7 @@ Dioxus 和 Electron 是两个目标相似但完全不同的项目。Electron 使
 
 ## 贡献
 
-- 查看网站上[关于贡献的部分](https://dioxuslabs.com/learn/0.6/contributing).
+- 查看网站上[关于贡献的部分](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - 在我们的 [issues](https://github.com/dioxuslabs/dioxus/issues) 上报告问题.
 - [加入](https://discord.gg/XgGxMSkvUM) Discord 并提问！
 

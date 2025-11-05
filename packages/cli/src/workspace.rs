@@ -310,6 +310,14 @@ impl Workspace {
 
                 let found = workspace_members.find_map(|node| {
                     if let krates::Node::Krate { id, krate, .. } = node {
+                        // Skip this default member if it doesn't have any binary targets
+                        if !krate
+                            .targets
+                            .iter()
+                            .any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))
+                        {
+                            return None;
+                        }
                         let member_path =
                             std::fs::canonicalize(krate.manifest_path.parent().unwrap()).unwrap();
                         if member_path == default_member_path {

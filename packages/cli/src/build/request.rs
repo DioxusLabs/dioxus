@@ -640,6 +640,24 @@ impl BuildRequest {
                     }
                 })
                 .or_else(|| {
+                    // If multiple renderers are enabled, pick the first non-server one
+                    if enabled_renderers.len() == 2
+                        && enabled_renderers
+                            .iter()
+                            .any(|f| matches!(f.0, Renderer::Server))
+                    {
+                        return Some(
+                            enabled_renderers
+                                .iter()
+                                .find(|f| !matches!(f.0, Renderer::Server))
+                                .cloned()
+                                .unwrap(),
+                        );
+                    }
+                    None
+                })
+                .or_else(|| {
+                    // Pick the first non-server feature in the cargo.toml
                     let non_server_features = known_features_as_renderers
                         .iter()
                         .filter(|f| f.1.as_str() != "server")
@@ -893,7 +911,7 @@ impl BuildRequest {
             ]);
         }
 
-        // On windows, we pass /SUBSYSTbEM:WINDOWS to prevent a console from appearing
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
         if matches!(bundle, BundleFormat::Windows)
             && !rustflags
                 .flags
@@ -907,6 +925,11 @@ impl BuildRequest {
             rustflags
                 .flags
                 .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            rustflags
+                .flags
+                .push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
@@ -5280,23 +5303,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if css_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
+                        );
                     }
                 }
                 AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
                     }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if js_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
+                        );
                     }
                 }
                 _ => {}

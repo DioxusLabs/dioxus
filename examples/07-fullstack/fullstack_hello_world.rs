@@ -18,7 +18,7 @@ fn main() {
     });
 }
 
-#[get("/api/{name}/?age")]
+#[get("/api/:name/?age")]
 async fn get_message(name: String, age: i32) -> Result<String> {
     Ok(format!("Hello {}, you are {} years old!", name, age))
 }

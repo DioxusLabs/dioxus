@@ -6,7 +6,7 @@ edition = "2021"
 description = "Native renderer for Dioxus based on blitz"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]

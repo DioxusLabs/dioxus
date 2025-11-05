@@ -34,7 +34,7 @@ pub trait IntoRequest<R = ClientResponse>: Sized {
 
 impl<A, R> IntoRequest<R> for (A,)
 where
-    A: IntoRequest<R> + 'static,
+    A: IntoRequest<R> + 'static + Send,
 {
     fn into_request(
         self,
@@ -157,9 +157,20 @@ impl<T, E> AssertIsResult for Result<T, E> {}
 #[doc(hidden)]
 pub fn assert_is_result<T: AssertIsResult>() {}
 
-#[diagnostic::on_unimplemented(
-    message = "The arguments to the server function must either be a single `impl FromRequest + IntoRequest` argument, or multiple `DeserializeOwned` arguments."
-)]
+#[diagnostic::on_unimplemented(message = r#"❌ Invalid Arguments to ServerFn ❌
+
+The arguments to the server function must be either:
+
+- a single `impl FromRequest + IntoRequest` argument
+- or multiple `DeserializeOwned` arguments.
+
+Did you forget to implement `IntoRequest` or `Deserialize` for one of the arguments?
+
+`IntoRequest` is a trait that allows payloads to be sent to the server function.
+
+> See https://dioxuslabs.com/learn/0.7/essentials/fullstack/server_functions for more details.
+
+"#)]
 pub trait AssertCanEncode {}
 
 pub struct CantEncode;
@@ -167,5 +178,27 @@ pub struct CantEncode;
 pub struct EncodeIsVerified;
 impl AssertCanEncode for EncodeIsVerified {}
 
+#[diagnostic::on_unimplemented(message = r#"❌ Invalid return type from ServerFn ❌
+
+The arguments to the server function must be either:
+
+- a single `impl FromResponse` return type
+- a single `impl Serialize + DeserializedOwned` return type
+
+Did you forget to implement `FromResponse` or `DeserializeOwned` for one of the arguments?
+
+`FromResponse` is a trait that allows payloads to be decoded from the server function response.
+
+> See https://dioxuslabs.com/learn/0.7/essentials/fullstack/server_functions for more details.
+
+"#)]
+pub trait AssertCanDecode {}
+pub struct CantDecode;
+pub struct DecodeIsVerified;
+impl AssertCanDecode for DecodeIsVerified {}
+
 #[doc(hidden)]
 pub fn assert_can_encode(_t: impl AssertCanEncode) {}
+
+#[doc(hidden)]
+pub fn assert_can_decode(_t: impl AssertCanDecode) {}
