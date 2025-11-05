@@ -126,8 +126,19 @@ impl FullstackContext {
     /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
     /// function extractors.
     pub async fn extract<T: FromRequest<Self, M>, M>() -> Result<T, ServerFnError> {
-        let this = Self::current()
-            .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
+        let this = Self::current().unwrap_or_else(|| {
+            // Create a dummy context if one doesn't exist, making the function usable outside of a request context
+            FullstackContext::new(
+                axum_core::extract::Request::builder()
+                    .method("GET")
+                    .uri("/")
+                    .header("X-Dummy-Header", "true")
+                    .body(())
+                    .unwrap()
+                    .into_parts()
+                    .0,
+            )
+        });
 
         let parts = this.request_headers.read().clone();
         let request = axum_core::extract::Request::from_parts(parts, Default::default());
