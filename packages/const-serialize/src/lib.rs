@@ -3,6 +3,7 @@
 
 use std::{char, mem::MaybeUninit};
 
+mod cbor;
 mod const_buffers;
 mod const_vec;
 
