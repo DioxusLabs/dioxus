@@ -202,9 +202,9 @@ dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.0" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0" }
 
 # const-serializea
-const-serialize = { path = "packages/const-serialize", version = "=0.7.0-rc.3" }
-const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0.7.0-rc.3" }
-dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "=0.7.0-rc.3" }
+const-serialize = { path = "packages/const-serialize", version = "0.7.0" }
+const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.7.0" }
+dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "0.7.0" }
 
 # permissions
 permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.0-rc.3" }
