@@ -14,6 +14,7 @@ keywords = ["assets"]
 
 [dependencies]
 const-serialize = { workspace = true }
+dx-macro-helpers = { workspace = true }
 manganis-core = { workspace = true }
 manganis-macro = { workspace = true }
 

@@ -43,30 +43,14 @@ pub mod macro_helpers {
     //! and should not be used directly.
 
     pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};
+    pub use dx_macro_helpers::copy_bytes;
     pub use permissions_core::Permission;
 
     /// Serialize a permission to a const buffer with a large enough buffer size
     pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
-        // First serialize with default buffer size
-        let serialized = const_serialize::serialize_const(permission, ConstVec::new());
-        // Then copy into a larger buffer and pad to MEMORY_LAYOUT size
-        let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
-        // Reserve the maximum size of the permission
-        while data.len() < Permission::MEMORY_LAYOUT.size() {
-            data = data.push(0);
-        }
-        data
-    }
-
-    /// Copy a slice into a constant sized buffer at compile time
-    pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
-        let mut out = [0; N];
-        let mut i = 0;
-        while i < N {
-            out[i] = bytes[i];
-            i += 1;
-        }
-        out
+        dx_macro_helpers::serialize_to_const_with_max::<4096>(
+            permission,
+            Permission::MEMORY_LAYOUT.size(),
+        )
     }
 }

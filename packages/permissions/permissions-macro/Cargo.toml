@@ -18,6 +18,7 @@ proc-macro = true
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
+dx-macro-helpers = { path = "../../dx-macro-helpers" }
 permissions-core = { path = "../permissions-core" }
 const-serialize = { path = "../../const-serialize" }
 

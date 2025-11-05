@@ -15,5 +15,6 @@ categories = ["development-tools::build-utils"]
 permissions-core = { path = "../permissions-core" }
 permissions-macro = { path = "../permissions-macro" }
 const-serialize = { path = "../../const-serialize" }
+dx-macro-helpers = { path = "../../dx-macro-helpers" }
 
 [dev-dependencies]

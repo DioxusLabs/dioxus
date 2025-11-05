@@ -62,6 +62,7 @@ members = [
     "packages/rsx-hotreload",
     "packages/const-serialize",
     "packages/const-serialize-macro",
+    "packages/dx-macro-helpers",
     "packages/permissions/permissions-core",
     "packages/permissions/permissions-macro",
     "packages/permissions/permissions",
@@ -203,6 +204,7 @@ dioxus-cli-config = { path = "packages/cli-config", version = "=0.7.0-rc.3" }
 # const-serializea
 const-serialize = { path = "packages/const-serialize", version = "=0.7.0-rc.3" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "=0.7.0-rc.3" }
+dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "=0.7.0-rc.3" }
 
 # permissions
 permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.0-rc.3" }

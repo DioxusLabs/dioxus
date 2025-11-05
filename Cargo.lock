@@ -6630,6 +6630,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
+name = "dx-macro-helpers"
+version = "0.7.0-rc.3"
+dependencies = [
+ "const-serialize",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10764,6 +10774,7 @@ name = "manganis"
 version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
+ "dx-macro-helpers",
  "manganis-core",
  "manganis-macro",
 ]
@@ -10785,6 +10796,7 @@ name = "manganis-macro"
 version = "0.7.0-rc.3"
 dependencies = [
  "dunce",
+ "dx-macro-helpers",
  "macro-string",
  "manganis",
  "manganis-core",
@@ -12610,6 +12622,7 @@ name = "permissions"
 version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
+ "dx-macro-helpers",
  "permissions-core",
  "permissions-macro",
 ]
@@ -12628,10 +12641,11 @@ name = "permissions-macro"
 version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
+ "dx-macro-helpers",
  "permissions-core",
  "proc-macro2",
  "quote",
- "syn 2.0.107",
+ "syn 2.0.108",
 ]
 
 [[package]]
@@ -13001,7 +13015,7 @@ dependencies = [
  "const-serialize-macro",
  "proc-macro2",
  "quote",
- "syn 2.0.107",
+ "syn 2.0.108",
 ]
 
 [[package]]
