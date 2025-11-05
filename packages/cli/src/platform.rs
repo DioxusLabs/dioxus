@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{arg, ArgMatches, Args, FromArgMatches};
+use clap::{arg, Arg, ArgMatches, Args, FromArgMatches};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;
@@ -47,6 +47,39 @@ pub(crate) enum Platform {
     Unknown,
 }
 
+impl Platform {
+    fn from_identifier(identifier: &str) -> std::result::Result<Self, clap::Error> {
+        match identifier {
+            "web" => Ok(Self::Web),
+            "macos" => Ok(Self::MacOS),
+            "windows" => Ok(Self::Windows),
+            "linux" => Ok(Self::Linux),
+            "ios" => Ok(Self::Ios),
+            "android" => Ok(Self::Android),
+            "server" => Ok(Self::Server),
+            "liveview" => Ok(Self::Liveview),
+            "desktop" => {
+                if cfg!(target_os = "macos") {
+                    Ok(Self::MacOS)
+                } else if cfg!(target_os = "windows") {
+                    Ok(Self::Windows)
+                } else if cfg!(unix) {
+                    Ok(Self::Linux)
+                } else {
+                    Err(clap::Error::raw(
+                        clap::error::ErrorKind::InvalidValue,
+                        "Desktop alias is not supported on this platform",
+                    ))
+                }
+            }
+            _ => Err(clap::Error::raw(
+                clap::error::ErrorKind::InvalidValue,
+                format!("Unknown platform: {identifier}"),
+            )),
+        }
+    }
+}
+
 impl Args for Platform {
     fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
         Self::augment_args(cmd)
@@ -63,6 +96,17 @@ impl Args for Platform {
             .arg(arg!(--android "Target an android app").help_heading(HELP_HEADING))
             .arg(arg!(--server "Target a server build").help_heading(HELP_HEADING))
             .arg(arg!(--liveview "Target a liveview build").help_heading(HELP_HEADING))
+            .arg(
+                Arg::new("platform")
+                    .long("platform")
+                    .value_name("PLATFORM")
+                    .help("Manually set the platform (web, macos, windows, linux, ios, android, server, liveview)")
+                    .help_heading(HELP_HEADING)
+                    .value_parser([
+                        "web", "macos", "windows", "linux", "ios", "android", "server", "liveview", "desktop",
+                    ])
+                    .conflicts_with("target_alias"),
+            )
             .group(
                 clap::ArgGroup::new("target_alias")
                     .args([
@@ -77,35 +121,10 @@ impl Args for Platform {
 
 impl FromArgMatches for Platform {
     fn from_arg_matches(matches: &ArgMatches) -> Result<Self, clap::Error> {
-        if let Some(platform) = matches.get_one::<clap::Id>("target_alias") {
-            match platform.as_str() {
-                "web" => Ok(Self::Web),
-                "desktop" => {
-                    if cfg!(target_os = "macos") {
-                        Ok(Self::MacOS)
-                    } else if cfg!(target_os = "windows") {
-                        Ok(Self::Windows)
-                    } else if cfg!(unix) {
-                        Ok(Self::Linux)
-                    } else {
-                        Err(clap::Error::raw(
-                            clap::error::ErrorKind::InvalidValue,
-                            "Desktop alias is not supported on this platform",
-                        ))
-                    }
-                }
-                "macos" => Ok(Self::MacOS),
-                "windows" => Ok(Self::Windows),
-                "linux" => Ok(Self::Linux),
-                "ios" => Ok(Self::Ios),
-                "android" => Ok(Self::Android),
-                "liveview" => Ok(Self::Liveview),
-                "server" => Ok(Self::Server),
-                _ => Err(clap::Error::raw(
-                    clap::error::ErrorKind::InvalidValue,
-                    format!("Unknown target alias: {platform}"),
-                )),
-            }
+        if let Some(identifier) = matches.get_one::<String>("platform") {
+            Self::from_identifier(identifier)
+        } else if let Some(platform) = matches.get_one::<clap::Id>("target_alias") {
+            Self::from_identifier(platform.as_str())
         } else {
             Ok(Self::Unknown)
         }
