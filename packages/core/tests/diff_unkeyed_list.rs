@@ -510,6 +510,7 @@ fn replace_and_add_items() {
     }
 }
 
+// Simplified regression test for https://github.com/DioxusLabs/dioxus/issues/4924
 #[test]
 fn nested_unkeyed_lists() {
     let mut dom = VirtualDom::new(|| {
