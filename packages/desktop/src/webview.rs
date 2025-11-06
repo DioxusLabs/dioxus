@@ -1,7 +1,6 @@
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
-use crate::WindowCloseBehaviour;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
@@ -475,7 +474,7 @@ impl WebviewInstance {
             shared.clone(),
             asset_handlers,
             file_hover,
-            WindowCloseBehaviour::WindowCloses,
+            cfg.window_close_behavior,
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
