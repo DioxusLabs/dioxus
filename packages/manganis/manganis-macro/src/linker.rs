@@ -14,6 +14,6 @@ pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStr
         quote! { manganis::macro_helpers::serialize_asset },
         quote! { manganis::macro_helpers::copy_bytes },
         quote! { manganis::macro_helpers::const_serialize::ConstVec<u8> },
-        false,
+        true, // Add #[used] attribute for defense-in-depth, even though we also reference it
     )
 }

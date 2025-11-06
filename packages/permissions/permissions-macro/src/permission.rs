@@ -64,6 +64,12 @@ impl ToTokens for PermissionParser {
 
                     #link_section
 
+                    // Create a module-level static reference to the linker section to ensure
+                    // it's preserved even if the permission constant is unused.
+                    // This prevents the linker from optimizing away the symbol.
+                    #[used]
+                    static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
+
                     // Return the permission
                     __PERMISSION
                 }
