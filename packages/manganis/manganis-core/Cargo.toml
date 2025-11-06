@@ -18,6 +18,7 @@ const-serialize = { workspace = true, features = ["serde"] }
 dioxus-core-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 permissions-core = { path = "../../permissions/permissions-core", optional = true }
+platform-bridge = { path = "../../platform-bridge", optional = true, features = ["metadata"] }
 
 [dev-dependencies]
 manganis = { workspace = true }
@@ -26,3 +27,4 @@ dioxus = { workspace = true }
 [features]
 dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]
 permissions = ["dep:permissions-core"]
+java-sources = ["dep:platform-bridge"]

@@ -47,7 +47,7 @@ mod android_plugin;
 /// # Embedding
 ///
 /// The macro embeds absolute file paths into the binary using linker symbols with the
-/// `__JAVA_SOURCE__` prefix. This allows the Dioxus CLI to directly locate and copy Java
+/// `__MANGANIS__` prefix (unified with assets and permissions). This allows the Dioxus CLI to directly locate and copy Java
 /// source files without searching the workspace at build time.
 ///
 /// # Example Structure

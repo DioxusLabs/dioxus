@@ -108,8 +108,9 @@ impl ToTokens for AndroidPluginParser {
         let (_, file_path_lits) = self.resolve_file_paths();
 
         // Generate the export name as a string literal
+        // Use __MANGANIS__ prefix for unified symbol collection
         let export_name_lit = syn::LitStr::new(
-            &format!("__JAVA_SOURCE__{}", plugin_hash),
+            &format!("__MANGANIS__{}", plugin_hash),
             proc_macro2::Span::call_site(),
         );
 
@@ -152,24 +153,24 @@ impl ToTokens for AndroidPluginParser {
                     __FILE_PATHS,
                 );
 
-            // Serialize the metadata
+            // Wrap in LinkerSymbol::JavaSource for unified symbol collection
+            const __LINKER_SYMBOL: dioxus_platform_bridge::android::LinkerSymbol = dioxus_platform_bridge::android::LinkerSymbol::JavaSource(__JAVA_META);
+
+            // Serialize the LinkerSymbol
             const __BUFFER: const_serialize::ConstVec<u8, 4096> = {
                 const EMPTY: const_serialize::ConstVec<u8, 4096> = const_serialize::ConstVec::new_with_max_size();
-                const_serialize::serialize_const(&__JAVA_META, EMPTY)
+                const_serialize::serialize_const(&__LINKER_SYMBOL, EMPTY)
             };
             const __BYTES: &[u8] = __BUFFER.as_ref();
             const __LEN: usize = __BYTES.len();
 
-            // Embed in linker section
-            #[link_section = "__DATA,__java_source"]
-            #[used]
+            // Embed in linker section using unified __MANGANIS__ prefix
+            #[link_section = "__DATA,__manganis"]
             #[unsafe(export_name = #export_name_lit)]
-            static __LINK_SECTION: [u8; __LEN] = dioxus_platform_bridge::android::macro_helpers::copy_bytes(__BYTES);
+            static __LINK_SECTION: [u8; __LEN] = dx_macro_helpers::copy_bytes(__BYTES);
 
-            // Create a module-level static reference to the linker section to ensure
-            // it's preserved even if the macro invocation appears unused.
-            // This provides additional protection against optimization.
-            #[used]
+            // Create a static reference to the linker section (without #[used])
+            // The symbol will be kept by usage, similar to permissions
             static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
         };
 

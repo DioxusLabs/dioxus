@@ -294,10 +294,14 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
-/// Also extracts permissions from LinkerSymbol::Permission variants.
+/// Also extracts permissions and Java sources from LinkerSymbol variants.
 pub(crate) async fn extract_assets_from_file(
     path: impl AsRef<Path>,
-) -> Result<(AssetManifest, Vec<permissions_core::Permission>)> {
+) -> Result<(
+    AssetManifest,
+    Vec<permissions_core::Permission>,
+    Vec<platform_bridge::android::JavaSourceMetadata>,
+)> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,
@@ -314,6 +318,7 @@ pub(crate) async fn extract_assets_from_file(
 
     let mut assets = Vec::new();
     let mut permissions = Vec::new();
+    let mut java_sources = Vec::new();
     let mut asset_offsets = Vec::new(); // Track which offsets contain assets (for writing back)
 
     // Read each symbol from the data section using the offsets
@@ -345,6 +350,16 @@ pub(crate) async fn extract_assets_from_file(
                     );
                     permissions.push(permission);
                     // Don't add to asset_offsets - permissions don't get written back
+                }
+                #[cfg(feature = "java-sources")]
+                LinkerSymbol::JavaSource(java_source) => {
+                    tracing::debug!(
+                        "Found Java source at offset {offset}: plugin={}, package={}",
+                        java_source.plugin_name.as_str(),
+                        java_source.package_name.as_str()
+                    );
+                    java_sources.push(java_source);
+                    // Don't add to asset_offsets - Java sources don't get written back
                 }
             }
         } else {
@@ -411,7 +426,7 @@ pub(crate) async fn extract_assets_from_file(
         manifest.insert_asset(asset);
     }
 
-    Ok((manifest, permissions))
+    Ok((manifest, permissions, java_sources))
 }
 
 /// Try to open a file for writing, retrying if the file is already open by another process.

@@ -5,6 +5,9 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 #[cfg(feature = "permissions")]
 use permissions_core::Permission;
 
+#[cfg(feature = "java-sources")]
+use platform_bridge::android::JavaSourceMetadata;
+
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary.
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
@@ -204,17 +207,21 @@ impl dioxus_core_types::DioxusFormattable for Asset {
     }
 }
 
-/// A unified linker symbol that can represent either an asset or a permission.
+/// A unified linker symbol that can represent an asset, permission, or Java source.
 ///
-/// This enum is used to embed both assets and permissions in the binary using
-/// the same linker section mechanism, allowing the CLI to extract both types
+/// This enum is used to embed different types of metadata in the binary using
+/// the same linker section mechanism, allowing the CLI to extract all types
 /// from a single symbol prefix.
-#[cfg(feature = "permissions")]
+#[cfg(any(feature = "permissions", feature = "java-sources"))]
 #[derive(Debug, Clone, SerializeConst)]
 #[repr(C, u8)]
 pub enum LinkerSymbol {
     /// An asset that should be bundled
     Asset(BundledAsset),
     /// A permission that should be declared in platform manifests
+    #[cfg(feature = "permissions")]
     Permission(Permission),
+    /// Java source metadata for Android builds
+    #[cfg(feature = "java-sources")]
+    JavaSource(JavaSourceMetadata),
 }

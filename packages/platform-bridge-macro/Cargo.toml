@@ -20,6 +20,8 @@ quote = "1.0"
 proc-macro2 = "1.0"
 const-serialize = { path = "../const-serialize" }
 const-serialize-macro = { path = "../const-serialize-macro" }
+manganis-core = { path = "../../manganis/manganis-core", features = ["java-sources"] }
+dx-macro-helpers = { path = "../../dx-macro-helpers" }
 
 [dev-dependencies]
 
