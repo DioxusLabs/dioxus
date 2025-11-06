@@ -54,6 +54,19 @@ impl FileDialogRequest {
         vec![]
     }
 
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        vec![]
+    }
+
     #[cfg(any(
         target_os = "windows",
         target_os = "macos",
