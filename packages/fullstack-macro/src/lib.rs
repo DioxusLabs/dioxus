@@ -772,7 +772,7 @@ impl CompiledRoute {
         });
 
         out.push(parse_quote!(
-            dioxus_server::axum::extract::Query(#query_tokens)
+            dioxus_fullstack::payloads::Query(#query_tokens)
         ));
 
         out
