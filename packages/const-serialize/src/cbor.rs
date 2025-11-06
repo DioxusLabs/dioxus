@@ -279,7 +279,7 @@ const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8]), ()> {
             let Ok(len) = item_length(after_map) else {
                 return Err(());
             };
-            let Some((_, rest)) = rest.split_at_checked(len as usize) else {
+            let Some((_, rest)) = after_map.split_at_checked(len as usize) else {
                 return Err(());
             };
             after_map = rest;
