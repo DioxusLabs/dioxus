@@ -17,6 +17,7 @@ serde = { workspace = true, features = ["derive"] }
 const-serialize = { workspace = true, features = ["serde"] }
 dioxus-core-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
+permissions-core = { path = "../../permissions/permissions-core", optional = true }
 
 [dev-dependencies]
 manganis = { workspace = true }
@@ -24,3 +25,4 @@ dioxus = { workspace = true }
 
 [features]
 dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]
+permissions = ["dep:permissions-core"]

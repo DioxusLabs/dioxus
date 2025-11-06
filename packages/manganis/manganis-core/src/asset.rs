@@ -2,6 +2,9 @@ use crate::AssetOptions;
 use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
+#[cfg(feature = "permissions")]
+use permissions_core::Permission;
+
 /// An asset that should be copied by the bundler with some options. This type will be
 /// serialized into the binary.
 /// CLIs that support manganis, should pull out the assets from the link section, optimize,
@@ -199,4 +202,19 @@ impl dioxus_core_types::DioxusFormattable for Asset {
     fn format(&self) -> std::borrow::Cow<'static, str> {
         std::borrow::Cow::Owned(self.to_string())
     }
+}
+
+/// A unified linker symbol that can represent either an asset or a permission.
+///
+/// This enum is used to embed both assets and permissions in the binary using
+/// the same linker section mechanism, allowing the CLI to extract both types
+/// from a single symbol prefix.
+#[cfg(feature = "permissions")]
+#[derive(Debug, Clone, SerializeConst)]
+#[repr(C, u8)]
+pub enum LinkerSymbol {
+    /// An asset that should be bundled
+    Asset(BundledAsset),
+    /// A permission that should be declared in platform manifests
+    Permission(Permission),
 }

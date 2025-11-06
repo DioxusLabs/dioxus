@@ -12,9 +12,13 @@ keywords = ["permissions", "mobile", "desktop", "web", "cross-platform"]
 categories = ["development-tools::build-utils"]
 
 [dependencies]
-permissions-core = { path = "../permissions-core" }
+permissions-core = { path = "../permissions-core", features = ["manganis"] }
 permissions-macro = { path = "../permissions-macro" }
 const-serialize = { path = "../../const-serialize" }
 dx-macro-helpers = { path = "../../dx-macro-helpers" }
+manganis-core = { path = "../../manganis/manganis-core", features = ["permissions"], optional = true }
+
+[features]
+manganis = ["dep:manganis-core"]
 
 [dev-dependencies]

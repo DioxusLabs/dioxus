@@ -43,46 +43,16 @@ pub struct MacosPermission {
     pub description: String,
 }
 
-/// Extract all permissions from the given file
-pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<PermissionManifest> {
-    let path = path.as_ref();
-    let offsets = match linker_symbols::find_symbol_offsets_from_path(path, PERMISSION_SYMBOL_PREFIX) {
-        Ok(offsets) => offsets,
-        Err(_) => {
-            tracing::debug!("No permission symbols found");
-            return Ok(PermissionManifest::default());
-        }
-    };
-
-    // If no symbols found, return empty manifest
-    if offsets.is_empty() {
-        return Ok(PermissionManifest::default());
-    }
-
-    let mut file = std::fs::File::open(path)?;
-    let mut permissions = Vec::new();
-
-    for offset in offsets.iter().copied() {
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        let mut data_in_range = vec![0; Permission::MEMORY_LAYOUT.size()];
-        file.read_exact(&mut data_in_range)?;
-
-        let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
-
-        if let Some((_, permission)) = const_serialize::deserialize_const!(Permission, buffer) {
-            tracing::debug!(
-                "Found permission at offset {offset}: {:?} - {}",
-                permission.kind(),
-                permission.description()
-            );
-            permissions.push(permission);
-        } else {
-            tracing::warn!(
-                "Found permission symbol at offset {offset} that could not be deserialized"
-            );
-        }
-    }
-
+/// Extract all permissions from the given file.
+///
+/// This function now extracts permissions from the unified __MANGANIS__ symbols
+/// by calling the asset extraction function which handles LinkerSymbol enum.
+pub(crate) async fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<PermissionManifest> {
+    use super::assets;
+    
+    // Extract both assets and permissions from unified symbol collection
+    let (_assets, permissions) = assets::extract_assets_from_file(path).await?;
+    
     Ok(PermissionManifest::new(permissions))
 }
 

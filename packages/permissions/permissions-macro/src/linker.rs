@@ -5,15 +5,15 @@ use quote::{quote, ToTokens};
 ///
 /// This function creates a static array containing the serialized permission data
 /// and exports it with a unique symbol name that can be found by build tools.
-/// The pattern follows the same approach as Manganis for asset embedding.
+/// Uses the unified __MANGANIS__ prefix to share the same symbol collection as assets.
 pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -> TokenStream2 {
     dx_macro_helpers::linker::generate_link_section(
         permission,
         permission_hash,
-        "__PERMISSION__",
-        quote! { permissions::macro_helpers::serialize_permission },
+        "__MANGANIS__",
+        quote! { permissions::macro_helpers::serialize_linker_symbol_permission },
         quote! { permissions::macro_helpers::copy_bytes },
         quote! { permissions::macro_helpers::ConstVec<u8, 4096> },
-        true, // permissions needs #[used] attribute
+        false, // No #[used] attribute - we use volatile reads instead
     )
 }

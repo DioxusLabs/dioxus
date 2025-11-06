@@ -1,4 +1,4 @@
-use const_serialize::{ConstStr, SerializeConst};
+use const_serialize::{deserialize_const, ConstStr, ConstVec, SerializeConst};
 use std::hash::{Hash, Hasher};
 
 use crate::{PermissionKind, Platform, PlatformFlags, PlatformIdentifiers};
@@ -421,6 +421,86 @@ impl PermissionBuilder {
             kind,
             description,
             supported_platforms,
+        }
+    }
+}
+
+/// A permission handle that wraps a permission with volatile read semantics.
+///
+/// Similar to `Asset`, this type uses a function pointer to force the compiler
+/// to read the linker section at runtime via volatile reads, preventing the
+/// linker from optimizing away unused permissions.
+///
+/// ```rust
+/// use permissions::{static_permission, PermissionHandle};
+///
+/// const CAMERA: PermissionHandle = static_permission!(Camera, description = "Take photos");
+/// // Use the permission
+/// let permission = CAMERA.permission();
+/// ```
+#[allow(unpredictable_function_pointer_comparisons)]
+#[derive(PartialEq, Clone, Copy)]
+pub struct PermissionHandle {
+    /// A function that returns a pointer to the bundled permission. This will be resolved after the linker has run and
+    /// put into the lazy permission. We use a function instead of using the pointer directly to force the compiler to
+    /// read the static __REFERENCE_TO_LINK_SECTION at runtime which will be offset by the hot reloading engine instead
+    /// of at compile time which can't be offset
+    ///
+    /// WARNING: Don't read this directly. Reads can get optimized away at compile time before
+    /// the data for this is filled in by the CLI after the binary is built. Instead, use
+    /// [`std::ptr::read_volatile`] to read the data.
+    bundled: fn() -> &'static [u8],
+}
+
+impl std::fmt::Debug for PermissionHandle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PermissionHandle")
+            .field("permission", &self.permission())
+            .finish()
+    }
+}
+
+unsafe impl Send for PermissionHandle {}
+unsafe impl Sync for PermissionHandle {}
+
+impl PermissionHandle {
+    #[doc(hidden)]
+    /// This should only be called from the macro
+    /// Create a new permission handle from the bundled form of the permission and the link section
+    pub const fn new(bundled: extern "Rust" fn() -> &'static [u8]) -> Self {
+        Self { bundled }
+    }
+
+    /// Get the permission from the bundled data
+    pub fn permission(&self) -> Permission {
+        let bundled = (self.bundled)();
+        let len = bundled.len();
+        let ptr = bundled as *const [u8] as *const u8;
+        if ptr.is_null() {
+            panic!("Tried to use a permission that was not bundled. Make sure you are compiling dx as the linker");
+        }
+        let mut bytes = ConstVec::new();
+        for byte in 0..len {
+            // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
+            // since we are reading a u8 there are no alignment requirements
+            let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
+            bytes = bytes.push(byte);
+        }
+        let read = bytes.read();
+        // Deserialize as LinkerSymbol::Permission, then extract the Permission
+        #[cfg(feature = "manganis")]
+        {
+            use manganis_core::LinkerSymbol;
+            match deserialize_const!(LinkerSymbol, read) {
+                Some((_, LinkerSymbol::Permission(permission))) => permission,
+                Some((_, LinkerSymbol::Asset(_))) => panic!("Expected Permission but found Asset in linker symbol"),
+                None => panic!("Failed to deserialize permission. Make sure you built with the matching version of the Dioxus CLI"),
+            }
+        }
+        #[cfg(not(feature = "manganis"))]
+        {
+            // Fallback: deserialize directly as Permission for backward compatibility
+            deserialize_const!(Permission, read).expect("Failed to deserialize permission. Make sure you built with the matching version of the Dioxus CLI").1
         }
     }
 }
