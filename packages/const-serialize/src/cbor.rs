@@ -1,36 +1,41 @@
-// Major type 0:
-// An unsigned integer in the range 0..264-1 inclusive. The value of the encoded item is the argument itself. For example, the integer 10 is denoted as the one byte 0b000_01010 (major type 0, additional information 10). The integer 500 would be 0b000_11001 (major type 0, additional information 25) followed by the two bytes 0x01f4, which is 500 in decimal.
-// Major type 1:
-// A negative integer in the range -264..-1 inclusive. The value of the item is -1 minus the argument. For example, the integer -500 would be 0b001_11001 (major type 1, additional information 25) followed by the two bytes 0x01f3, which is 499 in decimal.
-// Major type 2:
-// A byte string. The number of bytes in the string is equal to the argument. For example, a byte string whose length is 5 would have an initial byte of 0b010_00101 (major type 2, additional information 5 for the length), followed by 5 bytes of binary content. A byte string whose length is 500 would have 3 initial bytes of 0b010_11001 (major type 2, additional information 25 to indicate a two-byte length) followed by the two bytes 0x01f4 for a length of 500, followed by 500 bytes of binary content.
-// Major type 3:
-// A text string (Section 2) encoded as UTF-8 [RFC3629]. The number of bytes in the string is equal to the argument. A string containing an invalid UTF-8 sequence is well-formed but invalid (Section 1.2). This type is provided for systems that need to interpret or display human-readable text, and allows the differentiation between unstructured bytes and text that has a specified repertoire (that of Unicode) and encoding (UTF-8). In contrast to formats such as JSON, the Unicode characters in this type are never escaped. Thus, a newline character (U+000A) is always represented in a string as the byte 0x0a, and never as the bytes 0x5c6e (the characters "\" and "n") nor as 0x5c7530303061 (the characters "\", "u", "0", "0", "0", and "a").
-// Major type 4:
-// An array of data items. In other formats, arrays are also called lists, sequences, or tuples (a "CBOR sequence" is something slightly different, though [RFC8742]). The argument is the number of data items in the array. Items in an array do not need to all be of the same type. For example, an array that contains 10 items of any type would have an initial byte of 0b100_01010 (major type 4, additional information 10 for the length) followed by the 10 remaining items.
-// Major type 5:
-// A map of pairs of data items. Maps are also called tables, dictionaries, hashes, or objects (in JSON). A map is comprised of pairs of data items, each pair consisting of a key that is immediately followed by a value. The argument is the number of pairs of data items in the map. For example, a map that contains 9 pairs would have an initial byte of 0b101_01001 (major type 5, additional information 9 for the number of pairs) followed by the 18 remaining items. The first item is the first key, the second item is the first value, the third item is the second key, and so on. Because items in a map come in pairs, their total number is always even: a map that contains an odd number of items (no value data present after the last key data item) is not well-formed. A map that has duplicate keys may be well-formed, but it is not valid, and thus it causes indeterminate decoding; see also Section 5.6.
-// Major type 6:
-// A tagged data item ("tag") whose tag number, an integer in the range 0..264-1 inclusive, is the argument and whose enclosed data item (tag content) is the single encoded data item that follows the head. See Section 3.4.
-// Major type 7:
-// Floating-point numbers and simple values, as well as the "break" stop code. See Section 3.3.
-
 use crate::ConstVec;
 
+/// Each item in CBOR starts with a leading byte, which determines the type of the item and additional information.
+///
+/// The first 3 bits of the leading byte are the major type, which indicates the type of the item.
 #[repr(u8)]
 #[derive(PartialEq)]
 enum MajorType {
+    // Major type 0:
+    // An unsigned integer in the range 0..264-1 inclusive. The value of the encoded item is the argument itself. For example, the integer 10 is denoted as the one byte 0b000_01010 (major type 0, additional information 10). The integer 500 would be 0b000_11001 (major type 0, additional information 25) followed by the two bytes 0x01f4, which is 500 in decimal.
     UnsignedInteger = 0,
+    // Major type 1:
+    // A negative integer in the range -264..-1 inclusive. The value of the item is -1 minus the argument. For example, the integer -500 would be 0b001_11001 (major type 1, additional information 25) followed by the two bytes 0x01f3, which is 499 in decimal.
     NegativeInteger = 1,
+    // Major type 2:
+    // A byte string. The number of bytes in the string is equal to the argument. For example, a byte string whose length is 5 would have an initial byte of 0b010_00101 (major type 2, additional information 5 for the length), followed by 5 bytes of binary content. A byte string whose length is 500 would have 3 initial bytes of 0b010_11001 (major type 2, additional information 25 to indicate a two-byte length) followed by the two bytes 0x01f4 for a length of 500, followed by 500 bytes of binary content.
     Bytes = 2,
+    // Major type 3:
+    // A text string (Section 2) encoded as UTF-8 [RFC3629]. The number of bytes in the string is equal to the argument. A string containing an invalid UTF-8 sequence is well-formed but invalid (Section 1.2). This type is provided for systems that need to interpret or display human-readable text, and allows the differentiation between unstructured bytes and text that has a specified repertoire (that of Unicode) and encoding (UTF-8). In contrast to formats such as JSON, the Unicode characters in this type are never escaped. Thus, a newline character (U+000A) is always represented in a string as the byte 0x0a, and never as the bytes 0x5c6e (the characters "\" and "n") nor as 0x5c7530303061 (the characters "\", "u", "0", "0", "0", and "a").
     Text = 3,
+    // Major type 4:
+    // An array of data items. In other formats, arrays are also called lists, sequences, or tuples (a "CBOR sequence" is something slightly different, though [RFC8742]). The argument is the number of data items in the array. Items in an array do not need to all be of the same type. For example, an array that contains 10 items of any type would have an initial byte of 0b100_01010 (major type 4, additional information 10 for the length) followed by the 10 remaining items.
     Array = 4,
+    // Major type 5:
+    // A map of pairs of data items. Maps are also called tables, dictionaries, hashes, or objects (in JSON). A map is comprised of pairs of data items, each pair consisting of a key that is immediately followed by a value. The argument is the number of pairs of data items in the map. For example, a map that contains 9 pairs would have an initial byte of 0b101_01001 (major type 5, additional information 9 for the number of pairs) followed by the 18 remaining items. The first item is the first key, the second item is the first value, the third item is the second key, and so on. Because items in a map come in pairs, their total number is always even: a map that contains an odd number of items (no value data present after the last key data item) is not well-formed. A map that has duplicate keys may be well-formed, but it is not valid, and thus it causes indeterminate decoding; see also Section 5.6.
     Map = 5,
+    // Major type 6:
+    // A tagged data item ("tag") whose tag number, an integer in the range 0..264-1 inclusive, is the argument and whose enclosed data item (tag content) is the single encoded data item that follows the head. See Section 3.4.
     Tagged = 6,
+    // Major type 7:
+    // Floating-point numbers and simple values, as well as the "break" stop code. See Section 3.3.
     Float = 7,
 }
 
 impl MajorType {
+    /// The bitmask for the major type in the leading byte
+    const MASK: u8 = 0b0001_1111;
+
     const fn from_byte(byte: u8) -> Self {
         match byte >> 5 {
             0 => MajorType::UnsignedInteger,
@@ -52,7 +57,7 @@ const fn item_length(bytes: &[u8]) -> Result<usize, ()> {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     match major {
         MajorType::UnsignedInteger | MajorType::NegativeInteger => {
             Ok(1 + get_length_of_number(additional_information) as usize)
@@ -73,8 +78,8 @@ const fn item_length(bytes: &[u8]) -> Result<usize, ()> {
             else {
                 return Err(());
             };
-            let mut total_length = length_of_number as usize + length_of_items as usize;
-            let mut items_left = length_of_items;
+            let mut total_length = length_of_number as usize;
+            let mut items_left = length_of_items * if let MajorType::Map = major { 2 } else { 1 };
             while items_left > 0 {
                 let Some((_, after)) = rest.split_at_checked(total_length) else {
                     return Err(());
@@ -105,12 +110,33 @@ fn test_item_length_str() {
     assert_eq!(length, 2);
 }
 
-const fn take_number(bytes: &[u8]) -> Result<(i64, &[u8]), ()> {
+#[test]
+fn test_item_length_map() {
+    #[rustfmt::skip]
+    let input = [
+        /* map(1) */              0xA1,
+        /* text(1) */             0x61,
+        /* "A" */                 0x41,
+        /* map(2) */              0xA2,
+        /* text(3) */             0x63,
+        /* "one" */               0x6F, 0x6E, 0x65,
+        /* unsigned(286331153) */ 0x1A, 0x11, 0x11, 0x11, 0x11,
+        /* text(3) */             0x63,
+        /* "two" */               0x74, 0x77, 0x6F,
+        /* unsigned(34) */        0x18, 0x22,
+    ];
+    let Ok(length) = item_length(&input) else {
+        panic!("Failed to calculate length");
+    };
+    assert_eq!(length, input.len());
+}
+
+pub(crate) const fn take_number(bytes: &[u8]) -> Result<(i64, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     match major {
         MajorType::UnsignedInteger => {
             let Ok((number, rest)) = grab_u64(rest, additional_information) else {
@@ -128,7 +154,7 @@ const fn take_number(bytes: &[u8]) -> Result<(i64, &[u8]), ()> {
     }
 }
 
-const fn write_number<const MAX_SIZE: usize>(
+pub(crate) const fn write_number<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     number: i64,
 ) -> ConstVec<u8, MAX_SIZE> {
@@ -176,12 +202,12 @@ const fn log2_bytes_for_number(number: u64) -> u8 {
     }
 }
 
-const fn take_bytes(bytes: &[u8]) -> Result<(&[u8], &[u8]), ()> {
+pub(crate) const fn take_bytes(bytes: &[u8]) -> Result<(&[u8], &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     if let MajorType::Bytes = major {
         take_bytes_from(rest, additional_information)
     } else {
@@ -189,7 +215,7 @@ const fn take_bytes(bytes: &[u8]) -> Result<(&[u8], &[u8]), ()> {
     }
 }
 
-const fn write_bytes<const MAX_SIZE: usize>(
+pub(crate) const fn write_bytes<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     bytes: &[u8],
 ) -> ConstVec<u8, MAX_SIZE> {
@@ -197,12 +223,12 @@ const fn write_bytes<const MAX_SIZE: usize>(
     vec.extend(bytes)
 }
 
-const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
+pub(crate) const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     if let MajorType::Text = major {
         let Ok((bytes, rest)) = take_bytes_from(rest, additional_information) else {
             return Err(());
@@ -216,7 +242,7 @@ const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
     }
 }
 
-const fn write_str<const MAX_SIZE: usize>(
+pub(crate) const fn write_str<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     string: &str,
 ) -> ConstVec<u8, MAX_SIZE> {
@@ -224,12 +250,12 @@ const fn write_str<const MAX_SIZE: usize>(
     vec.extend(string.as_bytes())
 }
 
-const fn take_array(bytes: &[u8]) -> Result<(usize, &[u8]), ()> {
+pub(crate) const fn take_array(bytes: &[u8]) -> Result<(usize, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     if let MajorType::Array = major {
         let Ok((length, rest)) = take_len_from(rest, additional_information) else {
             return Err(());
@@ -240,14 +266,14 @@ const fn take_array(bytes: &[u8]) -> Result<(usize, &[u8]), ()> {
     }
 }
 
-const fn write_array<const MAX_SIZE: usize>(
+pub(crate) const fn write_array<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     len: usize,
 ) -> ConstVec<u8, MAX_SIZE> {
     write_major_type_and_u64(vec, MajorType::Array, len as u64)
 }
 
-const fn write_map<const MAX_SIZE: usize>(
+pub(crate) const fn write_map<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     len: usize,
 ) -> ConstVec<u8, MAX_SIZE> {
@@ -255,19 +281,19 @@ const fn write_map<const MAX_SIZE: usize>(
     write_major_type_and_u64(vec, MajorType::Map, len as u64)
 }
 
-const fn write_map_key<const MAX_SIZE: usize>(
+pub(crate) const fn write_map_key<const MAX_SIZE: usize>(
     value: ConstVec<u8, MAX_SIZE>,
     key: &str,
 ) -> ConstVec<u8, MAX_SIZE> {
     write_str(value, key)
 }
 
-const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8]), ()> {
+pub(crate) const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
     };
     let major = MajorType::from_byte(*head);
-    let additional_information = *head & 0b0001_1111;
+    let additional_information = *head & MajorType::MASK;
     if let MajorType::Map = major {
         let Ok((length, rest)) = take_len_from(rest, additional_information) else {
             return Err(());
@@ -291,9 +317,9 @@ const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8]), ()> {
     }
 }
 
-struct MapRef<'a> {
-    bytes: &'a [u8],
-    len: usize,
+pub(crate) struct MapRef<'a> {
+    pub(crate) bytes: &'a [u8],
+    pub(crate) len: usize,
 }
 
 impl<'a> MapRef<'a> {
@@ -301,7 +327,7 @@ impl<'a> MapRef<'a> {
         Self { bytes, len }
     }
 
-    const fn find(&self, key: &str) -> Result<Option<&[u8]>, ()> {
+    pub(crate) const fn find(&self, key: &str) -> Result<Option<&[u8]>, ()> {
         let mut bytes = self.bytes;
         let mut items_left = self.len;
         while items_left > 0 {
@@ -325,7 +351,7 @@ impl<'a> MapRef<'a> {
     }
 }
 
-const fn str_eq(a: &str, b: &str) -> bool {
+pub(crate) const fn str_eq(a: &str, b: &str) -> bool {
     let a_bytes = a.as_bytes();
     let b_bytes = b.as_bytes();
     let a_len = a_bytes.len();
@@ -358,7 +384,10 @@ const fn take_len_from(rest: &[u8], additional_information: u8) -> Result<(u64, 
     }
 }
 
-const fn take_bytes_from(rest: &[u8], additional_information: u8) -> Result<(&[u8], &[u8]), ()> {
+pub(crate) const fn take_bytes_from(
+    rest: &[u8],
+    additional_information: u8,
+) -> Result<(&[u8], &[u8]), ()> {
     let Ok((number, rest)) = grab_u64(rest, additional_information) else {
         return Err(());
     };

@@ -4,24 +4,32 @@
 use std::{char, mem::MaybeUninit};
 
 mod cbor;
-mod const_buffers;
 mod const_vec;
 
-pub use const_buffers::ConstReadBuffer;
 pub use const_serialize_macro::SerializeConst;
 pub use const_vec::ConstVec;
+
+use crate::cbor::{
+    str_eq, take_array, take_map, take_number, take_str, write_array, write_map, write_map_key,
+    write_number,
+};
 
 /// Plain old data for a field. Stores the offset of the field in the struct and the layout of the field.
 #[derive(Debug, Copy, Clone)]
 pub struct StructFieldLayout {
+    name: &'static str,
     offset: usize,
     layout: Layout,
 }
 
 impl StructFieldLayout {
     /// Create a new struct field layout
-    pub const fn new(offset: usize, layout: Layout) -> Self {
-        Self { offset, layout }
+    pub const fn new(name: &'static str, offset: usize, layout: Layout) -> Self {
+        Self {
+            name,
+            offset,
+            layout,
+        }
     }
 }
 
@@ -83,6 +91,7 @@ impl EnumLayout {
 /// The layout for an enum variant. The enum variant layout is just a struct layout with a tag and alignment.
 #[derive(Debug, Copy, Clone)]
 pub struct EnumVariant {
+    name: &'static str,
     // Note: tags may not be sequential
     tag: u32,
     data: StructLayout,
@@ -91,8 +100,13 @@ pub struct EnumVariant {
 
 impl EnumVariant {
     /// Create a new enum variant layout
-    pub const fn new(tag: u32, data: StructLayout, align: usize) -> Self {
-        Self { tag, data, align }
+    pub const fn new(name: &'static str, tag: u32, data: StructLayout, align: usize) -> Self {
+        Self {
+            name,
+            tag,
+            data,
+            align,
+        }
     }
 }
 
@@ -199,7 +213,7 @@ macro_rules! impl_serialize_const_tuple {
                     size: std::mem::size_of::<($($generic,)*)>(),
                     data: &[
                         $(
-                            StructFieldLayout::new(std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
+                            StructFieldLayout::new(stringify!($generic_number), std::mem::offset_of!($inner, $generic_number), $generic::MEMORY_LAYOUT),
                         )*
                     ],
                 })
@@ -259,6 +273,7 @@ unsafe impl SerializeConst for ConstStr {
         size: std::mem::size_of::<Self>(),
         data: &[
             StructFieldLayout::new(
+                "bytes",
                 std::mem::offset_of!(Self, bytes),
                 Layout::List(ListLayout {
                     len: MAX_STR_SIZE,
@@ -268,6 +283,7 @@ unsafe impl SerializeConst for ConstStr {
                 }),
             ),
             StructFieldLayout::new(
+                "len",
                 std::mem::offset_of!(Self, len),
                 Layout::Primitive(PrimitiveLayout {
                     size: std::mem::size_of::<u32>(),
@@ -588,13 +604,20 @@ fn fuzz_utf8_byte_to_char_len() {
 /// Serialize a struct that is stored at the pointer passed in
 const fn serialize_const_struct(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    to: ConstVec<u8>,
     layout: &StructLayout,
 ) -> ConstVec<u8> {
     let mut i = 0;
-    while i < layout.data.len() {
+    let field_count = layout.data.len();
+    let mut to = write_map(to, field_count);
+    while i < field_count {
         // Serialize the field at the offset pointer in the struct
-        let StructFieldLayout { offset, layout } = &layout.data[i];
+        let StructFieldLayout {
+            name,
+            offset,
+            layout,
+        } = &layout.data[i];
+        to = write_map_key(to, name);
         let field = ptr.wrapping_byte_add(*offset as _);
         to = serialize_const_ptr(field, to, layout);
         i += 1;
@@ -623,7 +646,6 @@ const fn serialize_const_enum(
         } else {
             unsafe { byte_ptr.wrapping_byte_add(offset as _).read() }
         };
-        to = to.push(byte);
         discriminant |= (byte as u32) << (offset * 8);
         offset += 1;
     }
@@ -631,8 +653,12 @@ const fn serialize_const_enum(
     let mut i = 0;
     while i < layout.variants.len() {
         // If the variant is the discriminated one, serialize it
-        let EnumVariant { tag, data, .. } = &layout.variants[i];
+        let EnumVariant {
+            tag, name, data, ..
+        } = &layout.variants[i];
         if discriminant == *tag {
+            to = write_map(to, 1);
+            to = write_map_key(to, name);
             let data_ptr = ptr.wrapping_byte_offset(layout.variants_offset as _);
             to = serialize_const_struct(data_ptr, to, data);
             break;
@@ -645,24 +671,27 @@ const fn serialize_const_enum(
 /// Serialize a primitive type that is stored at the pointer passed in
 const fn serialize_const_primitive(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    to: ConstVec<u8>,
     layout: &PrimitiveLayout,
 ) -> ConstVec<u8> {
     let ptr = ptr as *const u8;
     let mut offset = 0;
+    let mut i64_bytes = [0u8; 8];
     while offset < layout.size {
         // If the bytes are reversed, walk backwards from the end of the number when pushing bytes
-        if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
-            to = to.push(unsafe {
+        let byte = unsafe {
+            if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
                 ptr.wrapping_byte_offset((layout.size - offset - 1) as _)
                     .read()
-            });
-        } else {
-            to = to.push(unsafe { ptr.wrapping_byte_offset(offset as _).read() });
-        }
+            } else {
+                ptr.wrapping_byte_offset(offset as _).read()
+            }
+        };
+        i64_bytes[offset as usize] = byte;
         offset += 1;
     }
-    to
+    let number = i64::from_ne_bytes(i64_bytes);
+    write_number(to, number)
 }
 
 /// Serialize a constant sized array that is stored at the pointer passed in
@@ -673,6 +702,7 @@ const fn serialize_const_list(
 ) -> ConstVec<u8> {
     let len = layout.len;
     let mut i = 0;
+    to = write_array(to, len);
     while i < len {
         let field = ptr.wrapping_byte_offset((i * layout.item_layout.size()) as _);
         to = serialize_const_ptr(field, to, layout.item_layout);
@@ -711,8 +741,7 @@ const fn serialize_const_ptr(ptr: *const (), to: ConstVec<u8>, layout: &Layout) 
 ///     b: 0x22,
 ///     c: 0x33333333,
 /// }, buffer);
-/// let buf = buffer.read();
-/// assert_eq!(buf.as_ref(), &[0x11, 0x11, 0x11, 0x11, 0x22, 0x33, 0x33, 0x33, 0x33]);
+/// assert_eq!(buffer.as_ref(), &[0xa3, 0x61, 0x61, 0x1a, 0x11, 0x11, 0x11, 0x11, 0x61, 0x62, 0x18, 0x22, 0x61, 0x63, 0x1a, 0x33, 0x33, 0x33, 0x33]);
 /// ```
 #[must_use = "The data is serialized into the returned buffer"]
 pub const fn serialize_const<T: SerializeConst>(data: &T, to: ConstVec<u8>) -> ConstVec<u8> {
@@ -721,96 +750,98 @@ pub const fn serialize_const<T: SerializeConst>(data: &T, to: ConstVec<u8>) -> C
 }
 
 /// Deserialize a primitive type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-const fn deserialize_const_primitive<'a, const N: usize>(
-    mut from: ConstReadBuffer<'a>,
+const fn deserialize_const_primitive<'a>(
+    from: &'a [u8],
     layout: &PrimitiveLayout,
-    out: (usize, [MaybeUninit<u8>; N]),
-) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
-    let (start, mut out) = out;
+    out: &mut [MaybeUninit<u8>],
+) -> Option<&'a [u8]> {
     let mut offset = 0;
+    let Ok((number, from)) = take_number(from) else {
+        return None;
+    };
+    let bytes = number.to_le_bytes();
     while offset < layout.size {
         // If the bytes are reversed, walk backwards from the end of the number when filling in bytes
-        let (from_new, value) = match from.get() {
-            Some(data) => data,
-            None => return None,
-        };
-        from = from_new;
+        let byte = bytes[offset];
         if cfg!(any(target_endian = "big", feature = "test-big-endian")) {
-            out[start + layout.size - offset - 1] = MaybeUninit::new(value);
+            out[layout.size - offset - 1] = MaybeUninit::new(byte);
         } else {
-            out[start + offset] = MaybeUninit::new(value);
+            out[offset] = MaybeUninit::new(byte);
         }
         offset += 1;
     }
-    Some((from, out))
+    Some(from)
 }
 
 /// Deserialize a struct type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-const fn deserialize_const_struct<'a, const N: usize>(
-    mut from: ConstReadBuffer<'a>,
+const fn deserialize_const_struct<'a>(
+    from: &'a [u8],
     layout: &StructLayout,
-    out: (usize, [MaybeUninit<u8>; N]),
-) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
-    let (start, mut out) = out;
+    out: &mut [MaybeUninit<u8>],
+) -> Option<&'a [u8]> {
+    let Ok((map, from)) = take_map(from) else {
+        return None;
+    };
     let mut i = 0;
     while i < layout.data.len() {
         // Deserialize the field at the offset pointer in the struct
-        let StructFieldLayout { offset, layout } = &layout.data[i];
-        let (new_from, new_out) = match deserialize_const_ptr(from, layout, (start + *offset, out))
-        {
-            Some(data) => data,
-            None => return None,
+        let StructFieldLayout {
+            name,
+            offset,
+            layout,
+        } = &layout.data[i];
+        let Ok(Some(from)) = map.find(name) else {
+            return None;
         };
-        from = new_from;
-        out = new_out;
+        let Some((_, field_bytes)) = out.split_at_mut_checked(*offset) else {
+            return None;
+        };
+        if deserialize_const_ptr(from, layout, field_bytes).is_none() {
+            return None;
+        }
         i += 1;
     }
-    Some((from, out))
+    Some(from)
 }
 
 /// Deserialize an enum type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-const fn deserialize_const_enum<'a, const N: usize>(
-    mut from: ConstReadBuffer<'a>,
+const fn deserialize_const_enum<'a>(
+    from: &'a [u8],
     layout: &EnumLayout,
-    out: (usize, [MaybeUninit<u8>; N]),
-) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
-    let (start, mut out) = out;
-    let mut discriminant = 0;
+    out: &mut [MaybeUninit<u8>],
+) -> Option<&'a [u8]> {
+    // First, deserialize the map
+    let Ok((map, remaining)) = take_map(from) else {
+        return None;
+    };
 
-    // First, deserialize the discriminant
-    let mut offset = 0;
-    while offset < layout.discriminant.size {
-        // If the bytes are reversed, walk backwards from the end of the number when filling in bytes
-        let (from_new, value) = match from.get() {
-            Some(data) => data,
-            None => return None,
-        };
-        from = from_new;
-        if cfg!(target_endian = "big") {
-            out[start + layout.size - offset - 1] = MaybeUninit::new(value);
-            discriminant |= (value as u32) << ((layout.discriminant.size - offset - 1) * 8);
-        } else {
-            out[start + offset] = MaybeUninit::new(value);
-            discriminant |= (value as u32) << (offset * 8);
-        }
-        offset += 1;
-    }
+    // Then get the only field which is the tag
+    let Ok((deserilized_name, from)) = take_str(&map.bytes) else {
+        return None;
+    };
 
     // Then, deserialize the variant
     let mut i = 0;
     let mut matched_variant = false;
     while i < layout.variants.len() {
         // If the variant is the discriminated one, deserialize it
-        let EnumVariant { tag, data, .. } = &layout.variants[i];
-        if discriminant == *tag {
-            let offset = layout.variants_offset;
-            let (new_from, new_out) =
-                match deserialize_const_struct(from, data, (start + offset, out)) {
-                    Some(data) => data,
-                    None => return None,
-                };
-            from = new_from;
-            out = new_out;
+        let EnumVariant {
+            name, data, tag, ..
+        } = &layout.variants[i];
+        if str_eq(deserilized_name, *name) {
+            // Write the tag to the output buffer
+            let tag_bytes = tag.to_ne_bytes();
+            let mut offset = 0;
+            while offset < layout.discriminant.size {
+                out[offset] = MaybeUninit::new(tag_bytes[offset]);
+                offset += 1;
+            }
+            let Some((_, out)) = out.split_at_mut_checked(layout.variants_offset) else {
+                return None;
+            };
+            if deserialize_const_struct(from, data, out).is_none() {
+                return None;
+            }
             matched_variant = true;
             break;
         }
@@ -820,38 +851,40 @@ const fn deserialize_const_enum<'a, const N: usize>(
         return None;
     }
 
-    Some((from, out))
+    Some(remaining)
 }
 
 /// Deserialize a list type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-const fn deserialize_const_list<'a, const N: usize>(
-    mut from: ConstReadBuffer<'a>,
+const fn deserialize_const_list<'a>(
+    from: &'a [u8],
     layout: &ListLayout,
-    out: (usize, [MaybeUninit<u8>; N]),
-) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
-    let (start, mut out) = out;
-    let len = layout.len;
+    mut out: &mut [MaybeUninit<u8>],
+) -> Option<&'a [u8]> {
     let item_layout = layout.item_layout;
+    let Ok((len, mut from)) = take_array(from) else {
+        return None;
+    };
     let mut i = 0;
     while i < len {
-        let (new_from, new_out) =
-            match deserialize_const_ptr(from, item_layout, (start + i * item_layout.size(), out)) {
-                Some(data) => data,
-                None => return None,
-            };
+        let Some(new_from) = deserialize_const_ptr(from, item_layout, out) else {
+            return None;
+        };
+        let Some((_, item_out)) = out.split_at_mut_checked(item_layout.size()) else {
+            return None;
+        };
+        out = item_out;
         from = new_from;
-        out = new_out;
         i += 1;
     }
-    Some((from, out))
+    Some(from)
 }
 
 /// Deserialize a type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-const fn deserialize_const_ptr<'a, const N: usize>(
-    from: ConstReadBuffer<'a>,
+const fn deserialize_const_ptr<'a>(
+    from: &'a [u8],
     layout: &Layout,
-    out: (usize, [MaybeUninit<u8>; N]),
-) -> Option<(ConstReadBuffer<'a>, [MaybeUninit<u8>; N])> {
+    out: &mut [MaybeUninit<u8>],
+) -> Option<&'a [u8]> {
     match layout {
         Layout::Enum(layout) => deserialize_const_enum(from, layout, out),
         Layout::Struct(layout) => deserialize_const_struct(from, layout, out),
@@ -860,7 +893,7 @@ const fn deserialize_const_ptr<'a, const N: usize>(
     }
 }
 
-/// Deserialize a type into the output buffer. Accepts `(type, ConstVec<u8>)` as input and returns `Option<(ConstReadBuffer, Instance of type)>`
+/// Deserialize a type into the output buffer. Accepts `(type, ConstVec<u8>)` as input and returns `Option<(&'a [u8], Instance of type)>`
 ///
 /// # Example
 /// ```rust
@@ -880,7 +913,7 @@ const fn deserialize_const_ptr<'a, const N: usize>(
 ///     c: 0x33333333,
 ///     d: 0x44444444,
 /// }, buffer);
-/// let buf = buffer.read();
+/// let buf = buffer.as_ref();
 /// assert_eq!(deserialize_const!(Struct, buf).unwrap().1, Struct {
 ///     a: 0x11111111,
 ///     b: 0x22,
@@ -902,15 +935,14 @@ macro_rules! deserialize_const {
 /// # Safety
 /// N must be `std::mem::size_of::<T>()`
 #[must_use = "The data is deserialized from the input buffer"]
-pub const unsafe fn deserialize_const_raw<const N: usize, T: SerializeConst>(
-    from: ConstReadBuffer,
-) -> Option<(ConstReadBuffer, T)> {
+pub const unsafe fn deserialize_const_raw<'a, const N: usize, T: SerializeConst>(
+    from: &'a [u8],
+) -> Option<(&'a [u8], T)> {
     // Create uninitized memory with the size of the type
-    let out = [MaybeUninit::uninit(); N];
+    let mut out = [MaybeUninit::uninit(); N];
     // Fill in the bytes into the buffer for the type
-    let (from, out) = match deserialize_const_ptr(from, &T::MEMORY_LAYOUT, (0, out)) {
-        Some(data) => data,
-        None => return None,
+    let Some(from) = deserialize_const_ptr(from, &T::MEMORY_LAYOUT, &mut out) else {
+        return None;
     };
     // Now that the memory is filled in, transmute it into the type
     Some((from, unsafe {

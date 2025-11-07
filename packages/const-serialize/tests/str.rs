@@ -6,7 +6,7 @@ fn test_serialize_const_layout_str() {
     let str = ConstStr::new("hello");
     buf = serialize_const(&str, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(
         deserialize_const!(ConstStr, buf).unwrap().1.as_str(),
         "hello"
@@ -19,7 +19,7 @@ fn test_serialize_const_layout_nested_str() {
     let str = ConstStr::new("hello");
     buf = serialize_const(&[str, str, str] as &[ConstStr; 3], buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
 
     assert_eq!(
         deserialize_const!([ConstStr; 3], buf).unwrap().1,
@@ -35,6 +35,6 @@ fn test_serialize_const_layout_nested_str() {
 fn test_serialize_str_too_little_data() {
     let mut buf = ConstVec::new();
     buf = buf.push(1);
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(ConstStr, buf), None);
 }

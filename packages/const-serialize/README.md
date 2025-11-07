@@ -29,7 +29,7 @@ const {
     }; 3];
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
-    let buf = buf.read();
+    let buf = buf.as_ref();
     let (buf, deserialized) = match deserialize_const!([Struct; 3], buf) {
         Some(data) => data,
         None => panic!("data mismatch"),

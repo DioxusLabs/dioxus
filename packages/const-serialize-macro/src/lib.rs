@@ -48,6 +48,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                             std::mem::size_of::<Self>(),
                             &[#(
                                 const_serialize::StructFieldLayout::new(
+                                    stringify!(#field_names),
                                     std::mem::offset_of!(#ty, #field_names),
                                     <#field_types as const_serialize::SerializeConst>::MEMORY_LAYOUT,
                                 ),
@@ -151,6 +152,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                             }
                         });
                     last_discriminant = Some(discriminant.clone());
+                    let variant_name = &variant.ident;
                     let field_names = variant.fields.iter().enumerate().map(|(i, field)| {
                         field
                             .ident
@@ -170,6 +172,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                                 )*
                             }
                             const_serialize::EnumVariant::new(
+                                stringify!(#variant_name),
                                 #discriminant as u32,
                                 match VariantStruct::MEMORY_LAYOUT {
                                     const_serialize::Layout::Struct(layout) => layout,
