@@ -7,10 +7,9 @@ fn test_serialize_const_layout_str() {
     buf = serialize_const(&str, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.as_ref();
-    assert_eq!(
-        deserialize_const!(ConstStr, buf).unwrap().1.as_str(),
-        "hello"
-    );
+    let str = deserialize_const!(ConstStr, buf).unwrap().1;
+    eprintln!("{str:?}");
+    assert_eq!(str.as_str(), "hello");
 }
 
 #[test]

@@ -1,3 +1,9 @@
+//! Const serialization utilities for the CBOR data format.
+//!
+//! Resources:
+//! The spec: https://www.rfc-editor.org/rfc/rfc8949.html
+//! A playground to check examples against: https://cbor.me/
+
 use crate::ConstVec;
 
 /// Each item in CBOR starts with a leading byte, which determines the type of the item and additional information.
