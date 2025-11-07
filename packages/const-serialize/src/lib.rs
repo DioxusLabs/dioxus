@@ -10,8 +10,8 @@ pub use const_serialize_macro::SerializeConst;
 pub use const_vec::ConstVec;
 
 use crate::cbor::{
-    str_eq, take_array, take_map, take_number, take_str, write_array, write_map, write_map_key,
-    write_number,
+    str_eq, take_array, take_bytes, take_map, take_number, take_str, write_array, write_bytes,
+    write_map, write_map_key, write_number,
 };
 
 /// Plain old data for a field. Stores the offset of the field in the struct and the layout of the field.
@@ -773,12 +773,17 @@ const unsafe fn serialize_const_array(
 
     let data_ptr = ptr.wrapping_byte_offset(layout.data_offset as _);
     let item_layout = layout.data_layout.item_layout;
-    let mut i = 0;
-    to = write_array(to, len);
-    while i < len {
-        let item = data_ptr.wrapping_byte_offset((i * item_layout.size()) as _);
-        to = serialize_const_ptr(item, to, item_layout);
-        i += 1;
+    if item_layout.size() == 1 {
+        let slice = std::slice::from_raw_parts(data_ptr as *const u8, len);
+        to = write_bytes(to, slice);
+    } else {
+        let mut i = 0;
+        to = write_array(to, len);
+        while i < len {
+            let item = data_ptr.wrapping_byte_offset((i * item_layout.size()) as _);
+            to = serialize_const_ptr(item, to, item_layout);
+            i += 1;
+        }
     }
     to
 }
@@ -957,36 +962,49 @@ const fn deserialize_const_array<'a>(
     layout: &ArrayLayout,
     out: &mut [MaybeUninit<u8>],
 ) -> Option<&'a [u8]> {
-    let Ok((len, mut from)) = take_array(from) else {
-        return None;
-    };
-
     let Some((_, len_out)) = out.split_at_mut_checked(layout.len_offset) else {
         return None;
     };
 
-    // Write out the length of the array
-    layout.len_layout.write(len as u32, len_out);
-
-    let Some((_, mut data_out)) = out.split_at_mut_checked(layout.data_offset) else {
-        return None;
-    };
-
     let item_layout = layout.data_layout.item_layout;
-    let mut i = 0;
-    while i < len {
-        let Some(new_from) = deserialize_const_ptr(from, item_layout, data_out) else {
+    if item_layout.size() == 1 {
+        let Ok((bytes, new_from)) = take_bytes(from) else {
             return None;
         };
-        let Some((_, item_out)) = data_out.split_at_mut_checked(item_layout.size()) else {
+        // Write out the length of the array
+        layout.len_layout.write(bytes.len() as u32, len_out);
+        let Some((_, data_out)) = out.split_at_mut_checked(layout.data_offset) else {
             return None;
         };
-        data_out = item_out;
-        from = new_from;
-        i += 1;
+        let mut offset = 0;
+        while offset < bytes.len() {
+            data_out[offset].write(bytes[offset]);
+            offset += 1;
+        }
+        Some(new_from)
+    } else {
+        let Ok((len, mut from)) = take_array(from) else {
+            return None;
+        };
+        // Write out the length of the array
+        layout.len_layout.write(len as u32, len_out);
+        let Some((_, mut data_out)) = out.split_at_mut_checked(layout.data_offset) else {
+            return None;
+        };
+        let mut i = 0;
+        while i < len {
+            let Some(new_from) = deserialize_const_ptr(from, item_layout, data_out) else {
+                return None;
+            };
+            let Some((_, item_out)) = data_out.split_at_mut_checked(item_layout.size()) else {
+                return None;
+            };
+            data_out = item_out;
+            from = new_from;
+            i += 1;
+        }
+        Some(from)
     }
-
-    Some(from)
 }
 
 /// Deserialize a type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
