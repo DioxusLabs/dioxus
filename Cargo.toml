@@ -240,7 +240,7 @@ tracing = "0.1.41"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.19", default-features = false }
 toml = "0.8"
-tokio = "1.46"
+tokio = "1.48"
 tokio-util = { version = "0.7.15" }
 tokio-stream = { version = "0.1.17" }
 slab = "0.4.10"
@@ -489,7 +489,7 @@ pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
-tokio = { version = "1.46", default-features = false, features = [
+tokio = { version = "1.48", default-features = false, features = [
     "sync",
     "macros",
     "io-util",
@@ -499,7 +499,7 @@ tokio = { version = "1.46", default-features = false, features = [
 uuid = { workspace = true, features = ["v4", "serde", "js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio = { version = "1.46", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
