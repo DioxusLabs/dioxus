@@ -318,7 +318,7 @@ impl Workspace {
                                 return None;
                             }
                             if std::fs::canonicalize(krate.manifest_path.parent().unwrap())
-                                .is_ok_and(|memeber_path| memeber_path == default_member_path)
+                                .is_ok_and(|member_path| member_path == default_member_path)
                             {
                                 return Some(id);
                             }
