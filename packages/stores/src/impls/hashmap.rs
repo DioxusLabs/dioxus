@@ -5,6 +5,7 @@ use std::{
     collections::HashMap,
     hash::{BuildHasher, Hash},
     iter::FusedIterator,
+    panic::Location,
 };
 
 use crate::{store::Store, ReadStore};
@@ -12,6 +13,7 @@ use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
     Writable, WriteLock, WriteSignal,
 };
+use generational_box::ValueDroppedError;
 
 impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, St: 'static>
     Store<HashMap<K, V, St>, Lens>
@@ -273,17 +275,20 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     /// store.insert(0, "value".to_string());
     /// assert_eq!(store.get_unchecked(0).cloned(), "value".to_string());
     /// ```
+    #[track_caller]
     pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
     where
         Q: Hash + Eq + 'static,
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
     {
+        let location = Location::caller();
         self.into_selector()
             .hash_child_unmapped(key.borrow())
             .map_writer(move |writer| GetWrite {
                 index: key,
                 write: writer,
+                created: location,
             })
             .into()
     }
@@ -294,6 +299,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
 pub struct GetWrite<Index, Write> {
     index: Index,
     write: Write,
+    created: &'static Location<'static>,
 }
 
 impl<Index, Write, K, V, St> Readable for GetWrite<Index, Write>
@@ -311,12 +317,9 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_read_unchecked().map(|value| {
-            Self::Storage::map(value, |value: &Write::Target| {
-                value
-                    .get(&self.index)
-                    .expect("Tried to access a key that does not exist")
-            })
+        self.write.try_read_unchecked().and_then(|value| {
+            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
+                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 
@@ -324,12 +327,9 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_peek_unchecked().map(|value| {
-            Self::Storage::map(value, |value: &Write::Target| {
-                value
-                    .get(&self.index)
-                    .expect("Tried to access a key that does not exist")
-            })
+        self.write.try_peek_unchecked().and_then(|value| {
+            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
+                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 
@@ -356,12 +356,11 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_write_unchecked().map(|value| {
-            WriteLock::map(value, |value: &mut Write::Target| {
-                value
-                    .get_mut(&self.index)
-                    .expect("Tried to access a key that does not exist")
+        self.write.try_write_unchecked().and_then(|value| {
+            WriteLock::filter_map(value, |value: &mut Write::Target| {
+                value.get_mut(&self.index)
             })
+            .ok_or_else(|| BorrowMutError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 }
