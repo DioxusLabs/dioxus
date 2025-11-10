@@ -270,9 +270,8 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     /// use dioxus::prelude::*;
     /// use std::collections::HashMap;
     /// let mut store = use_store(|| HashMap::new());
-    /// assert!(store.get(0).is_none());
     /// store.insert(0, "value".to_string());
-    /// assert_eq!(store.get(0).unwrap().cloned(), "value".to_string());
+    /// assert_eq!(store.get_unchecked(0).cloned(), "value".to_string());
     /// ```
     pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
     where

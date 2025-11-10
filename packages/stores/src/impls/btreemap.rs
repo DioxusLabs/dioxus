@@ -77,7 +77,7 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
         self.selector().track_shallow();
         let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
         keys.into_iter().map(move |key| {
-            let value = self.clone().get(key.clone()).unwrap();
+            let value = self.clone().get_unchecked(key.clone());
             (key, value)
         })
     }
@@ -110,7 +110,7 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
-            .map(move |key| self.clone().get(key).unwrap())
+            .map(move |key| self.clone().get_unchecked(key))
     }
 
     /// Insert a new key-value pair into the BTreeMap. This method will mark the store as shallowly dirty, causing
@@ -257,6 +257,34 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
                 })
                 .into()
         })
+    }
+
+    /// Get a store for the value associated with the given key without checking if the key exists.
+    /// This method creates a new store scope that tracks just changes to the value associated with the key.
+    ///
+    /// This is not unsafe, but it will panic when you try to read the value if it does not exist.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// use dioxus::prelude::*;
+    /// use std::collections::BTreeMap;
+    /// let mut store = use_store(|| BTreeMap::new());
+    /// store.insert(0, "value".to_string());
+    /// assert_eq!(store.get_unchecked(0).cloned(), "value".to_string());
+    /// ```
+    pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
+    where
+        Q: Hash + Ord + 'static,
+        K: Borrow<Q> + Ord,
+    {
+        self.into_selector()
+            .hash_child_unmapped(key.borrow())
+            .map_writer(move |writer| GetWrite {
+                index: key,
+                write: writer,
+            })
+            .into()
     }
 }
 
