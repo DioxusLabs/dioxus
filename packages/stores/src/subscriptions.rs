@@ -226,13 +226,13 @@ impl StoreSubscriptions {
 
     /// Mark the node and all its children as dirty
     pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
-        let keys = {
+        let paths = {
             let read = self.inner.read();
             let mut nodes = Vec::new();
             read.root.paths_under(key, &mut nodes);
             nodes
         };
-        for key in keys {
+        for path in paths {
             self.mark_dirty_shallow(&key);
         }
     }
@@ -266,7 +266,7 @@ impl StoreSubscriptions {
             paths
         };
         for path in paths {
-            self.mark_dirty_shallow(&*path);
+            self.mark_dirty_shallow(&path);
         }
     }
 
