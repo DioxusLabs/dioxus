@@ -233,7 +233,7 @@ impl StoreSubscriptions {
             nodes
         };
         for path in paths {
-            self.mark_dirty_shallow(&key);
+            self.mark_dirty_shallow(&path);
         }
     }
 
