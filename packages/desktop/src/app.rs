@@ -33,6 +33,7 @@ pub(crate) struct App {
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
+    pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -62,6 +63,7 @@ impl App {
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
+            disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -624,7 +626,7 @@ impl App {
 
     /// Disable DMA buffer rendering on Linux Wayland sessions to avoid bugs with WebKitGTK
     fn disable_dma_buf(&self) {
-        if cfg!(target_os = "linux") {
+        if cfg!(target_os = "linux") && self.disable_dma_buf_on_wayland {
             static INIT: std::sync::Once = std::sync::Once::new();
             INIT.call_once(|| {
                 if std::path::Path::new("/dev/dri").exists()
