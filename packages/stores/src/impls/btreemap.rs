@@ -136,7 +136,6 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
         // in the map and mark the whole map as dirty if it does.
         // In the 0.8 release, we should change this method to only mark the existing value as dirty.
         if self.peek().contains_key(&key) {
-            println!("marking map as dirty");
             self.selector().mark_dirty();
         } else {
             self.selector().mark_dirty_shallow();
