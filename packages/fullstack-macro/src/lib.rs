@@ -1396,6 +1396,7 @@ enum Method {
     Connect(Ident),
     Options(Ident),
     Trace(Ident),
+    Patch(Ident),
 }
 
 impl ToTokens for Method {
@@ -1408,7 +1409,8 @@ impl ToTokens for Method {
             | Self::Head(ident)
             | Self::Connect(ident)
             | Self::Options(ident)
-            | Self::Trace(ident) => {
+            | Self::Trace(ident)
+            | Self::Patch(ident) => {
                 ident.to_tokens(tokens);
             }
         }
@@ -1444,6 +1446,7 @@ impl Method {
             Self::Connect(span) => Ident::new("connect", span.span()),
             Self::Options(span) => Ident::new("options", span.span()),
             Self::Trace(span) => Ident::new("trace", span.span()),
+            Self::Patch(span) => Ident::new("patch", span.span()),
         }
     }
 
@@ -1457,6 +1460,7 @@ impl Method {
             "CONNECT" => Self::Connect(Ident::new("CONNECT", Span::call_site())),
             "OPTIONS" => Self::Options(Ident::new("OPTIONS", Span::call_site())),
             "TRACE" => Self::Trace(Ident::new("TRACE", Span::call_site())),
+            "PATCH" => Self::Patch(Ident::new("PATCH", Span::call_site())),
             _ => panic!("expected one of (GET, POST, PUT, DELETE, HEAD, CONNECT, OPTIONS, TRACE)"),
         }
     }
