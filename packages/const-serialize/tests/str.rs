@@ -7,6 +7,7 @@ fn test_serialize_const_layout_str() {
     buf = serialize_const(&str, buf);
     println!("{:?}", buf.as_ref());
     let buf = buf.as_ref();
+    assert!(buf.len() < 10);
     let str = deserialize_const!(ConstStr, buf).unwrap().1;
     eprintln!("{str:?}");
     assert_eq!(str.as_str(), "hello");
@@ -18,6 +19,7 @@ fn test_serialize_const_layout_nested_str() {
     let str = ConstStr::new("hello");
     buf = serialize_const(&[str, str, str] as &[ConstStr; 3], buf);
     println!("{:?}", buf.as_ref());
+    assert!(buf.len() < 30);
     let buf = buf.as_ref();
 
     assert_eq!(

@@ -1,5 +1,18 @@
 //! Const serialization utilities for the CBOR data format.
 //!
+//! ## Overview of the format
+//!
+//! Const serialize only supports a subset of the CBOR format, specifically the major types:
+//! - UnsignedInteger
+//! - NegativeInteger
+//! - Bytes
+//! - String
+//! - Array
+//!
+//! Each item in CBOR starts with a leading byte, which determines the type of the item and additional information.
+//! The additional information is encoded in the lower 5 bits of the leading byte and generally indicates either a
+//! small number or how many of the next bytes are part of the first number.
+//!
 //! Resources:
 //! The spec: https://www.rfc-editor.org/rfc/rfc8949.html
 //! A playground to check examples against: https://cbor.me/
@@ -12,29 +25,21 @@ use crate::ConstVec;
 #[repr(u8)]
 #[derive(PartialEq)]
 enum MajorType {
-    // Major type 0:
-    // An unsigned integer in the range 0..264-1 inclusive. The value of the encoded item is the argument itself. For example, the integer 10 is denoted as the one byte 0b000_01010 (major type 0, additional information 10). The integer 500 would be 0b000_11001 (major type 0, additional information 25) followed by the two bytes 0x01f4, which is 500 in decimal.
+    /// An unsigned integer in the range 0..2^64. The value of the number is encoded in the remaining bits of the leading byte and any additional bytes.
     UnsignedInteger = 0,
-    // Major type 1:
-    // A negative integer in the range -264..-1 inclusive. The value of the item is -1 minus the argument. For example, the integer -500 would be 0b001_11001 (major type 1, additional information 25) followed by the two bytes 0x01f3, which is 499 in decimal.
+    /// An unsigned integer in the range -2^64..-1. The value of the number is encoded in the remaining bits of the leading byte and any additional bytes
     NegativeInteger = 1,
-    // Major type 2:
-    // A byte string. The number of bytes in the string is equal to the argument. For example, a byte string whose length is 5 would have an initial byte of 0b010_00101 (major type 2, additional information 5 for the length), followed by 5 bytes of binary content. A byte string whose length is 500 would have 3 initial bytes of 0b010_11001 (major type 2, additional information 25 to indicate a two-byte length) followed by the two bytes 0x01f4 for a length of 500, followed by 500 bytes of binary content.
+    /// A byte sequence. The number of bytes in the sequence is encoded in the remaining bits of the leading byte and any additional bytes.
     Bytes = 2,
-    // Major type 3:
-    // A text string (Section 2) encoded as UTF-8 [RFC3629]. The number of bytes in the string is equal to the argument. A string containing an invalid UTF-8 sequence is well-formed but invalid (Section 1.2). This type is provided for systems that need to interpret or display human-readable text, and allows the differentiation between unstructured bytes and text that has a specified repertoire (that of Unicode) and encoding (UTF-8). In contrast to formats such as JSON, the Unicode characters in this type are never escaped. Thus, a newline character (U+000A) is always represented in a string as the byte 0x0a, and never as the bytes 0x5c6e (the characters "\" and "n") nor as 0x5c7530303061 (the characters "\", "u", "0", "0", "0", and "a").
+    /// A text sequence. The number of bytes in the sequence is encoded in the remaining bits of the leading byte and any additional bytes.
     Text = 3,
-    // Major type 4:
-    // An array of data items. In other formats, arrays are also called lists, sequences, or tuples (a "CBOR sequence" is something slightly different, though [RFC8742]). The argument is the number of data items in the array. Items in an array do not need to all be of the same type. For example, an array that contains 10 items of any type would have an initial byte of 0b100_01010 (major type 4, additional information 10 for the length) followed by the 10 remaining items.
+    /// A dynamically sized array of non-uniform data items. The number of items in the array is encoded in the remaining bits of the leading byte and any additional bytes.
     Array = 4,
-    // Major type 5:
-    // A map of pairs of data items. Maps are also called tables, dictionaries, hashes, or objects (in JSON). A map is comprised of pairs of data items, each pair consisting of a key that is immediately followed by a value. The argument is the number of pairs of data items in the map. For example, a map that contains 9 pairs would have an initial byte of 0b101_01001 (major type 5, additional information 9 for the number of pairs) followed by the 18 remaining items. The first item is the first key, the second item is the first value, the third item is the second key, and so on. Because items in a map come in pairs, their total number is always even: a map that contains an odd number of items (no value data present after the last key data item) is not well-formed. A map that has duplicate keys may be well-formed, but it is not valid, and thus it causes indeterminate decoding; see also Section 5.6.
+    /// A map of pairs of data items. The first item in each pair is the key and the second item is the value. The number of items in the array is encoded in the remaining bits of the leading byte and any additional bytes.
     Map = 5,
-    // Major type 6:
-    // A tagged data item ("tag") whose tag number, an integer in the range 0..264-1 inclusive, is the argument and whose enclosed data item (tag content) is the single encoded data item that follows the head. See Section 3.4.
+    /// Tagged values - not supported
     Tagged = 6,
-    // Major type 7:
-    // Floating-point numbers and simple values, as well as the "break" stop code. See Section 3.3.
+    /// Floating point values - not supported
     Float = 7,
 }
 
@@ -64,10 +69,15 @@ const fn item_length(bytes: &[u8]) -> Result<usize, ()> {
     };
     let major = MajorType::from_byte(*head);
     let additional_information = *head & MajorType::MASK;
-    match major {
+    let length_of_item = match major {
+        // The length of the number is the total of:
+        // - The length of the number (which may be 0 if the number is encoded in additional information)
         MajorType::UnsignedInteger | MajorType::NegativeInteger => {
-            Ok(1 + get_length_of_number(additional_information) as usize)
+            get_length_of_number(additional_information) as usize
         }
+        // The length of the text or bytes is the total of:
+        // - The length of the number that denotes the length of the text or bytes
+        // - The length of the text or bytes themselves
         MajorType::Text | MajorType::Bytes => {
             let length_of_number = get_length_of_number(additional_information);
             let Ok((length_of_bytes, _)) =
@@ -75,8 +85,11 @@ const fn item_length(bytes: &[u8]) -> Result<usize, ()> {
             else {
                 return Err(());
             };
-            Ok(1 + length_of_number as usize + length_of_bytes as usize)
+            length_of_number as usize + length_of_bytes as usize
         }
+        // The length of the map is the total of:
+        // - The length of the number that denotes the number of items
+        // - The length of the pairs of items themselves
         MajorType::Array | MajorType::Map => {
             let length_of_number = get_length_of_number(additional_information);
             let Ok((length_of_items, _)) =
@@ -96,47 +109,15 @@ const fn item_length(bytes: &[u8]) -> Result<usize, ()> {
                 total_length += item_length;
                 items_left -= 1;
             }
-            Ok(1 + total_length)
+            total_length
         }
-        _ => Err(()),
-    }
-}
-
-#[test]
-fn test_item_length_str() {
-    let input = [
-        0x61, // text(1)
-        /**/ 0x31, // "1"
-        0x61, // text(1)
-        /**/ 0x31, // "1"
-    ];
-    let Ok(length) = item_length(&input) else {
-        panic!("Failed to calculate length");
+        _ => return Err(()),
     };
-    assert_eq!(length, 2);
+    let length_of_head = 1;
+    Ok(length_of_head + length_of_item)
 }
 
-#[test]
-fn test_item_length_map() {
-    #[rustfmt::skip]
-    let input = [
-        /* map(1) */              0xA1,
-        /* text(1) */             0x61,
-        /* "A" */                 0x41,
-        /* map(2) */              0xA2,
-        /* text(3) */             0x63,
-        /* "one" */               0x6F, 0x6E, 0x65,
-        /* unsigned(286331153) */ 0x1A, 0x11, 0x11, 0x11, 0x11,
-        /* text(3) */             0x63,
-        /* "two" */               0x74, 0x77, 0x6F,
-        /* unsigned(34) */        0x18, 0x22,
-    ];
-    let Ok(length) = item_length(&input) else {
-        panic!("Failed to calculate length");
-    };
-    assert_eq!(length, input.len());
-}
-
+/// Read a number from the buffer, returning the number and the remaining bytes.
 pub(crate) const fn take_number(bytes: &[u8]) -> Result<(i64, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
@@ -160,6 +141,7 @@ pub(crate) const fn take_number(bytes: &[u8]) -> Result<(i64, &[u8]), ()> {
     }
 }
 
+/// Write a number to the buffer
 pub(crate) const fn write_number<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     number: i64,
@@ -170,6 +152,9 @@ pub(crate) const fn write_number<const MAX_SIZE: usize>(
     }
 }
 
+/// Write the major type along with a number to the buffer. The first byte
+/// contains both the major type and the additional information which contains
+/// either the number itself or the number of extra bytes the number occupies.
 const fn write_major_type_and_u64<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     major: MajorType,
@@ -177,11 +162,14 @@ const fn write_major_type_and_u64<const MAX_SIZE: usize>(
 ) -> ConstVec<u8, MAX_SIZE> {
     let major = (major as u8) << 5;
     match number {
+        // For numbers less than 24, store the number in the lower bits
+        // of the first byte
         0..24 => {
             let additional_information = number as u8;
             let byte = major | additional_information;
             vec.push(byte)
         }
+        // For larger numbers, store the number of extra bytes the number occupies
         24.. => {
             let log2_additional_bytes = log2_bytes_for_number(number);
             let additional_bytes = 1 << log2_additional_bytes;
@@ -198,6 +186,8 @@ const fn write_major_type_and_u64<const MAX_SIZE: usize>(
     }
 }
 
+/// Find the number of bytes required to store a number and return the log2 of the number of bytes.
+/// This is the number stored in the additional information field if the number is more than 24.
 const fn log2_bytes_for_number(number: u64) -> u8 {
     let required_bytes = ((64 - number.leading_zeros()).div_ceil(8)) as u8;
     match required_bytes {
@@ -208,6 +198,7 @@ const fn log2_bytes_for_number(number: u64) -> u8 {
     }
 }
 
+/// Take bytes from a slice and return the bytes and the remaining slice.
 pub(crate) const fn take_bytes(bytes: &[u8]) -> Result<(&[u8], &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
@@ -221,6 +212,7 @@ pub(crate) const fn take_bytes(bytes: &[u8]) -> Result<(&[u8], &[u8]), ()> {
     }
 }
 
+/// Write bytes to a buffer and return the new buffer.
 pub(crate) const fn write_bytes<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     bytes: &[u8],
@@ -229,6 +221,7 @@ pub(crate) const fn write_bytes<const MAX_SIZE: usize>(
     vec.extend(bytes)
 }
 
+/// Take a string from a buffer and return the string and the remaining buffer.
 pub(crate) const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
@@ -248,6 +241,7 @@ pub(crate) const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
     }
 }
 
+/// Write a string to a buffer and return the new buffer.
 pub(crate) const fn write_str<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     string: &str,
@@ -256,6 +250,8 @@ pub(crate) const fn write_str<const MAX_SIZE: usize>(
     vec.extend(string.as_bytes())
 }
 
+/// Take the length and header of an array from a buffer and return the length and the remaining buffer.
+/// You must loop over the elements of the array and parse them outside of this method.
 pub(crate) const fn take_array(bytes: &[u8]) -> Result<(usize, &[u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
@@ -272,6 +268,7 @@ pub(crate) const fn take_array(bytes: &[u8]) -> Result<(usize, &[u8]), ()> {
     }
 }
 
+/// Write the header and length of an array.
 pub(crate) const fn write_array<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     len: usize,
@@ -279,6 +276,7 @@ pub(crate) const fn write_array<const MAX_SIZE: usize>(
     write_major_type_and_u64(vec, MajorType::Array, len as u64)
 }
 
+/// Write the header and length of a map.
 pub(crate) const fn write_map<const MAX_SIZE: usize>(
     vec: ConstVec<u8, MAX_SIZE>,
     len: usize,
@@ -287,6 +285,7 @@ pub(crate) const fn write_map<const MAX_SIZE: usize>(
     write_major_type_and_u64(vec, MajorType::Map, len as u64)
 }
 
+/// Write the key of a map entry.
 pub(crate) const fn write_map_key<const MAX_SIZE: usize>(
     value: ConstVec<u8, MAX_SIZE>,
     key: &str,
@@ -294,6 +293,7 @@ pub(crate) const fn write_map_key<const MAX_SIZE: usize>(
     write_str(value, key)
 }
 
+/// Take a map from the byte slice and return the map reference and the remaining bytes.
 pub(crate) const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8]), ()> {
     let [head, rest @ ..] = bytes else {
         return Err(());
@@ -311,7 +311,7 @@ pub(crate) const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8
             let Ok(len) = item_length(after_map) else {
                 return Err(());
             };
-            let Some((_, rest)) = after_map.split_at_checked(len as usize) else {
+            let Some((_, rest)) = after_map.split_at_checked(len) else {
                 return Err(());
             };
             after_map = rest;
@@ -323,16 +323,21 @@ pub(crate) const fn take_map<'a>(bytes: &'a [u8]) -> Result<(MapRef<'a>, &'a [u8
     }
 }
 
+/// A reference to a CBOR map.
 pub(crate) struct MapRef<'a> {
+    /// The bytes of the map.
     pub(crate) bytes: &'a [u8],
+    /// The length of the map.
     pub(crate) len: usize,
 }
 
 impl<'a> MapRef<'a> {
+    /// Create a new map reference.
     const fn new(bytes: &'a [u8], len: usize) -> Self {
         Self { bytes, len }
     }
 
+    /// Find a key in the map and return the buffer associated with it.
     pub(crate) const fn find(&self, key: &str) -> Result<Option<&[u8]>, ()> {
         let mut bytes = self.bytes;
         let mut items_left = self.len;
@@ -347,7 +352,7 @@ impl<'a> MapRef<'a> {
             let Ok(len) = item_length(rest) else {
                 return Err(());
             };
-            let Some((_, rest)) = rest.split_at_checked(len as usize) else {
+            let Some((_, rest)) = rest.split_at_checked(len) else {
                 return Err(());
             };
             bytes = rest;
@@ -357,6 +362,7 @@ impl<'a> MapRef<'a> {
     }
 }
 
+/// Compare two strings for equality at compile time.
 pub(crate) const fn str_eq(a: &str, b: &str) -> bool {
     let a_bytes = a.as_bytes();
     let b_bytes = b.as_bytes();
@@ -375,6 +381,7 @@ pub(crate) const fn str_eq(a: &str, b: &str) -> bool {
     true
 }
 
+/// Take the length from the additional information byte and return it along with the remaining bytes.
 const fn take_len_from(rest: &[u8], additional_information: u8) -> Result<(u64, &[u8]), ()> {
     match additional_information {
         // If additional_information < 24, the argument's value is the value of the additional information.
@@ -384,12 +391,14 @@ const fn take_len_from(rest: &[u8], additional_information: u8) -> Result<(u64, 
             let Ok((number, rest)) = grab_u64(rest, additional_information) else {
                 return Err(());
             };
-            Ok((number as u64, rest))
+            Ok((number, rest))
         }
         _ => Err(()),
     }
 }
 
+/// Take a list of bytes from the byte slice and the additional information byte
+/// and return the bytes and the remaining bytes.
 pub(crate) const fn take_bytes_from(
     rest: &[u8],
     additional_information: u8,
@@ -403,6 +412,7 @@ pub(crate) const fn take_bytes_from(
     Ok((bytes, rest))
 }
 
+/// Find the length of the number based on the additional information byte.
 const fn get_length_of_number(additional_information: u8) -> u8 {
     match additional_information {
         0..24 => 0,
@@ -411,6 +421,7 @@ const fn get_length_of_number(additional_information: u8) -> u8 {
     }
 }
 
+/// Read a u64 from the byte slice and the additional information byte.
 const fn grab_u64(rest: &[u8], additional_information: u8) -> Result<(u64, &[u8]), ()> {
     grab_u64_with_byte_length(
         rest,
@@ -419,6 +430,7 @@ const fn grab_u64(rest: &[u8], additional_information: u8) -> Result<(u64, &[u8]
     )
 }
 
+/// Read a u64 from the byte slice and the additional information byte along with the byte length.
 const fn grab_u64_with_byte_length(
     mut rest: &[u8],
     byte_length: u8,
@@ -442,106 +454,147 @@ const fn grab_u64_with_byte_length(
     }
 }
 
-#[test]
-fn test_parse_byte() {
-    for byte in 0..=255 {
-        let bytes = if byte < 24 {
-            [byte | 0b00000000, 0]
-        } else {
-            [0b00000000 | 24, byte]
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_byte() {
+        for byte in 0..=255 {
+            let bytes = if byte < 24 {
+                [byte | 0b00000000, 0]
+            } else {
+                [0b00000000 | 24, byte]
+            };
+            let (item, _) = take_number(&bytes).unwrap();
+            assert_eq!(item, byte as _);
+        }
+        for byte in 1..=255 {
+            let bytes = if byte < 24 {
+                [byte - 1 | 0b0010_0000, 0]
+            } else {
+                [0b0010_0000 | 24, byte - 1]
+            };
+            let (item, _) = take_number(&bytes).unwrap();
+            assert_eq!(item, -(byte as i64));
+        }
+    }
+
+    #[test]
+    fn test_byte_roundtrip() {
+        for byte in 0..=255 {
+            let vec = write_number(ConstVec::new(), byte as _);
+            println!("{vec:?}");
+            let (item, _) = take_number(vec.as_ref()).unwrap();
+            assert_eq!(item, byte as _);
+        }
+        for byte in 0..=255 {
+            let vec = write_number(ConstVec::new(), -(byte as i64));
+            let (item, _) = take_number(vec.as_ref()).unwrap();
+            assert_eq!(item, -(byte as i64));
+        }
+    }
+
+    #[test]
+    fn test_number_roundtrip() {
+        for _ in 0..100 {
+            let value = rand::random::<i64>();
+            let vec = write_number(ConstVec::new(), value);
+            let (item, _) = take_number(vec.as_ref()).unwrap();
+            assert_eq!(item, value);
+        }
+    }
+
+    #[test]
+    fn test_bytes_roundtrip() {
+        for _ in 0..100 {
+            let len = (rand::random::<u8>() % 100) as usize;
+            let bytes = rand::random::<[u8; 100]>();
+            let vec = write_bytes(ConstVec::new(), &bytes[..len]);
+            let (item, _) = take_bytes(vec.as_ref()).unwrap();
+            assert_eq!(item, &bytes[..len]);
+        }
+    }
+
+    #[test]
+    fn test_array_roundtrip() {
+        for _ in 0..100 {
+            let len = (rand::random::<u8>() % 100) as usize;
+            let mut vec = write_array(ConstVec::new(), len);
+            for i in 0..len {
+                vec = write_number(vec, i as _);
+            }
+            let (len, mut remaining) = take_array(vec.as_ref()).unwrap();
+            for i in 0..len {
+                let (item, rest) = take_number(remaining).unwrap();
+                remaining = rest;
+                assert_eq!(item, i as i64);
+            }
+        }
+    }
+
+    #[test]
+    fn test_map_roundtrip() {
+        use rand::prelude::SliceRandom;
+        for _ in 0..100 {
+            let len = (rand::random::<u8>() % 10) as usize;
+            let mut vec = write_map(ConstVec::new(), len);
+            let mut random_order_indexes = (0..len).collect::<Vec<_>>();
+            random_order_indexes.shuffle(&mut rand::rng());
+            for &i in &random_order_indexes {
+                vec = write_map_key(vec, &i.to_string());
+                vec = write_number(vec, i as _);
+            }
+            println!("len: {}", len);
+            println!("Map: {:?}", vec);
+            let (map, remaining) = take_map(vec.as_ref()).unwrap();
+            println!("remaining: {:?}", remaining);
+            assert!(remaining.is_empty());
+            for i in 0..len {
+                let key = i.to_string();
+                let key_location = map
+                    .find(&key)
+                    .expect("encoding is valid")
+                    .expect("key exists");
+                let (value, _) = take_number(key_location).unwrap();
+                assert_eq!(value, i as i64);
+            }
+        }
+    }
+
+    #[test]
+    fn test_item_length_str() {
+        #[rustfmt::skip]
+    let input = [
+        /* text(1) */ 0x61,
+        /* "1" */     0x31,
+        /* text(1) */ 0x61,
+        /* "1" */     0x31,
+    ];
+        let Ok(length) = item_length(&input) else {
+            panic!("Failed to calculate length");
         };
-        let (item, _) = take_number(&bytes).unwrap();
-        assert_eq!(item, byte as _);
+        assert_eq!(length, 2);
     }
-    for byte in 1..=255 {
-        let bytes = if byte < 24 {
-            [byte - 1 | 0b0010_0000, 0]
-        } else {
-            [0b0010_0000 | 24, byte - 1]
+
+    #[test]
+    fn test_item_length_map() {
+        #[rustfmt::skip]
+    let input = [
+        /* map(1) */              0xA1,
+        /* text(1) */             0x61,
+        /* "A" */                 0x41,
+        /* map(2) */              0xA2,
+        /* text(3) */             0x63,
+        /* "one" */               0x6F, 0x6E, 0x65,
+        /* unsigned(286331153) */ 0x1A, 0x11, 0x11, 0x11, 0x11,
+        /* text(3) */             0x63,
+        /* "two" */               0x74, 0x77, 0x6F,
+        /* unsigned(34) */        0x18, 0x22,
+    ];
+        let Ok(length) = item_length(&input) else {
+            panic!("Failed to calculate length");
         };
-        let (item, _) = take_number(&bytes).unwrap();
-        assert_eq!(item, -(byte as i64));
-    }
-}
-
-#[test]
-fn test_byte_roundtrip() {
-    for byte in 0..=255 {
-        let vec = write_number(ConstVec::new(), byte as _);
-        println!("{vec:?}");
-        let (item, _) = take_number(vec.as_ref()).unwrap();
-        assert_eq!(item, byte as _);
-    }
-    for byte in 0..=255 {
-        let vec = write_number(ConstVec::new(), -(byte as i64));
-        let (item, _) = take_number(vec.as_ref()).unwrap();
-        assert_eq!(item, -(byte as i64));
-    }
-}
-
-#[test]
-fn test_number_roundtrip() {
-    for _ in 0..100 {
-        let value = rand::random::<i64>();
-        let vec = write_number(ConstVec::new(), value);
-        let (item, _) = take_number(vec.as_ref()).unwrap();
-        assert_eq!(item, value);
-    }
-}
-
-#[test]
-fn test_bytes_roundtrip() {
-    for _ in 0..100 {
-        let len = (rand::random::<u8>() % 100) as usize;
-        let bytes = rand::random::<[u8; 100]>();
-        let vec = write_bytes(ConstVec::new(), &bytes[..len]);
-        let (item, _) = take_bytes(vec.as_ref()).unwrap();
-        assert_eq!(item, &bytes[..len]);
-    }
-}
-
-#[test]
-fn test_array_roundtrip() {
-    for _ in 0..100 {
-        let len = (rand::random::<u8>() % 100) as usize;
-        let mut vec = write_array(ConstVec::new(), len);
-        for i in 0..len {
-            vec = write_number(vec, i as _);
-        }
-        let (len, mut remaining) = take_array(vec.as_ref()).unwrap();
-        for i in 0..len {
-            let (item, rest) = take_number(remaining).unwrap();
-            remaining = rest;
-            assert_eq!(item, i as i64);
-        }
-    }
-}
-
-#[test]
-fn test_map_roundtrip() {
-    use rand::prelude::SliceRandom;
-    for _ in 0..100 {
-        let len = (rand::random::<u8>() % 10) as usize;
-        let mut vec = write_map(ConstVec::new(), len);
-        let mut random_order_indexes = (0..len).collect::<Vec<_>>();
-        random_order_indexes.shuffle(&mut rand::rng());
-        for &i in &random_order_indexes {
-            vec = write_map_key(vec, &i.to_string());
-            vec = write_number(vec, i as _);
-        }
-        println!("len: {}", len);
-        println!("Map: {:?}", vec);
-        let (map, remaining) = take_map(vec.as_ref()).unwrap();
-        println!("remaining: {:?}", remaining);
-        assert!(remaining.is_empty());
-        for i in 0..len {
-            let key = i.to_string();
-            let key_location = map
-                .find(&key)
-                .expect("encoding is valid")
-                .expect("key exists");
-            let (value, _) = take_number(key_location).unwrap();
-            assert_eq!(value, i as i64);
-        }
+        assert_eq!(length, input.len());
     }
 }

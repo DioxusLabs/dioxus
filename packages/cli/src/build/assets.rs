@@ -316,7 +316,7 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
         file.read_exact(&mut data_in_range)?;
 
-        let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
+        let buffer = &data_in_range;
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
