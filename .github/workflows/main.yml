@@ -288,15 +288,6 @@ jobs:
               platform: "desktop",
             }
           - {
-              target: x86_64-apple-darwin,
-              os: macos-13,
-              toolchain: "1.88.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-              platform: "desktop",
-            }
-          - {
               target: aarch64-apple-ios,
               os: macos-latest,
               toolchain: "1.88.0",
