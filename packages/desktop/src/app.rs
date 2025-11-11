@@ -102,6 +102,9 @@ impl App {
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.connect_preserve_window_state_handler();
 
+        // Make sure to disable DMA buffer rendering on Linux Wayland sessions
+        app.disable_dma_buf();
+
         (event_loop, app)
     }
 
@@ -614,6 +617,28 @@ impl App {
                         // give it a moment for the event to be processed
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
+                }
+            });
+        }
+    }
+
+    /// Disable DMA buffer rendering on Linux Wayland sessions to avoid bugs with WebKitGTK
+    fn disable_dma_buf(&self) {
+        if cfg!(target_os = "linux") {
+            static INIT: std::sync::Once = std::sync::Once::new();
+            INIT.call_once(|| {
+                if std::path::Path::new("/dev/dri").exists()
+                    && std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
+                {
+                    // Gnome Webkit is currently buggy under Wayland and KDE, so we will run it with XWayland mode.
+                    // See: https://github.com/DioxusLabs/dioxus/issues/3667
+                    unsafe {
+                        // Disable explicit sync for NVIDIA drivers on Linux when using Way
+                        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                    }
+                }
+                unsafe {
+                    std::env::set_var("GDK_BACKEND", "x11");
                 }
             });
         }
