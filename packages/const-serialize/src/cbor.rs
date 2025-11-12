@@ -14,8 +14,8 @@
 //! small number or how many of the next bytes are part of the first number.
 //!
 //! Resources:
-//! The spec: https://www.rfc-editor.org/rfc/rfc8949.html
-//! A playground to check examples against: https://cbor.me/
+//! The spec: <https://www.rfc-editor.org/rfc/rfc8949.html>
+//! A playground to check examples against: <https://cbor.me/>
 
 use crate::ConstVec;
 
@@ -462,17 +462,13 @@ mod tests {
     #[test]
     fn test_parse_byte() {
         for byte in 0..=255 {
-            let bytes = if byte < 24 {
-                [byte | 0b00000000, 0]
-            } else {
-                [0b00000000 | 24, byte]
-            };
+            let bytes = if byte < 24 { [byte, 0] } else { [24, byte] };
             let (item, _) = take_number(&bytes).unwrap();
             assert_eq!(item, byte as _);
         }
         for byte in 1..=255 {
             let bytes = if byte < 24 {
-                [byte - 1 | 0b0010_0000, 0]
+                [(byte - 1) | 0b0010_0000, 0]
             } else {
                 [0b0010_0000 | 24, byte - 1]
             };
