@@ -142,56 +142,56 @@ members = [
 ]
 
 [workspace.package]
-version = "0.7.0"
+version = "0.7.1"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.7.0" }
-dioxus-core = { path = "packages/core", version = "0.7.0" }
-dioxus-core-types = { path = "packages/core-types", version = "0.7.0" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.7.0" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.7.0" }
-dioxus-router = { path = "packages/router", version = "0.7.0" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.7.0" }
-dioxus-document = { path = "packages/document", version = "0.7.0", default-features = false }
-dioxus-history = { path = "packages/history", version = "0.7.0", default-features = false }
-dioxus-html = { path = "packages/html", version = "0.7.0", default-features = false }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.0" }
-dioxus-hooks = { path = "packages/hooks", version = "0.7.0" }
-dioxus-web = { path = "packages/web", version = "0.7.0", default-features = false }
-dioxus-ssr = { path = "packages/ssr", version = "0.7.0", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.7.0", default-features = false }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.0" }
-dioxus-liveview = { path = "packages/liveview", version = "0.7.0" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.7.0" }
-dioxus-check = { path = "packages/check", version = "0.7.0" }
-dioxus-rsx = { path = "packages/rsx", version = "0.7.0" }
-dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.0" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.0" }
-dioxus-signals = { path = "packages/signals", version = "0.7.0" }
-dioxus-stores = { path = "packages/stores", version = "0.7.0" }
-dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.0" }
-dioxus-devtools = { path = "packages/devtools", version = "0.7.0" }
-dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.0" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.7.0", default-features = false }
-dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.0", default-features = false }
-dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.0", default-features = false }
-dioxus-server = { path = "packages/fullstack-server", version = "0.7.0" }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.0" }
-dioxus-logger = { path = "packages/logger", version = "0.7.0" }
-dioxus-native = { path = "packages/native", version = "0.7.0" }
-dioxus-native-dom = { path = "packages/native-dom", version = "0.7.0" }
-dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.0" }
-dioxus-config-macros = { path = "packages/config-macros", version = "0.7.0" }
-dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.0" }
+dioxus = { path = "packages/dioxus", version = "0.7.1" }
+dioxus-core = { path = "packages/core", version = "0.7.1" }
+dioxus-core-types = { path = "packages/core-types", version = "0.7.1" }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.7.1" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.7.1" }
+dioxus-router = { path = "packages/router", version = "0.7.1" }
+dioxus-router-macro = { path = "packages/router-macro", version = "0.7.1" }
+dioxus-document = { path = "packages/document", version = "0.7.1", default-features = false }
+dioxus-history = { path = "packages/history", version = "0.7.1", default-features = false }
+dioxus-html = { path = "packages/html", version = "0.7.1", default-features = false }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.1" }
+dioxus-hooks = { path = "packages/hooks", version = "0.7.1" }
+dioxus-web = { path = "packages/web", version = "0.7.1", default-features = false }
+dioxus-ssr = { path = "packages/ssr", version = "0.7.1", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.7.1", default-features = false }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.1" }
+dioxus-liveview = { path = "packages/liveview", version = "0.7.1" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.7.1" }
+dioxus-check = { path = "packages/check", version = "0.7.1" }
+dioxus-rsx = { path = "packages/rsx", version = "0.7.1" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.1" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.1" }
+dioxus-signals = { path = "packages/signals", version = "0.7.1" }
+dioxus-stores = { path = "packages/stores", version = "0.7.1" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.1" }
+dioxus-devtools = { path = "packages/devtools", version = "0.7.1" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.1" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.7.1", default-features = false }
+dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.1", default-features = false }
+dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.1", default-features = false }
+dioxus-server = { path = "packages/fullstack-server", version = "0.7.1" }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.1" }
+dioxus-logger = { path = "packages/logger", version = "0.7.1" }
+dioxus-native = { path = "packages/native", version = "0.7.1" }
+dioxus-native-dom = { path = "packages/native-dom", version = "0.7.1" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.1" }
+dioxus-config-macros = { path = "packages/config-macros", version = "0.7.1" }
+dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.1" }
 
-generational-box = { path = "packages/generational-box", version = "0.7.0" }
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.0" }
+generational-box = { path = "packages/generational-box", version = "0.7.1" }
+lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.1" }
 
 # cli
-dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.0" }
-dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.0" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.7.0" }
+dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.1" }
+dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.1" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.7.1" }
 
 # const-serialize
 const-serialize = { path = "packages/const-serialize", version = "0.8.0" }
@@ -201,24 +201,24 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 const-serialize-07 = { package = "const-serialize", version = "0.7.1" }
 
 # subsecond
-subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.0" }
-subsecond = { path = "packages/subsecond/subsecond", version = "0.7.0" }
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.1" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.7.1" }
 
 # manganis
-manganis = { path = "packages/manganis/manganis", version = "0.7.0" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.0" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.0" }
+manganis = { path = "packages/manganis/manganis", version = "0.7.1" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.1" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.1" }
 
 # The version of assets published with 0.7.0 and 0.7.1 that the CLI should still support
 manganis-core-07 = { package = "manganis-core", version = "0.7.1" }
 
 # wasm-split
-wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.0" }
-wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.0" }
-wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.0" }
-wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.0" }
+wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.1" }
+wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.1" }
+wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.1" }
+wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.1" }
 
-depinfo = { path = "packages/depinfo", version = "0.7.0" }
+depinfo = { path = "packages/depinfo", version = "0.7.1" }
 warnings = { version = "0.2.1" }
 
 # blitz
@@ -228,8 +228,9 @@ blitz-html = { version = "0.2" }
 blitz-paint = { version = "0.2" }
 blitz-traits = { version = "0.2" }
 blitz-shell = { version = "0.2", default-features = false }
-anyrender = { version = "0.6", default-features = false }
+anyrender = { version = "0.6.2", default-features = false }
 anyrender_vello = { version = "0.6", default-features = false }
+anyrender_vello_cpu = { version = "0.8", default-features = false }
 wgpu_context = { version = "0.1", default-features = false }
 wgpu = { version = "26.0" }
 vello = "0.6"
@@ -245,7 +246,7 @@ tracing = "0.1.41"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.19", default-features = false }
 toml = "0.8"
-tokio = "1.46"
+tokio = "1.48"
 tokio-util = { version = "0.7.15" }
 tokio-stream = { version = "0.1.17" }
 slab = "0.4.10"
@@ -490,10 +491,11 @@ futures = { workspace = true }
 axum-core = { workspace = true }
 uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
+pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
-tokio = { version = "1.46", default-features = false, features = [
+tokio = { version = "1.48", default-features = false, features = [
     "sync",
     "macros",
     "io-util",
@@ -503,7 +505,7 @@ tokio = { version = "1.46", default-features = false, features = [
 uuid = { workspace = true, features = ["v4", "serde", "js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-tokio = { version = "1.46", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time

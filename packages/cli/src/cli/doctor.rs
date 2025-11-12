@@ -66,6 +66,11 @@ impl Doctor {
             Ok(path) => path.to_string_lossy().to_string(),
             Err(_) => "not found".to_string(),
         };
+        let vscode_insiders_ext = has_dioxus_ext(".vscode-insiders");
+        let vscode_insiders_ext_msg = match vscode_insiders_ext.as_ref() {
+            Ok(path) => path.to_string_lossy().to_string(),
+            Err(_) => "not found".to_string(),
+        };
         let cursor_ext = has_dioxus_ext(".cursor");
         let cursor_ext_msg = match cursor_ext.as_ref() {
             Ok(path) => path.to_string_lossy().to_string(),
@@ -216,6 +221,7 @@ impl Doctor {
 
 {LINK_STYLE}Devtools{LINK_STYLE:#}
  VSCode Extension: {HINT_STYLE}{vscode_ext_msg}{HINT_STYLE:#}
+ VSCode-Insiders Extension: {HINT_STYLE}{vscode_insiders_ext_msg}{HINT_STYLE:#}
  Cursor Extension: {HINT_STYLE}{cursor_ext_msg}{HINT_STYLE:#}
  TailwindCSS: {HINT_STYLE}{tailwindcss}{HINT_STYLE:#}
 
