@@ -342,3 +342,32 @@ mod input_types {
         Ok(())
     }
 }
+
+mod handlers {
+    use super::*;
+
+    #[get("/handlers/get")]
+    async fn handle_get() -> Result<String> {
+        Ok("handled get".to_string())
+    }
+
+    #[post("/handlers/post")]
+    async fn handle_post() -> Result<String> {
+        Ok("handled post".to_string())
+    }
+
+    #[put("/handlers/put")]
+    async fn handle_put() -> Result<String> {
+        Ok("handled put".to_string())
+    }
+
+    #[patch("/handlers/patch")]
+    async fn handle_patch() -> Result<String> {
+        Ok("handled patch".to_string())
+    }
+
+    #[delete("/handlers/delete")]
+    async fn handle_delete() -> Result<String> {
+        Ok("handled delete".to_string())
+    }
+}

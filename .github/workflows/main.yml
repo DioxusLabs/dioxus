@@ -221,6 +221,7 @@ jobs:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
     runs-on: blacksmith-8vcpu-ubuntu-2404
+    timeout-minutes: 45
     strategy:
       matrix:
         platform:
@@ -280,15 +281,6 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: macos-latest,
-              toolchain: "1.88.0",
-              cross: false,
-              command: "test",
-              args: "--all --tests",
-              platform: "desktop",
-            }
-          - {
-              target: x86_64-apple-darwin,
-              os: macos-13,
               toolchain: "1.88.0",
               cross: false,
               command: "test",

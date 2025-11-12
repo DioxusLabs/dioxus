@@ -7,7 +7,9 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["web"] }
+dioxus = { workspace = true, features = ["web"], optional = true }
+# We test both if the current version of dioxus works and if the CLI can understand assets from the old asset format
+dioxus_07 = { package = "dioxus", version = "=0.7.1", features = ["web"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
@@ -15,3 +17,8 @@ serde_json.workspace = true
 # reqwest = { workspace = true, features = ["blocking"] }
 # flate2 = "1.1.2"
 # tar = "0.4.44"
+
+[features]
+default = ["dioxus"]
+dioxus = ["dep:dioxus"]
+dioxus_07 = ["dep:dioxus_07"]

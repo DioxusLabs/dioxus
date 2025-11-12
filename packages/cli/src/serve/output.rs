@@ -33,7 +33,7 @@ use super::AppServer;
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
-const VIEWPORT_HEIGHT_BIG: u16 = 13;
+const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
 /// The TUI that drives the console output.
 ///
@@ -849,11 +849,12 @@ impl Output {
             "o: open the app",
             "p: pause rebuilds",
             "v: toggle verbose logs",
-            "t: toggle tracing logs ",
+            "t: toggle tracing logs",
             "c: clear the screen",
+            "d: attach debugger",
             "/: toggle more commands",
         ];
-        let layout: [_; 8] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
+        let layout: [_; 9] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
             .horizontal_margin(1)
             .areas(col2);
         for (idx, cmd) in cmds.iter().enumerate() {

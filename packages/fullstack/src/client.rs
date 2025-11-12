@@ -644,7 +644,11 @@ mod browser {
             self: Box<Self>,
         ) -> Pin<Box<dyn Future<Output = Result<Bytes, RequestError>> + Send>> {
             Box::pin(SendWrapper::new(async move {
-                let bytes = self.inner.binary().await.unwrap();
+                let bytes = self
+                    .inner
+                    .binary()
+                    .await
+                    .map_err(|e| RequestError::Request(e.to_string()))?;
                 Ok(bytes.into())
             }))
         }
@@ -653,16 +657,24 @@ mod browser {
             self: Box<Self>,
         ) -> Pin<Box<dyn Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>>
         {
+            let body = match self.inner.body() {
+                Some(body) => body,
+                None => {
+                    return Box::pin(SendWrapper::new(futures::stream::iter([Err(
+                        StreamingError::Failed,
+                    )])));
+                }
+            };
+
             Box::pin(SendWrapper::new(
-                wasm_streams::ReadableStream::from_raw(self.inner.body().unwrap())
+                wasm_streams::ReadableStream::from_raw(body)
                     .into_stream()
                     .map(|chunk| {
-                        Ok(chunk
-                            .unwrap()
+                        let array = chunk
+                            .map_err(|_| StreamingError::Failed)?
                             .dyn_into::<Uint8Array>()
-                            .unwrap()
-                            .to_vec()
-                            .into())
+                            .map_err(|_| StreamingError::Failed)?;
+                        Ok(array.to_vec().into())
                     }),
             ))
         }

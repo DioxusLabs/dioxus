@@ -166,6 +166,14 @@ pub(crate) struct TargetArgs {
     /// See <https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170> for more information.
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) windows_subsystem: Option<String>,
+
+    /// Output raw JSON diagnostics from cargo instead of processing them [default: false]
+    ///
+    /// When enabled, cargo's JSON output will be relayed directly to stdout without any processing or formatting by DX.
+    /// This is useful for integration with other tools that expect cargo's raw JSON format.
+    #[clap(long, help_heading = HELP_HEADING)]
+    #[serde(default)]
+    pub(crate) raw_json_diagnostics: bool,
 }
 
 impl Anonymized for TargetArgs {
@@ -191,6 +199,7 @@ impl Anonymized for TargetArgs {
             "base_path": self.base_path.is_some(),
             "cargo_args": self.cargo_args.is_some(),
             "rustc_args": self.rustc_args.is_some(),
+            "raw_json_diagnostics": self.raw_json_diagnostics,
         }}
     }
 }

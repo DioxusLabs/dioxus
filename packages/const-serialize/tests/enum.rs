@@ -81,7 +81,7 @@ fn test_serialize_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
@@ -91,7 +91,7 @@ fn test_serialize_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 }
 
@@ -110,7 +110,7 @@ fn test_serialize_list_of_lopsided_enums() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
 
     let data = [
@@ -126,7 +126,7 @@ fn test_serialize_list_of_lopsided_enums() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
 
     let data = [
@@ -139,7 +139,7 @@ fn test_serialize_list_of_lopsided_enums() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
 
     let data = [
@@ -152,7 +152,7 @@ fn test_serialize_list_of_lopsided_enums() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([Enum; 2], buf).unwrap().1, data);
 }
 
@@ -171,14 +171,14 @@ fn test_serialize_u8_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B;
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 }
 
@@ -198,7 +198,7 @@ fn test_serialize_corrupted_enum() {
     buf = serialize_const(&data, buf);
     buf = buf.set(0, 2);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf), None);
 }
 
@@ -226,7 +226,7 @@ fn test_serialize_nested_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
@@ -236,7 +236,7 @@ fn test_serialize_nested_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
@@ -249,7 +249,7 @@ fn test_serialize_nested_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
 
     let data = Enum::B {
@@ -262,6 +262,81 @@ fn test_serialize_nested_enum() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!(Enum, buf).unwrap().1, data);
+}
+
+#[test]
+fn test_adding_enum_field_non_breaking() {
+    #[derive(Debug, PartialEq, SerializeConst)]
+    #[repr(C, u8)]
+    enum Initial {
+        A { a: u32, b: u8 },
+    }
+
+    #[derive(Debug, PartialEq, SerializeConst)]
+    #[repr(C, u8)]
+    enum New {
+        A { b: u8, a: u32, c: u32 },
+    }
+
+    let data = New::A {
+        a: 0x11111111,
+        b: 0x22,
+        c: 0x33333333,
+    };
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    let buf = buf.as_ref();
+    // The new struct should be able to deserialize into the initial struct
+    let (_, data2) = deserialize_const!(Initial, buf).unwrap();
+    assert_eq!(
+        Initial::A {
+            a: 0x11111111,
+            b: 0x22,
+        },
+        data2
+    );
+}
+
+#[test]
+fn test_adding_enum_variant_non_breaking() {
+    #[derive(Debug, PartialEq, SerializeConst)]
+    #[repr(C, u8)]
+    enum Initial {
+        A { a: u32, b: u8 },
+    }
+
+    #[derive(Debug, PartialEq, SerializeConst)]
+    #[repr(C, u8)]
+    enum New {
+        #[allow(unused)]
+        B {
+            d: u32,
+            e: u8,
+        },
+        A {
+            c: u32,
+            b: u8,
+            a: u32,
+        },
+    }
+
+    let data = New::A {
+        a: 0x11111111,
+        b: 0x22,
+        c: 0x33333333,
+    };
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    let buf = buf.as_ref();
+    // The new struct should be able to deserialize into the initial struct
+    let (_, data2) = deserialize_const!(Initial, buf).unwrap();
+    assert_eq!(
+        Initial::A {
+            a: 0x11111111,
+            b: 0x22,
+        },
+        data2
+    );
 }
