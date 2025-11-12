@@ -41,16 +41,17 @@ pub const fn serialize_to_const<T: SerializeConst>(
 ///
 /// This variant uses a `ConstVec` with a fixed maximum size (e.g., `ConstVec<u8, 4096>`)
 /// and then pads to the specified memory layout size.
+///
+/// This function serializes directly into the larger buffer to avoid overflow issues
+/// when the serialized data exceeds the default 1024-byte buffer size.
 pub const fn serialize_to_const_with_max<const MAX_SIZE: usize>(
     value: &impl SerializeConst,
     memory_layout_size: usize,
 ) -> ConstVec<u8, MAX_SIZE> {
-    // First serialize with default buffer size
-    let serialized = const_serialize::serialize_const(value, ConstVec::new());
-    // Then copy into a larger buffer and pad to MEMORY_LAYOUT size
+    // Serialize directly into the larger buffer to avoid overflow
     let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
-    data = data.extend(serialized.as_ref());
-    // Reserve the maximum size of the type
+    data = const_serialize::serialize_const(value, data);
+    // Reserve the maximum size of the type (pad to MEMORY_LAYOUT size)
     while data.len() < memory_layout_size {
         data = data.push(0);
     }

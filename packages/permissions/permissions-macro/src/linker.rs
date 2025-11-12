@@ -12,8 +12,8 @@ pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -
         permission_hash,
         "__ASSETS__",
         quote! { permissions::macro_helpers::serialize_permission },
-        quote! { permissions::macro_helpers::copy_bytes },
-        quote! { permissions::macro_helpers::ConstVec<u8> },
+        quote! { dx_macro_helpers::copy_bytes },
+        quote! { permissions::macro_helpers::ConstVec<u8, 4096> },
         true, // permissions needs #[used] attribute
     )
 }

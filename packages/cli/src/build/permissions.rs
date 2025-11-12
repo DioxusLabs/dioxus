@@ -13,7 +13,6 @@
 use std::path::Path;
 
 use crate::Result;
-use anyhow::Context;
 use permissions_core::{Permission, Platform};
 use serde::Serialize;
 
@@ -42,17 +41,20 @@ pub struct MacosPermission {
 ///
 /// This function now uses the unified symbol collection from assets.rs
 /// which handles both assets and permissions from the __ASSETS__ prefix.
-pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<PermissionManifest> {
+///
+/// Note: For better performance, use `extract_symbols_from_file` directly
+/// if you need both assets and permissions, as it avoids redundant file reads.
+#[allow(dead_code)] // May be used in the future or by other code paths
+pub(crate) async fn extract_permissions_from_file(
+    path: impl AsRef<Path>,
+) -> Result<PermissionManifest> {
     use crate::build::assets::extract_symbols_from_file;
-    use tokio::runtime::Runtime;
-    
+
     let path = path.as_ref();
-    
+
     // Use the unified symbol extraction which handles both assets and permissions
-    // Create a runtime for async execution
-    let rt = Runtime::new().context("Failed to create runtime for permission extraction")?;
-    let result = rt.block_on(extract_symbols_from_file(path))?;
-    
+    let result = extract_symbols_from_file(path).await?;
+
     Ok(PermissionManifest::new(result.permissions))
 }
 

@@ -3,7 +3,7 @@ use const_serialize::ConstVec;
 use manganis_core::{AssetOptions, BundledAsset};
 
 // Re-export shared helpers from dx-macro-helpers
-pub use dx_macro_helpers::{copy_bytes, SerializeConst};
+pub use dx_macro_helpers::SerializeConst;
 
 const PLACEHOLDER_HASH: &str = "This should be replaced by dx as part of the build process. If you see this error, make sure you are using a matching version of dx and dioxus and you are not stripping symbols from your binary.";
 

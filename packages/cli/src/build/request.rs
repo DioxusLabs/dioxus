@@ -334,7 +334,7 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset};
-use manganis_core::{AssetOptionsBuilder, AssetVariant};
+use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -1337,10 +1337,9 @@ impl BuildRequest {
             );
         }
 
-        let assets = self.collect_assets(&exe, ctx).await?;
-
-        // Extract permissions from the binary (same pattern as assets)
-        let permissions = self.collect_permissions(&exe, ctx).await?;
+        // Extract both assets and permissions together from the same binary
+        // Since they use the same __ASSETS__ prefix, we can extract them in one pass
+        let (assets, permissions) = self.collect_assets_and_permissions(&exe, ctx).await?;
 
         // Extract Java sources for Android builds
         let java_sources = self.collect_java_sources(&exe, ctx).await?;
@@ -1374,91 +1373,105 @@ impl BuildRequest {
         })
     }
 
-    /// Collect the assets from the final executable and modify the binary in place to point to the right
-    /// hashed asset location.
-    async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if self.skip_assets {
-            return Ok(AssetManifest::default());
+    /// Collect both assets and permissions from the final executable in one pass
+    ///
+    /// This method combines both asset and permission extraction to read the binary
+    /// file only once, since both use the __ASSETS__ prefix. This avoids reading
+    /// the file twice and improves performance.
+    async fn collect_assets_and_permissions(
+        &self,
+        exe: &Path,
+        ctx: &BuildContext,
+    ) -> Result<(AssetManifest, super::permissions::PermissionManifest)> {
+        use super::assets::extract_symbols_from_file;
+
+        // Extract both assets and permissions in one pass
+        let skip_assets = self.skip_assets;
+        let skip_permissions = self.skip_permissions || self.bundle == BundleFormat::Web;
+
+        if skip_assets && skip_permissions {
+            return Ok((
+                AssetManifest::default(),
+                super::permissions::PermissionManifest::default(),
+            ));
         }
 
         ctx.status_extracting_assets();
+        let result = extract_symbols_from_file(exe).await?;
 
-        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+        // Build asset manifest
+        let asset_manifest = if skip_assets {
+            AssetManifest::default()
+        } else {
+            let mut manifest = AssetManifest::default();
+            for asset in result.assets {
+                manifest.insert_asset(asset);
+            }
 
-        // If the user has a public dir, we submit all the entries there as assets too
-        //
-        // These don't receive a hash in their filename, since they're user-provided static assets
-        // We only do this for web builds
-        if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
-        {
-            if let Some(dir) = self.user_public_dir() {
-                for entry in walkdir::WalkDir::new(&dir)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let from = entry.path().to_path_buf();
-                    let relative_path = from.strip_prefix(&dir).unwrap();
-                    let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
-                        from.to_string_lossy().as_ref(),
-                        to.as_str(),
-                        AssetOptionsBuilder::new()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
-                    ));
+            // If the user has a public dir, we submit all the entries there as assets too
+            // These don't receive a hash in their filename, since they're user-provided static assets
+            // We only do this for web builds
+            if matches!(self.bundle, BundleFormat::Web)
+                && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            {
+                if let Some(dir) = self.user_public_dir() {
+                    for entry in walkdir::WalkDir::new(&dir)
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().is_file())
+                    {
+                        let from = entry.path().to_path_buf();
+                        let relative_path = from.strip_prefix(&dir).unwrap();
+                        let to = format!("../{}", relative_path.display());
+                        manifest.insert_asset(BundledAsset::new(
+                            from.to_string_lossy().as_ref(),
+                            to.as_str(),
+                            manganis_core::AssetOptions::builder()
+                                .with_hash_suffix(false)
+                                .into_asset_options(),
+                        ));
+                    }
                 }
             }
-        }
 
-        Ok(manifest)
-    }
-
-    /// Collect permissions from the final executable
-    async fn collect_permissions(
-        &self,
-        exe: &Path,
-        _ctx: &BuildContext,
-    ) -> Result<super::permissions::PermissionManifest> {
-        if self.skip_permissions {
-            return Ok(super::permissions::PermissionManifest::default());
-        }
-
-        // Skip permission extraction for web builds - permissions are runtime-only
-        if self.bundle == BundleFormat::Web {
-            return Ok(super::permissions::PermissionManifest::default());
-        }
-
-        let manifest = super::permissions::extract_permissions_from_file(exe)?;
-
-        // Log permissions found for platforms that need them
-        let platform = match self.bundle {
-            BundleFormat::Android => Some(permissions_core::Platform::Android),
-            BundleFormat::Ios => Some(permissions_core::Platform::Ios),
-            BundleFormat::MacOS => Some(permissions_core::Platform::Macos),
-            _ => None,
+            manifest
         };
 
-        if let Some(platform) = platform {
-            let perms = manifest.permissions_for_platform(platform);
-            if !perms.is_empty() {
-                tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
-                for perm in &perms {
-                    tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
+        // Build permission manifest
+        let permission_manifest = if skip_permissions {
+            super::permissions::PermissionManifest::default()
+        } else {
+            let manifest = super::permissions::PermissionManifest::new(result.permissions);
+
+            // Log permissions found for platforms that need them
+            let platform = match self.bundle {
+                BundleFormat::Android => Some(permissions_core::Platform::Android),
+                BundleFormat::Ios => Some(permissions_core::Platform::Ios),
+                BundleFormat::MacOS => Some(permissions_core::Platform::Macos),
+                _ => None,
+            };
+
+            if let Some(platform) = platform {
+                let perms = manifest.permissions_for_platform(platform);
+                if !perms.is_empty() {
+                    tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
+                    for perm in &perms {
+                        tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
+                    }
+                } else {
+                    tracing::debug!("No permissions found for {:?}", platform);
                 }
             } else {
-                tracing::debug!("No permissions found for {:?}", platform);
+                tracing::debug!(
+                    "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
+                    self.bundle
+                );
             }
-        } else {
-            tracing::debug!(
-                "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
-                self.bundle
-            );
-        }
 
-        Ok(manifest)
+            manifest
+        };
+
+        Ok((asset_manifest, permission_manifest))
     }
 
     /// Collect Java sources for Android builds
@@ -2167,9 +2180,11 @@ impl BuildRequest {
         }
 
         // Now extract the assets from the fat binary
-        artifacts.assets = self
-            .collect_assets(&self.patch_exe(artifacts.time_start), ctx)
+        // We combine asset and permission extraction to read the binary only once
+        let (assets, _permissions) = self
+            .collect_assets_and_permissions(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
+        artifacts.assets = assets;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
