@@ -42,6 +42,7 @@ pub mod macro_helpers {
     //! These functions are used internally by the `static_permission!()` macro (and its `permission!()` alias)
     //! and should not be used directly.
 
+    // Re-export const_serialize types for convenience
     pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};
     pub use permissions_core::{Permission, SymbolData};
 
