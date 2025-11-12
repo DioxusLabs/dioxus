@@ -8,7 +8,7 @@ pub struct ArrayLayout {
 }
 
 impl ArrayLayout {
-    /// Create a new list layout
+    /// Create a new array layout
     pub const fn new(len: usize, item_layout: &'static Layout) -> Self {
         Self { len, item_layout }
     }
@@ -22,7 +22,7 @@ unsafe impl<const N: usize, T: SerializeConst> SerializeConst for [T; N] {
 }
 
 /// Serialize a constant sized array that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_list(
+pub(crate) const unsafe fn serialize_const_array(
     ptr: *const (),
     mut to: ConstVec<u8>,
     layout: &ArrayLayout,
@@ -38,8 +38,8 @@ pub(crate) const unsafe fn serialize_const_list(
     to
 }
 
-/// Deserialize a list type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-pub(crate) const fn deserialize_const_list<'a>(
+/// Deserialize an array type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
+pub(crate) const fn deserialize_const_array<'a>(
     from: &'a [u8],
     layout: &ArrayLayout,
     mut out: &mut [MaybeUninit<u8>],

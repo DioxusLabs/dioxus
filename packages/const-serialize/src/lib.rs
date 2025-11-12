@@ -74,8 +74,8 @@ const unsafe fn serialize_const_ptr(
     match layout {
         Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
         Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
-        Layout::Array(layout) => serialize_const_list(ptr, to, layout),
-        Layout::List(layout) => serialize_const_array(ptr, to, layout),
+        Layout::Array(layout) => serialize_const_array(ptr, to, layout),
+        Layout::List(layout) => serialize_const_list(ptr, to, layout),
         Layout::Primitive(layout) => serialize_const_primitive(ptr, to, layout),
     }
 }
@@ -118,8 +118,8 @@ const fn deserialize_const_ptr<'a>(
     match layout {
         Layout::Enum(layout) => deserialize_const_enum(from, layout, out),
         Layout::Struct(layout) => deserialize_const_struct(from, layout, out),
-        Layout::Array(layout) => deserialize_const_list(from, layout, out),
-        Layout::List(layout) => deserialize_const_array(from, layout, out),
+        Layout::Array(layout) => deserialize_const_array(from, layout, out),
+        Layout::List(layout) => deserialize_const_list(from, layout, out),
         Layout::Primitive(layout) => deserialize_const_primitive(from, layout, out),
     }
 }

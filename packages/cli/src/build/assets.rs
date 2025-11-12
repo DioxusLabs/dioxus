@@ -524,7 +524,7 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         let version = symbol.version;
         let offset = symbol.offset;
         tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
-        let new_data = version.serialize(&asset);
+        let new_data = version.serialize(asset);
 
         file.seek(std::io::SeekFrom::Start(offset))?;
         // Write the modified binary data back to the file

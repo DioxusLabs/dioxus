@@ -190,6 +190,7 @@ const fn write_major_type_and_u64<const MAX_SIZE: usize>(
 /// This is the number stored in the additional information field if the number is more than 24.
 const fn log2_bytes_for_number(number: u64) -> u8 {
     let required_bytes = ((64 - number.leading_zeros()).div_ceil(8)) as u8;
+    #[allow(clippy::match_overlapping_arm)]
     match required_bytes {
         ..=1 => 0,
         ..=2 => 1,
@@ -232,7 +233,7 @@ pub(crate) const fn take_str(bytes: &[u8]) -> Result<(&str, &[u8]), ()> {
         let Ok((bytes, rest)) = take_bytes_from(rest, additional_information) else {
             return Err(());
         };
-        let Ok(string) = str::from_utf8(bytes) else {
+        let Ok(string) = std::str::from_utf8(bytes) else {
             return Err(());
         };
         Ok((string, rest))

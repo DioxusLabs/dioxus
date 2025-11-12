@@ -1,9 +1,9 @@
 use crate::*;
 
-/// The layout for a dynamically sized array. The array layout is just a length and an item layout.
+/// The layout for a dynamically sized list. The list layout is just a length and an item layout.
 #[derive(Debug, Copy, Clone)]
 pub struct ListLayout {
-    /// The size of the struct backing the array
+    /// The size of the struct backing the list
     pub(crate) size: usize,
     /// The byte offset of the length field
     len_offset: usize,
@@ -34,13 +34,13 @@ impl ListLayout {
     }
 }
 
-/// Serialize a dynamically sized array that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_array(
+/// Serialize a dynamically sized list that is stored at the pointer passed in
+pub(crate) const unsafe fn serialize_const_list(
     ptr: *const (),
     mut to: ConstVec<u8>,
     layout: &ListLayout,
 ) -> ConstVec<u8> {
-    // Read the length of the array
+    // Read the length of the list
     let len_ptr = ptr.wrapping_byte_offset(layout.len_offset as _);
     let len = layout.len_layout.read(len_ptr as *const u8) as usize;
 
@@ -64,8 +64,8 @@ pub(crate) const unsafe fn serialize_const_array(
     to
 }
 
-/// Deserialize a array type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
-pub(crate) const fn deserialize_const_array<'a>(
+/// Deserialize a list type into the out buffer at the offset passed in. Returns a new version of the buffer with the data added.
+pub(crate) const fn deserialize_const_list<'a>(
     from: &'a [u8],
     layout: &ListLayout,
     out: &mut [MaybeUninit<u8>],
@@ -80,24 +80,24 @@ pub(crate) const fn deserialize_const_array<'a>(
         let Ok((bytes, new_from)) = take_bytes(from) else {
             return None;
         };
-        // Write out the length of the array
+        // Write out the length of the list
         layout.len_layout.write(bytes.len() as u32, len_out);
         let Some((_, data_out)) = out.split_at_mut_checked(layout.data_offset) else {
             return None;
         };
         let mut offset = 0;
         while offset < bytes.len() {
-            data_out[offset].write(bytes[offset]);
+            data_out[offset] = MaybeUninit::new(bytes[offset]);
             offset += 1;
         }
         Some(new_from)
     }
-    // Otherwise, serialize as an array of objects
+    // Otherwise, serialize as an list of objects
     else {
         let Ok((len, mut from)) = take_array(from) else {
             return None;
         };
-        // Write out the length of the array
+        // Write out the length of the list
         layout.len_layout.write(len as u32, len_out);
         let Some((_, mut data_out)) = out.split_at_mut_checked(layout.data_offset) else {
             return None;

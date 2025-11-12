@@ -14,6 +14,9 @@ impl PrimitiveLayout {
     }
 
     /// Read the value from the given pointer
+    ///
+    /// # Safety
+    /// The pointer must be valid for reads of `self.size` bytes.
     pub const unsafe fn read(self, byte_ptr: *const u8) -> u32 {
         let mut value = 0;
         let mut offset = 0;

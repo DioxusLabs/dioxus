@@ -60,7 +60,7 @@ impl ConstStr {
         let mut bytes = [MaybeUninit::uninit(); MAX_STR_SIZE];
         let mut i = 0;
         while i < str_bytes.len() {
-            bytes[i].write(str_bytes[i]);
+            bytes[i] = MaybeUninit::new(str_bytes[i]);
             i += 1;
         }
         Self {
@@ -69,12 +69,18 @@ impl ConstStr {
         }
     }
 
-    /// Get a reference to the string
-    pub const fn as_str(&self) -> &str {
-        let str_bytes = unsafe {
+    /// Get the bytes of the initialized portion of the string
+    const fn bytes(&self) -> &[u8] {
+        // Safety: All bytes up to the pointer are initialized
+        unsafe {
             &*(self.bytes.split_at(self.len as usize).0 as *const [MaybeUninit<u8>]
                 as *const [u8])
-        };
+        }
+    }
+
+    /// Get a reference to the string
+    pub const fn as_str(&self) -> &str {
+        let str_bytes = self.bytes();
         match std::str::from_utf8(str_bytes) {
             Ok(s) => s,
             Err(_) => panic!(
@@ -115,7 +121,7 @@ impl ConstStr {
         let new_len = len as usize + str_bytes.len();
         let mut i = 0;
         while i < str_bytes.len() {
-            bytes[len as usize + i].write(str_bytes[i]);
+            bytes[len as usize + i] = MaybeUninit::new(str_bytes[i]);
             i += 1;
         }
         Self {
@@ -126,7 +132,19 @@ impl ConstStr {
 
     /// Split the string at a byte index. The byte index must be a char boundary
     pub const fn split_at(self, index: usize) -> (Self, Self) {
-        let (left, right) = self.as_str().split_at(index);
+        let (left, right) = self.bytes().split_at(index);
+        let left = match std::str::from_utf8(left) {
+            Ok(s) => s,
+            Err(_) => {
+                panic!("Invalid utf8; you cannot split at a byte that is not a char boundary")
+            }
+        };
+        let right = match std::str::from_utf8(right) {
+            Ok(s) => s,
+            Err(_) => {
+                panic!("Invalid utf8; you cannot split at a byte that is not a char boundary")
+            }
+        };
         (Self::new(left), Self::new(right))
     }
 
@@ -239,7 +257,7 @@ impl Eq for ConstStr {}
 
 impl PartialOrd for ConstStr {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.as_str().partial_cmp(other.as_str())
+        Some(self.cmp(other))
     }
 }
 
