@@ -4175,16 +4175,6 @@ dependencies = [
 
 [[package]]
 name = "const-serialize"
-version = "0.7.0"
-dependencies = [
- "const-serialize 0.7.0",
- "const-serialize-macro 0.7.0",
- "rand 0.9.2",
- "serde",
-]
-
-[[package]]
-name = "const-serialize"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd339aa356cc6452308fad2ee56623f900a8e68bc0ab9360a0ddb8270e5640c8"
@@ -4194,8 +4184,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "const-serialize"
+version = "0.8.0"
+dependencies = [
+ "const-serialize 0.8.0",
+ "const-serialize-macro 0.8.0",
+ "rand 0.9.2",
+ "serde",
+]
+
+[[package]]
 name = "const-serialize-macro"
-version = "0.7.0"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "797d158acb331e2a89d696343a27cd39bf7e36aaef33ba4799a5ef1526e24861"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4204,9 +4206,7 @@ dependencies = [
 
 [[package]]
 name = "const-serialize-macro"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "797d158acb331e2a89d696343a27cd39bf7e36aaef33ba4799a5ef1526e24861"
+version = "0.8.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5380,8 +5380,8 @@ dependencies = [
  "clap",
  "console 0.16.1",
  "console-subscriber",
- "const-serialize 0.7.0",
  "const-serialize 0.7.1",
+ "const-serialize 0.8.0",
  "convert_case 0.8.0",
  "crossterm 0.29.0",
  "ctrlc",
@@ -5498,7 +5498,7 @@ dependencies = [
  "browserslist-rs 0.19.0",
  "built 0.8.0",
  "codemap",
- "const-serialize 0.7.0",
+ "const-serialize 0.8.0",
  "grass",
  "image",
  "imagequant",
@@ -10771,7 +10771,7 @@ dependencies = [
 name = "manganis"
 version = "0.7.0"
 dependencies = [
- "const-serialize 0.7.0",
+ "const-serialize 0.8.0",
  "manganis-core 0.7.0",
  "manganis-macro",
 ]
@@ -10780,7 +10780,7 @@ dependencies = [
 name = "manganis-core"
 version = "0.7.0"
 dependencies = [
- "const-serialize 0.7.0",
+ "const-serialize 0.8.0",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core-types",
