@@ -232,12 +232,25 @@ fn looks_like_manganis_symbol(name: &str) -> Option<ManganisVersion> {
     }
 }
 
+/// An asset offset in the binary
+#[derive(Clone, Copy)]
+struct ManganisSymbolOffset {
+    version: ManganisVersion,
+    offset: u64,
+}
+
+impl ManganisSymbolOffset {
+    fn new(version: ManganisVersion, offset: u64) -> Self {
+        Self { version, offset }
+    }
+}
+
 /// Find the offsets of any manganis symbols in the given file.
 fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     path: &Path,
     file_contents: &[u8],
     file: &File<'a, R>,
-) -> Result<Vec<(ManganisVersion, u64)>> {
+) -> Result<Vec<ManganisSymbolOffset>> {
     let pdb_file = find_pdb_file(path);
 
     match file.format() {
@@ -285,7 +298,7 @@ fn find_pdb_file(path: &Path) -> Option<PathBuf> {
 }
 
 /// Find the offsets of any manganis symbols in a pdb file.
-fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<(ManganisVersion, u64)>> {
+fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<ManganisSymbolOffset>> {
     let pdb_file_handle = std::fs::File::open(pdb_file)?;
     let mut pdb_file = pdb::PDB::open(pdb_file_handle).context("Failed to open PDB file")?;
     let Ok(Some(sections)) = pdb_file.sections() else {
@@ -314,7 +327,10 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<(ManganisVersion, u64)
                 .get(rva.section as usize - 1)
                 .expect("Section index out of bounds");
 
-            addresses.push((version, (section.pointer_to_raw_data + rva.offset) as u64));
+            addresses.push(ManganisSymbolOffset::new(
+                version,
+                (section.pointer_to_raw_data + rva.offset) as u64,
+            ));
         }
     }
     Ok(addresses)
@@ -323,7 +339,7 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<(ManganisVersion, u64)
 /// Find the offsets of any manganis symbols in a native object file.
 fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
     file: &File<'a, R>,
-) -> Result<Vec<(ManganisVersion, u64)>> {
+) -> Result<Vec<ManganisSymbolOffset>> {
     let mut offsets = Vec::new();
     for (version, symbol, section) in manganis_symbols(file) {
         let virtual_address = symbol.address();
@@ -341,7 +357,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
             .try_into()
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = section_range_start + section_relative_address;
-        offsets.push((version, file_offset));
+        offsets.push(ManganisSymbolOffset::new(version, file_offset));
     }
 
     Ok(offsets)
@@ -367,7 +383,7 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
 fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
-) -> Result<Vec<(ManganisVersion, u64)>> {
+) -> Result<Vec<ManganisSymbolOffset>> {
     let Some(section) = file
         .sections()
         .find(|section| section.name() == Ok("<data>"))
@@ -454,7 +470,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = data_start_offset + section_relative_address;
 
-        offsets.push((version, file_offset));
+        offsets.push(ManganisSymbolOffset::new(version, file_offset));
     }
 
     Ok(offsets)
@@ -480,7 +496,9 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
     let mut assets = Vec::new();
 
     // Read each asset from the data section using the offsets
-    for (version, offset) in offsets.iter().copied() {
+    for symbol in offsets.iter().copied() {
+        let version = symbol.version;
+        let offset = symbol.offset;
         file.seek(std::io::SeekFrom::Start(offset))?;
         let mut data_in_range = vec![0; version.size()];
         file.read_exact(&mut data_in_range)?;
@@ -502,7 +520,9 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
     // Write back the assets to the binary file
-    for ((version, offset), asset) in offsets.into_iter().zip(&assets) {
+    for (symbol, asset) in offsets.into_iter().zip(&assets) {
+        let version = symbol.version;
+        let offset = symbol.offset;
         tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = version.serialize(&asset);
 
