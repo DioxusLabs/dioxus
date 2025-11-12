@@ -165,12 +165,6 @@ impl ToTokens for AndroidPluginParser {
             #[used]
             #[unsafe(export_name = #export_name_lit)]
             static __LINK_SECTION: [u8; __LEN] = dioxus_platform_bridge::android::macro_helpers::copy_bytes(__BYTES);
-
-            // Create a module-level static reference to the linker section to ensure
-            // it's preserved even if the macro invocation appears unused.
-            // This provides additional protection against optimization.
-            #[used]
-            static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
         };
 
         tokens.extend(link_section);
