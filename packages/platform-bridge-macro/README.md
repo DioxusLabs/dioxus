@@ -23,7 +23,7 @@ dioxus_platform_bridge::android_plugin!(
 ```
 
 This generates:
-- Linker symbols with `__MANGANIS__` prefix (unified with assets and permissions)
+- Linker symbols with `__JAVA_SOURCE__` prefix
 - Absolute path embedding for fast file resolution
 - Compile-time file existence validation
 
@@ -60,11 +60,11 @@ If a file is not found, the macro emits a compile error with details about where
 1. **Validation**: Checks that Java files exist in common locations
 2. **Path Resolution**: Converts relative filenames to absolute paths using `env!("CARGO_MANIFEST_DIR")`
 3. **Serialization**: Serializes metadata using `const-serialize`
-4. **Linker Section**: Embeds data in `__DATA,__manganis` section with unique symbol name
+4. **Linker Section**: Embeds data in `__DATA,__java_source` section with unique symbol name
 
 ### Build Time (Dioxus CLI)
 
-1. **Extraction**: Parses binary to find `__MANGANIS__*` symbols containing `LinkerSymbol::JavaSource`
+1. **Extraction**: Parses binary to find `__JAVA_SOURCE__*` symbols
 2. **Path Handling**: Uses embedded absolute paths directly (fast path) or searches workspace (legacy)
 3. **Copying**: Copies Java files to Gradle structure: `app/src/main/java/{package}/`
 4. **Compilation**: Gradle compiles Java sources to DEX bytecode

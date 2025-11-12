@@ -30,7 +30,3 @@ pub use java::*;
 
 #[cfg(feature = "metadata")]
 pub use metadata::JavaSourceMetadata;
-
-// Re-export LinkerSymbol for use in generated macro code
-#[cfg(feature = "metadata")]
-pub use manganis_core::LinkerSymbol;

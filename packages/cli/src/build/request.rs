@@ -1378,7 +1378,7 @@ impl BuildRequest {
 
         ctx.status_extracting_assets();
 
-        let (mut manifest, _extracted_permissions, _extracted_java_sources) = super::assets::extract_assets_from_file(exe).await?;
+        let (mut manifest, _extracted_permissions) = super::assets::extract_assets_from_file(exe).await?;
 
         // If the user has a public dir, we submit all the entries there as assets too
         //
@@ -1465,7 +1465,7 @@ impl BuildRequest {
             return Ok(super::android_java::JavaSourceManifest::default());
         }
 
-        let manifest = super::android_java::extract_java_sources_from_file(exe).await?;
+        let manifest = super::android_java::extract_java_sources_from_file(exe)?;
 
         if !manifest.is_empty() {
             tracing::debug!(
@@ -1475,8 +1475,8 @@ impl BuildRequest {
             for source in manifest.sources() {
                 tracing::debug!(
                     "  Plugin: {}, Package: {}, Files: {}",
-                    source.plugin_name,
-                    source.package_name,
+                    source.plugin_name.as_str(),
+                    source.package_name.as_str(),
                     source.files.len()
                 );
             }
@@ -1498,12 +1498,12 @@ impl BuildRequest {
             .join("java");
 
         for source_metadata in java_sources.sources() {
-            let package_path = source_metadata.package_name.replace('.', "/");
+            let package_path = source_metadata.package_name.as_str().replace('.', "/");
             let plugin_java_dir = app_java_dir.join(&package_path);
             std::fs::create_dir_all(&plugin_java_dir)?;
 
             for file_path_str in source_metadata.files.iter() {
-                let file_path = PathBuf::from(file_path_str);
+                let file_path = PathBuf::from(file_path_str.as_str());
 
                 // Get filename for destination
                 let filename = file_path.file_name().ok_or_else(|| {
