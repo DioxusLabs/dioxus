@@ -71,11 +71,11 @@ impl_serialize_const!(f32);
 impl_serialize_const!(f64);
 
 /// Serialize a primitive type that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_primitive(
+pub(crate) const unsafe fn serialize_const_primitive<const MAX_SIZE: usize>(
     ptr: *const (),
-    to: ConstVec<u8>,
+    to: ConstVec<u8, MAX_SIZE>,
     layout: &PrimitiveLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     let ptr = ptr as *const u8;
     let mut offset = 0;
     let mut i64_bytes = [0u8; 8];

@@ -5658,6 +5658,7 @@ dependencies = [
  "manganis-core 0.7.1",
  "mozjpeg",
  "object 0.37.3",
+ "permissions-core",
  "png",
  "rayon",
  "serde",
@@ -13366,6 +13367,7 @@ version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize 0.8.0",
  "const-serialize-macro 0.8.0",
+ "manganis-core 0.7.1",
  "serde",
 ]
 

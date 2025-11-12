@@ -14,6 +14,7 @@ categories = ["development-tools::build-utils"]
 [dependencies]
 const-serialize = { path = "../../const-serialize" }
 const-serialize-macro = { path = "../../const-serialize-macro" }
+manganis-core = { path = "../../manganis/manganis-core" }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]

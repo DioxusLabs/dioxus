@@ -10,17 +10,12 @@
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
 //! and do not require build-time manifest generation.
 
-use std::io::{Read, Seek};
 use std::path::Path;
 
 use crate::Result;
-use const_serialize::SerializeConst;
+use anyhow::Context;
 use permissions_core::{Permission, Platform};
 use serde::Serialize;
-
-const PERMISSION_SYMBOL_PREFIX: &str = "__PERMISSION__";
-
-use super::linker_symbols;
 
 /// Android permission for Handlebars template
 #[derive(Debug, Clone, Serialize)]
@@ -44,46 +39,21 @@ pub struct MacosPermission {
 }
 
 /// Extract all permissions from the given file
+///
+/// This function now uses the unified symbol collection from assets.rs
+/// which handles both assets and permissions from the __ASSETS__ prefix.
 pub(crate) fn extract_permissions_from_file(path: impl AsRef<Path>) -> Result<PermissionManifest> {
+    use crate::build::assets::extract_symbols_from_file;
+    use tokio::runtime::Runtime;
+    
     let path = path.as_ref();
-    let offsets = match linker_symbols::find_symbol_offsets_from_path(path, PERMISSION_SYMBOL_PREFIX) {
-        Ok(offsets) => offsets,
-        Err(_) => {
-            tracing::debug!("No permission symbols found");
-            return Ok(PermissionManifest::default());
-        }
-    };
-
-    // If no symbols found, return empty manifest
-    if offsets.is_empty() {
-        return Ok(PermissionManifest::default());
-    }
-
-    let mut file = std::fs::File::open(path)?;
-    let mut permissions = Vec::new();
-
-    for offset in offsets.iter().copied() {
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        let mut data_in_range = vec![0; Permission::MEMORY_LAYOUT.size()];
-        file.read_exact(&mut data_in_range)?;
-
-        let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
-
-        if let Some((_, permission)) = const_serialize::deserialize_const!(Permission, buffer) {
-            tracing::debug!(
-                "Found permission at offset {offset}: {:?} - {}",
-                permission.kind(),
-                permission.description()
-            );
-            permissions.push(permission);
-        } else {
-            tracing::warn!(
-                "Found permission symbol at offset {offset} that could not be deserialized"
-            );
-        }
-    }
-
-    Ok(PermissionManifest::new(permissions))
+    
+    // Use the unified symbol extraction which handles both assets and permissions
+    // Create a runtime for async execution
+    let rt = Runtime::new().context("Failed to create runtime for permission extraction")?;
+    let result = rt.block_on(extract_symbols_from_file(path))?;
+    
+    Ok(PermissionManifest::new(result.permissions))
 }
 
 /// A manifest of all permissions found in a binary

@@ -8,7 +8,7 @@ use crate::{PermissionKind, Platform, PlatformFlags, PlatformIdentifiers};
 /// This struct contains all the information needed to declare a permission
 /// across all supported platforms. It uses const-serialize to be embeddable
 /// in linker sections.
-#[derive(Debug, Clone, PartialEq, Eq, SerializeConst)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
 pub struct Permission {
     /// The kind of permission being declared
     kind: PermissionKind,

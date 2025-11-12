@@ -35,11 +35,12 @@ use std::{
 
 use crate::Result;
 use anyhow::{bail, Context};
-use const_serialize::{serialize_const, ConstVec, SerializeConst};
+use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
+use permissions_core::{Permission, SymbolData};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 /// Extract all manganis symbols and their sections from the given object file.
@@ -60,6 +61,7 @@ enum ManganisVersion {
     /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
     Legacy,
     /// The new version of the manganis format 0.7.2 onward
+    /// This now includes both assets (old BundledAsset format) and permissions (SymbolData format)
     New,
 }
 
@@ -69,11 +71,18 @@ impl ManganisVersion {
             ManganisVersion::Legacy => {
                 <manganis_core_07::BundledAsset as const_serialize_07::SerializeConst>::MEMORY_LAYOUT.size()
             }
-            ManganisVersion::New => BundledAsset::MEMORY_LAYOUT.size(),
+            // For new format, we use a larger buffer size to accommodate variable-length CBOR
+            // The actual size will be determined by CBOR deserialization
+            ManganisVersion::New => 4096,
         }
     }
 
-    fn deserialize(&self, data: &[u8]) -> Option<BundledAsset> {
+    /// Deserialize data, trying multiple formats for backward compatibility
+    ///
+    /// Tries in order:
+    /// 1. SymbolData (new unified format) - can contain Asset or Permission
+    /// 2. BundledAsset (old asset format) - for backward compatibility
+    fn deserialize(&self, data: &[u8]) -> Option<SymbolDataOrAsset> {
         match self {
             ManganisVersion::Legacy => {
                 let buffer = const_serialize_07::ConstReadBuffer::new(data);
@@ -81,18 +90,43 @@ impl ManganisVersion {
                 let (_, legacy_asset) =
                     const_serialize_07::deserialize_const!(manganis_core_07::BundledAsset, buffer)?;
 
-                Some(legacy_asset_to_modern_asset(&legacy_asset))
+                Some(SymbolDataOrAsset::Asset(legacy_asset_to_modern_asset(&legacy_asset)))
             }
             ManganisVersion::New => {
-                let (_, asset) =
-                    const_serialize::deserialize_const!(manganis_core::BundledAsset, data)?;
-
-                Some(asset)
+                // First try SymbolData (new format with enum variant)
+                // CBOR deserialization returns (remaining_bytes, value)
+                // We accept if remaining is empty or contains only padding (zeros)
+                if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
+                    // Check if remaining bytes are all zeros (padding) or empty
+                    // This handles the case where the linker section is larger than the actual CBOR data
+                    let is_valid = remaining.is_empty()
+                        || remaining.iter().all(|&b| b == 0)
+                        || remaining.len() < data.len() / 2; // Allow some padding
+                    
+                    if is_valid {
+                        return Some(SymbolDataOrAsset::SymbolData(symbol_data));
+                    }
+                }
+                
+                // Fallback: try BundledAsset (old format for backward compatibility)
+                // This handles assets that were serialized directly as BundledAsset (not wrapped in SymbolData)
+                if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
+                    // Check if remaining bytes are all zeros (padding) or empty
+                    let is_valid = remaining.is_empty()
+                        || remaining.iter().all(|&b| b == 0)
+                        || remaining.len() < data.len() / 2; // Allow some padding
+                    
+                    if is_valid {
+                        return Some(SymbolDataOrAsset::Asset(asset));
+                    }
+                }
+                
+                None
             }
         }
     }
 
-    fn serialize(&self, asset: &BundledAsset) -> Vec<u8> {
+    fn serialize_asset(&self, asset: &BundledAsset) -> Vec<u8> {
         match self {
             ManganisVersion::Legacy => {
                 let legacy_asset = modern_asset_to_legacy_asset(asset);
@@ -103,11 +137,21 @@ impl ManganisVersion {
                 buffer.as_ref().to_vec()
             }
             ManganisVersion::New => {
+                // New format: serialize as BundledAsset directly (backward compatible)
                 let buffer = serialize_const(asset, ConstVec::new());
                 buffer.as_ref().to_vec()
             }
         }
     }
+}
+
+/// Result of deserializing a symbol - can be either SymbolData or legacy Asset
+#[derive(Debug, Clone)]
+enum SymbolDataOrAsset {
+    /// New unified format (can contain Asset or Permission)
+    SymbolData(SymbolData),
+    /// Old asset format (backward compatibility)
+    Asset(BundledAsset),
 }
 
 fn legacy_asset_to_modern_asset(
@@ -476,9 +520,20 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     Ok(offsets)
 }
 
-/// Find all assets in the given file, hash them, and write them back to the file.
-/// Then return an `AssetManifest` containing all the assets found in the file.
-pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+/// Result of extracting symbols from a binary file
+#[derive(Debug, Clone)]
+pub(crate) struct SymbolExtractionResult {
+    /// Assets found in the binary
+    pub assets: Vec<BundledAsset>,
+    /// Permissions found in the binary
+    pub permissions: Vec<Permission>,
+}
+
+/// Find all assets and permissions in the given file, hash assets, and write them back to the file.
+/// Then return both assets and permissions found in the file.
+pub(crate) async fn extract_symbols_from_file(
+    path: impl AsRef<Path>,
+) -> Result<SymbolExtractionResult> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,
@@ -494,23 +549,63 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
     let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
     let mut assets = Vec::new();
+    let mut permissions = Vec::new();
+    let mut symbol_data_results = Vec::new();
 
-    // Read each asset from the data section using the offsets
+    // Read each symbol from the data section using the offsets
     for symbol in offsets.iter().copied() {
         let version = symbol.version;
         let offset = symbol.offset;
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        let mut data_in_range = vec![0; version.size()];
-        file.read_exact(&mut data_in_range)?;
-
-        if let Some(bundled_asset) = version.deserialize(&data_in_range) {
-            tracing::debug!(
-                "Found asset at offset {offset}: {:?}",
-                bundled_asset.absolute_source_path()
-            );
-            assets.push(bundled_asset);
+        
+        // Read data from file_contents (already loaded into memory)
+        // Use a large buffer for CBOR (variable length), but don't exceed file size
+        let buffer_size = version.size().min(file_contents.len().saturating_sub(offset as usize));
+        if buffer_size == 0 {
+            tracing::warn!("Symbol at offset {offset} is beyond file size");
+            continue;
+        }
+        
+        let data_in_range = if (offset as usize) + buffer_size <= file_contents.len() {
+            &file_contents[offset as usize..(offset as usize) + buffer_size]
         } else {
-            tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
+            &file_contents[offset as usize..]
+        };
+
+        // Try to deserialize - CBOR will handle variable-length data correctly
+        if let Some(result) = version.deserialize(data_in_range) {
+            match result {
+                SymbolDataOrAsset::SymbolData(symbol_data) => {
+                    match symbol_data {
+                        SymbolData::Asset(asset) => {
+                            tracing::debug!(
+                                "Found asset (via SymbolData) at offset {offset}: {:?}",
+                                asset.absolute_source_path()
+                            );
+                            assets.push(asset);
+                            symbol_data_results.push((symbol, SymbolDataOrAsset::SymbolData(symbol_data)));
+                        }
+                        SymbolData::Permission(permission) => {
+                            tracing::debug!(
+                                "Found permission at offset {offset}: {:?} - {}",
+                                permission.kind(),
+                                permission.description()
+                            );
+                            permissions.push(permission);
+                            // Permissions are not written back, so don't store the symbol
+                        }
+                    }
+                }
+                SymbolDataOrAsset::Asset(asset) => {
+                    tracing::debug!(
+                        "Found asset (old format) at offset {offset}: {:?}",
+                        asset.absolute_source_path()
+                    );
+                    assets.push(asset);
+                    symbol_data_results.push((symbol, SymbolDataOrAsset::Asset(asset)));
+                }
+            }
+        } else {
+            tracing::warn!("Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions, or the symbol may be in an unsupported format.");
         }
     }
 
@@ -519,16 +614,53 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         .par_iter_mut()
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
-    // Write back the assets to the binary file
-    for (symbol, asset) in offsets.into_iter().zip(&assets) {
+    // Write back only assets to the binary file (permissions are not modified)
+    for (symbol, result) in symbol_data_results {
         let version = symbol.version;
         let offset = symbol.offset;
-        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
-        let new_data = version.serialize(asset);
-
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        // Write the modified binary data back to the file
-        file.write_all(new_data.as_ref())?;
+        
+        match result {
+            SymbolDataOrAsset::Asset(asset) => {
+                tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
+                let new_data = version.serialize_asset(&asset);
+                file.seek(std::io::SeekFrom::Start(offset))?;
+                // Write the modified binary data back to the file
+                // For CBOR, the new data might be a different size, so we need to handle that
+                // For now, we'll write back the same size as before
+                if new_data.len() <= version.size() {
+                    file.write_all(&new_data)?;
+                    // Pad with zeros if needed (for fixed-size arrays)
+                    if new_data.len() < version.size() {
+                        let padding = vec![0; version.size() - new_data.len()];
+                        file.write_all(&padding)?;
+                    }
+                } else {
+                    tracing::warn!(
+                        "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. This should not happen.",
+                        new_data.len(),
+                        version.size()
+                    );
+                    file.write_all(&new_data[..version.size()])?;
+                }
+            }
+            SymbolDataOrAsset::SymbolData(symbol_data) => {
+                // Only write back if it's an Asset variant
+                if let SymbolData::Asset(asset) = symbol_data {
+                    tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
+                    let new_data = version.serialize_asset(&asset);
+                    file.seek(std::io::SeekFrom::Start(offset))?;
+                    if new_data.len() <= version.size() {
+                        file.write_all(&new_data)?;
+                        if new_data.len() < version.size() {
+                            let padding = vec![0; version.size() - new_data.len()];
+                            file.write_all(&padding)?;
+                        }
+                    } else {
+                        file.write_all(&new_data[..version.size()])?;
+                    }
+                }
+            }
+        }
     }
 
     // Ensure the file is flushed to disk
@@ -554,12 +686,23 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         }
     }
 
-    // Finally, create the asset manifest
+    Ok(SymbolExtractionResult {
+        assets: assets.clone(),
+        permissions,
+    })
+}
+
+/// Find all assets in the given file, hash them, and write them back to the file.
+/// Then return an `AssetManifest` containing all the assets found in the file.
+///
+/// This is a convenience function that extracts symbols and returns only assets.
+/// For permissions, use `extract_permissions_from_file` instead.
+pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+    let result = extract_symbols_from_file(path).await?;
     let mut manifest = AssetManifest::default();
-    for asset in assets {
+    for asset in result.assets {
         manifest.insert_asset(asset);
     }
-
     Ok(manifest)
 }
 

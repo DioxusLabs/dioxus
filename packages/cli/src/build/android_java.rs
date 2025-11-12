@@ -119,14 +119,15 @@ fn parse_java_metadata_at_offset(data: &[u8], offset: usize) -> Result<JavaSourc
     let end = (offset + 4096).min(data.len());
     let metadata_bytes = &data[offset..end];
 
-    let buffer = const_serialize::ConstReadBuffer::new(metadata_bytes);
-
+    // Use deserialize_const! directly with the byte slice (new API)
+    // Note: Java sources are being ignored for now per the plan, but we fix compilation errors
+    
     // Deserialize the struct fields
-    // The SerializeConst derive creates a tuple-like serialization
-    if let Some((buffer, package_name)) = const_serialize::deserialize_const!(ConstStr, buffer) {
-        if let Some((buffer, plugin_name)) = const_serialize::deserialize_const!(ConstStr, buffer) {
-            if let Some((buffer, file_count)) = const_serialize::deserialize_const!(u8, buffer) {
-                if let Some((_, files)) = const_serialize::deserialize_const!([ConstStr; 8], buffer)
+    // The new API uses deserialize_const! with a byte slice directly
+    if let Some((remaining, package_name)) = const_serialize::deserialize_const!(ConstStr, metadata_bytes) {
+        if let Some((remaining, plugin_name)) = const_serialize::deserialize_const!(ConstStr, remaining) {
+            if let Some((remaining, file_count)) = const_serialize::deserialize_const!(u8, remaining) {
+                if let Some((_, files)) = const_serialize::deserialize_const!([ConstStr; 8], remaining)
                 {
                     return Ok(JavaSourceMetadata::from_const_serialize(
                         package_name,

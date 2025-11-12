@@ -35,11 +35,11 @@ impl ListLayout {
 }
 
 /// Serialize a dynamically sized list that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_list(
+pub(crate) const unsafe fn serialize_const_list<const MAX_SIZE: usize>(
     ptr: *const (),
-    mut to: ConstVec<u8>,
+    mut to: ConstVec<u8, MAX_SIZE>,
     layout: &ListLayout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     // Read the length of the list
     let len_ptr = ptr.wrapping_byte_offset(layout.len_offset as _);
     let len = layout.len_layout.read(len_ptr as *const u8) as usize;

@@ -66,11 +66,11 @@ pub unsafe trait SerializeConst: Sized {
 }
 
 /// Serialize a pointer to a type that is stored at the pointer passed in
-const unsafe fn serialize_const_ptr(
+const unsafe fn serialize_const_ptr<const MAX_SIZE: usize>(
     ptr: *const (),
-    to: ConstVec<u8>,
+    to: ConstVec<u8, MAX_SIZE>,
     layout: &Layout,
-) -> ConstVec<u8> {
+) -> ConstVec<u8, MAX_SIZE> {
     match layout {
         Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
         Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),

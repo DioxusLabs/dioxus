@@ -19,6 +19,9 @@ mod json;
 pub use file::process_file_to;
 pub use hash::add_hash_to_asset;
 
+// Re-export SymbolData from permissions-core for convenience
+pub use permissions_core::SymbolData;
+
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarily by incremental compilation artifacts.

@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 
 /// We store description of the assets an application uses in the executable.
 /// We use the `link_section` attribute embed an extra section in the executable.
