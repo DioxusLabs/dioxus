@@ -164,7 +164,7 @@ fn legacy_asset_to_modern_asset(
         _ => AssetOptions::builder().into_asset_options(),
     };
 
-    BundledAsset::new(bundled_path, absolute_path, options)
+    BundledAsset::new(absolute_path, bundled_path, options)
 }
 
 fn modern_asset_to_legacy_asset(modern_asset: &BundledAsset) -> manganis_core_07::BundledAsset {
@@ -219,7 +219,7 @@ fn modern_asset_to_legacy_asset(modern_asset: &BundledAsset) -> manganis_core_07
         _ => manganis_core_07::AssetOptions::builder().into_asset_options(),
     };
 
-    manganis_core_07::BundledAsset::new(bundled_path, absolute_path, options)
+    manganis_core_07::BundledAsset::new(absolute_path, bundled_path, options)
 }
 
 fn looks_like_manganis_symbol(name: &str) -> Option<ManganisVersion> {
