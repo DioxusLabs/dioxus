@@ -10,11 +10,17 @@
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
 //! and do not require build-time manifest generation.
 
+use std::io::{Read, Seek};
 use std::path::Path;
 
 use crate::Result;
+use const_serialize::SerializeConst;
 use permissions_core::{Permission, Platform};
 use serde::Serialize;
+
+const PERMISSION_SYMBOL_PREFIX: &str = "__PERMISSION__";
+
+use super::linker_symbols;
 
 /// Android permission for Handlebars template
 #[derive(Debug, Clone, Serialize)]
