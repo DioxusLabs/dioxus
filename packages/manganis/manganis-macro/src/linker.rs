@@ -8,7 +8,7 @@ use quote::ToTokens;
 /// After linking, the "manganis" sections of the different object files will be merged.
 pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStream2 {
     let position = proc_macro2::Span::call_site();
-    let export_name = syn::LitStr::new(&format!("__MANGANIS__{}", asset_hash), position);
+    let export_name = syn::LitStr::new(&format!("__ASSETS__{}", asset_hash), position);
 
     quote::quote! {
         // First serialize the asset into a constant sized buffer

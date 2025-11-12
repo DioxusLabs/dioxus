@@ -4177,15 +4177,36 @@ dependencies = [
 name = "const-serialize"
 version = "0.7.0"
 dependencies = [
- "const-serialize",
- "const-serialize-macro",
+ "const-serialize 0.7.0",
+ "const-serialize-macro 0.7.0",
  "rand 0.9.2",
+ "serde",
+]
+
+[[package]]
+name = "const-serialize"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd339aa356cc6452308fad2ee56623f900a8e68bc0ab9360a0ddb8270e5640c8"
+dependencies = [
+ "const-serialize-macro 0.7.1",
  "serde",
 ]
 
 [[package]]
 name = "const-serialize-macro"
 version = "0.7.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.108",
+]
+
+[[package]]
+name = "const-serialize-macro"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "797d158acb331e2a89d696343a27cd39bf7e36aaef33ba4799a5ef1526e24861"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5359,7 +5380,8 @@ dependencies = [
  "clap",
  "console 0.16.1",
  "console-subscriber",
- "const-serialize",
+ "const-serialize 0.7.0",
+ "const-serialize 0.7.1",
  "convert_case 0.8.0",
  "crossterm 0.29.0",
  "ctrlc",
@@ -5403,7 +5425,8 @@ dependencies = [
  "local-ip-address",
  "log",
  "manganis",
- "manganis-core",
+ "manganis-core 0.7.0",
+ "manganis-core 0.7.1",
  "memmap",
  "memoize",
  "notify",
@@ -5475,13 +5498,13 @@ dependencies = [
  "browserslist-rs 0.19.0",
  "built 0.8.0",
  "codemap",
- "const-serialize",
+ "const-serialize 0.7.0",
  "grass",
  "image",
  "imagequant",
  "lightningcss",
  "manganis",
- "manganis-core",
+ "manganis-core 0.7.0",
  "mozjpeg",
  "object 0.37.3",
  "png",
@@ -5720,7 +5743,7 @@ name = "dioxus-dx-wire-format"
 version = "0.7.0"
 dependencies = [
  "cargo_metadata",
- "manganis-core",
+ "manganis-core 0.7.0",
  "serde",
  "serde_json",
  "subsecond-types",
@@ -10748,8 +10771,8 @@ dependencies = [
 name = "manganis"
 version = "0.7.0"
 dependencies = [
- "const-serialize",
- "manganis-core",
+ "const-serialize 0.7.0",
+ "manganis-core 0.7.0",
  "manganis-macro",
 ]
 
@@ -10757,11 +10780,21 @@ dependencies = [
 name = "manganis-core"
 version = "0.7.0"
 dependencies = [
- "const-serialize",
+ "const-serialize 0.7.0",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
+ "serde",
+]
+
+[[package]]
+name = "manganis-core"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41fbd1fb8c5aabcc54c6b02dbc968e1c89c28f3e543f2789ef9e3ce45dbdf5df"
+dependencies = [
+ "const-serialize 0.7.1",
  "serde",
 ]
 
@@ -10772,7 +10805,7 @@ dependencies = [
  "dunce",
  "macro-string",
  "manganis",
- "manganis-core",
+ "manganis-core 0.7.0",
  "proc-macro2",
  "quote",
  "syn 2.0.108",
