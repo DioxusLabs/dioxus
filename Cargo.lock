@@ -6533,8 +6533,8 @@ dependencies = [
 name = "dioxus-platform-bridge"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize",
- "const-serialize-macro",
+ "const-serialize 0.8.0",
+ "const-serialize-macro 0.8.0",
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.6.3",
@@ -7187,9 +7187,9 @@ checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
 name = "dx-macro-helpers"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
- "const-serialize",
+ "const-serialize 0.8.0",
  "proc-macro2",
  "quote",
  "syn 2.0.108",
@@ -11423,9 +11423,8 @@ dependencies = [
 name = "manganis"
 version = "0.7.1"
 dependencies = [
- "dx-macro-helpers",
- "manganis-macro",
  "const-serialize 0.8.0",
+ "dx-macro-helpers",
  "manganis-core 0.7.1",
  "manganis-macro 0.7.1",
 ]
@@ -13355,7 +13354,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "permissions"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize",
+ "const-serialize 0.8.0",
  "dx-macro-helpers",
  "permissions-core",
  "permissions-macro",
@@ -13365,8 +13364,8 @@ dependencies = [
 name = "permissions-core"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize",
- "const-serialize-macro",
+ "const-serialize 0.8.0",
+ "const-serialize-macro 0.8.0",
  "serde",
 ]
 
@@ -13374,7 +13373,7 @@ dependencies = [
 name = "permissions-macro"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize",
+ "const-serialize 0.8.0",
  "dx-macro-helpers",
  "permissions-core",
  "proc-macro2",
@@ -13770,8 +13769,8 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 name = "platform-bridge-macro"
 version = "0.7.0-rc.3"
 dependencies = [
- "const-serialize",
- "const-serialize-macro",
+ "const-serialize 0.8.0",
+ "const-serialize-macro 0.8.0",
  "proc-macro2",
  "quote",
  "syn 2.0.108",
