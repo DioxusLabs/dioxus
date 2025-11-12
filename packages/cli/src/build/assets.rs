@@ -38,7 +38,6 @@ use anyhow::{bail, Context};
 use const_serialize::{ConstVec, SerializeConst};
 use dioxus_cli_opt::AssetManifest;
 use manganis::BundledAsset;
-use manganis_core::LinkerSymbol;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -207,12 +206,12 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         tracing::error!("Failed to find <data> section in WASM file");
         return Ok(Vec::new());
     };
-    let Some((section_range_start, section_range_end)) = section.file_range() else {
+    let Some((_, section_range_end)) = section.file_range() else {
         tracing::error!("Failed to find file range for <data> section in WASM file");
         return Ok(Vec::new());
     };
-    let section_size = section_range_end - section_range_start;
-    let section_start = section_range_start;
+    let section_size = section.data()?.len() as u64;
+    let section_start = section_range_end - section_size;
 
     // Translate the section_relative_address to the file offset
     // WASM files have a section address of 0 in object, reparse the data section with wasmparser
@@ -294,10 +293,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
-/// Also extracts permissions from LinkerSymbol::Permission variants.
-pub(crate) async fn extract_assets_from_file(
-    path: impl AsRef<Path>,
-) -> Result<(AssetManifest, Vec<permissions_core::Permission>)> {
+pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,
@@ -313,56 +309,24 @@ pub(crate) async fn extract_assets_from_file(
     let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
     let mut assets = Vec::new();
-    let mut permissions = Vec::new();
-    let mut asset_offsets = Vec::new(); // Track which offsets contain assets (for writing back)
 
-    // Read each symbol from the data section using the offsets
+    // Read each asset from the data section using the offsets
     for offset in offsets.iter().copied() {
         file.seek(std::io::SeekFrom::Start(offset))?;
-        // Use LinkerSymbol size for reading
-        let mut data_in_range = vec![0; LinkerSymbol::MEMORY_LAYOUT.size()];
+        let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
         file.read_exact(&mut data_in_range)?;
 
         let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
-        // Try to deserialize as LinkerSymbol
-        if let Some((_, linker_symbol)) = const_serialize::deserialize_const!(LinkerSymbol, buffer)
+        if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
-            match linker_symbol {
-                LinkerSymbol::Asset(bundled_asset) => {
-                    tracing::debug!(
-                        "Found asset at offset {offset}: {:?}",
-                        bundled_asset.absolute_source_path()
-                    );
-                    assets.push(bundled_asset);
-                    asset_offsets.push(offset);
-                }
-                LinkerSymbol::Permission(permission) => {
-                    tracing::debug!(
-                        "Found permission at offset {offset}: {:?} - {}",
-                        permission.kind(),
-                        permission.description()
-                    );
-                    permissions.push(permission);
-                    // Don't add to asset_offsets - permissions don't get written back
-                }
-            }
+            tracing::debug!(
+                "Found asset at offset {offset}: {:?}",
+                bundled_asset.absolute_source_path()
+            );
+            assets.push(bundled_asset);
         } else {
-            // Fallback: try to deserialize as BundledAsset for backward compatibility
-            // This handles old binaries that only have assets
-            let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
-            if let Some((_, bundled_asset)) =
-                const_serialize::deserialize_const!(BundledAsset, buffer)
-            {
-                tracing::debug!(
-                    "Found legacy asset at offset {offset}: {:?}",
-                    bundled_asset.absolute_source_path()
-                );
-                assets.push(bundled_asset);
-                asset_offsets.push(offset);
-            } else {
-                tracing::warn!("Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
-            }
+            tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
         }
     }
 
@@ -371,8 +335,8 @@ pub(crate) async fn extract_assets_from_file(
         .par_iter_mut()
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
-    // Write back the assets to the binary file (only assets, not permissions)
-    for (offset, asset) in asset_offsets.iter().copied().zip(&assets) {
+    // Write back the assets to the binary file
+    for (offset, asset) in offsets.into_iter().zip(&assets) {
         tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(asset, new_data);
@@ -411,7 +375,7 @@ pub(crate) async fn extract_assets_from_file(
         manifest.insert_asset(asset);
     }
 
-    Ok((manifest, permissions))
+    Ok(manifest)
 }
 
 /// Try to open a file for writing, retrying if the file is already open by another process.

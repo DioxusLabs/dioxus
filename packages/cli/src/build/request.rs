@@ -1332,8 +1332,7 @@ impl BuildRequest {
 
         let assets = self.collect_assets(&exe, ctx).await?;
 
-        // Extract permissions from the binary (now extracted together with assets)
-        // Permissions are already extracted in extract_assets_from_file above
+        // Extract permissions from the binary (same pattern as assets)
         let permissions = self.collect_permissions(&exe, ctx).await?;
 
         // Extract Java sources for Android builds
@@ -1378,7 +1377,7 @@ impl BuildRequest {
 
         ctx.status_extracting_assets();
 
-        let (mut manifest, _extracted_permissions) = super::assets::extract_assets_from_file(exe).await?;
+        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
 
         // If the user has a public dir, we submit all the entries there as assets too
         //
@@ -1425,7 +1424,7 @@ impl BuildRequest {
             return Ok(super::permissions::PermissionManifest::default());
         }
 
-        let manifest = super::permissions::extract_permissions_from_file(exe).await?;
+        let manifest = super::permissions::extract_permissions_from_file(exe)?;
 
         // Log permissions found for platforms that need them
         let platform = match self.bundle {

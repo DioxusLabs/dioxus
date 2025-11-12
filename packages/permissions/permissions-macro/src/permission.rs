@@ -42,30 +42,18 @@ impl ToTokens for PermissionParser {
         let expr = &self.expr;
 
         if is_custom {
-            // For Custom permissions, we still use the linker section but they might be larger
-            // The buffer size is 4096 which should be sufficient for most custom permissions
-            let link_section =
-                crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
-
+            // For Custom permissions, skip linker section generation due to buffer size limitations
+            // Custom permissions can exceed the 4096 byte buffer limit when serialized
             tokens.extend(quote! {
                 {
-                    // Create the permission instance from the expression
+                    // Create the permission instance directly for Custom permissions
+                    // Skip linker section generation due to buffer size limitations
                     const __PERMISSION: permissions_core::Permission = #expr;
-
-                    #link_section
-
-                    // Create a static reference to the linker section (without #[used])
-                    // The PermissionHandle will perform volatile reads to keep the symbol
-                    static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
-
-                    // Return a PermissionHandle that performs volatile reads
-                    // This ensures the symbol remains in the binary when the permission is used
-                    permissions_core::PermissionHandle::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
+                    __PERMISSION
                 }
             });
         } else {
             // For regular permissions, use the normal serialization approach with linker sections
-            // Wrap the permission in LinkerSymbol::Permission for unified symbol collection
             let link_section =
                 crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
 
@@ -76,13 +64,14 @@ impl ToTokens for PermissionParser {
 
                     #link_section
 
-                    // Create a static reference to the linker section (without #[used])
-                    // The PermissionHandle will perform volatile reads to keep the symbol
+                    // Create a module-level static reference to the linker section to ensure
+                    // it's preserved even if the permission constant is unused.
+                    // This prevents the linker from optimizing away the symbol.
+                    #[used]
                     static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
 
-                    // Return a PermissionHandle that performs volatile reads
-                    // This ensures the symbol remains in the binary when the permission is used
-                    permissions_core::PermissionHandle::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
+                    // Return the permission
+                    __PERMISSION
                 }
             });
         }

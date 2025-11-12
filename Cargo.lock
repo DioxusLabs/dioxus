@@ -10787,7 +10787,6 @@ dependencies = [
  "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
- "permissions-core",
  "serde",
 ]
 
@@ -12623,7 +12622,6 @@ version = "0.7.0-rc.3"
 dependencies = [
  "const-serialize",
  "dx-macro-helpers",
- "manganis-core",
  "permissions-core",
  "permissions-macro",
 ]
