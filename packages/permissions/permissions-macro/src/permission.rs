@@ -32,42 +32,20 @@ impl ToTokens for PermissionParser {
         self.expr.to_string().hash(&mut hash);
         let permission_hash = format!("{:016x}", hash.finish());
 
-        // Check if this is a Custom permission by examining the expression
-        // Custom permissions are built via PermissionBuilder::custom() or contain PermissionKind::Custom
-        let expr_str = self.expr.to_string();
-        let is_custom = expr_str.contains("custom()")
-            || expr_str.contains("Custom {")
-            || expr_str.contains("PermissionKind::Custom");
-
         let expr = &self.expr;
+        let link_section =
+            crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
 
-        if is_custom {
-            // For Custom permissions, skip linker section generation due to buffer size limitations
-            // Custom permissions can exceed the 4096 byte buffer limit when serialized
-            tokens.extend(quote! {
-                {
-                    // Create the permission instance directly for Custom permissions
-                    // Skip linker section generation due to buffer size limitations
-                    const __PERMISSION: permissions_core::Permission = #expr;
-                    __PERMISSION
-                }
-            });
-        } else {
-            // For regular permissions, use the normal serialization approach with linker sections
-            let link_section =
-                crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
+        tokens.extend(quote! {
+            {
+                // Create the permission instance from the expression
+                const __PERMISSION: permissions::Permission = #expr;
 
-            tokens.extend(quote! {
-                {
-                    // Create the permission instance from the expression
-                    const __PERMISSION: permissions_core::Permission = #expr;
+                #link_section
 
-                    #link_section
-
-                    // Return the permission
-                    __PERMISSION
-                }
-            });
-        }
+                // Return the permission
+                __PERMISSION
+            }
+        });
     }
 }

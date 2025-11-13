@@ -17,16 +17,24 @@ This crate provides a unified API for declaring permissions across supported pla
 ### Basic Permission Declaration
 
 ```rust
-use permissions::{static_permission, Permission};
+use permissions::{static_permission, Permission, PermissionBuilder, PermissionKind};
 
-// Declare a camera permission
-const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
+// Declare a camera permission using the builder
+const CAMERA: Permission = static_permission!(
+    Permission::new(PermissionKind::Camera, "Take photos")
+);
 
-// Declare a location permission with precision
-const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
+// Declare a fine-grained location permission
+const LOCATION: Permission = static_permission!(
+    PermissionBuilder::location(permissions::LocationPrecision::Fine)
+        .with_description("Track your runs")
+        .build()
+);
 
 // Declare a microphone permission
-const MICROPHONE: Permission = static_permission!(Microphone, description = "Record audio");
+const MICROPHONE: Permission = static_permission!(
+    Permission::new(PermissionKind::Microphone, "Record audio")
+);
 ```
 
 ### Custom Permissions (For Untested or Special Use Cases)
@@ -35,16 +43,16 @@ For permissions that aren't yet tested or for special use cases, use the `Custom
 with platform-specific identifiers:
 
 ```rust
-use permissions::{static_permission, Permission};
+use permissions::{static_permission, Permission, PermissionBuilder};
 
 // Example: Request storage permission
 const STORAGE: Permission = static_permission!(
-    Custom { 
-        android = "android.permission.READ_EXTERNAL_STORAGE",
-        ios = "NSPhotoLibraryUsageDescription",
-        macos = "NSPhotoLibraryUsageDescription"
-    },
-    description = "Access files on your device"
+    PermissionBuilder::custom()
+        .with_android("android.permission.READ_EXTERNAL_STORAGE")
+        .with_ios("NSPhotoLibraryUsageDescription")
+        .with_macos("NSPhotoLibraryUsageDescription")
+        .with_description("Access files on your device")
+        .build()
 );
 ```
 
@@ -55,9 +63,13 @@ const STORAGE: Permission = static_permission!(
 ### Using Permissions
 
 ```rust
-use permissions::{static_permission, Permission, Platform};
+use permissions::{
+    static_permission, Permission, PermissionBuilder, PermissionKind, Platform,
+};
 
-const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
+const CAMERA: Permission = static_permission!(
+    Permission::new(PermissionKind::Camera, "Take photos")
+);
 
 // Get the description
 println!("Description: {}", CAMERA.description());

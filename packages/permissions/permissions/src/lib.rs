@@ -30,8 +30,8 @@
 //! > to preserve backward compatibility with existing code.
 
 pub use permissions_core::{
-    LocationPrecision, Permission, PermissionKind, PermissionManifest, Platform, PlatformFlags,
-    PlatformIdentifiers,
+    CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
+    PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers,
 };
 pub use permissions_macro::{permission, static_permission};
 
