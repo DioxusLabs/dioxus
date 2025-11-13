@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use tauri::{
-    ipc::{Channel, InvokeResponseBody},
     plugin::{PluginApi, PluginHandle},
     AppHandle, Runtime,
 };
@@ -43,50 +42,6 @@ impl<R: Runtime> Geolocation<R> {
             .map_err(Into::into)
     }
 
-    /// Register a position watcher. This method returns an id to use in `clear_watch`.
-    pub fn watch_position<F: Fn(WatchEvent) + Send + Sync + 'static>(
-        &self,
-        options: PositionOptions,
-        callback: F,
-    ) -> crate::Result<u32> {
-        let channel = Channel::new(move |event| {
-            let payload = match event {
-                InvokeResponseBody::Json(payload) => serde_json::from_str::<WatchEvent>(&payload)
-                    .unwrap_or_else(|error| {
-                        WatchEvent::Error(format!(
-                            "Couldn't deserialize watch event payload: `{error}`"
-                        ))
-                    }),
-                _ => WatchEvent::Error("Unexpected watch event payload.".to_string()),
-            };
-
-            callback(payload);
-
-            Ok(())
-        });
-        let id = channel.id();
-
-        self.watch_position_inner(options, channel)?;
-
-        Ok(id)
-    }
-
-    pub(crate) fn watch_position_inner(
-        &self,
-        options: PositionOptions,
-        channel: Channel,
-    ) -> crate::Result<()> {
-        self.0
-            .run_mobile_plugin("watchPosition", WatchPayload { options, channel })
-            .map_err(Into::into)
-    }
-
-    pub fn clear_watch(&self, channel_id: u32) -> crate::Result<()> {
-        self.0
-            .run_mobile_plugin("clearWatch", ClearWatchPayload { channel_id })
-            .map_err(Into::into)
-    }
-
     pub fn check_permissions(&self) -> crate::Result<PermissionStatus> {
         self.0
             .run_mobile_plugin("checkPermissions", ())
@@ -104,16 +59,4 @@ impl<R: Runtime> Geolocation<R> {
             )
             .map_err(Into::into)
     }
-}
-
-#[derive(Serialize)]
-struct WatchPayload {
-    options: PositionOptions,
-    channel: Channel,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ClearWatchPayload {
-    channel_id: u32,
 }

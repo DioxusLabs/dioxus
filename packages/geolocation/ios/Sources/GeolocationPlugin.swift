@@ -13,10 +13,7 @@ import Dispatch
 @objc(GeolocationPlugin)
 public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
   private let locationManager = CLLocationManager()
-  private var isUpdatingLocation: Bool = false
   private var positionCallbacks: [String: (String) -> Void] = [:]
-  private var watcherCallbacks: [UInt32: (String) -> Void] = [:]
-  private var permissionCallbacks: [String: (String) -> Void] = [:]
 
   override init() {
     super.init()
@@ -85,52 +82,6 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
       return (try? JSONSerialization.data(withJSONObject: error)).flatMap {
         String(data: $0, encoding: .utf8)
       } ?? "{\"error\":\"Timeout waiting for location\"}"
-    }
-  }
-
-  /**
-   * Watch position (called from ObjC/Rust)
-   */
-  @objc public func watchPositionNative(_ optionsJson: String, callbackId: UInt32) {
-    guard let optionsData = optionsJson.data(using: .utf8),
-          let optionsDict = try? JSONSerialization.jsonObject(with: optionsData) as? [String: Any] else {
-      // Call error callback
-      if let callback = self.watcherCallbacks[callbackId] {
-        callback("{\"error\":\"Invalid options JSON\"}")
-      }
-      return
-    }
-
-    let enableHighAccuracy = optionsDict["enableHighAccuracy"] as? Bool ?? false
-
-    self.watcherCallbacks[callbackId] = { result in
-      // Will be called from delegate methods
-    }
-
-    DispatchQueue.main.async {
-      if enableHighAccuracy {
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyBest
-      } else {
-        self.locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
-      }
-
-      if CLLocationManager.authorizationStatus() == .notDetermined {
-        self.locationManager.requestWhenInUseAuthorization()
-      } else {
-        self.locationManager.startUpdatingLocation()
-        self.isUpdatingLocation = true
-      }
-    }
-  }
-
-  /**
-   * Clear watch (called from ObjC/Rust)
-   */
-  @objc public func clearWatchNative(_ callbackId: UInt32) {
-    self.watcherCallbacks.removeValue(forKey: callbackId)
-
-    if self.watcherCallbacks.isEmpty {
-      self.stopUpdating()
     }
   }
 
@@ -204,11 +155,6 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
     }
     self.positionCallbacks.removeAll()
 
-    // Notify all watcher callbacks
-    for (_, callback) in self.watcherCallbacks {
-      let errorJson = "{\"error\":\"\(errorMessage)\"}"
-      callback(errorJson)
-    }
   }
 
   public func locationManager(
@@ -226,40 +172,19 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
     }
     self.positionCallbacks.removeAll()
 
-    // Notify all watcher callbacks
-    for (_, callback) in self.watcherCallbacks {
-      callback(resultJson)
-    }
   }
 
   public func locationManager(
     _ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus
   ) {
-    // Notify all permission callbacks
-    let statusJson = self.checkPermissionsJson()
-    for (_, callback) in self.permissionCallbacks {
-      callback(statusJson)
-    }
-    self.permissionCallbacks.removeAll()
-
     if !self.positionCallbacks.isEmpty {
       self.locationManager.requestLocation()
-    }
-
-    if !self.watcherCallbacks.isEmpty && !self.isUpdatingLocation {
-      self.locationManager.startUpdatingLocation()
-      self.isUpdatingLocation = true
     }
   }
 
   //
   // Internal/Helper methods
   //
-
-  private func stopUpdating() {
-    self.locationManager.stopUpdatingLocation()
-    self.isUpdatingLocation = false
-  }
 
   private func convertLocationToJson(_ location: CLLocation) -> String {
     var ret: [String: Any] = [:]
@@ -283,20 +208,6 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
     return "{\"error\":\"Failed to serialize location\"}"
   }
 
-  /**
-   * Callback functions to be called from Rust
-   * These are declared as external functions implemented in Rust
-   */
-  @objc public func onLocationUpdateNative(_ watchId: UInt32, locationJson: String) {
-    // This will be called from Rust when location updates arrive
-    // The Rust code will handle the actual callback invocation
-    dioxus_geolocation_on_location_update(watchId, locationJson)
-  }
-
-  @objc public func onLocationErrorNative(_ watchId: UInt32, errorMessage: String) {
-    // This will be called from Rust when location errors occur
-    dioxus_geolocation_on_location_error(watchId, errorMessage)
-  }
 }
 
 /**
@@ -306,20 +217,4 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
 @_cdecl("dioxus_geolocation_plugin_init")
 public func dioxus_geolocation_plugin_init() {
   _ = GeolocationPlugin.self
-}
-
-/**
- * External functions declared in Rust
- * These will be implemented in the Rust code via objc2 bindings
- */
-@_cdecl("dioxus_geolocation_on_location_update")
-func dioxus_geolocation_on_location_update(_ watchId: UInt32, _ locationJson: UnsafePointer<CChar>) {
-  // This is a placeholder - the actual implementation is in Rust
-  // The Swift code will call this from the delegate methods
-}
-
-@_cdecl("dioxus_geolocation_on_location_error")
-func dioxus_geolocation_on_location_error(_ watchId: UInt32, _ errorMessage: UnsafePointer<CChar>) {
-  // This is a placeholder - the actual implementation is in Rust
-  // The Swift code will call this from the delegate methods
 }

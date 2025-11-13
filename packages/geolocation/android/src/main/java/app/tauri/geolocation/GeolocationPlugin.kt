@@ -13,17 +13,14 @@ import android.os.Looper
 import android.webkit.WebView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.Timer
-import java.util.TimerTask
 import kotlin.concurrent.schedule
 
 class GeolocationPlugin(private val activity: Activity) {
   private val geolocation = Geolocation(activity)
-  private var watchCallbacks: MutableMap<Int, (Location?, String?) -> Unit> = mutableMapOf()
 
   fun checkPermissions(): Map<String, String> {
     val response = mutableMapOf<String, String>()
@@ -84,28 +81,6 @@ class GeolocationPlugin(private val activity: Activity) {
         errorCallback(error)
       },
     )
-  }
-
-  fun watchPosition(
-    watchId: Int,
-    enableHighAccuracy: Boolean,
-    timeout: Long,
-    callback: (Location?, String?) -> Unit,
-  ) {
-    watchCallbacks[watchId] = callback
-    geolocation.requestLocationUpdates(
-      enableHighAccuracy,
-      timeout,
-      { location -> callback(location, null) },
-      { error -> callback(null, error) },
-    )
-  }
-
-  fun clearWatch(watchId: Int) {
-    watchCallbacks.remove(watchId)
-    if (watchCallbacks.isEmpty()) {
-      geolocation.clearLocationUpdates()
-    }
   }
 
   private fun permissionToStatus(value: Int): String =
@@ -195,27 +170,4 @@ class GeolocationPlugin(private val activity: Activity) {
     return output ?: JSONObject(mapOf("error" to "Timeout waiting for location.")).toString()
   }
 
-  // Start watching and forward updates through JNI callbacks
-  fun watchPositionNative(watchId: Int, enableHighAccuracy: Boolean, timeout: Long) {
-    watchPosition(
-      watchId,
-      enableHighAccuracy,
-      timeout,
-      { location, error ->
-        if (error != null) {
-          onLocationErrorNative(watchId, error)
-        } else if (location != null) {
-          onLocationUpdateNative(watchId, locationToPositionJson(location))
-        }
-      },
-    )
-  }
-
-  fun clearWatchNative(watchId: Int) {
-    clearWatch(watchId)
-  }
-
-  // Native callbacks implemented in Rust
-  private external fun onLocationUpdateNative(watchId: Int, locationJson: String)
-  private external fun onLocationErrorNative(watchId: Int, errorMessage: String)
 }

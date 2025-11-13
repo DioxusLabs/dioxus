@@ -8370,7 +8370,6 @@ dependencies = [
  "dioxus 0.7.1",
  "dioxus-geolocation",
  "dioxus-router",
- "futures-util",
  "serde",
 ]
 
