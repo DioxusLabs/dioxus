@@ -13,20 +13,24 @@ mod assets;
 mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
+mod link_handler;
 
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
-pub use anyrender_vello::{
-    wgpu_context::DeviceHandle, CustomPaintCtx, CustomPaintSource, TextureHandle,
-};
+pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
+pub use dioxus_renderer::{DioxusNativeWindowRenderer, Features, Limits};
+
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
+pub use dioxus_renderer::use_wgpu;
 
 use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
+use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
+use std::sync::Arc;
 use winit::window::WindowAttributes;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
@@ -82,10 +86,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
     // Turn on the runtime and enter it
+    #[cfg(feature = "net")]
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
+    #[cfg(feature = "net")]
     let _guard = rt.enter();
 
     // Setup hot-reloading if enabled.
@@ -113,25 +119,29 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         vdom.insert_any_root_context(context());
     }
 
-    #[cfg(feature = "net")]
-    let net_provider = {
-        let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
-        Some(net_provider)
-    };
+    let net_provider = Some(DioxusNativeNetProvider::shared(event_loop.create_proxy()));
 
-    #[cfg(not(feature = "net"))]
-    let net_provider = None;
+    #[cfg(feature = "html")]
+    let html_parser_provider = Some(Arc::new(blitz_html::HtmlProvider) as _);
+    #[cfg(not(feature = "html"))]
+    let html_parser_provider = None;
+
+    let navigation_provider = Some(Arc::new(DioxusNativeNavigationProvider) as _);
 
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(
         vdom,
         DocumentConfig {
             net_provider,
+            html_parser_provider,
+            navigation_provider,
             ..Default::default()
         },
     );
+    #[cfg(not(all(target_os = "ios", target_abi = "sim")))]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    #[cfg(all(target_os = "ios", target_abi = "sim"))]
+    let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
         renderer.clone(),

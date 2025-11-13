@@ -111,6 +111,7 @@ impl WasmOpt {
         if !res.status.success() {
             let err = String::from_utf8_lossy(&res.stderr);
             tracing::error!(
+                telemetry = %serde_json::json!({ "event": "wasm_opt_failed" }),
                 "wasm-opt failed with status code {}\nstderr: {}\nstdout: {}",
                 res.status,
                 err,
@@ -243,7 +244,7 @@ pub fn installed_location() -> Option<PathBuf> {
 }
 
 fn install_dir() -> PathBuf {
-    Workspace::dioxus_home_dir().join("binaryen")
+    Workspace::dioxus_data_dir().join("binaryen")
 }
 
 fn installed_bin_name() -> &'static str {

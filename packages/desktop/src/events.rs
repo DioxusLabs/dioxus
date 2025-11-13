@@ -2,16 +2,45 @@
 
 use crate::{
     element::DesktopElement,
-    file_upload::{DesktopFileDragEvent, DesktopFileUploadForm},
+    file_upload::{DesktopFileDragEvent, DesktopFormData},
 };
 use dioxus_html::*;
 
 pub(crate) struct SerializedHtmlEventConverter;
 
 impl HtmlEventConverter for SerializedHtmlEventConverter {
+    /// This impl is special because it relies on the renderer to convert from serialized data to native data
+    /// as an intermediate step.
+    fn convert_drag_data(&self, event: &PlatformEventData) -> DragData {
+        event
+            .downcast::<DesktopFileDragEvent>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    /// This impl is special because it relies on the renderer to convert from serialized data to native data
+    /// as an intermediate step.
+    fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
+        event.downcast::<DesktopFormData>().cloned().unwrap().into()
+    }
+
+    /// This impl is special because it leverages the `DesktopElement` ref between the virtualdom and webview
+    fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData {
+        event.downcast::<DesktopElement>().cloned().unwrap().into()
+    }
+
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData {
         event
             .downcast::<SerializedAnimationData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData {
+        event
+            .downcast::<SerializedCancelData>()
             .cloned()
             .unwrap()
             .into()
@@ -33,37 +62,9 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
-    fn convert_drag_data(&self, event: &PlatformEventData) -> DragData {
-        // Attempt a simple serialized data conversion
-        if let Some(_data) = event.downcast::<SerializedDragData>() {
-            return _data.clone().into();
-        }
-
-        // If that failed then it's a file drag form
-        event
-            .downcast::<DesktopFileDragEvent>()
-            .cloned()
-            .unwrap()
-            .into()
-    }
-
     fn convert_focus_data(&self, event: &PlatformEventData) -> FocusData {
         event
             .downcast::<SerializedFocusData>()
-            .cloned()
-            .unwrap()
-            .into()
-    }
-
-    fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
-        // Attempt a simple serialized form data conversion
-        if let Some(_data) = event.downcast::<SerializedFormData>() {
-            return _data.clone().into();
-        }
-
-        // If that failed then it's a file upload form
-        event
-            .downcast::<DesktopFileUploadForm>()
             .cloned()
             .unwrap()
             .into()
@@ -91,10 +92,6 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .cloned()
             .unwrap()
             .into()
-    }
-
-    fn convert_mounted_data(&self, event: &PlatformEventData) -> MountedData {
-        event.downcast::<DesktopElement>().cloned().unwrap().into()
     }
 
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {

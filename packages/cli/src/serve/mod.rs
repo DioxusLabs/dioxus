@@ -39,7 +39,7 @@ pub(crate) use update::*;
 /// - I'd love to be able to configure the CLI while it's running so we can change settings on the fly.
 /// - I want us to be able to detect a `server_fn` in the project and then upgrade from a static server
 ///   to a dynamic one on the fly.
-pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> Result<()> {
+pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Result<()> {
     // Load the args into a plan, resolving all tooling, build dirs, arguments, decoding the multi-target, etc
     let exit_on_error = args.exit_on_error;
     let mut builder = AppServer::new(args).await?;
@@ -109,12 +109,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                 pid,
             } => {
                 devserver
-                    .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
+                    .send_hotreload(builder.applied_hot_reload_changes(BuildId::PRIMARY))
                     .await;
 
                 if builder.server.is_some() {
                     devserver
-                        .send_hotreload(builder.applied_hot_reload_changes(BuildId::SERVER))
+                        .send_hotreload(builder.applied_hot_reload_changes(BuildId::SECONDARY))
                         .await;
                 }
 
@@ -175,27 +175,18 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
                     }
                     BuilderUpdate::BuildReady { bundle } => match bundle.mode {
                         BuildMode::Thin { ref cache, .. } => {
-                            let elapsed =
-                                bundle.time_end.duration_since(bundle.time_start).unwrap();
-                            match builder.hotpatch(&bundle, id, cache).await {
-                                Ok(jumptable) => {
-                                    let pid = match id {
-                                        BuildId::CLIENT => builder.client.pid,
-                                        _ => builder.server.as_ref().and_then(|s| s.pid),
-                                    };
-                                    devserver.send_patch(jumptable, elapsed, id, pid).await
-                                }
-                                Err(err) => {
-                                    tracing::error!("Failed to hot-patch app: {err}");
+                            if let Err(err) =
+                                builder.hotpatch(&bundle, id, cache, &mut devserver).await
+                            {
+                                tracing::error!("Failed to hot-patch app: {err}");
 
-                                    if let Some(_patching) =
-                                        err.downcast_ref::<crate::build::PatchError>()
-                                    {
-                                        tracing::info!("Starting full rebuild: {err}");
-                                        builder.full_rebuild().await;
-                                        devserver.send_reload_start().await;
-                                        devserver.start_build().await;
-                                    }
+                                if let Some(_patching) =
+                                    err.downcast_ref::<crate::build::PatchError>()
+                                {
+                                    tracing::info!("Starting full rebuild: {err}");
+                                    builder.full_rebuild().await;
+                                    devserver.send_reload_start().await;
+                                    devserver.start_build().await;
                                 }
                             }
                         }
@@ -267,13 +258,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &mut TraceController) -> 
             }
 
             ServeUpdate::ToggleShouldRebuild => {
+                use crate::styles::{ERROR, NOTE_STYLE};
                 builder.automatic_rebuilds = !builder.automatic_rebuilds;
                 tracing::info!(
                     "Automatic rebuilds are currently: {}",
                     if builder.automatic_rebuilds {
-                        "enabled"
+                        format!("{NOTE_STYLE}enabled{NOTE_STYLE:#}")
                     } else {
-                        "disabled"
+                        format!("{ERROR}disabled{ERROR:#}")
                     }
                 )
             }

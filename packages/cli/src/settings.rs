@@ -5,8 +5,6 @@ use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
 
-const GLOBAL_SETTINGS_FILE_NAME: &str = "dioxus/settings.toml";
-
 /// Describes cli settings from project or global level.
 /// The order of priority goes:
 /// 1. CLI Flags/Arguments
@@ -29,6 +27,8 @@ pub(crate) struct CliSettings {
     pub(crate) no_downloads: Option<bool>,
     /// Ignore updates for this version
     pub(crate) ignore_version_update: Option<String>,
+    /// Disable telemetry
+    pub(crate) disable_telemetry: Option<bool>,
 }
 
 impl CliSettings {
@@ -43,38 +43,37 @@ impl CliSettings {
         CliSettings::from_global().unwrap_or_default()
     }
 
+    /// Get the path to the settings toml file.
+    pub(crate) fn get_settings_path() -> PathBuf {
+        crate::Workspace::global_settings_file()
+    }
+
     /// Get the current settings structure from global.
     pub(crate) fn from_global() -> Option<Self> {
-        let Some(path) = dirs::data_local_dir() else {
-            warn!("failed to get local data directory, some config keys may be missing");
-            return None;
-        };
+        let settings = crate::Workspace::global_settings_file();
 
-        let path = path.join(GLOBAL_SETTINGS_FILE_NAME);
-        let Some(data) = fs::read_to_string(path).ok() else {
-            // We use a debug here because we expect the file to not exist.
-            trace!("failed to read `{}` config file", GLOBAL_SETTINGS_FILE_NAME);
+        if !settings.exists() {
+            trace!("global settings file does not exist, returning None");
             return None;
-        };
-
-        let data = toml::from_str::<CliSettings>(&data).ok();
-        if data.is_none() {
-            warn!(
-                "failed to parse `{}` config file",
-                GLOBAL_SETTINGS_FILE_NAME
-            );
         }
 
-        data
+        let Some(data) = fs::read_to_string(&settings).ok() else {
+            warn!("failed to read global settings file");
+            return None;
+        };
+
+        let Some(data) = toml::from_str::<CliSettings>(&data).ok() else {
+            warn!("failed to parse global settings file");
+            return None;
+        };
+
+        Some(data)
     }
 
     /// Save the current structure to the global settings toml.
     /// This does not save to project-level settings.
     pub(crate) fn save(&self) -> Result<()> {
-        let path = Self::get_settings_path().ok_or_else(|| {
-            error!(dx_src = ?TraceSrc::Dev, "failed to get settings path");
-            anyhow::anyhow!("failed to get settings path")
-        })?;
+        let path = Self::get_settings_path();
 
         let data = toml::to_string_pretty(&self).map_err(|e| {
             error!(dx_src = ?TraceSrc::Dev, ?self, "failed to parse config into toml");
@@ -103,16 +102,6 @@ impl CliSettings {
         Ok(())
     }
 
-    /// Get the path to the settings toml file.
-    pub(crate) fn get_settings_path() -> Option<PathBuf> {
-        let Some(path) = dirs::data_local_dir() else {
-            warn!("failed to get local data directory, some config keys may be missing");
-            return None;
-        };
-
-        Some(path.join(GLOBAL_SETTINGS_FILE_NAME))
-    }
-
     /// Modify the settings toml file - doesn't change the settings for this session
     pub(crate) fn modify_settings(with: impl FnOnce(&mut CliSettings)) -> Result<()> {
         let mut _settings = CliSettings::load();
@@ -129,11 +118,54 @@ impl CliSettings {
             return true;
         }
 
-        if crate::devcfg::no_downloads() {
+        if std::env::var("NO_DOWNLOADS").is_ok() {
             return true;
         }
 
         CliSettings::load().no_downloads.unwrap_or_default()
+    }
+
+    /// Check if telemetry is disabled
+    pub(crate) fn telemetry_disabled() -> bool {
+        use std::env::var;
+
+        static TELEMETRY_DISABLED: LazyLock<bool> = LazyLock::new(|| {
+            if cfg!(feature = "disable-telemetry") {
+                return true;
+            }
+
+            if matches!(var("DX_TELEMETRY_ENABLED"), Ok(val) if val.eq_ignore_ascii_case("false") || val == "0")
+            {
+                return true;
+            }
+
+            if matches!(var("TELEMETRY"), Ok(val) if val.eq_ignore_ascii_case("false") || val == "0")
+            {
+                return true;
+            }
+
+            CliSettings::load().disable_telemetry.unwrap_or_default()
+        });
+
+        *TELEMETRY_DISABLED
+    }
+
+    pub(crate) fn is_ci() -> bool {
+        static CI: LazyLock<bool> = LazyLock::new(|| {
+            if matches!(std::env::var("CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
+            {
+                return true;
+            }
+
+            if matches!(std::env::var("DX_CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
+            {
+                return true;
+            }
+
+            false
+        });
+
+        *CI
     }
 }
 

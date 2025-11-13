@@ -3,12 +3,15 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod doctor;
+pub(crate) mod hotpatch;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod platform_override;
+pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -22,11 +25,13 @@ pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
 use crate::platform_override::CommandWithPlatformOverrides;
+use crate::Anonymized;
 use crate::{error::Result, Error, StructuredOutput};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;
+use serde_json::{json, Value};
 use std::sync::LazyLock;
 use std::{
     fmt::Display,
@@ -79,6 +84,12 @@ pub(crate) enum Commands {
     #[clap(name = "doctor")]
     Doctor(doctor::Doctor),
 
+    /// Print project information in a structured format, like cargo args, linker args, and other
+    /// flags DX sets that might be useful in third-party tools.
+    #[clap(name = "print")]
+    #[clap(subcommand)]
+    Print(print::Print),
+
     /// Translate a source file into Dioxus code.
     #[clap(name = "translate")]
     Translate(translate::Translate),
@@ -100,37 +111,27 @@ pub(crate) enum Commands {
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
 
-    /// Run a dioxus build tool. IE `build-assets`, etc
+    /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
+
+    /// Manage components from the `dioxus-component` registry.
+    #[clap(name = "components")]
+    #[clap(subcommand)]
+    Components(component::ComponentCommand),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum BuildTools {
     /// Build the assets for a specific target.
     #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
-}
 
-impl Display for Commands {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Commands::Build(_) => write!(f, "build"),
-            Commands::Translate(_) => write!(f, "translate"),
-            Commands::Serve(_) => write!(f, "serve"),
-            Commands::New(_) => write!(f, "create"),
-            Commands::Init(_) => write!(f, "init"),
-            Commands::Config(_) => write!(f, "config"),
-            Commands::Autoformat(_) => write!(f, "fmt"),
-            Commands::Check(_) => write!(f, "check"),
-            Commands::Bundle(_) => write!(f, "bundle"),
-            Commands::Run(_) => write!(f, "run"),
-            Commands::SelfUpdate(_) => write!(f, "self-update"),
-            Commands::Tools(_) => write!(f, "tools"),
-            Commands::Doctor(_) => write!(f, "doctor"),
-        }
-    }
+    /// Hotpatch the "tip" of a given "fat" binary. The output here must be from the `dx build` command with "fat" enabled
+    #[clap(name = "hotpatch")]
+    HotpatchTip(hotpatch::HotpatchTip),
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {

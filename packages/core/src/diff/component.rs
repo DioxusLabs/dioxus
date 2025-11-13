@@ -9,8 +9,8 @@ use crate::{
         ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
         VComponent, WriteMutations,
     },
-    nodes::{AsVNode, VNode},
-    scopes::ScopeId,
+    nodes::VNode,
+    scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
     Element, SuspenseContext,
 };
@@ -50,13 +50,12 @@ impl VirtualDom {
             // If it is suspended, we need to diff it but write the mutations nothing
             // Note: It is important that we still diff the scope even if it is suspended, because the scope may render other child components which may change between renders
             let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
-            old.as_vnode()
-                .diff_node(new_real_nodes, self, render_to.as_deref_mut());
+            old.diff_node(new_real_nodes, self, render_to.as_deref_mut());
 
-            self.scopes[scope.0].last_rendered_node = Some(new_nodes);
+            self.scopes[scope.0].last_rendered_node = Some(LastRenderedNode::new(new_nodes));
 
             if render_to.is_some() {
-                self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+                self.runtime.get_state(scope).mount(&self.runtime);
             }
         })
     }
@@ -69,7 +68,7 @@ impl VirtualDom {
         &mut self,
         to: Option<&mut M>,
         scope: ScopeId,
-        new_nodes: Element,
+        new_nodes: LastRenderedNode,
         parent: Option<ElementRef>,
     ) -> usize {
         self.runtime.clone().with_scope_on_stack(scope, || {
@@ -79,15 +78,13 @@ impl VirtualDom {
             let mut render_to = to.filter(|_| self.runtime.scope_should_render(scope));
 
             // Create the node
-            let nodes = new_nodes
-                .as_vnode()
-                .create(self, parent, render_to.as_deref_mut());
+            let nodes = new_nodes.create(self, parent, render_to.as_deref_mut());
 
             // Then set the new node as the last rendered node
             self.scopes[scope.0].last_rendered_node = Some(new_nodes);
 
             if render_to.is_some() {
-                self.runtime.get_state(scope).unwrap().mount(&self.runtime);
+                self.runtime.get_state(scope).mount(&self.runtime);
             }
 
             nodes
@@ -105,13 +102,8 @@ impl VirtualDom {
         SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
 
         // Remove the component from the dom
-        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.as_ref() {
-            node.clone().as_vnode().remove_node_inner(
-                self,
-                to,
-                destroy_component_state,
-                replace_with,
-            )
+        if let Some(node) = self.scopes[scope_id.0].last_rendered_node.clone() {
+            node.remove_node_inner(self, to, destroy_component_state, replace_with)
         };
 
         if destroy_component_state {
@@ -154,7 +146,7 @@ impl VNode {
         // Now diff the scope
         dom.run_and_diff_scope(to, scope_id);
 
-        let height = dom.runtime.get_state(scope_id).unwrap().height;
+        let height = dom.runtime.get_state(scope_id).height;
         dom.dirty_scopes.remove(&ScopeOrder::new(height, scope_id));
     }
 
@@ -210,16 +202,15 @@ impl VNode {
             let new = dom.run_scope(scope_id);
 
             // Then set the new node as the last rendered node
-            dom.scopes[scope_id.0].last_rendered_node = Some(new);
+            dom.scopes[scope_id.0].last_rendered_node = Some(LastRenderedNode::new(new));
         }
 
         let scope = ScopeId(dom.get_mounted_dyn_node(mount, idx));
 
         let new_node = dom.scopes[scope.0]
             .last_rendered_node
-            .as_ref()
-            .expect("Component to be mounted")
-            .clone();
+            .clone()
+            .expect("Component to be mounted");
 
         dom.create_scope(to, scope, new_node, parent)
     }

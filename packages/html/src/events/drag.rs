@@ -1,6 +1,9 @@
-use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::*;
+use crate::{
+    data_transfer::DataTransfer,
+    geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
+};
 
 use dioxus_core::Event;
 use keyboard_types::Modifiers;
@@ -51,6 +54,11 @@ impl DragData {
         }
     }
 
+    /// The DataTransfer object is used to hold the data that is being dragged during a drag and drop operation.
+    pub fn data_transfer(&self) -> DataTransfer {
+        self.inner.data_transfer()
+    }
+
     /// Downcast this event data to a specific type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
@@ -59,7 +67,7 @@ impl DragData {
 }
 
 impl crate::HasFileData for DragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
+    fn files(&self) -> Vec<FileData> {
         self.inner.files()
     }
 }
@@ -106,111 +114,115 @@ impl PointerInteraction for DragData {
 }
 
 #[cfg(feature = "serialize")]
-/// A serialized version of DragData
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedDragData {
-    pub mouse: crate::point_interaction::SerializedPointInteraction,
-
-    #[serde(default)]
-    files: Option<crate::file_data::SerializedFileEngine>,
-}
+pub use ser::*;
 
 #[cfg(feature = "serialize")]
-impl SerializedDragData {
-    fn new(drag: &DragData) -> Self {
-        Self {
-            mouse: crate::point_interaction::SerializedPointInteraction::from(drag),
-            files: None,
+mod ser {
+    use super::*;
+
+    /// A serialized version of DragData
+    #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
+    pub struct SerializedDragData {
+        pub mouse: crate::point_interaction::SerializedPointInteraction,
+
+        pub data_transfer: crate::data_transfer::SerializedDataTransfer,
+    }
+
+    impl SerializedDragData {
+        fn new(drag: &DragData) -> Self {
+            Self {
+                mouse: crate::point_interaction::SerializedPointInteraction::from(drag),
+                data_transfer: crate::data_transfer::SerializedDataTransfer::from(drag),
+            }
+        }
+    }
+
+    impl HasDataTransferData for SerializedDragData {
+        fn data_transfer(&self) -> crate::data_transfer::DataTransfer {
+            crate::data_transfer::DataTransfer::new(self.data_transfer.clone())
+        }
+    }
+
+    impl HasDragData for SerializedDragData {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    impl crate::file_data::HasFileData for SerializedDragData {
+        fn files(&self) -> Vec<FileData> {
+            self.data_transfer
+                .files
+                .iter()
+                .map(|f| FileData::new(f.clone()))
+                .collect()
+        }
+    }
+
+    impl HasMouseData for SerializedDragData {
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    impl InteractionLocation for SerializedDragData {
+        fn client_coordinates(&self) -> ClientPoint {
+            self.mouse.client_coordinates()
+        }
+
+        fn page_coordinates(&self) -> PagePoint {
+            self.mouse.page_coordinates()
+        }
+
+        fn screen_coordinates(&self) -> ScreenPoint {
+            self.mouse.screen_coordinates()
+        }
+    }
+
+    impl InteractionElementOffset for SerializedDragData {
+        fn element_coordinates(&self) -> ElementPoint {
+            self.mouse.element_coordinates()
+        }
+
+        fn coordinates(&self) -> Coordinates {
+            self.mouse.coordinates()
+        }
+    }
+
+    impl ModifiersInteraction for SerializedDragData {
+        fn modifiers(&self) -> Modifiers {
+            self.mouse.modifiers()
+        }
+    }
+
+    impl PointerInteraction for SerializedDragData {
+        fn held_buttons(&self) -> MouseButtonSet {
+            self.mouse.held_buttons()
+        }
+
+        fn trigger_button(&self) -> Option<MouseButton> {
+            self.mouse.trigger_button()
+        }
+    }
+
+    impl serde::Serialize for DragData {
+        fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            SerializedDragData::new(self).serialize(serializer)
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for DragData {
+        fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let data = SerializedDragData::deserialize(deserializer)?;
+            Ok(Self {
+                inner: Box::new(data),
+            })
         }
     }
 }
 
-#[cfg(feature = "serialize")]
-impl HasDragData for SerializedDragData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl crate::file_data::HasFileData for SerializedDragData {
-    fn files(&self) -> Option<std::sync::Arc<dyn crate::file_data::FileEngine>> {
-        self.files
-            .as_ref()
-            .map(|files| std::sync::Arc::new(files.clone()) as _)
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl HasMouseData for SerializedDragData {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl InteractionLocation for SerializedDragData {
-    fn client_coordinates(&self) -> ClientPoint {
-        self.mouse.client_coordinates()
-    }
-
-    fn page_coordinates(&self) -> PagePoint {
-        self.mouse.page_coordinates()
-    }
-
-    fn screen_coordinates(&self) -> ScreenPoint {
-        self.mouse.screen_coordinates()
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl InteractionElementOffset for SerializedDragData {
-    fn element_coordinates(&self) -> ElementPoint {
-        self.mouse.element_coordinates()
-    }
-
-    fn coordinates(&self) -> Coordinates {
-        self.mouse.coordinates()
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl ModifiersInteraction for SerializedDragData {
-    fn modifiers(&self) -> Modifiers {
-        self.mouse.modifiers()
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl PointerInteraction for SerializedDragData {
-    fn held_buttons(&self) -> MouseButtonSet {
-        self.mouse.held_buttons()
-    }
-
-    fn trigger_button(&self) -> Option<MouseButton> {
-        self.mouse.trigger_button()
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for DragData {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedDragData::new(self).serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for DragData {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = SerializedDragData::deserialize(deserializer)?;
-        Ok(Self {
-            inner: Box::new(data),
-        })
-    }
-}
-
 /// A trait for any object that has the data for a drag event
-pub trait HasDragData: HasMouseData + crate::HasFileData {
+pub trait HasDragData: HasMouseData + crate::HasFileData + crate::HasDataTransferData {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

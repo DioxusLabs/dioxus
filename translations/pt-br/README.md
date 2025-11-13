@@ -40,7 +40,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Exemplos </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6"> Guia </a>
+    <a href="https://dioxuslabs.com/learn/0.7/"> Guia </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -81,23 +81,11 @@ Se você conhece React, então você já conhece o Dioxus.
 - Agendamento assíncrono de canais-múltiplos para suporte de `async` de primera-classe.
 - E mais! Leia as [publicações de lançamento](https://dioxuslabs.com/blog/introducing-dioxus/).
 
-## Começando com...
-
-<table style="width:100%" align="center">
-    <tr>
-        <th><a href="https://dioxuslabs.com/learn/0.6">Tutorial</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/web">Web</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/desktop">Desktop</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/ssr">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/learn/0.6/guides/mobile">Móvel</a></th>
-    <tr>
-</table>
-
 ## Projetos de Exemplo:
 
-| Navegador de Arquivos (Desktop)                                                                                                                                                                  | WiFi Scanner (Desktop)                                                                                           | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![Explorador de Arquivos](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer/assets/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](/example-projects/bluetooth-scanner/demo_small.png)](/example-projects/bluetooth-scanner/) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Exemplo de E-commerce](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
+| Navegador de Arquivos (Desktop)                                                                                                                                                                  | WiFi Scanner (Desktop)                                                                           | TodoMVC (Todas as Plataformas)                                                                                                                                          | E-commerce com Tailwind (SSR/LiveView)                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [![Explorador de Arquivos](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer/assets/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](/examples/bluetooth-scanner/demo_small.png)](/examples/bluetooth-scanner/) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![Exemplo de E-commerce](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 Veja a página [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) para uma lista curada do conteúdo dentro do ecossistema do Dioxus.
 
@@ -161,7 +149,7 @@ Dioxus é único no ecossistema do Rust por suportar:
 - SSR com `hydration` feito pelo Cliente
 - Suporte à aplicação Desktop
 
-Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.6).
+Para mais informações sobre quais funções estão atualmente disponíveis e para o progresso futuro, veja [O Guia](https://dioxuslabs.com/learn/0.7/).
 
 ## Projeto dentro do ecossistema Dioxus
 

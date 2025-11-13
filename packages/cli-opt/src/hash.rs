@@ -47,6 +47,7 @@ fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash>
     // Create a hasher
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     options.hash(&mut hash);
+
     // Hash the version of CLI opt
     hash.write(crate::build_info::version().as_bytes());
     hash_file_with_options(options, source, &mut hash, false)?;
@@ -70,6 +71,7 @@ pub(crate) fn hash_file_with_options(
         ResolvedAssetType::Scss(options) => {
             hash_scss(options, source, hasher)?;
         }
+
         ResolvedAssetType::Js(options) => {
             hash_js(options, source, hasher, !in_folder)?;
         }
@@ -82,12 +84,24 @@ pub(crate) fn hash_file_with_options(
         | ResolvedAssetType::File => {
             hash_file_contents(source, hasher)?;
         }
+
         // Or the folder contents recursively
         ResolvedAssetType::Folder(_) => {
-            let files = std::fs::read_dir(source)?;
-            for file in files.flatten() {
+            for file in std::fs::read_dir(source)?.flatten() {
                 let path = file.path();
-                hash_file_with_options(options, &path, hasher, true)?;
+                hash_file_with_options(
+                    // We can't reuse the options here since they contain the source variant which no
+                    // longer applies to the nested files
+                    //
+                    // We don't hash nested files either since we assume the parent here is already being hashed
+                    // (or being opted out of hashing)
+                    &AssetOptions::builder()
+                        .with_hash_suffix(false)
+                        .into_asset_options(),
+                    &path,
+                    hasher,
+                    true,
+                )?;
             }
         }
     }
@@ -126,6 +140,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
                 tracing::error!("Failed to get file name from path: {source}");
                 return;
             };
+
             // The output extension path is the extension set by the options
             // or the extension of the source file if we don't recognize the file
             let mut ext = asset.options().extension().map(Into::into).or_else(|| {
@@ -163,7 +178,7 @@ pub fn add_hash_to_asset(asset: &mut BundledAsset) {
             *asset = BundledAsset::new(source, &bundled_path, options);
         }
         Err(err) => {
-            tracing::error!("Failed to hash asset: {err}");
+            tracing::error!("Failed to hash asset {source}: {err}");
         }
     }
 }

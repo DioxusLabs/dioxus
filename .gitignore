@@ -5,9 +5,13 @@
 /packages/playwright-tests/fullstack/dist
 /packages/playwright-tests/test-results
 /packages/playwright-tests/web-hot-patch-temp
+/packages/playwright-tests/web-hot-patch-fullstack-temp
+/packages/playwright-tests/web-hot-patch/Cargo.lock
+/packages/playwright-tests/web-hot-patch-fullstack/Cargo.lock
 /dist
 .DS_Store
 /examples/assets/test_video.mp4
+/examples/_assets/test_video.mp4
 static
 
 # new recommendation to keep the lockfile in for CI and reproducible builds
@@ -27,6 +31,8 @@ node_modules/
 /packages/playwright-report/
 /packages/playwright/.cache/
 
+# Zed
+.zed/
 
 # ignore the output of tmps
 tmp/

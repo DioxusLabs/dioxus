@@ -9,6 +9,7 @@ use std::{
 
 use css_module::CssModuleParser;
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
@@ -63,6 +64,24 @@ pub fn asset(input: TokenStream) -> TokenStream {
     let asset = parse_macro_input!(input as asset::AssetParser);
 
     quote! { #asset }.into_token_stream().into()
+}
+
+/// Resolve an asset at compile time, returning `None` if the asset does not exist.
+///
+/// This behaves like the `asset!` macro when the asset can be resolved, but mirrors
+/// [`option_env!`](core::option_env) by returning an `Option` instead of emitting a compile error
+/// when the asset is missing.
+///
+/// ```rust
+/// # use manganis::{asset, option_asset, Asset};
+/// const REQUIRED: Asset = asset!("/assets/style.css");
+/// const OPTIONAL: Option<Asset> = option_asset!("/assets/maybe.css");
+/// ```
+#[proc_macro]
+pub fn option_asset(input: TokenStream) -> TokenStream {
+    let asset = parse_macro_input!(input as asset::AssetParser);
+
+    asset.expand_option_tokens().into()
 }
 
 /// Generate type-safe and globally-unique CSS identifiers from a CSS module.
@@ -169,7 +188,7 @@ pub fn css_module(input: TokenStream) -> TokenStream {
     quote! { #style }.into_token_stream().into()
 }
 
-fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
+fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
     // Get the location of the root of the crate which is where all assets are relative to
     //
     // IE
@@ -186,8 +205,28 @@ fn resolve_path(raw: &str) -> Result<PathBuf, AssetParseError> {
     // 1. the input file should be a pathbuf
     let input = PathBuf::from(raw);
 
+    let path = if raw.starts_with('.') {
+        if let Some(local_folder) = span.local_file().as_ref().and_then(|f| f.parent()) {
+            local_folder.join(raw)
+        } else {
+            // If we are running in rust analyzer, just assume the path is valid and return an error when
+            // we compile if it doesn't exist
+            if looks_like_rust_analyzer(&span) {
+                return Ok(
+                    "The asset macro was expanded under Rust Analyzer which doesn't support paths or local assets yet"
+                        .into(),
+                );
+            }
+
+            // Otherwise, return an error about the version of rust required for relative assets
+            return Err(AssetParseError::RelativeAssetPath);
+        }
+    } else {
+        manifest_dir.join(raw.trim_start_matches('/'))
+    };
+
     // 2. absolute path to the asset
-    let Ok(path) = std::path::absolute(manifest_dir.join(raw.trim_start_matches('/'))) else {
+    let Ok(path) = std::path::absolute(path) else {
         return Err(AssetParseError::InvalidPath {
             path: input.clone(),
         });
@@ -275,6 +314,7 @@ enum AssetParseError {
     IoError { err: std::io::Error, path: PathBuf },
     InvalidPath { path: PathBuf },
     FailedToReadAsset(std::io::Error),
+    RelativeAssetPath,
 }
 
 impl std::fmt::Display for AssetParseError {
@@ -294,6 +334,26 @@ impl std::fmt::Display for AssetParseError {
                 )
             }
             AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
+            AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
         }
     }
+}
+
+/// Rust analyzer doesn't provide a stable way to detect if macros are running under it.
+/// This function uses heuristics to determine if we are running under rust analyzer for better error
+/// messages.
+fn looks_like_rust_analyzer(span: &Span) -> bool {
+    // Rust analyzer spans have a struct debug impl compared to rustcs custom debug impl
+    // RA Example: SpanData { range: 45..58, anchor: SpanAnchor(EditionedFileId(0, Edition2024), ErasedFileAstId { kind: Fn, index: 0, hash: 9CD8 }), ctx: SyntaxContext(4294967036) }
+    // Rustc Example: #0 bytes(70..83)
+    let looks_like_rust_analyzer_span = format!("{:?}", span).contains("ctx:");
+    // The rust analyzer macro expander runs under RUST_ANALYZER_INTERNALS_DO_NOT_USE
+    let looks_like_rust_analyzer_env = std::env::var("RUST_ANALYZER_INTERNALS_DO_NOT_USE").is_ok();
+    // The rust analyzer executable is named rust-analyzer-proc-macro-srv
+    let looks_like_rust_analyzer_exe = std::env::current_exe().ok().is_some_and(|p| {
+        p.file_stem()
+            .and_then(|s| s.to_str())
+            .is_some_and(|s| s.contains("rust-analyzer"))
+    });
+    looks_like_rust_analyzer_span || looks_like_rust_analyzer_env || looks_like_rust_analyzer_exe
 }

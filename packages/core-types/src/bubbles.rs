@@ -10,6 +10,7 @@
 /// in their definition, which gets passed as part of the mutations.
 pub fn event_bubbles(evt: &str) -> bool {
     match evt {
+        "cancel" => false,
         "copy" => true,
         "cut" => true,
         "paste" => true,

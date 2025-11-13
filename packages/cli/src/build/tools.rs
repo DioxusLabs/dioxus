@@ -1,8 +1,9 @@
+use crate::Result;
+use anyhow::Context;
 use itertools::Itertools;
 use std::{path::PathBuf, sync::Arc};
 use target_lexicon::{
-    Aarch64Architecture, Architecture, ArmArchitecture, Environment, OperatingSystem, Triple,
-    X86_32Architecture,
+    Aarch64Architecture, Architecture, ArmArchitecture, Triple, X86_32Architecture,
 };
 use tokio::process::Command;
 
@@ -155,19 +156,20 @@ impl AndroidTools {
     /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/ld"
     ///
     /// However, for our purposes, we only go through the cc driver and not the linker directly.
-    pub(crate) fn android_cc(&self, triple: &Triple) -> PathBuf {
+    pub(crate) fn android_cc(&self, triple: &Triple, sdk_version: u32) -> PathBuf {
         let suffix = if cfg!(target_os = "windows") {
             ".cmd"
         } else {
             ""
         };
 
-        self.android_tools_dir().join(format!(
-            "{}{}-clang{}",
-            triple,
-            self.min_sdk_version(),
-            suffix
-        ))
+        let target = match triple.architecture {
+            Architecture::Arm(_) => "armv7a-linux-androideabi",
+            _ => &triple.to_string(),
+        };
+
+        self.android_tools_dir()
+            .join(format!("{}{}-clang{}", target, sdk_version, suffix))
     }
 
     pub(crate) fn sysroot(&self) -> PathBuf {
@@ -187,11 +189,6 @@ impl AndroidTools {
 
     pub(crate) fn emulator(&self) -> PathBuf {
         self.sdk().join("emulator").join("emulator")
-    }
-
-    // todo(jon): this should be configurable
-    pub(crate) fn min_sdk_version(&self) -> u32 {
-        24
     }
 
     pub(crate) fn clang_folder(&self) -> PathBuf {
@@ -243,9 +240,6 @@ impl AndroidTools {
         //  - We try to match the architecture unless otherwise specified. This is because
         //    emulators that match the host arch are usually faster.
         let mut triple = "aarch64-linux-android".parse::<Triple>().unwrap();
-        triple.operating_system = OperatingSystem::Linux;
-        triple.environment = Environment::Android;
-        triple.architecture = target_lexicon::HOST.architecture;
 
         // TODO: Wire this up with --device flag. (add `-s serial`` flag before `shell` arg)
         let output = Command::new(&self.adb)
@@ -258,7 +252,9 @@ impl AndroidTools {
 
         match output {
             Ok(Ok(out)) => match out.trim() {
-                "armv7l" => triple.architecture = Architecture::Arm(ArmArchitecture::Arm),
+                "armv7l" | "armv8l" => {
+                    triple.architecture = Architecture::Arm(ArmArchitecture::Arm)
+                }
                 "aarch64" => {
                     triple.architecture = Architecture::Aarch64(Aarch64Architecture::Aarch64)
                 }
@@ -300,6 +296,56 @@ impl AndroidTools {
             "armv7-linux-androideabi" => "arm-linux-androideabi",
             _ => rust_target,
         }) as _
+    }
+
+    pub(crate) fn openssl_prebuilt_aar() -> &'static [u8] {
+        include_bytes!("../../assets/android/prebuilt/openssl-1.1.1q-beta-1.tar.gz")
+    }
+
+    pub(crate) fn openssl_prebuilt_dest() -> PathBuf {
+        crate::Workspace::dioxus_data_dir()
+            .join("prebuilt")
+            .join("openssl-1.1.1q-beta-1")
+    }
+
+    pub(crate) fn openssl_lib_dir(arch: &Triple) -> PathBuf {
+        let libs_dir = Self::openssl_prebuilt_dest().join("ssl").join("libs");
+
+        match arch.architecture {
+            Architecture::Arm(_) => libs_dir.join("android.armeabi-v7a"),
+            Architecture::Aarch64(_) => libs_dir.join("android.arm64-v8a"),
+            Architecture::X86_32(_) => libs_dir.join("android.x86"),
+            Architecture::X86_64 => libs_dir.join("android.x86_64"),
+            _ => libs_dir.join("android.arm64-v8a"), // Default to arm64-v8a
+        }
+    }
+
+    pub(crate) fn openssl_include_dir() -> PathBuf {
+        Self::openssl_prebuilt_dest().join("ssl").join("include")
+    }
+
+    /// Unzip the prebuilt OpenSSL AAR file into the `.dx/prebuilt/openssl-<version>` directory
+    pub(crate) fn unpack_prebuilt_openssl() -> Result<()> {
+        let raw_aar = AndroidTools::openssl_prebuilt_aar();
+        let aar_dest = AndroidTools::openssl_prebuilt_dest();
+
+        if aar_dest.exists() {
+            tracing::trace!("Prebuilt OpenSSL already exists at {:?}", aar_dest);
+            return Ok(());
+        }
+
+        std::fs::create_dir_all(aar_dest.parent().context("no parent for aar")?)
+            .context("failed to create prebuilt OpenSSL directory")?;
+
+        // Unpack the entire tar.gz file into the destination directory
+        let mut archive = tar::Archive::new(flate2::read::GzDecoder::new(raw_aar as &[u8]));
+        archive
+            .unpack(aar_dest.parent().context("no parent for aar dest")?)
+            .context("failed to unpack prebuilt OpenSSL archive")?;
+
+        tracing::debug!("Unpacked prebuilt OpenSSL to {:?}", aar_dest);
+
+        Ok(())
     }
 }
 

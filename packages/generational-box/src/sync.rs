@@ -19,23 +19,22 @@ use crate::{
 type RwLockStorageEntryRef = RwLockReadGuard<'static, StorageEntry<RwLockStorageEntryData>>;
 type RwLockStorageEntryMut = RwLockWriteGuard<'static, StorageEntry<RwLockStorageEntryData>>;
 
+type AnyRef = MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
+type AnyRefMut = MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
+
+#[derive(Default)]
 pub(crate) enum RwLockStorageEntryData {
     Reference(GenerationalPointer<SyncStorage>),
     Rc(RcStorageEntry<Box<dyn Any + Send + Sync>>),
     Data(Box<dyn Any + Send + Sync>),
+    #[default]
     Empty,
-}
-
-impl Default for RwLockStorageEntryData {
-    fn default() -> Self {
-        Self::Empty
-    }
 }
 
 impl Debug for RwLockStorageEntryData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Reference(location) => write!(f, "Reference({:?})", location),
+            Self::Reference(location) => write!(f, "Reference({location:?})"),
             Self::Rc(_) => write!(f, "Rc"),
             Self::Data(_) => write!(f, "Data"),
             Self::Empty => write!(f, "Empty"),
@@ -59,13 +58,16 @@ pub struct SyncStorage {
 impl SyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>> {
-        Self::get_split_ref(pointer).map(|(_, guard)| {
-            RwLockReadGuard::map(guard, |data| match &data.data {
-                RwLockStorageEntryData::Data(data) => data,
-                RwLockStorageEntryData::Rc(data) => &data.data,
-                _ => unreachable!(),
-            })
+    ) -> BorrowResult<(AnyRef, GenerationalPointer<Self>)> {
+        Self::get_split_ref(pointer).map(|(resolved, guard)| {
+            (
+                RwLockReadGuard::map(guard, |data| match &data.data {
+                    RwLockStorageEntryData::Data(data) => data,
+                    RwLockStorageEntryData::Rc(data) => &data.data,
+                    _ => unreachable!(),
+                }),
+                resolved,
+            )
         })
     }
 
@@ -99,14 +101,16 @@ impl SyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>>
-    {
-        Self::get_split_mut(pointer).map(|(_, guard)| {
-            RwLockWriteGuard::map(guard, |data| match &mut data.data {
-                RwLockStorageEntryData::Data(data) => data,
-                RwLockStorageEntryData::Rc(data) => &mut data.data,
-                _ => unreachable!(),
-            })
+    ) -> BorrowMutResult<(AnyRefMut, GenerationalPointer<Self>)> {
+        Self::get_split_mut(pointer).map(|(resolved, guard)| {
+            (
+                RwLockWriteGuard::map(guard, |data| match &mut data.data {
+                    RwLockStorageEntryData::Data(data) => data,
+                    RwLockStorageEntryData::Rc(data) => &mut data.data,
+                    _ => unreachable!(),
+                }),
+                resolved,
+            )
         })
     }
 
@@ -178,43 +182,43 @@ fn sync_runtime() -> &'static Arc<Mutex<Vec<&'static SyncStorage>>> {
 }
 
 impl AnyStorage for SyncStorage {
-    type Ref<'a, R: ?Sized + 'static> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
-    type Mut<'a, W: ?Sized + 'static> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
+    type Ref<'a, R: ?Sized + 'a> = GenerationalRef<MappedRwLockReadGuard<'a, R>>;
+    type Mut<'a, W: ?Sized + 'a> = GenerationalRefMut<MappedRwLockWriteGuard<'a, W>>;
 
-    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_ref<'a: 'b, 'b, T: ?Sized + 'b>(
         ref_: Self::Ref<'a, T>,
     ) -> Self::Ref<'b, T> {
         ref_
     }
 
-    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'static>(
+    fn downcast_lifetime_mut<'a: 'b, 'b, T: ?Sized + 'a>(
         mut_: Self::Mut<'a, T>,
     ) -> Self::Mut<'b, T> {
         mut_
     }
 
-    fn map<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map<T: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, T>,
         f: impl FnOnce(&T) -> &U,
     ) -> Self::Ref<'_, U> {
         ref_.map(|inner| MappedRwLockReadGuard::map(inner, f))
     }
 
-    fn map_mut<T: ?Sized + 'static, U: ?Sized + 'static>(
+    fn map_mut<T: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, T>,
         f: impl FnOnce(&mut T) -> &mut U,
     ) -> Self::Mut<'_, U> {
         mut_ref.map(|inner| MappedRwLockWriteGuard::map(inner, f))
     }
 
-    fn try_map<I: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map<I: ?Sized, U: ?Sized>(
         ref_: Self::Ref<'_, I>,
         f: impl FnOnce(&I) -> Option<&U>,
     ) -> Option<Self::Ref<'_, U>> {
         ref_.try_map(|inner| MappedRwLockReadGuard::try_map(inner, f).ok())
     }
 
-    fn try_map_mut<I: ?Sized + 'static, U: ?Sized + 'static>(
+    fn try_map_mut<I: ?Sized, U: ?Sized>(
         mut_ref: Self::Mut<'_, I>,
         f: impl FnOnce(&mut I) -> Option<&mut U>,
     ) -> Option<Self::Mut<'_, U>> {
@@ -277,7 +281,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     fn try_read(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
-        let read = Self::read(pointer)?;
+        let (read, pointer) = Self::read(pointer)?;
 
         let read = MappedRwLockReadGuard::try_map(read, |any| {
             // Then try to downcast
@@ -298,7 +302,7 @@ impl<T: Sync + Send + 'static> Storage<T> for SyncStorage {
     fn try_write(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
-        let write = Self::write(pointer)?;
+        let (write, pointer) = Self::write(pointer)?;
 
         let write = MappedRwLockWriteGuard::try_map(write, |any| {
             // Then try to downcast

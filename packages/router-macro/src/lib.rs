@@ -6,7 +6,8 @@ extern crate proc_macro;
 use layout::Layout;
 use nest::{Nest, NestId};
 use proc_macro::TokenStream;
-use quote::{__private::Span, format_ident, quote, ToTokens};
+use proc_macro2::Span;
+use quote::{format_ident, quote, ToTokens};
 use redirect::Redirect;
 use route::{Route, RouteType};
 use segment::RouteSegment;
@@ -694,6 +695,7 @@ impl RouteEnum {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum RouteEndpoint {
     Route(Route),
     Redirect(Redirect),
@@ -751,6 +753,7 @@ impl ToTokens for SiteMapSegment {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum SegmentType {
     Static(String),
     Dynamic(String),

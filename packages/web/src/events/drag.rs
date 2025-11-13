@@ -1,11 +1,14 @@
+use crate::{WebDataTransfer, WebFileData, WebFileEngine};
+
 use super::{Synthetic, WebEventExt};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
     input_data::{decode_mouse_button_set, MouseButton},
-    HasDragData, HasFileData, HasMouseData, InteractionElementOffset, InteractionLocation,
-    Modifiers, ModifiersInteraction, PointerInteraction,
+    FileData, HasDataTransferData, HasDragData, HasFileData, HasMouseData,
+    InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
+    PointerInteraction,
 };
-use web_sys::DragEvent;
+use web_sys::{DragEvent, FileReader};
 
 impl InteractionLocation for Synthetic<DragEvent> {
     fn client_coordinates(&self) -> ClientPoint {
@@ -70,32 +73,53 @@ impl HasDragData for Synthetic<DragEvent> {
     }
 }
 
-impl HasFileData for Synthetic<DragEvent> {
-    fn files(&self) -> Option<std::sync::Arc<dyn dioxus_html::FileEngine>> {
-        #[cfg(feature = "file_engine")]
-        {
-            use wasm_bindgen::JsCast;
-            let files = self
-                .event
-                .dyn_ref::<web_sys::DragEvent>()
-                .and_then(|drag_event| {
-                    drag_event.data_transfer().and_then(|dt| {
-                        dt.files().and_then(|files| {
-                            #[allow(clippy::arc_with_non_send_sync)]
-                            crate::file_engine::WebFileEngine::new(files).map(|f| {
-                                std::sync::Arc::new(f)
-                                    as std::sync::Arc<dyn dioxus_html::FileEngine>
-                            })
-                        })
-                    })
-                });
+impl HasDataTransferData for Synthetic<DragEvent> {
+    fn data_transfer(&self) -> dioxus_html::DataTransfer {
+        use wasm_bindgen::JsCast;
 
-            files
+        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
+            if let Some(data) = target.data_transfer() {
+                let web_data_transfer = WebDataTransfer::new(data);
+                return dioxus_html::DataTransfer::new(web_data_transfer);
+            }
         }
-        #[cfg(not(feature = "file_engine"))]
-        {
-            None
+
+        // Return an empty DataTransfer if we couldn't get one from the event
+        let web_data_transfer = WebDataTransfer::new(web_sys::DataTransfer::new().unwrap());
+        dioxus_html::DataTransfer::new(web_data_transfer)
+    }
+}
+
+impl HasFileData for Synthetic<DragEvent> {
+    fn files(&self) -> Vec<FileData> {
+        use wasm_bindgen::JsCast;
+
+        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
+            if let Some(data_transfer) = target.data_transfer() {
+                if let Some(file_list) = data_transfer.files() {
+                    return WebFileEngine::new(file_list).to_files();
+                } else {
+                    let items = data_transfer.items();
+                    let mut files = vec![];
+                    for i in 0..items.length() {
+                        if let Some(item) = items.get(i) {
+                            if item.kind() == "file" {
+                                if let Ok(Some(file)) = item.get_as_file() {
+                                    let web_data =
+                                        WebFileData::new(file, FileReader::new().unwrap());
+                                    files.push(FileData::new(web_data));
+                                }
+                            }
+                        }
+                    }
+                    return files;
+                }
+            }
+        } else {
+            tracing::warn!("DragEvent target was not a DragEvent");
         }
+
+        vec![]
     }
 }
 

@@ -2,21 +2,17 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{ElementId, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, ScopeId, VirtualDom};
 use dioxus_history::History;
-use dioxus_html::PlatformEventData;
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::Arc,
     time::Duration,
 };
 use tao::{
@@ -410,37 +406,6 @@ impl App {
         }
     }
 
-    pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
-        let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
-            return;
-        };
-
-        let id = ElementId(file_dialog.target);
-        let event_name = &file_dialog.event;
-        let event_bubbles = file_dialog.bubbles;
-        let files = file_dialog.get_file_event();
-
-        let as_any = Box::new(DesktopFileUploadForm {
-            files: Arc::new(NativeFileEngine::new(files)),
-        });
-
-        let data = Rc::new(PlatformEventData::new(as_any));
-
-        let Some(view) = self.webviews.get_mut(&window) else {
-            return;
-        };
-
-        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
-
-        let runtime = view.dom.runtime();
-        if event_name == "change&input" {
-            runtime.handle_event("input", event.clone(), id);
-            runtime.handle_event("change", event, id);
-        } else {
-            runtime.handle_event(event_name, event, id);
-        }
-    }
-
     /// Poll the virtualdom until it's pending
     ///
     /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
@@ -553,11 +518,8 @@ impl App {
                 return;
             };
 
-            let url = webview.dom.in_runtime(|| {
-                ScopeId::ROOT
-                    .consume_context::<Rc<dyn History>>()
-                    .unwrap()
-                    .current_route()
+            let url = webview.dom.in_scope(ScopeId::ROOT, || {
+                consume_context::<Rc<dyn History>>().current_route()
             });
 
             let state = PreservedWindowState {
@@ -622,12 +584,9 @@ impl App {
                 }
 
                 // Set the url if it exists
-                webview.dom.in_runtime(|| {
+                webview.dom.in_scope(ScopeId::ROOT, || {
                     if let Some(url) = state.url {
-                        ScopeId::ROOT
-                            .consume_context::<Rc<dyn History>>()
-                            .unwrap()
-                            .replace(url);
+                        consume_context::<Rc<dyn History>>().replace(url);
                     }
                 })
             }

@@ -290,24 +290,7 @@ impl HotpatchModuleCache {
     }
 }
 
-/// Create a jump table for the given original and patch files.
-pub fn create_jump_table(
-    patch: &Path,
-    triple: &Triple,
-    cache: &HotpatchModuleCache,
-) -> Result<JumpTable> {
-    // Symbols are stored differently based on the platform, so we need to handle them differently.
-    // - Wasm requires the walrus crate and actually modifies the patch file
-    // - windows requires the pdb crate and pdb files
-    // - nix requires the object crate
-    match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(patch, cache),
-        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache),
-        _ => create_native_jump_table(patch, triple, cache),
-    }
-}
-
-fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
     let old_name_to_addr = &cache.symbol_table;
 
@@ -361,7 +344,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(
+pub fn create_native_jump_table(
     patch: &Path,
     triple: &Triple,
     cache: &HotpatchModuleCache,
@@ -416,7 +399,7 @@ fn create_native_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
-fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
     let old_symbols =
@@ -1191,6 +1174,8 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
+    let mut exported = HashSet::new();
+
     // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitates things
     // like inline-js, snippets, and literally the `#[wasm_bindgen]` macro. All calls to JS are
     // just `extern "wbg"` blocks!
@@ -1227,9 +1212,10 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let new_func_id = module.funcs.add_local(builder.local_func(locals));
 
-            module
-                .exports
-                .add(&format!("__saved_wbg_{}", import.name), new_func_id);
+            let saved_name = format!("__saved_wbg_{}", import.name);
+            if exported.insert(saved_name.clone()) {
+                module.exports.add(&saved_name, new_func_id);
+            }
 
             make_indirect.push(new_func_id);
         }
@@ -1254,9 +1240,10 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         //
         // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1505
         if name.starts_with("__wbindgen") {
-            module
-                .exports
-                .add(&format!("__saved_wbg_{name}"), func.id());
+            let saved_name = format!("__saved_wbg_{}", name);
+            if exported.insert(saved_name.clone()) {
+                module.exports.add(&saved_name, func.id());
+            }
         }
 
         // This is basically `--export-all` but designed to work around wasm-bindgen not properly gc-ing
@@ -1322,6 +1309,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || name.contains("wasm_bindgen4__rt8wbg_")
 }
 
 /// Manually parse the data section from a wasm module
@@ -1329,7 +1317,7 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
 /// We need to do this for data symbols because walrus doesn't provide the right range and offset
 /// information for data segments. Fortunately, it provides it for code sections, so we only need to
 /// do a small amount extra of parsing here.
-fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
+fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
     let parser = wasmparser::Parser::new(0);
     let mut parser = parser.parse_all(bytes);
     let mut segments = vec![];
@@ -1384,10 +1372,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection> {
 
         data_symbol_map.insert(*name, index);
 
-        if symbol.size == 0 {
-            continue;
-        }
-
         let data_segment = segments
             .get(symbol.index as usize)
             .context("Failed to find data segment")?;
@@ -1441,7 +1425,7 @@ struct ParsedModule<'a> {
 
 /// Parse a module and return the mapping of index to FunctionID.
 /// We'll use this mapping to remap ModuleIDs
-fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule> {
+fn parse_module_with_ids(bindgened: &[u8]) -> Result<ParsedModule<'_>> {
     let ids = Arc::new(RwLock::new(Vec::new()));
     let ids_ = ids.clone();
     let module = Module::from_buffer_with_config(

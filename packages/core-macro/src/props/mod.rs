@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, PathSegment, Type};
+use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -172,7 +172,7 @@ mod util {
 }
 
 mod field_info {
-    use crate::props::{looks_like_write_type, type_from_inside_option};
+    use crate::props::{looks_like_store_type, looks_like_write_type, type_from_inside_option};
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
@@ -197,7 +197,7 @@ mod field_info {
             ordinal: usize,
             field: &syn::Field,
             field_defaults: FieldBuilderAttr,
-        ) -> Result<FieldInfo, Error> {
+        ) -> Result<FieldInfo<'_>, Error> {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
@@ -221,8 +221,8 @@ mod field_info {
                     builder_attr.auto_into = false;
                 }
 
-                // Write fields automatically use impl Into
-                if looks_like_write_type(&field.ty) {
+                // Write and Store fields automatically use impl Into
+                if looks_like_write_type(&field.ty) || looks_like_store_type(&field.ty) {
                     builder_attr.auto_into = true;
                 }
 
@@ -509,7 +509,7 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
 
     // If the segment is a supported optional type, provide the inner type.
     // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
         // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
@@ -855,17 +855,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let ty = f.ty;
                     quote!(#name: #ty)
                 })
-                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_core::internal::generational_box::Owner)),
+                );
             let global_fields_value = self
                 .extend_fields()
                 .map(|f| {
                     let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: Owner::default())),
-                );
+                .chain(self.has_child_owned_fields().then(
+                    || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
+                ));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -1064,7 +1066,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: field_name, ..
             } = field;
             if *field_name == "key" {
-                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.6/reference/dynamic_rendering#rendering-lists for more information about keys"));
+                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys"));
             }
             let StructInfo {
                 ref builder_name, ..
@@ -1744,44 +1746,35 @@ fn child_owned_type(ty: &Type) -> bool {
     looks_like_signal_type(ty) || looks_like_write_type(ty) || looks_like_callback_type(ty)
 }
 
+/// Check if the path without generics matches the type we are looking for
+fn last_segment_matches(ty: &Type, expected: &Ident) -> bool {
+    extract_base_type_without_generics(ty).is_some_and(|path_without_generics| {
+        path_without_generics
+            .segments
+            .last()
+            .is_some_and(|seg| seg.ident == *expected)
+    })
+}
+
 fn looks_like_signal_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::ReadOnlySignal)
-                || path_without_generics == parse_quote!(prelude::ReadOnlySignal)
-                || path_without_generics == parse_quote!(ReadOnlySignal)
-                || path_without_generics == parse_quote!(dioxus_core::prelude::ReadSignal)
-                || path_without_generics == parse_quote!(prelude::ReadSignal)
-                || path_without_generics == parse_quote!(ReadSignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(ReadOnlySignal))
+        || last_segment_matches(ty, &parse_quote!(ReadSignal))
 }
 
 fn looks_like_write_type(ty: &Type) -> bool {
-    match extract_base_type_without_generics(ty) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::prelude::WriteSignal)
-                || path_without_generics == parse_quote!(prelude::WriteSignal)
-                || path_without_generics == parse_quote!(WriteSignal)
-        }
-        None => false,
-    }
+    last_segment_matches(ty, &parse_quote!(WriteSignal))
+}
+
+fn looks_like_store_type(ty: &Type) -> bool {
+    last_segment_matches(ty, &parse_quote!(Store))
+        || last_segment_matches(ty, &parse_quote!(ReadStore))
+        || last_segment_matches(ty, &parse_quote!(WriteStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {
     let type_without_option = remove_option_wrapper(ty.clone());
-    match extract_base_type_without_generics(&type_without_option) {
-        Some(path_without_generics) => {
-            path_without_generics == parse_quote!(dioxus_core::EventHandler)
-                || path_without_generics == parse_quote!(prelude::EventHandler)
-                || path_without_generics == parse_quote!(EventHandler)
-                || path_without_generics == parse_quote!(dioxus_core::Callback)
-                || path_without_generics == parse_quote!(prelude::Callback)
-                || path_without_generics == parse_quote!(Callback)
-        }
-        None => false,
-    }
+    last_segment_matches(&type_without_option, &parse_quote!(EventHandler))
+        || last_segment_matches(&type_without_option, &parse_quote!(Callback))
 }
 
 #[test]

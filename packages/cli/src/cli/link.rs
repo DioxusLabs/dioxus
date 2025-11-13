@@ -1,7 +1,7 @@
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -82,52 +82,51 @@ impl LinkAction {
 
     pub(crate) fn write_env_vars(
         &self,
-        env_vars: &mut Vec<(Cow<'static, str>, String)>,
+        env_vars: &mut Vec<(Cow<'static, str>, OsString)>,
     ) -> Result<()> {
-        env_vars.push((Self::DX_LINK_ARG.into(), "1".to_string()));
+        env_vars.push((Self::DX_LINK_ARG.into(), "1".into()));
         env_vars.push((
             Self::DX_ARGS_FILE.into(),
-            dunce::canonicalize(&self.link_args_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_args_file)?.into_os_string(),
         ));
         env_vars.push((
             Self::DX_ERR_FILE.into(),
-            dunce::canonicalize(&self.link_err_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_err_file)?.into_os_string(),
         ));
-        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string()));
+        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string().into()));
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER.into(),
                 dunce::canonicalize(linker)
                     .unwrap_or(linker.clone())
-                    .to_string_lossy()
-                    .to_string(),
+                    .into_os_string(),
             ));
         }
 
         Ok(())
     }
 
-    pub(crate) async fn run_link(self) {
+    pub(crate) fn run_link(self) -> ExitCode {
         let link_err_file = self.link_err_file.clone();
-        let res = self.run_link_inner().await;
+        if let Err(err) = self.run_link_inner() {
+            eprintln!("Linker error: {err}");
 
-        if let Err(err) = res {
             // If we failed to run the linker, we need to write the error to the file
             // so that the main process can read it.
             _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
             _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+
+            return ExitCode::FAILURE;
         }
+
+        ExitCode::SUCCESS
     }
 
     /// Write the incoming linker args to a file
     ///
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
-    async fn run_link_inner(self) -> Result<()> {
+    fn run_link_inner(self) -> Result<()> {
         let mut args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
             return Ok(());
@@ -154,12 +153,20 @@ impl LinkAction {
                 };
                 let res = cmd.output().expect("Failed to run linker");
 
+                if !res.status.success() {
+                    bail!(
+                        "{}\n{}",
+                        String::from_utf8_lossy(&res.stdout),
+                        String::from_utf8_lossy(&res.stderr)
+                    );
+                }
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    // Write linker warnings to file so that the main process can read them.
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
                     _ = std::fs::write(
                         self.link_err_file,
                         format!(
-                            "Linker error: {}\n{}",
+                            "Linker warnings: {}\n{}",
                             String::from_utf8_lossy(&res.stdout),
                             String::from_utf8_lossy(&res.stderr)
                         ),
@@ -195,8 +202,8 @@ impl LinkAction {
                     target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
                     target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
                     target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-                    target_lexicon::BinaryFormat::Unknown => todo!(),
-                    _ => todo!("Binary format not supported"),
+                    target_lexicon::BinaryFormat::Unknown => unimplemented!(),
+                    _ => unimplemented!("Binary format not supported"),
                 };
 
                 let arch = match triple.architecture {
@@ -207,13 +214,13 @@ impl LinkAction {
                     target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
                     target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
                     target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-                    _ => todo!("Architecture not supported"),
+                    _ => unimplemented!("Architecture not supported"),
                 };
 
                 let endian = match triple.endianness() {
                     Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
                     Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                    Err(_) => todo!("Endianness not supported"),
+                    Err(_) => unimplemented!("Endianness not supported"),
                 };
 
                 let bytes = object::write::Object::new(format, arch, endian)

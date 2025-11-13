@@ -57,7 +57,12 @@ impl RunArgs {
                             _ = builder
                                 .open(&bundle, &mut devserver)
                                 .await
-                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                                .inspect_err(|e| {
+                                    tracing::error!(
+                                        telemetry = %serde_json::json!({ "event": "failed_to_open_app_run" }),
+                                        "Failed to open app: {e}"
+                                    );
+                                });
 
                             if bundle_format == BundleFormat::Web {
                                 tracing::info!(
@@ -97,13 +102,18 @@ impl RunArgs {
                                 path,
                             } => tracing::info!(
                                 "[{bundle_format}] Copying asset {} ({current}/{total})",
-                                path.display(),
+                                path.file_name()
+                                    .map(|f| f.to_string_lossy())
+                                    .unwrap_or_default(),
                             ),
                             BuildStage::Bundling => {
                                 tracing::info!("[{bundle_format}] Bundling app")
                             }
                             BuildStage::RunningGradle => {
                                 tracing::info!("[{bundle_format}] Running Gradle")
+                            }
+                            BuildStage::CodeSigning => {
+                                tracing::info!("[{bundle_format}] Code signing app")
                             }
                             BuildStage::Success => {}
                             BuildStage::Restarting => {}

@@ -1,8 +1,8 @@
 use crate::{
-    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
-    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
-use anyhow::{bail, Context};
+use anyhow::{bail, Context, Error};
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -22,6 +22,7 @@ use tokio::{
     process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
 
@@ -77,6 +78,12 @@ pub(crate) struct AppBuilder {
     // we don't map stdin today (todo) but most apps don't need it
     pub stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub stderr: Option<Lines<BufReader<ChildStderr>>>,
+
+    // Android logcat stream (treated as stderr for error/warn levels)
+    pub adb_logcat_stdout: Option<UnboundedReceiverStream<String>>,
+
+    /// Handle to the task that's monitoring the child process
+    pub spawn_handle: Option<JoinHandle<Result<()>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -146,6 +153,8 @@ impl AppBuilder {
             child: None,
             stderr: None,
             stdout: None,
+            adb_logcat_stdout: None,
+            spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
             patch_cache: None,
@@ -154,23 +163,24 @@ impl AppBuilder {
     }
 
     /// Create a new `AppBuilder` and immediately start a build process.
-    pub fn started(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
+    pub fn started(request: &BuildRequest, mode: BuildMode, build_id: BuildId) -> Result<Self> {
         let mut builder = Self::new(request)?;
-        builder.start(mode);
+        builder.start(mode, build_id);
         Ok(builder)
     }
 
-    pub(crate) fn start(&mut self, mode: BuildMode) {
+    pub(crate) fn start(&mut self, mode: BuildMode, build_id: BuildId) {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let tx = self.tx.clone();
             async move {
                 let ctx = BuildContext {
                     mode,
+                    build_id,
                     tx: tx.clone(),
                 };
                 request.verify_tooling(&ctx).await?;
-                request.prepare_build_dir()?;
+                request.prebuild(&ctx).await?;
                 request.build(&ctx).await
             }
         });
@@ -198,6 +208,25 @@ impl AppBuilder {
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(|f| f.next_line())) => {
                 StderrReceived {  msg }
+            },
+            Some(msg) = OptionFuture::from(self.spawn_handle.as_mut()) => {
+                match msg {
+                    Ok(Ok(_)) => StdoutReceived { msg: "Finished launching app".to_string() },
+                    Ok(Err(err)) => StderrReceived { msg: err.to_string() },
+                    Err(err) => StderrReceived { msg: err.to_string() }
+                }
+            },
+            Some(Some(msg)) = OptionFuture::from(self.adb_logcat_stdout.as_mut().map(|s| s.next())) => {
+                // Send as stderr for errors/warnings, stdout for info/debug
+                // Parse the priority level from a logcat line
+                //
+                // Logcat brief format: "I/TAG(12345): message"
+                // Returns the priority char (V, D, I, W, E, F)
+                if matches!(msg.chars().next().unwrap_or('I'), 'E' | 'W' | 'F') {
+                    StderrReceived { msg }
+                } else {
+                    StdoutReceived { msg }
+                }
             },
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
                 match status {
@@ -290,10 +319,12 @@ impl AppBuilder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
+    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>, build_id: BuildId) {
         // We need the rustc args from the original build to pass to the new build
         let Some(artifacts) = self.artifacts.as_ref().cloned() else {
-            tracing::warn!("Ignoring patch rebuild since there is no existing build.");
+            tracing::warn!(
+                "Ignoring patch rebuild for {build_id:?} since there is no existing build."
+            );
             return;
         };
 
@@ -327,6 +358,7 @@ impl AppBuilder {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
+                build_id,
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
@@ -340,7 +372,7 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn start_rebuild(&mut self, mode: BuildMode) {
+    pub(crate) fn start_rebuild(&mut self, mode: BuildMode, build_id: BuildId) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
@@ -351,6 +383,7 @@ impl AppBuilder {
             let ctx = BuildContext {
                 tx: self.tx.clone(),
                 mode,
+                build_id,
             };
             async move { request.build(&ctx).await }
         });
@@ -402,17 +435,18 @@ impl AppBuilder {
                             );
                         }
                         BuildStage::Bundling => tracing::info!("Bundling app..."),
+                        BuildStage::CodeSigning => tracing::info!("Code signing app..."),
                         _ => {}
                     }
 
-                    tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
+                    tracing::info!(json = %StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuilderUpdate::CompilerMessage { message } => {
-                    tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                    tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                 }
                 BuilderUpdate::BuildReady { bundle } => {
-                    tracing::debug!(json = ?StructuredOutput::BuildFinished {
-                        path: self.build.root_dir(),
+                    tracing::debug!(json = %StructuredOutput::BuildFinished {
+                        artifacts: bundle.clone().into_structured_output(),
                     });
                     return Ok(bundle);
                 }
@@ -420,11 +454,10 @@ impl AppBuilder {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
-                            tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                            tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
                     }
 
-                    tracing::error!(?err, json = ?StructuredOutput::Error { message: err.to_string() });
                     return Err(err);
                 }
                 BuilderUpdate::StdoutReceived { .. } => {}
@@ -484,11 +517,7 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY
-            .get()
-            .map(|f| f.verbose)
-            .unwrap_or_default()
-        {
+        if verbosity_or_default().verbose {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
@@ -517,7 +546,7 @@ impl AppBuilder {
         }
 
         // If there's any CARGO vars in the rustc_wrapper files, push those too
-        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str::<RustcArgs>(&res) {
                 for (key, value) in res.envs {
                     if key.starts_with("CARGO_") {
@@ -561,16 +590,16 @@ impl AppBuilder {
             }
 
             BundleFormat::Ios => {
-                if self.build.device {
-                    self.codesign_ios().await?;
-                    self.open_ios_device().await?
+                if let Some(device) = self.build.device_name.to_owned() {
+                    self.open_ios_device(&device).await?
                 } else {
                     self.open_ios_sim(envs).await?
                 }
             }
 
             BundleFormat::Android => {
-                self.open_android_sim(false, devserver_ip, envs).await?;
+                self.open_android(false, devserver_ip, envs, self.build.device_name.clone())
+                    .await?;
             }
 
             // These are all just basically running the main exe, but with slightly different resource dir paths
@@ -630,6 +659,11 @@ impl AppBuilder {
         if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
             _ = std::fs::remove_file(entropy_app_exe);
         }
+
+        // Abort the spawn handle monitoring task if it exists
+        if let Some(spawn_handle) = self.spawn_handle.take() {
+            spawn_handle.abort();
+        }
     }
 
     pub(crate) async fn hotpatch(
@@ -639,7 +673,6 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
         // Hotpatch asset!() calls
@@ -687,23 +720,13 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
+        let mut jump_table = self.build.create_jump_table(&new, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {
             jump_table.lib = self
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib =
-                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap())
         }
 
         let changed_files = match &res.mode {
@@ -913,291 +936,249 @@ impl AppBuilder {
         Ok(())
     }
 
-    /// We have this whole thing figured out, but we don't actually use it yet.
-    ///
-    /// Launching on devices is more complicated and requires us to codesign the app, which we don't
-    /// currently do.
-    ///
-    /// Converting these commands shouldn't be too hard, but device support would imply we need
-    /// better support for codesigning and entitlements.
-    async fn open_ios_device(&self) -> Result<()> {
-        use serde_json::Value;
+    /// Upload the app to the device and launch it
+    async fn open_ios_device(&mut self, device_query: &str) -> Result<()> {
+        let device_query = device_query.to_string();
+        let root_dir = self.build.root_dir().clone();
+        self.spawn_handle = Some(tokio::task::spawn(async move {
+            // 1. Find an active device
+            let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
-        // 1. Find an active device
-        let device_uuid = get_device_uuid().await?;
+            tracing::info!("Uploading app to iOS device, this might take a while...");
 
-        // 2. Get the installation URL of the app
-        let installation_url = get_installation_url(&device_uuid, &self.build.root_dir()).await?;
+            // 2. Get the installation URL of the app
+            let installation_url = Self::get_ios_installation_url(&device_uuid, &root_dir).await?;
 
-        // 3. Launch the app into the background, paused
-        launch_app_paused(&device_uuid, &installation_url).await?;
+            // 3. Launch the app into the background, paused
+            Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
 
-        async fn get_device_uuid() -> Result<String> {
-            let tmpfile = tempfile::NamedTempFile::new()
-                .context("Failed to create temporary file for device list")?;
-
-            Command::new("xcrun")
-                .args([
-                    "devicectl".to_string(),
-                    "list".to_string(),
-                    "devices".to_string(),
-                    "--json-output".to_string(),
-                    tmpfile.path().to_str().unwrap().to_string(),
-                ])
-                .output()
-                .await?;
-
-            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
-                .context("Failed to parse xcrun output")?;
-            let device_uuid = json["result"]["devices"][0]["identifier"]
-                .as_str()
-                .context("Failed to extract device UUID")?
-                .to_string();
-
-            Ok(device_uuid)
-        }
-
-        async fn get_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
-            let tmpfile = tempfile::NamedTempFile::new()
-                .context("Failed to create temporary file for device list")?;
-
-            // xcrun devicectl device install app --device <uuid> --path <path> --json-output
-            let output = Command::new("xcrun")
-                .args([
-                    "devicectl",
-                    "device",
-                    "install",
-                    "app",
-                    "--device",
-                    device_uuid,
-                    &app_path.display().to_string(),
-                    "--json-output",
-                ])
-                .arg(tmpfile.path())
-                .output()
-                .await?;
-
-            if !output.status.success() {
-                bail!("Failed to install app: {output:?}");
-            }
-
-            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
-                .context("Failed to parse xcrun output")?;
-            let installation_url = json["result"]["installedApplications"][0]["installationURL"]
-                .as_str()
-                .context("Failed to extract installation URL from xcrun output")?
-                .to_string();
-
-            Ok(installation_url)
-        }
-
-        async fn launch_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
-            let tmpfile = tempfile::NamedTempFile::new()
-                .context("Failed to create temporary file for device list")?;
-
-            let output = Command::new("xcrun")
-                .args([
-                    "devicectl",
-                    "device",
-                    "process",
-                    "launch",
-                    "--no-activate",
-                    "--verbose",
-                    "--device",
-                    device_uuid,
-                    installation_url,
-                    "--json-output",
-                ])
-                .arg(tmpfile.path())
-                .output()
-                .await?;
-
-            if !output.status.success() {
-                bail!("Failed to launch app: {output:?}");
-            }
-
-            let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
-                .context("Failed to parse xcrun output")?;
-
-            let status_pid = json["result"]["process"]["processIdentifier"]
-                .as_u64()
-                .context("Failed to extract process identifier")?;
-
-            let output = Command::new("xcrun")
-                .args([
-                    "devicectl",
-                    "device",
-                    "process",
-                    "resume",
-                    "--device",
-                    device_uuid,
-                    "--pid",
-                    &status_pid.to_string(),
-                ])
-                .output()
-                .await?;
-
-            if !output.status.success() {
-                bail!("Failed to resume app: {output:?}");
-            }
-
-            Ok(())
-        }
+            Result::Ok(()) as Result<()>
+        }));
 
         Ok(())
     }
 
-    async fn codesign_ios(&self) -> Result<()> {
-        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
-- Created a provisioning profile before
-- Accepted the Apple Developer Program License Agreement
+    /// Parse the xcrun output to get the device based on its name and connected state.
+    ///
+    /// ```json, ignore
+    /// "connectionProperties" : {
+    ///   "authenticationType" : "manualPairing",
+    ///   "isMobileDeviceOnly" : false,
+    ///   "lastConnectionDate" : "2025-08-15T01:46:43.182Z",
+    ///   "pairingState" : "paired",
+    ///   "potentialHostnames" : [
+    ///     "00008130-0002058401E8001C.coredevice.local",
+    ///     "67054C13-C6C8-5AC2-B967-24C040AD3F17.coredevice.local"
+    ///   ],
+    ///   "transportType" : "localNetwork",
+    ///   "tunnelState" : "disconnected",
+    ///   "tunnelTransportProtocol" : "tcp"
+    /// },
+    /// "deviceProperties" : {
+    ///   "bootedFromSnapshot" : true,
+    ///   "bootedSnapshotName" : "com.apple.os.update-A771E2B3E8C155D1B1188896B3247851B64737ACDE91A5B6F6C1F03A541406AA",
+    ///   "ddiServicesAvailable" : false,
+    ///   "developerModeStatus" : "enabled",
+    ///   "hasInternalOSBuild" : false,
+    ///   "name" : "Jon’s iPhone (2)",
+    ///   "osBuildUpdate" : "22G86",
+    ///   "osVersionNumber" : "18.6",
+    ///   "rootFileSystemIsWritable" : false
+    /// }
+    /// ```
+    async fn get_ios_device_uuid(device_name_query: &str) -> Result<String> {
+        use serde_json::Value;
 
-The agreement changes frequently and might need to be accepted again.
-To accept the agreement, go to https://developer.apple.com/account
+        let tmpfile = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for device list")?;
 
-To create a provisioning profile, follow the instructions here:
-https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
-
-        // Check the xcode 16 location first
-        let mut profiles_folder = dirs::home_dir()
-            .context("Your machine has no home-dir")?
-            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
-
-        // If it doesn't exist, check the old location
-        if !profiles_folder.exists() {
-            profiles_folder = dirs::home_dir()
-                .context("Your machine has no home-dir")?
-                .join("Library/MobileDevice/Provisioning Profiles");
-        }
-
-        if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
-            tracing::error!(
-                r#"No provisioning profiles found when trying to codesign the app.
-We checked the folders:
-- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
-- XCode15: ~/Library/MobileDevice/Provisioning Profiles
-
-{CODESIGN_ERROR}
-"#
-            )
-        }
-
-        let identities = Command::new("security")
-            .args(["find-identity", "-v", "-p", "codesigning"])
-            .output()
-            .await
-            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
-            .map(|e| {
-                String::from_utf8(e.stdout)
-                    .context("Failed to parse `security find-identity -v -p codesigning`")
-            })??;
-
-        // Parsing this:
-        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
-        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
-            .unwrap()
-            .captures(&identities)
-            .and_then(|caps| caps.get(1))
-            .map(|m| m.as_str())
-            .context(
-                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
-            )?;
-
-        // Acquire the provision file
-        let provision_file = profiles_folder
-            .read_dir()?
-            .flatten()
-            .find(|entry| {
-                entry
-                    .file_name()
-                    .to_str()
-                    .map(|s| s.contains("mobileprovision"))
-                    .unwrap_or_default()
-            })
-            .context("Failed to find a provisioning profile. \n\n{CODESIGN_ERROR}")?;
-
-        // The .mobileprovision file has some random binary thrown into into, but it's still basically a plist
-        // Let's use the plist markers to find the start and end of the plist
-        fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
-            bytes
-                .windows(byte_match.len())
-                .enumerate()
-                .rev()
-                .find(|(_, slice)| *slice == byte_match)
-                .map(|(i, _)| i + byte_match.len())
-        }
-        let bytes = std::fs::read(provision_file.path())?;
-        let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
-        let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
-            .context("Failed to parse .mobileprovision file")?;
-        let sub_bytes = &bytes[(cut1 - 6)..cut2];
-        let mbfile: ProvisioningProfile =
-            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;
-
-        #[derive(serde::Deserialize, Debug)]
-        struct ProvisioningProfile {
-            #[serde(rename = "TeamIdentifier")]
-            team_identifier: Vec<String>,
-            #[serde(rename = "Entitlements")]
-            entitlements: Entitlements,
-            #[allow(dead_code)]
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct Entitlements {
-            #[serde(rename = "application-identifier")]
-            application_identifier: String,
-            #[serde(rename = "keychain-access-groups")]
-            keychain_access_groups: Vec<String>,
-        }
-
-        let entielements_xml = format!(
-            r#"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-    <key>application-identifier</key>
-    <string>{APPLICATION_IDENTIFIER}</string>
-    <key>keychain-access-groups</key>
-    <array>
-        <string>{APP_ID_ACCESS_GROUP}.*</string>
-    </array>
-    <key>get-task-allow</key>
-    <true/>
-    <key>com.apple.developer.team-identifier</key>
-    <string>{TEAM_IDENTIFIER}</string>
-</dict></plist>
-        "#,
-            APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
-            APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
-            TEAM_IDENTIFIER = mbfile.team_identifier[0],
-        );
-
-        // write to a temp file
-        let temp_file = tempfile::NamedTempFile::new()?;
-        std::fs::write(temp_file.path(), entielements_xml)?;
-
-        // codesign the app
-        let output = Command::new("codesign")
+        Command::new("xcrun")
             .args([
-                "--force",
-                "--entitlements",
-                temp_file.path().to_str().unwrap(),
-                "--sign",
-                app_dev_name,
+                "devicectl".to_string(),
+                "list".to_string(),
+                "devices".to_string(),
+                "--json-output".to_string(),
+                tmpfile.path().to_str().unwrap().to_string(),
             ])
-            .arg(self.build.root_dir())
             .output()
-            .await
-            .context("Failed to codesign the app - is `codesign` in your path?")?;
+            .await?;
+
+        let json: Value = serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+            .context("Failed to parse xcrun output")?;
+
+        let devices = json
+            .get("result")
+            .context("Failed to parse xcrun output")?
+            .get("devices")
+            .context("Failed to parse xcrun output")?
+            .as_array()
+            .context("Failed to get devices from xcrun output")?;
+
+        // by default, we just pick the first available device and then look for better fits.
+        let mut device_idx = 0;
+
+        match device_name_query.is_empty() {
+            // If the user provided a query, then we look through the device list looking for the right one.
+            // This searches both UUIDs and names, making it possible to paste an ID or a name.
+            false => {
+                use nucleo::{chars, Config, Matcher, Utf32Str};
+                let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
+                let mut matcher = Matcher::new(Config::DEFAULT);
+                let mut best_score = 0;
+                let needle = device_name_query.chars().map(normalize).collect::<String>();
+                for (idx, device) in devices.iter().enumerate() {
+                    let device_name = device
+                        .get("deviceProperties")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|n| n.as_str())
+                        .unwrap_or_default();
+                    let device_uuid = device
+                        .get("identifier")
+                        .and_then(|n| n.as_str())
+                        .unwrap_or_default();
+                    let haystack = format!("{device_name} {device_uuid}")
+                        .chars()
+                        .map(normalize)
+                        .collect::<String>();
+                    let name_score = matcher.fuzzy_match(
+                        Utf32Str::Ascii(haystack.as_bytes()),
+                        Utf32Str::Ascii(needle.as_bytes()),
+                    );
+                    if let Some(score) = name_score {
+                        if score > best_score {
+                            best_score = score;
+                            device_idx = idx;
+                        }
+                    }
+                }
+
+                if best_score == 0 {
+                    tracing::warn!(
+                        "No device found matching query: {device_name_query}. Using first available device."
+                    );
+                }
+            }
+
+            // If the query is empty, then we just find the first connected/available device
+            // This is somewhat based on the bundle format, since we don't want to accidentally upload
+            // iOS apps to watches/tvs
+            true => {
+                for (idx, device) in devices.iter().enumerate() {
+                    let is_paired = device
+                        .get("connectionProperties")
+                        .and_then(|g| g.get("pairingState"))
+                        .map(|s| s.as_str() == Some("paired"))
+                        .unwrap_or(false);
+
+                    let is_ios_device = matches!(
+                        device.get("deviceType").and_then(|s| s.as_str()),
+                        Some("iPhone") | Some("iPad") | Some("iPod")
+                    );
+
+                    if is_paired && is_ios_device {
+                        device_idx = idx;
+                        break;
+                    }
+                }
+            }
+        }
+
+        devices
+            .get(device_idx)
+            .context("No devices found")?
+            .get("identifier")
+            .and_then(|id| id.as_str())
+            .map(|s| s.to_string())
+            .context("Failed to extract device UUID")
+    }
+
+    async fn get_ios_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+        let tmpfile = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for device list")?;
+
+        // xcrun devicectl device install app --device <uuid> --path <path> --json-output
+        let output = Command::new("xcrun")
+            .args([
+                "devicectl",
+                "device",
+                "install",
+                "app",
+                "--device",
+                device_uuid,
+                &app_path.display().to_string(),
+                "--json-output",
+            ])
+            .arg(tmpfile.path())
+            .output()
+            .await?;
 
         if !output.status.success() {
             bail!(
-                "Failed to codesign the app: {}",
-                String::from_utf8(output.stderr).unwrap_or_default()
+                "Failed to install app: {}",
+                String::from_utf8_lossy(&output.stderr)
             );
+        }
+
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+                .context("Failed to parse xcrun output")?;
+        let installation_url = json["result"]["installedApplications"][0]["installationURL"]
+            .as_str()
+            .context("Failed to extract installation URL from xcrun output")?
+            .to_string();
+
+        Ok(installation_url)
+    }
+
+    async fn launch_ios_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+        let tmpfile = tempfile::NamedTempFile::new()
+            .context("Failed to create temporary file for device list")?;
+
+        let output = Command::new("xcrun")
+            .args([
+                "devicectl",
+                "device",
+                "process",
+                "launch",
+                "--no-activate",
+                "--verbose",
+                "--device",
+                device_uuid,
+                installation_url,
+                "--json-output",
+            ])
+            .arg(tmpfile.path())
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            bail!("Failed to launch app: {output:?}");
+        }
+
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
+                .context("Failed to parse xcrun output")?;
+
+        let status_pid = json["result"]["process"]["processIdentifier"]
+            .as_u64()
+            .context("Failed to extract process identifier")?;
+
+        let output = Command::new("xcrun")
+            .args([
+                "devicectl",
+                "device",
+                "process",
+                "resume",
+                "--device",
+                device_uuid,
+                "--pid",
+                &status_pid.to_string(),
+            ])
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            bail!("Failed to resume app: {output:?}");
         }
 
         Ok(())
@@ -1238,19 +1219,21 @@ We checked the folders:
     ///
     /// # Resources:
     /// - <https://developer.android.com/studio/run/emulator-commandline>
-    async fn open_android_sim(
-        &self,
+    async fn open_android(
+        &mut self,
         root: bool,
         devserver_socket: SocketAddr,
         envs: Vec<(String, String)>,
+        device_name_query: Option<String>,
     ) -> Result<()> {
         let apk_path = self.build.debug_apk_path();
         let session_cache = self.build.session_cache_dir();
         let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
+        let (stdout_tx, stdout_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        let _handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+        let task = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1258,19 +1241,14 @@ We checked the folders:
                 }
             }
 
-            let port = devserver_socket.port();
-            if let Err(e) = Command::new(&adb)
-                .arg("reverse")
-                .arg(format!("tcp:{port}"))
-                .arg(format!("tcp:{port}"))
-                .output()
-                .await
-            {
-                tracing::error!("failed to forward port {port}: {e}");
-            }
+            // Try to get the transport ID for the device in case there are multiple specified devices
+            // All future commands should use this since its the most recent.
+            let transport_id_args =
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
 
             // Wait for device to be ready
             let cmd = Command::new(&adb)
+                .args(transport_id_args)
                 .arg("wait-for-device")
                 .arg("shell")
                 .arg(r#"while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done;"#)
@@ -1283,6 +1261,17 @@ We checked the folders:
                     tracing::info!("Waiting for android emulator to be ready...");
                     _ = cmd_future.await;
                 }
+            }
+
+            let port = devserver_socket.port();
+            if let Err(e) = Command::new(&adb)
+                .arg("reverse")
+                .arg(format!("tcp:{port}"))
+                .arg(format!("tcp:{port}"))
+                .output()
+                .await
+            {
+                tracing::error!("failed to forward port {port}: {e}");
             }
 
             // Install
@@ -1341,8 +1330,65 @@ We checked the folders:
                 tracing::error!("Failed to start app with `adb`: {std_err}");
             }
 
-            Ok(())
+            // Try to get the transport ID for the device
+            let transport_id_args =
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
+
+            // Get the app's PID with retries
+            // Retry up to 10 times (10 seconds total) since app launch is asynchronous
+            let mut pid: Option<String> = None;
+            for attempt in 1..=10 {
+                match Self::get_android_app_pid(&adb, &application_id, &transport_id_args).await {
+                    Ok(p) => {
+                        pid = Some(p);
+                        break;
+                    }
+                    Err(_) if attempt < 10 => {
+                        tracing::debug!(
+                            "App PID not found yet, retrying in 1 second... (attempt {}/10)",
+                            attempt
+                        );
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    Err(e) => {
+                        return Err(e).context(
+                            "Failed to get app PID after 10 attempts - app may not have started",
+                        );
+                    }
+                }
+            }
+
+            let pid = pid.context("Failed to get app PID")?;
+
+            // Spawn logcat with filtering
+            // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
+            // With tracing enabled: show all logs from the app process
+            // Note: We always capture at DEBUG level, then filter in Rust based on trace flag
+            let mut child = Command::new(&adb)
+                .args(&transport_id_args)
+                .arg("logcat")
+                .arg("-v")
+                .arg("brief")
+                .arg("--pid")
+                .arg(&pid)
+                .arg("*:D") // Capture all logs at DEBUG level (filtered in Rust)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = child.stdout.take().unwrap();
+            let mut reader = BufReader::new(stdout).lines();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                _ = stdout_tx.send(line);
+            }
+
+            Ok::<(), Error>(())
         });
+
+        self.spawn_handle = Some(task);
+        self.adb_logcat_stdout = Some(UnboundedReceiverStream::new(stdout_rx));
 
         Ok(())
     }
@@ -1352,12 +1398,14 @@ We checked the folders:
         let name = id.to_string();
         let some_entropy = name.split('-').next().unwrap();
 
+        // Split up the exe into the file stem and extension
+        let extension = exe.extension().unwrap_or_default();
+        let file_stem = exe.file_stem().unwrap().to_str().unwrap();
+
         // Make a copy of the server exe with a new name
-        let entropy_server_exe = exe.with_file_name(format!(
-            "{}-{}",
-            exe.file_name().unwrap().to_str().unwrap(),
-            some_entropy
-        ));
+        let entropy_server_exe = exe
+            .with_file_name(format!("{}-{}", file_stem, some_entropy))
+            .with_extension(extension);
 
         std::fs::copy(exe, &entropy_server_exe).unwrap();
 
@@ -1609,5 +1657,82 @@ We checked the folders:
             .spawn();
 
         Ok(())
+    }
+
+    async fn get_android_device_transport_id(
+        adb: &PathBuf,
+        device_name_query: Option<&str>,
+    ) -> Vec<String> {
+        // If there are multiple devices, we pick the one matching the query
+        let mut device_specifier_args = vec![];
+
+        if let Some(device_name_query) = device_name_query {
+            if let Ok(res) = Command::new(adb).arg("devices").arg("-l").output().await {
+                let devices = String::from_utf8_lossy(&res.stdout);
+                let mut best_score = 0;
+                let mut device_identifier = "".to_string();
+                use nucleo::{chars, Config, Matcher, Utf32Str};
+                let mut matcher = Matcher::new(Config::DEFAULT);
+                let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
+                let needle = device_name_query.chars().map(normalize).collect::<Vec<_>>();
+
+                for line in devices.lines() {
+                    let device_name = line.split_whitespace().next().unwrap_or("");
+                    let Some(transport_id) = line
+                        .split_whitespace()
+                        .find(|s| s.starts_with("transport_id:"))
+                        .map(|s| s.trim_start_matches("transport_id:"))
+                    else {
+                        continue;
+                    };
+
+                    let device_name = device_name.chars().map(normalize).collect::<Vec<_>>();
+                    let score = matcher
+                        .fuzzy_match(Utf32Str::Unicode(&device_name), Utf32Str::Unicode(&needle));
+                    if let Some(score) = score {
+                        if score > best_score {
+                            best_score = score;
+                            device_identifier = transport_id.to_string();
+                        }
+                    }
+                }
+
+                if best_score != 0 {
+                    device_specifier_args.push("-t".to_string());
+                    device_specifier_args.push(device_identifier.to_string());
+                }
+            }
+
+            if device_specifier_args.is_empty() {
+                tracing::warn!(
+                    "No device found matching query: {device_name_query}. Using default transport ID."
+                );
+            }
+        }
+
+        device_specifier_args
+    }
+
+    /// Get the PID of the running Android app
+    async fn get_android_app_pid(
+        adb: &Path,
+        application_id: &str,
+        transport_id_args: &[String],
+    ) -> Result<String> {
+        let output = Command::new(adb)
+            .args(transport_id_args)
+            .arg("shell")
+            .arg("pidof")
+            .arg(application_id)
+            .output()
+            .await?;
+
+        let pid = String::from_utf8(output.stdout)?.trim().to_string();
+
+        if pid.is_empty() {
+            anyhow::bail!("App process not found - may not have started yet");
+        }
+
+        Ok(pid)
     }
 }

@@ -26,12 +26,16 @@ dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }
+dioxus-cli-telemetry = { workspace =  true }
+dioxus-component-manifest = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-serde = { workspace = true, features = ["derive"] }
+# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
+# but pinning serde fixes the issue in the meantime
+serde = { version = "=1.0.221", features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
@@ -75,6 +79,7 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
+git2 = "0.20.2"
 
 # path lookup
 which = { version = "8.0.0" }
@@ -103,7 +108,6 @@ tracing-subscriber = { version = "0.3.19", features = [
 ] }
 console-subscriber = { version = "0.4.1", optional = true }
 tracing = { workspace = true }
-wasm-opt = { version = "0.116.1", optional = true }
 ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }
 path-absolutize = { workspace = true }
@@ -134,6 +138,7 @@ walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
 tauri-utils = { workspace = true }
+tauri-macos-sign = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
@@ -154,6 +159,14 @@ self_update = { version = "0.42.0", features = [
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
+posthog-rs = "0.3.5"
+serde_json5 = "0.2.1"
+fs2 = "0.4.3"
+sentry-backtrace = "0.42.0"
+nucleo = "0.5.0"
+
+# 0.5.12 rust-version is too high
+home = "=0.5.11"
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }
@@ -162,6 +175,7 @@ built = { version = "0.8.0", features = ["git2"] }
 default = []
 tokio-console = ["dep:console-subscriber", "tokio/tracing"]
 no-downloads = []
+disable-telemetry = []
 
 [[bin]]
 path = "src/main.rs"
@@ -176,5 +190,3 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]

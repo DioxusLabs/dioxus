@@ -61,13 +61,15 @@ jobs:
             os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
+          # os: blacksmith-4vcpu-ubuntu-2404
+          # os: blacksmith-4vcpu-ubuntu-2404
           # - target: x86_64-unknown-linux-musl
           #   os: ubuntu-24.04
           # - target: aarch64-unknown-linux-musl
           #   os: ubuntu-24.04-arm
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install openssl on macos
         if: matrix.platform.os == 'macos-latest'
@@ -90,7 +92,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.88.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -128,7 +130,7 @@ jobs:
   # release-crates:
   #   steps:
   #     # Checkout the right branch, and the nightly stuff
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v5
   #       ref: ${{ github.event.inputs.channel }}
   #     - run: sudo apt-get update
   #     - run: sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -153,7 +155,7 @@ jobs:
 
   #     # Build the docs here too before publishing, to ensure they're up to date
   #     - name: cargo doc
-  #       run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --workspace --all-features
+  #       run: cargo doc --no-deps --workspace --all-features
 
   #     - name: Publish to crates.io
   #       run: |

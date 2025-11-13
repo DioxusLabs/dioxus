@@ -1,13 +1,11 @@
 use crate::{
     any_props::{AnyProps, BoxedAnyProps},
-    innerlude::{throw_error, RenderError, ScopeOrder, ScopeState},
-    nodes::AsVNode,
+    innerlude::{RenderError, ScopeOrder, ScopeState},
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    ReactiveContext,
+    Element, ReactiveContext,
 };
-use crate::{Element, VNode};
 
 impl VirtualDom {
     pub(super) fn new_scope(
@@ -15,8 +13,8 @@ impl VirtualDom {
         props: BoxedAnyProps,
         name: &'static str,
     ) -> &mut ScopeState {
-        let parent_id = self.runtime.current_scope_id().ok();
-        let height = match parent_id.and_then(|id| self.runtime.get_state(id)) {
+        let parent_id = self.runtime.try_current_scope_id();
+        let height = match parent_id.and_then(|id| self.runtime.try_get_state(id)) {
             Some(parent) => parent.height() + 1,
             None => 0,
         };
@@ -39,7 +37,6 @@ impl VirtualDom {
         });
 
         self.runtime.create_scope(scope_runtime);
-        tracing::trace!("created scope {id:?} with parent {parent_id:?}");
 
         scope
     }
@@ -49,7 +46,7 @@ impl VirtualDom {
     #[track_caller]
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> Element {
         // Ensure we are currently inside a `Runtime`.
-        crate::Runtime::current().unwrap_or_else(|e| panic!("{}", e));
+        crate::Runtime::current();
 
         self.runtime.clone().with_scope_on_stack(scope_id, || {
             let scope = &self.scopes[scope_id.0];
@@ -79,8 +76,15 @@ impl VirtualDom {
                         // the component runs, it returns a clone of the last rsx that was returned from
                         // that resource. If we don't deep clone the VNode and the resource changes, then
                         // we could end up diffing two different versions of the same mounted node
-                        let mut render_return = render_return.deep_clone();
-                        self.handle_element_return(&mut render_return, scope_id, &scope.state());
+                        let mut render_return = match render_return {
+                            Ok(node) => Ok(node.deep_clone()),
+                            Err(RenderError::Error(err)) => Err(RenderError::Error(err.clone())),
+                            Err(RenderError::Suspended(fut)) => {
+                                Err(RenderError::Suspended(fut.deep_clone()))
+                            }
+                        };
+
+                        self.handle_element_return(&mut render_return, &scope.state());
                         render_return
                     })
                 })
@@ -101,24 +105,16 @@ impl VirtualDom {
     }
 
     /// Insert any errors, or suspended tasks from an element return into the runtime
-    fn handle_element_return(&self, node: &mut Element, scope_id: ScopeId, scope_state: &Scope) {
+    fn handle_element_return(&self, node: &mut Element, scope: &Scope) {
         match node {
-            Err(RenderError::Aborted(e)) => {
-                tracing::error!(
-                    "Error while rendering component `{}`:\n{e}",
-                    scope_state.name
-                );
-                throw_error(e.clone());
-                e.render = VNode::placeholder();
+            Err(RenderError::Error(e)) => {
+                tracing::error!("Error while rendering component `{}`: {e}", scope.name);
+                self.runtime.throw_error(scope.id, e.clone());
             }
             Err(RenderError::Suspended(e)) => {
                 let task = e.task();
                 // Insert the task into the nearest suspense boundary if it exists
-                let boundary = self
-                    .runtime
-                    .get_state(scope_id)
-                    .unwrap()
-                    .suspense_location();
+                let boundary = scope.suspense_location();
                 let already_suspended = self
                     .runtime
                     .tasks
@@ -127,7 +123,7 @@ impl VirtualDom {
                     .expect("Suspended on a task that no longer exists")
                     .suspend(boundary.clone());
                 if !already_suspended {
-                    tracing::trace!("Suspending {:?} on {:?}", scope_id, task);
+                    tracing::trace!("Suspending {:?} on {:?}", scope.id, task);
                     // Add this task to the suspended tasks list of the boundary
                     if let SuspenseLocation::UnderSuspense(boundary) = &boundary {
                         boundary.add_suspended_task(e.clone());
@@ -136,13 +132,10 @@ impl VirtualDom {
                         .suspended_tasks
                         .set(self.runtime.suspended_tasks.get() + 1);
                 }
-                e.placeholder = VNode::placeholder();
             }
             Ok(_) => {
                 // If the render was successful, we can move the render generation forward by one
-                scope_state
-                    .render_count
-                    .set(scope_state.render_count.get() + 1);
+                scope.render_count.set(scope.render_count.get() + 1);
             }
         }
     }

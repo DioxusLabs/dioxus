@@ -1,4 +1,4 @@
-use dioxus_core::{ScopeId, Subscribers};
+use dioxus_core::{Runtime, ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -32,9 +32,10 @@ pub struct Global<T, R = T> {
 /// Allow calling a signal with signal() syntax
 ///
 /// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Clone + 'static, R: Clone + 'static> Deref for Global<T, R>
+impl<T: Clone, R: Clone> Deref for Global<T, R>
 where
-    T: Readable<Target = R> + InitializeFromFunction<R>,
+    T: Readable<Target = R> + InitializeFromFunction<R> + 'static,
+    T::Target: 'static,
 {
     type Target = dyn Fn() -> R;
 
@@ -43,9 +44,9 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Readable for Global<T, R>
+impl<T, R> Readable for Global<T, R>
 where
-    T: Readable<Target = R> + InitializeFromFunction<R>,
+    T: Readable<Target = R> + InitializeFromFunction<R> + Clone + 'static,
 {
     type Target = R;
     type Storage = T::Storage;
@@ -53,23 +54,32 @@ where
     #[track_caller]
     fn try_read_unchecked(
         &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
+    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
+    where
+        R: 'static,
+    {
         self.resolve().try_read_unchecked()
     }
 
     #[track_caller]
-    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>> {
+    fn try_peek_unchecked(&self) -> BorrowResult<ReadableRef<'static, Self>>
+    where
+        R: 'static,
+    {
         self.resolve().try_peek_unchecked()
     }
 
-    fn subscribers(&self) -> Option<Subscribers> {
+    fn subscribers(&self) -> Subscribers
+    where
+        R: 'static,
+    {
         self.resolve().subscribers()
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Writable for Global<T, R>
+impl<T: Clone, R> Writable for Global<T, R>
 where
-    T: Writable<Target = R> + InitializeFromFunction<R>,
+    T: Writable<Target = R> + InitializeFromFunction<R> + 'static,
 {
     type WriteMetadata = T::WriteMetadata;
 
@@ -81,9 +91,9 @@ where
     }
 }
 
-impl<T: Clone + 'static, R: 'static> Global<T, R>
+impl<T: Clone, R> Global<T, R>
 where
-    T: Writable<Target = R> + InitializeFromFunction<R>,
+    T: Writable<Target = R> + InitializeFromFunction<R> + 'static,
 {
     /// Write this value
     pub fn write(&self) -> WritableRef<'static, T, R> {
@@ -93,12 +103,15 @@ where
     /// Run a closure with a mutable reference to the signal's value.
     /// If the signal has been dropped, this will panic.
     #[track_caller]
-    pub fn with_mut<O>(&self, f: impl FnOnce(&mut R) -> O) -> O {
+    pub fn with_mut<O>(&self, f: impl FnOnce(&mut R) -> O) -> O
+    where
+        T::Target: 'static,
+    {
         self.resolve().with_mut(f)
     }
 }
 
-impl<T: Clone + 'static, R> Global<T, R>
+impl<T: Clone, R> Global<T, R>
 where
     T: InitializeFromFunction<R>,
 {
@@ -160,7 +173,10 @@ where
 
     /// Resolve the global value. This will try to get the existing value from the current virtual dom, and if it doesn't exist, it will create a new one.
     // NOTE: This is not called "get" or "value" because those methods overlap with Readable and Writable
-    pub fn resolve(&self) -> T {
+    pub fn resolve(&self) -> T
+    where
+        T: 'static,
+    {
         let key = self.key();
 
         let context = get_global_context();
@@ -174,7 +190,9 @@ where
         }
         // Otherwise, create it
         // Constructors are always run in the root scope
-        let signal = ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
+        let signal = dioxus_core::Runtime::current().in_scope(ScopeId::ROOT, || {
+            T::initialize_from_function(self.constructor)
+        });
         context
             .map
             .borrow_mut()
@@ -237,7 +255,7 @@ impl From<&'static Location<'static>> for GlobalKey<'static> {
 impl GlobalLazyContext {
     /// Get a signal with the given string key
     /// The key will be converted to a UUID with the appropriate internal namespace
-    pub fn get_signal_with_key<T>(&self, key: GlobalKey) -> Option<Signal<T>> {
+    pub fn get_signal_with_key<T: 'static>(&self, key: GlobalKey) -> Option<Signal<T>> {
         self.map.borrow().get(&key).map(|f| {
             *f.downcast_ref::<Signal<T>>().unwrap_or_else(|| {
                 panic!(
@@ -258,9 +276,10 @@ impl GlobalLazyContext {
 
 /// Get the global context for signals
 pub fn get_global_context() -> GlobalLazyContext {
-    match ScopeId::ROOT.has_context() {
+    let rt = Runtime::current();
+    match rt.has_context(ScopeId::ROOT) {
         Some(context) => context,
-        None => ScopeId::ROOT.provide_context(Default::default()),
+        None => rt.provide_context(ScopeId::ROOT, Default::default()),
     }
 }
 

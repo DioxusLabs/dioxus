@@ -1,8 +1,11 @@
-use std::ops::{Deref, DerefMut, IndexMut};
+use std::{
+    collections::{HashMap, HashSet},
+    ops::{Deref, DerefMut, IndexMut},
+};
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
+use crate::{ext_methods, read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]
@@ -36,34 +39,16 @@ pub type WritableRef<'a, T: Writable, O = <T as Readable>::Target> =
 /// ```
 pub trait Writable: Readable {
     /// Additional data associated with the write reference.
-    type WriteMetadata: 'static;
-
-    /// Get a mutable reference to the value. If the value has been dropped, this will panic.
-    #[track_caller]
-    fn write(&mut self) -> WritableRef<'_, Self> {
-        self.try_write().unwrap()
-    }
-
-    /// Try to get a mutable reference to the value.
-    #[track_caller]
-    fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError> {
-        self.try_write_unchecked().map(WriteLock::downcast_lifetime)
-    }
+    type WriteMetadata;
 
     /// Try to get a mutable reference to the value without checking the lifetime. This will update any subscribers.
     ///
     /// NOTE: This method is completely safe because borrow checking is done at runtime.
     fn try_write_unchecked(
         &self,
-    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>;
-
-    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
-    ///
-    /// NOTE: This method is completely safe because borrow checking is done at runtime.
-    #[track_caller]
-    fn write_unchecked(&self) -> WritableRef<'static, Self> {
-        self.try_write_unchecked().unwrap()
-    }
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static;
 }
 
 /// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information
@@ -77,7 +62,7 @@ pub trait Writable: Readable {
 /// # use dioxus::prelude::*;
 /// fn app() -> Element {
 ///     let mut value = use_signal(|| String::from("hello"));
-///     
+///
 ///     rsx! {
 ///         button {
 ///             onclick: move |_| {
@@ -176,7 +161,7 @@ pub trait Writable: Readable {
 /// - T is the current type of the write
 /// - S is the storage type of the signal. This type determines if the signal is local to the current thread, or it can be shared across threads.
 /// - D is the additional data associated with the write reference. This is used by signals to track when the write is dropped
-pub struct WriteLock<'a, T: ?Sized + 'static, S: AnyStorage = UnsyncStorage, D = ()> {
+pub struct WriteLock<'a, T: ?Sized + 'a, S: AnyStorage = UnsyncStorage, D = ()> {
     write: S::Mut<'a, T>,
     data: D,
 }
@@ -256,7 +241,7 @@ impl<'a, T: ?Sized, S: AnyStorage, D> WriteLock<'a, T, S, D> {
 impl<T, S, D> Deref for WriteLock<'_, T, S, D>
 where
     S: AnyStorage,
-    T: ?Sized + 'static,
+    T: ?Sized,
 {
     type Target = T;
 
@@ -268,7 +253,7 @@ where
 impl<T, S, D> DerefMut for WriteLock<'_, T, S, D>
 where
     S: AnyStorage,
-    T: ?Sized + 'static,
+    T: ?Sized,
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.write
@@ -277,9 +262,41 @@ where
 
 /// An extension trait for [`Writable`] that provides some convenience methods.
 pub trait WritableExt: Writable {
-    /// Map the readable type to a new type. This lets you provide a view into a readable type without needing to clone the inner value.
+    /// Get a mutable reference to the value. If the value has been dropped, this will panic.
+    #[track_caller]
+    fn write(&mut self) -> WritableRef<'_, Self>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write().unwrap()
+    }
+
+    /// Try to get a mutable reference to the value.
+    #[track_caller]
+    fn try_write(&mut self) -> Result<WritableRef<'_, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write_unchecked().map(WriteLock::downcast_lifetime)
+    }
+
+    /// Get a mutable reference to the value without checking the lifetime. This will update any subscribers.
     ///
-    /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    /// NOTE: This method is completely safe because borrow checking is done at runtime.
+    #[track_caller]
+    fn write_unchecked(&self) -> WritableRef<'static, Self>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write_unchecked().unwrap()
+    }
+
+    /// Map the references and mutable references of the writable value to a new type. This lets you provide a view
+    /// into the writable value without creating a new signal or cloning the value.
+    ///
+    /// Anything that subscribes to the writable value will be rerun whenever the original value changes or you write to this
+    /// scoped value, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
+    /// For fine grained scoped updates, use stores instead
     ///
     /// # Example
     /// ```rust
@@ -306,17 +323,20 @@ pub trait WritableExt: Writable {
     /// ```
     fn map_mut<O, F, FMut>(self, f: F, f_mut: FMut) -> MappedMutSignal<O, Self, F, FMut>
     where
-        Self: Clone + Sized + 'static,
-        O: ?Sized + 'static,
-        F: Fn(&Self::Target) -> &O + 'static,
-        FMut: Fn(&mut Self::Target) -> &mut O + 'static,
+        Self: Sized,
+        O: ?Sized,
+        F: Fn(&Self::Target) -> &O,
+        FMut: Fn(&mut Self::Target) -> &mut O,
     {
         MappedMutSignal::new(self, f, f_mut)
     }
 
     /// Run a function with a mutable reference to the value. If the value has been dropped, this will panic.
     #[track_caller]
-    fn with_mut<O>(&mut self, f: impl FnOnce(&mut Self::Target) -> O) -> O {
+    fn with_mut<O>(&mut self, f: impl FnOnce(&mut Self::Target) -> O) -> O
+    where
+        Self::Target: 'static,
+    {
         f(&mut *self.write())
     }
 
@@ -324,7 +344,7 @@ pub trait WritableExt: Writable {
     #[track_caller]
     fn set(&mut self, value: Self::Target)
     where
-        Self::Target: Sized,
+        Self::Target: Sized + 'static,
     {
         *self.write() = value;
     }
@@ -333,7 +353,7 @@ pub trait WritableExt: Writable {
     #[track_caller]
     fn toggle(&mut self)
     where
-        Self::Target: std::ops::Not<Output = Self::Target> + Clone,
+        Self::Target: std::ops::Not<Output = Self::Target> + Clone + 'static,
     {
         let inverted = !(*self.peek()).clone();
         self.set(inverted);
@@ -346,7 +366,7 @@ pub trait WritableExt: Writable {
         index: I,
     ) -> WritableRef<'_, Self, <Self::Target as std::ops::Index<I>>::Output>
     where
-        Self::Target: std::ops::IndexMut<I>,
+        Self::Target: std::ops::IndexMut<I> + 'static,
     {
         WriteLock::map(self.write(), |v| v.index_mut(index))
     }
@@ -355,7 +375,7 @@ pub trait WritableExt: Writable {
     #[track_caller]
     fn take(&mut self) -> Self::Target
     where
-        Self::Target: Default,
+        Self::Target: Default + 'static,
     {
         self.with_mut(std::mem::take)
     }
@@ -364,7 +384,7 @@ pub trait WritableExt: Writable {
     #[track_caller]
     fn replace(&mut self, value: Self::Target) -> Self::Target
     where
-        Self::Target: Sized,
+        Self::Target: Sized + 'static,
     {
         self.with_mut(|v| std::mem::replace(v, value))
     }
@@ -390,16 +410,22 @@ impl<T: Writable<Storage = UnsyncStorage> + 'static> WritableBoxedExt for T {
 }
 
 /// An extension trait for [`Writable<Option<T>>`]` that provides some convenience methods.
-pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
+pub trait WritableOptionExt<T>: Writable<Target = Option<T>> {
     /// Gets the value out of the Option, or inserts the given value if the Option is empty.
     #[track_caller]
-    fn get_or_insert(&mut self, default: T) -> WritableRef<'_, Self, T> {
+    fn get_or_insert(&mut self, default: T) -> WritableRef<'_, Self, T>
+    where
+        T: 'static,
+    {
         self.get_or_insert_with(|| default)
     }
 
     /// Gets the value out of the Option, or inserts the value returned by the given function if the Option is empty.
     #[track_caller]
-    fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> WritableRef<'_, Self, T> {
+    fn get_or_insert_with(&mut self, default: impl FnOnce() -> T) -> WritableRef<'_, Self, T>
+    where
+        T: 'static,
+    {
         let is_none = self.read().is_none();
         if is_none {
             self.with_mut(|v| *v = Some(default()));
@@ -411,83 +437,114 @@ pub trait WritableOptionExt<T: 'static>: Writable<Target = Option<T>> {
 
     /// Attempts to write the inner value of the Option.
     #[track_caller]
-    fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>> {
+    fn as_mut(&mut self) -> Option<WritableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         WriteLock::filter_map(self.write(), |v: &mut Option<T>| v.as_mut())
     }
 }
 
-impl<T, W> WritableOptionExt<T> for W
-where
-    T: 'static,
-    W: Writable<Target = Option<T>>,
-{
-}
+impl<T, W> WritableOptionExt<T> for W where W: Writable<Target = Option<T>> {}
 
 /// An extension trait for [`Writable<Vec<T>>`] that provides some convenience methods.
-pub trait WritableVecExt<T: 'static>: Writable<Target = Vec<T>> {
+pub trait WritableVecExt<T>: Writable<Target = Vec<T>> {
     /// Pushes a new value to the end of the vector.
     #[track_caller]
-    fn push(&mut self, value: T) {
+    fn push(&mut self, value: T)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.push(value))
     }
 
     /// Pops the last value from the vector.
     #[track_caller]
-    fn pop(&mut self) -> Option<T> {
+    fn pop(&mut self) -> Option<T>
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.pop())
     }
 
     /// Inserts a new value at the given index.
     #[track_caller]
-    fn insert(&mut self, index: usize, value: T) {
+    fn insert(&mut self, index: usize, value: T)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.insert(index, value))
     }
 
     /// Removes the value at the given index.
     #[track_caller]
-    fn remove(&mut self, index: usize) -> T {
+    fn remove(&mut self, index: usize) -> T
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.remove(index))
     }
 
     /// Clears the vector, removing all values.
     #[track_caller]
-    fn clear(&mut self) {
+    fn clear(&mut self)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.clear())
     }
 
     /// Extends the vector with the given iterator.
     #[track_caller]
-    fn extend(&mut self, iter: impl IntoIterator<Item = T>) {
+    fn extend(&mut self, iter: impl IntoIterator<Item = T>)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.extend(iter))
     }
 
     /// Truncates the vector to the given length.
     #[track_caller]
-    fn truncate(&mut self, len: usize) {
+    fn truncate(&mut self, len: usize)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.truncate(len))
     }
 
     /// Swaps two values in the vector.
     #[track_caller]
-    fn swap_remove(&mut self, index: usize) -> T {
+    fn swap_remove(&mut self, index: usize) -> T
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.swap_remove(index))
     }
 
     /// Retains only the values that match the given predicate.
     #[track_caller]
-    fn retain(&mut self, f: impl FnMut(&T) -> bool) {
+    fn retain(&mut self, f: impl FnMut(&T) -> bool)
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.retain(f))
     }
 
     /// Splits the vector into two at the given index.
     #[track_caller]
-    fn split_off(&mut self, at: usize) -> Vec<T> {
+    fn split_off(&mut self, at: usize) -> Vec<T>
+    where
+        T: 'static,
+    {
         self.with_mut(|v| v.split_off(at))
     }
 
     /// Try to mutably get an element from the vector.
     #[track_caller]
-    fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>> {
+    fn get_mut(&mut self, index: usize) -> Option<WritableRef<'_, Self, T>>
+    where
+        T: 'static,
+    {
         WriteLock::filter_map(self.write(), |v: &mut Vec<T>| v.get_mut(index))
     }
 
@@ -524,9 +581,148 @@ impl<'a, T: 'static, R: Writable<Target = Vec<T>>> Iterator for WritableValueIte
     }
 }
 
-impl<T, W> WritableVecExt<T> for W
-where
-    T: 'static,
-    W: Writable<Target = Vec<T>>,
+impl<W, T> WritableVecExt<T> for W where W: Writable<Target = Vec<T>> {}
+
+/// An extension trait for [`Writable<String>`] that provides some convenience methods.
+pub trait WritableStringExt: Writable<Target = String> {
+    ext_methods! {
+        /// Pushes a character to the end of the string.
+        fn push_str(&mut self, s: &str) = String::push_str;
+
+        /// Pushes a character to the end of the string.
+        fn push(&mut self, c: char) = String::push;
+
+        /// Pops a character from the end of the string.
+        fn pop(&mut self) -> Option<char> = String::pop;
+
+        /// Inserts a string at the given index.
+        fn insert_str(&mut self, idx: usize, s: &str) = String::insert_str;
+
+        /// Inserts a character at the given index.
+        fn insert(&mut self, idx: usize, c: char) = String::insert;
+
+        /// Remove a character at the given index
+        fn remove(&mut self, idx: usize) -> char = String::remove;
+
+        /// Replace a range of the string with the given string.
+        fn replace_range(&mut self, range: impl std::ops::RangeBounds<usize>, replace_with: &str) = String::replace_range;
+
+        /// Clears the string, removing all characters.
+        fn clear(&mut self) = String::clear;
+
+        /// Extends the string with the given iterator of characters.
+        fn extend(&mut self, iter: impl IntoIterator<Item = char>) = String::extend;
+
+        /// Truncates the string to the given length.
+        fn truncate(&mut self, len: usize) = String::truncate;
+
+        /// Splits the string off at the given index, returning the tail as a new string.
+        fn split_off(&mut self, at: usize) -> String = String::split_off;
+    }
+}
+
+impl<W> WritableStringExt for W where W: Writable<Target = String> {}
+
+/// An extension trait for [`Writable<HashMap<K, V, H>>`] that provides some convenience methods.
+pub trait WritableHashMapExt<K: 'static, V: 'static, H: 'static>:
+    Writable<Target = HashMap<K, V, H>>
+{
+    ext_methods! {
+        /// Clears the map, removing all key-value pairs.
+        fn clear(&mut self) = HashMap::clear;
+
+        /// Retains only the key-value pairs that match the given predicate.
+        fn retain(&mut self, f: impl FnMut(&K, &mut V) -> bool) = HashMap::retain;
+    }
+
+    /// Inserts a key-value pair into the map. If the key was already present, the old value is returned.
+    #[track_caller]
+    fn insert(&mut self, k: K, v: V) -> Option<V>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.insert(k, v))
+    }
+
+    /// Extends the map with the key-value pairs from the given iterator.
+    #[track_caller]
+    fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>)
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.extend(iter))
+    }
+
+    /// Removes a key from the map, returning the value at the key if the key was previously in the map.
+    #[track_caller]
+    fn remove(&mut self, k: &K) -> Option<V>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|map: &mut HashMap<K, V, H>| map.remove(k))
+    }
+
+    /// Get a mutable reference to the value at the given key.
+    #[track_caller]
+    fn get_mut(&mut self, k: &K) -> Option<WritableRef<'_, Self, V>>
+    where
+        K: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        WriteLock::filter_map(self.write(), |map: &mut HashMap<K, V, H>| map.get_mut(k))
+    }
+}
+
+impl<K: 'static, V: 'static, H: 'static, R> WritableHashMapExt<K, V, H> for R where
+    R: Writable<Target = HashMap<K, V, H>>
+{
+}
+
+/// An extension trait for [`Writable<HashSet<V, H>>`] that provides some convenience methods.
+pub trait WritableHashSetExt<V: 'static, H: 'static>: Writable<Target = HashSet<V, H>> {
+    ext_methods! {
+        /// Clear the hash set.
+        fn clear(&mut self) = HashSet::clear;
+
+        /// Retain only the elements specified by the predicate.
+        fn retain(&mut self, f: impl FnMut(&V) -> bool) = HashSet::retain;
+    }
+
+    /// Inserts a value into the set. Returns true if the value was not already present.
+    #[track_caller]
+    fn insert(&mut self, k: V) -> bool
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.insert(k))
+    }
+
+    /// Extends the set with the values from the given iterator.
+    #[track_caller]
+    fn extend(&mut self, iter: impl IntoIterator<Item = V>)
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.extend(iter))
+    }
+
+    /// Removes a value from the set. Returns true if the value was present.
+    #[track_caller]
+    fn remove(&mut self, k: &V) -> bool
+    where
+        V: std::cmp::Eq + std::hash::Hash,
+        H: std::hash::BuildHasher,
+    {
+        self.with_mut(|set| set.remove(k))
+    }
+}
+
+impl<V: 'static, H: 'static, R> WritableHashSetExt<V, H> for R where
+    R: Writable<Target = HashSet<V, H>>
 {
 }

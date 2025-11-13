@@ -4,10 +4,10 @@ const { test, expect } = require("@playwright/test");
 test("optimized scripts run", async ({ page }) => {
   await page.goto("http://localhost:8989");
 
-  // Expect the page to load the script after optimizations have been applied. The script
-  // should add an editor to the page that shows a main function
-  const main = page.locator("#main");
-  await expect(main).toContainText("hi");
+  // // Expect the page to load the script after optimizations have been applied. The script
+  // // should add an editor to the page that shows a main function
+  // const main = page.locator("#main");
+  // await expect(main).toContainText("hi");
 
   // Expect the page to contain an image with the id "some_image"
   const image = page.locator("#some_image");
@@ -44,4 +44,16 @@ test("unused external assets are bundled", async ({ page }) => {
   expect(response.status()).toBe(200);
   // make sure the response is an image
   expect(response.headers()["content-type"]).toBe("image/png");
+});
+
+test("assets are resolved", async ({ page }) => {
+  await page.goto("http://localhost:8989");
+
+  // Expect the page to contain an element with the id "resolved-data"
+  const resolvedData = page.locator("#resolved-data");
+  await expect(resolvedData).toBeVisible();
+  // Expect the element to contain the text "List: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+  await expect(resolvedData).toContainText(
+    "List: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+  );
 });

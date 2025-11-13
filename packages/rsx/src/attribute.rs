@@ -614,17 +614,19 @@ impl IfAttributeValue {
     }
 
     fn contains_expression(&self) -> bool {
-        if let AttributeValue::AttrExpr(_) = &*self.then_value {
-            return true;
+        fn attribute_value_contains_expression(expr: &AttributeValue) -> bool {
+            match expr {
+                AttributeValue::IfExpr(if_expr) => if_expr.contains_expression(),
+                AttributeValue::AttrLiteral(_) => false,
+                _ => true,
+            }
         }
-        match &self.else_value {
-            Some(attribute) => match attribute.as_ref() {
-                AttributeValue::IfExpr(if_expr) => if_expr.is_terminated(),
-                AttributeValue::AttrExpr(_) => true,
-                _ => false,
-            },
-            None => false,
-        }
+
+        attribute_value_contains_expression(&self.then_value)
+            || self
+                .else_value
+                .as_deref()
+                .is_some_and(attribute_value_contains_expression)
     }
 
     fn parse_attribute_value_from_block(block: &Block) -> syn::Result<Box<AttributeValue>> {
@@ -691,7 +693,7 @@ impl IfAttributeValue {
             }
         }
 
-        let then_value = quote_attribute_value_string(then_value, terminated);
+        let then_value = quote_attribute_value_string(then_value, contains_expression);
 
         let then_value = if terminated {
             quote! { #then_value }

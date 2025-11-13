@@ -26,6 +26,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
+use rustls::crypto::{aws_lc_rs::default_provider, CryptoProvider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -148,7 +149,7 @@ impl WebServer {
                 if let Some(new_socket) = new_hot_reload_socket {
                     let aslr_reference = new_socket.aslr_reference;
                     let pid = new_socket.pid;
-                    let id = new_socket.build_id.unwrap_or(BuildId::CLIENT);
+                    let id = new_socket.build_id.unwrap_or(BuildId::PRIMARY);
 
                     drop(new_message);
                     self.hot_reload_sockets.push(new_socket);
@@ -315,6 +316,7 @@ impl WebServer {
             for_build_id: Some(build.0 as _),
         });
         self.send_devserver_message_to_all(msg).await;
+        self.set_ready().await;
     }
 
     /// Tells all clients that a hot patch has started.
@@ -337,12 +339,7 @@ impl WebServer {
 
     /// Tells all clients to reload if possible for new changes.
     pub(crate) async fn send_reload_command(&mut self) {
-        tracing::trace!("Sending reload to toast");
-
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-
-        self.build_status.set(Status::Ready);
-        self.send_build_status().await;
+        self.set_ready().await;
         self.send_devserver_message_to_all(DevserverMsg::FullReloadCommand)
             .await;
     }
@@ -361,6 +358,16 @@ impl WebServer {
                 .send(Message::Text(serde_json::to_string(&msg).unwrap().into()))
                 .await;
         }
+    }
+
+    /// Mark the devserver status as ready and notify listeners.
+    async fn set_ready(&mut self) {
+        if matches!(self.build_status.get(), Status::Ready) {
+            return;
+        }
+
+        self.build_status.set(Status::Ready);
+        self.send_build_status().await;
     }
 
     /// Get the address the devserver should run on
@@ -416,7 +423,10 @@ async fn devserver_mainloop(
         return Ok(());
     }
 
-    // If we're using rustls, we need to get the cert/key paths and then set up rustls
+    // If we're using rustls, we need to install the provider, get the cert/key paths, and then set up rustls
+    if let Err(provider) = CryptoProvider::install_default(default_provider()) {
+        bail!("Failed to install default CryptoProvider: {provider:?}");
+    }
     let (cert_path, key_path) = get_rustls(&https_cfg).await?;
     let rustls = axum_server::tls_rustls::RustlsConfig::from_pem_file(cert_path, key_path).await?;
 

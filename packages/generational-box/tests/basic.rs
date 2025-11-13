@@ -14,7 +14,7 @@ fn compile_fail() {}
 
 #[test]
 fn leaking_is_ok() {
-    fn leaking_is_ok_test<S: Storage<String>>() {
+    fn leaking_is_ok_test<S: Storage<String> + 'static>() {
         let data = String::from("hello world");
         let key;
         {
@@ -37,7 +37,7 @@ fn leaking_is_ok() {
 
 #[test]
 fn drops() {
-    fn drops_test<S: Storage<String>>() {
+    fn drops_test<S: Storage<String> + 'static>() {
         let data = String::from("hello world");
         let key;
         {
@@ -56,7 +56,7 @@ fn drops() {
 
 #[test]
 fn works() {
-    fn works_test<S: Storage<i32>>() {
+    fn works_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
         let key = owner.insert(1);
 
@@ -69,7 +69,7 @@ fn works() {
 
 #[test]
 fn insert_while_reading() {
-    fn insert_while_reading_test<S: Storage<String> + Storage<&'static i32>>() {
+    fn insert_while_reading_test<S: Storage<String> + Storage<&'static i32> + 'static>() {
         let owner = S::owner();
         let key;
         {
@@ -88,7 +88,7 @@ fn insert_while_reading() {
 #[test]
 #[should_panic]
 fn panics() {
-    fn panics_test<S: Storage<i32>>() {
+    fn panics_test<S: Storage<i32> + 'static>() {
         let owner = S::owner();
 
         let key = owner.insert(1);
@@ -103,7 +103,7 @@ fn panics() {
 
 #[test]
 fn fuzz() {
-    fn maybe_owner_scope<S: Storage<String>>(
+    fn maybe_owner_scope<S: Storage<String> + 'static>(
         valid_keys: &mut Vec<GenerationalBox<String, S>>,
         invalid_keys: &mut Vec<GenerationalBox<String, S>>,
         path: &mut Vec<u8>,

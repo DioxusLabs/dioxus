@@ -2,7 +2,7 @@ use generational_box::{Storage, SyncStorage, UnsyncStorage};
 
 #[test]
 fn reference_counting() {
-    fn reference_counting<S: Storage<String>>() {
+    fn reference_counting<S: Storage<String> + 'static>() {
         let data = String::from("hello world");
         let reference;
         {
@@ -30,7 +30,7 @@ fn reference_counting() {
 
 #[test]
 fn move_reference_in_place() {
-    fn move_reference_in_place<S: Storage<String>>() {
+    fn move_reference_in_place<S: Storage<String> + 'static>() {
         let data1 = String::from("hello world");
         let data2 = String::from("hello world 2");
 

@@ -216,6 +216,8 @@ impl TailwindCli {
         let arch = match target_lexicon::HOST.architecture {
             target_lexicon::Architecture::X86_64 if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::X86_64 => "x64",
+            // you would think this would be arm64.exe, but tailwind doesnt distribute arm64 binaries
+            target_lexicon::Architecture::Aarch64(_) if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::Aarch64(_) => "arm64",
             _ => return None,
         };
@@ -224,7 +226,7 @@ impl TailwindCli {
     }
 
     fn install_dir(&self) -> Result<PathBuf> {
-        let bindgen_dir = Workspace::dioxus_home_dir().join("tailwind/");
+        let bindgen_dir = Workspace::dioxus_data_dir().join("tailwind/");
         Ok(bindgen_dir)
     }
 

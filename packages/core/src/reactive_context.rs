@@ -62,11 +62,7 @@ impl ReactiveContext {
             }
             let _ = tx.unbounded_send(());
         };
-        let _self = Self::new_with_callback(
-            callback,
-            current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-            origin,
-        );
+        let _self = Self::new_with_callback(callback, current_scope_id(), origin);
         (_self, rx)
     }
 
@@ -86,7 +82,7 @@ impl ReactiveContext {
             scope: None,
         };
 
-        let owner = scope.owner();
+        let owner = Runtime::current().scope_owner(scope);
 
         let self_ = Self {
             scope,
@@ -108,8 +104,7 @@ impl ReactiveContext {
         let id = scope.id;
         let sender = runtime.sender.clone();
         let update_scope = move || {
-            tracing::trace!("Marking scope {:?} as dirty", id);
-            sender.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+            _ = sender.unbounded_send(SchedulerMsg::Immediate(id));
         };
 
         // Otherwise, create a new context at the current scope
@@ -335,6 +330,21 @@ impl Default for Subscribers {
 }
 
 impl Subscribers {
+    /// Create a new no-op list of subscribers.
+    pub fn new_noop() -> Self {
+        struct NoopSubscribers;
+        impl SubscriberList for NoopSubscribers {
+            fn add(&self, _subscriber: ReactiveContext) {}
+
+            fn remove(&self, _subscriber: &ReactiveContext) {}
+
+            fn visit(&self, _f: &mut dyn FnMut(&ReactiveContext)) {}
+        }
+        Subscribers {
+            inner: Arc::new(NoopSubscribers),
+        }
+    }
+
     /// Create a new list of subscribers.
     pub fn new() -> Self {
         Subscribers {

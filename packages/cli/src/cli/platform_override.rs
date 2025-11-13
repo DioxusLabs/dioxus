@@ -1,6 +1,8 @@
 #![allow(dead_code)]
+use crate::Anonymized;
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
+use serde_json::{json, Value};
 
 /// Wraps a component with the subcommands `@server` and `@client` which will let you override the
 /// base arguments for the client and server instances.
@@ -27,6 +29,19 @@ impl<T> CommandWithPlatformOverrides<T> {
             Some(server) => f(server),
             None => f(&self.shared),
         }
+    }
+}
+
+impl<T> Anonymized for CommandWithPlatformOverrides<T>
+where
+    T: Anonymized,
+{
+    fn anonymized(&self) -> Value {
+        json!({
+            "shared": self.shared.anonymized(),
+            "server": self.server.as_ref().map(|s| s.anonymized()),
+            "client": self.client.as_ref().map(|c| c.anonymized()),
+        })
     }
 }
 

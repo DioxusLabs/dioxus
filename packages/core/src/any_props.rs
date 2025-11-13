@@ -75,7 +75,7 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
     }
 
     fn render(&self) -> Element {
-        fn render_inner(name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
+        fn render_inner(_name: &str, res: Result<Element, Box<dyn Any + Send>>) -> Element {
             match res {
                 Ok(node) => node,
                 Err(err) => {
@@ -83,9 +83,9 @@ impl<F: ComponentFunction<P, M> + Clone, P: Clone + 'static, M: 'static> AnyProp
                     // so do nothing
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        tracing::error!("Panic while rendering component `{name}`: {err:?}");
+                        tracing::error!("Panic while rendering component `{_name}`: {err:?}");
                     }
-                    Element::Err(CapturedPanic { error: err }.into())
+                    Element::Err(CapturedPanic(err).into())
                 }
             }
         }

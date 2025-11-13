@@ -45,7 +45,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
@@ -81,7 +81,7 @@ fn app() -> Element {
 - [Ergonomik durum yönetimi](https://dioxuslabs.com/blog/release-050) React, Solid ve Svelte'nin en iyi özelliklerini birleştirdik.
 - Rust'ın en en hızlı wasm(WebAssembly)-framework'ü (yazılım geliştirmek için kullanılan kütüphanelerin bir araya gelmesi ile oluşan yapılar) ile yüksek performans [sledgehammer](https://dioxuslabs.com/blog/templates-diffing).
 - Web, macOS, Linux ve Windows üzerinde deploy (yayınlamak) için entegre paketleyici (burada belirtilen `dx bundle` bizim için işleri hallediyor).
-- Ve daha fazlası! Gözat -> [Dioxus turu](https://dioxuslabs.com/learn/0.6/).
+- Ve daha fazlası! Gözat -> [Dioxus turu](https://dioxuslabs.com/learn/0.7/).
 
 ## Anında hot-reloading
 
@@ -93,7 +93,7 @@ Tek bir `dx serve` komutu ile uygulamanı çalıştır. Markup ve styles(html ve
 
 ## Web ve Masaüstü için Paketleyici
 
-Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon ile derlenip paketlensin. Web üzerindeki [`.avif` oluşturma, `.wasm` sıkıştırma, küçültme](https://dioxuslabs.com/learn/0.6/guides/assets) ve daha fazlası ile avantajı yakala. [50kb'dan daha küçük](https://github.com/ealmloff/tiny-dioxus/) hafif web uygulamaları ve 15mb'dan daha az boyutlarda masaüstü/mobil uygulamalar üret.
+Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon ile derlenip paketlensin. Web üzerindeki [`.avif` oluşturma, `.wasm` sıkıştırma, küçültme](https://dioxuslabs.com/learn/0.7/tutorial/assets) ve daha fazlası ile avantajı yakala. [50kb'dan daha küçük](https://github.com/ealmloff/tiny-dioxus/) hafif web uygulamaları ve 15mb'dan daha az boyutlarda masaüstü/mobil uygulamalar üret.
 
 <div align="center">
   <img src="../../notes/bundle.gif">
@@ -101,7 +101,7 @@ Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon il
 
 ## Fantastik Dökümantasyon
 
-Temiz, okunabilir ve kapsayıcı döküman için bir ton uğraştık. Bütün html elementleri ve listeners(takipçiler) MDN (geliştiriciler için dökümantasyon detay için [tıkla](https://developer.mozilla.org)) ile dökümente edildi, ve güncelliğinden emin olmak için docsite(dökümanlar) Dioxus'un kendisi ile sürekli entegrasyon halinde. Rehbeler, referanslar, tarifler, ve daha fazlası için göz at [Dioxus websitesi](https://dioxuslabs.com/learn/0.6/). İlginç gerçek: Dioxus'un sitesini yeni özelliklerimizi test etmek için deneme tahtası olarak kullanıyoruz -> [Göz at!](https://github.com/dioxusLabs/docsite)
+Temiz, okunabilir ve kapsayıcı döküman için bir ton uğraştık. Bütün html elementleri ve listeners(takipçiler) MDN (geliştiriciler için dökümantasyon detay için [tıkla](https://developer.mozilla.org)) ile dökümente edildi, ve güncelliğinden emin olmak için docsite(dökümanlar) Dioxus'un kendisi ile sürekli entegrasyon halinde. Rehbeler, referanslar, tarifler, ve daha fazlası için göz at [Dioxus websitesi](https://dioxuslabs.com/learn/0.7/). İlginç gerçek: Dioxus'un sitesini yeni özelliklerimizi test etmek için deneme tahtası olarak kullanıyoruz -> [Göz at!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="../../notes/docs.avif">
@@ -391,7 +391,7 @@ Dioxus ve Electron benzer amaçlara sahip tamamıyla farklı iki projedir. Elect
 
 ## Katkı Sağlama
 
-- [Katkı sağlamayla alakalı kısım](https://dioxuslabs.com/learn/0.6/contributing) için web sitemizi ziyaret edin.
+- [Katkı sağlamayla alakalı kısım](https://dioxuslabs.com/learn/0.7/beyond/contributing) için web sitemizi ziyaret edin.
 - [Issue tracker(sorun takipçisi)](https://github.com/dioxuslabs/dioxus/issues) üzerinden sorunlarınızı raporlayabilirsiniz.
 - Discord'a [katıl](https://discord.gg/XgGxMSkvUM) ve sorularını sor!
 

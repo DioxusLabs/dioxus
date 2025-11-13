@@ -499,7 +499,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
-        // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
+        // on android we try to circumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
         let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
 
@@ -573,6 +573,16 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
 
         // Wait for the fetch to complete - we need the wasm module size in bytes to reserve in the memory
         let response: web_sys::Response = JsFuture::from(response).await.unwrap().unchecked_into();
+
+        // If the status is not success, we bail
+        if !response.ok() {
+            panic!(
+                "Failed to patch wasm module at {} - response failed with: {}",
+                path,
+                response.status_text()
+            );
+        }
+
         let dl_bytes: ArrayBuffer = JsFuture::from(response.array_buffer().unwrap())
             .await
             .unwrap()
