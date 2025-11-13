@@ -131,7 +131,15 @@ impl<Lens: Readable<Target = BTreeMap<K, V>> + 'static, K: 'static, V: 'static>
         K: Ord,
         Lens: Writable,
     {
-        self.selector().mark_dirty_shallow();
+        // TODO: This method was released in 0.7 without the hash bound so we don't have a way
+        // to mark only the existing value as dirty. Instead we need to check if the value already exists
+        // in the map and mark the whole map as dirty if it does.
+        // In the 0.8 release, we should change this method to only mark the existing value as dirty.
+        if self.peek().contains_key(&key) {
+            self.selector().mark_dirty();
+        } else {
+            self.selector().mark_dirty_shallow();
+        }
         self.selector().write_untracked().insert(key, value);
     }
 

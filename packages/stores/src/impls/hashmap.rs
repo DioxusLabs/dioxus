@@ -139,7 +139,13 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
         St: BuildHasher,
         Lens: Writable,
     {
+        // Mark the store itself as dirty since the keys may have changed
         self.selector().mark_dirty_shallow();
+        // Mark the existing value as dirty if it exists
+        self.selector()
+            .as_ref()
+            .hash_child_unmapped(key.borrow())
+            .mark_dirty();
         self.selector().write_untracked().insert(key, value);
     }
 
