@@ -1,8 +1,12 @@
 //! Android-specific utilities for mobile APIs
 
+#[cfg(target_os = "android")]
 pub mod activity;
+#[cfg(target_os = "android")]
 pub mod callback;
+#[cfg(target_os = "android")]
 pub mod java;
+#[cfg(any(target_os = "android", feature = "metadata"))]
 pub mod metadata;
 
 #[doc(hidden)]
@@ -24,9 +28,12 @@ pub mod macro_helpers {
     }
 }
 
+#[cfg(target_os = "android")]
 pub use activity::*;
+#[cfg(target_os = "android")]
 pub use callback::*;
+#[cfg(target_os = "android")]
 pub use java::*;
 
 #[cfg(feature = "metadata")]
-pub use metadata::JavaSourceMetadata;
+pub use metadata::AndroidArtifactMetadata;

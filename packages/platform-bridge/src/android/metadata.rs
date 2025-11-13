@@ -3,81 +3,45 @@
 #[cfg(feature = "metadata")]
 use const_serialize::{ConstStr, ConstVec, SerializeConst};
 
-/// Java source file metadata that can be embedded in the binary
+/// Android artifact metadata that can be embedded in the binary.
 ///
-/// This struct contains information about Java source files that need to be
-/// compiled into the Android APK. It uses const-serialize to be embeddable
-/// in linker sections, similar to how permissions work.
+/// This struct contains information about prebuilt Android artifacts (e.g. AARs)
+/// that should be linked into the final Gradle project. The data is embedded via
+/// linker sections similar to how permissions and Swift metadata are handled.
 #[cfg(feature = "metadata")]
 #[derive(Debug, Clone, PartialEq, Eq, SerializeConst)]
-pub struct JavaSourceMetadata {
-    /// Java package name (e.g. "dioxus.mobile.geolocation")
-    pub package_name: ConstStr,
-    /// Plugin identifier for organization (e.g. "geolocation")
+pub struct AndroidArtifactMetadata {
     pub plugin_name: ConstStr,
-    /// Number of files
-    pub file_count: u8,
-    /// File paths - absolute paths to Java source files
-    /// Example: "/path/to/crate/src/sys/android/LocationCallback.java"
-    /// Maximum 8 files supported
-    pub files: [ConstStr; 8],
+    pub artifact_path: ConstStr,
+    pub gradle_dependencies: ConstStr,
 }
 
 #[cfg(feature = "metadata")]
-impl JavaSourceMetadata {
-    /// Create new Java source metadata with absolute file paths
-    ///
-    /// Takes full absolute paths to Java source files. The paths are embedded at compile time
-    /// using the `android_plugin!()` macro, which uses `env!("CARGO_MANIFEST_DIR")` to resolve
-    /// paths relative to the calling crate.
-    ///
-    /// # Example
-    /// ```rust,no_run
-    /// JavaSourceMetadata::new(
-    ///     "dioxus.mobile.geolocation",
-    ///     "geolocation",
-    ///     &[
-    ///         "/path/to/crate/src/sys/android/LocationCallback.java",
-    ///         "/path/to/crate/src/sys/android/PermissionsHelper.java",
-    ///     ],
-    /// )
-    /// ```
+impl AndroidArtifactMetadata {
     pub const fn new(
-        package_name: &'static str,
         plugin_name: &'static str,
-        file_paths: &'static [&'static str],
+        artifact_path: &'static str,
+        gradle_dependencies: &'static str,
     ) -> Self {
-        let mut file_array = [ConstStr::new(""); 8];
-        let mut i = 0;
-        while i < file_paths.len() && i < 8 {
-            file_array[i] = ConstStr::new(file_paths[i]);
-            i += 1;
-        }
-
         Self {
-            package_name: ConstStr::new(package_name),
             plugin_name: ConstStr::new(plugin_name),
-            file_count: file_paths.len() as u8,
-            files: file_array,
+            artifact_path: ConstStr::new(artifact_path),
+            gradle_dependencies: ConstStr::new(gradle_dependencies),
         }
     }
 
-    /// The size of the serialized data buffer
     pub const SERIALIZED_SIZE: usize = 4096;
 }
 
-/// Buffer type used for serialized Java metadata blobs
 #[cfg(feature = "metadata")]
-pub type JavaMetadataBuffer = ConstVec<u8, { JavaSourceMetadata::SERIALIZED_SIZE }>;
+pub type AndroidMetadataBuffer = ConstVec<u8, { AndroidArtifactMetadata::SERIALIZED_SIZE }>;
 
-/// Serialize metadata into a fixed-size buffer for linker embedding
 #[cfg(feature = "metadata")]
-pub const fn serialize_java_metadata(meta: &JavaSourceMetadata) -> JavaMetadataBuffer {
+pub const fn serialize_android_metadata(meta: &AndroidArtifactMetadata) -> AndroidMetadataBuffer {
     let serialized = const_serialize::serialize_const(meta, ConstVec::new());
-    let mut buffer: JavaMetadataBuffer = ConstVec::new_with_max_size();
+    let mut buffer: AndroidMetadataBuffer = ConstVec::new_with_max_size();
     buffer = buffer.extend(serialized.as_ref());
-    // Pad to the expected size to ensure consistent linker symbols
-    while buffer.len() < JavaSourceMetadata::SERIALIZED_SIZE {
+    while buffer.len() < AndroidArtifactMetadata::SERIALIZED_SIZE {
         buffer = buffer.push(0);
     }
     buffer

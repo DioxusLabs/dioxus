@@ -1,151 +1,127 @@
-//! Android Java source collection from compiled binaries
+//! Android artifact collection from compiled binaries.
 //!
-//! This module extracts Java source metadata from embedded linker symbols,
-//! similar to how permissions and manganis work. It finds `__JAVA_SOURCE__`
-//! symbols in the binary and deserializes them into metadata that can be
-//! used by the Gradle build process.
+//! This module extracts Android artifact metadata (AAR paths) from embedded linker symbols,
+//! similar to how permissions and Swift sources are discovered. It finds
+//! `__ANDROID_ARTIFACT__` symbols in the binary and deserializes them so the
+//! Gradle build can consume the prebuilt plugins.
 
 use std::io::Read;
 use std::path::Path;
 
 use crate::Result;
 
-const JAVA_SOURCE_SYMBOL_PREFIX: &str = "__JAVA_SOURCE__";
+const ANDROID_ARTIFACT_SYMBOL_PREFIX: &str = "__ANDROID_ARTIFACT__";
 
 use super::linker_symbols;
 
-/// Metadata about Java sources that need to be compiled to DEX
-/// This mirrors the struct from platform-bridge
+/// Metadata about Android artifacts (AARs) that should be included in the Gradle build.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct JavaSourceMetadata {
-    /// File paths relative to crate root
-    pub files: Vec<String>,
-    /// Java package name (e.g. "dioxus.mobile.geolocation")
-    pub package_name: String,
-    /// Plugin identifier for organization (e.g. "geolocation")
+pub struct AndroidArtifactMetadata {
     pub plugin_name: String,
+    pub artifact_path: String,
+    pub gradle_dependencies: Vec<String>,
 }
 
-impl JavaSourceMetadata {
-    /// Create from the platform-bridge SerializeConst version
-    fn from_const_serialize(
-        package_name: const_serialize::ConstStr,
-        plugin_name: const_serialize::ConstStr,
-        file_count: u8,
-        files: [const_serialize::ConstStr; 8],
-    ) -> Self {
+impl AndroidArtifactMetadata {
+    fn from_const(meta: dioxus_platform_bridge::android::AndroidArtifactMetadata) -> Self {
+        let deps = meta
+            .gradle_dependencies
+            .as_str()
+            .split('\n')
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            })
+            .collect();
         Self {
-            package_name: package_name.as_str().to_string(),
-            plugin_name: plugin_name.as_str().to_string(),
-            files: files[..file_count as usize]
-                .iter()
-                .map(|s| s.as_str().to_string())
-                .collect(),
+            plugin_name: meta.plugin_name.as_str().to_string(),
+            artifact_path: meta.artifact_path.as_str().to_string(),
+            gradle_dependencies: deps,
         }
     }
 }
 
-/// A manifest of all Java sources found in a binary
+/// Manifest of all Android artifacts found in a binary.
 #[derive(Debug, Clone, Default)]
-pub struct JavaSourceManifest {
-    sources: Vec<JavaSourceMetadata>,
+pub struct AndroidArtifactManifest {
+    artifacts: Vec<AndroidArtifactMetadata>,
 }
 
-impl JavaSourceManifest {
-    pub fn new(sources: Vec<JavaSourceMetadata>) -> Self {
-        Self { sources }
+impl AndroidArtifactManifest {
+    pub fn new(artifacts: Vec<AndroidArtifactMetadata>) -> Self {
+        Self { artifacts }
     }
 
-    pub fn sources(&self) -> &[JavaSourceMetadata] {
-        &self.sources
+    pub fn artifacts(&self) -> &[AndroidArtifactMetadata] {
+        &self.artifacts
     }
 
     pub fn is_empty(&self) -> bool {
-        self.sources.is_empty()
+        self.artifacts.is_empty()
     }
 }
 
-/// Extract all Java sources from the given file
-pub(crate) fn extract_java_sources_from_file(path: impl AsRef<Path>) -> Result<JavaSourceManifest> {
+/// Extract all Android artifacts from the given file.
+pub(crate) fn extract_android_artifacts_from_file(
+    path: impl AsRef<Path>,
+) -> Result<AndroidArtifactManifest> {
     let path = path.as_ref();
-    let offsets = linker_symbols::find_symbol_offsets_from_path(path, JAVA_SOURCE_SYMBOL_PREFIX)?;
+    let offsets =
+        linker_symbols::find_symbol_offsets_from_path(path, ANDROID_ARTIFACT_SYMBOL_PREFIX)?;
 
     let mut file = std::fs::File::open(path)?;
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
 
-    let mut sources = Vec::new();
-
-    // Parse the metadata from each symbol offset
-    // The format is: (package_name: &str, plugin_name: &str, files: &[&str])
+    let mut artifacts = Vec::new();
     for offset in offsets {
-        match parse_java_metadata_at_offset(&file_contents, offset as usize) {
+        match parse_android_metadata_at_offset(&file_contents, offset as usize) {
             Ok(metadata) => {
                 tracing::debug!(
-                    "Extracted Java metadata: plugin={}, package={}, files={:?}",
+                    "Extracted Android artifact metadata: plugin={} path={} deps={}",
                     metadata.plugin_name,
-                    metadata.package_name,
-                    metadata.files
+                    metadata.artifact_path,
+                    metadata.gradle_dependencies.len()
                 );
-                sources.push(metadata);
+                artifacts.push(metadata);
             }
             Err(e) => {
-                tracing::warn!("Failed to parse Java metadata at offset {}: {}", offset, e);
+                tracing::warn!(
+                    "Failed to parse Android metadata at offset {}: {}",
+                    offset,
+                    e
+                );
             }
         }
     }
 
-    if !sources.is_empty() {
+    if !artifacts.is_empty() {
         tracing::info!(
-            "Extracted {} Java source declarations from binary",
-            sources.len()
+            "Extracted {} Android artifact declaration(s) from binary",
+            artifacts.len()
         );
     }
 
-    Ok(JavaSourceManifest::new(sources))
+    Ok(AndroidArtifactManifest::new(artifacts))
 }
 
-/// Parse Java metadata from binary data at the given offset
-///
-/// The data is serialized using const-serialize and contains:
-/// - package_name: ConstStr
-/// - plugin_name: ConstStr  
-/// - file_count: u8
-/// - files: [ConstStr; 8]
-fn parse_java_metadata_at_offset(data: &[u8], offset: usize) -> Result<JavaSourceMetadata> {
-    use const_serialize::ConstStr;
-
-    // Read the serialized data (padded to 4096 bytes like permissions)
+fn parse_android_metadata_at_offset(data: &[u8], offset: usize) -> Result<AndroidArtifactMetadata> {
     let end = (offset + 4096).min(data.len());
     let metadata_bytes = &data[offset..end];
 
-    // Use deserialize_const! directly with the byte slice (new API)
-    // Note: Java sources are being ignored for now per the plan, but we fix compilation errors
-
-    // Deserialize the struct fields
-    // The new API uses deserialize_const! with a byte slice directly
-    if let Some((remaining, package_name)) =
-        const_serialize::deserialize_const!(ConstStr, metadata_bytes)
-    {
-        if let Some((remaining, plugin_name)) =
-            const_serialize::deserialize_const!(ConstStr, remaining)
-        {
-            if let Some((remaining, file_count)) =
-                const_serialize::deserialize_const!(u8, remaining)
-            {
-                if let Some((_, files)) =
-                    const_serialize::deserialize_const!([ConstStr; 8], remaining)
-                {
-                    return Ok(JavaSourceMetadata::from_const_serialize(
-                        package_name,
-                        plugin_name,
-                        file_count,
-                        files,
-                    ));
-                }
-            }
-        }
+    if let Some((_, meta)) = const_serialize::deserialize_const!(
+        dioxus_platform_bridge::android::AndroidArtifactMetadata,
+        metadata_bytes
+    ) {
+        return Ok(AndroidArtifactMetadata::from_const(meta));
     }
 
-    anyhow::bail!("Failed to deserialize Java metadata at offset {}", offset)
+    anyhow::bail!(
+        "Failed to deserialize Android metadata at offset {}",
+        offset
+    )
 }

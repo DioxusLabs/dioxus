@@ -1,0 +1,37 @@
+[package]
+name = "dioxus-geolocation"
+description = "Get and track the device's current position for Dioxus mobile apps"
+version = { workspace = true }
+edition = "2021"
+authors = ["DioxusLabs"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus"
+build = "build.rs"
+
+[package.metadata.docs.rs]
+targets = ["aarch64-linux-android", "aarch64-apple-ios"]
+
+[package.metadata.platforms.support]
+windows = { level = "none", notes = "" }
+linux = { level = "none", notes = "" }
+macos = { level = "none", notes = "" }
+android = { level = "full", notes = "" }
+ios = { level = "full", notes = "" }
+
+[features]
+default = []
+metadata = ["dioxus-platform-bridge/metadata"]
+
+[dependencies]
+serde = "1.0"
+serde_json = "1.0"
+log = "0.4"
+thiserror = "1.0"
+dioxus-platform-bridge = { workspace = true, optional = true }
+permissions = { workspace = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6.3"

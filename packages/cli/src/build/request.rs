@@ -454,7 +454,7 @@ pub struct BuildArtifacts {
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
     pub(crate) permissions: super::permissions::PermissionManifest,
-    pub(crate) java_sources: super::android_java::JavaSourceManifest,
+    pub(crate) android_artifacts: super::android_java::AndroidArtifactManifest,
     pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
@@ -1125,9 +1125,9 @@ impl BuildRequest {
                     .context("Failed to write metadata")?;
 
                 // Copy Java sources to Gradle directory for Android
-                if self.bundle == BundleFormat::Android && !artifacts.java_sources.is_empty() {
-                    self.copy_java_sources_to_gradle(&artifacts.java_sources)
-                        .context("Failed to copy Java sources to Gradle directory")?;
+                if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+                    self.install_android_artifacts(&artifacts.android_artifacts)
+                        .context("Failed to install Android plugin artifacts")?;
                 }
 
                 if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
@@ -1350,8 +1350,8 @@ impl BuildRequest {
         // Since they use the same __ASSETS__ prefix, we can extract them in one pass
         let (assets, permissions) = self.collect_assets_and_permissions(&exe, ctx).await?;
 
-        // Extract Java sources for Android builds
-        let java_sources = self.collect_java_sources(&exe, ctx).await?;
+        // Extract Android artifacts for Android builds
+        let android_artifacts = self.collect_android_artifacts(&exe, ctx).await?;
 
         // Extract Swift sources for iOS/macOS builds
         let swift_sources = self.collect_swift_sources(&exe, ctx).await?;
@@ -1376,7 +1376,7 @@ impl BuildRequest {
             time_start,
             assets,
             permissions,
-            java_sources,
+            android_artifacts,
             swift_sources,
             mode,
             depinfo,
@@ -1488,29 +1488,28 @@ impl BuildRequest {
         Ok((asset_manifest, permission_manifest))
     }
 
-    /// Collect Java sources for Android builds
-    async fn collect_java_sources(
+    /// Collect Android plugin artifacts declared by dependencies.
+    async fn collect_android_artifacts(
         &self,
         exe: &Path,
         _ctx: &BuildContext,
-    ) -> Result<super::android_java::JavaSourceManifest> {
+    ) -> Result<super::android_java::AndroidArtifactManifest> {
         if self.bundle != BundleFormat::Android {
-            return Ok(super::android_java::JavaSourceManifest::default());
+            return Ok(super::android_java::AndroidArtifactManifest::default());
         }
 
-        let manifest = super::android_java::extract_java_sources_from_file(exe)?;
+        let manifest = super::android_java::extract_android_artifacts_from_file(exe)?;
 
         if !manifest.is_empty() {
             tracing::debug!(
-                "Found {} Java source declarations for Android",
-                manifest.sources().len()
+                "Found {} Android artifact declaration(s)",
+                manifest.artifacts().len()
             );
-            for source in manifest.sources() {
+            for artifact in manifest.artifacts() {
                 tracing::debug!(
-                    "  Plugin: {}, Package: {}, Files: {}",
-                    source.plugin_name.as_str(),
-                    source.package_name.as_str(),
-                    source.files.len()
+                    "  Plugin: {} Artifact: {}",
+                    artifact.plugin_name,
+                    artifact.artifact_path
                 );
             }
         }
@@ -1518,51 +1517,49 @@ impl BuildRequest {
         Ok(manifest)
     }
 
-    /// Copy collected Java source files to the Gradle app directory
-    fn copy_java_sources_to_gradle(
+    /// Copy collected Android AARs into the Gradle project and add dependencies.
+    fn install_android_artifacts(
         &self,
-        java_sources: &super::android_java::JavaSourceManifest,
+        android_artifacts: &super::android_java::AndroidArtifactManifest,
     ) -> Result<()> {
-        let app_java_dir = self
-            .root_dir()
-            .join("app")
-            .join("src")
-            .join("main")
-            .join("java");
+        let libs_dir = self.root_dir().join("app").join("libs");
+        std::fs::create_dir_all(&libs_dir)?;
 
-        for source_metadata in java_sources.sources() {
-            let package_path = source_metadata.package_name.as_str().replace('.', "/");
-            let plugin_java_dir = app_java_dir.join(&package_path);
-            std::fs::create_dir_all(&plugin_java_dir)?;
-
-            for file_path_str in source_metadata.files.iter() {
-                let file_path = PathBuf::from(file_path_str.as_str());
-
-                // Get filename for destination
-                let filename = file_path.file_name().ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Java source path has no filename: {} (for plugin '{}')",
-                        file_path.display(),
-                        source_metadata.plugin_name
-                    )
-                })?;
-                let dest_file = plugin_java_dir.join(filename);
-
-                // Use embedded absolute path directly
-                if !file_path.exists() {
-                    anyhow::bail!(
-                        "Java source not found at embedded path: {} (for plugin '{}')",
-                        file_path.display(),
-                        source_metadata.plugin_name
-                    );
-                }
-
-                tracing::debug!(
-                    "Copying Java file: {} -> {}",
-                    file_path.display(),
-                    dest_file.display()
+        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
+        for artifact in android_artifacts.artifacts() {
+            let artifact_path = PathBuf::from(&artifact.artifact_path);
+            if !artifact_path.exists() {
+                anyhow::bail!(
+                    "Android plugin artifact not found: {}",
+                    artifact_path.display()
                 );
-                std::fs::copy(&file_path, &dest_file)?;
+            }
+
+            let filename = artifact_path
+                .file_name()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Android plugin artifact path has no filename: {}",
+                        artifact_path.display()
+                    )
+                })?
+                .to_owned();
+            let dest_file = libs_dir.join(&filename);
+            std::fs::copy(&artifact_path, &dest_file)?;
+            tracing::debug!(
+                "Copied Android artifact {} -> {}",
+                artifact_path.display(),
+                dest_file.display()
+            );
+
+            let dep_line = format!(
+                "implementation(files(\"libs/{}\"))",
+                filename.to_string_lossy()
+            );
+            self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+
+            for dependency in &artifact.gradle_dependencies {
+                self.ensure_gradle_dependency(&build_gradle, dependency)?;
             }
         }
 
@@ -1660,24 +1657,6 @@ impl BuildRequest {
         }
 
         Ok(())
-    }
-
-    /// Get the iOS/macOS SDK path
-    fn get_ios_sdk_path(sdk: &str) -> Result<String> {
-        use std::process::Command;
-
-        let output = Command::new("xcrun")
-            .arg("--show-sdk-path")
-            .arg("--sdk")
-            .arg(sdk)
-            .output()?;
-
-        if output.status.success() {
-            let path = String::from_utf8(output.stdout)?.trim().to_string();
-            Ok(path)
-        } else {
-            anyhow::bail!("Failed to find SDK path for: {}", sdk)
-        }
     }
 
     /// Update platform manifests with permissions after they're collected
@@ -3403,6 +3382,8 @@ impl BuildRequest {
         let target_cxx = tools.target_cxx();
         let java_home = tools.java_home();
         let ndk_home = tools.ndk.clone();
+        let sdk_root = tools.sdk();
+        let artifact_dir = self.android_artifact_dir()?;
         tracing::debug!(
             r#"Using android:
             min_sdk_version: {min_sdk_version}
@@ -3411,13 +3392,42 @@ impl BuildRequest {
             target_cc: {target_cc:?}
             target_cxx: {target_cxx:?}
             java_home: {java_home:?}
+            sdk_root: {sdk_root:?}
+            artifact_dir: {artifact_dir:?}
             "#
         );
 
-        if let Some(java_home) = java_home {
+        if let Some(java_home) = &java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
+            env_vars.push((
+                "DX_ANDROID_JAVA_HOME".into(),
+                java_home.clone().into_os_string(),
+            ));
         }
+
+        env_vars.push((
+            "DX_ANDROID_ARTIFACT_DIR".into(),
+            artifact_dir.into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_NDK_HOME".into(),
+            ndk_home.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_SDK_ROOT".into(),
+            sdk_root.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "ANDROID_NDK_HOME".into(),
+            ndk_home.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "ANDROID_SDK_ROOT".into(),
+            sdk_root.clone().into_os_string(),
+        ));
+        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
+        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
 
         let triple = self.triple.to_string();
 
@@ -3536,7 +3546,10 @@ impl BuildRequest {
                 ),
                 linker.into_os_string(),
             ),
-            ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            (
+                "ANDROID_NDK_ROOT".to_string(),
+                ndk_home.clone().into_os_string(),
+            ),
             (
                 "OPENSSL_LIB_DIR".to_string(),
                 openssl_lib_dir.into_os_string(),
@@ -3586,6 +3599,17 @@ impl BuildRequest {
         }
 
         Ok(env_vars)
+    }
+
+    fn android_artifact_dir(&self) -> Result<PathBuf> {
+        let dir = self
+            .internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join("android-artifacts")
+            .join(self.triple.to_string());
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -3969,6 +3993,25 @@ impl BuildRequest {
         }
 
         kotlin_dir
+    }
+
+    fn ensure_gradle_dependency(&self, build_gradle: &Path, dependency_line: &str) -> Result<()> {
+        use std::fs;
+
+        let mut contents = fs::read_to_string(build_gradle)?;
+        if contents.contains(dependency_line) {
+            return Ok(());
+        }
+
+        if let Some(idx) = contents.find("dependencies {") {
+            let insert_pos = idx + "dependencies {".len();
+            contents.insert_str(insert_pos, &format!("\n    {dependency_line}"));
+        } else {
+            contents.push_str(&format!("\ndependencies {{\n    {dependency_line}\n}}\n"));
+        }
+
+        fs::write(build_gradle, contents)?;
+        Ok(())
     }
 
     fn copy_dependency_java_sources(&self, app_java_dir: &Path) -> Result<()> {

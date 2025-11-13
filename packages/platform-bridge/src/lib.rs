@@ -5,7 +5,7 @@
 //! boilerplate for JNI (Android) and objc2 (iOS/macOS) bindings, build scripts,
 //! and platform-specific resource management.
 
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", feature = "metadata"))]
 pub mod android;
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -25,7 +25,7 @@ pub use jni;
 pub use objc2;
 
 /// Re-export the android_plugin! macro when metadata feature is enabled
-#[cfg(all(feature = "metadata", target_os = "android"))]
+#[cfg(all(feature = "metadata", any(target_os = "android", feature = "metadata")))]
 pub use platform_bridge_macro::android_plugin;
 
 /// Re-export the ios_plugin! macro when metadata feature is enabled

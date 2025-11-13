@@ -10,9 +10,9 @@ mod ios_plugin;
 
 /// Declare an Android plugin that will be embedded in the binary
 ///
-/// This macro collects Java source files and embeds their metadata into the compiled
-/// binary using linker symbols. The Dioxus CLI will extract this metadata and copy the
-/// Java files into the Gradle build structure for compilation to DEX.
+/// This macro declares prebuilt Android artifacts (AARs) and embeds their metadata into the compiled
+/// binary using linker symbols. The Dioxus CLI uses this metadata to include the artifacts in the
+/// generated Gradle project.
 ///
 /// # Syntax
 ///
@@ -20,47 +20,31 @@ mod ios_plugin;
 /// ```rust,no_run
 /// #[cfg(target_os = "android")]
 /// dioxus_platform_bridge::android_plugin!(
-///     package = "dioxus.mobile.geolocation",
 ///     plugin = "geolocation",
-///     files = [
-///         "src/sys/android/LocationCallback.java",
-///         "src/sys/android/PermissionsHelper.java"
-///     ]
+///     aar = { path = "android/build/outputs/aar/geolocation-plugin-release.aar" }
 /// );
 /// ```
 ///
 /// # Parameters
 ///
-/// - `package`: The Java package name (e.g., "dioxus.mobile.geolocation")
 /// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
-/// - `files`: Array of Java file paths relative to `CARGO_MANIFEST_DIR` (e.g., "src/sys/android/File.java")
+/// - `aar`: A block with either `{ path = "relative/path/to.aar" }` or `{ env = "ENV_WITH_PATH" }`
 ///
-/// # File Paths
+/// When `path` is used, it is resolved relative to `CARGO_MANIFEST_DIR`. When `env` is used,
+/// the environment variable is read at compile time via `env!`.
 ///
-/// File paths should be specified relative to your crate's manifest directory (`CARGO_MANIFEST_DIR`).
-/// Common directory structures include:
-/// - `src/sys/android/`
-/// - `src/android/`
-/// - Any other directory structure you prefer
-///
-/// The macro will resolve these paths at compile time using `env!("CARGO_MANIFEST_DIR")`.
-///
-/// # Embedding
-///
-/// The macro embeds absolute file paths into the binary using linker symbols with the
-/// `__JAVA_SOURCE__` prefix. This allows the Dioxus CLI to directly locate and copy Java
-/// source files without searching the workspace at build time.
+/// The macro embeds the resolved artifact path into the binary using linker symbols with the
+/// `__ANDROID_ARTIFACT__` prefix so the CLI can pick up the resulting AAR without manual configuration.
 ///
 /// # Example Structure
 ///
 /// ```text
 /// your-plugin-crate/
-/// └── src/
-///     ├── lib.rs                  # Contains android_plugin!() macro invocation
-///     └── sys/
-///         └── android/
-///             ├── LocationCallback.java    # Java plugin sources
-///             └── PermissionsHelper.java
+/// └── android/
+///     ├── build.gradle.kts        # Builds the AAR
+///     ├── settings.gradle.kts
+///     └── build/outputs/aar/
+///         └── geolocation-plugin-release.aar
 /// ```
 #[proc_macro]
 pub fn android_plugin(input: TokenStream) -> TokenStream {
