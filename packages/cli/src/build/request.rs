@@ -1441,13 +1441,13 @@ impl BuildRequest {
         let permission_manifest = if skip_permissions {
             super::permissions::PermissionManifest::default()
         } else {
-            let manifest = super::permissions::PermissionManifest::new(result.permissions);
+            let manifest = super::permissions::PermissionManifest::from_permissions(result.permissions);
 
             // Log permissions found for platforms that need them
             let platform = match self.bundle {
-                BundleFormat::Android => Some(permissions_core::Platform::Android),
-                BundleFormat::Ios => Some(permissions_core::Platform::Ios),
-                BundleFormat::MacOS => Some(permissions_core::Platform::Macos),
+                BundleFormat::Android => Some(permissions::Platform::Android),
+                BundleFormat::Ios => Some(permissions::Platform::Ios),
+                BundleFormat::MacOS => Some(permissions::Platform::Macos),
                 _ => None,
             };
 

@@ -1,7 +1,7 @@
 //! Android metadata types for linker-based collection
 
 #[cfg(feature = "metadata")]
-use const_serialize::{ConstStr, SerializeConst};
+use const_serialize::{ConstStr, ConstVec, SerializeConst};
 
 /// Java source file metadata that can be embedded in the binary
 ///
@@ -64,4 +64,20 @@ impl JavaSourceMetadata {
 
     /// The size of the serialized data buffer
     pub const SERIALIZED_SIZE: usize = 4096;
+}
+
+/// Buffer type used for serialized Java metadata blobs
+#[cfg(feature = "metadata")]
+pub type JavaMetadataBuffer = ConstVec<u8, JavaSourceMetadata::SERIALIZED_SIZE>;
+
+/// Serialize metadata into a fixed-size buffer for linker embedding
+#[cfg(feature = "metadata")]
+pub const fn serialize_java_metadata(meta: &JavaSourceMetadata) -> JavaMetadataBuffer {
+    let mut buffer: JavaMetadataBuffer = ConstVec::new_with_max_size();
+    buffer = const_serialize::serialize_const(meta, buffer);
+    // Pad to the expected size to ensure consistent linker symbols
+    while buffer.len() < JavaSourceMetadata::SERIALIZED_SIZE {
+        buffer = buffer.push(0);
+    }
+    buffer
 }

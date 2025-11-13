@@ -18,8 +18,3 @@ proc-macro = true
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-const-serialize = { path = "../const-serialize" }
-const-serialize-macro = { path = "../const-serialize-macro" }
-
-[dev-dependencies]
-

@@ -40,7 +40,7 @@ use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
-use permissions_core::{Permission, SymbolData};
+use permissions::{Permission, SymbolData};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 /// Extract all manganis symbols and their sections from the given object file.

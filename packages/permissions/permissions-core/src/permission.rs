@@ -113,6 +113,11 @@ impl PermissionManifest {
         }
     }
 
+    /// Create a manifest from an existing list of permissions
+    pub fn from_permissions(permissions: Vec<Permission>) -> Self {
+        Self { permissions }
+    }
+
     /// Add a permission to the manifest
     pub fn add_permission(&mut self, permission: Permission) {
         self.permissions.push(permission);

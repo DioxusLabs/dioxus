@@ -152,11 +152,9 @@ impl ToTokens for AndroidPluginParser {
                     __FILE_PATHS,
                 );
 
-            // Serialize the metadata
-            const __BUFFER: const_serialize::ConstVec<u8, 4096> = {
-                const EMPTY: const_serialize::ConstVec<u8, 4096> = const_serialize::ConstVec::new_with_max_size();
-                const_serialize::serialize_const(&__JAVA_META, EMPTY)
-            };
+            // Serialize the metadata using the shared helper
+            const __BUFFER: dioxus_platform_bridge::android::metadata::JavaMetadataBuffer =
+                dioxus_platform_bridge::android::metadata::serialize_java_metadata(&__JAVA_META);
             const __BYTES: &[u8] = __BUFFER.as_ref();
             const __LEN: usize = __BYTES.len();
 
@@ -164,7 +162,8 @@ impl ToTokens for AndroidPluginParser {
             #[link_section = "__DATA,__java_source"]
             #[used]
             #[unsafe(export_name = #export_name_lit)]
-            static __LINK_SECTION: [u8; __LEN] = dioxus_platform_bridge::android::macro_helpers::copy_bytes(__BYTES);
+            static __LINK_SECTION: [u8; __LEN] =
+                dioxus_platform_bridge::android::macro_helpers::copy_bytes(__BYTES);
         };
 
         tokens.extend(link_section);

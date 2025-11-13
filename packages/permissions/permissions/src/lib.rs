@@ -31,7 +31,7 @@
 
 pub use permissions_core::{
     CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
-    PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers,
+    PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
 };
 pub use permissions_macro::{permission, static_permission};
 

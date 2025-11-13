@@ -13,8 +13,11 @@
 use std::path::Path;
 
 use crate::Result;
-use permissions_core::{Permission, Platform};
+use permissions::Platform;
 use serde::Serialize;
+
+/// Alias the shared manifest type from the permissions crate for CLI-specific helpers
+pub type PermissionManifest = permissions::PermissionManifest;
 
 /// Android permission for Handlebars template
 #[derive(Debug, Clone, Serialize)]
@@ -55,36 +58,7 @@ pub(crate) async fn extract_permissions_from_file(
     // Use the unified symbol extraction which handles both assets and permissions
     let result = extract_symbols_from_file(path).await?;
 
-    Ok(PermissionManifest::new(result.permissions))
-}
-
-/// A manifest of all permissions found in a binary
-#[derive(Debug, Clone, Default)]
-pub struct PermissionManifest {
-    permissions: Vec<Permission>,
-}
-
-impl PermissionManifest {
-    pub fn new(permissions: Vec<Permission>) -> Self {
-        Self { permissions }
-    }
-
-    #[allow(dead_code)]
-    pub fn permissions(&self) -> &[Permission] {
-        &self.permissions
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.permissions.is_empty()
-    }
-
-    pub fn permissions_for_platform(&self, platform: Platform) -> Vec<&Permission> {
-        self.permissions
-            .iter()
-            .filter(|p| p.supports_platform(platform))
-            .collect()
-    }
+    Ok(PermissionManifest::from_permissions(result.permissions))
 }
 
 /// Get Android permissions for Handlebars template
