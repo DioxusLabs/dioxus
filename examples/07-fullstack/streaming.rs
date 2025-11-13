@@ -60,8 +60,9 @@ fn app() -> Element {
     let mut start_echo_stream = use_action(move || async move {
         continue_echo_stream.set(true);
         echo_responses.clear();
-        let stream = echo_stream(Streaming::new(
-            futures::stream::unfold(0, move |index| async move {
+        let stream = echo_stream(Streaming::new(futures::stream::unfold(
+            0,
+            move |index| async move {
                 if !continue_echo_stream() {
                     return None;
                 }
@@ -71,8 +72,8 @@ fn app() -> Element {
                     age: (index % 10) as u8,
                 };
                 Some((dog, index + 1))
-            }),
-        ))
+            },
+        )))
         .await?;
         stream
             .into_inner()
@@ -88,8 +89,9 @@ fn app() -> Element {
     let mut start_transform_stream = use_action(move || async move {
         continue_transform_stream.set(true);
         transform_responses.clear();
-        let stream = transform_stream(Streaming::new(
-            futures::stream::unfold(0, move |index| async move {
+        let stream = transform_stream(Streaming::new(futures::stream::unfold(
+            0,
+            move |index| async move {
                 if !continue_transform_stream() {
                     return None;
                 }
@@ -99,8 +101,8 @@ fn app() -> Element {
                     age: (index % 10) as u8,
                 };
                 Some((dog, index + 1))
-            }),
-        ))
+            },
+        )))
         .await?;
         stream
             .into_inner()
