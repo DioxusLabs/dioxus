@@ -140,7 +140,7 @@ impl Asset {
             let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
             bytes = bytes.push(byte);
         }
-        let read = bytes.read();
+        let read = bytes.as_ref();
         deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
     }
 
