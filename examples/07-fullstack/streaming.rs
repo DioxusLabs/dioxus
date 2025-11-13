@@ -21,6 +21,7 @@ use dioxus::{
     fullstack::{JsonEncoding, Streaming, TextStream},
     prelude::*,
 };
+use futures::{StreamExt as _, TryStreamExt};
 
 fn main() {
     dioxus::launch(app)
@@ -29,6 +30,8 @@ fn main() {
 fn app() -> Element {
     let mut text_responses = use_signal(String::new);
     let mut json_responses = use_signal(Vec::new);
+    let mut echo_responses = use_signal(Vec::new);
+    let mut transform_responses = use_signal(Vec::new);
 
     let mut start_text_stream = use_action(move || async move {
         text_responses.clear();
@@ -53,6 +56,62 @@ fn app() -> Element {
         dioxus::Ok(())
     });
 
+    let mut continue_echo_stream = use_signal_sync(|| false);
+    let mut start_echo_stream = use_action(move || async move {
+        continue_echo_stream.set(true);
+        echo_responses.clear();
+        let stream = echo_stream(Streaming::new(
+            futures::stream::unfold(0, move |index| async move {
+                if !continue_echo_stream() {
+                    return None;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let dog = Dog {
+                    name: format!("Dog {}", index),
+                    age: (index % 10) as u8,
+                };
+                Some((dog, index + 1))
+            }),
+        ))
+        .await?;
+        stream
+            .into_inner()
+            .try_for_each(move |dog| async move {
+                echo_responses.push(dog);
+                Ok(())
+            })
+            .await?;
+        dioxus::Ok(())
+    });
+
+    let mut continue_transform_stream = use_signal_sync(|| false);
+    let mut start_transform_stream = use_action(move || async move {
+        continue_transform_stream.set(true);
+        transform_responses.clear();
+        let stream = transform_stream(Streaming::new(
+            futures::stream::unfold(0, move |index| async move {
+                if !continue_transform_stream() {
+                    return None;
+                }
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let dog = Dog {
+                    name: format!("Dog {}", index),
+                    age: (index % 10) as u8,
+                };
+                Some((dog, index + 1))
+            }),
+        ))
+        .await?;
+        stream
+            .into_inner()
+            .try_for_each(move |text| async move {
+                transform_responses.push(text);
+                Ok(())
+            })
+            .await?;
+        dioxus::Ok(())
+    });
+
     rsx! {
         div {
             button { onclick: move |_| start_text_stream.call(), "Start text stream" }
@@ -64,6 +123,20 @@ fn app() -> Element {
             button { onclick: move |_| start_json_stream.cancel(), "Stop JSON stream" }
             for dog in json_responses.read().iter() {
                 pre { "{dog:?}" }
+            }
+        }
+        div {
+            button { onclick: move |_| start_echo_stream.call(), "Start echo stream" }
+            button { onclick: move |_| continue_echo_stream.set(false), "Stop echo stream" }
+            for dog in echo_responses.read().iter() {
+                pre { "{dog:?}" }
+            }
+        }
+        div {
+            button { onclick: move |_| start_transform_stream.call(), "Start transform stream" }
+            button { onclick: move |_| continue_transform_stream.set(false), "Stop transform stream" }
+            for text in transform_responses.read().iter() {
+                pre { "{text}" }
             }
         }
     }
@@ -144,4 +217,21 @@ async fn byte_stream() -> Result<Streaming<Bytes>> {
     });
 
     Ok(Streaming::new(rx))
+}
+
+/// An example of echoing the stream back to the client.
+#[post("/api/echo_stream")]
+async fn echo_stream(stream: Streaming<Dog, JsonEncoding>) -> Result<Streaming<Dog, JsonEncoding>> {
+    Ok(stream)
+}
+
+/// An example of transforming the stream on the server.
+#[post("/api/transform_stream")]
+async fn transform_stream(stream: Streaming<Dog, JsonEncoding>) -> Result<TextStream> {
+    Ok(Streaming::new(stream.into_inner().filter_map(
+        |dog| async {
+            dog.ok()
+                .map(|dog| format!("name: {}, age: {}", dog.name, dog.age))
+        },
+    )))
 }
