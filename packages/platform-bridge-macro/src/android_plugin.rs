@@ -1,11 +1,14 @@
 use quote::{quote, ToTokens};
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    collections::BTreeSet,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 use syn::{parse::Parse, parse::ParseStream, Token};
 
 pub struct AndroidPluginParser {
     plugin_name: String,
     artifact: ArtifactDeclaration,
-    dependencies: Vec<String>,
+    dependencies: BTreeSet<String>,
 }
 
 enum ArtifactDeclaration {
@@ -17,7 +20,7 @@ impl Parse for AndroidPluginParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let mut plugin_name = None;
         let mut artifact = None;
-        let mut dependencies: Vec<String> = Vec::new();
+        let mut dependencies: BTreeSet<String> = BTreeSet::new();
 
         while !input.is_empty() {
             let field = input.parse::<syn::Ident>()?;
@@ -35,7 +38,7 @@ impl Parse for AndroidPluginParser {
 
                     while !content.is_empty() {
                         let value = content.parse::<syn::LitStr>()?;
-                        dependencies.push(value.value());
+                        dependencies.insert(value.value());
                         let _ = content.parse::<Option<Token![,]>>()?;
                     }
 
@@ -98,9 +101,8 @@ impl Parse for AndroidPluginParser {
         Ok(Self {
             plugin_name: plugin_name
                 .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'plugin'"))?,
-            artifact: artifact.ok_or_else(|| {
-                syn::Error::new(input.span(), "Missing required field 'aar'")
-            })?,
+            artifact: artifact
+                .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'aar'"))?,
             dependencies,
         })
     }
@@ -133,7 +135,12 @@ impl ToTokens for AndroidPluginParser {
                 quote! { env!(#env_lit) }
             }
         };
-        let deps_joined = self.dependencies.join("\n");
+        let deps_joined = self
+            .dependencies
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         let deps_lit = syn::LitStr::new(&deps_joined, proc_macro2::Span::call_site());
 
         let link_section = quote! {

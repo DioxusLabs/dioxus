@@ -1124,7 +1124,7 @@ impl BuildRequest {
                     .await
                     .context("Failed to write metadata")?;
 
-                // Copy Java sources to Gradle directory for Android
+                // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
                 if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
                     self.install_android_artifacts(&artifacts.android_artifacts)
                         .context("Failed to install Android plugin artifacts")?;
@@ -3418,14 +3418,8 @@ impl BuildRequest {
             "DX_ANDROID_SDK_ROOT".into(),
             sdk_root.clone().into_os_string(),
         ));
-        env_vars.push((
-            "ANDROID_NDK_HOME".into(),
-            ndk_home.clone().into_os_string(),
-        ));
-        env_vars.push((
-            "ANDROID_SDK_ROOT".into(),
-            sdk_root.clone().into_os_string(),
-        ));
+        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
+        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
         env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
         env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
 
@@ -3889,9 +3883,6 @@ impl BuildRequest {
             main_activity,
         )?;
 
-        // Copy Java sources from dependencies (for platform shims)
-        self.copy_dependency_java_sources(&app_java)?;
-
         // Write the res folder, containing stuff like default icons, colors, and menubars.
         let res = app_main.join("res");
         create_dir_all(&res)?;
@@ -4011,53 +4002,6 @@ impl BuildRequest {
         }
 
         fs::write(build_gradle, contents)?;
-        Ok(())
-    }
-
-    fn copy_dependency_java_sources(&self, app_java_dir: &Path) -> Result<()> {
-        use std::fs::read_dir;
-
-        // Get workspace path
-        let workspace_root = self.workspace.workspace_root();
-        let packages_dir = workspace_root.join("packages");
-
-        // Scan packages directory for android-shim subdirectories
-        if let Ok(entries) = read_dir(&packages_dir) {
-            for entry in entries.flatten() {
-                let shim_dir = entry.path().join("android-shim/src/main/java");
-                if shim_dir.exists() {
-                    tracing::debug!("Found Java shim directory: {:?}", shim_dir);
-                    self.copy_dir_all(&shim_dir, app_java_dir)?;
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    #[allow(clippy::only_used_in_recursion)]
-    fn copy_dir_all(&self, from: &Path, to: &Path) -> Result<()> {
-        use std::fs::{copy, create_dir_all, read_dir};
-
-        if !from.exists() {
-            return Ok(());
-        }
-
-        for entry in read_dir(from)? {
-            let entry = entry?;
-            let path = entry.path();
-            let file_name = entry.file_name();
-            let dest = to.join(&file_name);
-
-            if path.is_dir() {
-                create_dir_all(&dest)?;
-                self.copy_dir_all(&path, &dest)?;
-            } else if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("java") {
-                tracing::debug!("Copying Java file: {:?} -> {:?}", path, dest);
-                copy(&path, &dest)?;
-            }
-        }
-
         Ok(())
     }
 

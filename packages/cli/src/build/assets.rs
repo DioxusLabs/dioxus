@@ -783,7 +783,8 @@ pub(crate) async fn extract_symbols_from_file(
 /// Then return an `AssetManifest` containing all the assets found in the file.
 ///
 /// This is a convenience function that extracts symbols and returns only assets.
-/// For permissions, use `extract_permissions_from_file` instead.
+/// (Permissions can be read from the [`SymbolExtractionResult`] returned by
+/// `extract_symbols_from_file`.)
 pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let result = extract_symbols_from_file(path).await?;
     let mut manifest = AssetManifest::default();

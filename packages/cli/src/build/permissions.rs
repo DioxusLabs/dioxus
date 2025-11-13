@@ -9,10 +9,6 @@
 //!
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
 //! and do not require build-time manifest generation.
-
-use std::path::Path;
-
-use crate::Result;
 use permissions::Platform;
 use serde::Serialize;
 
@@ -38,27 +34,6 @@ pub struct IosPermission {
 pub struct MacosPermission {
     pub key: String,
     pub description: String,
-}
-
-/// Extract all permissions from the given file
-///
-/// This function now uses the unified symbol collection from assets.rs
-/// which handles both assets and permissions from the __ASSETS__ prefix.
-///
-/// Note: For better performance, use `extract_symbols_from_file` directly
-/// if you need both assets and permissions, as it avoids redundant file reads.
-#[allow(dead_code)] // May be used in the future or by other code paths
-pub(crate) async fn extract_permissions_from_file(
-    path: impl AsRef<Path>,
-) -> Result<PermissionManifest> {
-    use crate::build::assets::extract_symbols_from_file;
-
-    let path = path.as_ref();
-
-    // Use the unified symbol extraction which handles both assets and permissions
-    let result = extract_symbols_from_file(path).await?;
-
-    Ok(PermissionManifest::from_permissions(result.permissions))
 }
 
 /// Get Android permissions for Handlebars template

@@ -1,7 +1,8 @@
 //! Utilities for extracting metadata from linker sections
 //!
 //! This module provides generic utilities for extracting metadata embedded in compiled binaries
-//! via linker sections. It's used by both permissions and Java source extraction.
+//! via linker sections. It's used by the asset/permission collector, Android plugin artifact
+//! discovery, and the Swift metadata scanner.
 
 use std::path::Path;
 
@@ -10,7 +11,8 @@ use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Sect
 
 /// Extract symbols from an object file that match a given prefix
 ///
-/// This is a generic utility used by both permission and Java source extraction.
+/// This is a generic utility used across metadata collectors (assets/permissions, Android artifacts,
+/// Swift sources, etc).
 pub fn extract_symbols_with_prefix<'a, 'b, R: ReadRef<'a>>(
     file: &'b File<'a, R>,
     prefix: &'b str,
