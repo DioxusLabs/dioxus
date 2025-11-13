@@ -1,6 +1,6 @@
 [package]
 name = "permissions-macro"
-version = "0.7.0-rc.3"
+version = { workspace = true }
 edition = "2021"
 description = "Procedural macro for declaring permissions with linker embedding"
 authors = ["DioxusLabs"]
@@ -18,8 +18,8 @@ proc-macro = true
 syn = { version = "2.0", features = ["full"] }
 quote = "1.0"
 proc-macro2 = "1.0"
-dx-macro-helpers = { path = "../../dx-macro-helpers" }
-permissions-core = { path = "../permissions-core" }
-const-serialize = { path = "../../const-serialize" }
+dx-macro-helpers = { workspace = true }
+permissions-core = { workspace = true }
+const-serialize = { workspace = true }
 
 [dev-dependencies]

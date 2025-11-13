@@ -61,6 +61,20 @@ impl<T> MainThreadCell<T> {
             slot.as_ref().expect("Manager initialized")
         }
     }
+
+    /// Fallible variant of [`get_or_init_with`] that allows returning an error during initialization.
+    pub fn get_or_try_init_with<F, E>(&self, _mtm: MainThreadMarker, init: F) -> Result<&T, E>
+    where
+        F: FnOnce() -> Result<T, E>,
+    {
+        unsafe {
+            let slot = &mut *self.0.get();
+            if slot.is_none() {
+                *slot = Some(init()?);
+            }
+            Ok(slot.as_ref().expect("Manager initialized"))
+        }
+    }
 }
 
 // SAFETY: `MainThreadCell` enforces main-thread-only access through

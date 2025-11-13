@@ -1,6 +1,6 @@
 [package]
 name = "platform-bridge-macro"
-version = "0.7.0-rc.3"
+version = { workspace = true }
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "Procedural macro for declaring platform plugins with linker embedding"

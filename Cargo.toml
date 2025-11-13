@@ -113,6 +113,7 @@ members = [
     "examples/01-app-demos/bluetooth-scanner",
     "examples/01-app-demos/file-explorer",
     "examples/01-app-demos/hotdog",
+    "examples/01-app-demos/geolocation",
 
     # Fullstack examples
     "examples/07-fullstack/hello-world",
@@ -146,7 +147,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
-    "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/fullstack-error-codes", "packages/geolocation",
 ]
 
 [workspace.package]
@@ -205,12 +206,16 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.7.1" }
 dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "0.7.0" }
 
 # permissions
-permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.0-rc.3" }
-permissions-macro = { path = "packages/permissions/permissions-macro", version = "=0.7.0-rc.3" }
-permissions = { path = "packages/permissions/permissions", version = "=0.7.0-rc.3" }
+permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.1" }
+permissions-macro = { path = "packages/permissions/permissions-macro", version = "=0.7.1" }
+permissions = { path = "packages/permissions/permissions", version = "=0.7.1" }
 
 # platform bridge
-dioxus-platform-bridge = { path = "packages/platform-bridge", version = "=0.7.0-rc.3" }
+dioxus-platform-bridge = { path = "packages/platform-bridge", version = "=0.7.1" }
+platform-bridge-macro = { path = "packages/platform-bridge-macro", version = "=0.7.1" }
+
+# geolocation
+dioxus-geolocation = { path = "packages/geolocation", version = "=0.7.1" }
 # const-serialize
 const-serialize = { path = "packages/const-serialize", version = "0.8.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0" }

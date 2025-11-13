@@ -68,7 +68,7 @@ impl JavaSourceMetadata {
 
 /// Buffer type used for serialized Java metadata blobs
 #[cfg(feature = "metadata")]
-pub type JavaMetadataBuffer = ConstVec<u8, JavaSourceMetadata::SERIALIZED_SIZE>;
+pub type JavaMetadataBuffer = ConstVec<u8, { JavaSourceMetadata::SERIALIZED_SIZE }>;
 
 /// Serialize metadata into a fixed-size buffer for linker embedding
 #[cfg(feature = "metadata")]

@@ -19,4 +19,3 @@ pub enum SymbolData {
     /// A permission declaration for the application
     Permission(Permission),
 }
-

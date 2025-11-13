@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-platform-bridge"
-version = "0.7.0-rc.3"
+version = { workspace = true }
 edition = "2021"
 license = "MIT OR Apache-2.0"
 description = "FFI utilities and plugin metadata for Dioxus mobile platform APIs"
@@ -18,9 +18,9 @@ metadata = [
 
 [dependencies]
 thiserror = { workspace = true }
-const-serialize = { path = "../const-serialize", optional = true }
-const-serialize-macro = { path = "../const-serialize-macro", optional = true }
-platform-bridge-macro = { path = "../platform-bridge-macro", optional = true }
+const-serialize = { workspace = true, optional = true }
+const-serialize-macro = { workspace = true, optional = true }
+platform-bridge-macro = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

@@ -90,7 +90,9 @@ impl ManganisVersion {
                 let (_, legacy_asset) =
                     const_serialize_07::deserialize_const!(manganis_core_07::BundledAsset, buffer)?;
 
-                Some(SymbolDataOrAsset::Asset(legacy_asset_to_modern_asset(&legacy_asset)))
+                Some(SymbolDataOrAsset::Asset(legacy_asset_to_modern_asset(
+                    &legacy_asset,
+                )))
             }
             ManganisVersion::New => {
                 // First try SymbolData (new format with enum variant)
@@ -104,7 +106,7 @@ impl ManganisVersion {
                     let is_valid = remaining.is_empty()
                         || remaining.iter().all(|&b| b == 0)
                         || remaining.len() <= data.len(); // Allow any amount of padding as long as it's not larger than data
-                    
+
                     if is_valid {
                         return Some(SymbolDataOrAsset::SymbolData(symbol_data));
                     } else {
@@ -122,15 +124,14 @@ impl ManganisVersion {
                         &data[..data.len().min(32)]
                     );
                 }
-                
+
                 // Fallback: try BundledAsset (direct format - assets are now serialized this way)
                 // This handles assets that were serialized directly as BundledAsset (not wrapped in SymbolData)
                 if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
                     // Check if remaining bytes are all zeros (padding) or empty
                     // Accept any amount of padding as long as it's all zeros (which is what we pad with)
-                    let is_valid = remaining.is_empty()
-                        || remaining.iter().all(|&b| b == 0);
-                    
+                    let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
+
                     if is_valid {
                         tracing::debug!(
                             "Successfully deserialized BundledAsset, remaining padding: {} bytes",
@@ -151,7 +152,7 @@ impl ManganisVersion {
                         &data[..data.len().min(32)]
                     );
                 }
-                
+
                 None
             }
         }
@@ -635,15 +636,17 @@ pub(crate) async fn extract_symbols_from_file(
     for symbol in offsets.iter().copied() {
         let version = symbol.version;
         let offset = symbol.offset;
-        
+
         // Read data from file_contents (already loaded into memory)
         // Use a large buffer for variable length data, but don't exceed file size
-        let buffer_size = version.size().min(file_contents.len().saturating_sub(offset as usize));
+        let buffer_size = version
+            .size()
+            .min(file_contents.len().saturating_sub(offset as usize));
         if buffer_size == 0 {
             tracing::warn!("Symbol at offset {offset} is beyond file size");
             continue;
         }
-        
+
         let data_in_range = if (offset as usize) + buffer_size <= file_contents.len() {
             &file_contents[offset as usize..(offset as usize) + buffer_size]
         } else {
@@ -728,7 +731,8 @@ pub(crate) async fn extract_symbols_from_file(
             }
             AssetRepresentation::SymbolData => {
                 tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
-                let Some(new_data) = version.serialize_symbol_data(&SymbolData::Asset(asset)) else {
+                let Some(new_data) = version.serialize_symbol_data(&SymbolData::Asset(asset))
+                else {
                     tracing::warn!(
                         "Symbol at offset {offset} was stored as SymbolData but the binary format only supports raw assets"
                     );

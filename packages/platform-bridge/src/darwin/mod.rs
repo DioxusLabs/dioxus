@@ -6,7 +6,13 @@
 
 pub mod manager;
 
+#[cfg(feature = "metadata")]
+pub mod metadata;
+
 pub use manager::*;
 
 /// Re-export MainThreadMarker for convenience
 pub use objc2::MainThreadMarker;
+
+#[cfg(feature = "metadata")]
+pub use metadata::*;

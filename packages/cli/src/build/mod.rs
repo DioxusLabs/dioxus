@@ -12,6 +12,7 @@ mod android_java;
 mod assets;
 mod builder;
 mod context;
+mod ios_swift;
 mod linker_symbols;
 mod manifest;
 mod patch;

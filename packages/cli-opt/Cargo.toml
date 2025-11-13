@@ -13,7 +13,7 @@ keywords = ["dom", "ui", "gui", "react"]
 anyhow = { workspace = true }
 manganis = { workspace = true }
 manganis-core = { workspace = true }
-permissions = { path = "../permissions/permissions" }
+permissions = { workspace = true }
 object = { workspace = true, features = ["wasm"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

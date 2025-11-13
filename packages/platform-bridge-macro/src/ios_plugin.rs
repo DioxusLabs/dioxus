@@ -1,0 +1,140 @@
+use quote::{quote, ToTokens};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use syn::{parse::Parse, parse::ParseStream, Token};
+
+/// Parser for the `ios_plugin!()` macro syntax
+pub struct IosPluginParser {
+    /// Plugin identifier (e.g., "geolocation")
+    plugin_name: String,
+    /// Swift Package declaration
+    spm: SpmDeclaration,
+}
+
+#[derive(Clone)]
+struct SpmDeclaration {
+    path: String,
+    product: String,
+}
+
+impl Parse for IosPluginParser {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let mut plugin_name = None;
+        let mut spm = None;
+
+        while !input.is_empty() {
+            let field = input.parse::<syn::Ident>()?;
+            match field.to_string().as_str() {
+                "plugin" => {
+                    let _equals = input.parse::<Token![=]>()?;
+                    let plugin_lit = input.parse::<syn::LitStr>()?;
+                    plugin_name = Some(plugin_lit.value());
+                    let _ = input.parse::<Option<Token![,]>>()?;
+                }
+                "spm" => {
+                    let _equals = input.parse::<Token![=]>()?;
+                    let content;
+                    syn::braced!(content in input);
+
+                    let mut path = None;
+                    let mut product = None;
+                    while !content.is_empty() {
+                        let key = content.parse::<syn::Ident>()?;
+                        let key_str = key.to_string();
+                        let _eq = content.parse::<Token![=]>()?;
+                        let value = content.parse::<syn::LitStr>()?;
+                        match key_str.as_str() {
+                            "path" => path = Some(value.value()),
+                            "product" => product = Some(value.value()),
+                            _ => return Err(syn::Error::new(
+                                key.span(),
+                                "Unknown field in spm declaration (expected 'path' or 'product')",
+                            )),
+                        }
+                        let _ = content.parse::<Option<Token![,]>>()?;
+                    }
+
+                    let path = path.ok_or_else(|| {
+                        syn::Error::new(field.span(), "Missing required field 'path' in spm block")
+                    })?;
+                    let product = product.ok_or_else(|| {
+                        syn::Error::new(
+                            field.span(),
+                            "Missing required field 'product' in spm block",
+                        )
+                    })?;
+                    spm = Some(SpmDeclaration { path, product });
+
+                    let _ = input.parse::<Option<Token![,]>>()?;
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        field.span(),
+                        "Unknown field, expected 'plugin' or 'spm'",
+                    ));
+                }
+            }
+        }
+
+        Ok(Self {
+            plugin_name: plugin_name
+                .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'plugin'"))?,
+            spm: spm
+                .ok_or_else(|| syn::Error::new(input.span(), "Missing required field 'spm'"))?,
+        })
+    }
+}
+
+impl ToTokens for IosPluginParser {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let plugin_name = &self.plugin_name;
+
+        let mut hash = DefaultHasher::new();
+        self.plugin_name.hash(&mut hash);
+        self.spm.path.hash(&mut hash);
+        self.spm.product.hash(&mut hash);
+        let plugin_hash = format!("{:016x}", hash.finish());
+
+        let export_name_lit = syn::LitStr::new(
+            &format!("__SWIFT_SOURCE__{}", plugin_hash),
+            proc_macro2::Span::call_site(),
+        );
+
+        let path_lit = syn::LitStr::new(&self.spm.path, proc_macro2::Span::call_site());
+        let product_lit = syn::LitStr::new(&self.spm.product, proc_macro2::Span::call_site());
+
+        let link_section = quote! {
+            const __SWIFT_META: dioxus_platform_bridge::darwin::SwiftSourceMetadata =
+                dioxus_platform_bridge::darwin::SwiftSourceMetadata::new(
+                    #plugin_name,
+                    concat!(env!("CARGO_MANIFEST_DIR"), "/", #path_lit),
+                    #product_lit,
+                );
+
+            const __BUFFER: dioxus_platform_bridge::darwin::metadata::SwiftMetadataBuffer =
+                dioxus_platform_bridge::darwin::metadata::serialize_swift_metadata(&__SWIFT_META);
+            const __BYTES: &[u8] = __BUFFER.as_ref();
+        };
+
+        let link_section = quote! {
+            #link_section
+
+            #[link_section = "__DATA,__swift_source"]
+            #[used]
+            #[unsafe(export_name = #export_name_lit)]
+            static __LINK_SECTION: [u8; 4096] = {
+                const fn copy_bytes_internal<const N: usize>(bytes: &[u8]) -> [u8; N] {
+                    let mut array = [0u8; N];
+                    let mut i = 0;
+                    while i < bytes.len() && i < N {
+                        array[i] = bytes[i];
+                        i += 1;
+                    }
+                    array
+                }
+                copy_bytes_internal::<4096>(__BYTES)
+            };
+        };
+
+        tokens.extend(link_section);
+    }
+}

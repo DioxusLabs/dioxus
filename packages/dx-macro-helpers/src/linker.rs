@@ -67,4 +67,3 @@ pub fn generate_link_section(
         static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
     }
 }
-

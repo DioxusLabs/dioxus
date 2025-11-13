@@ -82,13 +82,13 @@ pub fn check_self_permission(
         "(Ljava/lang/String;)I",
         &[JValue::Object(&permission_string)],
     )?;
-    
+
     const PERMISSION_GRANTED: i32 = 0;
     Ok(status.i()? == PERMISSION_GRANTED)
 }
 
 /// Request permissions via a helper class's static method
-/// 
+///
 /// This uses PermissionsHelper.requestPermissionsOnUiThread(pattern)
 /// to request permissions on the UI thread.
 pub fn request_permissions_via_helper(

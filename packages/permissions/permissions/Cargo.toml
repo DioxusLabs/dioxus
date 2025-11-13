@@ -1,6 +1,6 @@
 [package]
 name = "permissions"
-version = "0.7.0-rc.3"
+version = { workspace = true }
 edition = "2021"
 description = "Cross-platform permission management system with linker-based collection"
 authors = ["DioxusLabs"]
@@ -12,9 +12,9 @@ keywords = ["permissions", "mobile", "desktop", "web", "cross-platform"]
 categories = ["development-tools::build-utils"]
 
 [dependencies]
-permissions-core = { path = "../permissions-core" }
-permissions-macro = { path = "../permissions-macro" }
-const-serialize = { path = "../../const-serialize" }
-dx-macro-helpers = { path = "../../dx-macro-helpers" }
+permissions-core = { workspace = true }
+permissions-macro = { workspace = true }
+const-serialize = { workspace = true }
+dx-macro-helpers = { workspace = true }
 
 [dev-dependencies]

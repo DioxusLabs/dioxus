@@ -121,13 +121,20 @@ fn parse_java_metadata_at_offset(data: &[u8], offset: usize) -> Result<JavaSourc
 
     // Use deserialize_const! directly with the byte slice (new API)
     // Note: Java sources are being ignored for now per the plan, but we fix compilation errors
-    
+
     // Deserialize the struct fields
     // The new API uses deserialize_const! with a byte slice directly
-    if let Some((remaining, package_name)) = const_serialize::deserialize_const!(ConstStr, metadata_bytes) {
-        if let Some((remaining, plugin_name)) = const_serialize::deserialize_const!(ConstStr, remaining) {
-            if let Some((remaining, file_count)) = const_serialize::deserialize_const!(u8, remaining) {
-                if let Some((_, files)) = const_serialize::deserialize_const!([ConstStr; 8], remaining)
+    if let Some((remaining, package_name)) =
+        const_serialize::deserialize_const!(ConstStr, metadata_bytes)
+    {
+        if let Some((remaining, plugin_name)) =
+            const_serialize::deserialize_const!(ConstStr, remaining)
+        {
+            if let Some((remaining, file_count)) =
+                const_serialize::deserialize_const!(u8, remaining)
+            {
+                if let Some((_, files)) =
+                    const_serialize::deserialize_const!([ConstStr; 8], remaining)
                 {
                     return Ok(JavaSourceMetadata::from_const_serialize(
                         package_name,

@@ -455,6 +455,7 @@ pub struct BuildArtifacts {
     pub(crate) assets: AssetManifest,
     pub(crate) permissions: super::permissions::PermissionManifest,
     pub(crate) java_sources: super::android_java::JavaSourceManifest,
+    pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1129,6 +1130,14 @@ impl BuildRequest {
                         .context("Failed to copy Java sources to Gradle directory")?;
                 }
 
+                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+                    && !artifacts.swift_sources.is_empty()
+                {
+                    self.embed_swift_stdlibs(&artifacts.swift_sources)
+                        .await
+                        .context("Failed to embed Swift standard libraries")?;
+                }
+
                 // Update platform manifests with permissions AFTER writing metadata
                 // to avoid having them overwritten by the template
                 self.update_manifests_with_permissions(&artifacts.permissions)
@@ -1344,6 +1353,9 @@ impl BuildRequest {
         // Extract Java sources for Android builds
         let java_sources = self.collect_java_sources(&exe, ctx).await?;
 
+        // Extract Swift sources for iOS/macOS builds
+        let swift_sources = self.collect_swift_sources(&exe, ctx).await?;
+
         // Note: We'll update platform manifests with permissions AFTER write_metadata()
         // to avoid having them overwritten by the template
 
@@ -1365,6 +1377,7 @@ impl BuildRequest {
             assets,
             permissions,
             java_sources,
+            swift_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1441,7 +1454,8 @@ impl BuildRequest {
         let permission_manifest = if skip_permissions {
             super::permissions::PermissionManifest::default()
         } else {
-            let manifest = super::permissions::PermissionManifest::from_permissions(result.permissions);
+            let manifest =
+                super::permissions::PermissionManifest::from_permissions(result.permissions);
 
             // Log permissions found for platforms that need them
             let platform = match self.bundle {
@@ -1553,6 +1567,117 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    /// Collect Swift sources for iOS/macOS builds
+    async fn collect_swift_sources(
+        &self,
+        exe: &Path,
+        _ctx: &BuildContext,
+    ) -> Result<super::ios_swift::SwiftSourceManifest> {
+        if !matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS) {
+            return Ok(super::ios_swift::SwiftSourceManifest::default());
+        }
+
+        let manifest = super::ios_swift::extract_swift_sources_from_file(exe)?;
+
+        if !manifest.is_empty() {
+            tracing::debug!(
+                "Found {} Swift source declarations for {:?}",
+                manifest.sources().len(),
+                self.bundle
+            );
+            for source in manifest.sources() {
+                tracing::debug!(
+                    "  Plugin: {} (Swift package path={} product={})",
+                    source.plugin_name(),
+                    source.package_path(),
+                    source.product()
+                );
+            }
+        }
+
+        Ok(manifest)
+    }
+
+    /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
+    async fn embed_swift_stdlibs(
+        &self,
+        swift_sources: &super::ios_swift::SwiftSourceManifest,
+    ) -> Result<()> {
+        if swift_sources.is_empty() {
+            return Ok(());
+        }
+
+        let platform_flag = match self.bundle {
+            BundleFormat::Ios => {
+                let triple_str = self.triple.to_string();
+                if triple_str.contains("sim") || triple_str.contains("x86_64") {
+                    "iphonesimulator"
+                } else {
+                    "iphoneos"
+                }
+            }
+            BundleFormat::MacOS => "macosx",
+            _ => return Ok(()),
+        };
+
+        let frameworks_dir = self.frameworks_folder();
+        std::fs::create_dir_all(&frameworks_dir)?;
+
+        let exe_path = self.main_exe();
+        if !exe_path.exists() {
+            anyhow::bail!(
+                "Expected executable at {} when embedding Swift stdlibs",
+                exe_path.display()
+            );
+        }
+
+        let output = Command::new("xcrun")
+            .arg("swift-stdlib-tool")
+            .arg("--copy")
+            .arg("--platform")
+            .arg(platform_flag)
+            .arg("--scan-executable")
+            .arg(&exe_path)
+            .arg("--destination")
+            .arg(&frameworks_dir)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "swift-stdlib-tool failed: {}{}",
+                stderr.trim(),
+                if stdout.trim().is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" | {}", stdout.trim())
+                }
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Get the iOS/macOS SDK path
+    fn get_ios_sdk_path(sdk: &str) -> Result<String> {
+        use std::process::Command;
+
+        let output = Command::new("xcrun")
+            .arg("--show-sdk-path")
+            .arg("--sdk")
+            .arg(sdk)
+            .output()?;
+
+        if output.status.success() {
+            let path = String::from_utf8(output.stdout)?.trim().to_string();
+            Ok(path)
+        } else {
+            anyhow::bail!("Failed to find SDK path for: {}", sdk)
+        }
     }
 
     /// Update platform manifests with permissions after they're collected

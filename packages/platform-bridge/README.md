@@ -51,6 +51,21 @@ dioxus_platform_bridge::android_plugin!(
 );
 ```
 
+### Declaring iOS/macOS Swift Packages
+
+Declare Swift packages for iOS/macOS builds:
+
+```rust
+use dioxus_platform_bridge::ios_plugin;
+
+// Declare Swift package metadata (collected by dx CLI)
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+dioxus_platform_bridge::ios_plugin!(
+    plugin = "geolocation",
+    spm = { path = "ios", product = "GeolocationPlugin" }
+);
+```
+
 ## Architecture
 
 The crate is organized into platform-specific modules:

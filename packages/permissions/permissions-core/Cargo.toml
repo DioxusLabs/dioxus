@@ -1,6 +1,6 @@
 [package]
 name = "permissions-core"
-version = "0.7.0-rc.3"
+version = { workspace = true }
 edition = "2021"
 description = "Core types and platform mappings for the permissions system"
 authors = ["DioxusLabs"]
@@ -12,9 +12,9 @@ keywords = ["permissions", "mobile", "desktop", "web"]
 categories = ["development-tools::build-utils"]
 
 [dependencies]
-const-serialize = { path = "../../const-serialize" }
-const-serialize-macro = { path = "../../const-serialize-macro" }
-manganis-core = { path = "../../manganis/manganis-core" }
+const-serialize = { workspace = true }
+const-serialize-macro = { workspace = true }
+manganis-core = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
