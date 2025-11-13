@@ -30,8 +30,9 @@
 //! > to preserve backward compatibility with existing code.
 
 pub use permissions_core::{
-    CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
-    PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
+    AndroidArtifactMetadata, CustomPermissionBuilder, LocationPrecision, Permission,
+    PermissionBuilder, PermissionKind, PermissionManifest, Platform, PlatformFlags,
+    PlatformIdentifiers, SwiftPackageMetadata, SymbolData,
 };
 pub use permissions_macro::{permission, static_permission};
 
@@ -46,27 +47,31 @@ pub mod macro_helpers {
     pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};
     // Re-export copy_bytes so generated code can use it without dx-macro-helpers dependency
     pub use dx_macro_helpers::copy_bytes;
+    use permissions_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
     pub use permissions_core::{Permission, SymbolData};
 
-    /// Serialize a permission as SymbolData::Permission to a const buffer
-    ///
-    /// This wraps the permission in SymbolData::Permission variant for unified
-    /// serialization with assets using the same __ASSETS__ prefix.
-    ///
-    /// Uses a 4096-byte buffer to accommodate permissions with large ConstStr fields
-    /// (especially custom permissions). The buffer is padded to the full buffer size (4096)
-    /// to match the linker section size. const-serialize deserialization will ignore
-    /// the padding (zeros) at the end.
-    pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
-        let symbol_data = SymbolData::Permission(*permission);
-        // Serialize using the default buffer, then expand into the fixed-size buffer
+    const fn serialize_symbol_data(symbol_data: SymbolData) -> ConstVec<u8, 4096> {
         let serialized = const_serialize::serialize_const(&symbol_data, ConstVec::new());
         let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
         data = data.extend(serialized.as_ref());
-        // Pad to full buffer size (4096) to match linker section size
         while data.len() < 4096 {
             data = data.push(0);
         }
         data
+    }
+
+    /// Serialize a permission into a const buffer (wrapped in `SymbolData::Permission`).
+    pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
+        serialize_symbol_data(SymbolData::Permission(*permission))
+    }
+
+    /// Serialize Android artifact metadata (wrapped in `SymbolData::AndroidArtifact`).
+    pub const fn serialize_android_artifact(meta: &AndroidArtifactMetadata) -> ConstVec<u8, 4096> {
+        serialize_symbol_data(SymbolData::AndroidArtifact(*meta))
+    }
+
+    /// Serialize Swift package metadata (wrapped in `SymbolData::SwiftPackage`).
+    pub const fn serialize_swift_package(meta: &SwiftPackageMetadata) -> ConstVec<u8, 4096> {
+        serialize_symbol_data(SymbolData::SwiftPackage(*meta))
     }
 }

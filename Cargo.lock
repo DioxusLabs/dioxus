@@ -6554,6 +6554,7 @@ dependencies = [
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.6.3",
+ "permissions",
  "platform-bridge-macro",
  "thiserror 2.0.17",
 ]
@@ -9675,7 +9676,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dioxus 0.7.1",
- "permissions",
  "reqwest 0.12.24",
  "rusqlite",
  "serde",
@@ -13797,6 +13797,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 name = "platform-bridge-macro"
 version = "0.7.1"
 dependencies = [
+ "dx-macro-helpers",
  "proc-macro2",
  "quote",
  "syn 2.0.108",

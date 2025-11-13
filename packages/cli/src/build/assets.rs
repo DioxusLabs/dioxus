@@ -40,7 +40,7 @@ use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
-use permissions::{Permission, SymbolData};
+use permissions::{AndroidArtifactMetadata, Permission, SwiftPackageMetadata, SymbolData};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 /// Extract all manganis symbols and their sections from the given object file.
@@ -607,6 +607,10 @@ pub(crate) struct SymbolExtractionResult {
     pub assets: Vec<BundledAsset>,
     /// Permissions found in the binary
     pub permissions: Vec<Permission>,
+    /// Android plugin artifacts discovered in the binary
+    pub android_artifacts: Vec<AndroidArtifactMetadata>,
+    /// Swift packages discovered in the binary
+    pub swift_packages: Vec<SwiftPackageMetadata>,
 }
 
 /// Find all assets and permissions in the given file, hash assets, and write them back to the file.
@@ -630,6 +634,8 @@ pub(crate) async fn extract_symbols_from_file(
 
     let mut assets = Vec::new();
     let mut permissions = Vec::new();
+    let mut android_artifacts = Vec::new();
+    let mut swift_packages = Vec::new();
     let mut write_entries = Vec::new();
 
     // Read each symbol from the data section using the offsets
@@ -680,6 +686,20 @@ pub(crate) async fn extract_symbols_from_file(
                             );
                             permissions.push(permission);
                             // Permissions are not written back, so don't store the symbol
+                        }
+                        SymbolData::AndroidArtifact(meta) => {
+                            tracing::debug!(
+                                "Found Android artifact declaration for plugin {}",
+                                meta.plugin_name.as_str()
+                            );
+                            android_artifacts.push(meta);
+                        }
+                        SymbolData::SwiftPackage(meta) => {
+                            tracing::debug!(
+                                "Found Swift package declaration for plugin {}",
+                                meta.plugin_name.as_str()
+                            );
+                            swift_packages.push(meta);
                         }
                     }
                 }
@@ -774,8 +794,10 @@ pub(crate) async fn extract_symbols_from_file(
     }
 
     Ok(SymbolExtractionResult {
-        assets: assets.clone(),
+        assets,
         permissions,
+        android_artifacts,
+        swift_packages,
     })
 }
 

@@ -11,8 +11,9 @@ mod ios_plugin;
 /// Declare an Android plugin that will be embedded in the binary
 ///
 /// This macro declares prebuilt Android artifacts (AARs) and embeds their metadata into the compiled
-/// binary using linker symbols. The Dioxus CLI uses this metadata to include the artifacts in the
-/// generated Gradle project.
+/// binary using the shared `SymbolData` stream (the same linker section used for assets and
+/// permissions). The Dioxus CLI reads that metadata to copy the AARs into the generated Gradle
+/// project and to append any additional Gradle dependencies.
 ///
 /// # Syntax
 ///
@@ -33,8 +34,9 @@ mod ios_plugin;
 /// When `path` is used, it is resolved relative to `CARGO_MANIFEST_DIR`. When `env` is used,
 /// the environment variable is read at compile time via `env!`.
 ///
-/// The macro embeds the resolved artifact path into the binary using linker symbols with the
-/// `__ANDROID_ARTIFACT__` prefix so the CLI can pick up the resulting AAR without manual configuration.
+/// The macro wraps the resolved artifact path and dependency strings in
+/// `SymbolData::AndroidArtifact` and stores it under the `__ASSETS__*` linker prefix. Because the CLI
+/// already scans that prefix for assets and permissions, no extra scanner is required.
 ///
 /// # Example Structure
 ///
@@ -55,9 +57,9 @@ pub fn android_plugin(input: TokenStream) -> TokenStream {
 
 /// Declare an iOS/macOS plugin that will be embedded in the binary
 ///
-/// This macro declares Swift packages and embeds their metadata into the compiled
-/// binary using linker symbols. The Dioxus CLI uses this metadata to ensure the Swift
-/// runtime is bundled correctly.
+/// This macro declares Swift packages and embeds their metadata into the compiled binary using the
+/// shared `SymbolData` stream. The Dioxus CLI uses this metadata to ensure the Swift runtime is
+/// bundled correctly whenever Swift code is linked.
 ///
 /// # Syntax
 ///
@@ -79,11 +81,8 @@ pub fn android_plugin(input: TokenStream) -> TokenStream {
 /// The macro expands paths using `env!("CARGO_MANIFEST_DIR")` so package manifests are
 /// resolved relative to the crate declaring the plugin.
 ///
-/// # Embedding
-///
-/// The macro embeds package metadata into the binary using linker symbols with the
-/// `__SWIFT_SOURCE__` prefix. This allows the Dioxus CLI to detect when Swift support
-/// (stdlib embedding, diagnostics, etc.) is required.
+/// The metadata is serialized as `SymbolData::SwiftPackage` and emitted under the `__ASSETS__*`
+/// prefix, alongside assets, permissions, and Android artifacts.
 ///
 /// # Example Structure
 ///

@@ -8,7 +8,7 @@ This crate provides common patterns and utilities for implementing mobile platfo
 
 - **Android Support**: JNI utilities, activity caching, DEX loading, callback registration
 - **iOS/macOS Support**: Main thread utilities, manager caching, objc2 integration
-- **Metadata System**: Declare Java sources in code (collected by dx CLI)
+- **Metadata System**: Declarative macros (`android_plugin!`, `ios_plugin!`) for embedding platform artifacts that the Dioxus CLI collects from linker symbols
 
 ## Usage
 
@@ -35,19 +35,19 @@ let cell = MainThreadCell::new();
 let value = cell.get_or_init_with(mtm, || "initialized");
 ```
 
-### Declaring Android Java Sources
+### Declaring Android Plugins
 
-No build scripts needed! Declare Java sources for Android:
+Declare Gradle artifacts (AARs) plus extra Gradle dependency lines. The metadata is embedded in the
+Rust binary and discovered by the Dioxus CLI when bundling user apps:
 
 ```rust
 use dioxus_platform_bridge::android_plugin;
 
-// Declare Java sources (embedded in binary, collected by dx CLI)
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "metadata", target_os = "android"))]
 dioxus_platform_bridge::android_plugin!(
-    package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
-    files = ["src/android/LocationCallback.java", "src/android/PermissionsHelper.java"]
+    aar = { env = "DIOXUS_ANDROID_ARTIFACT" },
+    deps = ["implementation(\"com.google.android.gms:play-services-location:21.3.0\")"]
 );
 ```
 
@@ -58,8 +58,7 @@ Declare Swift packages for iOS/macOS builds:
 ```rust
 use dioxus_platform_bridge::ios_plugin;
 
-// Declare Swift package metadata (collected by dx CLI)
-#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
 dioxus_platform_bridge::ios_plugin!(
     plugin = "geolocation",
     spm = { path = "ios", product = "GeolocationPlugin" }
@@ -70,7 +69,7 @@ dioxus_platform_bridge::ios_plugin!(
 
 The crate is organized into platform-specific modules:
 
-- `android/` - JNI utilities, activity management, callback systems, Java source metadata
+- `android/` - JNI utilities, activity management, callback systems, Android metadata helpers
 - `darwin/` - Main thread utilities for iOS and macOS (objc2)
 
 ## License

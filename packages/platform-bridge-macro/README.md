@@ -1,89 +1,76 @@
 # platform-bridge-macro
 
-Procedural macro for declaring Android Java sources with linker-based embedding for Dioxus builds.
+Procedural macros for declaring Android and iOS/macOS plugin metadata that the Dioxus CLI collects
+from linker symbols.
 
 ## Overview
 
-This crate provides the `android_plugin!()` macro for declaring Android Java sources that need to be compiled into the APK.
+The crate exposes two macros:
 
-## Usage
+- `android_plugin!` — declare a prebuilt Android AAR and optional Gradle dependency strings.
+- `ios_plugin!` — declare a Swift Package (path + product) that was linked into the binary.
 
-### Basic Example
+Each macro serializes its metadata as `SymbolData` and emits it under the `__ASSETS__*` linker
+prefix, alongside regular assets and permissions. The CLI already performs a single scan of that
+prefix after building the Rust binary, so plugin metadata piggy-backs on the same pipeline.
+
+## Android: `android_plugin!`
 
 ```rust
 use dioxus_platform_bridge::android_plugin;
 
-// Declare Java sources for Android
-#[cfg(target_os = "android")]
+#[cfg(all(feature = "metadata", target_os = "android"))]
 dioxus_platform_bridge::android_plugin!(
-    package = "dioxus.mobile.geolocation",
     plugin = "geolocation",
-    files = ["LocationCallback.java", "PermissionsHelper.java"]
-);
-```
-
-This generates:
-- Linker symbols with `__JAVA_SOURCE__` prefix
-- Absolute path embedding for fast file resolution
-- Compile-time file existence validation
-
-## Macro Syntax
-
-```rust
-android_plugin!(
-    package = "<java.package.name>",    // Required: Java package (e.g., "dioxus.mobile.geolocation")
-    plugin = "<plugin_id>",              // Required: Plugin identifier (e.g., "geolocation")
-    files = ["File1.java", ...]         // Required: Array of Java filenames
+    aar = { env = "DIOXUS_ANDROID_ARTIFACT" },
+    deps = ["implementation(\"com.google.android.gms:play-services-location:21.3.0\")"]
 );
 ```
 
 ### Parameters
 
-- **package**: The Java package name where the classes will live in the APK
-- **plugin**: The plugin identifier for organization and symbol naming
-- **files**: Array of Java filenames relative to `src/sys/android/` or `src/android/`
+| Name   | Required | Description |
+|--------|----------|-------------|
+| `plugin` | ✅ | Logical plugin identifier used for grouping in diagnostics. |
+| `aar` | ✅ | `{ path = "relative/path.aar" }` or `{ env = "ENV_WITH_PATH" }` to locate the artifact. Paths are resolved relative to `CARGO_MANIFEST_DIR`. |
+| `deps` | optional | Array of strings (typically Gradle `implementation(...)` lines) appended verbatim to the generated `build.gradle.kts`. |
 
-## File Resolution
+The macro resolves the artifact path at compile time, wraps it together with the plugin identifier
+and dependency strings in `SymbolData::AndroidArtifact`, and emits it via a linker symbol. No Java
+source copying or runtime reflection is involved.
 
-The macro automatically searches for Java files in these locations (relative to `CARGO_MANIFEST_DIR`):
+**CLI behaviour:** while bundling (`dx bundle --android`), the CLI collects every
+`SymbolData::AndroidArtifact`, copies the referenced `.aar` into `app/libs/`, and makes sure the
+Gradle module depends on it plus any extra `deps` strings.
 
-1. `src/sys/android/` (recommended)
-2. `src/android/`
-3. Root directory (fallback)
+## iOS/macOS: `ios_plugin!`
 
-If a file is not found, the macro emits a compile error with details about where it searched.
+```rust
+use dioxus_platform_bridge::ios_plugin;
 
-## How It Works
-
-### Compile Time
-
-1. **Validation**: Checks that Java files exist in common locations
-2. **Path Resolution**: Converts relative filenames to absolute paths using `env!("CARGO_MANIFEST_DIR")`
-3. **Serialization**: Serializes metadata using `const-serialize`
-4. **Linker Section**: Embeds data in `__DATA,__java_source` section with unique symbol name
-
-### Build Time (Dioxus CLI)
-
-1. **Extraction**: Parses binary to find `__JAVA_SOURCE__*` symbols
-2. **Path Handling**: Uses embedded absolute paths directly (fast path) or searches workspace (legacy)
-3. **Copying**: Copies Java files to Gradle structure: `app/src/main/java/{package}/`
-4. **Compilation**: Gradle compiles Java sources to DEX bytecode
-
-The macro uses linker-based binary embedding with compile-time validation, similar to the `static_permission!()` and `asset!()` macros.
-
-
-## Error Messages
-
-If a file is missing, you'll see:
-
-```
-error: Java file 'LocationCallback.java' not found. Searched in:
-  - /path/to/crate/src/sys/android/LocationCallback.java
-  - /path/to/crate/src/android/LocationCallback.java
-  - /path/to/crate/LocationCallback.java
+#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
+dioxus_platform_bridge::ios_plugin!(
+    plugin = "geolocation",
+    spm = { path = "ios", product = "GeolocationPlugin" }
+);
 ```
 
-## See Also
+### Parameters
 
-- [`platform-bridge`](../platform-bridge/): Core utilities for Android and iOS/macOS
+| Name   | Required | Description |
+|--------|----------|-------------|
+| `plugin` | ✅ | Logical plugin identifier. |
+| `spm.path` | ✅ | Relative path (from `CARGO_MANIFEST_DIR`) to the Swift package folder. |
+| `spm.product` | ✅ | The SwiftPM product name that was linked into the Rust binary. |
 
+The macro emits `SymbolData::SwiftPackage` entries containing the absolute package path and product
+name. The CLI uses those entries as a signal to run `swift-stdlib-tool` and embed the Swift runtime
+frameworks when bundling for Apple platforms.
+
+## Implementation Notes
+
+- Serialization uses `dx-macro-helpers` which ensures each record is padded to 4 KB for consistent
+  linker output.
+- Because all metadata ends up in the shared `__ASSETS__*` section, plugin authors do not need any
+  additional build steps—the CLI automatically consumes the data in the same pass as assets and
+  permissions.

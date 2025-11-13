@@ -14,6 +14,7 @@ metadata = [
     "dep:const-serialize",
     "dep:const-serialize-macro",
     "dep:platform-bridge-macro",
+    "dep:permissions",
 ]
 
 [dependencies]
@@ -21,6 +22,7 @@ thiserror = { workspace = true }
 const-serialize = { workspace = true, optional = true }
 const-serialize-macro = { workspace = true, optional = true }
 platform-bridge-macro = { workspace = true, optional = true }
+permissions = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

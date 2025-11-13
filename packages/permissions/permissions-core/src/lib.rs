@@ -4,7 +4,7 @@ mod symbol_data;
 
 pub use permission::*;
 pub use platforms::*;
-pub use symbol_data::SymbolData;
+pub use symbol_data::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 
 // Re-export PermissionBuilder and CustomPermissionBuilder for convenience
 pub use permission::{CustomPermissionBuilder, PermissionBuilder};

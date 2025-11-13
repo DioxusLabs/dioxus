@@ -1,3 +1,4 @@
+use dx_macro_helpers::linker;
 use quote::{quote, ToTokens};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::{parse::Parse, parse::ParseStream, Token};
@@ -94,46 +95,26 @@ impl ToTokens for IosPluginParser {
         self.spm.product.hash(&mut hash);
         let plugin_hash = format!("{:016x}", hash.finish());
 
-        let export_name_lit = syn::LitStr::new(
-            &format!("__SWIFT_SOURCE__{}", plugin_hash),
-            proc_macro2::Span::call_site(),
-        );
-
         let path_lit = syn::LitStr::new(&self.spm.path, proc_macro2::Span::call_site());
         let product_lit = syn::LitStr::new(&self.spm.product, proc_macro2::Span::call_site());
 
-        let link_section = quote! {
-            const __SWIFT_META: dioxus_platform_bridge::darwin::SwiftSourceMetadata =
-                dioxus_platform_bridge::darwin::SwiftSourceMetadata::new(
-                    #plugin_name,
-                    concat!(env!("CARGO_MANIFEST_DIR"), "/", #path_lit),
-                    #product_lit,
-                );
-
-            const __BUFFER: dioxus_platform_bridge::darwin::metadata::SwiftMetadataBuffer =
-                dioxus_platform_bridge::darwin::metadata::serialize_swift_metadata(&__SWIFT_META);
-            const __BYTES: &[u8] = __BUFFER.as_ref();
+        let metadata_expr = quote! {
+            dioxus_platform_bridge::darwin::SwiftSourceMetadata::new(
+                #plugin_name,
+                concat!(env!("CARGO_MANIFEST_DIR"), "/", #path_lit),
+                #product_lit,
+            )
         };
 
-        let link_section = quote! {
-            #link_section
-
-            #[link_section = "__DATA,__swift_source"]
-            #[used]
-            #[unsafe(export_name = #export_name_lit)]
-            static __LINK_SECTION: [u8; 4096] = {
-                const fn copy_bytes_internal<const N: usize>(bytes: &[u8]) -> [u8; N] {
-                    let mut array = [0u8; N];
-                    let mut i = 0;
-                    while i < bytes.len() && i < N {
-                        array[i] = bytes[i];
-                        i += 1;
-                    }
-                    array
-                }
-                copy_bytes_internal::<4096>(__BYTES)
-            };
-        };
+        let link_section = linker::generate_link_section(
+            metadata_expr,
+            &plugin_hash,
+            "__ASSETS__",
+            quote! { dioxus_platform_bridge::darwin::metadata::serialize_swift_metadata },
+            quote! { dioxus_platform_bridge::android::macro_helpers::copy_bytes },
+            quote! { dioxus_platform_bridge::darwin::metadata::SwiftMetadataBuffer },
+            true,
+        );
 
         tokens.extend(link_section);
     }

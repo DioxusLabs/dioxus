@@ -1346,15 +1346,9 @@ impl BuildRequest {
             );
         }
 
-        // Extract both assets and permissions together from the same binary
-        // Since they use the same __ASSETS__ prefix, we can extract them in one pass
-        let (assets, permissions) = self.collect_assets_and_permissions(&exe, ctx).await?;
-
-        // Extract Android artifacts for Android builds
-        let android_artifacts = self.collect_android_artifacts(&exe, ctx).await?;
-
-        // Extract Swift sources for iOS/macOS builds
-        let swift_sources = self.collect_swift_sources(&exe, ctx).await?;
+        // Extract all linker metadata (assets, permissions, Android/iOS plugins) in a single pass.
+        let (assets, permissions, android_artifacts, swift_sources) =
+            self.collect_assets_and_permissions(&exe, ctx).await?;
 
         // Note: We'll update platform manifests with permissions AFTER write_metadata()
         // to avoid having them overwritten by the template
@@ -1395,35 +1389,44 @@ impl BuildRequest {
         &self,
         exe: &Path,
         ctx: &BuildContext,
-    ) -> Result<(AssetManifest, super::permissions::PermissionManifest)> {
+    ) -> Result<(
+        AssetManifest,
+        super::permissions::PermissionManifest,
+        super::android_java::AndroidArtifactManifest,
+        super::ios_swift::SwiftSourceManifest,
+    )> {
         use super::assets::extract_symbols_from_file;
 
-        // Extract both assets and permissions in one pass
         let skip_assets = self.skip_assets;
         let skip_permissions = self.skip_permissions || self.bundle == BundleFormat::Web;
+        let needs_android_artifacts = self.bundle == BundleFormat::Android;
+        let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
-        if skip_assets && skip_permissions {
+        if skip_assets && skip_permissions && !needs_android_artifacts && !needs_swift_packages {
             return Ok((
                 AssetManifest::default(),
                 super::permissions::PermissionManifest::default(),
+                super::android_java::AndroidArtifactManifest::default(),
+                super::ios_swift::SwiftSourceManifest::default(),
             ));
         }
 
         ctx.status_extracting_assets();
-        let result = extract_symbols_from_file(exe).await?;
+        let super::assets::SymbolExtractionResult {
+            assets: extracted_assets,
+            permissions: extracted_permissions,
+            android_artifacts,
+            swift_packages,
+        } = extract_symbols_from_file(exe).await?;
 
-        // Build asset manifest
         let asset_manifest = if skip_assets {
             AssetManifest::default()
         } else {
             let mut manifest = AssetManifest::default();
-            for asset in result.assets {
+            for asset in extracted_assets {
                 manifest.insert_asset(asset);
             }
 
-            // If the user has a public dir, we submit all the entries there as assets too
-            // These don't receive a hash in their filename, since they're user-provided static assets
-            // We only do this for web builds
             if matches!(self.bundle, BundleFormat::Web)
                 && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
             {
@@ -1450,14 +1453,12 @@ impl BuildRequest {
             manifest
         };
 
-        // Build permission manifest
         let permission_manifest = if skip_permissions {
             super::permissions::PermissionManifest::default()
         } else {
             let manifest =
-                super::permissions::PermissionManifest::from_permissions(result.permissions);
+                super::permissions::PermissionManifest::from_permissions(extracted_permissions);
 
-            // Log permissions found for platforms that need them
             let platform = match self.bundle {
                 BundleFormat::Android => Some(permissions::Platform::Android),
                 BundleFormat::Ios => Some(permissions::Platform::Ios),
@@ -1485,36 +1486,44 @@ impl BuildRequest {
             manifest
         };
 
-        Ok((asset_manifest, permission_manifest))
-    }
-
-    /// Collect Android plugin artifacts declared by dependencies.
-    async fn collect_android_artifacts(
-        &self,
-        exe: &Path,
-        _ctx: &BuildContext,
-    ) -> Result<super::android_java::AndroidArtifactManifest> {
-        if self.bundle != BundleFormat::Android {
-            return Ok(super::android_java::AndroidArtifactManifest::default());
-        }
-
-        let manifest = super::android_java::extract_android_artifacts_from_file(exe)?;
-
-        if !manifest.is_empty() {
+        let android_manifest = super::android_java::AndroidArtifactManifest::new(android_artifacts);
+        if !android_manifest.is_empty() {
             tracing::debug!(
                 "Found {} Android artifact declaration(s)",
-                manifest.artifacts().len()
+                android_manifest.artifacts().len()
             );
-            for artifact in manifest.artifacts() {
+            for artifact in android_manifest.artifacts() {
                 tracing::debug!(
                     "  Plugin: {} Artifact: {}",
-                    artifact.plugin_name,
-                    artifact.artifact_path
+                    artifact.plugin_name.as_str(),
+                    artifact.artifact_path.as_str()
                 );
             }
         }
 
-        Ok(manifest)
+        let swift_manifest = super::ios_swift::SwiftSourceManifest::new(swift_packages);
+        if !swift_manifest.is_empty() {
+            tracing::debug!(
+                "Found {} Swift package declaration(s) for {:?}",
+                swift_manifest.sources().len(),
+                self.bundle
+            );
+            for source in swift_manifest.sources() {
+                tracing::debug!(
+                    "  Plugin: {} (Swift package path={} product={})",
+                    source.plugin_name.as_str(),
+                    source.package_path.as_str(),
+                    source.product.as_str()
+                );
+            }
+        }
+
+        Ok((
+            asset_manifest,
+            permission_manifest,
+            android_manifest,
+            swift_manifest,
+        ))
     }
 
     /// Copy collected Android AARs into the Gradle project and add dependencies.
@@ -1527,7 +1536,7 @@ impl BuildRequest {
 
         let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
         for artifact in android_artifacts.artifacts() {
-            let artifact_path = PathBuf::from(&artifact.artifact_path);
+            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
             if !artifact_path.exists() {
                 anyhow::bail!(
                     "Android plugin artifact not found: {}",
@@ -1558,43 +1567,18 @@ impl BuildRequest {
             );
             self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
 
-            for dependency in &artifact.gradle_dependencies {
+            for dependency in artifact
+                .gradle_dependencies
+                .as_str()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+            {
                 self.ensure_gradle_dependency(&build_gradle, dependency)?;
             }
         }
 
         Ok(())
-    }
-
-    /// Collect Swift sources for iOS/macOS builds
-    async fn collect_swift_sources(
-        &self,
-        exe: &Path,
-        _ctx: &BuildContext,
-    ) -> Result<super::ios_swift::SwiftSourceManifest> {
-        if !matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS) {
-            return Ok(super::ios_swift::SwiftSourceManifest::default());
-        }
-
-        let manifest = super::ios_swift::extract_swift_sources_from_file(exe)?;
-
-        if !manifest.is_empty() {
-            tracing::debug!(
-                "Found {} Swift source declarations for {:?}",
-                manifest.sources().len(),
-                self.bundle
-            );
-            for source in manifest.sources() {
-                tracing::debug!(
-                    "  Plugin: {} (Swift package path={} product={})",
-                    source.plugin_name(),
-                    source.package_path(),
-                    source.product()
-                );
-            }
-        }
-
-        Ok(manifest)
     }
 
     /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
@@ -2283,12 +2267,13 @@ impl BuildRequest {
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
-        // Now extract the assets from the fat binary
-        // We combine asset and permission extraction to read the binary only once
-        let (assets, _permissions) = self
+        // Now extract linker metadata from the fat binary (assets, permissions, plugin data)
+        let (assets, _permissions, android_artifacts, swift_sources) = self
             .collect_assets_and_permissions(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
         artifacts.assets = assets;
+        artifacts.android_artifacts = android_artifacts;
+        artifacts.swift_sources = swift_sources;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)

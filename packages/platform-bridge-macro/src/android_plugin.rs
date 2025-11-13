@@ -1,3 +1,4 @@
+use dx_macro_helpers::linker;
 use quote::{quote, ToTokens};
 use std::{
     collections::BTreeSet,
@@ -120,11 +121,6 @@ impl ToTokens for AndroidPluginParser {
         }
         let plugin_hash = format!("{:016x}", hash.finish());
 
-        let export_name_lit = syn::LitStr::new(
-            &format!("__ANDROID_ARTIFACT__{}", plugin_hash),
-            proc_macro2::Span::call_site(),
-        );
-
         let artifact_expr = match &self.artifact {
             ArtifactDeclaration::Path(path) => {
                 let path_lit = syn::LitStr::new(path, proc_macro2::Span::call_site());
@@ -143,24 +139,23 @@ impl ToTokens for AndroidPluginParser {
             .join("\n");
         let deps_lit = syn::LitStr::new(&deps_joined, proc_macro2::Span::call_site());
 
-        let link_section = quote! {
-            const __ANDROID_META: dioxus_platform_bridge::android::AndroidArtifactMetadata =
-                dioxus_platform_bridge::android::AndroidArtifactMetadata::new(
-                    #plugin_name,
-                    #artifact_expr,
-                    #deps_lit,
-                );
-
-            const __BUFFER: dioxus_platform_bridge::android::metadata::AndroidMetadataBuffer =
-                dioxus_platform_bridge::android::metadata::serialize_android_metadata(&__ANDROID_META);
-            const __BYTES: &[u8] = __BUFFER.as_ref();
-
-            #[link_section = "__DATA,__android_artifact"]
-            #[used]
-            #[unsafe(export_name = #export_name_lit)]
-            static __LINK_SECTION: [u8; 4096] =
-                dioxus_platform_bridge::android::macro_helpers::copy_bytes(__BYTES);
+        let metadata_expr = quote! {
+            dioxus_platform_bridge::android::AndroidArtifactMetadata::new(
+                #plugin_name,
+                #artifact_expr,
+                #deps_lit,
+            )
         };
+
+        let link_section = linker::generate_link_section(
+            metadata_expr,
+            &plugin_hash,
+            "__ASSETS__",
+            quote! { dioxus_platform_bridge::android::metadata::serialize_android_metadata },
+            quote! { dioxus_platform_bridge::android::macro_helpers::copy_bytes },
+            quote! { dioxus_platform_bridge::android::metadata::AndroidMetadataBuffer },
+            true,
+        );
 
         tokens.extend(link_section);
     }
