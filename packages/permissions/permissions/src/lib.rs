@@ -44,6 +44,8 @@ pub mod macro_helpers {
 
     // Re-export const_serialize types for convenience
     pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};
+    // Re-export copy_bytes so generated code can use it without dx-macro-helpers dependency
+    pub use dx_macro_helpers::copy_bytes;
     pub use permissions_core::{Permission, SymbolData};
 
     /// Serialize a permission as SymbolData::Permission to a const buffer
@@ -52,16 +54,19 @@ pub mod macro_helpers {
     /// serialization with assets using the same __ASSETS__ prefix.
     ///
     /// Uses a 4096-byte buffer to accommodate permissions with large ConstStr fields
-    /// (especially custom permissions). The buffer is padded to MEMORY_LAYOUT.size()
-    /// for consistency with the CLI's expectations. CBOR serialization is self-describing,
-    /// so padding doesn't affect deserialization.
+    /// (especially custom permissions). The buffer is padded to the full buffer size (4096)
+    /// to match the linker section size. const-serialize deserialization will ignore
+    /// the padding (zeros) at the end.
     pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
         let symbol_data = SymbolData::Permission(*permission);
-        // Use serialize_to_const_with_max to ensure we have a 4096-byte buffer
-        // This matches the CLI's expectation for the new CBOR format
-        dx_macro_helpers::serialize_to_const_with_max::<4096>(
-            &symbol_data,
-            SymbolData::MEMORY_LAYOUT.size(),
-        )
+        // Serialize into a 4096-byte buffer and pad to full size
+        // This matches the CLI's expectation for the fixed buffer size
+        let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
+        data = const_serialize::serialize_const(&symbol_data, data);
+        // Pad to full buffer size (4096) to match linker section size
+        while data.len() < 4096 {
+            data = data.push(0);
+        }
+        data
     }
 }

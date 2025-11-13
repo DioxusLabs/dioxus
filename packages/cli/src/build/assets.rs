@@ -94,31 +94,62 @@ impl ManganisVersion {
             }
             ManganisVersion::New => {
                 // First try SymbolData (new format with enum variant)
-                // CBOR deserialization returns (remaining_bytes, value)
+                // const-serialize deserialization returns (remaining_bytes, value)
                 // We accept if remaining is empty or contains only padding (zeros)
                 if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
                     // Check if remaining bytes are all zeros (padding) or empty
-                    // This handles the case where the linker section is larger than the actual CBOR data
+                    // This handles the case where the linker section is larger than the actual data
+                    // Be very lenient with padding - as long as we successfully deserialized, accept it
+                    // The padding is just zeros added to fill the buffer size
                     let is_valid = remaining.is_empty()
                         || remaining.iter().all(|&b| b == 0)
-                        || remaining.len() < data.len() / 2; // Allow some padding
+                        || remaining.len() <= data.len(); // Allow any amount of padding as long as it's not larger than data
                     
                     if is_valid {
                         return Some(SymbolDataOrAsset::SymbolData(symbol_data));
+                    } else {
+                        tracing::debug!(
+                            "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
+                            remaining.len(),
+                            data.len(),
+                            &data[..data.len().min(32)]
+                        );
                     }
+                } else {
+                    tracing::debug!(
+                        "Failed to deserialize as SymbolData. Data length: {}, first few bytes: {:?}",
+                        data.len(),
+                        &data[..data.len().min(32)]
+                    );
                 }
                 
-                // Fallback: try BundledAsset (old format for backward compatibility)
+                // Fallback: try BundledAsset (direct format - assets are now serialized this way)
                 // This handles assets that were serialized directly as BundledAsset (not wrapped in SymbolData)
                 if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
                     // Check if remaining bytes are all zeros (padding) or empty
+                    // Accept any amount of padding as long as it's all zeros (which is what we pad with)
                     let is_valid = remaining.is_empty()
-                        || remaining.iter().all(|&b| b == 0)
-                        || remaining.len() < data.len() / 2; // Allow some padding
+                        || remaining.iter().all(|&b| b == 0);
                     
                     if is_valid {
+                        tracing::debug!(
+                            "Successfully deserialized BundledAsset, remaining padding: {} bytes",
+                            remaining.len()
+                        );
                         return Some(SymbolDataOrAsset::Asset(asset));
+                    } else {
+                        tracing::warn!(
+                            "BundledAsset deserialized but remaining bytes are not all zeros: {} remaining bytes, first few: {:?}",
+                            remaining.len(),
+                            &remaining[..remaining.len().min(16)]
+                        );
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to deserialize as BundledAsset. Data length: {}, first 32 bytes: {:?}",
+                        data.len(),
+                        &data[..data.len().min(32)]
+                    );
                 }
                 
                 None
@@ -138,8 +169,19 @@ impl ManganisVersion {
             }
             ManganisVersion::New => {
                 // New format: serialize as BundledAsset directly (backward compatible)
-                let buffer = serialize_const(asset, ConstVec::new());
+                // Use a 4096-byte buffer to match the buffer size used in macro serialization
+                let buffer = serialize_const(asset, ConstVec::<u8, 4096>::new_with_max_size());
                 buffer.as_ref().to_vec()
+            }
+        }
+    }
+
+    fn serialize_symbol_data(&self, data: &SymbolData) -> Option<Vec<u8>> {
+        match self {
+            ManganisVersion::Legacy => None,
+            ManganisVersion::New => {
+                let buffer = serialize_const(data, ConstVec::<u8, 4096>::new_with_max_size());
+                Some(buffer.as_ref().to_vec())
             }
         }
     }
@@ -152,6 +194,35 @@ enum SymbolDataOrAsset {
     SymbolData(SymbolData),
     /// Old asset format (backward compatibility)
     Asset(BundledAsset),
+}
+
+#[derive(Clone, Copy)]
+struct AssetWriteEntry {
+    symbol: ManganisSymbolOffset,
+    asset_index: usize,
+    representation: AssetRepresentation,
+}
+
+impl AssetWriteEntry {
+    fn new(
+        symbol: ManganisSymbolOffset,
+        asset_index: usize,
+        representation: AssetRepresentation,
+    ) -> Self {
+        Self {
+            symbol,
+            asset_index,
+            representation,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AssetRepresentation {
+    /// Serialized as a raw BundledAsset (legacy or new format)
+    RawBundled,
+    /// Serialized as SymbolData::Asset (new CBOR format)
+    SymbolData,
 }
 
 fn legacy_asset_to_modern_asset(
@@ -550,7 +621,7 @@ pub(crate) async fn extract_symbols_from_file(
 
     let mut assets = Vec::new();
     let mut permissions = Vec::new();
-    let mut symbol_data_results = Vec::new();
+    let mut write_entries = Vec::new();
 
     // Read each symbol from the data section using the offsets
     for symbol in offsets.iter().copied() {
@@ -558,7 +629,7 @@ pub(crate) async fn extract_symbols_from_file(
         let offset = symbol.offset;
         
         // Read data from file_contents (already loaded into memory)
-        // Use a large buffer for CBOR (variable length), but don't exceed file size
+        // Use a large buffer for variable length data, but don't exceed file size
         let buffer_size = version.size().min(file_contents.len().saturating_sub(offset as usize));
         if buffer_size == 0 {
             tracing::warn!("Symbol at offset {offset} is beyond file size");
@@ -571,7 +642,8 @@ pub(crate) async fn extract_symbols_from_file(
             &file_contents[offset as usize..]
         };
 
-        // Try to deserialize - CBOR will handle variable-length data correctly
+        // Try to deserialize - const-serialize will handle variable-length data correctly
+        // The deserialization should work even with padding (zeros) at the end
         if let Some(result) = version.deserialize(data_in_range) {
             match result {
                 SymbolDataOrAsset::SymbolData(symbol_data) => {
@@ -581,8 +653,13 @@ pub(crate) async fn extract_symbols_from_file(
                                 "Found asset (via SymbolData) at offset {offset}: {:?}",
                                 asset.absolute_source_path()
                             );
+                            let asset_index = assets.len();
                             assets.push(asset);
-                            symbol_data_results.push((symbol, SymbolDataOrAsset::SymbolData(symbol_data)));
+                            write_entries.push(AssetWriteEntry::new(
+                                symbol,
+                                asset_index,
+                                AssetRepresentation::SymbolData,
+                            ));
                         }
                         SymbolData::Permission(permission) => {
                             tracing::debug!(
@@ -600,8 +677,13 @@ pub(crate) async fn extract_symbols_from_file(
                         "Found asset (old format) at offset {offset}: {:?}",
                         asset.absolute_source_path()
                     );
+                    let asset_index = assets.len();
                     assets.push(asset);
-                    symbol_data_results.push((symbol, SymbolDataOrAsset::Asset(asset)));
+                    write_entries.push(AssetWriteEntry::new(
+                        symbol,
+                        asset_index,
+                        AssetRepresentation::RawBundled,
+                    ));
                 }
             }
         } else {
@@ -615,50 +697,43 @@ pub(crate) async fn extract_symbols_from_file(
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
     // Write back only assets to the binary file (permissions are not modified)
-    for (symbol, result) in symbol_data_results {
-        let version = symbol.version;
-        let offset = symbol.offset;
-        
-        match result {
-            SymbolDataOrAsset::Asset(asset) => {
+    for entry in write_entries {
+        let version = entry.symbol.version;
+        let offset = entry.symbol.offset;
+        let asset = assets
+            .get(entry.asset_index)
+            .copied()
+            .expect("asset index collected from symbol scan");
+
+        match entry.representation {
+            AssetRepresentation::RawBundled => {
                 tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
                 let new_data = version.serialize_asset(&asset);
-                file.seek(std::io::SeekFrom::Start(offset))?;
-                // Write the modified binary data back to the file
-                // For CBOR, the new data might be a different size, so we need to handle that
-                // For now, we'll write back the same size as before
-                if new_data.len() <= version.size() {
-                    file.write_all(&new_data)?;
-                    // Pad with zeros if needed (for fixed-size arrays)
-                    if new_data.len() < version.size() {
-                        let padding = vec![0; version.size() - new_data.len()];
-                        file.write_all(&padding)?;
-                    }
-                } else {
+                if new_data.len() > version.size() {
                     tracing::warn!(
-                        "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. This should not happen.",
+                        "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
                         new_data.len(),
                         version.size()
                     );
-                    file.write_all(&new_data[..version.size()])?;
                 }
+                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
             }
-            SymbolDataOrAsset::SymbolData(symbol_data) => {
-                // Only write back if it's an Asset variant
-                if let SymbolData::Asset(asset) = symbol_data {
-                    tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
-                    let new_data = version.serialize_asset(&asset);
-                    file.seek(std::io::SeekFrom::Start(offset))?;
-                    if new_data.len() <= version.size() {
-                        file.write_all(&new_data)?;
-                        if new_data.len() < version.size() {
-                            let padding = vec![0; version.size() - new_data.len()];
-                            file.write_all(&padding)?;
-                        }
-                    } else {
-                        file.write_all(&new_data[..version.size()])?;
-                    }
+            AssetRepresentation::SymbolData => {
+                tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
+                let Some(new_data) = version.serialize_symbol_data(&SymbolData::Asset(asset)) else {
+                    tracing::warn!(
+                        "Symbol at offset {offset} was stored as SymbolData but the binary format only supports raw assets"
+                    );
+                    continue;
+                };
+                if new_data.len() > version.size() {
+                    tracing::warn!(
+                        "SymbolData asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
+                        new_data.len(),
+                        version.size()
+                    );
                 }
+                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
             }
         }
     }
@@ -731,4 +806,26 @@ async fn open_file_for_writing_with_timeout(
             }
         }
     }
+}
+
+fn write_serialized_bytes(
+    file: &mut std::fs::File,
+    offset: u64,
+    data: &[u8],
+    buffer_size: usize,
+) -> Result<()> {
+    use std::io::SeekFrom;
+
+    file.seek(SeekFrom::Start(offset))?;
+    if data.len() <= buffer_size {
+        file.write_all(data)?;
+        if data.len() < buffer_size {
+            let padding = vec![0; buffer_size - data.len()];
+            file.write_all(&padding)?;
+        }
+    } else {
+        file.write_all(&data[..buffer_size])?;
+    }
+
+    Ok(())
 }

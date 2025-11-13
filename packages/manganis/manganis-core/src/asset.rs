@@ -133,7 +133,8 @@ impl Asset {
         if ptr.is_null() {
             panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
         }
-        let mut bytes = ConstVec::new();
+        // Use a 4096-byte buffer to accommodate both old format (1024 bytes) and new format (4096 bytes)
+        let mut bytes = ConstVec::<u8, 4096>::new_with_max_size();
         for byte in 0..len {
             // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
             // since we are reading a u8 there are no alignment requirements
@@ -141,7 +142,17 @@ impl Asset {
             bytes = bytes.push(byte);
         }
         let read = bytes.as_ref();
-        deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
+        // Try to deserialize as BundledAsset directly
+        if let Some((_, asset)) = deserialize_const!(BundledAsset, read) {
+            return asset;
+        }
+        // If that fails, the data might still be in SymbolData::Asset format (not processed by CLI yet)
+        // We can't deserialize SymbolData here due to circular dependency, so provide a helpful error
+        panic!(
+            "Failed to deserialize asset. The asset data may be in SymbolData format and needs to be processed by the Dioxus CLI. \
+             Make sure you are running 'dx serve' or 'dx build' to process assets. \
+             If the error persists, try cleaning your build directory with 'cargo clean' and rebuilding."
+        )
     }
 
     /// Return a canonicalized path to the asset
