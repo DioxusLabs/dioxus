@@ -169,9 +169,13 @@ impl ManganisVersion {
             }
             ManganisVersion::New => {
                 // New format: serialize as BundledAsset directly (backward compatible)
-                // Use a 4096-byte buffer to match the buffer size used in macro serialization
-                let buffer = serialize_const(asset, ConstVec::<u8, 4096>::new_with_max_size());
-                buffer.as_ref().to_vec()
+                // Pad to 4096 bytes to match the linker output size
+                let buffer = serialize_const(asset, ConstVec::new());
+                let mut data = buffer.as_ref().to_vec();
+                if data.len() < 4096 {
+                    data.resize(4096, 0);
+                }
+                data
             }
         }
     }
@@ -180,8 +184,12 @@ impl ManganisVersion {
         match self {
             ManganisVersion::Legacy => None,
             ManganisVersion::New => {
-                let buffer = serialize_const(data, ConstVec::<u8, 4096>::new_with_max_size());
-                Some(buffer.as_ref().to_vec())
+                let buffer = serialize_const(data, ConstVec::new());
+                let mut bytes = buffer.as_ref().to_vec();
+                if bytes.len() < 4096 {
+                    bytes.resize(4096, 0);
+                }
+                Some(bytes)
             }
         }
     }

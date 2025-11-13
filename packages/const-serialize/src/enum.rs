@@ -1,11 +1,11 @@
 use crate::*;
 
 /// Serialize an enum that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_enum<const MAX_SIZE: usize>(
+pub(crate) const unsafe fn serialize_const_enum(
     ptr: *const (),
-    mut to: ConstVec<u8, MAX_SIZE>,
+    mut to: ConstVec<u8>,
     layout: &EnumLayout,
-) -> ConstVec<u8, MAX_SIZE> {
+) -> ConstVec<u8> {
     let byte_ptr = ptr as *const u8;
     let discriminant = layout.discriminant.read(byte_ptr);
 

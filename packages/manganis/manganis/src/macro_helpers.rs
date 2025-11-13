@@ -32,10 +32,10 @@ pub const fn create_bundled_asset_relative(
 /// linker section size. const-serialize deserialization will ignore
 /// the padding (zeros) at the end.
 pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
-    // Serialize directly into a 4096-byte buffer and pad to full size
-    // This matches the CLI's expectation for the fixed buffer size
+    // Serialize using the default buffer, then expand into the fixed-size buffer
+    let serialized = const_serialize::serialize_const(asset, ConstVec::new());
     let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
-    data = const_serialize::serialize_const(asset, data);
+    data = data.extend(serialized.as_ref());
     // Pad to full buffer size (4096) to match linker section size
     while data.len() < 4096 {
         data = data.push(0);

@@ -73,8 +73,9 @@ pub type JavaMetadataBuffer = ConstVec<u8, JavaSourceMetadata::SERIALIZED_SIZE>;
 /// Serialize metadata into a fixed-size buffer for linker embedding
 #[cfg(feature = "metadata")]
 pub const fn serialize_java_metadata(meta: &JavaSourceMetadata) -> JavaMetadataBuffer {
+    let serialized = const_serialize::serialize_const(meta, ConstVec::new());
     let mut buffer: JavaMetadataBuffer = ConstVec::new_with_max_size();
-    buffer = const_serialize::serialize_const(meta, buffer);
+    buffer = buffer.extend(serialized.as_ref());
     // Pad to the expected size to ensure consistent linker symbols
     while buffer.len() < JavaSourceMetadata::SERIALIZED_SIZE {
         buffer = buffer.push(0);

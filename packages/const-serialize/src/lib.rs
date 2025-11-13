@@ -66,11 +66,11 @@ pub unsafe trait SerializeConst: Sized {
 }
 
 /// Serialize a pointer to a type that is stored at the pointer passed in
-const unsafe fn serialize_const_ptr<const MAX_SIZE: usize>(
+const unsafe fn serialize_const_ptr(
     ptr: *const (),
-    to: ConstVec<u8, MAX_SIZE>,
+    to: ConstVec<u8>,
     layout: &Layout,
-) -> ConstVec<u8, MAX_SIZE> {
+) -> ConstVec<u8> {
     match layout {
         Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
         Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
@@ -103,10 +103,7 @@ const unsafe fn serialize_const_ptr<const MAX_SIZE: usize>(
 /// assert_eq!(buffer.as_ref(), &[0xa3, 0x61, 0x61, 0x1a, 0x11, 0x11, 0x11, 0x11, 0x61, 0x62, 0x18, 0x22, 0x61, 0x63, 0x1a, 0x33, 0x33, 0x33, 0x33]);
 /// ```
 #[must_use = "The data is serialized into the returned buffer"]
-pub const fn serialize_const<T: SerializeConst, const MAX_SIZE: usize>(
-    data: &T,
-    to: ConstVec<u8, MAX_SIZE>,
-) -> ConstVec<u8, MAX_SIZE> {
+pub const fn serialize_const<T: SerializeConst>(data: &T, to: ConstVec<u8>) -> ConstVec<u8> {
     let ptr = data as *const T as *const ();
     // SAFETY: The pointer is valid and the layout is correct
     unsafe { serialize_const_ptr(ptr, to, &T::MEMORY_LAYOUT) }

@@ -34,11 +34,11 @@ impl StructLayout {
 }
 
 /// Serialize a struct that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_struct<const MAX_SIZE: usize>(
+pub(crate) const unsafe fn serialize_const_struct(
     ptr: *const (),
-    to: ConstVec<u8, MAX_SIZE>,
+    to: ConstVec<u8>,
     layout: &StructLayout,
-) -> ConstVec<u8, MAX_SIZE> {
+) -> ConstVec<u8> {
     let mut i = 0;
     let field_count = layout.data.len();
     let mut to = write_map(to, field_count);

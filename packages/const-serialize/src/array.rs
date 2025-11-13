@@ -22,11 +22,11 @@ unsafe impl<const N: usize, T: SerializeConst> SerializeConst for [T; N] {
 }
 
 /// Serialize a constant sized array that is stored at the pointer passed in
-pub(crate) const unsafe fn serialize_const_array<const MAX_SIZE: usize>(
+pub(crate) const unsafe fn serialize_const_array(
     ptr: *const (),
-    mut to: ConstVec<u8, MAX_SIZE>,
+    mut to: ConstVec<u8>,
     layout: &ArrayLayout,
-) -> ConstVec<u8, MAX_SIZE> {
+) -> ConstVec<u8> {
     let len = layout.len;
     let mut i = 0;
     to = write_array(to, len);
