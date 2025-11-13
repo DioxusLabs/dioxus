@@ -5374,7 +5374,7 @@ dependencies = [
  "dioxus-config-macros 0.7.1",
  "dioxus-core 0.7.1",
  "dioxus-core-macro 0.7.1",
- "dioxus-desktop",
+ "dioxus-desktop 0.7.1",
  "dioxus-devtools 0.7.1",
  "dioxus-document 0.7.1",
  "dioxus-fullstack 0.7.1",
@@ -5416,6 +5416,7 @@ dependencies = [
  "dioxus-config-macros 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-core 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-core-macro 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-desktop 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-devtools 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-document 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-fullstack 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5888,6 +5889,61 @@ dependencies = [
  "rfd",
  "rustc-hash 2.1.1",
  "separator",
+ "serde",
+ "serde_json",
+ "signal-hook",
+ "slab",
+ "subtle",
+ "tao",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "tray-icon",
+ "tungstenite 0.27.0",
+ "webbrowser",
+ "wry",
+]
+
+[[package]]
+name = "dioxus-desktop"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f493c74ff09410c5eadf42abd031d4b3d4032a4d5a2411c77d1d0d5156ca3687"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "cocoa",
+ "core-foundation 0.10.1",
+ "dioxus-asset-resolver 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-cli-config 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-core 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-devtools 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-document 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-history 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-hooks 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-html 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-interpreter-js 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-signals 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dunce",
+ "futures-channel",
+ "futures-util",
+ "generational-box 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "global-hotkey",
+ "infer",
+ "jni 0.21.1",
+ "lazy-js-bundle 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc",
+ "muda",
+ "ndk 0.9.0",
+ "ndk-context",
+ "ndk-sys 0.6.0+11769913",
+ "objc",
+ "objc_id",
+ "percent-encoding",
+ "rand 0.9.2",
+ "rfd",
+ "rustc-hash 2.1.1",
  "serde",
  "serde_json",
  "signal-hook",
@@ -6389,6 +6445,9 @@ dependencies = [
  "keyboard-types",
  "lazy-js-bundle 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustversion",
+ "serde",
+ "serde_json",
+ "serde_repr",
  "tracing",
 ]
 
@@ -6439,9 +6498,13 @@ version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83ab170d89308399205f8ad3d43d8d419affe317016b41ca0695186f7593cba2"
 dependencies = [
+ "dioxus-core 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-core-types 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dioxus-html 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "js-sys",
  "lazy-js-bundle 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hash 2.1.1",
+ "serde",
  "sledgehammer_bindgen",
  "sledgehammer_utils",
  "wasm-bindgen",
@@ -8368,10 +8431,8 @@ dependencies = [
 name = "geolocation"
 version = "0.1.0"
 dependencies = [
- "dioxus 0.7.1",
+ "dioxus 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "dioxus-geolocation",
- "dioxus-router",
- "serde",
 ]
 
 [[package]]

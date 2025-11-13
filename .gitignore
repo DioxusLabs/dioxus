@@ -12,7 +12,6 @@
 .DS_Store
 /examples/assets/test_video.mp4
 /examples/_assets/test_video.mp4
-/examples/01-app-demos/geolocation/
 static
 
 # new recommendation to keep the lockfile in for CI and reproducible builds

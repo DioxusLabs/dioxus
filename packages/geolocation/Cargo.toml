@@ -27,7 +27,7 @@ serde = "1.0"
 serde_json = "1.0"
 log = "0.4"
 thiserror = "1.0"
-dioxus-platform-bridge = { workspace = true, optional = true }
+dioxus-platform-bridge = { workspace = true }
 permissions = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
