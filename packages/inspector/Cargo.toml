@@ -11,7 +11,6 @@ client = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:web-sys"]
 server = ["dep:reqwest"]
 
 [dependencies]
-dioxus = { version = "0.7", default-features = false, features = ["macro", "html", "signals"] }
 dioxus-inspector-macros = { path = "../inspector-macros" }
 reqwest = { version = "0.12", optional = true, features = ["json"] }
 serde = { version = "1.0", features = ["derive"] }
