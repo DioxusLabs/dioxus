@@ -6328,6 +6328,7 @@ dependencies = [
 name = "dioxus-geolocation"
 version = "0.7.1"
 dependencies = [
+ "dioxus-mobile-plugin-build",
  "dioxus-platform-bridge",
  "jni 0.21.1",
  "log",
@@ -6562,6 +6563,10 @@ dependencies = [
  "tracing-subscriber",
  "tracing-wasm",
 ]
+
+[[package]]
+name = "dioxus-mobile-plugin-build"
+version = "0.7.1"
 
 [[package]]
 name = "dioxus-native"

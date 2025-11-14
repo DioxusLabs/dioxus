@@ -77,6 +77,9 @@ pub enum PermissionKind {
         android: ConstStr,
         ios: ConstStr,
         macos: ConstStr,
+        android_enabled: bool,
+        ios_enabled: bool,
+        macos_enabled: bool,
     },
 }
 
@@ -115,10 +118,17 @@ impl PermissionKind {
                 android,
                 ios,
                 macos,
+                android_enabled,
+                ios_enabled,
+                macos_enabled,
             } => PlatformIdentifiers {
-                android: Some(*android),
-                ios: Some(*ios),
-                macos: Some(*macos),
+                android: if *android_enabled {
+                    Some(*android)
+                } else {
+                    None
+                },
+                ios: if *ios_enabled { Some(*ios) } else { None },
+                macos: if *macos_enabled { Some(*macos) } else { None },
             },
         }
     }

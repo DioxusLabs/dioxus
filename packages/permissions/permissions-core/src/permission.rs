@@ -1,7 +1,7 @@
 use const_serialize::{ConstStr, SerializeConst};
 use std::hash::{Hash, Hasher};
 
-use crate::{PermissionKind, Platform, PlatformFlags, PlatformIdentifiers};
+use crate::{PermissionKind, Platform, PlatformFlags, PlatformIdentifiers, SymbolData};
 
 /// A permission declaration that can be embedded in the binary
 ///
@@ -75,17 +75,16 @@ impl Permission {
             .map(|s| s.as_str().to_string())
     }
 
-    /// Create a permission from embedded data (used by the macro)
-    ///
-    /// This function is used internally by the macro to create a Permission
-    /// from data embedded in the binary via linker sections.
-    pub const fn from_embedded() -> Self {
-        // This is a placeholder implementation. The actual deserialization
-        // will be handled by the macro expansion.
-        Self {
-            kind: PermissionKind::Camera,   // Placeholder
-            description: ConstStr::new(""), // Placeholder
-            supported_platforms: PlatformFlags::new(),
+    /// Deserialize a permission from the bytes emitted into linker sections.
+    /// This helper mirrors what the CLI performs when it scans the binary and
+    /// allows runtime consumers to interpret the serialized metadata as well.
+    pub fn from_embedded(bytes: &[u8]) -> Option<Self> {
+        const SYMBOL_SIZE: usize = std::mem::size_of::<SymbolData>();
+        let (_, symbol) =
+            unsafe { const_serialize::deserialize_const_raw::<SYMBOL_SIZE, SymbolData>(bytes) }?;
+        match symbol {
+            SymbolData::Permission(permission) => Some(permission),
+            _ => None,
         }
     }
 }
@@ -179,10 +178,11 @@ pub struct CustomPermissionBuilder {
 }
 
 impl CustomPermissionBuilder {
-    /// Set the Android permission string
+    /// Set the Android permission string.
+    ///
+    /// Call this when the permission applies to Android. Omit it for iOS/macOS-only permissions.
     ///
     /// # Examples
-    ///
     /// ```rust
     /// use permissions_core::{Permission, PermissionBuilder};
     ///
@@ -201,6 +201,8 @@ impl CustomPermissionBuilder {
     /// Set the iOS usage description key
     ///
     /// This key is used in the iOS Info.plist file.
+    ///
+    /// Call this when the permission applies to iOS. Omit it when not needed.
     ///
     /// # Examples
     ///
@@ -222,6 +224,8 @@ impl CustomPermissionBuilder {
     /// Set the macOS usage description key
     ///
     /// This key is used in the macOS Info.plist file.
+    ///
+    /// Call this when the permission applies to macOS. Omit it when not needed.
     ///
     /// # Examples
     ///
@@ -256,32 +260,38 @@ impl CustomPermissionBuilder {
     /// # Panics
     ///
     /// This method will cause a compile-time error if any required field is missing:
-    /// - `android` - Android permission string must be set
-    /// - `ios` - iOS usage description key must be set
-    /// - `macos` - macOS usage description key must be set
     /// - `description` - User-facing description must be set
+    /// - `android`/`ios`/`macos` - At least one platform identifier must be provided
     pub const fn build(self) -> Permission {
-        let android = match self.android {
-            Some(a) => a,
-            None => panic!("CustomPermissionBuilder::build() requires android field to be set. Call .with_android() before .build()"),
-        };
-        let ios = match self.ios {
-            Some(i) => i,
-            None => panic!("CustomPermissionBuilder::build() requires ios field to be set. Call .with_ios() before .build()"),
-        };
-        let macos = match self.macos {
-            Some(m) => m,
-            None => panic!("CustomPermissionBuilder::build() requires macos field to be set. Call .with_macos() before .build()"),
-        };
         let description = match self.description {
             Some(d) => d,
             None => panic!("CustomPermissionBuilder::build() requires description field to be set. Call .with_description() before .build()"),
+        };
+
+        if self.android.is_none() && self.ios.is_none() && self.macos.is_none() {
+            panic!("CustomPermissionBuilder::build() requires at least one platform identifier. Call .with_android(), .with_ios(), or .with_macos() before .build()");
+        }
+
+        let android = match self.android {
+            Some(value) => value,
+            None => ConstStr::new(""),
+        };
+        let ios = match self.ios {
+            Some(value) => value,
+            None => ConstStr::new(""),
+        };
+        let macos = match self.macos {
+            Some(value) => value,
+            None => ConstStr::new(""),
         };
 
         let kind = PermissionKind::Custom {
             android,
             ios,
             macos,
+            android_enabled: self.android.is_some(),
+            ios_enabled: self.ios.is_some(),
+            macos_enabled: self.macos.is_some(),
         };
         let supported_platforms = kind.supported_platforms();
 
@@ -427,5 +437,42 @@ impl PermissionBuilder {
             description,
             supported_platforms,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use const_serialize::{serialize_const, ConstVec};
+
+    #[test]
+    fn custom_permission_with_partial_platforms() {
+        let permission = PermissionBuilder::custom()
+            .with_android("android.permission.CAMERA")
+            .with_description("Camera access on Android")
+            .build();
+
+        assert!(permission.supports_platform(Platform::Android));
+        assert!(!permission.supports_platform(Platform::Ios));
+        assert!(!permission.supports_platform(Platform::Macos));
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "CustomPermissionBuilder::build() requires at least one platform identifier"
+    )]
+    fn custom_permission_requires_platform() {
+        let _ = PermissionBuilder::custom()
+            .with_description("Missing identifiers")
+            .build();
+    }
+
+    #[test]
+    fn deserialize_permission_from_embedded_bytes() {
+        let permission = Permission::new(PermissionKind::Camera, "Camera access");
+        let buffer = serialize_const(&SymbolData::Permission(permission), ConstVec::<u8>::new());
+        let decoded = Permission::from_embedded(buffer.as_ref()).expect("permission decoded");
+        assert_eq!(decoded.description(), permission.description());
+        assert!(decoded.supports_platform(Platform::Android));
     }
 }

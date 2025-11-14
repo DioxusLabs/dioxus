@@ -148,6 +148,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes", "packages/geolocation",
+    "packages/mobile-plugin-build",
 ]
 
 [workspace.package]
@@ -216,6 +217,9 @@ platform-bridge-macro = { path = "packages/platform-bridge-macro", version = "=0
 
 # geolocation
 dioxus-geolocation = { path = "packages/geolocation", version = "=0.7.1" }
+
+# mobile plugin tooling
+dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "=0.7.1" }
 # const-serialize
 const-serialize = { path = "packages/const-serialize", version = "0.8.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0" }
