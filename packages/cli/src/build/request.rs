@@ -841,15 +841,6 @@ impl BuildRequest {
             None => bundle.profile_name(args.release),
         };
 
-        // Warn if the user is trying to build with strip and using manganis
-        Self::warn_manganis_strip(
-            &workspace.krates,
-            &workspace.cargo_toml,
-            main_package,
-            &profile,
-            args.release,
-        );
-
         // Determine if we should codesign
         let should_codesign =
             args.codesign || device.is_some() || args.apple_entitlements.is_some();
@@ -1101,6 +1092,7 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                self.strip_binary(&artifacts).await?;
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
@@ -3627,32 +3619,19 @@ impl BuildRequest {
         })
     }
 
-    /// Return the platforms that are enabled for the package
-    ///
-    /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn warn_manganis_strip(
-        krates: &krates::Krates,
-        cargo_toml: &cargo_toml::Manifest,
-        main_package: &krates::cm::Package,
-        profile: &str,
-        release: bool,
-    ) {
-        let Some(id) = krates.nid_for_kid(&main_package.id.clone().into()) else {
-            return;
-        };
-        let dependencies = krates.direct_dependencies(id);
-        if !dependencies.iter().any(|dep| dep.krate.name == "manganis") {
-            return;
-        }
-
-        let (profile_name, profile) = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => (profile, Some(custom_profile)),
-            (_, true) => ("release", cargo_toml.profile.release.as_ref()),
-            (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
+    /// Checks the strip setting for the package, resolving profiles recursively
+    pub(crate) fn get_strip_setting(&self) -> StripSetting {
+        let cargo_toml = &self.workspace.cargo_toml;
+        let profile = &self.profile;
+        let release = self.release;
+        let profile = match (cargo_toml.profile.custom.get(profile), release) {
+            (Some(custom_profile), _) => Some(custom_profile),
+            (_, true) => cargo_toml.profile.release.as_ref(),
+            (_, false) => cargo_toml.profile.dev.as_ref(),
         };
 
         let Some(profile) = profile else {
-            return;
+            return StripSetting::None;
         };
 
         // Get the strip setting from the profile or the profile it inherits from
@@ -3673,15 +3652,11 @@ impl BuildRequest {
         }
 
         let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, we don't need to warn
-            return;
+            // If the profile doesn't have a strip option, return None
+            return StripSetting::None;
         };
 
-        if matches!(strip, cargo_toml::StripSetting::Symbols) {
-            tracing::warn!(
-                "The `strip` option is enabled in the `{profile_name}` profile. This may cause manganis assets to be stripped from the final binary.",
-            );
-        }
+        strip
     }
 
     pub(crate) fn renderer_enabled_by_dioxus_dependency(
@@ -3985,6 +3960,27 @@ impl BuildRequest {
             | BundleFormat::Server => {}
         }
 
+        Ok(())
+    }
+
+    /// Strip the final binary after extracting all assets with rustc-objcopy
+    async fn strip_binary(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        let exe = &artifacts.exe;
+        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
+        let strip_arg = match self.get_strip_setting() {
+            StripSetting::Debuginfo => Some("--strip-debug"),
+            StripSetting::Symbols => Some("--strip-all"),
+            StripSetting::None => None,
+        };
+        if let Some(strip_arg) = strip_arg {
+            let rustc_objcopy = self.workspace.rustc_objcopy();
+            let mut command = Command::new(rustc_objcopy);
+            command.arg(strip_arg).arg(&exe).arg(&exe);
+            let output = command.output().await?;
+            if !output.status.success() {
+                return Err(anyhow::anyhow!("Failed to strip binary"));
+            }
+        }
         Ok(())
     }
 
@@ -5251,6 +5247,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 args.push(format!(r#"profile.{profile}.debug=true"#));
             }
         }
+
+        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
+        // after assets are built
+        args.push(format!(r#"profile.{profile}.strip=false"#));
 
         // Prepend --config to each argument
         args.into_iter()

@@ -231,6 +231,16 @@ impl Workspace {
             .join("rust-lld")
     }
 
+    #[allow(unused)]
+    pub fn rust_llvm(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-lld")
+    }
+
     /// Return the path to the `cc` compiler
     ///
     /// This is used for the patching system to run the linker.
@@ -272,6 +282,17 @@ impl Workspace {
             .join(Triple::host().to_string())
             .join("bin")
             .join("gcc-ld")
+    }
+
+    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+    pub fn rustc_objcopy(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-objcopy")
     }
 
     /// Find the "main" package in the workspace. There might not be one!
