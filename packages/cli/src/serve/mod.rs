@@ -204,6 +204,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                         screen.push_stdio(bundle_format, msg, tracing::Level::ERROR);
                     }
                     BuilderUpdate::ProcessExited { status } => {
+                        if matches!(id, BuildId::SECONDARY) && builder.server.is_some() {
+                            builder.mark_server_dirty();
+                            tracing::debug!(
+                                "Server process exited with status {status}; will restart on next open"
+                            );
+                        }
                         if status.success() {
                             tracing::info!(
                                 r#"Application [{bundle_format}] exited gracefully.

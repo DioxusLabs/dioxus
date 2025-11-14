@@ -67,6 +67,7 @@ pub(crate) struct AppServer {
     pub(crate) fullstack: bool,
     pub(crate) ssg: bool,
     pub(crate) watch_fs: bool,
+    pub(crate) server_dirty: bool,
 
     // resolve args related to the webserver
     pub(crate) devserver_port: u16,
@@ -182,6 +183,8 @@ impl AppServer {
         crate::update::log_if_cli_could_update();
 
         // Create the runner
+        let server_present = server.is_some();
+
         let mut runner = Self {
             file_map: Default::default(),
             applied_client_hot_reload_message: Default::default(),
@@ -209,6 +212,7 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            server_dirty: server_present,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -237,6 +241,7 @@ impl AppServer {
         self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
             server.start(build_mode, BuildId::SECONDARY);
+            self.mark_server_dirty();
         }
     }
 
@@ -498,8 +503,15 @@ impl AppServer {
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
                 self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
+                if self.should_rebuild_server(files) {
+                    if let Some(server_builder) = self.server.as_mut() {
+                        server_builder.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
+                    }
+                } else if self.server.is_some() {
+                    tracing::info!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Skipping server patch: no server files changed"
+                    );
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -507,8 +519,16 @@ impl AppServer {
             } else {
                 self.client
                     .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
+                if self.should_rebuild_server(files) {
+                    if let Some(server_builder) = self.server.as_mut() {
+                        server_builder.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
+                        self.mark_server_dirty();
+                    }
+                } else if self.server.is_some() {
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Skipping server rebuild: no server files changed"
+                    );
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -560,6 +580,38 @@ impl AppServer {
         }
     }
 
+    fn should_rebuild_server(&self, files: &[PathBuf]) -> bool {
+        let Some(server_builder) = self.server.as_ref() else {
+            return false;
+        };
+
+        if files.is_empty() {
+            return false;
+        }
+
+        let server_crate_dir = server_builder.build.crate_dir();
+        let mut watched_roots = self.local_dependencies(server_builder.build.crate_package);
+        watched_roots.push(server_crate_dir.clone());
+
+        let dep_files = server_builder
+            .artifacts
+            .as_ref()
+            .map(|artifacts| &artifacts.depinfo.files);
+
+        files.iter().any(|path| {
+            watched_roots.iter().any(|root| path.starts_with(root))
+                || dep_files.map_or(false, |deps| {
+                    deps.iter().any(|dep| {
+                        if dep.is_absolute() {
+                            path.as_path() == dep.as_path()
+                        } else {
+                            path.as_path() == server_crate_dir.join(dep)
+                        }
+                    })
+                })
+        })
+    }
+
     /// Finally "bundle" this app and return a handle to it
     pub(crate) async fn open(
         &mut self,
@@ -601,10 +653,21 @@ impl AppServer {
             }
 
             let open_browser = self.client.builds_opened == 0 && self.open_browser;
-            self.open_all(devserver, open_browser).await?;
 
-            // Give a second for the server to boot
-            tokio::time::sleep(Duration::from_millis(300)).await;
+            // For web builds after initial launch, if the server doesn't need restarting,
+            // skip the open_all ceremony and just send the reload command directly
+            let is_web = matches!(self.client.build.bundle, BundleFormat::Web);
+            let needs_full_open = self.client.builds_opened == 0 || self.server_dirty || !is_web;
+            let server_was_dirty = self.server_dirty;
+
+            if needs_full_open {
+                self.open_all(devserver, open_browser).await?;
+
+                // Give a moment for the server to boot (if it was restarted)
+                if server_was_dirty {
+                    tokio::time::sleep(Duration::from_millis(300)).await;
+                }
+            }
 
             // Update the screen + devserver with the new handle info
             devserver.send_reload_command().await
@@ -633,19 +696,24 @@ impl AppServer {
         // Always open the server first after the client has been built
         // Only open the server if it isn't prerendered
         if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
-            tracing::debug!("Opening server build");
-            server.soft_kill().await;
-            server
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    false,
-                    false,
-                    BuildId::SECONDARY,
-                    &self.server_args,
-                )
-                .await?;
+            if self.server_dirty {
+                tracing::debug!("Opening server build");
+                server.soft_kill().await;
+                server
+                    .open(
+                        devserver_ip,
+                        displayed_address,
+                        fullstack_address,
+                        false,
+                        false,
+                        BuildId::SECONDARY,
+                        &self.server_args,
+                    )
+                    .await?;
+                self.server_dirty = false;
+            } else {
+                tracing::debug!("Skipping server restart; no server changes detected");
+            }
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
@@ -708,6 +776,7 @@ impl AppServer {
             .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
         if let Some(s) = self.server.as_mut() {
             s.start_rebuild(build_mode, BuildId::SECONDARY);
+            self.mark_server_dirty();
         }
 
         self.clear_hot_reload_changes();
@@ -1022,6 +1091,12 @@ impl AppServer {
             RecursiveMode::NonRecursive,
         ) {
             handle_notify_error(err);
+        }
+    }
+
+    pub(crate) fn mark_server_dirty(&mut self) {
+        if self.server.is_some() {
+            self.server_dirty = true;
         }
     }
 
