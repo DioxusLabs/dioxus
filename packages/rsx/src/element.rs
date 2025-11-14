@@ -1,14 +1,14 @@
 use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::fmt::{Display, Formatter};
 use syn::{
+    Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Brace,
-    Ident, LitStr, Result, Token,
 };
 
 /// Parse the VNode::Element type
@@ -116,7 +116,7 @@ impl ToTokens for Element {
             ElementName::Custom(_) => quote! { None },
         };
 
-        let static_attrs = el
+        let mut static_attrs = el
             .merged_attributes
             .iter()
             .map(|attr| {
@@ -157,6 +157,11 @@ impl ToTokens for Element {
                 }
             })
             .collect::<Vec<_>>();
+
+        #[cfg(debug_assertions)]
+        if let Some(inspector_attr) = inspector_attribute(el) {
+            static_attrs.push(inspector_attr);
+        }
 
         // Render either the child
         let children = el.children.iter().map(|c| match c {
@@ -397,6 +402,40 @@ impl Display for ElementName {
             ElementName::Custom(s) => write!(f, "{}", s.value()),
         }
     }
+}
+
+#[cfg(debug_assertions)]
+fn inspector_attribute(el: &Element) -> Option<TokenStream2> {
+    use syn::spanned::Spanned;
+
+    let span = el.name.span();
+    let tag = el.name.to_string();
+    let tag_literal = LitStr::new(&tag, Span::call_site());
+
+    Some(quote_spanned! { span =>
+        {
+            const __INSPECTOR_DIR: &str = dioxus_core::const_format::str_replace!(env!("CARGO_MANIFEST_DIR"), "\\\\", "/");
+            const __INSPECTOR_FILE: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+            const __INSPECTOR_PATH: &str = dioxus_core::const_format::concatcp!(__INSPECTOR_DIR, "/", __INSPECTOR_FILE);
+
+            dioxus_core::TemplateAttribute::Static {
+                name: "data-inspector",
+                namespace: None,
+                value: dioxus_core::const_format::formatcp!(
+                    "{{\"file\":\"{}\",\"line\":{},\"column\":{},\"tag\":\"{}\"}}",
+                    __INSPECTOR_PATH,
+                    line!(),
+                    column!(),
+                    #tag_literal
+                ),
+            }
+        }
+    })
+}
+
+#[cfg(not(debug_assertions))]
+fn inspector_attribute(_el: &Element) -> Option<TokenStream2> {
+    None
 }
 
 #[cfg(test)]
@@ -704,11 +743,13 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 3);
 
         // style should not generate a diagnostic
-        assert!(!parsed
-            .diagnostics
-            .diagnostics
-            .into_iter()
-            .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
+        assert!(
+            !parsed
+                .diagnostics
+                .diagnostics
+                .into_iter()
+                .any(|f| f.emit_as_item_tokens().to_string().contains("style"))
+        );
     }
 
     #[test]
