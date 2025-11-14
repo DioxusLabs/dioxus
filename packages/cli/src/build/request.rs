@@ -4032,19 +4032,16 @@ impl BuildRequest {
 
         // Prepare our configuration
         //
-        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
-        // wasm-opt and wasm-split need them to do better optimizations.
+        // we turn on debug symbols in dev mode
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
             || !self.release
-            || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
-        let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
+        let keep_names = ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -4081,10 +4078,6 @@ impl BuildRequest {
         // not blocking this thread. Dunno if that's true
         if should_bundle_split {
             ctx.status_splitting_bundle();
-
-            if !will_wasm_opt {
-                bail!("Bundle splitting should automatically enable wasm-opt, but it was not enabled.");
-            }
 
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
@@ -4182,6 +4175,7 @@ impl BuildRequest {
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.release {
             ctx.status_optimizing_wasm();
+            tracing::info!("Optimizing wasm file");
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
