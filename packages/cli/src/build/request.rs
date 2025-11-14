@@ -334,7 +334,7 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset};
-use manganis_core::{AssetOptionsBuilder, AssetVariant};
+use manganis_core::AssetVariant;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -390,6 +390,7 @@ pub(crate) struct BuildRequest {
     pub(crate) no_default_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
+    pub(crate) skip_permissions: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
@@ -452,6 +453,9 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
+    pub(crate) permissions: super::permissions::PermissionManifest,
+    pub(crate) android_artifacts: super::android_java::AndroidArtifactManifest,
+    pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -931,7 +935,12 @@ impl BuildRequest {
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
-        if matches!(bundle, BundleFormat::Ios) {
+        if matches!(bundle, BundleFormat::Ios)
+            && matches!(
+                triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            )
+        {
             let xcode_path = Workspace::get_xcode_path()
                 .await
                 .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
@@ -1033,6 +1042,7 @@ impl BuildRequest {
             should_codesign,
             session_cache_dir,
             skip_assets: args.skip_assets,
+            skip_permissions: args.skip_permissions,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -1113,6 +1123,26 @@ impl BuildRequest {
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
+
+                // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
+                if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+                    self.install_android_artifacts(&artifacts.android_artifacts)
+                        .context("Failed to install Android plugin artifacts")?;
+                }
+
+                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+                    && !artifacts.swift_sources.is_empty()
+                {
+                    self.embed_swift_stdlibs(&artifacts.swift_sources)
+                        .await
+                        .context("Failed to embed Swift standard libraries")?;
+                }
+
+                // Update platform manifests with permissions AFTER writing metadata
+                // to avoid having them overwritten by the template
+                self.update_manifests_with_permissions(&artifacts.permissions)
+                    .context("Failed to update manifests with permissions")?;
+
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
@@ -1316,7 +1346,13 @@ impl BuildRequest {
             );
         }
 
-        let assets = self.collect_assets(&exe, ctx).await?;
+        // Extract all linker metadata (assets, permissions, Android/iOS plugins) in a single pass.
+        let (assets, permissions, android_artifacts, swift_sources) =
+            self.collect_assets_and_permissions(&exe, ctx).await?;
+
+        // Note: We'll update platform manifests with permissions AFTER write_metadata()
+        // to avoid having them overwritten by the template
+
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
@@ -1333,6 +1369,9 @@ impl BuildRequest {
             direct_rustc,
             time_start,
             assets,
+            permissions,
+            android_artifacts,
+            swift_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1341,46 +1380,434 @@ impl BuildRequest {
         })
     }
 
-    /// Collect the assets from the final executable and modify the binary in place to point to the right
-    /// hashed asset location.
-    async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if self.skip_assets {
-            return Ok(AssetManifest::default());
+    /// Collect both assets and permissions from the final executable in one pass
+    ///
+    /// This method combines both asset and permission extraction to read the binary
+    /// file only once, since both use the __ASSETS__ prefix. This avoids reading
+    /// the file twice and improves performance.
+    async fn collect_assets_and_permissions(
+        &self,
+        exe: &Path,
+        ctx: &BuildContext,
+    ) -> Result<(
+        AssetManifest,
+        super::permissions::PermissionManifest,
+        super::android_java::AndroidArtifactManifest,
+        super::ios_swift::SwiftSourceManifest,
+    )> {
+        use super::assets::extract_symbols_from_file;
+
+        let skip_assets = self.skip_assets;
+        let skip_permissions = self.skip_permissions || self.bundle == BundleFormat::Web;
+        let needs_android_artifacts = self.bundle == BundleFormat::Android;
+        let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
+
+        if skip_assets && skip_permissions && !needs_android_artifacts && !needs_swift_packages {
+            return Ok((
+                AssetManifest::default(),
+                super::permissions::PermissionManifest::default(),
+                super::android_java::AndroidArtifactManifest::default(),
+                super::ios_swift::SwiftSourceManifest::default(),
+            ));
         }
 
         ctx.status_extracting_assets();
+        let super::assets::SymbolExtractionResult {
+            assets: extracted_assets,
+            permissions: extracted_permissions,
+            android_artifacts,
+            swift_packages,
+        } = extract_symbols_from_file(exe).await?;
 
-        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+        let asset_manifest = if skip_assets {
+            AssetManifest::default()
+        } else {
+            let mut manifest = AssetManifest::default();
+            for asset in extracted_assets {
+                manifest.insert_asset(asset);
+            }
 
-        // If the user has a public dir, we submit all the entries there as assets too
-        //
-        // These don't receive a hash in their filename, since they're user-provided static assets
-        // We only do this for web builds
-        if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
-        {
-            if let Some(dir) = self.user_public_dir() {
-                for entry in walkdir::WalkDir::new(&dir)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let from = entry.path().to_path_buf();
-                    let relative_path = from.strip_prefix(&dir).unwrap();
-                    let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
-                        from.to_string_lossy().as_ref(),
-                        to.as_str(),
-                        AssetOptionsBuilder::new()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
-                    ));
+            if matches!(self.bundle, BundleFormat::Web)
+                && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            {
+                if let Some(dir) = self.user_public_dir() {
+                    for entry in walkdir::WalkDir::new(&dir)
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().is_file())
+                    {
+                        let from = entry.path().to_path_buf();
+                        let relative_path = from.strip_prefix(&dir).unwrap();
+                        let to = format!("../{}", relative_path.display());
+                        manifest.insert_asset(BundledAsset::new(
+                            from.to_string_lossy().as_ref(),
+                            to.as_str(),
+                            manganis_core::AssetOptions::builder()
+                                .with_hash_suffix(false)
+                                .into_asset_options(),
+                        ));
+                    }
                 }
+            }
+
+            manifest
+        };
+
+        let permission_manifest = if skip_permissions {
+            super::permissions::PermissionManifest::default()
+        } else {
+            let manifest =
+                super::permissions::PermissionManifest::from_permissions(extracted_permissions);
+
+            let platform = match self.bundle {
+                BundleFormat::Android => Some(permissions::Platform::Android),
+                BundleFormat::Ios => Some(permissions::Platform::Ios),
+                BundleFormat::MacOS => Some(permissions::Platform::Macos),
+                _ => None,
+            };
+
+            if let Some(platform) = platform {
+                let perms = manifest.permissions_for_platform(platform);
+                if !perms.is_empty() {
+                    tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
+                    for perm in &perms {
+                        tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
+                    }
+                } else {
+                    tracing::debug!("No permissions found for {:?}", platform);
+                }
+            } else {
+                tracing::debug!(
+                    "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
+                    self.bundle
+                );
+            }
+
+            manifest
+        };
+
+        let android_manifest = super::android_java::AndroidArtifactManifest::new(android_artifacts);
+        if !android_manifest.is_empty() {
+            tracing::debug!(
+                "Found {} Android artifact declaration(s)",
+                android_manifest.artifacts().len()
+            );
+            for artifact in android_manifest.artifacts() {
+                tracing::debug!(
+                    "  Plugin: {} Artifact: {}",
+                    artifact.plugin_name.as_str(),
+                    artifact.artifact_path.as_str()
+                );
             }
         }
 
-        Ok(manifest)
+        let swift_manifest = super::ios_swift::SwiftSourceManifest::new(swift_packages);
+        if !swift_manifest.is_empty() {
+            tracing::debug!(
+                "Found {} Swift package declaration(s) for {:?}",
+                swift_manifest.sources().len(),
+                self.bundle
+            );
+            for source in swift_manifest.sources() {
+                tracing::debug!(
+                    "  Plugin: {} (Swift package path={} product={})",
+                    source.plugin_name.as_str(),
+                    source.package_path.as_str(),
+                    source.product.as_str()
+                );
+            }
+        }
+
+        Ok((
+            asset_manifest,
+            permission_manifest,
+            android_manifest,
+            swift_manifest,
+        ))
+    }
+
+    /// Copy collected Android AARs into the Gradle project and add dependencies.
+    fn install_android_artifacts(
+        &self,
+        android_artifacts: &super::android_java::AndroidArtifactManifest,
+    ) -> Result<()> {
+        let libs_dir = self.root_dir().join("app").join("libs");
+        std::fs::create_dir_all(&libs_dir)?;
+
+        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
+        for artifact in android_artifacts.artifacts() {
+            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
+            if !artifact_path.exists() {
+                anyhow::bail!(
+                    "Android plugin artifact not found: {}",
+                    artifact_path.display()
+                );
+            }
+
+            let filename = artifact_path
+                .file_name()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Android plugin artifact path has no filename: {}",
+                        artifact_path.display()
+                    )
+                })?
+                .to_owned();
+            let dest_file = libs_dir.join(&filename);
+            std::fs::copy(&artifact_path, &dest_file)?;
+            tracing::debug!(
+                "Copied Android artifact {} -> {}",
+                artifact_path.display(),
+                dest_file.display()
+            );
+
+            let dep_line = format!(
+                "implementation(files(\"libs/{}\"))",
+                filename.to_string_lossy()
+            );
+            self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+
+            for dependency in artifact
+                .gradle_dependencies
+                .as_str()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+            {
+                self.ensure_gradle_dependency(&build_gradle, dependency)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
+    async fn embed_swift_stdlibs(
+        &self,
+        swift_sources: &super::ios_swift::SwiftSourceManifest,
+    ) -> Result<()> {
+        if swift_sources.is_empty() {
+            return Ok(());
+        }
+
+        let platform_flag = match self.bundle {
+            BundleFormat::Ios => {
+                let triple_str = self.triple.to_string();
+                if triple_str.contains("sim") || triple_str.contains("x86_64") {
+                    "iphonesimulator"
+                } else {
+                    "iphoneos"
+                }
+            }
+            BundleFormat::MacOS => "macosx",
+            _ => return Ok(()),
+        };
+
+        let frameworks_dir = self.frameworks_folder();
+        std::fs::create_dir_all(&frameworks_dir)?;
+
+        let exe_path = self.main_exe();
+        if !exe_path.exists() {
+            anyhow::bail!(
+                "Expected executable at {} when embedding Swift stdlibs",
+                exe_path.display()
+            );
+        }
+
+        let output = Command::new("xcrun")
+            .arg("swift-stdlib-tool")
+            .arg("--copy")
+            .arg("--platform")
+            .arg(platform_flag)
+            .arg("--scan-executable")
+            .arg(&exe_path)
+            .arg("--destination")
+            .arg(&frameworks_dir)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "swift-stdlib-tool failed: {}{}",
+                stderr.trim(),
+                if stdout.trim().is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" | {}", stdout.trim())
+                }
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Update platform manifests with permissions after they're collected
+    pub(crate) fn update_manifests_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        match self.bundle {
+            BundleFormat::Android => self.update_android_manifest_with_permissions(permissions),
+            BundleFormat::Ios => self.update_ios_manifest_with_permissions(permissions),
+            BundleFormat::MacOS => self.update_macos_manifest_with_permissions(permissions),
+            _ => {
+                tracing::debug!(
+                    "Skipping manifest update for {:?} - uses runtime-only permissions",
+                    self.bundle
+                );
+                Ok(())
+            }
+        }
+    }
+
+    fn update_android_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let android_permissions = super::permissions::get_android_permissions(permissions);
+        if android_permissions.is_empty() {
+            tracing::debug!("No Android permissions found to add to manifest");
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+        if !manifest_path.exists() {
+            tracing::warn!("AndroidManifest.xml not found, skipping permission update");
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Find the position after the INTERNET permission
+        let internet_permission =
+            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+        if let Some(pos) = manifest_content.find(internet_permission) {
+            let insert_pos = pos + internet_permission.len();
+
+            // Generate permission declarations
+            let mut permission_declarations = String::new();
+            for perm in &android_permissions {
+                permission_declarations.push_str(&format!(
+                    "\n    <uses-permission android:name=\"{}\" />",
+                    perm.name
+                ));
+            }
+
+            manifest_content.insert_str(insert_pos, &permission_declarations);
+            std::fs::write(&manifest_path, manifest_content)?;
+
+            tracing::debug!(
+                "Added {} Android permissions to AndroidManifest.xml",
+                android_permissions.len()
+            );
+            for perm in &android_permissions {
+                tracing::debug!("  • {} - {}", perm.name, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_ios_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let ios_permissions = super::permissions::get_ios_permissions(permissions);
+        if ios_permissions.is_empty() {
+            tracing::debug!("No iOS permissions found to add to manifest");
+            return Ok(());
+        }
+
+        // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::debug!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &ios_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} iOS permissions to Info.plist",
+                ios_permissions.len()
+            );
+            for perm in &ios_permissions {
+                tracing::debug!("  • {} - {}", perm.key, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn update_macos_manifest_with_permissions(
+        &self,
+        permissions: &super::permissions::PermissionManifest,
+    ) -> Result<()> {
+        let macos_permissions = super::permissions::get_macos_permissions(permissions);
+        if macos_permissions.is_empty() {
+            tracing::debug!("No macOS permissions found to add to manifest");
+            return Ok(());
+        }
+
+        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+        if !plist_path.exists() {
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission update",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let mut permission_entries = String::new();
+            for perm in &macos_permissions {
+                permission_entries.push_str(&format!(
+                    "\n\t<key>{}</key>\n\t<string>{}</string>",
+                    perm.key, perm.description
+                ));
+            }
+
+            plist_content.insert_str(pos, &permission_entries);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::info!(
+                "🖥️ Added {} macOS permissions to Info.plist:",
+                macos_permissions.len()
+            );
+            for perm in &macos_permissions {
+                tracing::info!("  • {} - {}", perm.key, perm.description);
+            }
+        }
+
+        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1840,10 +2267,13 @@ impl BuildRequest {
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
-        // Now extract the assets from the fat binary
-        artifacts.assets = self
-            .collect_assets(&self.patch_exe(artifacts.time_start), ctx)
+        // Now extract linker metadata from the fat binary (assets, permissions, plugin data)
+        let (assets, _permissions, android_artifacts, swift_sources) = self
+            .collect_assets_and_permissions(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
+        artifacts.assets = assets;
+        artifacts.android_artifacts = android_artifacts;
+        artifacts.swift_sources = swift_sources;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -1927,7 +2357,11 @@ impl BuildRequest {
                         || *arg == "-arch"
                         || *arg == "-L"
                         || *arg == "-target"
-                        || *arg == "-isysroot"
+                        || (*arg == "-isysroot"
+                            && matches!(
+                                self.triple.operating_system,
+                                target_lexicon::OperatingSystem::IOS(_)
+                            ))
                     {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
@@ -2014,8 +2448,13 @@ impl BuildRequest {
         }
 
         if let Some(vale) = extract_value("-isysroot") {
-            out_args.push("-isysroot".to_string());
-            out_args.push(vale);
+            if matches!(
+                self.triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            ) {
+                out_args.push("-isysroot".to_string());
+                out_args.push(vale);
+            }
         }
 
         Ok(out_args)
@@ -2928,6 +3367,8 @@ impl BuildRequest {
         let target_cxx = tools.target_cxx();
         let java_home = tools.java_home();
         let ndk_home = tools.ndk.clone();
+        let sdk_root = tools.sdk();
+        let artifact_dir = self.android_artifact_dir()?;
         tracing::debug!(
             r#"Using android:
             min_sdk_version: {min_sdk_version}
@@ -2936,13 +3377,36 @@ impl BuildRequest {
             target_cc: {target_cc:?}
             target_cxx: {target_cxx:?}
             java_home: {java_home:?}
+            sdk_root: {sdk_root:?}
+            artifact_dir: {artifact_dir:?}
             "#
         );
 
-        if let Some(java_home) = java_home {
+        if let Some(java_home) = &java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
+            env_vars.push((
+                "DX_ANDROID_JAVA_HOME".into(),
+                java_home.clone().into_os_string(),
+            ));
         }
+
+        env_vars.push((
+            "DX_ANDROID_ARTIFACT_DIR".into(),
+            artifact_dir.into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_NDK_HOME".into(),
+            ndk_home.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_SDK_ROOT".into(),
+            sdk_root.clone().into_os_string(),
+        ));
+        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
+        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
+        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
+        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
 
         let triple = self.triple.to_string();
 
@@ -3061,7 +3525,10 @@ impl BuildRequest {
                 ),
                 linker.into_os_string(),
             ),
-            ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            (
+                "ANDROID_NDK_ROOT".to_string(),
+                ndk_home.clone().into_os_string(),
+            ),
             (
                 "OPENSSL_LIB_DIR".to_string(),
                 openssl_lib_dir.into_os_string(),
@@ -3081,10 +3548,16 @@ impl BuildRequest {
                 "WRY_ANDROID_LIBRARY".to_string(),
                 "dioxusmain".to_string().into(),
             ),
-            (
-                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
-                self.wry_android_kotlin_files_out_dir().into_os_string(),
-            ),
+            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
+                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                // Ensure the directory exists for WRY's canonicalize check
+                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                }
+                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                kotlin_dir.into_os_string()
+            }),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
             // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
@@ -3105,6 +3578,17 @@ impl BuildRequest {
         }
 
         Ok(env_vars)
+    }
+
+    fn android_artifact_dir(&self) -> Result<PathBuf> {
+        let dir = self
+            .internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join("android-artifacts")
+            .join(self.triple.to_string());
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -3272,12 +3756,14 @@ impl BuildRequest {
         let app = root.join("app");
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
+        let app_java = app_main.join("java");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
         let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
+        create_dir_all(&app_java)?;
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
         create_dir_all(&app_kotlin_out)?;
@@ -3483,6 +3969,25 @@ impl BuildRequest {
         }
 
         kotlin_dir
+    }
+
+    fn ensure_gradle_dependency(&self, build_gradle: &Path, dependency_line: &str) -> Result<()> {
+        use std::fs;
+
+        let mut contents = fs::read_to_string(build_gradle)?;
+        if contents.contains(dependency_line) {
+            return Ok(());
+        }
+
+        if let Some(idx) = contents.find("dependencies {") {
+            let insert_pos = idx + "dependencies {".len();
+            contents.insert_str(insert_pos, &format!("\n    {dependency_line}"));
+        } else {
+            contents.push_str(&format!("\ndependencies {{\n    {dependency_line}\n}}\n"));
+        }
+
+        fs::write(build_gradle, contents)?;
+        Ok(())
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable

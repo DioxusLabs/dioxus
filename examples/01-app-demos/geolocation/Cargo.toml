@@ -1,0 +1,17 @@
+[package]
+name = "geolocation"
+version = "0.1.0"
+authors = ["Sabin Regmi <get2sabin@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { version = "0.7.1", features = [] }
+dioxus-geolocation = { path = "../../../packages/geolocation"}
+
+[features]
+default = ["mobile"]
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+mobile = ["dioxus/mobile"]
