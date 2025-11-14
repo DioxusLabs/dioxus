@@ -30,7 +30,7 @@ use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, Result};
 use dioxus_fullstack_core::{HttpError, RequestError};
-use dioxus_hooks::{use_resource, ClasicResource, Resource, UseWaker};
+use dioxus_hooks::{use_resource, PendingResource, Resource, UseWaker};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::StreamExt;
@@ -109,7 +109,7 @@ where
     Out: 'static,
     Enc: 'static,
 {
-    connection: ClasicResource<Result<Websocket<In, Out, Enc>, CapturedError>>,
+    connection: PendingResource<Result<Websocket<In, Out, Enc>, CapturedError>>,
     waker: UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,

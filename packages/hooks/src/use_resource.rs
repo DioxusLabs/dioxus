@@ -1,21 +1,25 @@
-use std::{fmt::Display, future::Future, ops::Deref};
+use std::{
+    fmt::{Debug, Display},
+    future::Future,
+    ops::Deref,
+};
 
 use dioxus_core::{spawn, use_hook, ReactiveContext, RenderError, SuspendedFuture, Task};
 use dioxus_signals::{
-    BorrowError, CopyValue, MappedMutSignal, Readable, ReadableExt, ReadableRef, WritableExt,
-    WriteSignal,
+    BorrowError, CopyValue, Global, InitializeFromFunction, MappedMutSignal, Readable, ReadableExt,
+    ReadableRef, WritableExt, WriteSignal,
 };
 use dioxus_stores::{MappedStore, Store};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
 #[track_caller]
-pub fn use_resource<T, F>(future: impl FnMut() -> F + 'static) -> ClasicResource<T>
+pub fn use_resource<T, F>(future: impl FnMut() -> F + 'static) -> PendingResource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
     let location = std::panic::Location::caller();
-    use_hook(|| create_resource(future, location))
+    use_hook(|| Resource::new_with_location(future, location))
 }
 
 fn run_future_in_context<T, F>(
@@ -55,7 +59,7 @@ struct ResourceHandle {
     wakers: Vec<std::task::Waker>,
 }
 
-pub type ClasicResource<T> = Resource<Store<Option<T>>>;
+pub type PendingResource<T> = Resource<Store<Option<T>>>;
 pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> = Resource<MappedStore<T, Lens>>;
 pub type OkResource<T, E, Lens = WriteSignal<Option<T>>> =
     Resource<MappedStore<T, MappedMutSignal<Result<T, E>, Lens>>>;
@@ -270,40 +274,6 @@ impl<S> Resource<S> {
         !self.handle.read().task.paused()
     }
 
-    /// Get the current state of the resource's future. This method returns a [`ReadSignal`] which can be read to get the current state of the resource or passed to other hooks and components.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     // We can read the current state of the future with the `state` method
-    ///     match resource.state().cloned() {
-    ///         UseResourceState::Pending => rsx! {
-    ///             "The resource is still pending"
-    ///         },
-    ///         UseResourceState::Paused => rsx! {
-    ///             "The resource has been paused"
-    ///         },
-    ///         UseResourceState::Stopped => rsx! {
-    ///             "The resource has been stopped"
-    ///         },
-    ///         UseResourceState::Ready => rsx! {
-    ///             "The resource is ready!"
-    ///         },
-    ///     }
-    /// }
-    /// ```
-    pub fn state(&self) -> ReadSignal<UseResourceState> {
-        self.state.into()
-    }
-
     /// Get the current value of the resource's future.  This method returns a [`ReadSignal`] which can be read to get the current value of the resource or passed to other hooks and components.
     ///
     /// ## Example
@@ -339,7 +309,74 @@ impl<S> Resource<S> {
     }
 }
 
-impl<T: 'static> ClasicResource<T> {
+impl<T: 'static> PendingResource<T> {
+    #[track_caller]
+    pub fn new<F>(future: impl FnMut() -> F + 'static) -> Self
+    where
+        F: Future<Output = T> + 'static,
+    {
+        let location = std::panic::Location::caller();
+        Self::new_with_location(future, location)
+    }
+
+    pub fn new_with_location<F>(
+        mut future: impl FnMut() -> F + 'static,
+        location: &'static std::panic::Location<'static>,
+    ) -> Self
+    where
+        F: Future<Output = T> + 'static,
+    {
+        let mut state = Store::new(None);
+        let mut future = move || {
+            let fut = future();
+            async move {
+                let result = fut.await;
+                state.set(Some(result));
+            }
+        };
+        let (rc, mut changed) = ReactiveContext::new();
+
+        // Start the initial task
+        let mut task = run_future_in_context(&rc, &mut future, location);
+        let handle = ResourceHandle {
+            task: task.clone(),
+            wakers: Vec::new(),
+            rc: rc.clone(),
+        };
+        let mut handle = CopyValue::new(handle);
+
+        // Spawn a task to watch for changes
+        spawn(async move {
+            loop {
+                // Wait for the dependencies to change
+                let _ = changed.next().await;
+
+                // Stop the old task
+                task.cancel();
+
+                // Start a new task
+                task = run_future_in_context(
+                    &rc,
+                    &mut || {
+                        let future = future();
+                        async move {
+                            let result = future.await;
+                            let wakers = std::mem::take(&mut handle.write().wakers);
+                            for waker in wakers {
+                                waker.wake();
+                            }
+                            result
+                        }
+                    },
+                    location,
+                );
+                let mut handle = handle.write();
+                handle.task = task.clone();
+            }
+        });
+        Resource { state, handle }
+    }
+
     /// Clear the resource's value. This will just reset the value. It will not modify any running tasks.
     ///
     /// ## Example
@@ -382,6 +419,12 @@ impl<S: Display> Display for Resource<S> {
     }
 }
 
+impl<T: Debug> Debug for Resource<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.state.fmt(f)
+    }
+}
+
 impl<S: Readable> Readable for Resource<S> {
     type Target = S::Target;
     type Storage = S::Storage;
@@ -406,65 +449,6 @@ impl<S: Readable> Readable for Resource<S> {
     {
         self.state.subscribers()
     }
-}
-
-fn create_resource<T, F>(
-    mut future: impl FnMut() -> F + 'static,
-    location: &'static std::panic::Location<'static>,
-) -> Resource<Store<Option<T>>>
-where
-    T: 'static,
-    F: Future<Output = T> + 'static,
-{
-    let mut state = Store::new(None);
-    let mut future = move || {
-        let fut = future();
-        async move {
-            let result = fut.await;
-            state.set(Some(result));
-        }
-    };
-    let (rc, mut changed) = ReactiveContext::new();
-
-    // Start the initial task
-    let mut task = run_future_in_context(&rc, &mut future, location);
-    let handle = ResourceHandle {
-        task: task.clone(),
-        wakers: Vec::new(),
-        rc: rc.clone(),
-    };
-    let mut handle = CopyValue::new(handle);
-
-    // Spawn a task to watch for changes
-    spawn(async move {
-        loop {
-            // Wait for the dependencies to change
-            let _ = changed.next().await;
-
-            // Stop the old task
-            task.cancel();
-
-            // Start a new task
-            task = run_future_in_context(
-                &rc,
-                &mut || {
-                    let future = future();
-                    async move {
-                        let result = future.await;
-                        let wakers = std::mem::take(&mut handle.write().wakers);
-                        for waker in wakers {
-                            waker.wake();
-                        }
-                        result
-                    }
-                },
-                location,
-            );
-            let mut handle = handle.write();
-            handle.task = task.clone();
-        }
-    });
-    Resource { state, handle }
 }
 
 impl<T: 'static, E: 'static, Lens> Resource<Store<Option<Result<T, E>>, Lens>>
@@ -539,19 +523,71 @@ where
     }
 }
 
-impl<T> std::future::Future for Resource<T> {
+impl<T> std::future::IntoFuture for Resource<T> {
+    type Output = ();
+    type IntoFuture = ResourceFuture;
+
+    fn into_future(self) -> Self::IntoFuture {
+        ResourceFuture {
+            resource: self.handle,
+        }
+    }
+}
+
+/// A future that is awaiting the resolution of a resource
+pub struct ResourceFuture {
+    resource: CopyValue<ResourceHandle>,
+}
+
+impl std::future::Future for ResourceFuture {
     type Output = ();
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        if self.handle.read().task.paused() {
-            let mut handle = self.handle.write_unchecked();
+        let myself = self.get_mut();
+        let mut handle = myself.resource.write();
+        if !handle.task.paused() {
+            std::task::Poll::Ready(())
+        } else {
             handle.wakers.push(cx.waker().clone());
             std::task::Poll::Pending
-        } else {
-            std::task::Poll::Ready(())
         }
+    }
+}
+
+/// A type alias for global stores
+///
+/// # Example
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// static DOGS: GlobalResource<dioxus::Result<String>, _> = Global::new(|| async {
+///     Ok(reqwest::get("https://dog.ceo/api/breeds/list/all")
+///         .await?
+///         .text()
+///         .await?)
+/// });
+///
+/// fn app() -> Element {
+///     let dogs = DOGS.resolve();
+///     match dogs.result() {
+///         None => rsx! { "Loading..." },
+///         Some(Ok(dogs)) => rsx! { "Dogs: {dogs}" },
+///         Some(Err(err)) => rsx! { "Error: {err}" },
+///     }
+/// }
+/// ```
+pub type GlobalResource<T, F> = Global<PendingResource<T>, F>;
+
+impl<F, T> InitializeFromFunction<F> for PendingResource<T>
+where
+    F: Future<Output = T> + 'static,
+    T: 'static,
+{
+    #[track_caller]
+    fn initialize_from_function(f: fn() -> F) -> Self {
+        Resource::new(f)
     }
 }
