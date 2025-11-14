@@ -1,0 +1,39 @@
+[package]
+name = "dioxus-inspector"
+version = "0.1.0"
+edition = "2024"
+description = "Inspector tooling for Dioxus applications"
+license = "MIT OR Apache-2.0"
+
+[features]
+default = []
+client = ["dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:web-sys"]
+server = ["dep:reqwest"]
+
+[dependencies]
+dioxus = { version = "0.7", default-features = false, features = ["macro", "html", "signals"] }
+dioxus-inspector-macros = { path = "../inspector-macros" }
+reqwest = { version = "0.12", optional = true, features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+wasm-bindgen = { version = "0.2", optional = true, features = ["serde-serialize"] }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true, features = [
+    "Document",
+    "Element",
+    "HtmlDivElement",
+    "HtmlElement",
+    "CssStyleDeclaration",
+    "Window",
+    "MouseEvent",
+    "KeyboardEvent",
+    "Event",
+    "EventTarget",
+    "DomRect",
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+    "Headers",
+    "console",
+] }

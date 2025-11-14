@@ -40,4 +40,3 @@ bundle/
 
 # in debugging we frequently dump wasm to wat with `wasm-tools print`
 *.wat
-packages/inspector-macros/*
