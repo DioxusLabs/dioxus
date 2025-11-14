@@ -270,7 +270,7 @@ tower = "0.5.2"
 http = "1.3.1"
 notify = { version = "8.1.0" }
 tower-http = "0.6.6"
-hyper = "1.6.0"
+hyper = "=1.7.0" # Hyper 1.8 was published with a change that breaks the CLI: See https://github.com/hyperium/hyper/issues/3975 and https://github.com/DioxusLabs/dioxus/issues/4963
 hyper-rustls = { version = "0.27.7", default-features = false, features = [
     "native-tokio",
     "http1",
