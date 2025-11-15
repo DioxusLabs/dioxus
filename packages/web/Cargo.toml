@@ -18,6 +18,7 @@ dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
 dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
+dioxus-inspector = { workspace = true, features = ["client"], optional = true }
 dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
@@ -94,6 +95,7 @@ lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["mounted", "devtools", "document"]
+inspector = ["dep:dioxus-inspector"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
     "web-sys/Element",

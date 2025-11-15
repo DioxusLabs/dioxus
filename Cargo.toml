@@ -43,6 +43,8 @@ members = [
     "packages/hooks",
     "packages/html-internal-macro",
     "packages/html",
+    "packages/inspector",
+    "packages/inspector-macros",
     "packages/interpreter",
     "packages/lazy-js-bundle",
     "packages/liveview",
@@ -70,6 +72,8 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/component-manifest",
+    "packages/inspector",
+    "packages/inspector-macros",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -158,6 +162,8 @@ dioxus-history = { path = "packages/history", version = "0.7.1", default-feature
 dioxus-html = { path = "packages/html", version = "0.7.1", default-features = false }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.1" }
 dioxus-hooks = { path = "packages/hooks", version = "0.7.1" }
+dioxus-inspector = { path = "packages/inspector", version = "0.1.0", default-features = false }
+dioxus-inspector-macros = { path = "packages/inspector-macros", version = "0.1.0" }
 dioxus-web = { path = "packages/web", version = "0.7.1", default-features = false }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.1", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.1", default-features = false }

@@ -54,6 +54,16 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     #[cfg(all(feature = "devtools", debug_assertions))]
     let mut hotreload_rx = devtools::init(&web_config);
 
+    // Auto-initialize inspector in debug builds
+    #[cfg(all(debug_assertions, feature = "inspector"))]
+    {
+        if let Err(err) = dioxus_inspector::InspectorClient::new("http://127.0.0.1:41235/api/inspector/open").install() {
+            web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&format!(
+                "Inspector client failed to initialize: {:?}", err
+            )));
+        }
+    }
+
     #[cfg(feature = "document")]
     if let Some(history) = web_config.history.clone() {
         virtual_dom.in_scope(ScopeId::ROOT, || dioxus_core::provide_context(history));
