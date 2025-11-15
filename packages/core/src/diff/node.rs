@@ -901,11 +901,11 @@ impl VNode {
         let mut last_path = None;
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
-        let merged_dyamic_attributes = &self.merge_dynamic_attributes();
+        let merged_dynamic_attributes = &self.merge_dynamic_attributes();
         while let Some((attribute_idx, attribute_path)) =
             dynamic_attributes_iter.next_if(from_root_node)
         {
-            let attribute = &merged_dyamic_attributes[attribute_idx];
+            let attribute = &merged_dynamic_attributes[attribute_idx];
 
             let id = match last_path {
                 // If the last path was exactly the same, we can reuse the id
