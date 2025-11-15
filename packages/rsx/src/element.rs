@@ -414,8 +414,10 @@ fn inspector_attribute(el: &Element) -> Option<TokenStream2> {
 
     Some(quote_spanned! { span =>
         {
-            const __INSPECTOR_DIR: &str = dioxus_core::const_format::str_replace!(env!("CARGO_MANIFEST_DIR"), "\\\\", "/");
-            const __INSPECTOR_FILE: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+            const __INSPECTOR_DIR_TMP: &str = dioxus_core::const_format::str_replace!(env!("CARGO_MANIFEST_DIR"), "\\\\", "/");
+            const __INSPECTOR_DIR: &str = dioxus_core::const_format::str_replace!(__INSPECTOR_DIR_TMP, '\\', "/");
+            const __INSPECTOR_FILE_TMP: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
+            const __INSPECTOR_FILE: &str = dioxus_core::const_format::str_replace!(__INSPECTOR_FILE_TMP, '\\', "/");
             const __INSPECTOR_PATH: &str = dioxus_core::const_format::concatcp!(__INSPECTOR_DIR, "/", __INSPECTOR_FILE);
 
             dioxus_core::TemplateAttribute::Static {
