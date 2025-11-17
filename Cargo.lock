@@ -6311,6 +6311,7 @@ dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
  "quote",
+ "rustversion",
  "syn 2.0.108",
 ]
 
