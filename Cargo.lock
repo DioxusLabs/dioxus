@@ -5693,6 +5693,14 @@ name = "dioxus-cli-optimization-test"
 version = "0.0.1"
 dependencies = [
  "dioxus 0.7.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "dioxus-cli-optimization-test-07"
+version = "0.0.1"
+dependencies = [
  "dioxus 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",

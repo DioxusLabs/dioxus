@@ -173,10 +173,10 @@ module.exports = defineConfig({
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), "cli-optimization"),
+      cwd: path.join(process.cwd(), "cli-optimization-07"),
       // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
-        'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 9191 --no-default-features --features dioxus_07',
+        'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 9191',
       port: 9191,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

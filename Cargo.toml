@@ -136,6 +136,7 @@ members = [
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
     "packages/playwright-tests/cli-optimization",
+    "packages/playwright-tests/cli-optimization-07",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes",
