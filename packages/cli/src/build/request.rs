@@ -3975,7 +3975,7 @@ impl BuildRequest {
         if let Some(strip_arg) = strip_arg {
             let rustc_objcopy = self.workspace.rustc_objcopy();
             let mut command = Command::new(rustc_objcopy);
-            command.arg(strip_arg).arg(&exe).arg(&exe);
+            command.arg(strip_arg).arg(exe).arg(exe);
             let output = command.output().await?;
             if !output.status.success() {
                 return Err(anyhow::anyhow!("Failed to strip binary"));
