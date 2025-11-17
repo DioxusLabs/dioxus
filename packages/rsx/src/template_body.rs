@@ -302,6 +302,13 @@ impl TemplateBody {
 
             self.diagnostics.push(diagnostic);
         }
+
+        // Make sure there are not multiple keys or keys on nodes other than the first in the block
+        for root in self.roots.iter().skip(1) {
+            if let Some(key) = root.key() {
+                self.diagnostics.push(key.span().warning("Keys are only allowed on the first node in the block."));
+            }
+        }
     }
 
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {
