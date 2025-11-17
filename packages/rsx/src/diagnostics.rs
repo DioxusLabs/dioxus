@@ -53,3 +53,24 @@ impl ToTokens for Diagnostics {
         }
     }
 }
+
+// TODO: Ideally this would be integrated into the existing diagnostics struct, but currently all fields are public so adding
+// new fields would be a breaking change. Diagnostics also doesn't expose the message directly so we can't just modify
+// the expansion
+pub(crate) mod new_diagnostics {
+    use std::fmt::Display;
+
+    use proc_macro2::{Span, TokenStream as TokenStream2};
+    use quote::quote_spanned;
+
+    pub(crate) fn warning_diagnostic(span: Span, message: impl Display) -> TokenStream2 {
+        let note = message.to_string();
+        quote_spanned! { span =>
+            const _: () = {
+                #[deprecated(note = #note)]
+                struct Warning;
+                _ = Warning;
+            };
+        }
+    }
+}
