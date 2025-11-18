@@ -23,6 +23,8 @@ fn main() {
 
 #[component]
 fn App() -> Element {
+    // Force asset to be included in the final bundle. We shouldn't need this once #[used(linker)] is stable
+    _ = _ASSET;
     // todo: test monaco more....
     // const MONACO_FOLDER: Asset = asset!("/monaco-editor/package/min/vs");
     //     let script = format!("(() => {{
