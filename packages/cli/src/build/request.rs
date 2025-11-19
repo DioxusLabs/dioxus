@@ -4045,7 +4045,7 @@ impl BuildRequest {
             || self.wasm_split
             || !self.release
             || ctx.mode == BuildMode::Fat;
-        let keep_names = ctx.mode == BuildMode::Fat;
+        let keep_names = self.wasm_split || ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -4179,7 +4179,6 @@ impl BuildRequest {
         // Make sure to optimize the main wasm file if requested or if bundle splitting
         if should_bundle_split || self.release {
             ctx.status_optimizing_wasm();
-            tracing::info!("Optimizing wasm file");
             wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
         }
 
