@@ -36,7 +36,7 @@ pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8> {
 /// Deserialize a const buffer into a BundledAsset
 pub const fn deserialize_asset(bytes: &[u8]) -> BundledAsset {
     let bytes = ConstVec::new().extend(bytes);
-    match const_serialize::deserialize_const!(BundledAsset, bytes.read()) {
+    match const_serialize::deserialize_const!(BundledAsset, bytes.as_ref()) {
         Some((_, asset)) => asset,
         None => panic!("Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"),
     }

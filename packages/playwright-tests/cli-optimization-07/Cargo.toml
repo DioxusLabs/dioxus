@@ -1,5 +1,5 @@
 [package]
-name = "dioxus-cli-optimization-test"
+name = "dioxus-cli-optimization-test-07"
 version = "0.0.1"
 edition = "2021"
 description = "Playwright test for Dioxus CLI optimization"
@@ -7,7 +7,8 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["web"] }
+# We test both if the current version of dioxus works and if the CLI can understand assets from the old asset format
+dioxus = { version = "=0.7.1", features = ["web"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 
@@ -15,4 +16,3 @@ serde_json.workspace = true
 # reqwest = { workspace = true, features = ["blocking"] }
 # flate2 = "1.1.2"
 # tar = "0.4.44"
-
