@@ -8,11 +8,14 @@
 //! hot-patching Rust code through binary analysis and a custom linker. The [`builder`] module contains
 //! the management of the ongoing build and methods to open the build as a running app.
 
+mod android_java;
 mod assets;
 mod builder;
 mod context;
+mod ios_swift;
 mod manifest;
 mod patch;
+mod permissions;
 mod pre_render;
 mod request;
 mod tools;

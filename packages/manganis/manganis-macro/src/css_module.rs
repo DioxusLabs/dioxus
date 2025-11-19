@@ -97,7 +97,7 @@ impl ToTokens for CssModuleParser {
             let ident = Ident::new(&as_snake, Span::call_site());
 
             values.push(quote! {
-                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::const_serialize::ConstStr::new(#id).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
+                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::ConstStr::new(#id).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
             });
         }
 
@@ -111,7 +111,7 @@ impl ToTokens for CssModuleParser {
 
             let ident = Ident::new(&as_snake, Span::call_site());
             values.push(quote! {
-                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::const_serialize::ConstStr::new(#class).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
+                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::ConstStr::new(#class).push_str(#mod_name::__ASSET_HASH.as_str()).as_str() };
             });
         }
 
@@ -130,7 +130,7 @@ impl ToTokens for CssModuleParser {
 
                 // Get the hash to use when builidng hashed css idents.
                 const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
-                pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
+                pub(super) const __ASSET_HASH: manganis::macro_helpers::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
                 // Css ident class for deref stylesheet inclusion.
                 pub(super) struct __CssIdent { pub inner: &'static str }
