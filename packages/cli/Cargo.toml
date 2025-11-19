@@ -32,7 +32,7 @@ dioxus-component-manifest = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
+uuid = { workspace = true, features = ["v4", "v5"] }
 # swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
 # but pinning serde fixes the issue in the meantime
 serde = { version = "=1.0.221", features = ["derive"] }
