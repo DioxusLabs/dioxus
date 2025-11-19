@@ -3965,6 +3965,10 @@ impl BuildRequest {
 
     /// Strip the final binary after extracting all assets with rustc-objcopy
     async fn strip_binary(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        // Never strip the binary if we are going to bundle split it
+        if self.wasm_split {
+            return Ok(());
+        }
         let exe = &artifacts.exe;
         // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
         let strip_arg = match self.get_strip_setting() {
