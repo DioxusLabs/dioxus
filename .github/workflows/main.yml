@@ -220,10 +220,11 @@ jobs:
   playwright:
     if: github.event.pull_request.draft == false
     name: Playwright Tests
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       matrix:
+        os: [windows-latest, blacksmith-8vcpu-ubuntu-2404]
         platform:
           - { toolchain: beta }
           # - { toolchain: 1.86.0 }
