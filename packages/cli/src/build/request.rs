@@ -400,6 +400,7 @@ pub(crate) struct BuildRequest {
     pub(crate) apple_team_id: Option<String>,
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
+    pub(crate) windows_subsystem: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -909,27 +910,6 @@ impl BuildRequest {
             ]);
         }
 
-        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
-        if matches!(bundle, BundleFormat::Windows)
-            && !rustflags
-                .flags
-                .iter()
-                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
-        {
-            let subsystem = args
-                .windows_subsystem
-                .clone()
-                .unwrap_or_else(|| "WINDOWS".to_string());
-            rustflags
-                .flags
-                .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
-            // We also need to set the entry point to mainCRTStartup to avoid windows looking
-            // for a WinMain function
-            rustflags
-                .flags
-                .push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
-        }
-
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
         if matches!(bundle, BundleFormat::Ios) {
             let xcode_path = Workspace::get_xcode_path()
@@ -1040,6 +1020,7 @@ impl BuildRequest {
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
+            windows_subsystem: args.windows_subsystem.clone(),
         })
     }
 
@@ -2672,6 +2653,25 @@ impl BuildRequest {
         cargo_args.extend(self.extra_cargo_args.clone());
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
+
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
+        if matches!(self.bundle, BundleFormat::Windows)
+            && !self
+                .rustflags
+                .flags
+                .iter()
+                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+        {
+            let subsystem = self
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
+
+            cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
+        }
 
         // The bundle splitter needs relocation data to create a call-graph.
         // This will automatically be erased by wasm-opt during the optimization step.
