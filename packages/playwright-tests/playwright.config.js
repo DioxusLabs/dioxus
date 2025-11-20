@@ -10,6 +10,7 @@ const path = require("path");
 
 let webServer = [];
 let grep = undefined;
+let grepInvert = undefined;
 if (process.platform === "win32") {
   webServer = [
     {
@@ -204,6 +205,8 @@ if (process.platform === "win32") {
       stdout: "pipe",
     },
   ];
+
+  grepInvert = /windows/;
 }
 
 /**
@@ -239,6 +242,7 @@ module.exports = defineConfig({
     {
       name: "chromium",
       grep,
+      grepInvert,
       use: { ...devices["Desktop Chrome"] },
     },
   ],
