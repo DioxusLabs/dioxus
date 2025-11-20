@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use dioxus::LaunchBuilder;
+use dioxus::prelude::*;
 
 fn main() {
     LaunchBuilder::new()
