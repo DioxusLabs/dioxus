@@ -1239,8 +1239,12 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         // want to preserve the actual underlying function so side modules can call them directly.
         //
         // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1505
-        if name.starts_with("__wbindgen") {
-            let saved_name = format!("__saved_wbg_{}", name);
+        //
+        // Note: We demangle the symbol name to handle both legacy C++ mangling and the new v0 scheme.
+        // See: https://blog.rust-lang.org/2025/11/20/switching-to-v0-mangling-on-nightly/
+        let sym = DemangledSymbol::new(name);
+        if sym.is_wbindgen_intrinsic() {
+            let saved_name = format!("__saved_wbg_{}", sym.name);
             if exported.insert(saved_name.clone()) {
                 module.exports.add(&saved_name, func.id());
             }
@@ -1294,18 +1298,83 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(module.emit_wasm())
 }
 
-/// Check if the name is a wasm-bindgen symbol
+/// A demangled Rust symbol, split into its module path and leaf name.
+#[derive(Debug, Clone)]
+struct DemangledSymbol {
+    /// The full module path, e.g. "wasm_bindgen" or "wasm_bindgen::closure"
+    /// Empty string if the symbol wasn't mangled or has no path.
+    path: String,
+    /// The symbol name, e.g. "__wbindgen_object_drop_ref"
+    name: String,
+}
+
+impl DemangledSymbol {
+    /// Demangle a symbol name and split it into path and name components.
+    ///
+    /// Supports both legacy C++ mangling and the new v0 mangling scheme.
+    /// If the symbol isn't mangled, returns it as-is with an empty path.
+    fn new(mangled: &str) -> Self {
+        let demangled = rustc_demangle::demangle(mangled).to_string();
+
+        // Split on last "::" to separate the module path from the symbol name
+        if let Some(pos) = demangled.rfind("::") {
+            Self {
+                path: demangled[..pos].to_string(),
+                name: demangled[pos + 2..].to_string(),
+            }
+        } else {
+            // No path separator - either not mangled or a top-level symbol
+            Self {
+                path: String::new(),
+                name: demangled,
+            }
+        }
+    }
+
+    /// Check if this symbol is from the wasm_bindgen crate.
+    fn is_wasm_bindgen(&self) -> bool {
+        self.path == "wasm_bindgen" || self.path.starts_with("wasm_bindgen::")
+    }
+
+    /// Check if this is a wasm_bindgen intrinsic (starts with __wbindgen or __wbg_).
+    fn is_wbindgen_intrinsic(&self) -> bool {
+        self.is_wasm_bindgen()
+            && (self.name.starts_with("__wbindgen") || self.name.starts_with("__wbg_"))
+    }
+}
+
+/// Check if the name is a wasm-bindgen symbol that should be filtered out.
 ///
-/// todo(jon): I believe we can just look at all the functions the wasm_bindgen describe export references.
-/// this is kinda hacky on slow.
+/// This function demangles the symbol name first (supporting both legacy and v0 mangling schemes)
+/// and then checks against known wasm-bindgen internal patterns that should not be preserved.
 ///
-/// Uses the heuristics from the wasm-bindgen source code itself:
-///
-/// <https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165>
+/// References:
+/// - <https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1165>
+/// - <https://blog.rust-lang.org/2025/11/20/switching-to-v0-mangling-on-nightly/>
 fn name_is_bindgen_symbol(name: &str) -> bool {
-    name.contains("__wbindgen_describe")
-        || name.contains("__wbindgen_externref")
-        || name.contains("wasm_bindgen8describe6inform")
+    // First check the raw name for unmangled patterns (e.g. import names)
+    if name.contains("__wbindgen_describe") || name.contains("__wbindgen_externref") {
+        return true;
+    }
+
+    // Demangle and check against known patterns
+    let sym = DemangledSymbol::new(name);
+
+    if sym.is_wasm_bindgen() {
+        // Check for __wbindgen_describe* and __wbindgen_externref* symbols
+        if sym.name.starts_with("__wbindgen_describe")
+            || sym.name.starts_with("__wbindgen_externref")
+        {
+            return true;
+        }
+        // Check for __rt::wbg_ internal symbols
+        if sym.path.contains("::__rt") && sym.name.starts_with("wbg_") {
+            return true;
+        }
+    }
+
+    // Legacy mangled patterns (for older toolchains using C++ mangling)
+    name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
