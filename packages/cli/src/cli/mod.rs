@@ -75,7 +75,7 @@ pub(crate) enum Commands {
     #[clap(name = "run")]
     Run(run::RunArgs),
 
-    /// Init a new project for Dioxus in the current directory (by default).
+    /// Init a new project for Dioxus in a given directory.
     /// Will attempt to keep your project in a good state.
     #[clap(name = "init")]
     Init(init::Init),

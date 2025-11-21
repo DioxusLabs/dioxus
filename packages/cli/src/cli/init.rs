@@ -4,11 +4,13 @@ use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
 #[clap(name = "init")]
 pub struct Init {
-    /// Create a new Dioxus project at PATH
-    #[arg(default_value = ".")]
+    /// Create a new Dioxus project at PATH. Required.
+    /// The user should provide "." intentionally
+    /// if creating a project in current dir is requested.
+    #[clap(required(true), help("Please provide \".\" if you are sure you want to create the project inside the current directory"))]
     pub path: PathBuf,
 
-    /// Project name. Defaults to directory name
+    /// Project name. Defaults to directory name.
     #[arg(short, long)]
     pub name: Option<String>,
 
@@ -54,7 +56,10 @@ impl Init {
     pub async fn init(mut self) -> Result<StructuredOutput> {
         // Project name defaults to directory name.
         if self.name.is_none() {
-            self.name = Some(create::name_from_path(&self.path)?);
+            self.name = Some(
+                create::name_from_path(&self.path)
+                    .expect("Could not retrieve the current directory name"),
+            );
         }
 
         // Perform a connectivity check so we just don't it around doing nothing if there's a network error
