@@ -231,6 +231,8 @@ jobs:
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
+      - name: log info
+        run: echo ${{ matrix.platform.os }}
       - name: Free Disk Space
         if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' || matrix.platform.os == 'blacksmith-8vcpu-ubuntu-2404' }}
         uses: ./.github/actions/free-disk-space
