@@ -148,6 +148,24 @@ impl Bundle {
         })
     }
 
+    #[allow(deprecated)]
+    fn windows_icon_override(
+        krate: &BuildRequest,
+        bundle_settings: &mut BundleSettings,
+        windows_icon: Option<String>,
+    ) {
+        let has_windows_icon_override = match krate.config.bundle.windows.as_ref() {
+            Some(windows) => windows.icon_path.is_some(),
+            None => false,
+        };
+
+        if !has_windows_icon_override {
+            let icon = windows_icon.expect("Missing .ico app icon");
+            // for now it still needs to be set even though it's deprecated
+            bundle_settings.windows.icon_path = PathBuf::from(icon);
+        }
+    }
+
     fn bundle_desktop(
         build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
@@ -184,17 +202,12 @@ impl Bundle {
         }
 
         if cfg!(windows) {
-            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
+            let windows_icon = match bundle_settings.icon.as_ref() {
+                Some(icons) => icons.iter().find(|i| i.ends_with(".ico")).cloned(),
+                None => None,
+            };
 
-                if let Some(icon_path) = icon_path {
-                    bundle_settings.icon = Some(vec![icon_path.into()]);
-                };
-            }
+            Self::windows_icon_override(krate, &mut bundle_settings, windows_icon);
         }
 
         if bundle_settings.resources_map.is_none() {
