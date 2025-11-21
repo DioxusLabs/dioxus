@@ -19843,6 +19843,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "windows-headless"
+version = "0.7.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "windows-implement"
 version = "0.58.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

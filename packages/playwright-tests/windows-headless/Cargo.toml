@@ -1,0 +1,7 @@
+[package]
+name = "windows-headless"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+dioxus = { workspace = true, features = ["desktop"] }
