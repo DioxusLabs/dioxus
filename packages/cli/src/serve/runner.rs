@@ -24,7 +24,7 @@ use notify::{
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, TcpListener},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -54,6 +54,7 @@ pub(crate) struct AppServer {
     // Tracked state related to open builds and hot reloading
     pub(crate) applied_client_hot_reload_message: HotReloadMsg,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
+    pub(crate) scss_indirection_map: HashMap<PathBuf, PathBuf>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
     pub(crate) use_hotpatch_engine: bool,
@@ -209,6 +210,7 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            scss_indirection_map: Default::default(),
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -223,6 +225,7 @@ impl AppServer {
             // really, we should be using depinfo to get the files that are actually used, but the depinfo file might not be around yet
             // todo(jon): see if we can just guess the depinfo file before it generates. might be stale but at least it catches most of the files
             runner.load_rsx_filemap();
+            runner.load_scss_filemap();
         }
 
         Ok(runner)
@@ -383,6 +386,37 @@ impl AppServer {
             if self.client.build.path_is_in_public_dir(path) {
                 needs_full_rebuild = true;
                 continue;
+            }
+
+            // Scss files may be referenced with `@use` at-rules by an asset we need to reload the parent
+            if ext == "scss" || ext == "sass" {
+                let Ok(new_content) = std::fs::read_to_string(path) else {
+                    tracing::debug!(
+                        "Failed to read SCSS/SASS file while hotreloading: {:?}",
+                        path
+                    );
+                    continue;
+                };
+
+                let Some(parent_dir) = path.parent() else {
+                    tracing::debug!(
+                        "Failed to get parent directory of SCSS/SASS file while hotreloading: {:?}",
+                        path
+                    );
+                    continue;
+                };
+
+                let uses_at_rules = extract_use_paths(parent_dir, &new_content);
+
+                // Aggressively insert all at-rule targets into the map,
+                // we prevent cycles when resolving the at-rule targets in `get_scss_bundled_assets`
+                for at_rule_target in uses_at_rules {
+                    self.scss_indirection_map
+                        .insert(at_rule_target, path.clone());
+                }
+
+                let scss_bundled_assets = self.get_scss_bundled_assets(path).await;
+                assets.extend(scss_bundled_assets);
             }
 
             // If it's a rust file, we want to hotreload it using the filemap
@@ -932,6 +966,23 @@ impl AppServer {
         }
     }
 
+    /// Load the scss indirection map.
+    fn load_scss_filemap(&mut self) {
+        let dir = self.client.build.crate_dir();
+        self.fill_scss_indirection(&dir);
+        self.fill_scss_indirection(&dir);
+
+        if let Some(server) = self.server.as_ref() {
+            let dir = server.build.crate_dir();
+            self.fill_scss_indirection(&dir);
+            self.fill_scss_indirection(&dir);
+        }
+
+        for krate in self.all_watched_crates() {
+            self.fill_scss_indirection(&krate);
+        }
+    }
+
     /// Fill the filemap with files from the filesystem, using the given filter to determine which files to include.
     ///
     /// You can use the filter with something like a gitignore to only include files that are relevant to your project.
@@ -968,6 +1019,62 @@ impl AppServer {
                 }
             }
         }
+    }
+
+    /// Fill the scss indirection map with files from the filesystem, using the given filter to determine which files to include.
+    ///
+    /// Scss and Sass files will be scanned for @use statements and added to the indirection map
+    /// so their parent could be hot reloaded.
+    fn fill_scss_indirection(&mut self, dir: &PathBuf) {
+        for entry in walkdir::WalkDir::new(dir).into_iter().flatten() {
+            if self
+                .workspace
+                .ignore
+                .matched(entry.path(), entry.file_type().is_dir())
+                .is_ignore()
+            {
+                continue;
+            }
+
+            let path = entry.path();
+            let ext = path.extension().and_then(|s| s.to_str());
+
+            if ext == Some("scss") || ext == Some("sass") {
+                if let Ok(contents) = std::fs::read_to_string(path) {
+                    if let Some(parent_dir) = path.parent() {
+                        let uses_at_rules = extract_use_paths(parent_dir, &contents);
+                        for at_rule_target in uses_at_rules {
+                            self.scss_indirection_map
+                                .insert(at_rule_target, path.to_path_buf());
+                        }
+                    };
+                }
+            }
+        }
+    }
+
+    /// Get the bundled assets referencing a given SCSS file by traversing the SCSS dependency tree upward.
+    /// Scss and Sass may either bundled or refenced with the `@use` scss at-rule.
+    async fn get_scss_bundled_assets(&self, path: &Path) -> Vec<PathBuf> {
+        let mut current = path;
+        let mut assets = Vec::new();
+
+        let mut visited = HashSet::new();
+
+        while let Some(parent) = self.scss_indirection_map.get(current) {
+            if !visited.insert(parent) {
+                break;
+            }
+
+            if let Some(bundled_names) = self.client.hotreload_bundled_assets(parent).await {
+                for bundled_name in bundled_names {
+                    assets.push(PathBuf::from("/assets/").join(bundled_name));
+                }
+            }
+            current = parent;
+        }
+
+        assets
     }
 
     /// Commit the changes to the filemap, overwriting the contents of the files
@@ -1293,4 +1400,16 @@ fn is_wsl() -> bool {
     }
 
     false
+}
+
+// Extract paths from @use statements in SCSS/SASS files
+fn extract_use_paths(parent_dir: &Path, scss: &str) -> Vec<PathBuf> {
+    // Match @use "something/path.scss" or @use 'something/path' or @use "..." with or without semicolon/with options
+    // TODO: statically compile regex
+    let re = regex::Regex::new(r#"@use\s+['"]([^'"]+)['"]"#).unwrap();
+    re.captures_iter(scss)
+        .filter_map(|cap| cap.get(1).map(|m| m.as_str().to_string()))
+        .map(PathBuf::from)
+        .filter_map(|path| parent_dir.join(path).canonicalize().ok())
+        .collect()
 }
