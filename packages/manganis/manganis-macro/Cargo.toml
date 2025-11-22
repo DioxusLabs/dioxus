@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Evan Almloff"]
 description = "Ergonomic, automatic, cross crate asset collection and optimization"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/manganis/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/manganis/manganis-macro"
 homepage = "https://dioxuslabs.com"
 keywords = ["assets"]
 
