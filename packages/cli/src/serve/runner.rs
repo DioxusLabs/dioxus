@@ -81,6 +81,9 @@ pub(crate) struct AppServer {
 
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
+
+    // File changes that arrived while a build was in progress, to be processed after build completes
+    pub(crate) pending_file_changes: Vec<PathBuf>,
 }
 
 pub(crate) struct CachedFile {
@@ -209,6 +212,7 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            pending_file_changes: Vec::new(),
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -238,6 +242,12 @@ impl AppServer {
         if let Some(server) = self.server.as_mut() {
             server.start(build_mode, BuildId::SECONDARY);
         }
+    }
+
+    /// Take any pending file changes that were queued while a build was in progress.
+    /// Returns the files and clears the pending list.
+    pub(crate) fn take_pending_file_changes(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.pending_file_changes)
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -348,10 +358,14 @@ impl AppServer {
             self.client.stage,
             BuildStage::Failed | BuildStage::Aborted | BuildStage::Success
         ) {
+            // Queue file changes that arrive during a build, so we can process them after the build completes.
+            // This prevents losing changes from tools like stylance, tailwind, or sass that generate files
+            // in response to source changes.
             tracing::debug!(
-                "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
+                "Queueing file change: client is not ready to receive hotreloads. Files: {:#?}",
                 files
             );
+            self.pending_file_changes.extend(files.iter().cloned());
             return;
         }
 
