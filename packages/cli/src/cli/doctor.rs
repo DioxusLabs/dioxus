@@ -147,10 +147,10 @@ impl Doctor {
 
         // toolchains
         let mut has_wasm32_unknown_unknown = "❌";
-        let mut has_aarch64_android_linux = "❌";
+        let mut has_aarch64_linux_android = "❌";
         let mut has_i686_linux_android = "❌";
         let mut has_armv7_linux_androideabi = "❌";
-        let mut has_x86_64_android_linux = "❌";
+        let mut has_x86_64_linux_android = "❌";
         let mut has_x86_64_apple_ios = "❌";
         let mut has_aarch64_apple_ios = "❌";
         let mut has_aarch64_apple_ios_sim = "❌";
@@ -159,7 +159,7 @@ impl Doctor {
             has_wasm32_unknown_unknown = "✅";
         }
         if rustlib.join("aarch64-linux-android").exists() {
-            has_aarch64_android_linux = "✅";
+            has_aarch64_linux_android = "✅";
         }
         if rustlib.join("i686-linux-android").exists() {
             has_i686_linux_android = "✅";
@@ -168,7 +168,7 @@ impl Doctor {
             has_armv7_linux_androideabi = "✅";
         }
         if rustlib.join("x86_64-linux-android").exists() {
-            has_x86_64_android_linux = "✅";
+            has_x86_64_linux_android = "✅";
         }
         if rustlib.join("x86_64-apple-ios").exists() {
             has_x86_64_apple_ios = "✅";
@@ -248,10 +248,10 @@ impl Doctor {
 
 {LINK_STYLE}Toolchains{LINK_STYLE:#}
  {HINT_STYLE}{has_wasm32_unknown_unknown}{HINT_STYLE:#} wasm32-unknown-unknown {HINT_STYLE}(web){HINT_STYLE:#}
- {HINT_STYLE}{has_aarch64_android_linux}{HINT_STYLE:#} aarch64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_linux_android}{HINT_STYLE:#} aarch64-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_i686_linux_android}{HINT_STYLE:#} i686-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_armv7_linux_androideabi}{HINT_STYLE:#} armv7-linux-androideabi {HINT_STYLE}(android){HINT_STYLE:#}
- {HINT_STYLE}{has_x86_64_android_linux}{HINT_STYLE:#} x86_64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_x86_64_linux_android}{HINT_STYLE:#} x86_64-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_x86_64_apple_ios}{HINT_STYLE:#} x86_64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
  {HINT_STYLE}{has_aarch64_apple_ios}{HINT_STYLE:#} aarch64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
  {HINT_STYLE}{has_aarch64_apple_ios_sim}{HINT_STYLE:#} aarch64-apple-ios-sim {HINT_STYLE}(iOS){HINT_STYLE:#}
