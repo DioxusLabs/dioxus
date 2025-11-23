@@ -5,7 +5,6 @@
 #![allow(clippy::doc_overindented_list_items)]
 
 mod build;
-mod bundle_utils;
 mod cargo_toml;
 mod cli;
 mod config;
