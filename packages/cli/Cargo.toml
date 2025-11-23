@@ -81,6 +81,9 @@ reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
 git2 = "0.20.2"
 
+[target.'cfg(target_env = "musl")'.dependencies]
+git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
+
 # path lookup
 which = { version = "8.0.0" }
 
