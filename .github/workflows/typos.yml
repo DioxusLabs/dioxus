@@ -18,7 +18,7 @@ jobs:
     name: Check for typos
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Check for typos
         uses: crate-ci/typos@master
 
@@ -28,7 +28,7 @@ jobs:
     name: Check For Invalid Links
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Restore lychee cache
         uses: actions/cache@v4
         with:
