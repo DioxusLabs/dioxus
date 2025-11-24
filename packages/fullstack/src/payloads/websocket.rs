@@ -120,7 +120,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// `.try_recv()` will not fail due to the connection not being ready.
     pub async fn connect(&self) -> WebsocketState {
         // Wait for the connection to be established
-        while self.connection.pending() {
+        while self.connection.running() {
             _ = self.waker.wait().await;
         }
 

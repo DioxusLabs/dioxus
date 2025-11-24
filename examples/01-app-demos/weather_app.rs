@@ -36,7 +36,7 @@ fn app() -> Element {
                                         }
                                         Forecast { weather: weather.cloned() }
                                         div { height: "20px", margin_top: "10px",
-                                            if weather.running() {
+                                            if weather.pending() {
                                                 "Fetching weather data..."
                                             }
                                         }

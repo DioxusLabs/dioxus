@@ -274,6 +274,37 @@ impl<S> Resource<S> {
         !self.handle.read().task.paused()
     }
 
+    /// Is the resource's future currently running?
+    ///
+    /// Reading this does not subscribe to the future's state
+    ///
+    /// ## Example
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # use std::time::Duration;
+    /// fn App() -> Element {
+    ///     let mut revision = use_signal(|| "1d03b42");
+    ///     let mut resource = use_resource(move || async move {
+    ///         // This will run every time the revision signal changes because we read the count inside the future
+    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
+    ///     });
+    ///
+    ///     // We can use the `finished` method to check if the future is finished
+    ///     if resource.pending() {
+    ///         rsx! {
+    ///             "The resource is still running"
+    ///         }
+    ///     } else {
+    ///         rsx! {
+    ///             "The resource is finished"
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn pending(&self) -> bool {
+        self.handle.read().task.paused()
+    }
+
     /// Get the current value of the resource's future.  This method returns a [`ReadSignal`] which can be read to get the current value of the resource or passed to other hooks and components.
     ///
     /// ## Example
@@ -494,7 +525,7 @@ where
     }
 
     /// Is the resource's value currently running?
-    pub fn pending(&self) -> bool {
+    pub fn running(&self) -> bool {
         self.state.is_none()
     }
 
