@@ -61,9 +61,9 @@ struct ResourceHandle {
 
 pub type PendingResource<T> = Resource<Store<Option<T>>>;
 pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> = Resource<MappedStore<T, Lens>>;
-pub type OkResource<T, E, Lens = WriteSignal<Option<T>>> =
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
     Resource<MappedStore<T, MappedMutSignal<Result<T, E>, Lens>>>;
-pub type ErrResource<T, E, Lens = WriteSignal<Option<T>>> =
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
     Resource<MappedStore<E, MappedMutSignal<Result<T, E>, Lens>>>;
 
 /// A handle to a reactive future spawned with [`use_resource`] that can be used to modify or read the result of the future.
