@@ -89,6 +89,27 @@ where
     })
 }
 
+/// Same as [`use_coroutine`] but also provides the sender to the init function.
+pub fn use_coroutine_with_sender<M, G, F>(mut init: G) -> Coroutine<M>
+where
+    M: 'static,
+    G: FnMut(UnboundedReceiver<M>, UnboundedSender<M>) -> F + 'static,
+    F: Future<Output = ()> + 'static,
+{
+    let mut tx_copy_value = use_hook(|| CopyValue::new(None));
+
+    let future = use_future(move || {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
+        tx_copy_value.set(Some(tx.clone()));
+        init(rx, tx)
+    });
+
+    use_context_provider(|| Coroutine {
+        tx: tx_copy_value,
+        future,
+    })
+}
+
 /// Get a handle to a coroutine higher in the tree
 /// Analogous to use_context_provider and use_context,
 /// but used for coroutines specifically
