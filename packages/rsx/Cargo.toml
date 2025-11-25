@@ -16,6 +16,7 @@ keywords = ["dom", "ui", "gui", "react"]
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 proc-macro2-diagnostics = { workspace = true }
 quote = { workspace = true }
+rustversion.workspace = true
 syn = { workspace = true, features = ["full", "extra-traits", "visit", "visit-mut"] }
 
 [features]
