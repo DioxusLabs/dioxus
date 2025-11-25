@@ -637,22 +637,14 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
             continue;
         };
 
-        if name.contains("wasm_bindgen4__rt8wbg_cast") {
-            if !name.contains("breaks_if_inline") {
-                let name = name.to_string();
-                let old_idx = name_to_ifunc_old
+        if name.contains("wasm_bindgen4__rt8wbg_cast") && !name.contains("breaks_if_inline") {
+            let name = name.to_string();
+            let old_idx = name_to_ifunc_old
                     .get(&name)
                     .copied()
                     .ok_or_else(|| anyhow::anyhow!("Could not find matching wbg_cast function for [{name}] - must generate new JS bindings."))?;
 
-                convert_func_to_ifunc_call(
-                    &mut new,
-                    ifunc_table_initializer,
-                    func_id,
-                    old_idx,
-                    name,
-                );
-            }
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, old_idx, name);
         }
     }
 
