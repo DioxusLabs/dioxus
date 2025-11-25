@@ -807,8 +807,8 @@ impl AppBuilder {
 
             // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
             if self.build.bundle == BundleFormat::Android {
-                _ = self
-                    .copy_file_to_android_tmp(&changed_file, &bundled_name)
+                let _ = self
+                    .copy_file_to_android_tmp(&output_path, &bundled_name)
                     .await;
             }
             bundled_names.push(bundled_name);
@@ -828,7 +828,7 @@ impl AppBuilder {
         bundled_name: &Path,
     ) -> Result<PathBuf> {
         let target = dioxus_cli_config::android_session_cache_dir().join(bundled_name);
-        tracing::debug!("Pushing asset to device: {target:?}");
+        tracing::debug!("Pushing asset {changed_file:?} to device: {target:?}");
 
         let res = Command::new(&self.build.workspace.android_tools()?.adb)
             .arg("push")
