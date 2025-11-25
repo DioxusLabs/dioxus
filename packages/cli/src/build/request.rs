@@ -4377,6 +4377,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     );
                 }
             }
+            BundleFormat::MacOS => {
+                if self.should_codesign {
+                    ctx.status_codesigning();
+                    self.codesign_ios().await?;
+                    // self.codesign_macos().await?;
+                }
+            }
             BundleFormat::Ios => {
                 if self.should_codesign {
                     ctx.status_codesigning();
@@ -5257,6 +5264,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .flat_map(|arg| ["--config".to_string(), arg])
             .collect()
     }
+
+    // pub async codesign_macos(&self) -> Result<()> {
+
+    // }
 
     pub async fn codesign_ios(&self) -> Result<()> {
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
