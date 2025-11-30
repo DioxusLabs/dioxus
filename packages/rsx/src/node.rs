@@ -176,6 +176,14 @@ impl BodyNode {
             _ => panic!("Element name not available for this node"),
         }
     }
+
+    pub(crate) fn key(&self) -> Option<&AttributeValue> {
+        match self {
+            Self::Element(el) => el.key(),
+            Self::Component(comp) => comp.get_key(),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
