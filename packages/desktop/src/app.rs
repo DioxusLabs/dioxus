@@ -240,13 +240,17 @@ impl App {
             .unmounted_dom
             .take()
             .expect("Virtualdom should be set before initialization");
+        #[allow(unused_mut)]
         let mut cfg = self
             .cfg
             .take()
             .expect("Config should be set before initialization");
 
         self.is_visible_before_start = cfg.window.window.visible;
-        cfg.window = cfg.window.with_visible(false);
+        #[cfg(not(target_os = "linux"))]
+        {
+            cfg.window = cfg.window.with_visible(false);
+        }
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
@@ -283,9 +287,12 @@ impl App {
 
         view.edits.wry_queue.send_edits();
 
-        view.desktop_context
-            .window
-            .set_visible(self.is_visible_before_start);
+        #[cfg(not(target_os = "linux"))]
+        {
+            view.desktop_context
+                .window
+                .set_visible(self.is_visible_before_start);
+        }
 
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
