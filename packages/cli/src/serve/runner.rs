@@ -997,6 +997,18 @@ impl AppServer {
             }
         }
 
+        // Watch additional paths from [web.watcher].watch_path config
+        let crate_dir = self.client.build.crate_dir();
+        for watch_path in &self.client.build.config.web.watcher.watch_path {
+            let path = crate_dir.join(watch_path);
+            if path.exists() {
+                tracing::trace!("Watching configured path {path:?}");
+                if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+                    handle_notify_error(err);
+                }
+            }
+        }
+
         if let Some(server) = self.server.as_ref() {
             // Watch the server's crate directory as well
             for path in self.watch_paths(server.build.crate_dir(), server.build.crate_package) {
