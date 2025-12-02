@@ -302,7 +302,7 @@ impl App {
     /// Technically you can handle this with the use_window_event hook
     pub fn handle_close_msg(&mut self, id: WindowId) {
         self.webviews.remove(&id);
-        if self.webviews.is_empty() {
+        if self.exit_on_last_window_close && self.webviews.is_empty() {
             self.control_flow = ControlFlow::Exit
         }
     }
