@@ -238,9 +238,10 @@ mod field_info {
                     || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    // only change the default if it isn't manually set above
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
                 }
 
                 Ok(FieldInfo {

@@ -7,8 +7,7 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{consume_context, ScopeId, VirtualDom};
-use dioxus_history::History;
+use dioxus_core::VirtualDom;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -241,13 +240,17 @@ impl App {
             .unmounted_dom
             .take()
             .expect("Virtualdom should be set before initialization");
+        #[allow(unused_mut)]
         let mut cfg = self
             .cfg
             .take()
             .expect("Config should be set before initialization");
 
         self.is_visible_before_start = cfg.window.window.visible;
-        cfg.window = cfg.window.with_visible(false);
+        #[cfg(not(target_os = "linux"))]
+        {
+            cfg.window = cfg.window.with_visible(false);
+        }
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
@@ -284,9 +287,12 @@ impl App {
 
         view.edits.wry_queue.send_edits();
 
-        view.desktop_context
-            .window
-            .set_visible(self.is_visible_before_start);
+        #[cfg(not(target_os = "linux"))]
+        {
+            view.desktop_context
+                .window
+                .set_visible(self.is_visible_before_start);
+        }
 
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
@@ -480,9 +486,6 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        use dioxus_core::ScopeId;
-        use dioxus_history::History;
-
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
@@ -518,17 +521,12 @@ impl App {
                 return;
             };
 
-            let url = webview.dom.in_scope(ScopeId::ROOT, || {
-                consume_context::<Rc<dyn History>>().current_route()
-            });
-
             let state = PreservedWindowState {
                 x,
                 y,
                 width: width.max(200),
                 height: height.max(200),
                 monitor: monitor_name.to_string(),
-                url: Some(url),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
@@ -582,13 +580,6 @@ impl App {
                         window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
                     }
                 }
-
-                // Set the url if it exists
-                webview.dom.in_scope(ScopeId::ROOT, || {
-                    if let Some(url) = state.url {
-                        consume_context::<Rc<dyn History>>().replace(url);
-                    }
-                })
             }
         }
     }
@@ -627,7 +618,6 @@ struct PreservedWindowState {
     width: u32,
     height: u32,
     monitor: String,
-    url: Option<String>,
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later

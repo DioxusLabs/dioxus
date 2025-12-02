@@ -139,7 +139,7 @@ members = [
     "packages/playwright-tests/cli-optimization-07",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
-    "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/fullstack-error-codes", "packages/playwright-tests/windows-headless",
 ]
 
 [workspace.package]
@@ -256,7 +256,7 @@ futures = "0.3.31"
 futures-channel = "0.3.31"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.100"
+wasm-bindgen = "0.2.105"
 wasm-bindgen-futures = "0.4.50"
 js-sys = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
@@ -271,7 +271,7 @@ tauri-bundler = { version = "=2.5.0" }
 lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
-axum-server = { version = "0.7.2", default-features = false }
+axum-server = { version = "0.7.3", default-features = false }
 http-body = { version = "1.0" }
 tower = "0.5.2"
 http = "1.3.1"
