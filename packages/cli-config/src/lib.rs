@@ -232,7 +232,15 @@ pub fn base_path() -> Option<String> {
         return web_base_path();
     }
 
-    read_env_config!("DIOXUS_ASSET_ROOT")
+    // Get the normalized base path for the application with `/` trimmed from both ends.
+    read_env_config!("DIOXUS_ASSET_ROOT").and_then(|p| {
+        let trimmed = p.trim_matches('/');
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
 }
 
 #[cfg(feature = "web")]
