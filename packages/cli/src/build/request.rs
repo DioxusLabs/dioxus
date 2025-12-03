@@ -5211,43 +5211,40 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// Note how every platform gets its own profile, and each platform has a dev and release profile.
     fn profile_args(&self) -> Vec<String> {
+        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
+        // after assets are built
+        let profile = self.profile.as_str();
+        let mut args = Vec::new();
+        args.push(format!(r#"profile.{profile}.strip=false"#));
+
         // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
-        if self
+        if !self
             .workspace
             .cargo_toml
             .profile
             .custom
             .contains_key(&self.profile)
         {
-            return vec![];
-        }
+            // Otherwise, we need to add the profile arguments to make it adhoc
+            let inherits = if self.release { "release" } else { "dev" };
 
-        // Otherwise, we need to add the profile arguments to make it adhoc
-        let mut args = Vec::new();
+            // Add the profile definition first.
+            args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
 
-        let profile = self.profile.as_str();
-        let inherits = if self.release { "release" } else { "dev" };
+            // The default dioxus experience is to lightly optimize the web build, both in debug and release
+            // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+            // that with wasm-opt tooling instead.
+            if matches!(self.bundle, BundleFormat::Web) {
+                if self.release {
+                    args.push(format!(r#"profile.{profile}.opt-level="s""#));
+                }
 
-        // Add the profile definition first.
-        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
-
-        // The default dioxus experience is to lightly optimize the web build, both in debug and release
-        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
-        // that with wasm-opt tooling instead.
-        if matches!(self.bundle, BundleFormat::Web) {
-            if self.release {
-                args.push(format!(r#"profile.{profile}.opt-level="s""#));
-            }
-
-            if self.wasm_split {
-                args.push(format!(r#"profile.{profile}.lto=true"#));
-                args.push(format!(r#"profile.{profile}.debug=true"#));
+                if self.wasm_split {
+                    args.push(format!(r#"profile.{profile}.lto=true"#));
+                    args.push(format!(r#"profile.{profile}.debug=true"#));
+                }
             }
         }
-
-        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
-        // after assets are built
-        args.push(format!(r#"profile.{profile}.strip=false"#));
 
         // Prepend --config to each argument
         args.into_iter()
