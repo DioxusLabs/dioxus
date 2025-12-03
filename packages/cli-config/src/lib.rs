@@ -95,6 +95,12 @@ macro_rules! read_env_config {
     }};
 }
 
+/// Normalize a base path by trimming leading/trailing slashes and converting empty strings to None.
+fn normalize_base_path(path: Option<String>) -> Option<String> {
+    path.map(|s| s.trim_matches('/').to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Get the address of the devserver for use over a raw socket
 ///
 /// This returns a [`SocketAddr`], meaning that you still need to connect to it using a socket with
@@ -232,7 +238,7 @@ pub fn base_path() -> Option<String> {
         return web_base_path();
     }
 
-    read_env_config!("DIOXUS_ASSET_ROOT")
+    normalize_base_path(read_env_config!("DIOXUS_ASSET_ROOT"))
 }
 
 #[cfg(feature = "web")]
@@ -261,13 +267,13 @@ pub fn web_base_path() -> Option<String> {
         thread_local! {
             static BASE_PATH: std::cell::OnceCell<Option<String>> = const { std::cell::OnceCell::new() };
         }
-        BASE_PATH.with(|f| f.get_or_init(|| get_meta_contents(ASSET_ROOT_ENV)).clone())
+        BASE_PATH.with(|f| f.get_or_init(|| normalize_base_path(get_meta_contents(ASSET_ROOT_ENV))).clone())
     }
 
     // In release mode, we get the base path from the environment variable
     #[cfg(not(debug_assertions))]
     {
-        option_env!("DIOXUS_ASSET_ROOT").map(ToString::to_string)
+        normalize_base_path(option_env!("DIOXUS_ASSET_ROOT").map(ToString::to_string))
     }
 }
 
