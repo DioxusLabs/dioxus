@@ -4269,6 +4269,7 @@ dependencies = [
 name = "const-serialize"
 version = "0.8.0"
 dependencies = [
+ "const-serialize 0.7.1",
  "const-serialize 0.8.0",
  "const-serialize-macro 0.8.0",
  "rand 0.9.2",
@@ -11409,6 +11410,7 @@ dependencies = [
 name = "manganis"
 version = "0.7.1"
 dependencies = [
+ "const-serialize 0.7.1",
  "const-serialize 0.8.0",
  "manganis-core 0.7.1",
  "manganis-macro 0.7.1",
@@ -11429,6 +11431,7 @@ dependencies = [
 name = "manganis-core"
 version = "0.7.1"
 dependencies = [
+ "const-serialize 0.7.1",
  "const-serialize 0.8.0",
  "dioxus 0.7.1",
  "dioxus-cli-config 0.7.1",

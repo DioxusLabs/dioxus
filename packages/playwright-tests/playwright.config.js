@@ -144,7 +144,6 @@ if (process.platform === "win32") {
     },
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
-      // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
         'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 8989',
       port: 8989,
@@ -153,8 +152,16 @@ if (process.platform === "win32") {
       stdout: "pipe",
     },
     {
+      cwd: path.join(process.cwd(), "cli-optimization"),
+      command:
+        'cargo binstall dioxus-cli@0.7.1 --install-path dx-07 -y && ./dx-07/dx run --addr "127.0.0.1" --port 8181 && rm -rf dx-07',
+      port: 8181,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
       cwd: path.join(process.cwd(), "cli-optimization-07"),
-      // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
         'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 9191',
       port: 9191,

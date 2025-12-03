@@ -1,5 +1,6 @@
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
-use const_serialize::SerializeConst;
+use const_serialize_07 as const_serialize;
+use const_serialize_08::SerializeConst;
 use std::collections::HashSet;
 
 /// Options for a css module asset
@@ -12,9 +13,11 @@ use std::collections::HashSet;
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 #[non_exhaustive]
 #[doc(hidden)]
 pub struct CssModuleAssetOptions {
