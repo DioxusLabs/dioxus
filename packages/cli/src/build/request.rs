@@ -2801,11 +2801,8 @@ impl BuildRequest {
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = self.base_path() {
-                let trimmed = base_path.trim_matches('/');
-                if !trimmed.is_empty() {
-                    env_vars.push((ASSET_ROOT_ENV.into(), trimmed.to_string().into()));
-                }
+            if let Some(base_path) = self.trimmed_base_path() {
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
             env_vars.push((
                 APP_TITLE_ENV.into(),
@@ -4901,11 +4898,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.base_path() {
-                let trimmed = base_path.trim_matches('/');
-                if !trimmed.is_empty() {
-                    head_resources.push_str(&format_base_path_meta_element(trimmed));
-                }
+            if let Some(base_path) = &self.trimmed_base_path() {
+                head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
 
@@ -5050,14 +5044,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .filter(|_| matches!(self.bundle, BundleFormat::Web | BundleFormat::Server))
     }
 
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    /// Get the normalized base path for the application with `/` trimmed from both ends.
+    pub(crate) fn trimmed_base_path(&self) -> Option<&str> {
+        self.base_path()
+            .map(|p| p.trim_matches('/'))
+            .filter(|p| !p.is_empty())
+    }
+
+    /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
-        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
+        self.trimmed_base_path().unwrap_or(".")
     }
 
     /// Get the path to the package manifest directory
