@@ -522,10 +522,13 @@ impl AppBuilder {
         }
 
         if let Some(base_path) = krate.base_path() {
-            envs.push((
-                dioxus_cli_config::ASSET_ROOT_ENV.into(),
-                base_path.to_string(),
-            ));
+            let trimmed = base_path.trim_matches('/');
+            if !trimmed.is_empty() {
+                envs.push((
+                    dioxus_cli_config::ASSET_ROOT_ENV.into(),
+                    trimmed.to_string(),
+                ));
+            }
         }
 
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {

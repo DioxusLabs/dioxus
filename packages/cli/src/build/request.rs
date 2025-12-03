@@ -2802,7 +2802,10 @@ impl BuildRequest {
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
             if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
+                let trimmed = base_path.trim_matches('/');
+                if !trimmed.is_empty() {
+                    env_vars.push((ASSET_ROOT_ENV.into(), trimmed.to_string().into()));
+                }
             }
             env_vars.push((
                 APP_TITLE_ENV.into(),
@@ -4899,7 +4902,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
             if let Some(base_path) = &self.base_path() {
-                head_resources.push_str(&format_base_path_meta_element(base_path));
+                let trimmed = base_path.trim_matches('/');
+                if !trimmed.is_empty() {
+                    head_resources.push_str(&format_base_path_meta_element(trimmed));
+                }
             }
         }
 
