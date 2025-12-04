@@ -468,7 +468,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // `relocation-model=pic` synthesizes can reference the functions via the indirect function table
     // even if they are not normally synthesized in regular wasm code generation.
     //
-    // Normally, the dynaic linker setup would resolve GOT.func against the same GOT.func export in
+    // Normally, the dynamic linker setup would resolve GOT.func against the same GOT.func export in
     // the main module, but we don't have that. Instead, we simply re-parse the main module, aggregate
     // its ifunc table, and then resolve directly to the index in that table.
     for (import_id, ifunc_index) in got_funcs {
@@ -584,19 +584,23 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
 
         if let Some(table_idx) = name_to_ifunc_old.get(import.name.as_str()) {
             new.imports.delete(env_func_import);
-            convert_import_to_ifunc_call(
+            convert_func_to_ifunc_call(
                 &mut new,
                 ifunc_table_initializer,
                 func_id,
                 *table_idx,
                 name.clone(),
             );
+            continue;
         }
 
         if name_is_bindgen_symbol(&name) {
             new.imports.delete(env_func_import);
-            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            continue;
         }
+
+        tracing::warn!("[hotpatching]: Symbol slipped through the cracks: {}", name);
     }
 
     // Wire up the preserved intrinsic functions that we saved before running wasm-bindgen to the expected
@@ -613,7 +617,34 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         if name_is_bindgen_symbol(&import.name) {
             let name = import.name.as_str().to_string();
             new.imports.delete(import_id);
-            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+        }
+    }
+
+    // Rewrite the wbg_cast functions to call the indirect functions from the original module.
+    // This is necessary because wasm-bindgen uses these calls to perform dynamic type casting through
+    // the JS layer. If we don't rewrite these, they end up as calls to `breaks_if_inlined` functions
+    // which are no-ops and get rewritten by the wbindgen post-processing step.
+    //
+    // Here, we find the corresponding wbg_cast function in the old module by name and then rewrite
+    // the patch module's cast function to call the indirect function from the original module.
+    //
+    // See the wbg_cast implementation in wasm-bindgen for more details:
+    // <https://github.com/wasm-bindgen/wasm-bindgen/blob/f61a588f674304964a2062b2307edb304aed4d16/src/rt/mod.rs#L30>
+    let new_func_ids = new.funcs.iter().map(|f| f.id()).collect::<Vec<_>>();
+    for func_id in new_func_ids {
+        let Some(name) = new.funcs.get(func_id).name.as_deref() else {
+            continue;
+        };
+
+        if name.contains("wasm_bindgen4__rt8wbg_cast") && !name.contains("breaks_if_inline") {
+            let name = name.to_string();
+            let old_idx = name_to_ifunc_old
+                    .get(&name)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Could not find matching wbg_cast function for [{name}] - must generate new JS bindings."))?;
+
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, old_idx, name);
         }
     }
 
@@ -642,8 +673,18 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
+        // Find the corresponding ifunc in the old module by name
         if let Some(old_idx) = name_to_ifunc_old.get(*name) {
             map.insert(*old_idx as u64, *idx as u64);
+            continue;
+        }
+
+        // Warn if there might be a null entry
+        if !name.contains("breaks_if_inlined") {
+            tracing::warn!(
+                "[hotpatching]: Failed to find ifunc entry in old module for function: {}",
+                name
+            );
         }
     }
 
@@ -656,7 +697,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     })
 }
 
-fn convert_import_to_ifunc_call(
+fn convert_func_to_ifunc_call(
     new: &mut Module,
     ifunc_table_initializer: TableId,
     func_id: FunctionId,
@@ -1309,7 +1350,6 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("wasm_bindgen..describe..WasmDescribe")
         || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
         || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
-        || name.contains("wasm_bindgen4__rt8wbg_")
 }
 
 /// Manually parse the data section from a wasm module

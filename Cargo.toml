@@ -138,7 +138,7 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
-    "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/fullstack-error-codes", "packages/playwright-tests/windows-headless",
 ]
 
 [workspace.package]
@@ -249,7 +249,7 @@ futures = "0.3.31"
 futures-channel = "0.3.31"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.100"
+wasm-bindgen = "0.2.105"
 wasm-bindgen-futures = "0.4.50"
 js-sys = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
