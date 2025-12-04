@@ -4370,17 +4370,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     );
                 }
             }
-            BundleFormat::MacOS => {
+            BundleFormat::MacOS | BundleFormat::Ios => {
                 if self.should_codesign {
                     ctx.status_codesigning();
-                    self.codesign_ios().await?;
-                    // self.codesign_macos().await?;
-                }
-            }
-            BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_ios().await?;
+                    self.codesign_apple().await?;
                 }
             }
 
@@ -5261,27 +5254,22 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    // pub async codesign_macos(&self) -> Result<()> {
-
-    // }
-
-    pub async fn codesign_ios(&self) -> Result<()> {
+    pub async fn codesign_apple(&self) -> Result<()> {
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name =
-                Some(Self::auto_provision_signing_name().await.context(
-                    "Failed to automatically provision signing name for iOS codesigning.",
-                )?);
+            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
+                "Failed to automatically provision signing name for Apple codesigning.",
+            )?);
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         if entitlements_file.is_none() {
             let entitlements_xml = Self::auto_provision_entitlements()
                 .await
-                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -5296,7 +5284,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         )?;
 
         tracing::debug!(
-            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            "Codesigning Apple app with entitlements: {} and dev name: {}",
             entitlements_file.display(),
             app_dev_name
         );
