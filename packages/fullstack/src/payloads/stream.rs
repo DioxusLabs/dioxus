@@ -272,7 +272,7 @@ impl FromResponse for Streaming<Bytes> {
     }
 }
 
-impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding + 'static> FromResponse
+impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
     for Streaming<T, E>
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
@@ -354,7 +354,7 @@ impl<S> FromRequest<S> for ByteStream {
     }
 }
 
-impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding + 'static, S> FromRequest<S>
+impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding, S> FromRequest<S>
     for Streaming<T, E>
 {
     type Rejection = ServerFnError;
@@ -375,20 +375,10 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding + 'static, S>
                 HttpError::bad_request("Invalid content type")?;
             }
 
-            // let stream = body.into_data_stream();
-            // input_stream: Box::pin(futures::stream::empty()),
-            // output_stream: client_stream,
-            // stream: Box::pin(stream.map(|byte| match byte {
-            //     Ok(bytes) => match decode_stream_frame::<T, E>(bytes) {
-            //         Some(res) => Ok(res),
-            //         None => Err(StreamingError::Decoding),
-            //     },
-            //     Err(_) => Err(StreamingError::Failed),
-            // })),
+            let stream = body.into_data_stream();
 
-            let client_stream = byte_stream_to_client_stream::<E, _, _, _>(stream);
             Ok(Self {
-                stream: client_stream,
+                stream: byte_stream_to_client_stream::<E, _, _, _>(stream),
                 encoding: PhantomData,
             })
         }
@@ -506,12 +496,18 @@ fn byte_stream_to_client_stream<E, T, S, E1>(
 ) -> Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>
 where
     S: Stream<Item = Result<Bytes, E1>> + 'static,
-    E: Encoding + 'static,
+    E: Encoding,
     T: DeserializeOwned + 'static,
 {
     Box::pin(SendWrapper::new(stream.flat_map(|bytes| match bytes {
-        Ok(bytes) => iter_stream(DecodeIterator::<T, E>::new(bytes)),
-        Err(_) => iter_stream(DecodeIterator::<T, E>::failed()),
+        Ok(bytes) => iter_stream(DecodeIterator::<T, E>(
+            DecodeIteratorState::UnChecked(bytes),
+            PhantomData,
+        )),
+        Err(_) => iter_stream(DecodeIterator::<T, E>(
+            DecodeIteratorState::Failed,
+            PhantomData,
+        )),
     })))
 }
 
@@ -525,15 +521,6 @@ enum DecodeIteratorState {
 /// An iterator of T decoded from bytes
 /// that return an error if it is created empty
 struct DecodeIterator<T, E>(DecodeIteratorState, PhantomData<*const (T, E)>);
-
-impl<T, E> DecodeIterator<T, E> {
-    fn new(bytes: Bytes) -> Self {
-        DecodeIterator(DecodeIteratorState::UnChecked(bytes), PhantomData)
-    }
-    fn failed() -> Self {
-        DecodeIterator(DecodeIteratorState::Failed, PhantomData)
-    }
-}
 
 impl<T, E> Iterator for DecodeIterator<T, E>
 where
@@ -609,6 +596,7 @@ fn offset_payload_len(frame: &Bytes) -> Option<Result<(usize, usize), StreamingE
     if data.is_empty() {
         return None;
     }
+
     if data.len() < 2 {
         return Some(Err(StreamingError::Decoding));
     }
