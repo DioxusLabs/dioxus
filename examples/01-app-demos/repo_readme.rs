@@ -8,12 +8,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    let out = dioxus_ssr::render_element(rsx! {
-        div { "hello world!"}
-    });
-
-    println!("{}", out);
-    // dioxus::launch(app);
+    dioxus::launch(app);
 }
 
 fn app() -> Element {
