@@ -495,11 +495,11 @@ fn byte_stream_to_client_stream<E, T, S, E1>(
     stream: S,
 ) -> Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>
 where
-    S: Stream<Item = Result<Bytes, E1>> + 'static,
+    S: Stream<Item = Result<Bytes, E1>> + 'static + Send,
     E: Encoding,
     T: DeserializeOwned + 'static,
 {
-    Box::pin(SendWrapper::new(stream.flat_map(|bytes| match bytes {
+    Box::pin(stream.flat_map(|bytes| match bytes {
         Ok(bytes) => iter_stream(DecodeIterator::<T, E>(
             DecodeIteratorState::UnChecked(bytes),
             PhantomData,
@@ -508,7 +508,7 @@ where
             DecodeIteratorState::Failed,
             PhantomData,
         )),
-    })))
+    }))
 }
 
 enum DecodeIteratorState {
@@ -520,7 +520,7 @@ enum DecodeIteratorState {
 
 /// An iterator of T decoded from bytes
 /// that return an error if it is created empty
-struct DecodeIterator<T, E>(DecodeIteratorState, PhantomData<*const (T, E)>);
+struct DecodeIterator<T, E>(DecodeIteratorState, PhantomData<fn() -> *const (T, E)>);
 
 impl<T, E> Iterator for DecodeIterator<T, E>
 where
