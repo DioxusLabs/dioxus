@@ -442,6 +442,14 @@ impl WebviewInstance {
             None
         };
 
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            if let Some(additional_windows_args) = &cfg.additional_windows_args {
+                webview = webview.with_additional_browser_args(additional_windows_args);
+            }
+        }
+
         #[cfg(any(
             target_os = "windows",
             target_os = "macos",

@@ -99,8 +99,7 @@ pub type ChunkedTextStream = Streaming<String, CborEncoding>;
 ///
 /// Also note that not all browsers support streaming bodies to servers.
 pub struct Streaming<T = String, E = ()> {
-    output_stream: Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
-    input_stream: Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
+    stream: Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
     encoding: PhantomData<E>,
 }
 
@@ -124,9 +123,8 @@ impl<T: 'static + Send, E> Streaming<T, E> {
     pub fn new(value: impl Stream<Item = T> + Send + 'static) -> Self {
         // Box and pin the incoming stream and store as a trait object
         Self {
-            input_stream: Box::pin(value.map(|item| Ok(item)))
+            stream: Box::pin(value.map(|item| Ok(item)))
                 as Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>,
-            output_stream: Box::pin(futures::stream::empty()) as _,
             encoding: PhantomData,
         }
     }
@@ -149,12 +147,12 @@ impl<T: 'static + Send, E> Streaming<T, E> {
 
     /// Returns the next item in the stream, or `None` if the stream has ended.
     pub async fn next(&mut self) -> Option<Result<T, StreamingError>> {
-        self.output_stream.as_mut().next().await
+        self.stream.as_mut().next().await
     }
 
     /// Consumes the wrapper, returning the inner stream.
     pub fn into_inner(self) -> impl Stream<Item = Result<T, StreamingError>> + Send {
-        self.input_stream
+        self.stream
     }
 
     /// Creates a streaming payload from an existing stream of bytes.
@@ -162,8 +160,7 @@ impl<T: 'static + Send, E> Streaming<T, E> {
     /// This uses the internal framing mechanism to decode the stream into items of type `T`.
     fn from_bytes(stream: impl Stream<Item = Result<T, StreamingError>> + Send + 'static) -> Self {
         Self {
-            input_stream: Box::pin(stream),
-            output_stream: Box::pin(futures::stream::empty()) as _,
+            stream: Box::pin(stream),
             encoding: PhantomData,
         }
     }
@@ -185,8 +182,7 @@ where
 {
     fn from(value: S) -> Self {
         Self {
-            input_stream: Box::pin(value.map(|data| data.map_err(|_| StreamingError::Failed))),
-            output_stream: Box::pin(futures::stream::empty()) as _,
+            stream: Box::pin(value.map(|data| data.map_err(|_| StreamingError::Failed))),
             encoding: PhantomData,
         }
     }
@@ -208,7 +204,7 @@ impl IntoResponse for Streaming<String> {
     fn into_response(self) -> axum_core::response::Response {
         axum::response::Response::builder()
             .header("Content-Type", "text/plain; charset=utf-8")
-            .body(axum::body::Body::from_stream(self.input_stream))
+            .body(axum::body::Body::from_stream(self.stream))
             .unwrap()
     }
 }
@@ -217,14 +213,14 @@ impl IntoResponse for Streaming<Bytes> {
     fn into_response(self) -> axum_core::response::Response {
         axum::response::Response::builder()
             .header("Content-Type", "application/octet-stream")
-            .body(axum::body::Body::from_stream(self.input_stream))
+            .body(axum::body::Body::from_stream(self.stream))
             .unwrap()
     }
 }
 
 impl<T: DeserializeOwned + Serialize + 'static, E: Encoding> IntoResponse for Streaming<T, E> {
     fn into_response(self) -> axum_core::response::Response {
-        let res = self.input_stream.map(|r| match r {
+        let res = self.stream.map(|r| match r {
             Ok(res) => match encode_stream_frame::<T, E>(res) {
                 Some(bytes) => Ok(bytes),
                 None => Err(StreamingError::Failed),
@@ -251,8 +247,7 @@ impl FromResponse for Streaming<String> {
             }));
 
             Ok(Self {
-                output_stream: client_stream,
-                input_stream: Box::pin(futures::stream::empty()),
+                stream: client_stream,
                 encoding: PhantomData,
             })
         })
@@ -270,8 +265,7 @@ impl FromResponse for Streaming<Bytes> {
             )));
 
             Ok(Self {
-                output_stream: client_stream,
-                input_stream: Box::pin(futures::stream::empty()),
+                stream: client_stream,
                 encoding: PhantomData,
             })
         }
@@ -286,8 +280,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding + 'static> Fr
 
         SendWrapper::new(async move {
             Ok(Self {
-                output_stream: client_stream,
-                input_stream: Box::pin(futures::stream::empty()),
+                stream: client_stream,
                 encoding: PhantomData,
             })
         })
@@ -316,8 +309,7 @@ impl<S> FromRequest<S> for Streaming<String> {
             let stream = body.into_data_stream();
 
             Ok(Self {
-                input_stream: Box::pin(futures::stream::empty()),
-                output_stream: Box::pin(stream.map(|byte| match byte {
+                stream: Box::pin(stream.map(|byte| match byte {
                     Ok(bytes) => match String::from_utf8(bytes.to_vec()) {
                         Ok(string) => Ok(string),
                         Err(_) => Err(StreamingError::Decoding),
@@ -352,8 +344,7 @@ impl<S> FromRequest<S> for ByteStream {
             let stream = body.into_data_stream();
 
             Ok(Self {
-                input_stream: Box::pin(futures::stream::empty()),
-                output_stream: Box::pin(stream.map(|byte| match byte {
+                stream: Box::pin(stream.map(|byte| match byte {
                     Ok(bytes) => Ok(bytes),
                     Err(_) => Err(StreamingError::Failed),
                 })),
@@ -384,12 +375,20 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding + 'static, S>
                 HttpError::bad_request("Invalid content type")?;
             }
 
-            let stream = body.into_data_stream();
+            // let stream = body.into_data_stream();
+            // input_stream: Box::pin(futures::stream::empty()),
+            // output_stream: client_stream,
+            // stream: Box::pin(stream.map(|byte| match byte {
+            //     Ok(bytes) => match decode_stream_frame::<T, E>(bytes) {
+            //         Some(res) => Ok(res),
+            //         None => Err(StreamingError::Decoding),
+            //     },
+            //     Err(_) => Err(StreamingError::Failed),
+            // })),
 
             let client_stream = byte_stream_to_client_stream::<E, _, _, _>(stream);
             Ok(Self {
-                input_stream: Box::pin(futures::stream::empty()),
-                output_stream: client_stream,
+                stream: client_stream,
                 encoding: PhantomData,
             })
         }
@@ -404,7 +403,7 @@ impl IntoRequest for Streaming<String> {
         async move {
             builder
                 .header("Content-Type", "text/plain; charset=utf-8")?
-                .send_body_stream(self.input_stream.map(|e| e.map(Bytes::from)))
+                .send_body_stream(self.stream.map(|e| e.map(Bytes::from)))
                 .await
         }
     }
@@ -418,7 +417,7 @@ impl IntoRequest for ByteStream {
         async move {
             builder
                 .header(ContentType::name(), "application/octet-stream")?
-                .send_body_stream(self.input_stream)
+                .send_body_stream(self.stream)
                 .await
         }
     }
@@ -434,7 +433,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> IntoRequest
         async move {
             builder
                 .header("Content-Type", E::stream_content_type())?
-                .send_body_stream(self.input_stream.map(|r| {
+                .send_body_stream(self.stream.map(|r| {
                     r.and_then(|item| {
                         encode_stream_frame::<T, E>(item).ok_or(StreamingError::Failed)
                     })

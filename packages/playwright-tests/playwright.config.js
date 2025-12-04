@@ -8,44 +8,24 @@ const path = require("path");
  */
 // require('dotenv').config();
 
-/**
- * @see https://playwright.dev/docs/test-configuration
- */
-module.exports = defineConfig({
-  testDir: ".",
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: "html",
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
-  use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    // baseURL: 'http://127.0.0.1:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "retain-on-failure",
-    // Increase the timeout for navigations to give dx time to build the project
-    navigationTimeout: 50 * 60 * 1000,
-  },
-
-  timeout: 50 * 60 * 1000,
-
-  /* Configure projects for major browsers */
-  projects: [
+let webServer = [];
+let grep = undefined;
+let grepInvert = undefined;
+if (process.platform === "win32") {
+  webServer = [
     {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
+      cwd: path.join(process.cwd(), "windows-headless"),
+      command:
+        "cargo run --package dioxus-cli --release -- run --force-sequential",
+      port: 8787,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
     },
-  ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: [
+  ];
+  grep = /windows/;
+} else {
+  webServer = [
     {
       command:
         "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
@@ -224,5 +204,49 @@ module.exports = defineConfig({
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+  ];
+
+  grepInvert = /windows/;
+}
+
+/**
+ * @see https://playwright.dev/docs/test-configuration
+ */
+module.exports = defineConfig({
+  testDir: ".",
+  /* Run tests in files in parallel */
+  fullyParallel: true,
+  /* Fail the build on CI if you accidentally left test.only in the source code. */
+  forbidOnly: !!process.env.CI,
+  /* Retry on CI only */
+  retries: process.env.CI ? 2 : 0,
+  /* Opt out of parallel tests on CI. */
+  workers: process.env.CI ? 1 : undefined,
+  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
+  reporter: "html",
+  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  use: {
+    /* Base URL to use in actions like `await page.goto('/')`. */
+    // baseURL: 'http://127.0.0.1:3000',
+
+    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
+    trace: "retain-on-failure",
+    // Increase the timeout for navigations to give dx time to build the project
+    navigationTimeout: 50 * 60 * 1000,
+  },
+
+  timeout: 50 * 60 * 1000,
+
+  /* Configure projects for major browsers */
+  projects: [
+    {
+      name: "chromium",
+      grep,
+      grepInvert,
+      use: { ...devices["Desktop Chrome"] },
+    },
   ],
+
+  /* Run your local dev server before starting the tests */
+  webServer,
 });
