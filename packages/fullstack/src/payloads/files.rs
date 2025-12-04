@@ -249,6 +249,24 @@ impl<S> FromRequest<S> for FileStream {
 impl FromResponse for FileStream {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
+            // Check status code first - don't try to stream error responses as files
+            if !res.status().is_success() {
+                let status_code = res.status().as_u16();
+                let canonical_reason = res
+                    .status()
+                    .canonical_reason()
+                    .unwrap_or("Unknown error")
+                    .to_string();
+                let bytes = res.bytes().await.unwrap_or_default();
+                let message = String::from_utf8(bytes.to_vec()).unwrap_or(canonical_reason);
+
+                return Err(ServerFnError::ServerError {
+                    message,
+                    code: status_code,
+                    details: None,
+                });
+            }
+
             // Extract filename from Content-Disposition header if present.
             let name = res
                 .headers()

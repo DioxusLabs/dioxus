@@ -185,6 +185,15 @@ impl<Lens> SelectorScope<Lens> {
     {
         self.write.write_unchecked()
     }
+
+    /// Borrow the writer
+    pub(crate) fn as_ref(&self) -> SelectorScope<&Lens> {
+        SelectorScope {
+            path: self.path,
+            store: self.store,
+            write: &self.write,
+        }
+    }
 }
 
 impl<Lens: Readable> Readable for SelectorScope<Lens> {
