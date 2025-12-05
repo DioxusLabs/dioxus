@@ -297,16 +297,6 @@ impl App {
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
 
-    /// Todo: maybe we should poll the virtualdom asking if it has any final actions to apply before closing the webview
-    ///
-    /// Technically you can handle this with the use_window_event hook
-    pub fn handle_close_msg(&mut self, id: WindowId) {
-        self.webviews.remove(&id);
-        if self.exit_on_last_window_close && self.webviews.is_empty() {
-            self.control_flow = ControlFlow::Exit
-        }
-    }
-
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
         let Ok(result) = serde_json::from_value::<QueryResult>(msg.params()) else {
             return;
