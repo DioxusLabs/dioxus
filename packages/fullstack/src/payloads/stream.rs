@@ -276,11 +276,9 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
     for Streaming<T, E>
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
-        let client_stream = byte_stream_to_client_stream::<E, _, _, _>(res.bytes_stream());
-
         SendWrapper::new(async move {
             Ok(Self {
-                stream: client_stream,
+                stream: byte_stream_to_client_stream::<E, _, _, _>(res.bytes_stream()),
                 encoding: PhantomData,
             })
         })

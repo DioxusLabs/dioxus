@@ -21,7 +21,6 @@ use dioxus::{
     fullstack::{JsonEncoding, Streaming, TextStream},
     prelude::*,
 };
-use std::time::Duration;
 
 fn main() {
     dioxus::launch(app)
@@ -87,7 +86,7 @@ async fn text_stream(start: Option<i32>) -> Result<TextStream> {
             }
 
             count += 1;
-            async_std::task::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
         }
     });
 
