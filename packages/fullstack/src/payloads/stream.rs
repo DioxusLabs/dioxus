@@ -8,7 +8,6 @@ use axum::extract::{FromRequest, Request};
 use axum_core::response::IntoResponse;
 use bytes::{Buf as _, Bytes};
 use dioxus_fullstack_core::{HttpError, RequestError};
-use futures::stream::iter as iter_stream;
 use futures::{Stream, StreamExt};
 #[cfg(feature = "server")]
 use futures_channel::mpsc::UnboundedSender;
@@ -497,58 +496,42 @@ where
     E: Encoding,
     T: DeserializeOwned + 'static,
 {
-    Box::pin(stream.flat_map(|bytes| match bytes {
-        Ok(bytes) => iter_stream(DecodeIterator::<T, E>(
-            DecodeIteratorState::UnChecked(bytes),
-            PhantomData,
-        )),
-        Err(_) => iter_stream(DecodeIterator::<T, E>(
-            DecodeIteratorState::Failed,
-            PhantomData,
-        )),
-    }))
-}
-
-enum DecodeIteratorState {
-    Empty,
-    Failed,
-    Checked(Bytes),
-    UnChecked(Bytes),
-}
-
-/// An iterator of T decoded from bytes
-/// that return an error if it is created empty
-struct DecodeIterator<T, E>(DecodeIteratorState, PhantomData<fn() -> *const (T, E)>);
-
-impl<T, E> Iterator for DecodeIterator<T, E>
-where
-    E: Encoding,
-    T: DeserializeOwned,
-{
-    type Item = Result<T, StreamingError>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match std::mem::replace(&mut self.0, DecodeIteratorState::Empty) {
-            DecodeIteratorState::Empty => None,
-            DecodeIteratorState::Failed => Some(Err(StreamingError::Failed)),
-            DecodeIteratorState::Checked(mut bytes) => {
-                let r = decode_stream_frame_multi::<T, E>(&mut bytes);
-                if r.is_some() {
-                    self.0 = DecodeIteratorState::Checked(bytes)
-                }
-                r
-            }
-            DecodeIteratorState::UnChecked(mut bytes) => {
-                let r = decode_stream_frame_multi::<T, E>(&mut bytes);
-                if r.is_some() {
-                    self.0 = DecodeIteratorState::Checked(bytes);
-                    r
-                } else {
-                    Some(Err(StreamingError::Decoding))
-                }
-            }
+    Box::pin(stream.flat_map(|bytes| {
+        enum DecodeIteratorState {
+            Empty,
+            Failed,
+            Checked(Bytes),
+            UnChecked(Bytes),
         }
-    }
+
+        let mut state = match bytes {
+            Ok(bytes) => DecodeIteratorState::UnChecked(bytes),
+            Err(_) => DecodeIteratorState::Failed,
+        };
+
+        futures::stream::iter(std::iter::from_fn(move || {
+            match std::mem::replace(&mut state, DecodeIteratorState::Empty) {
+                DecodeIteratorState::Empty => None,
+                DecodeIteratorState::Failed => Some(Err(StreamingError::Failed)),
+                DecodeIteratorState::Checked(mut bytes) => {
+                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
+                    if r.is_some() {
+                        state = DecodeIteratorState::Checked(bytes)
+                    }
+                    r
+                }
+                DecodeIteratorState::UnChecked(mut bytes) => {
+                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
+                    if r.is_some() {
+                        state = DecodeIteratorState::Checked(bytes);
+                        r
+                    } else {
+                        Some(Err(StreamingError::Decoding))
+                    }
+                }
+            }
+        }))
+    }))
 }
 
 /// Decode a websocket-framed streaming payload produced by [`encode_stream_frame`].
@@ -581,9 +564,7 @@ where
     };
 
     let r = E::decode(frame.slice(offset..offset + payload_len));
-
     frame.advance(offset + payload_len);
-
     r.map(|r| Ok(r))
 }
 
