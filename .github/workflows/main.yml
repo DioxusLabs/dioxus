@@ -252,6 +252,7 @@ jobs:
           key: "playwright-${{ matrix.platform.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-on-failure: "true"
+      - uses: cargo-bins/cargo-binstall@main
       - name: Wipe dx cache
         if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404-arm' || matrix.os == 'blacksmith-8vcpu-ubuntu-2404' }}
         run: |

@@ -1,5 +1,6 @@
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
-use const_serialize::SerializeConst;
+use const_serialize_07 as const_serialize;
+use const_serialize_08::SerializeConst;
 
 /// Options for a css asset
 #[derive(
@@ -11,9 +12,11 @@ use const_serialize::SerializeConst;
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 pub struct CssAssetOptions {
     minify: bool,
     preload: bool,
