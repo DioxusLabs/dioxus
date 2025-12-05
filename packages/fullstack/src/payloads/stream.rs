@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::extract::{FromRequest, Request};
 use axum_core::response::IntoResponse;
-use bytes::Bytes;
+use bytes::{Buf as _, Bytes};
 use dioxus_fullstack_core::{HttpError, RequestError};
 use futures::{Stream, StreamExt};
 #[cfg(feature = "server")]
@@ -276,18 +276,8 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding> FromResponse
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         SendWrapper::new(async move {
-            let client_stream = Box::pin(SendWrapper::new(res.bytes_stream().map(
-                |byte| match byte {
-                    Ok(bytes) => match decode_stream_frame::<T, E>(bytes) {
-                        Some(res) => Ok(res),
-                        None => Err(StreamingError::Decoding),
-                    },
-                    Err(_) => Err(StreamingError::Failed),
-                },
-            )));
-
             Ok(Self {
-                stream: client_stream,
+                stream: byte_stream_to_client_stream::<E, _, _, _>(res.bytes_stream()),
                 encoding: PhantomData,
             })
         })
@@ -385,13 +375,7 @@ impl<T: DeserializeOwned + Serialize + 'static + Send, E: Encoding, S> FromReque
             let stream = body.into_data_stream();
 
             Ok(Self {
-                stream: Box::pin(stream.map(|byte| match byte {
-                    Ok(bytes) => match decode_stream_frame::<T, E>(bytes) {
-                        Some(res) => Ok(res),
-                        None => Err(StreamingError::Decoding),
-                    },
-                    Err(_) => Err(StreamingError::Failed),
-                })),
+                stream: byte_stream_to_client_stream::<E, _, _, _>(stream),
                 encoding: PhantomData,
             })
         }
@@ -504,20 +488,96 @@ pub fn encode_stream_frame<T: Serialize, E: Encoding>(data: T) -> Option<Bytes> 
     Some(Bytes::from(bytes).slice(offset..))
 }
 
+fn byte_stream_to_client_stream<E, T, S, E1>(
+    stream: S,
+) -> Pin<Box<dyn Stream<Item = Result<T, StreamingError>> + Send>>
+where
+    S: Stream<Item = Result<Bytes, E1>> + 'static + Send,
+    E: Encoding,
+    T: DeserializeOwned + 'static,
+{
+    Box::pin(stream.flat_map(|bytes| {
+        enum DecodeIteratorState {
+            Empty,
+            Failed,
+            Checked(Bytes),
+            UnChecked(Bytes),
+        }
+
+        let mut state = match bytes {
+            Ok(bytes) => DecodeIteratorState::UnChecked(bytes),
+            Err(_) => DecodeIteratorState::Failed,
+        };
+
+        futures::stream::iter(std::iter::from_fn(move || {
+            match std::mem::replace(&mut state, DecodeIteratorState::Empty) {
+                DecodeIteratorState::Empty => None,
+                DecodeIteratorState::Failed => Some(Err(StreamingError::Failed)),
+                DecodeIteratorState::Checked(mut bytes) => {
+                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
+                    if r.is_some() {
+                        state = DecodeIteratorState::Checked(bytes)
+                    }
+                    r
+                }
+                DecodeIteratorState::UnChecked(mut bytes) => {
+                    let r = decode_stream_frame_multi::<T, E>(&mut bytes);
+                    if r.is_some() {
+                        state = DecodeIteratorState::Checked(bytes);
+                        r
+                    } else {
+                        Some(Err(StreamingError::Decoding))
+                    }
+                }
+            }
+        }))
+    }))
+}
+
 /// Decode a websocket-framed streaming payload produced by [`encode_stream_frame`].
 ///
 /// This function returns `None` if the frame is invalid or cannot be decoded.
 ///
 /// It cannot handle masked frames, as those are not produced by our encoding function.
-pub fn decode_stream_frame<T, E>(frame: Bytes) -> Option<T>
+pub fn decode_stream_frame<T, E>(mut frame: Bytes) -> Option<T>
 where
     E: Encoding,
     T: DeserializeOwned,
 {
+    decode_stream_frame_multi::<T, E>(&mut frame).and_then(|r| r.ok())
+}
+
+/// Decode one value and advance the bytes pointer
+///
+/// If the frame is empty return None.
+///
+/// Otherwise, if the initial opcode is not the one expected for binary stream
+/// or the frame is not large enough return error StreamingError::Decoding
+fn decode_stream_frame_multi<T, E>(frame: &mut Bytes) -> Option<Result<T, StreamingError>>
+where
+    E: Encoding,
+    T: DeserializeOwned,
+{
+    let (offset, payload_len) = match offset_payload_len(frame)? {
+        Ok(r) => r,
+        Err(e) => return Some(Err(e)),
+    };
+
+    let r = E::decode(frame.slice(offset..offset + payload_len));
+    frame.advance(offset + payload_len);
+    r.map(|r| Ok(r))
+}
+
+/// Compute (offset,len) for decoding data
+fn offset_payload_len(frame: &Bytes) -> Option<Result<(usize, usize), StreamingError>> {
     let data = frame.as_ref();
 
-    if data.len() < 2 {
+    if data.is_empty() {
         return None;
+    }
+
+    if data.len() < 2 {
+        return Some(Err(StreamingError::Decoding));
     }
 
     let first = data[0];
@@ -528,12 +588,12 @@ where
     let opcode = first & 0x0F;
     let rsv = first & 0x70;
     if !fin || opcode != 0x02 || rsv != 0 {
-        return None;
+        return Some(Err(StreamingError::Decoding));
     }
 
     // Mask bit must be zero for our framing
     if second & 0x80 != 0 {
-        return None;
+        return Some(Err(StreamingError::Decoding));
     }
 
     let mut offset = 2usize;
@@ -541,14 +601,14 @@ where
 
     if payload_len == 126 {
         if data.len() < offset + 2 {
-            return None;
+            return Some(Err(StreamingError::Decoding));
         }
 
         payload_len = u16::from_be_bytes([data[offset], data[offset + 1]]) as usize;
         offset += 2;
     } else if payload_len == 127 {
         if data.len() < offset + 8 {
-            return None;
+            return Some(Err(StreamingError::Decoding));
         }
 
         let mut len_bytes = [0u8; 8];
@@ -556,7 +616,7 @@ where
         let len_u64 = u64::from_be_bytes(len_bytes);
 
         if len_u64 > usize::MAX as u64 {
-            return None;
+            return Some(Err(StreamingError::Decoding));
         }
 
         payload_len = len_u64 as usize;
@@ -564,8 +624,7 @@ where
     }
 
     if data.len() < offset + payload_len {
-        return None;
+        return Some(Err(StreamingError::Decoding));
     }
-
-    E::decode(frame.slice(offset..offset + payload_len))
+    Some(Ok((offset, payload_len)))
 }
