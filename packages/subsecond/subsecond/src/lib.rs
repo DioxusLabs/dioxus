@@ -305,7 +305,8 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 
     Some(unsafe { &*ptr })
 }
-unsafe fn commit_patch(table: JumpTable) {
+// TODO change it to not pub after finishing experimenting
+pub unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
         std::sync::atomic::Ordering::Relaxed,

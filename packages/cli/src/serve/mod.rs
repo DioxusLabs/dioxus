@@ -179,12 +179,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                 if let Err(err) =
                                     builder.hotpatch(&bundle, id, cache, &mut devserver).await
                                 {
-                                    tracing::error!("Failed to hot-patch app: {err}");
+                                    tracing::error!("Failed to hot-patch app: {err:?}");
 
                                     if let Some(_patching) =
                                         err.downcast_ref::<crate::build::PatchError>()
                                     {
-                                        tracing::info!("Starting full rebuild: {err}");
+                                        tracing::info!("Starting full rebuild: {err:?}");
                                         builder.full_rebuild().await;
                                         devserver.send_reload_start().await;
                                         devserver.start_build().await;
