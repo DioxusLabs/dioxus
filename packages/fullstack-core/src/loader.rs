@@ -238,7 +238,7 @@ impl<T> Readable for Loader<T> {
     where
         T: 'static,
     {
-        Ok(self.peek_unchecked())
+        Ok(self.read_value.peek_unchecked())
     }
 
     fn subscribers(&self) -> Subscribers
@@ -263,7 +263,8 @@ where
     T: Clone + IntoDynNode + PartialEq + 'static,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
-        self().into_dyn_node()
+        let t: T = self();
+        t.into_dyn_node()
     }
 }
 

@@ -1,7 +1,6 @@
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
-use crate::WindowCloseBehaviour;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
@@ -16,7 +15,7 @@ use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
 use futures_util::{pin_mut, FutureExt};
-use std::sync::atomic::AtomicBool;
+use std::sync::{atomic::AtomicBool, Arc};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -200,7 +199,7 @@ pub(crate) struct WebviewInstance {
 impl WebviewInstance {
     pub(crate) fn new(
         mut cfg: Config,
-        dom: VirtualDom,
+        mut dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
@@ -221,7 +220,10 @@ impl WebviewInstance {
             window = window.with_window_icon(Some(crate::default_icon()));
         }
 
-        let window = window.build(&shared.target).unwrap();
+        let window = Arc::new(window.build(&shared.target).unwrap());
+        if let Some(on_build) = cfg.on_window.as_mut() {
+            on_build(window.clone(), &mut dom);
+        }
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
@@ -433,6 +435,14 @@ impl WebviewInstance {
             None
         };
 
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            if let Some(additional_windows_args) = &cfg.additional_windows_args {
+                webview = webview.with_additional_browser_args(additional_windows_args);
+            }
+        }
+
         #[cfg(any(
             target_os = "windows",
             target_os = "macos",
@@ -465,7 +475,7 @@ impl WebviewInstance {
             shared.clone(),
             asset_handlers,
             file_hover,
-            WindowCloseBehaviour::WindowCloses,
+            cfg.window_close_behavior,
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
@@ -477,6 +487,9 @@ impl WebviewInstance {
             provide_context(provider);
             provide_context(history_provider);
         });
+
+        // Request an initial redraw
+        desktop_context.window.request_redraw();
 
         WebviewInstance {
             dom,

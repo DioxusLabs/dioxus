@@ -188,10 +188,10 @@ impl VNode {
             Some((idx, Placeholder(_) | Text(_))) => {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
-            // The node is a fragment, so we need to find the first element in the fragment
+            // The node is a fragment, so we need to find the last element in the fragment
             Some((_, Fragment(children))) => {
-                let child = children.first().unwrap();
-                child.find_first_element(dom)
+                let child = children.last().unwrap();
+                child.find_last_element(dom)
             }
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {

@@ -210,6 +210,18 @@ impl Bundle {
             Self::windows_icon_override(krate, &mut bundle_settings, windows_icon);
         }
 
+        // resolve the icon relative to the crate, not the current working directory
+        if let Some(icons) = bundle_settings.icon.as_mut() {
+            for icon in icons {
+                let icon_path = build
+                    .crate_dir()
+                    .join(&icon)
+                    .canonicalize()
+                    .with_context(|| format!("Failed to canonicalize path to icon {icon:?}"))?;
+                *icon = icon_path.to_string_lossy().to_string();
+            }
+        }
+
         if bundle_settings.resources_map.is_none() {
             bundle_settings.resources_map = Some(HashMap::new());
         }
