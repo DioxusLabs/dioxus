@@ -340,7 +340,7 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
 
     items.push({
       kind: item.kind,
-      type: item.type,
+      type_: item.type,
       data
     });
   }

@@ -400,6 +400,7 @@ pub(crate) struct BuildRequest {
     pub(crate) apple_team_id: Option<String>,
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
+    pub(crate) windows_subsystem: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -841,15 +842,6 @@ impl BuildRequest {
             None => bundle.profile_name(args.release),
         };
 
-        // Warn if the user is trying to build with strip and using manganis
-        Self::warn_manganis_strip(
-            &workspace.krates,
-            &workspace.cargo_toml,
-            main_package,
-            &profile,
-            args.release,
-        );
-
         // Determine if we should codesign
         let should_codesign =
             args.codesign || device.is_some() || args.apple_entitlements.is_some();
@@ -907,27 +899,6 @@ impl BuildRequest {
                     workspace.android_tools()?.sysroot().display()
                 ),
             ]);
-        }
-
-        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
-        if matches!(bundle, BundleFormat::Windows)
-            && !rustflags
-                .flags
-                .iter()
-                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
-        {
-            let subsystem = args
-                .windows_subsystem
-                .clone()
-                .unwrap_or_else(|| "WINDOWS".to_string());
-            rustflags
-                .flags
-                .push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
-            // We also need to set the entry point to mainCRTStartup to avoid windows looking
-            // for a WinMain function
-            rustflags
-                .flags
-                .push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
@@ -1040,6 +1011,7 @@ impl BuildRequest {
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
+            windows_subsystem: args.windows_subsystem.clone(),
         })
     }
 
@@ -1101,6 +1073,7 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                self.strip_binary(&artifacts).await?;
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
@@ -2673,6 +2646,25 @@ impl BuildRequest {
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
+        if matches!(self.bundle, BundleFormat::Windows)
+            && !self
+                .rustflags
+                .flags
+                .iter()
+                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+        {
+            let subsystem = self
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
+
+            cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
+        }
+
         // The bundle splitter needs relocation data to create a call-graph.
         // This will automatically be erased by wasm-opt during the optimization step.
         if self.bundle == BundleFormat::Web && self.wasm_split {
@@ -2809,7 +2801,7 @@ impl BuildRequest {
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = self.base_path() {
+            if let Some(base_path) = self.trimmed_base_path() {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
             env_vars.push((
@@ -3627,32 +3619,19 @@ impl BuildRequest {
         })
     }
 
-    /// Return the platforms that are enabled for the package
-    ///
-    /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn warn_manganis_strip(
-        krates: &krates::Krates,
-        cargo_toml: &cargo_toml::Manifest,
-        main_package: &krates::cm::Package,
-        profile: &str,
-        release: bool,
-    ) {
-        let Some(id) = krates.nid_for_kid(&main_package.id.clone().into()) else {
-            return;
-        };
-        let dependencies = krates.direct_dependencies(id);
-        if !dependencies.iter().any(|dep| dep.krate.name == "manganis") {
-            return;
-        }
-
-        let (profile_name, profile) = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => (profile, Some(custom_profile)),
-            (_, true) => ("release", cargo_toml.profile.release.as_ref()),
-            (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
+    /// Checks the strip setting for the package, resolving profiles recursively
+    pub(crate) fn get_strip_setting(&self) -> StripSetting {
+        let cargo_toml = &self.workspace.cargo_toml;
+        let profile = &self.profile;
+        let release = self.release;
+        let profile = match (cargo_toml.profile.custom.get(profile), release) {
+            (Some(custom_profile), _) => Some(custom_profile),
+            (_, true) => cargo_toml.profile.release.as_ref(),
+            (_, false) => cargo_toml.profile.dev.as_ref(),
         };
 
         let Some(profile) = profile else {
-            return;
+            return StripSetting::None;
         };
 
         // Get the strip setting from the profile or the profile it inherits from
@@ -3673,15 +3652,11 @@ impl BuildRequest {
         }
 
         let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, we don't need to warn
-            return;
+            // If the profile doesn't have a strip option, return None
+            return StripSetting::None;
         };
 
-        if matches!(strip, cargo_toml::StripSetting::Symbols) {
-            tracing::warn!(
-                "The `strip` option is enabled in the `{profile_name}` profile. This may cause manganis assets to be stripped from the final binary.",
-            );
-        }
+        strip
     }
 
     pub(crate) fn renderer_enabled_by_dioxus_dependency(
@@ -3988,6 +3963,31 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Strip the final binary after extracting all assets with rustc-objcopy
+    async fn strip_binary(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        // Never strip the binary if we are going to bundle split it
+        if self.wasm_split {
+            return Ok(());
+        }
+        let exe = &artifacts.exe;
+        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
+        let strip_arg = match self.get_strip_setting() {
+            StripSetting::Debuginfo => Some("--strip-debug"),
+            StripSetting::Symbols => Some("--strip-all"),
+            StripSetting::None => None,
+        };
+        if let Some(strip_arg) = strip_arg {
+            let rustc_objcopy = self.workspace.rustc_objcopy();
+            let mut command = Command::new(rustc_objcopy);
+            command.arg(strip_arg).arg(exe).arg(exe);
+            let output = command.output().await?;
+            if !output.status.success() {
+                return Err(anyhow::anyhow!("Failed to strip binary"));
+            }
+        }
+        Ok(())
+    }
+
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
@@ -4036,19 +4036,16 @@ impl BuildRequest {
 
         // Prepare our configuration
         //
-        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
-        // wasm-opt and wasm-split need them to do better optimizations.
+        // we turn on debug symbols in dev mode
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
             || !self.release
-            || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
-        let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
+        let keep_names = self.wasm_split || ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -4085,10 +4082,6 @@ impl BuildRequest {
         // not blocking this thread. Dunno if that's true
         if should_bundle_split {
             ctx.status_splitting_bundle();
-
-            if !will_wasm_opt {
-                bail!("Bundle splitting should automatically enable wasm-opt, but it was not enabled.");
-            }
 
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
@@ -4377,10 +4370,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                     );
                 }
             }
-            BundleFormat::Ios => {
+            BundleFormat::MacOS | BundleFormat::Ios => {
                 if self.should_codesign {
                     ctx.status_codesigning();
-                    self.codesign_ios().await?;
+                    self.codesign_apple().await?;
                 }
             }
 
@@ -4905,7 +4898,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.base_path() {
+            if let Some(base_path) = &self.trimmed_base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -5051,14 +5044,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .filter(|_| matches!(self.bundle, BundleFormat::Web | BundleFormat::Server))
     }
 
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    /// Get the normalized base path for the application with `/` trimmed from both ends.
+    pub(crate) fn trimmed_base_path(&self) -> Option<&str> {
+        self.base_path()
+            .map(|p| p.trim_matches('/'))
+            .filter(|p| !p.is_empty())
+    }
+
+    /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
-        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
+        self.trimmed_base_path().unwrap_or(".")
     }
 
     /// Get the path to the package manifest directory
@@ -5218,37 +5213,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// Note how every platform gets its own profile, and each platform has a dev and release profile.
     fn profile_args(&self) -> Vec<String> {
+        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
+        // after assets are built
+        let profile = self.profile.as_str();
+        let mut args = Vec::new();
+        args.push(format!(r#"profile.{profile}.strip=false"#));
+
         // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
-        if self
+        if !self
             .workspace
             .cargo_toml
             .profile
             .custom
             .contains_key(&self.profile)
         {
-            return vec![];
-        }
+            // Otherwise, we need to add the profile arguments to make it adhoc
+            let inherits = if self.release { "release" } else { "dev" };
 
-        // Otherwise, we need to add the profile arguments to make it adhoc
-        let mut args = Vec::new();
+            // Add the profile definition first.
+            args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
 
-        let profile = self.profile.as_str();
-        let inherits = if self.release { "release" } else { "dev" };
+            // The default dioxus experience is to lightly optimize the web build, both in debug and release
+            // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+            // that with wasm-opt tooling instead.
+            if matches!(self.bundle, BundleFormat::Web) {
+                if self.release {
+                    args.push(format!(r#"profile.{profile}.opt-level="s""#));
+                }
 
-        // Add the profile definition first.
-        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
-
-        // The default dioxus experience is to lightly optimize the web build, both in debug and release
-        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
-        // that with wasm-opt tooling instead.
-        if matches!(self.bundle, BundleFormat::Web) {
-            if self.release {
-                args.push(format!(r#"profile.{profile}.opt-level="s""#));
-            }
-
-            if self.wasm_split {
-                args.push(format!(r#"profile.{profile}.lto=true"#));
-                args.push(format!(r#"profile.{profile}.debug=true"#));
+                if self.wasm_split {
+                    args.push(format!(r#"profile.{profile}.lto=true"#));
+                    args.push(format!(r#"profile.{profile}.debug=true"#));
+                }
             }
         }
 
@@ -5258,23 +5254,22 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_ios(&self) -> Result<()> {
+    pub async fn codesign_apple(&self) -> Result<()> {
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name =
-                Some(Self::auto_provision_signing_name().await.context(
-                    "Failed to automatically provision signing name for iOS codesigning.",
-                )?);
+            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
+                "Failed to automatically provision signing name for Apple codesigning.",
+            )?);
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         if entitlements_file.is_none() {
             let entitlements_xml = Self::auto_provision_entitlements()
                 .await
-                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -5289,7 +5284,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         )?;
 
         tracing::debug!(
-            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            "Codesigning Apple app with entitlements: {} and dev name: {}",
             entitlements_file.display(),
             app_dev_name
         );
