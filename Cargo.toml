@@ -138,7 +138,8 @@ members = [
     "packages/playwright-tests/cli-optimization",
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
-    "packages/playwright-tests/fullstack-error-codes", "packages/playwright-tests/windows-headless",
+    "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/windows-headless",
 ]
 
 [workspace.package]
