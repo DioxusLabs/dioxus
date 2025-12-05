@@ -963,7 +963,7 @@ impl BuildRequest {
         let session_cache_dir = args
             .session_cache_dir
             .clone()
-            .unwrap_or_else(|| TempDir::new().unwrap().into_path());
+            .unwrap_or_else(|| TempDir::new().unwrap().keep());
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
