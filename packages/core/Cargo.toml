@@ -26,6 +26,7 @@ futures-util = { workspace = true, default-features = false, features = ["alloc"
 serde = { workspace = true, optional = true, features = ["derive"] }
 subsecond = { workspace = true }
 anyhow = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
