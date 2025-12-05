@@ -826,7 +826,6 @@ pub enum WebsocketError {
     Uninitialized,
 
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
     #[error("websocket upgrade failed")]
     Handshake(#[from] native::HandshakeError),
 
@@ -834,7 +833,6 @@ pub enum WebsocketError {
     Reqwest(#[from] reqwest::Error),
 
     #[cfg(not(target_arch = "wasm32"))]
-    #[cfg_attr(docsrs, doc(cfg(not(target_arch = "wasm32"))))]
     #[error("tungstenite error")]
     Tungstenite(#[from] tungstenite::Error),
 
@@ -848,7 +846,6 @@ pub enum WebsocketError {
 
     /// Error during serialization/deserialization.
     #[error("serde_json error")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
     Json(#[from] serde_json::Error),
 
     /// Error during serialization/deserialization.
