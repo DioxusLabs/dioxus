@@ -54,8 +54,10 @@ impl SelectorNode {
     /// This is used to mark nodes dirty recursively when a Store is written to.
     fn paths_under(&self, current_path: &[PathKey], paths: &mut Vec<Box<[PathKey]>>) {
         paths.push(current_path.into());
-        for child in self.root.values() {
-            child.paths_under(current_path, paths);
+        for (key, child) in self.root.iter() {
+            let mut current_path = current_path.to_vec();
+            current_path.push(*key);
+            child.paths_under(&current_path, paths);
         }
     }
 
