@@ -5,10 +5,10 @@ version = { workspace = true }
 authors = ["Jonathan Kelley"]
 description = "core for manganis"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/manganis/manganis-core"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "assets"]
-
+readme = "../manganis/README.md"
 
 # be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
 # prevent the main code from compiling!
