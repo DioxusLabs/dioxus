@@ -193,6 +193,6 @@ impl Deref for UseFuture {
     type Target = dyn Fn() -> UseFutureState;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+        dioxus_signals::readable_deref_impl(self)
     }
 }
