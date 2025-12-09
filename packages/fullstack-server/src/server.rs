@@ -421,7 +421,7 @@ async fn robots_txt_handler() -> Response {
         .status(StatusCode::OK)
         .header(CONTENT_TYPE, "text/plain; charset=utf-8")
         .body(Body::from(default_robots))
-        .unwrap()
+        .expect("Failed to build default robots.txt response")
 }
 
 /// Get the path to the public assets directory to serve static files from
