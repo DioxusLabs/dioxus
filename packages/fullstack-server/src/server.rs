@@ -161,6 +161,7 @@ impl DioxusRouterExt for Router<FullstackState> {
         app: impl ComponentFunction<(), M> + Send + Sync,
     ) -> Router<()> {
         self.register_server_functions()
+            .route("/robots.txt", get(robots_txt_handler))
             .fallback(get(FullstackState::render_handler))
             .with_state(FullstackState::new(cfg, app))
     }
@@ -170,7 +171,10 @@ impl DioxusRouterExt for Router<FullstackState> {
         cfg: ServeConfig,
         app: impl ComponentFunction<(), M> + Send + Sync,
     ) -> Router<()> {
+        // Register robots.txt handler before static assets so it takes priority
+        // This ensures robots.txt is always served as plain text, even if a file exists in public/
         self.register_server_functions()
+            .route("/robots.txt", get(robots_txt_handler))
             .serve_static_assets()
             .fallback(get(FullstackState::render_handler))
             .with_state(FullstackState::new(cfg, app))
@@ -385,6 +389,39 @@ impl FullstackState {
                 .unwrap(),
         }
     }
+}
+
+/// Handler for /robots.txt requests.
+/// This ensures robots.txt is served as plain text, not HTML.
+/// If a robots.txt file exists in the public directory, it serves that.
+/// Otherwise, it returns a default robots.txt allowing all crawlers.
+async fn robots_txt_handler() -> Response {
+    // Check if robots.txt exists in public directory
+    if let Some(public_path) = public_path() {
+        let robots_txt_path = public_path.join("robots.txt");
+        if robots_txt_path.exists() {
+            match tokio::fs::read_to_string(&robots_txt_path).await {
+                Ok(content) => {
+                    return Response::builder()
+                        .status(StatusCode::OK)
+                        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+                        .body(Body::from(content))
+                        .unwrap();
+                }
+                Err(_) => {
+                    // If we can't read the file, fall through to default
+                }
+            }
+        }
+    }
+
+    // Default robots.txt allowing all crawlers
+    let default_robots = "User-agent: *\nAllow: /\n";
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "text/plain; charset=utf-8")
+        .body(Body::from(default_robots))
+        .unwrap()
 }
 
 /// Get the path to the public assets directory to serve static files from
