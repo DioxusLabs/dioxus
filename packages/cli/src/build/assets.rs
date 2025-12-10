@@ -329,7 +329,73 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     tracing::warn!("Walrus found {} data segments total", walrus_segment_count);
     tracing::warn!("Segment mismatch check: wasmparser={}, walrus={}", data_segment_file_offsets.len(), walrus_segment_count);
 
+    // With atomics/shared memory, the symbols point to runtime memory addresses,
+    // but all data is in passive segments. We need to search the passive segments
+    // directly for the BundledAsset data.
+    // Instead of using symbol addresses, we'll scan the data segments for BundledAsset structures.
+    tracing::warn!("With atomics enabled, attempting direct scan of data segments for BundledAsset structures");
+    
     let mut offsets = Vec::new();
+    let mut found_symbols = std::collections::HashMap::new();
+    
+    // First, collect all MANGANIS symbols and their expected memory addresses
+    for export in module.exports.iter() {
+        if !looks_like_manganis_symbol(&export.name) {
+            continue;
+        }
+        
+        let walrus::ExportItem::Global(global) = export.item else {
+            continue;
+        };
+        
+        let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
+            continue;
+        };
+        
+        if let Some(virtual_address) = eval_walrus_global_expr(&module, &pointer) {
+            found_symbols.insert(export.name.clone(), virtual_address);
+        }
+    }
+    
+    tracing::warn!("Found {} MANGANIS symbols to search for", found_symbols.len());
+    
+    // Now scan all data segments looking for BundledAsset structures
+    for seg in &segments {
+        if !seg.is_active {
+            // Scan this passive segment for BundledAsset data
+            let seg_file_start = seg.file_offset as usize;
+            let seg_file_end = (seg.file_offset + (seg.memory_end - seg.memory_start)) as usize;
+            
+            if seg_file_start >= file_contents.len() || seg_file_end > file_contents.len() {
+                tracing::warn!("Segment file range out of bounds, skipping");
+                continue;
+            }
+            
+            let seg_data = &file_contents[seg_file_start..seg_file_end];
+            let asset_size = BundledAsset::MEMORY_LAYOUT.size();
+            
+            // Scan for potential BundledAsset structures
+            for offset in (0..seg_data.len().saturating_sub(asset_size)).step_by(4) {
+                let potential_asset_data = &seg_data[offset..offset + asset_size];
+                let buffer = const_serialize::ConstReadBuffer::new(potential_asset_data);
+                
+                if let Some((_, _bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
+                    let file_offset = seg_file_start + offset;
+                    offsets.push(file_offset as u64);
+                    tracing::warn!("Found BundledAsset at file offset {:#x} in passive segment", file_offset);
+                    break; // Found one in this segment, move to next segment
+                }
+            }
+        }
+    }
+    
+    if !offsets.is_empty() {
+        tracing::warn!("Successfully found {} BundledAsset structures via direct scan", offsets.len());
+        return Ok(offsets);
+    }
+    
+    // If direct scan failed, fall back to the old method
+    tracing::warn!("Direct scan found no assets, falling back to symbol-based search");
 
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
