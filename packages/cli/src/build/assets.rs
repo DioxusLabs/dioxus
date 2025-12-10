@@ -213,6 +213,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
 
+    // Parse the wasm file to find the globals
+    let module = walrus::Module::from_buffer(file_contents).unwrap();
+
     // Translate the section_relative_address to the file offset
     // WASM files have a section address of 0 in object, reparse the data section with wasmparser
     // to get the correct address and section start
@@ -223,40 +226,19 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         0,
     ))
     .context("Failed to create WASM data section reader")?;
-    let main_memory = reader
-        .into_iter()
-        .next()
-        .context("Failed find main memory from WASM data section")?
-        .context("Failed to read main memory from WASM data section")?;
-    // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
-    let data_start_offset = (main_memory.data.as_ptr() as u64)
-        .checked_sub(file_contents.as_ptr() as u64)
-        .expect("Data section start offset should be within the file contents");
 
-    // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
+    // Collect all the data segments from wasmparser to get their file offsets
+    // We assume the order of data segments in walrus matches the order in wasmparser
+    let mut data_segment_file_offsets = Vec::new();
+    for data in reader.into_iter() {
+        let data = data.context("Failed to read data segment from WASM data section")?;
+        let data_start_offset = (data.data.as_ptr() as u64)
+            .checked_sub(file_contents.as_ptr() as u64)
+            .expect("Data section start offset should be within the file contents");
+        data_segment_file_offsets.push(data_start_offset);
+    }
+
     let mut offsets = Vec::new();
-
-    // Find the main memory offset
-    let main_memory = module
-        .data
-        .iter()
-        .next()
-        .context("Failed to find main memory in WASM module")?;
-
-    let walrus::DataKind::Active {
-        offset: main_memory_offset,
-        ..
-    } = main_memory.kind
-    else {
-        tracing::error!("Failed to find main memory offset in WASM module");
-        return Ok(Vec::new());
-    };
-
-    // In the hot patch build, the main memory offset is a global from the main module and each global
-    // is it's own global. Use an offset of 0 instead if we can't evaluate the global
-    let main_memory_offset =
-        eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
 
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
@@ -279,13 +261,57 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        let section_relative_address: u64 = ((virtual_address as i128)
-            - main_memory_offset as i128)
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
-        let file_offset = data_start_offset + section_relative_address;
+        // Find the data segment that contains this virtual address
+        let mut found_segment = false;
+        for (i, data) in module.data.iter().enumerate() {
+            let walrus::DataKind::Active {
+                offset: memory_offset,
+                ..
+            } = &data.kind
+            else {
+                continue;
+            };
 
-        offsets.push(file_offset);
+            let memory_offset = eval_walrus_global_expr(&module, memory_offset).unwrap_or_default();
+            let data_len = data.value.len() as u64;
+
+            if virtual_address >= memory_offset && virtual_address < memory_offset + data_len {
+                // We found the segment that contains the asset
+                let segment_relative_address = virtual_address - memory_offset;
+                
+                // Get the file offset for this segment
+                let Some(data_start_offset) = data_segment_file_offsets.get(i) else {
+                    tracing::error!(
+                        "Found __MANGANIS__ symbol {:?} in WASM file, but the data segment index {} is out of bounds",
+                        export.name,
+                        i
+                    );
+                    break;
+                };
+
+                let file_offset = data_start_offset + segment_relative_address;
+                offsets.push(file_offset);
+                found_segment = true;
+                break;
+            }
+        }
+
+        if !found_segment {
+            tracing::error!(
+                "Found __MANGANIS__ symbol {:?} (addr: {}) in WASM file, but no data segment contains it.",
+                export.name,
+                virtual_address
+            );
+            for (i, data) in module.data.iter().enumerate() {
+                if let walrus::DataKind::Active { offset, .. } = &data.kind {
+                    let off = eval_walrus_global_expr(&module, offset).unwrap_or_default();
+                    let len = data.value.len() as u64;
+                    tracing::error!("Segment {}: [{:#x} - {:#x}) (len: {})", i, off, off + len, len);
+                } else {
+                    tracing::error!("Segment {}: Passive/Custom", i);
+                }
+            }
+        }
     }
 
     Ok(offsets)
