@@ -212,10 +212,18 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     };
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
+    
+    tracing::warn!("WASM <data> section: start={:#x}, end={:#x}, size={}", section_start, section_range_end, section_size);
 
     // Parse the wasm file to find the globals
     let module = walrus::Module::from_buffer(file_contents)
         .context("Failed to parse WASM module from file contents")?;
+    
+    // Check memory configuration
+    for mem in module.memories.iter() {
+        tracing::warn!("Memory: initial_pages={}, max_pages={:?}, shared={}", 
+            mem.initial, mem.maximum, mem.shared);
+    }
 
     // Collect file offsets for all data segments using wasmparser
     let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
@@ -371,6 +379,19 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         }
 
         if !found {
+            // With atomics, try interpreting the address as a direct file offset
+            // The symbol might point directly into the data section
+            if virtual_address >= section_start && virtual_address < section_range_end {
+                let file_offset = virtual_address;
+                offsets.push(file_offset);
+                tracing::warn!(
+                    "MANGANIS symbol {:?} (addr: {:#x}) - trying as direct file offset",
+                    export.name,
+                    file_offset
+                );
+                continue;
+            }
+            
             // Log detailed debug info but don't panic - the asset might still work
             tracing::warn!(
                 "Found __MANGANIS__ symbol {:?} (addr: {:#x}) in WASM file, but no segment range matched",
