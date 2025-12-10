@@ -225,21 +225,32 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     .context("Failed to create WASM data section reader")?;
 
     let mut data_segment_file_offsets = Vec::new();
+    let mut segment_count = 0;
     for data in reader.into_iter() {
         let data = data.context("Failed to read data segment from WASM data section")?;
         let data_start_offset = (data.data.as_ptr() as u64)
             .checked_sub(file_contents.as_ptr() as u64)
             .expect("Data section start offset should be within the file contents");
         data_segment_file_offsets.push(data_start_offset);
-        tracing::debug!(
-            "Wasmparser data segment: data_len={}, file_offset={:#x}, kind={:?}",
+        
+        let kind_str = match &data.kind {
+            wasmparser::DataKind::Active { memory_index, offset_expr } => {
+                format!("Active(mem={}, offset_expr_len={})", memory_index, offset_expr.get_binary_reader().bytes_remaining())
+            },
+            wasmparser::DataKind::Passive => "Passive".to_string(),
+        };
+        
+        tracing::warn!(
+            "Wasmparser segment {}: kind={}, data_len={}, file_offset={:#x}",
+            segment_count,
+            kind_str,
             data.data.len(),
-            data_start_offset,
-            data.kind
+            data_start_offset
         );
+        segment_count += 1;
     }
     
-    tracing::debug!("Found {} data segments via wasmparser", data_segment_file_offsets.len());
+    tracing::warn!("Total segments found via wasmparser: {}", data_segment_file_offsets.len());
 
     // Build a map of segment memory ranges. For Active segments, use their offset.
     // For Passive segments, we need to determine where they will be placed at runtime.
@@ -269,7 +280,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let mut segments: Vec<SegmentInfo> = Vec::new();
     let mut cumulative_passive_offset = passive_base.unwrap_or(0);
     
+    let mut walrus_segment_count = 0;
     for (i, data) in module.data.iter().enumerate() {
+        walrus_segment_count += 1;
         let file_offset = data_segment_file_offsets.get(i).copied().unwrap_or(0);
         let data_len = data.value.len() as u64;
         
