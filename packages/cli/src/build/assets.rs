@@ -383,19 +383,43 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                     break;
                 }
                 
-                let potential_asset_data = &seg_data[offset..offset + asset_size];
+                // Use a larger window to ensure we can safely deserialize strings/paths
+                let safe_window_size = (asset_size * 2).min(seg_data.len() - offset);
+                let potential_asset_data = &seg_data[offset..offset + safe_window_size];
+                
+                // Try to deserialize - this might fail if the data isn't actually a BundledAsset
                 let buffer = const_serialize::ConstReadBuffer::new(potential_asset_data);
                 
-                if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
-                    let file_offset = seg_file_start + offset;
-                    offsets.push(file_offset as u64);
-                    tracing::warn!(
-                        "Found BundledAsset at file offset {:#x} (segment offset {:#x}): {:?}", 
-                        file_offset, 
-                        offset,
-                        bundled_asset.absolute_source_path()
-                    );
-                    // Don't break - there might be more assets in this segment
+                // Use std::panic::catch_unwind to handle panics during deserialization
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    const_serialize::deserialize_const!(BundledAsset, buffer)
+                }));
+                
+                match result {
+                    Ok(Some((_, bundled_asset))) => {
+                        let file_offset = seg_file_start + offset;
+                        
+                        // Validate the asset has reasonable data
+                        let source_path = bundled_asset.absolute_source_path();
+                        if source_path.is_empty() || source_path.len() > 4096 {
+                            continue; // Skip invalid assets
+                        }
+                        
+                        offsets.push(file_offset as u64);
+                        tracing::warn!(
+                            "Found BundledAsset at file offset {:#x} (segment offset {:#x}): {:?}", 
+                            file_offset, 
+                            offset,
+                            source_path
+                        );
+                        // Don't break - there might be more assets in this segment
+                    }
+                    Ok(None) => {
+                        // Deserialization returned None, not a valid asset
+                    }
+                    Err(_) => {
+                        // Deserialization panicked, skip this offset
+                    }
                 }
             }
             
