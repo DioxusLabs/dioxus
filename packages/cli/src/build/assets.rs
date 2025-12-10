@@ -274,6 +274,10 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                     file_offset,
                     is_active: true,
                 });
+                tracing::debug!(
+                    "Active segment {}: memory [{:#x} - {:#x}), file_offset={:#x}, len={}",
+                    i, memory_start, memory_start + data_len, file_offset, data_len
+                );
             }
             walrus::DataKind::Passive => {
                 // For passive segments, assume they are placed sequentially starting at passive_base
@@ -284,6 +288,10 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                     file_offset,
                     is_active: false,
                 });
+                tracing::debug!(
+                    "Passive segment {}: memory [{:#x} - {:#x}), file_offset={:#x}, len={}",
+                    i, cumulative_passive_offset, cumulative_passive_offset + data_len, file_offset, data_len
+                );
                 cumulative_passive_offset += data_len;
             }
         }
