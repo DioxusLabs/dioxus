@@ -374,24 +374,53 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             let seg_data = &file_contents[seg_file_start..seg_file_end];
             let asset_size = BundledAsset::MEMORY_LAYOUT.size();
             
-            // Scan for potential BundledAsset structures
-            for offset in (0..seg_data.len().saturating_sub(asset_size)).step_by(4) {
+            // Scan for ALL BundledAsset structures in this segment (not just the first one)
+            let scan_len = seg_data.len().saturating_sub(asset_size);
+            tracing::warn!("Scanning segment at file offset {:#x}, length={}, scan_len={}", seg_file_start, seg_data.len(), scan_len);
+            
+            for offset in (0..=scan_len).step_by(4) {
+                if offset + asset_size > seg_data.len() {
+                    break;
+                }
+                
                 let potential_asset_data = &seg_data[offset..offset + asset_size];
                 let buffer = const_serialize::ConstReadBuffer::new(potential_asset_data);
                 
-                if let Some((_, _bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
+                if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
                     let file_offset = seg_file_start + offset;
                     offsets.push(file_offset as u64);
-                    tracing::warn!("Found BundledAsset at file offset {:#x} in passive segment", file_offset);
-                    break; // Found one in this segment, move to next segment
+                    tracing::warn!(
+                        "Found BundledAsset at file offset {:#x} (segment offset {:#x}): {:?}", 
+                        file_offset, 
+                        offset,
+                        bundled_asset.absolute_source_path()
+                    );
+                    // Don't break - there might be more assets in this segment
                 }
             }
+            
+            tracing::warn!("Finished scanning segment, found {} assets so far", offsets.len());
         }
     }
     
     if !offsets.is_empty() {
-        tracing::warn!("Successfully found {} BundledAsset structures via direct scan", offsets.len());
-        return Ok(offsets);
+        tracing::warn!("Successfully found {} BundledAsset structures via direct scan (expected {})", offsets.len(), found_symbols.len());
+        
+        // Validate that we can actually read these offsets
+        let asset_size = BundledAsset::MEMORY_LAYOUT.size();
+        offsets.retain(|&offset| {
+            let can_read = (offset as usize + asset_size) <= file_contents.len();
+            if !can_read {
+                tracing::error!("Offset {:#x} would read past end of file, removing", offset);
+            }
+            can_read
+        });
+        
+        if offsets.len() == found_symbols.len() {
+            return Ok(offsets);
+        } else {
+            tracing::warn!("Found {} assets but expected {}, continuing search", offsets.len(), found_symbols.len());
+        }
     }
     
     // If direct scan failed, fall back to the old method
