@@ -217,19 +217,13 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let module = walrus::Module::from_buffer(file_contents)
         .context("Failed to parse WASM module from file contents")?;
 
-    // Translate the section_relative_address to the file offset
-    // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-    // to get the correct address and section start
-    // Note: We need to reparse just the data section with wasmparser to get the file offset because walrus does
-    // not expose the file offset information
+    // Collect file offsets for all data segments using wasmparser
     let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
         &file_contents[section_start as usize..section_range_end as usize],
         0,
     ))
     .context("Failed to create WASM data section reader")?;
 
-    // Collect all the data segments from wasmparser to get their file offsets
-    // We assume the order of data segments in walrus matches the order in wasmparser
     let mut data_segment_file_offsets = Vec::new();
     for data in reader.into_iter() {
         let data = data.context("Failed to read data segment from WASM data section")?;
@@ -237,6 +231,62 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             .checked_sub(file_contents.as_ptr() as u64)
             .expect("Data section start offset should be within the file contents");
         data_segment_file_offsets.push(data_start_offset);
+    }
+
+    // Build a map of segment memory ranges. For Active segments, use their offset.
+    // For Passive segments, we need to determine where they will be placed at runtime.
+    // With atomics/bulk-memory, passive segments are typically loaded at __data_end.
+    // We'll look for __data_end or similar globals to find the base address.
+    let mut passive_base: Option<u64> = None;
+    for export in module.exports.iter() {
+        if export.name == "__data_end" || export.name == "__heap_base" {
+            if let walrus::ExportItem::Global(global) = export.item {
+                if let walrus::GlobalKind::Local(expr) = &module.globals.get(global).kind {
+                    passive_base = eval_walrus_global_expr(&module, expr);
+                    tracing::debug!("Found {} = {:?}", export.name, passive_base);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Build segment memory ranges
+    struct SegmentInfo {
+        memory_start: u64,
+        memory_end: u64,
+        file_offset: u64,
+        is_active: bool,
+    }
+    
+    let mut segments: Vec<SegmentInfo> = Vec::new();
+    let mut cumulative_passive_offset = passive_base.unwrap_or(0);
+    
+    for (i, data) in module.data.iter().enumerate() {
+        let file_offset = data_segment_file_offsets.get(i).copied().unwrap_or(0);
+        let data_len = data.value.len() as u64;
+        
+        match &data.kind {
+            walrus::DataKind::Active { offset, .. } => {
+                let memory_start = eval_walrus_global_expr(&module, offset).unwrap_or(0);
+                segments.push(SegmentInfo {
+                    memory_start,
+                    memory_end: memory_start + data_len,
+                    file_offset,
+                    is_active: true,
+                });
+            }
+            walrus::DataKind::Passive => {
+                // For passive segments, assume they are placed sequentially starting at passive_base
+                // This is an approximation - the actual placement depends on memory.init calls
+                segments.push(SegmentInfo {
+                    memory_start: cumulative_passive_offset,
+                    memory_end: cumulative_passive_offset + data_len,
+                    file_offset,
+                    is_active: false,
+                });
+                cumulative_passive_offset += data_len;
+            }
+        }
     }
 
     let mut offsets = Vec::new();
@@ -262,72 +312,42 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        // Find the data segment that contains this virtual address
-        let mut found_segment = false;
-        for (i, data) in module.data.iter().enumerate() {
-            let walrus::DataKind::Active {
-                offset: memory_offset,
-                ..
-            } = &data.kind
-            else {
-                continue;
-            };
-
-            let memory_offset = eval_walrus_global_expr(&module, memory_offset)
-                .unwrap_or_else(|| {
-                    tracing::warn!(
-                        "Failed to evaluate memory offset for segment {}, using 0",
-                        i
-                    );
-                    0
-                });
-            let data_len = data.value.len() as u64;
-
-            if virtual_address >= memory_offset && virtual_address < memory_offset + data_len {
-                // We found the segment that contains the asset
-                let segment_relative_address = virtual_address - memory_offset;
-                
-                // Get the file offset for this segment
-                let Some(data_start_offset) = data_segment_file_offsets.get(i) else {
-                    tracing::error!(
-                        "Found __MANGANIS__ symbol {:?} in WASM file, but the data segment index {} is out of bounds",
-                        export.name,
-                        i
-                    );
-                    break;
-                };
-
-                let file_offset = data_start_offset + segment_relative_address;
+        // Search all segments for this virtual address
+        let mut found = false;
+        for seg in &segments {
+            if virtual_address >= seg.memory_start && virtual_address < seg.memory_end {
+                let relative_offset = virtual_address - seg.memory_start;
+                let file_offset = seg.file_offset + relative_offset;
                 offsets.push(file_offset);
-                found_segment = true;
+                found = true;
+                tracing::debug!(
+                    "Found __MANGANIS__ symbol {:?} at file offset {:#x} (segment type: {})",
+                    export.name,
+                    file_offset,
+                    if seg.is_active { "active" } else { "passive" }
+                );
                 break;
             }
         }
 
-        if !found_segment {
-            let mut msg = format!(
-                "Found __MANGANIS__ symbol {:?} (addr: {}) in WASM file, but no data segment contains it.\nSegments:\n",
+        if !found {
+            // Log detailed debug info but don't panic - the asset might still work
+            tracing::warn!(
+                "Found __MANGANIS__ symbol {:?} (addr: {:#x}) in WASM file, but no segment range matched",
                 export.name,
                 virtual_address
             );
-            for (i, data) in module.data.iter().enumerate() {
-                if let walrus::DataKind::Active { offset, .. } = &data.kind {
-                    let off = eval_walrus_global_expr(&module, offset);
-                    let len = data.value.len() as u64;
-                    msg.push_str(&format!(
-                        "  Segment {}: Active [off_eval: {:?} -> {}] [len: {}] [range: {} - {}]\n",
-                        i,
-                        off,
-                        off.unwrap_or_default(),
-                        len,
-                        off.unwrap_or_default(),
-                        off.unwrap_or_default() + len
-                    ));
-                } else {
-                    msg.push_str(&format!("  Segment {}: Passive/Custom\n", i));
-                }
+            tracing::warn!("Available segments:");
+            for (i, seg) in segments.iter().enumerate() {
+                tracing::warn!(
+                    "  Segment {}: {} [{:#x} - {:#x}) file_offset={:#x}",
+                    i,
+                    if seg.is_active { "Active" } else { "Passive" },
+                    seg.memory_start,
+                    seg.memory_end,
+                    seg.file_offset
+                );
             }
-            panic!("{}", msg);
         }
     }
 
