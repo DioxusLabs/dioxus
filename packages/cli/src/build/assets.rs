@@ -297,20 +297,29 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         }
 
         if !found_segment {
-            tracing::error!(
-                "Found __MANGANIS__ symbol {:?} (addr: {}) in WASM file, but no data segment contains it.",
+            let mut msg = format!(
+                "Found __MANGANIS__ symbol {:?} (addr: {}) in WASM file, but no data segment contains it.\nSegments:\n",
                 export.name,
                 virtual_address
             );
             for (i, data) in module.data.iter().enumerate() {
                 if let walrus::DataKind::Active { offset, .. } = &data.kind {
-                    let off = eval_walrus_global_expr(&module, offset).unwrap_or_default();
+                    let off = eval_walrus_global_expr(&module, offset);
                     let len = data.value.len() as u64;
-                    tracing::error!("Segment {}: [{:#x} - {:#x}) (len: {})", i, off, off + len, len);
+                    msg.push_str(&format!(
+                        "  Segment {}: Active [off_eval: {:?} -> {}] [len: {}] [range: {} - {}]\n",
+                        i,
+                        off,
+                        off.unwrap_or_default(),
+                        len,
+                        off.unwrap_or_default(),
+                        off.unwrap_or_default() + len
+                    ));
                 } else {
-                    tracing::error!("Segment {}: Passive/Custom", i);
+                    msg.push_str(&format!("  Segment {}: Passive/Custom\n", i));
                 }
             }
+            panic!("{}", msg);
         }
     }
 
