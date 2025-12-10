@@ -231,7 +231,15 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             .checked_sub(file_contents.as_ptr() as u64)
             .expect("Data section start offset should be within the file contents");
         data_segment_file_offsets.push(data_start_offset);
+        tracing::debug!(
+            "Wasmparser data segment: data_len={}, file_offset={:#x}, kind={:?}",
+            data.data.len(),
+            data_start_offset,
+            data.kind
+        );
     }
+    
+    tracing::debug!("Found {} data segments via wasmparser", data_segment_file_offsets.len());
 
     // Build a map of segment memory ranges. For Active segments, use their offset.
     // For Passive segments, we need to determine where they will be placed at runtime.
@@ -260,6 +268,8 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     
     let mut segments: Vec<SegmentInfo> = Vec::new();
     let mut cumulative_passive_offset = passive_base.unwrap_or(0);
+    
+    tracing::debug!("Processing {} data segments from WASM module", module.data.len());
     
     for (i, data) in module.data.iter().enumerate() {
         let file_offset = data_segment_file_offsets.get(i).copied().unwrap_or(0);
@@ -299,16 +309,20 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
     let mut offsets = Vec::new();
 
+    tracing::debug!("Searching for MANGANIS symbols in {} exports", module.exports.len());
+
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
             continue;
         }
 
         let walrus::ExportItem::Global(global) = export.item else {
+            tracing::debug!("Symbol {:?} is not a global, skipping", export.name);
             continue;
         };
 
         let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
+            tracing::debug!("Symbol {:?} is not a local global, skipping", export.name);
             continue;
         };
 
@@ -319,6 +333,12 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             );
             continue;
         };
+        
+        tracing::debug!(
+            "Found MANGANIS symbol {:?} with virtual address {:#x}",
+            export.name,
+            virtual_address
+        );
 
         // Search all segments for this virtual address
         let mut found = false;
