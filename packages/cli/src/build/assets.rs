@@ -329,60 +329,16 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     tracing::warn!("Walrus found {} data segments total", walrus_segment_count);
     tracing::warn!("Segment mismatch check: wasmparser={}, walrus={}", data_segment_file_offsets.len(), walrus_segment_count);
 
-    // Check if we have only passive segments (atomics enabled)
+    // With atomics/bulk-memory, all segments are passive and memory layout is different.
+    // The symbol addresses point to where assets WILL BE in memory after memory.init,
+    // but they don't directly correspond to file offsets. We need to find them by searching.
     let all_passive = segments.iter().all(|s| !s.is_active);
     
-    if all_passive && !segments.is_empty() {
-        // With atomics, we can't use symbol addresses to locate assets reliably
-        // Count the expected number of assets first
-        let symbol_count = module.exports.iter()
-            .filter(|e| looks_like_manganis_symbol(&e.name))
-            .count();
-        
+    if all_passive {
         tracing::warn!("Detected atomics-enabled WASM (all passive data segments)");
-        tracing::warn!("Using direct segment data offsets for {} potential assets", symbol_count);
         
-        let mut offsets = Vec::new();
-        let asset_size = BundledAsset::MEMORY_LAYOUT.size();
-        
-        // Try to find assets in the first large segment (usually Segment 1)
-        for seg in &segments {
-            if seg.memory_end - seg.memory_start >= asset_size as u64 {
-                // This segment is large enough to potentially contain assets
-                // Try to deserialize from the beginning of this segment
-                let seg_file_start = seg.file_offset as usize;
-                let seg_file_end = seg_file_start + (seg.memory_end - seg.memory_start) as usize;
-                
-                if seg_file_start < file_contents.len() && seg_file_end <= file_contents.len() {
-                    let seg_data = &file_contents[seg_file_start..seg_file_end];
-                    
-                    // Search for patterns that look like BundledAsset starts
-                    // BundledAsset starts with const-serialize metadata
-                    for offset in (0..seg_data.len().saturating_sub(asset_size)).step_by(256) {
-                        if offset + asset_size > seg_data.len() {
-                            break;
-                        }
-                        
-                        let file_offset = seg_file_start + offset;
-                        offsets.push(file_offset as u64);
-                        tracing::debug!("Guessing asset at offset {:#x} in passive segment", file_offset);
-                        
-                        if offsets.len() >= symbol_count {
-                            break;
-                        }
-                    }
-                    
-                    if offsets.len() >= symbol_count {
-                        break;
-                    }
-                }
-            }
-        }
-        
-        if !offsets.is_empty() {
-            tracing::warn!("Returning {} potential asset offsets", offsets.len());
-            return Ok(offsets);
-        }
+        // Try the symbol-based search first - it might work if the passive segment offsets are correct
+        // The symbols contain memory addresses; we'll try to resolve them
     }
 
     let mut offsets = Vec::new();
@@ -441,22 +397,90 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                 export.name,
                 virtual_address
             );
-            tracing::warn!("Available segments:");
-            for (i, seg) in segments.iter().enumerate() {
-                tracing::warn!(
-                    "  Segment {}: {} [{:#x} - {:#x}) file_offset={:#x}",
-                    i,
-                    if seg.is_active { "Active" } else { "Passive" },
-                    seg.memory_start,
-                    seg.memory_end,
-                    seg.file_offset
-                );
+        }
+    }
+
+    // If we're in atomics mode and didn't find any offsets via symbol-based search,
+    // try a brute-force search for valid BundledAsset structures
+    if offsets.is_empty() && all_passive {
+        tracing::warn!("Symbol-based search failed for atomics WASM, trying brute-force asset location");
+        let asset_size = BundledAsset::MEMORY_LAYOUT.size();
+        
+        // Search through all segments for valid BundledAsset structures
+        for (seg_idx, seg) in segments.iter().enumerate() {
+            let seg_file_start = seg.file_offset as usize;
+            let seg_file_end = seg_file_start + (seg.memory_end - seg.memory_start) as usize;
+            
+            if seg_file_end > file_contents.len() {
+                tracing::debug!("Segment {} file range {:#x}-{:#x} exceeds file size", seg_idx, seg_file_start, seg_file_end);
+                continue;
             }
+            
+            let seg_data = &file_contents[seg_file_start..seg_file_end];
+            tracing::debug!("Searching segment {} ({} bytes) for BundledAsset structures", seg_idx, seg_data.len());
+            
+            // Try to find valid BundledAsset structures by attempting deserialization
+            // at likely boundaries (multiples of alignment or at asset spacing)
+            for offset in (0..seg_data.len().saturating_sub(asset_size)).step_by(4) {
+                if offset + asset_size > seg_data.len() {
+                    break;
+                }
+                
+                // Try to deserialize at this offset
+                let buffer = const_serialize::ConstReadBuffer::new(&seg_data[offset..offset + asset_size]);
+                if let Some((_, _)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
+                    let file_offset = seg_file_start + offset;
+                    offsets.push(file_offset as u64);
+                    tracing::debug!(
+                        "Found valid BundledAsset at segment {} offset {:#x} (file offset {:#x})",
+                        seg_idx, offset, file_offset
+                    );
+                    
+                    // Collect expected number of assets
+                    let symbol_count = module.exports.iter()
+                        .filter(|e| looks_like_manganis_symbol(&e.name))
+                        .count();
+                    if offsets.len() >= symbol_count {
+                        break;
+                    }
+                }
+            }
+            
+            if !offsets.is_empty() {
+                let symbol_count = module.exports.iter()
+                    .filter(|e| looks_like_manganis_symbol(&e.name))
+                    .count();
+                if offsets.len() >= symbol_count {
+                    tracing::warn!("Found {} assets via brute-force search", offsets.len());
+                    break;
+                }
+            }
+        }
+    }
+
+    if !offsets.is_empty() {
+        return Ok(offsets);
+    }
+
+    // If still no luck, log why
+    if all_passive {
+        tracing::warn!("Available segments:");
+        for (i, seg) in segments.iter().enumerate() {
+            tracing::warn!(
+                "  Segment {}: {} [{:#x} - {:#x}) file_offset={:#x}",
+                i,
+                if seg.is_active { "Active" } else { "Passive" },
+                seg.memory_start,
+                seg.memory_end,
+                seg.file_offset
+            );
         }
     }
 
     Ok(offsets)
 }
+
+// Removed duplicate closing brace - the function continues below with original code handling
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
