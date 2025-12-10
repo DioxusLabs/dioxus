@@ -214,7 +214,8 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let section_start = section_range_end - section_size;
 
     // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module from file contents")?;
 
     // Translate the section_relative_address to the file offset
     // WASM files have a section address of 0 in object, reparse the data section with wasmparser
