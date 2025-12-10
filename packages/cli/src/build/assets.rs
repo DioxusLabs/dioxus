@@ -272,7 +272,14 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                 continue;
             };
 
-            let memory_offset = eval_walrus_global_expr(&module, memory_offset).unwrap_or_default();
+            let memory_offset = eval_walrus_global_expr(&module, memory_offset)
+                .unwrap_or_else(|| {
+                    tracing::warn!(
+                        "Failed to evaluate memory offset for segment {}, using 0",
+                        i
+                    );
+                    0
+                });
             let data_len = data.value.len() as u64;
 
             if virtual_address >= memory_offset && virtual_address < memory_offset + data_len {
