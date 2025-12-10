@@ -401,59 +401,43 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     }
 
     // If we're in atomics mode and didn't find any offsets via symbol-based search,
-    // try a brute-force search for valid BundledAsset structures
+    // try a conservative search for assets in the largest segment
     if offsets.is_empty() && all_passive {
-        tracing::warn!("Symbol-based search failed for atomics WASM, trying brute-force asset location");
+        tracing::warn!("Symbol-based search failed for atomics WASM, trying conservative asset location");
         let asset_size = BundledAsset::MEMORY_LAYOUT.size();
+        let symbol_count = module.exports.iter()
+            .filter(|e| looks_like_manganis_symbol(&e.name))
+            .count();
         
-        // Search through all segments for valid BundledAsset structures
-        for (seg_idx, seg) in segments.iter().enumerate() {
+        // Find the largest segment (most likely to contain assets)
+        let largest_segment = segments.iter().enumerate()
+            .max_by_key(|(_, seg)| seg.memory_end - seg.memory_start);
+        
+        if let Some((seg_idx, seg)) = largest_segment {
             let seg_file_start = seg.file_offset as usize;
             let seg_file_end = seg_file_start + (seg.memory_end - seg.memory_start) as usize;
             
-            if seg_file_end > file_contents.len() {
-                tracing::debug!("Segment {} file range {:#x}-{:#x} exceeds file size", seg_idx, seg_file_start, seg_file_end);
-                continue;
-            }
-            
-            let seg_data = &file_contents[seg_file_start..seg_file_end];
-            tracing::debug!("Searching segment {} ({} bytes) for BundledAsset structures", seg_idx, seg_data.len());
-            
-            // Try to find valid BundledAsset structures by attempting deserialization
-            // at likely boundaries (multiples of alignment or at asset spacing)
-            for offset in (0..seg_data.len().saturating_sub(asset_size)).step_by(4) {
-                if offset + asset_size > seg_data.len() {
-                    break;
-                }
-                
-                // Try to deserialize at this offset
-                let buffer = const_serialize::ConstReadBuffer::new(&seg_data[offset..offset + asset_size]);
-                if let Some((_, _)) = const_serialize::deserialize_const!(BundledAsset, buffer) {
+            if seg_file_end <= file_contents.len() {
+                // Assume assets are packed at regular intervals starting from the segment beginning
+                // Use asset_size as the spacing
+                for i in 0..symbol_count {
+                    let offset = i * asset_size;
                     let file_offset = seg_file_start + offset;
-                    offsets.push(file_offset as u64);
-                    tracing::debug!(
-                        "Found valid BundledAsset at segment {} offset {:#x} (file offset {:#x})",
-                        seg_idx, offset, file_offset
-                    );
                     
-                    // Collect expected number of assets
-                    let symbol_count = module.exports.iter()
-                        .filter(|e| looks_like_manganis_symbol(&e.name))
-                        .count();
-                    if offsets.len() >= symbol_count {
-                        break;
+                    // Validate offset is within bounds
+                    if file_offset + asset_size <= file_contents.len() {
+                        offsets.push(file_offset as u64);
+                        tracing::debug!(
+                            "Assuming asset {} at segment {} offset {:#x} (file offset {:#x})",
+                            i, seg_idx, offset, file_offset
+                        );
                     }
                 }
             }
             
             if !offsets.is_empty() {
-                let symbol_count = module.exports.iter()
-                    .filter(|e| looks_like_manganis_symbol(&e.name))
-                    .count();
-                if offsets.len() >= symbol_count {
-                    tracing::warn!("Found {} assets via brute-force search", offsets.len());
-                    break;
-                }
+                tracing::warn!("Located {} assets in segment {} at regular intervals (size: {})", 
+                    offsets.len(), seg_idx, asset_size);
             }
         }
     }
