@@ -317,6 +317,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             }
         }
     }
+    
+    tracing::warn!("Walrus found {} data segments total", walrus_segment_count);
+    tracing::warn!("Segment mismatch check: wasmparser={}, walrus={}", data_segment_file_offsets.len(), walrus_segment_count);
 
     let mut offsets = Vec::new();
 
