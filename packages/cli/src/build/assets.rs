@@ -214,7 +214,8 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let section_start = section_range_end - section_size;
 
     // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module from file contents")?;
 
     // Translate the section_relative_address to the file offset
     // WASM files have a section address of 0 in object, reparse the data section with wasmparser
@@ -272,7 +273,14 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                 continue;
             };
 
-            let memory_offset = eval_walrus_global_expr(&module, memory_offset).unwrap_or_default();
+            let memory_offset = eval_walrus_global_expr(&module, memory_offset)
+                .unwrap_or_else(|| {
+                    tracing::warn!(
+                        "Failed to evaluate memory offset for segment {}, using 0",
+                        i
+                    );
+                    0
+                });
             let data_len = data.value.len() as u64;
 
             if virtual_address >= memory_offset && virtual_address < memory_offset + data_len {
