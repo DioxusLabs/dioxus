@@ -269,8 +269,6 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let mut segments: Vec<SegmentInfo> = Vec::new();
     let mut cumulative_passive_offset = passive_base.unwrap_or(0);
     
-    tracing::debug!("Processing {} data segments from WASM module", module.data.len());
-    
     for (i, data) in module.data.iter().enumerate() {
         let file_offset = data_segment_file_offsets.get(i).copied().unwrap_or(0);
         let data_len = data.value.len() as u64;
@@ -308,8 +306,6 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     }
 
     let mut offsets = Vec::new();
-
-    tracing::debug!("Searching for MANGANIS symbols in {} exports", module.exports.len());
 
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
