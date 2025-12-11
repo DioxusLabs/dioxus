@@ -3985,6 +3985,12 @@ impl BuildRequest {
             command.arg(strip_arg).arg(exe).arg(exe);
             let output = command.output().await?;
             if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
                 return Err(anyhow::anyhow!("Failed to strip binary"));
             }
         }
