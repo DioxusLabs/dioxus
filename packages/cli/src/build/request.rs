@@ -3979,10 +3979,18 @@ impl BuildRequest {
         };
         if let Some(strip_arg) = strip_arg {
             let rustc_objcopy = self.workspace.rustc_objcopy();
+            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
             let mut command = Command::new(rustc_objcopy);
+            command.env("LD_LIBRARY_PATH", &dylib_path);
             command.arg(strip_arg).arg(exe).arg(exe);
             let output = command.output().await?;
             if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
                 return Err(anyhow::anyhow!("Failed to strip binary"));
             }
         }
