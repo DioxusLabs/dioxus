@@ -2794,23 +2794,7 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn absolute_icon_path(&self, path: &str) -> Result<PathBuf> {
-        let icon_path = PathBuf::from(path);
-        let workspace_icon = self.workspace_dir().join(path);
-        let crate_icon = self.crate_dir().join(path);
-
-        if icon_path.is_absolute() && icon_path.is_file() {
-            Ok(dunce::canonicalize(icon_path)?)
-        } else if workspace_icon.is_file() {
-            Ok(dunce::canonicalize(workspace_icon)?)
-        } else if crate_icon.is_file() {
-            Ok(dunce::canonicalize(crate_icon)?)
-        } else {
-            Err(anyhow::anyhow!("Could not find icon from path {}", path))
-        }
-    }
-
-    fn app_icon_path(&self) -> Result<PathBuf> {
+    fn app_icon_path(&self) -> Result<String> {
         match self
             .config
             .bundle
@@ -2818,7 +2802,7 @@ impl BuildRequest {
             .as_ref()
             .and_then(|v| v.iter().find(|s| !s.to_lowercase().ends_with(".svg")))
         {
-            Some(value) => self.absolute_icon_path(value),
+            Some(value) => Ok(value.clone()),
             None => Err(anyhow::anyhow!("No icon set in Dioxus.toml")),
         }
     }
@@ -5448,12 +5432,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         if let Some(icons) = bundle.icon.as_ref() {
             for (id, icon) in icons.iter().enumerate() {
                 if icon.ends_with(".ico") {
-                    let icon_path = self.absolute_icon_path(icon)?.to_string_lossy().to_string();
                     if !default {
-                        winres.set_icon(&icon_path);
+                        winres.set_icon(icon);
                         default = true;
                     } else {
-                        winres.set_icon_with_id(&icon_path, &id.to_string());
+                        winres.set_icon_with_id(icon, &id.to_string());
                     };
                 }
             }
