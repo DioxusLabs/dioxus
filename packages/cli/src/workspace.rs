@@ -285,6 +285,11 @@ impl Workspace {
             .join("rust-objcopy")
     }
 
+    // ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib
+    pub fn rustc_objcopy_dylib_path(&self) -> PathBuf {
+        self.sysroot.join("lib")
+    }
+
     /// Find the "main" package in the workspace. There might not be one!
     pub fn find_main_package(&self, package: Option<String>) -> Result<NodeId> {
         if let Some(package) = package {

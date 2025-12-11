@@ -6,7 +6,7 @@
         class="darkmode-image"
     >
     <div>
-        <a href=https://dioxuslabs.com/learn/0.7/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.7/">Book (0.6)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
+        <a href=https://dioxuslabs.com/learn/0.7/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.7/">Book (0.7)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
     </div>
 </div>
 
