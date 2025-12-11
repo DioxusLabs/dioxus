@@ -149,25 +149,6 @@ impl Bundle {
         })
     }
 
-    fn canonicalize_icon_path(build: &BuildRequest, icon_path: &PathBuf) -> Result<PathBuf, Error> {
-        if icon_path.is_absolute() && icon_path.is_file() {
-            return Ok(dunce::canonicalize(icon_path)?);
-        }
-        let crate_icon = build.crate_dir().join(icon_path);
-        if crate_icon.is_file() {
-            return Ok(dunce::canonicalize(crate_icon)?);
-        }
-        let workspace_icon = build.workspace_dir().join(icon_path);
-        if workspace_icon.is_file() {
-            return Ok(dunce::canonicalize(workspace_icon)?);
-        }
-
-        Err(anyhow::anyhow!(
-            "Could not find icon from path {:?}",
-            icon_path
-        ))
-    }
-
     #[allow(deprecated)]
     fn windows_icon_override(
         krate: &BuildRequest,
@@ -176,7 +157,7 @@ impl Bundle {
         if let Some(windows) = krate.config.bundle.windows.as_ref() {
             if let Some(val) = windows.icon_path.as_ref() {
                 if val.extension() == Some(OsStr::new("ico")) {
-                    let windows_icon = Self::canonicalize_icon_path(krate, val)?;
+                    let windows_icon = krate.canonicalize_icon_path(val)?;
                     bundle_settings.windows.icon_path = PathBuf::from(&windows_icon);
                     return Ok(());
                 }
@@ -232,13 +213,13 @@ impl Bundle {
         // Resolve bundle.icon relative to the crate dir
         if let Some(icons) = bundle_settings.icon.as_mut() {
             for icon in icons.iter_mut() {
-                let path = Self::canonicalize_icon_path(build, &PathBuf::from(&icon))?;
+                let path = build.canonicalize_icon_path(&PathBuf::from(&icon))?;
                 *icon = path.to_string_lossy().to_string();
             }
         }
 
         if build.triple.operating_system == OperatingSystem::Windows {
-            Self::windows_icon_override(krate, &mut bundle_settings)?;
+            Self::windows_icon_override(build, &mut bundle_settings)?;
         }
 
         if bundle_settings.resources_map.is_none() {

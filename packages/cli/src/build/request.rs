@@ -2794,7 +2794,26 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn app_icon_path(&self) -> Result<String> {
+    pub(crate) fn canonicalize_icon_path(&self, icon_path: &PathBuf) -> Result<PathBuf, Error> {
+        if icon_path.is_absolute() && icon_path.is_file() {
+            return Ok(dunce::canonicalize(icon_path)?);
+        }
+        let crate_icon = self.crate_dir().join(icon_path);
+        if crate_icon.is_file() {
+            return Ok(dunce::canonicalize(crate_icon)?);
+        }
+        let workspace_icon = self.workspace_dir().join(icon_path);
+        if workspace_icon.is_file() {
+            return Ok(dunce::canonicalize(workspace_icon)?);
+        }
+
+        Err(anyhow::anyhow!(
+            "Could not find icon from path {:?}",
+            icon_path
+        ))
+    }
+
+    fn app_icon_path(&self) -> Result<PathBuf> {
         match self
             .config
             .bundle
@@ -2802,7 +2821,7 @@ impl BuildRequest {
             .as_ref()
             .and_then(|v| v.iter().find(|s| !s.to_lowercase().ends_with(".svg")))
         {
-            Some(value) => Ok(value.clone()),
+            Some(value) => self.canonicalize_icon_path(&PathBuf::from(value)),
             None => Err(anyhow::anyhow!("No icon set in Dioxus.toml")),
         }
     }
@@ -5432,11 +5451,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         if let Some(icons) = bundle.icon.as_ref() {
             for (id, icon) in icons.iter().enumerate() {
                 if icon.ends_with(".ico") {
+                    let icon_path = self
+                        .canonicalize_icon_path(&PathBuf::from(icon))?
+                        .to_string_lossy()
+                        .to_string();
                     if !default {
-                        winres.set_icon(icon);
+                        winres.set_icon(&icon_path);
                         default = true;
                     } else {
-                        winres.set_icon_with_id(icon, &id.to_string());
+                        winres.set_icon_with_id(&icon_path, &id.to_string());
                     };
                 }
             }
