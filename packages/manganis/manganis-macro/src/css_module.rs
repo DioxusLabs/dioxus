@@ -2,31 +2,20 @@ use crate::{asset::AssetParser, resolve_path};
 use macro_string::MacroString;
 use manganis_core::{create_module_hash, get_class_mappings, ClassNamePattern};
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::Comma,
-    Ident, Token, Visibility,
+    Ident,
 };
 
 pub(crate) struct CssModuleParser {
-    /// Whether the ident is const or static.
-    styles_vis: Visibility,
-    styles_ident: Ident,
     asset_parser: AssetParser,
 }
 
 impl Parse for CssModuleParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        // NEW: macro!(pub? STYLES_IDENT = "/path.css");
-        // pub(x)?
-        let styles_vis = input.parse::<Visibility>()?;
-
-        // Styles Ident
-        let styles_ident = input.parse::<Ident>()?;
-        let _equals = input.parse::<Token![=]>()?;
-
         // Asset path "/path.css"
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
         let asset = resolve_path(&src, path_expr.span());
@@ -45,11 +34,7 @@ impl Parse for CssModuleParser {
             options,
         };
 
-        Ok(Self {
-            styles_vis,
-            styles_ident,
-            asset_parser,
-        })
+        Ok(Self { asset_parser })
     }
 }
 
@@ -76,10 +61,6 @@ impl ToTokens for CssModuleParser {
 
         let mut values = Vec::new();
 
-        // Create unique module name based on styles ident.
-        let styles_ident = &self.styles_ident;
-        let mod_name = format_ident!("__{}_module", styles_ident);
-
         let hash = create_module_hash(asset);
         let class_mappings =
             get_class_mappings(css.as_str(), &ClassNamePattern::default(), hash.as_str())
@@ -91,22 +72,21 @@ impl ToTokens for CssModuleParser {
 
             let ident = Ident::new(&as_snake, Span::call_site());
             values.push(quote! {
-                pub const #ident: #mod_name::__CssIdent = #mod_name::__CssIdent { inner: manganis::macro_helpers::const_serialize::ConstStr::new(#new_class).as_str() };
+                pub const #ident: __Styles::__CssIdent = __Styles::__CssIdent { inner: #new_class };
             });
         }
 
-        let styles_vis = &self.styles_vis;
         // We use a PhantomData to prevent Rust from complaining about an unused lifetime if a css module without any idents is used.
         tokens.extend(quote! {
             #[doc(hidden)]
             #[allow(missing_docs, non_snake_case)]
-            mod #mod_name {
+            mod __Styles {
                 use dioxus::prelude::*;
 
                 #linker_tokens;
 
                 // Css ident class for deref stylesheet inclusion.
-                pub(super) struct __CssIdent { pub inner: &'static str }
+                pub struct __CssIdent { pub inner: &'static str }
 
                 use std::ops::Deref;
                 use std::sync::OnceLock;
@@ -140,11 +120,17 @@ impl ToTokens for CssModuleParser {
 
             /// Auto-generated idents struct for CSS modules.
             #[allow(missing_docs, non_snake_case)]
-            #styles_vis struct #styles_ident {}
+            pub struct Styles {}
 
-            impl #styles_ident {
+            impl Styles {
                 #( #values )*
             }
+
+                impl dioxus::core::IntoAttributeValue for __Styles::__CssIdent {
+                    fn into_value(self) -> dioxus::core::AttributeValue {
+                        dioxus::core::AttributeValue::Text(self.to_string())
+                    }
+                }
         })
     }
 }

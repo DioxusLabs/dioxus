@@ -183,7 +183,7 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 #[doc(hidden)]
-pub fn css_module(input: TokenStream) -> TokenStream {
+pub fn styles(input: TokenStream) -> TokenStream {
     let style = parse_macro_input!(input as CssModuleParser);
     quote! { #style }.into_token_stream().into()
 }
