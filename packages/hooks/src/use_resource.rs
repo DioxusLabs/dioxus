@@ -511,7 +511,7 @@ impl<T> Resource<T> {
         let read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> = self.read();
         if read.is_none() {
             drop(read);
-            maybe_drop.drop();
+            drop(maybe_drop);
             let _: () = (*self).await;
             // `.read()` should have paniced if not in the correct scope as well
             unreachable!("Future should cancel when ready");
@@ -525,8 +525,6 @@ where
     Self: Sized,
 {
     type Out;
-
-    fn drop(self) {}
 
     fn alive(self, v: T) -> Self::Out;
 }
