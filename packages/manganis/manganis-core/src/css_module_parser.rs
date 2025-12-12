@@ -33,7 +33,7 @@ pub fn transform_css<'a>(
     css: &'a str,
     hash: &str,
 ) -> Result<String, ParseError<&'a str, ContextError>> {
-    let fragments = parse_css(&css)?;
+    let fragments = parse_css(css)?;
 
     let mut new_css = String::with_capacity(css.len() * 2);
     let mut cursor = css;
@@ -56,11 +56,12 @@ pub fn transform_css<'a>(
 
 /// Gets all the classes in the css files and their rewritten names.
 /// Includes `:global(...)` classes where the name is not changed.
+#[allow(clippy::type_complexity)]
 pub fn get_class_mappings<'a>(
     css: &'a str,
     hash: &str,
 ) -> Result<Vec<(&'a str, Cow<'a, str>)>, ParseError<&'a str, ContextError>> {
-    let fragments = parse_css(&css)?;
+    let fragments = parse_css(css)?;
     let mut result = Vec::new();
 
     for c in fragments {
@@ -86,8 +87,8 @@ pub fn get_class_mappings<'a>(
 fn resolve_global_inner_classes<'a>(
     global: Global<'a>,
 ) -> Result<Vec<&'a str>, ParseError<&'a str, ContextError>> {
-    let mut input = global.inner;
-    let fragments = selector.parse(&mut input)?;
+    let input = global.inner;
+    let fragments = selector.parse(input)?;
     let mut result = Vec::new();
     for c in fragments {
         match c {
