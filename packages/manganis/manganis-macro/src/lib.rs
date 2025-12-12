@@ -1,11 +1,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::{
-    hash::Hasher,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
 use css_module::CssModuleParser;
 use proc_macro::TokenStream;
@@ -302,9 +298,7 @@ fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro
 #[derive(Debug)]
 enum AssetParseError {
     AssetDoesntExist { path: PathBuf },
-    IoError { err: std::io::Error, path: PathBuf },
     InvalidPath { path: PathBuf },
-    FailedToReadAsset(std::io::Error),
     RelativeAssetPath,
 }
 
@@ -314,9 +308,6 @@ impl std::fmt::Display for AssetParseError {
             AssetParseError::AssetDoesntExist { path } => {
                 write!(f, "Asset at {} doesn't exist", path.display())
             }
-            AssetParseError::IoError { path, err } => {
-                write!(f, "Failed to read file: {}; {}", path.display(), err)
-            }
             AssetParseError::InvalidPath { path } => {
                 write!(
                     f,
@@ -324,7 +315,6 @@ impl std::fmt::Display for AssetParseError {
                     path.display()
                 )
             }
-            AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
             AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
         }
     }
