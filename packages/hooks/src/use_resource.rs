@@ -442,6 +442,16 @@ impl<T> Resource<T> {
             _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
         }
     }
+
+    pub async fn read_async(&self) -> generational_box::GenerationalRef<std::cell::Ref<'_, T>> {
+        let read: generational_box::GenerationalRef<std::cell::Ref<'_, Option<T>>> = self.read();
+        if read.is_none() {
+            drop(read);
+            let _: () = (*self).await;
+            unreachable!("Future should cancel when ready");
+        }
+        read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
+    }
 }
 
 impl<T, E> Resource<Result<T, E>> {
