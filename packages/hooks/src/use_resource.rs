@@ -561,6 +561,48 @@ impl<T, A, B, C> MaybeDrop<T> for (A, B, C) {
     }
 }
 
+impl<T, A, B, C, D> MaybeDrop<T> for (A, B, C, D) {
+    type Out = (T, A, B, C, D);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1, self.2, self.3)
+    }
+}
+
+impl<T, A, B, C, D, E> MaybeDrop<T> for (A, B, C, D, E) {
+    type Out = (T, A, B, C, D, E);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1, self.2, self.3, self.4)
+    }
+}
+
+impl<T, A, B, C, D, E, F> MaybeDrop<T> for (A, B, C, D, E, F) {
+    type Out = (T, A, B, C, D, E, F);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1, self.2, self.3, self.4, self.5)
+    }
+}
+
+impl<T, A, B, C, D, E, F, G> MaybeDrop<T> for (A, B, C, D, E, F, G) {
+    type Out = (T, A, B, C, D, E, F, G);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1, self.2, self.3, self.4, self.5, self.6)
+    }
+}
+
+impl<T, A, B, C, D, E, F, G, H> MaybeDrop<T> for (A, B, C, D, E, F, G, H) {
+    type Out = (T, A, B, C, D, E, F, G, H);
+
+    fn alive(self, v: T) -> Self::Out {
+        (
+            v, self.0, self.1, self.2, self.3, self.4, self.5, self.6, self.7,
+        )
+    }
+}
+
 impl<T, E> Resource<Result<T, E>> {
     /// Convert the `Resource<Result<T, E>>` into an `Option<Result<MappedSignal<T>, MappedSignal<E>>>`
     #[allow(clippy::type_complexity)]
