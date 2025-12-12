@@ -443,14 +443,62 @@ impl<T> Resource<T> {
         }
     }
 
-    pub async fn read_async(&self) -> generational_box::GenerationalRef<std::cell::Ref<'_, T>> {
-        let read: generational_box::GenerationalRef<std::cell::Ref<'_, Option<T>>> = self.read();
+    pub async fn read_async<'a, M>(&'a self, maybe_drop: M) -> M::Out
+    where
+        M: MaybeDrop<generational_box::GenerationalRef<std::cell::Ref<'a, T>>>,
+    {
+        let read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> = self.read();
         if read.is_none() {
             drop(read);
+            maybe_drop.drop();
             let _: () = (*self).await;
+            // `.read()` should have paniced if not in the correct scope as well
             unreachable!("Future should cancel when ready");
         }
-        read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
+        maybe_drop.alive(read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap())))
+    }
+}
+
+pub trait MaybeDrop<T>
+where
+    Self: Sized,
+{
+    type Out;
+
+    fn drop(self) {}
+
+    fn alive(self, v: T) -> Self::Out;
+}
+
+impl<T> MaybeDrop<T> for () {
+    type Out = T;
+
+    fn alive(self, v: T) -> Self::Out {
+        v
+    }
+}
+
+impl<T, A> MaybeDrop<T> for (A,) {
+    type Out = (T, A);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0)
+    }
+}
+
+impl<T, A, B> MaybeDrop<T> for (A, B) {
+    type Out = (T, A, B);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1)
+    }
+}
+
+impl<T, A, B, C> MaybeDrop<T> for (A, B, C) {
+    type Out = (T, A, B, C);
+
+    fn alive(self, v: T) -> Self::Out {
+        (v, self.0, self.1, self.2)
     }
 }
 
