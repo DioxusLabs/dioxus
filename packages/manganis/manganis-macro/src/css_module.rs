@@ -1,6 +1,6 @@
 use crate::{asset::AssetParser, resolve_path};
 use macro_string::MacroString;
-use manganis_core::{create_module_hash, get_class_mappings, ClassNamePattern};
+use manganis_core::{create_module_hash, get_class_mappings};
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
@@ -62,9 +62,7 @@ impl ToTokens for CssModuleParser {
         let mut values = Vec::new();
 
         let hash = create_module_hash(asset);
-        let class_mappings =
-            get_class_mappings(css.as_str(), &ClassNamePattern::default(), hash.as_str())
-                .expect("Invalid css");
+        let class_mappings = get_class_mappings(css.as_str(), hash.as_str()).expect("Invalid css");
 
         // Generate class struct field tokens.
         for (old_class, new_class) in class_mappings.iter() {

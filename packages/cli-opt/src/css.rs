@@ -8,9 +8,7 @@ use lightningcss::{
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
-use manganis_core::{
-    create_module_hash, transform_css, ClassNamePattern, CssAssetOptions, CssModuleAssetOptions,
-};
+use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModuleAssetOptions};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,
@@ -64,7 +62,7 @@ pub(crate) fn process_css_module(
     src_name.push('-');
 
     let hash = create_module_hash(source);
-    let css = transform_css(css.as_str(), &ClassNamePattern::default(), hash.as_str())
+    let css = transform_css(css.as_str(), hash.as_str())
         .expect(&format!("Invalid css for file `{}`", source.display()));
 
     // Minify CSS

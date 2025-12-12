@@ -25,48 +25,12 @@ pub enum CssFragment<'s> {
     Global(Global<'s>),
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum Fragment {
-    Str(String),
-    Name,
-    Hash,
-}
-
-/// Pattern to create new class names
-#[derive(Debug, Clone, PartialEq)]
-pub struct ClassNamePattern(Vec<Fragment>);
-
-impl ClassNamePattern {
-    pub fn apply(&self, classname: &str, hash: &str) -> String {
-        self.0
-            .iter()
-            .map(|v| match v {
-                Fragment::Str(s) => s,
-                Fragment::Name => classname,
-                Fragment::Hash => hash,
-            })
-            .collect::<Vec<_>>()
-            .join("")
-    }
-}
-
-impl Default for ClassNamePattern {
-    fn default() -> Self {
-        Self(vec![
-            Fragment::Name,
-            Fragment::Str("-".into()),
-            Fragment::Hash,
-        ])
-    }
-}
-
 //************************************************************************//
 
 /// Parses and rewrites CSS class selectors with the hash applied.
 /// Does not modify `:global(...)` selectors.
 pub fn transform_css<'a>(
     css: &'a str,
-    class_name_pattern: &ClassNamePattern,
     hash: &str,
 ) -> Result<String, ParseError<&'a str, ContextError>> {
     let fragments = parse_css(&css)?;
@@ -76,7 +40,7 @@ pub fn transform_css<'a>(
 
     for fragment in fragments {
         let (span, replace) = match fragment {
-            CssFragment::Class(class) => (class, Cow::Owned(class_name_pattern.apply(class, hash))),
+            CssFragment::Class(class) => (class, Cow::Owned(apply_hash(class, hash))),
             CssFragment::Global(Global { inner, outer }) => (outer, Cow::Borrowed(inner)),
         };
 
@@ -94,7 +58,6 @@ pub fn transform_css<'a>(
 /// Includes `:global(...)` classes where the name is not changed.
 pub fn get_class_mappings<'a>(
     css: &'a str,
-    class_name_pattern: &ClassNamePattern,
     hash: &str,
 ) -> Result<Vec<(&'a str, Cow<'a, str>)>, ParseError<&'a str, ContextError>> {
     let fragments = parse_css(&css)?;
@@ -103,7 +66,7 @@ pub fn get_class_mappings<'a>(
     for c in fragments {
         match c {
             CssFragment::Class(class) => {
-                result.push((class, Cow::Owned(class_name_pattern.apply(class, hash))));
+                result.push((class, Cow::Owned(apply_hash(class, hash))));
             }
             CssFragment::Global(global) => {
                 let global_classes = resolve_global_inner_classes(global)?;
@@ -135,6 +98,10 @@ fn resolve_global_inner_classes<'a>(
         }
     }
     Ok(result)
+}
+
+fn apply_hash(class: &str, hash: &str) -> String {
+    format!("{}-{}", class, hash)
 }
 
 //************************************************************************//
@@ -341,12 +308,6 @@ fn at_rule<'s>(input: &mut &'s str) -> PResult<Vec<CssFragment<'s>>> {
             Ok(vec![])
         }
     }
-    // if identifier == "media" {
-    //     cut_err(terminated(style_rule_block_contents, '}')).parse_next(input)
-    // } else {
-    //     cut_err(terminated(unknown_block_contents, '}')).parse_next(input)?;
-    //     Ok(vec![])
-    // }
 }
 
 fn unknown_block_contents<'s>(input: &mut &'s str) -> PResult<&'s str> {
@@ -639,9 +600,8 @@ fn test_get_class_mappings() {
             color: blue;
         }
     }"#;
-    let pattern = ClassNamePattern::default();
     let hash = "abc1234";
-    let mappings = get_class_mappings(css, &pattern, hash).unwrap();
+    let mappings = get_class_mappings(css, hash).unwrap();
     let expected = vec![
         ("bag", "bag"),
         ("bar", "bar-abc1234"),
