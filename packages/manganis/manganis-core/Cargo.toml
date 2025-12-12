@@ -18,7 +18,6 @@ const-serialize = { workspace = true, features = ["serde"] }
 dioxus-core-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 winnow = { workspace = true }
-siphasher = { workspace = true }
 
 [dev-dependencies]
 manganis = { workspace = true }

@@ -1,6 +1,10 @@
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    path::Path,
+};
+
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 use const_serialize::SerializeConst;
-use std::collections::HashSet;
 
 /// Options for a css module asset
 #[derive(
@@ -89,4 +93,12 @@ impl AssetOptionsBuilder<CssModuleAssetOptions> {
             variant: AssetVariant::CssModule(self.variant),
         }
     }
+}
+
+pub fn create_module_hash(css_path: &Path) -> String {
+    let path_string = css_path.to_string_lossy();
+    let mut hasher = DefaultHasher::new();
+    path_string.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{:016x}", hash)[..8].to_string()
 }

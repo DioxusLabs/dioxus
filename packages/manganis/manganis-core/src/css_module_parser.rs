@@ -1,14 +1,5 @@
-// pub use class_name_pattern::{ClassNamePattern, Fragment};
+use std::borrow::Cow;
 
-use std::{
-    borrow::Cow,
-    fs,
-    hash::{Hash as _, Hasher as _},
-    path::{Path, PathBuf},
-    str::FromStr,
-};
-
-use siphasher::sip::SipHasher13;
 use winnow::{
     combinator::{alt, cut_err, delimited, fold_repeat, opt, peek, preceded, terminated},
     error::{ContextError, ParseError},
@@ -70,13 +61,6 @@ impl Default for ClassNamePattern {
 }
 
 //************************************************************************//
-
-pub fn create_hash(css: &str) -> String {
-    let mut hasher = SipHasher13::new();
-    css.hash(&mut hasher);
-    let hash = hasher.finish();
-    format!("{:016x}", hash)[..7].to_string()
-}
 
 /// Parses and rewrites CSS class selectors with the hash applied.
 /// Does not modify `:global(...)` selectors.

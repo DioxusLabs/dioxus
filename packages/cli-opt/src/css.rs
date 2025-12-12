@@ -9,7 +9,7 @@ use lightningcss::{
     targets::{Browsers, Targets},
 };
 use manganis_core::{
-    create_hash, transform_css, ClassNamePattern, CssAssetOptions, CssModuleAssetOptions,
+    create_module_hash, transform_css, ClassNamePattern, CssAssetOptions, CssModuleAssetOptions,
 };
 
 pub(crate) fn process_css(
@@ -63,7 +63,7 @@ pub(crate) fn process_css_module(
 
     src_name.push('-');
 
-    let hash = create_hash(&css);
+    let hash = create_module_hash(source);
     let css = transform_css(css.as_str(), &ClassNamePattern::default(), hash.as_str())
         .expect(&format!("Invalid css for file `{}`", source.display()));
 

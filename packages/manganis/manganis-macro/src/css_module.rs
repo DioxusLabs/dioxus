@@ -1,6 +1,6 @@
 use crate::{asset::AssetParser, resolve_path};
 use macro_string::MacroString;
-use manganis_core::{create_hash, get_class_mappings, ClassNamePattern};
+use manganis_core::{create_module_hash, get_class_mappings, ClassNamePattern};
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, ToTokens, TokenStreamExt};
 use syn::{
@@ -63,7 +63,7 @@ impl ToTokens for CssModuleParser {
         };
         self.asset_parser.to_tokens(&mut linker_tokens);
 
-        let path = match self.asset_parser.asset.as_ref() {
+        let asset = match self.asset_parser.asset.as_ref() {
             Ok(path) => path,
             Err(err) => {
                 let err = err.to_string();
@@ -72,7 +72,7 @@ impl ToTokens for CssModuleParser {
             }
         };
 
-        let css = std::fs::read_to_string(path).expect("Unable to read css module file");
+        let css = std::fs::read_to_string(asset).expect("Unable to read css module file");
 
         let mut values = Vec::new();
 
@@ -80,7 +80,7 @@ impl ToTokens for CssModuleParser {
         let styles_ident = &self.styles_ident;
         let mod_name = format_ident!("__{}_module", styles_ident);
 
-        let hash = create_hash(css.as_str());
+        let hash = create_module_hash(asset);
         let class_mappings =
             get_class_mappings(css.as_str(), &ClassNamePattern::default(), hash.as_str())
                 .expect("Invalid css");
@@ -95,9 +95,7 @@ impl ToTokens for CssModuleParser {
             });
         }
 
-        let options = &self.asset_parser.options;
         let styles_vis = &self.styles_vis;
-
         // We use a PhantomData to prevent Rust from complaining about an unused lifetime if a css module without any idents is used.
         tokens.extend(quote! {
             #[doc(hidden)]
@@ -106,10 +104,6 @@ impl ToTokens for CssModuleParser {
                 use dioxus::prelude::*;
 
                 #linker_tokens;
-
-                // Get the hash to use when builidng hashed css idents.
-                // const __ASSET_OPTIONS: manganis::AssetOptions = #options.into_asset_options();
-                // pub(super) const __ASSET_HASH: manganis::macro_helpers::const_serialize::ConstStr = manganis::macro_helpers::hash_asset(&__ASSET_OPTIONS, #hash);
 
                 // Css ident class for deref stylesheet inclusion.
                 pub(super) struct __CssIdent { pub inner: &'static str }
