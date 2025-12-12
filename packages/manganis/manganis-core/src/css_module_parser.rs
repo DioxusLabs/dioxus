@@ -643,8 +643,8 @@ fn test_parser_error_on_nested_globals() {
 #[should_panic]
 fn test_resolve_global_inner_classes_nested() {
     let global = Global {
-        inner: ".foo :global(.bar)".into(),
-        outer: ":global(.foo :global(.bar))".into(),
+        inner: ".foo :global(.bar)",
+        outer: ":global(.foo :global(.bar))",
     };
     let _ = resolve_global_inner_classes(global);
 }

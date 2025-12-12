@@ -63,7 +63,7 @@ pub(crate) fn process_css_module(
 
     let hash = create_module_hash(source);
     let css = transform_css(css.as_str(), hash.as_str())
-        .expect(&format!("Invalid css for file `{}`", source.display()));
+        .unwrap_or_else(|_| panic!("Invalid css for file `{}`", source.display()));
 
     // Minify CSS
     let css = if css_options.minified() {
