@@ -110,7 +110,7 @@ pub fn parse_css(input: &str) -> Result<Vec<CssFragment<'_>>, ParseError<&str, C
     style_rule_block_contents.parse(input)
 }
 
-pub fn recognize_repeat<'s, O>(
+fn recognize_repeat<'s, O>(
     range: impl Into<Range>,
     f: impl Parser<&'s str, O, ContextError>,
 ) -> impl Parser<&'s str, &'s str, ContextError> {
@@ -197,7 +197,7 @@ fn string<'s>(input: &mut &'s str) -> PResult<&'s str> {
 
 /// Behaves like take_till except it finds and parses strings and
 /// comments (allowing those to contain the end condition characters).
-pub fn stuff_till<'s>(
+fn stuff_till<'s>(
     range: impl Into<Range>,
     list: impl ContainsToken<char>,
 ) -> impl Parser<&'s str, &'s str, ContextError> {
@@ -215,7 +215,7 @@ pub fn stuff_till<'s>(
     )
 }
 
-pub(crate) fn selector<'s>(input: &mut &'s str) -> PResult<Vec<CssFragment<'s>>> {
+fn selector<'s>(input: &mut &'s str) -> PResult<Vec<CssFragment<'s>>> {
     fold_repeat(
         1..,
         alt((
