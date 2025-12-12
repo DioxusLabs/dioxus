@@ -84,10 +84,11 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
     asset.expand_option_tokens().into()
 }
 
-/// Generate type-safe and globally-unique CSS identifiers from a CSS module.
+/// Generate type-safe styles with scoped CSS class names.
 ///
-/// CSS modules allow you to have unique, scoped and type-safe CSS identifiers.
-/// The `styles!()` macro allows you to utilize CSS modules in your Rust projects.
+/// The `styles!()` macro creates scoped CSS modules that prevent class name collisions by making
+/// each class globally unique. It generates a `Styles` struct with type-safe identifiers for your
+/// CSS classes, allowing you to reference styles in your Rust code with compile-time guarantees.
 ///
 /// # Syntax
 ///
@@ -121,7 +122,11 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 ///
 /// # CSS Class Name Scoping
 ///
-/// The macro will collect all class selectors in your CSS file and transform them to be globally unique
+/// **The macro only processes CSS class selectors (`.class-name`).** Other selectors like IDs (`#id`),
+/// element selectors (`div`, `p`), attribute selectors, etc. are left unchanged and not exposed as
+/// Rust constants.
+///
+/// The macro collects all class selectors in your CSS file and transforms them to be globally unique
 /// by appending a hash. For example, `.myClass` becomes `.myClass-a1b2c3` where `a1b2c3` is a hash
 /// of the file path.
 ///
@@ -136,6 +141,10 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 ///
 /// /* This class will NOT be scoped (no hash added) */
 /// :global(.global-class) { color: red; }
+///
+/// /* Element selectors and other CSS remain unchanged */
+/// div { margin: 0; }
+/// #my-id { padding: 10px; }
 /// ```
 ///
 /// # Using Multiple CSS Modules
