@@ -71,16 +71,15 @@ impl Default for ClassNamePattern {
 
 //************************************************************************//
 
-pub fn create_hash(css: &str, hash_len: usize) -> String {
+pub fn create_hash(css: &str) -> String {
     let mut hasher = SipHasher13::new();
     css.hash(&mut hasher);
     let hash = hasher.finish();
-    let mut hash_str = format!("{hash:x}");
-    hash_str.truncate(hash_len);
-    hash_str
+    format!("{:016x}", hash)[..7].to_string()
 }
 
-/// Parses and rewrites CSS class selectors
+/// Parses and rewrites CSS class selectors with the hash applied.
+/// Does not modify `:global(...)` selectors.
 pub fn transform_css<'a>(
     css: &'a str,
     class_name_pattern: &ClassNamePattern,
@@ -107,6 +106,8 @@ pub fn transform_css<'a>(
     Ok(new_css)
 }
 
+/// Gets all the classes in the css files and their rewritten names.
+/// Includes `:global(...)` classes where the name is not changed.
 pub fn get_class_mappings<'a>(
     css: &'a str,
     class_name_pattern: &ClassNamePattern,
