@@ -282,46 +282,6 @@ fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
     Ok(path)
 }
 
-fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
-    // Create a hasher
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-
-    // If this is a folder, hash the folder contents
-    if file_path.is_dir() {
-        let files = std::fs::read_dir(file_path).map_err(|err| AssetParseError::IoError {
-            err,
-            path: file_path.to_path_buf(),
-        })?;
-        for file in files.flatten() {
-            let path = file.path();
-            hash_file_contents(&path)?;
-        }
-        return Ok(hash.finish());
-    }
-
-    // Otherwise, open the file to get its contents
-    let mut file = std::fs::File::open(file_path).map_err(|err| AssetParseError::IoError {
-        err,
-        path: file_path.to_path_buf(),
-    })?;
-
-    // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
-    // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
-    // know the file contents, so we only include that hash
-    let mut buffer = [0; 8192];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(AssetParseError::FailedToReadAsset)?;
-        if read == 0 {
-            break;
-        }
-        hash.write(&buffer[..read]);
-    }
-
-    Ok(hash.finish())
-}
-
 /// Parse `T`, while also collecting the tokens it was parsed from.
 fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro2::TokenStream)> {
     let begin = input.cursor();
