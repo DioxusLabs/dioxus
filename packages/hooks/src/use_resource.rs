@@ -443,6 +443,67 @@ impl<T> Resource<T> {
         }
     }
 
+    /// Asynchronously wait for the resource to be ready and read its value, while safely managing guards across the await point.
+    ///
+    /// This method solves a common problem when chaining resources: holding guards (like write guards from signals)
+    /// across await points can cause deadlocks or borrowing issues. `read_async()` accepts these guards as parameters,
+    /// drops them temporarily while waiting for the resource, and returns them back along with the resource value.
+    ///
+    /// ## How it works
+    ///
+    /// 1. **Accepts values**: Pass guards or other values as a tuple parameter (or `()` for no values)
+    /// 2. **Waits safely**: If the resource isn't ready, drops the guards to prevent deadlocks while waiting
+    /// 3. **Returns together**: Once ready, returns the resource value and your guards as a tuple
+    /// 4. **Compiler reminder**: Forces explicit acknowledgment that you're managing guards across an await
+    ///
+    /// ## Example
+    ///
+    /// Chaining two resources while maintaining write guards:
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn app() -> Element {
+    ///     let mut result = use_signal(|| "Waiting...".to_string());
+    ///     
+    ///     // First resource fetches data
+    ///     let mut data = use_resource(move || async move {
+    ///         reqwest::get("https://api.example.com/data")
+    ///             .await?
+    ///             .json::<String>()
+    ///             .await
+    ///     });
+    ///     
+    ///     // Second resource chains off the first using read_async
+    ///     let _process = use_resource(move || async move {
+    ///         // Get a write guard that we need to hold across the await
+    ///         let result_write = result.write();
+    ///         
+    ///         // Wait for the first resource and get our guard back
+    ///         let (data_ref, mut result_write) = data.read_async((result_write,)).await;
+    ///         
+    ///         // Now we can safely use both the data and our guard
+    ///         match &*data_ref {
+    ///             Ok(value) => *result_write = value.clone(),
+    ///             Err(e) => *result_write = format!("Error: {}", e),
+    ///         }
+    ///         
+    ///         Ok::<(), anyhow::Error>(())
+    ///     });
+    ///     
+    ///     rsx! { "{result}" }
+    /// }
+    /// ```
+    ///
+    /// If you don't need to hold any guards, pass `()`:
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// # let data = use_resource(move || async move { Ok::<String, ()>("test".to_string()) });
+    /// # async {
+    /// // Just wait for the resource without any guards
+    /// let data_ref = data.read_async(()).await;
+    /// # };
+    /// ```
     pub async fn read_async<'a, M>(&'a self, maybe_drop: M) -> M::Out
     where
         M: MaybeDrop<generational_box::GenerationalRef<std::cell::Ref<'a, T>>>,
