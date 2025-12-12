@@ -4,7 +4,7 @@ use crate::{use_callback, use_signal, use_waker, UseWaker};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
-    Subscribers, SuspendedFuture, Task,
+    Runtime, Subscribers, SuspendedFuture, Task,
 };
 use dioxus_signals::*;
 use futures_util::{
@@ -513,7 +513,7 @@ impl<T> Resource<T> {
             drop(read);
             drop(maybe_drop);
             let _: () = (*self).await;
-            // `.read()` should have paniced if not in the correct scope as well
+            // `.read()` should have panicked if not in the correct scope as well
             unreachable!("Future should cancel when ready");
         }
         maybe_drop.alive(read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap())))
