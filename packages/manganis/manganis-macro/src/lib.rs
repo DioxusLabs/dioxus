@@ -86,100 +86,123 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 
 /// Generate type-safe and globally-unique CSS identifiers from a CSS module.
 ///
-/// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is a CSS file with the `.module.css` file extension.
-/// The `css_module!()` macro allows you to utilize CSS modules in your Rust projects.
+/// CSS modules allow you to have unique, scoped and type-safe CSS identifiers.
+/// The `styles!()` macro allows you to utilize CSS modules in your Rust projects.
 ///
 /// # Syntax
 ///
-/// The `css_module!()` macro takes a few items.
-/// - A styles struct identifier. This is the `struct` you use to access your type-safe CSS identifiers in Rust.
-/// - The asset string path. This is the absolute path (from the crate root) to your CSS module.
-/// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
+/// The `styles!()` macro takes:
+/// - The asset string path - the absolute path (from the crate root) to your CSS file.
+/// - Optional `AssetOptions` to configure the processing of your CSS module.
 ///
 /// ```rust, ignore
-/// css_module!(StylesIdent = "/my.module.css", AssetOptions::css_module());
+/// styles!("/assets/my-styles.css");
+/// styles!("/assets/my-styles.css", AssetOptions::css_module().with_minify(true));
 /// ```
-///
-/// The styles struct can be made public by appending `pub` before the identifier.
-/// Read the [Variable Visibility](#variable-visibility) section for more information.
 ///
 /// # Generation
 ///
-/// The `css_module!()` macro does two few things:
-/// - It generates an asset using the `asset!()` macro and automatically inserts it into the app meta.
-/// - It generates a struct with snake-case associated constants of your CSS idents.
+/// The `styles!()` macro does two things:
+/// - It generates an asset and automatically inserts it as a stylesheet link in the document.
+/// - It generates a `Styles` struct with snake-case associated constants for your CSS class names.
 ///
 /// ```rust, ignore
 /// // This macro usage:
-/// css_module!(Styles = "/mycss.module.css");
+/// styles!("/assets/mycss.css");
 ///
 /// // Will generate this (simplified):
 /// struct Styles {}
 ///
 /// impl Styles {
-///     // This can be accessed with `Styles::your_ident`
-///     pub const your_ident: &str = "abc";
+///     // Snake-cased class names can be accessed like this:
+///     pub const your_class: &str = "your_class-a1b2c3";
 /// }
 /// ```
 ///
-/// # CSS Identifier Collection
-/// The macro will collect all identifiers used in your CSS module, convert them into snake_case, and generate a struct and fields around those identifier names.
+/// # CSS Class Name Scoping
 ///
-/// For example, `#fooBar` will become `foo_bar`.
+/// The macro will collect all class selectors in your CSS file and transform them to be globally unique
+/// by appending a hash. For example, `.myClass` becomes `.myClass-a1b2c3` where `a1b2c3` is a hash
+/// of the file path.
 ///
-/// Identifier used only inside of a media query, will not be collected (not yet supported). To get around this, you can use an empty block for the identifier:
+/// Class names are converted to snake_case for the Rust constants. For example:
+/// - `.fooBar` becomes `Styles::foo_bar`
+/// - `.my-class` becomes `Styles::my_class`
+///
+/// To prevent a class from being scoped, wrap it in `:global()`:
 /// ```css
-/// /* Empty ident block to ensure collection */
-/// #foo {}
+/// /* This class will be scoped */
+/// .my-class { color: blue; }
 ///
-/// @media ... {
-///     #foo { ... }
-/// }
+/// /* This class will NOT be scoped (no hash added) */
+/// :global(.global-class) { color: red; }
 /// ```
 ///
-/// # Variable Visibility
-/// If you want your asset or styles constant to be public, you can add the `pub` keyword in front of them.
-/// Restricted visibility (`pub(super)`, `pub(crate)`, etc) is also supported.
+/// # Using Multiple CSS Modules
+///
+/// Multiple `styles!()` macros can be used in the same file by placing them in different modules:
 /// ```rust, ignore
-/// css_module!(pub Styles = "/mycss.module.css");
+/// // First CSS module creates `Styles` in the current scope
+/// styles!("/assets/styles1.css");
+///
+/// mod other {
+///     use dioxus::prelude::*;
+///     // Second CSS module creates `Styles` in the `other` module
+///     styles!("/assets/styles2.css");
+/// }
+///
+/// // Access classes from both:
+/// rsx! {
+///     div { class: Styles::container }
+///     div { class: other::Styles::button }
+/// }
 /// ```
 ///
 /// # Asset Options
-/// Similar to the  `asset!()` macro, you can pass an optional `CssModuleAssetOptions` to configure a few processing settings.
-/// ```rust, ignore
-/// use manganis::CssModuleAssetOptions;
 ///
-/// css_module!(Styles = "/mycss.module.css",
+/// Similar to the `asset!()` macro, you can pass optional `AssetOptions` to configure processing:
+/// ```rust, ignore
+/// styles!(
+///     "/assets/mycss.css",
 ///     AssetOptions::css_module()
 ///         .with_minify(true)
-///         .with_preload(false),
+///         .with_preload(false)
 /// );
 /// ```
 ///
-/// # Examples
-/// First you need a CSS module:
+/// # Example
+///
+/// First create a CSS file:
 /// ```css
-/// /* mycss.module.css */
+/// /* assets/styles.css */
 ///
-/// #header {
-///     padding: 50px;
-/// }
-///
-/// .header {
-///     margin: 20px;
+/// .container {
+///     padding: 20px;
 /// }
 ///
 /// .button {
 ///     background-color: #373737;
 /// }
-/// ```
-/// Then you can use the `css_module!()` macro in your Rust project:
-/// ```rust, ignore
-/// css_module!(Styles = "/mycss.module.css");
 ///
-/// println!("{}", Styles::header);
-/// println!("{}", Styles::header_class);
-/// println!("{}", Styles::button);
+/// :global(.global-text) {
+///     font-weight: bold;
+/// }
+/// ```
+///
+/// Then use the `styles!()` macro:
+/// ```rust, ignore
+/// use dioxus::prelude::*;
+///
+/// fn app() -> Element {
+///     styles!("/assets/styles.css");
+///     
+///     rsx! {
+///         div { class: Styles::container,
+///             button { class: Styles::button, "Click me" }
+///             span { class: Styles::global_text, "This uses global class" }
+///         }
+///     }
+/// }
 /// ```
 #[proc_macro]
 #[doc(hidden)]
