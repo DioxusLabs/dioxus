@@ -487,7 +487,7 @@ impl<T> Resource<T> {
     ///             Err(e) => *result_write = format!("Error: {}", e),
     ///         }
     ///         
-    ///         Ok::<(), anyhow::Error>(())
+    ///         Ok::<(), Box<dyn std::error::Error>>(())
     ///     });
     ///     
     ///     rsx! { "{result}" }
