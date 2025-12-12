@@ -10988,6 +10988,8 @@ dependencies = [
  "dioxus-core-types",
  "manganis",
  "serde",
+ "siphasher 1.0.1",
+ "winnow 0.5.31",
 ]
 
 [[package]]
@@ -17784,7 +17786,7 @@ checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.12.0",
  "toml_datetime 0.6.11",
- "winnow 0.5.40",
+ "winnow 0.5.31",
 ]
 
 [[package]]
@@ -17795,7 +17797,7 @@ checksum = "70f427fce4d84c72b5b732388bf4a9f4531b53f74e2887e3ecb2481f68f66d81"
 dependencies = [
  "indexmap 2.12.0",
  "toml_datetime 0.6.11",
- "winnow 0.5.40",
+ "winnow 0.5.31",
 ]
 
 [[package]]
@@ -20424,9 +20426,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.5.40"
+version = "0.5.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
+checksum = "97a4882e6b134d6c28953a387571f1acdd3496830d5e36c5e3a1075580ea641c"
 dependencies = [
  "memchr",
 ]
