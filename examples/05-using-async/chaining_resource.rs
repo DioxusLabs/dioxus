@@ -7,7 +7,6 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut image_url = use_signal(|| "Loading...".to_owned());
     let mut breed_info = use_signal(|| "Waiting for dog image...".to_owned());
     let mut request_count = use_signal(|| 0);
     let mut analysis_result = use_signal(|| "No analysis yet".to_owned());
@@ -17,6 +16,7 @@ fn app() -> Element {
         message: String,
     }
 
+    // Base resource: fetches the dog image
     let mut dog_image = use_resource(move || async move {
         reqwest::get("https://dog.ceo/api/breeds/image/random")
             .await?
@@ -24,11 +24,12 @@ fn app() -> Element {
             .await
     });
 
+    // Second resource: extracts breed info from the base image
     let process_image = use_resource(move || async move {
-        // Wait for result from other resource
+        // Wait for result from base resource
         let result_ref = dog_image.read_async().await;
 
-        // Clone the data we need from the guard
+        // Clone the URL we need from the guard
         let url = match &*result_ref {
             Ok(response) => response.message.clone(),
             Err(e) => return Err(anyhow::anyhow!("Failed to fetch image: {}", e)),
@@ -42,17 +43,8 @@ fn app() -> Element {
             .await
             .unwrap();
 
-        // Now we can safely do a sync read since we know the value exists
-        let result = dog_image.read();
-        let response = result.as_ref().unwrap().as_ref().unwrap();
-
-        let mut image_url_write = image_url.write();
-        let mut breed_info_write = breed_info.write();
-        let mut count_write = request_count.write();
-
-        *image_url_write = url.clone();
-
-        let breed = if let Some(breed_part) = response.message.split("/breeds/").nth(1) {
+        // Extract breed from URL
+        let breed = if let Some(breed_part) = url.split("/breeds/").nth(1) {
             if let Some(breed) = breed_part.split('/').next() {
                 breed.replace('-', " ").to_uppercase()
             } else {
@@ -62,38 +54,41 @@ fn app() -> Element {
             "Unknown".to_string()
         };
 
+        let mut breed_info_write = breed_info.write();
+        let mut count_write = request_count.write();
+
         *breed_info_write = format!("Breed: {}", breed);
         *count_write += 1;
 
         Ok::<String, anyhow::Error>(breed)
     });
 
-    // Second resource: Uses the breed from the first resource to fetch additional info
+    // Third resource: analyzes the base image data independently
     let _breed_analyzer = use_resource(move || async move {
-        // Wait for the process_image resource to complete
-        let breed_result = process_image.read_async().await;
+        // This also depends on the base dog_image resource
+        let image_result = dog_image.read_async().await;
 
-        let breed = match &*breed_result {
-            Ok(breed) => breed.clone(),
+        let url = match &*image_result {
+            Ok(response) => response.message.clone(),
             Err(e) => {
                 let mut analysis = analysis_result.write();
                 *analysis = format!("Analysis failed: {}", e);
-                return Err(anyhow::anyhow!("No breed to analyze"));
+                return Err(anyhow::anyhow!("No image to analyze"));
             }
         };
 
         // Drop before async work
-        drop(breed_result);
+        drop(image_result);
 
-        // Simulate fetching additional breed information
-        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 500)); return null;"#)
+        // Simulate fetching additional information
+        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 300)); return null;"#)
             .await
             .unwrap();
 
         let analysis = format!(
-            "Analysis: {} breed detected. Image URL length: {} chars. Fetch timestamp: {}",
-            breed,
-            image_url.read().len(),
+            "Analysis: Image URL length: {} chars. Path segments: {}. Request #{}",
+            url.len(),
+            url.split('/').count(),
             request_count.read()
         );
 
@@ -117,9 +112,9 @@ fn app() -> Element {
             div { style: "background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;",
 
                 match &*dog_image.value().read() {
-                    Some(Ok(_)) => rsx! {
+                    Some(Ok(response)) => rsx! {
                         img {
-                            src: "{image_url}",
+                            src: "{response.message}",
                             alt: "Random dog",
                             style: "max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);",
                         }
@@ -136,9 +131,7 @@ fn app() -> Element {
                     "{breed_info}"
                 }
 
-                p { style: "color: #888; font-size: 14px; margin-top: 10px;",
-                    "{analysis_result}"
-                }
+                p { style: "color: #888; font-size: 14px; margin-top: 10px;", "{analysis_result}" }
 
                 p { style: "color: #888; font-size: 14px;", "Images fetched: {request_count}" }
             }
@@ -152,15 +145,37 @@ fn app() -> Element {
 
                 button {
                     onclick: move |_| async move {
-                        // This demonstrates using read_async in an onclick callback
                         let breed_result = process_image.read_async().await;
                         if let Ok(breed) = &*breed_result {
                             let mut analysis = analysis_result.write();
+                            let old_analysis = analysis.clone();
                             *analysis = format!("Manual trigger: Analyzing {} breed...", breed);
+                            drop(breed_result);
+                            drop(analysis);
+                            document::eval(r#"await new Promise(resolve => setTimeout(resolve, 2000)); return null;"#)
+                                .await
+                                .unwrap();
+                            let mut analysis = analysis_result.write();
+                            *analysis = old_analysis;
                         }
                     },
                     style: "background: #2196F3; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 4px; cursor: pointer;",
                     "🔍 Re-analyze Breed"
+                }
+            }
+
+            div { style: "margin-top: 30px; padding: 15px; background: #e3f2fd; border-left: 4px solid #2196F3; text-align: left;",
+                h3 { "📊 Resource Dependency Graph:" }
+                pre { style: "font-family: monospace; line-height: 1.6; margin: 10px 0;",
+                    "dog_image (base)\n"
+                    "    ├─→ process_image (extracts breed)\n"
+                    "    └─→ breed_analyzer (analyzes URL)"
+                }
+                p { style: "margin-top: 10px; font-size: 14px;",
+                    "Both process_image and breed_analyzer depend on dog_image, "
+                    "demonstrating how multiple resources can independently use "
+                    code { "read_async()" }
+                    " on the same base resource."
                 }
             }
         }
