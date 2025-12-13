@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use crate::{use_callback, use_signal};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
@@ -11,7 +11,14 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::HashMap,
+    future::Future,
+    rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
+    task::Waker,
+};
 use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
@@ -34,7 +41,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waker = use_waker::<()>();
+    let mut waiting_futures: Signal<HashMap<usize, Waker>> = use_signal(|| HashMap::new());
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -63,8 +70,10 @@ where
             state.set(UseResourceState::Ready);
             value.set(Some(res));
 
-            // Notify that the value has changed
-            waker.wake(());
+            let mut waiting_futures = waiting_futures.write();
+            for (_, waker) in waiting_futures.drain() {
+                waker.wake();
+            }
         })
     });
 
@@ -90,7 +99,7 @@ where
         task,
         value,
         state,
-        waker,
+        waiting_futures,
         callback: cb,
     }
 }
@@ -122,7 +131,7 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
-    waker: UseWaker<()>,
+    waiting_futures: Signal<HashMap<usize, Waker>>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -504,19 +513,17 @@ impl<T> Resource<T> {
     /// let data_ref = data.read_async(()).await;
     /// # };
     /// ```
-    pub async fn read_async<'a, M>(&'a self, maybe_drop: M) -> M::Out
-    where
-        M: MaybeDrop<generational_box::GenerationalRef<std::cell::Ref<'a, T>>>,
-    {
-        let read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> = self.read();
-        if read.is_none() {
+    pub async fn read_async<'a>(
+        &'a self,
+    ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
+        let mut read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> =
+            self.read();
+        while read.is_none() {
             drop(read);
-            drop(maybe_drop);
             let _: () = (*self).await;
-            // `.read()` should have panicked if not in the correct scope as well
-            unreachable!("Future should cancel when ready");
+            read = self.read();
         }
-        maybe_drop.alive(read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap())))
+        read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
     }
 }
 
@@ -703,16 +710,113 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-impl<T> std::future::Future for Resource<T> {
+// impl<T> std::future::Future for Resource<T> {
+//     type Output = ();
+
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         // SAFETY: We're not moving out of the pinned data, only accessing a field
+//         let this = unsafe { self.get_unchecked_mut() };
+//         match this.waker.clone().poll_unpin(cx) {
+//             std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+//             std::task::Poll::Pending => {
+//                 this.future_wakers.push(cx.waker().clone());
+//                 std::task::Poll::Pending
+//             }
+//         }
+//     }
+// }
+
+#[derive(Debug, Clone)]
+pub struct ResourceFuture<T>
+where
+    T: 'static,
+{
+    id: usize,
+    resource: Resource<T>,
+}
+
+// impl<T> std::future::Future for ResourceFuture<T>
+// where
+//     T: 'static,
+// {
+//     type Output = ();
+
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         match self.resource.waker.clone().poll_unpin(cx) {
+//             std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+//             std::task::Poll::Pending => {
+//                 let mut waiting_futures = self.resource.waiting_futures.clone();
+//                 waiting_futures.insert(self.id, cx.waker().clone());
+//                 std::task::Poll::Pending
+//             }
+//         }
+//     }
+// }
+
+impl<T> std::future::Future for ResourceFuture<T>
+where
+    T: 'static,
+{
     type Output = ();
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        match self.waker.clone().poll_unpin(cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+        if matches!(*self.resource.state.peek(), UseResourceState::Ready) {
+            return std::task::Poll::Ready(());
         }
+        {
+            let mut waiting_futures = self.resource.waiting_futures.clone();
+            waiting_futures.insert(self.id, cx.waker().clone());
+        }
+        std::task::Poll::Pending
     }
 }
+
+impl<T> Drop for ResourceFuture<T>
+where
+    T: 'static,
+{
+    fn drop(&mut self) {
+        self.resource.waiting_futures.write().remove(&self.id);
+    }
+}
+
+impl<T> std::future::IntoFuture for Resource<T>
+where
+    T: 'static,
+{
+    type Output = ();
+
+    type IntoFuture = ResourceFuture<T>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        static NEXT_FUTURE_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
+        ResourceFuture { id, resource: self }
+    }
+}
+
+// impl<T> std::future::Future for Resource<T>
+// where
+//     T: Clone,
+// {
+//     type Output = Option<T>;
+
+//     fn poll(
+//         self: std::pin::Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         match self.waker.clone().poll_unpin(cx) {
+//             std::task::Poll::Ready(v) => std::task::Poll::Ready(v),
+//             std::task::Poll::Pending => std::task::Poll::Pending,
+//         }
+//     }
+// }

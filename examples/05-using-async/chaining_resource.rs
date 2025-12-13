@@ -6,15 +6,17 @@
 //! reminding you that you're holding these guards across an await point and helping prevent
 //! common async pitfalls.
 
-use dioxus::prelude::*;
+use core::error;
+
+use dioxus::{core::Runtime, prelude::*};
 
 fn main() {
     dioxus::launch(app)
 }
 
 fn app() -> Element {
-    let mut image_url = use_signal(|| "Loading...".to_string());
-    let mut breed_info = use_signal(|| "Waiting for dog image...".to_string());
+    let mut image_url = use_signal(|| "No Image".to_owned());
+    let mut breed_info = use_signal(|| "No Breed Info".to_owned());
     let mut request_count = use_signal(|| 0);
 
     #[derive(serde::Deserialize, Clone)]
@@ -32,9 +34,13 @@ fn app() -> Element {
 
     let _process_image = use_resource(move || async move {
         // Guards we want to hold across the await point
-        let image_url_write = image_url.write();
-        let breed_info_write = breed_info.write();
-        let count_write = request_count.write();
+        let mut image_url_write = image_url.write();
+        let mut breed_info_write = breed_info.write();
+
+        *image_url_write = "Loading...".to_owned();
+        *breed_info_write = "Waiting for dog image...".to_owned();
+        drop(image_url_write);
+        drop(breed_info_write);
 
         // ⚠️ WARNING: Normally, holding guards across await points is dangerous!
         // `read_async()` solves this by:
@@ -43,23 +49,24 @@ fn app() -> Element {
         // 3. Returning them back with the resource if the resource is available
 
         // Wait for the first resource and get guards back
-        let (result_ref, mut image_url_write, mut breed_info_write, mut count_write) = dog_image
-            .read_async((image_url_write, breed_info_write, count_write))
-            .await;
-        // If we had no guards we could do the below
-        // let result_ref = dog_image.read_async(()).await;
+        let result_ref = dog_image.read_async().await;
+        let mut image_url_write = image_url.write();
+        let mut breed_info_write = breed_info.write();
 
+        let mut count_write = request_count.write();
         // Now we can safely use the result and our write guards together
         match &*result_ref {
             Ok(response) => {
                 let url = &response.message;
                 *image_url_write = url.clone();
 
-                if let Some(breed_part) = url.split("/breeds/").nth(1) {
-                    if let Some(breed) = breed_part.split('/').next() {
-                        let formatted_breed = breed.replace('-', " ").to_uppercase();
-                        *breed_info_write = format!("Breed: {}", formatted_breed);
-                    }
+                if let Some(breed_part) = url.split("/breeds/").nth(1)
+                    && let Some(breed) = breed_part.split('/').next()
+                {
+                    let formatted_breed = breed.replace('-', " ").to_uppercase();
+                    *breed_info_write = format!("Breed: {}", formatted_breed);
+                } else {
+                    *breed_info_write = "Breed information not found".to_string();
                 }
 
                 *count_write += 1;
@@ -74,6 +81,14 @@ fn app() -> Element {
     });
 
     rsx! {
+        button {
+            onclick: move |_| async move {
+                error!("Hit 1");
+                let test = _process_image.read_async().await;
+                error!("Hit 2");
+            },
+            "Click me"
+        }
         div { style: "font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center;",
 
             h1 { "🐕 Random Dog Image Fetcher" }
