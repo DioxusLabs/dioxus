@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use crate::{use_callback, use_signal};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
@@ -11,7 +11,14 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use std::{cell::Cell, future::Future, rc::Rc};
+use std::{
+    cell::Cell,
+    collections::HashMap,
+    future::Future,
+    rc::Rc,
+    sync::atomic::{AtomicUsize, Ordering},
+    task::Waker,
+};
 use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
@@ -34,7 +41,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waker = use_waker::<()>();
+    let mut waiting_futures: Signal<HashMap<usize, Waker>> = use_signal(HashMap::new);
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -63,8 +70,10 @@ where
             state.set(UseResourceState::Ready);
             value.set(Some(res));
 
-            // Notify that the value has changed
-            waker.wake(());
+            let mut waiting_futures = waiting_futures.write();
+            for (_, waker) in waiting_futures.drain() {
+                waker.wake();
+            }
         })
     });
 
@@ -90,7 +99,7 @@ where
         task,
         value,
         state,
-        waker,
+        waiting_futures,
         callback: cb,
     }
 }
@@ -122,7 +131,7 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
-    waker: UseWaker<()>,
+    waiting_futures: Signal<HashMap<usize, Waker>>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -442,6 +451,76 @@ impl<T> Resource<T> {
             _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
         }
     }
+
+    /// Asynchronously wait for the resource to be ready and read its value.
+    ///
+    /// This method waits until the resource completes, then returns a read guard to the value.
+    /// The guard works like any other `read()` guard and follows the same borrowing rules.
+    ///
+    /// ## Important: Handling Guards Across Await Points
+    ///
+    /// **Never hold the returned guard across await points.** If you need to do more async work
+    /// after reading the value, you must either:
+    ///
+    /// 1. **Clone the data and drop the guard:**
+    ///    ```rust,ignore
+    ///    let guard = resource.read_async().await;
+    ///    let data = guard.clone();
+    ///    drop(guard);
+    ///    // Now safe to do more async work
+    ///    ```
+    ///
+    /// 2. **Drop and use sync `read()`:**
+    ///    ```rust,ignore
+    ///    let guard1 = resource1.read_async().await;
+    ///    drop(guard1);
+    ///    let guard2 = resource2.read_async().await;
+    ///    // Value exists
+    ///    let guard1 = resource1.read().as_ref().unwrap();
+    ///    ```
+    ///
+    /// ```rust,ignore
+    /// // ❌ WRONG - holding guard across await
+    /// let guard = resource.read_async().await;
+    /// some_async_call().await; // Guard is still held!
+    /// println!("{}", guard.value);
+    /// ```
+    /// ## Example
+    ///
+    /// Chaining two resources where the second depends on the first:
+    ///
+    /// ```rust,no_run
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     let user_id = use_resource(|| async { fetch_user_id().await });
+    ///     
+    ///     let user_profile = use_resource(move || async move {
+    ///         // Wait for user_id to be ready
+    ///         let id_guard = user_id.read_async().await;
+    ///         let id = *id_guard; // Copy the ID
+    ///         drop(id_guard);     // Drop before async work
+    ///         
+    ///         // Now safe to make another async call
+    ///         fetch_profile(id).await
+    ///     });
+    ///     
+    ///     rsx! { "Profile: {user_profile:?}" }
+    /// }
+    /// # async fn fetch_user_id() -> u32 { 42 }
+    /// # async fn fetch_profile(id: u32) -> String { format!("User {}", id) }
+    /// ```
+    pub async fn read_async<'a>(
+        &'a self,
+    ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
+        let mut read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> =
+            self.read();
+        while read.is_none() {
+            drop(read);
+            let _: () = (*self).await;
+            read = self.read();
+        }
+        read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
+    }
 }
 
 impl<T, E> Resource<Result<T, E>> {
@@ -544,16 +623,56 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-impl<T> std::future::Future for Resource<T> {
+#[derive(Debug, Clone)]
+pub struct ResourceFuture<T>
+where
+    T: 'static,
+{
+    id: usize,
+    resource: Resource<T>,
+}
+
+impl<T> std::future::Future for ResourceFuture<T>
+where
+    T: 'static,
+{
     type Output = ();
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        match self.waker.clone().poll_unpin(cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+        if matches!(*self.resource.state.peek(), UseResourceState::Ready) {
+            return std::task::Poll::Ready(());
         }
+        {
+            let mut waiting_futures = self.resource.waiting_futures;
+            waiting_futures.insert(self.id, cx.waker().clone());
+        }
+        std::task::Poll::Pending
+    }
+}
+
+impl<T> Drop for ResourceFuture<T>
+where
+    T: 'static,
+{
+    fn drop(&mut self) {
+        self.resource.waiting_futures.write().remove(&self.id);
+    }
+}
+
+impl<T> std::future::IntoFuture for Resource<T>
+where
+    T: 'static,
+{
+    type Output = ();
+
+    type IntoFuture = ResourceFuture<T>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        static NEXT_FUTURE_ID: AtomicUsize = AtomicUsize::new(0);
+        let id = NEXT_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
+        ResourceFuture { id, resource: self }
     }
 }
