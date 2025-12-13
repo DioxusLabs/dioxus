@@ -1,6 +1,4 @@
 //! Chaining Resources with `read_async()`
-//!
-//! This example demonstrates how to use `read_async()` to chain resources together.
 
 use dioxus::prelude::*;
 
@@ -12,6 +10,7 @@ fn app() -> Element {
     let mut image_url = use_signal(|| "Loading...".to_owned());
     let mut breed_info = use_signal(|| "Waiting for dog image...".to_owned());
     let mut request_count = use_signal(|| 0);
+    let mut analysis_result = use_signal(|| "No analysis yet".to_owned());
 
     #[derive(serde::Deserialize, Clone)]
     struct DogImageResponse {
@@ -25,46 +24,86 @@ fn app() -> Element {
             .await
     });
 
-    let _process_image = use_resource(move || async move {
+    let process_image = use_resource(move || async move {
+        // Wait for result from other resource
         let result_ref = dog_image.read_async().await;
+
+        // Clone the data we need from the guard
+        let url = match &*result_ref {
+            Ok(response) => response.message.clone(),
+            Err(e) => return Err(anyhow::anyhow!("Failed to fetch image: {}", e)),
+        };
+
+        // Drop the guard before doing more async work
+        drop(result_ref);
+
+        // Simulate some async processing (e.g., image validation, metadata fetch)
+        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 500)); return null;"#)
+            .await
+            .unwrap();
+
+        // Now we can safely do a sync read since we know the value exists
+        let result = dog_image.read();
+        let response = result.as_ref().unwrap().as_ref().unwrap();
+
         let mut image_url_write = image_url.write();
         let mut breed_info_write = breed_info.write();
-
         let mut count_write = request_count.write();
-        match &*result_ref {
-            Ok(response) => {
-                let url = &response.message;
-                *image_url_write = url.clone();
 
-                if let Some(breed_part) = url.split("/breeds/").nth(1)
-                    && let Some(breed) = breed_part.split('/').next()
-                {
-                    let formatted_breed = breed.replace('-', " ").to_uppercase();
-                    *breed_info_write = format!("Breed: {}", formatted_breed);
-                } else {
-                    *breed_info_write = "Breed information not found".to_string();
-                }
+        *image_url_write = url.clone();
 
-                *count_write += 1;
+        let breed = if let Some(breed_part) = response.message.split("/breeds/").nth(1) {
+            if let Some(breed) = breed_part.split('/').next() {
+                breed.replace('-', " ").to_uppercase()
+            } else {
+                "Unknown".to_string()
             }
+        } else {
+            "Unknown".to_string()
+        };
+
+        *breed_info_write = format!("Breed: {}", breed);
+        *count_write += 1;
+
+        Ok::<String, anyhow::Error>(breed)
+    });
+
+    // Second resource: Uses the breed from the first resource to fetch additional info
+    let _breed_analyzer = use_resource(move || async move {
+        // Wait for the process_image resource to complete
+        let breed_result = process_image.read_async().await;
+
+        let breed = match &*breed_result {
+            Ok(breed) => breed.clone(),
             Err(e) => {
-                *image_url_write = format!("Error loading image: {}", e);
-                *breed_info_write = "Failed to fetch breed info".to_string();
+                let mut analysis = analysis_result.write();
+                *analysis = format!("Analysis failed: {}", e);
+                return Err(anyhow::anyhow!("No breed to analyze"));
             }
-        }
+        };
 
-        Ok::<(), anyhow::Error>(())
+        // Drop before async work
+        drop(breed_result);
+
+        // Simulate fetching additional breed information
+        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 500)); return null;"#)
+            .await
+            .unwrap();
+
+        let analysis = format!(
+            "Analysis: {} breed detected. Image URL length: {} chars. Fetch timestamp: {}",
+            breed,
+            image_url.read().len(),
+            request_count.read()
+        );
+
+        let mut analysis_write = analysis_result.write();
+        *analysis_write = analysis.clone();
+
+        Ok::<String, anyhow::Error>(analysis)
     });
 
     rsx! {
-        button {
-            onclick: move |_| async move {
-                error!("Hit 1");
-                let test = _process_image.read_async().await;
-                error!("Hit 2");
-            },
-            "Click me"
-        }
         div { style: "font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; text-align: center;",
 
             h1 { "🐕 Random Dog Image Fetcher" }
@@ -77,7 +116,6 @@ fn app() -> Element {
 
             div { style: "background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;",
 
-                // Display the fetched image
                 match &*dog_image.value().read() {
                     Some(Ok(_)) => rsx! {
                         img {
@@ -86,48 +124,43 @@ fn app() -> Element {
                             style: "max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);",
                         }
                     },
-                    Some(Err(_)) => rsx! {
-                        p { style: "color: red;", "❌ {image_url}" }
+                    Some(Err(e)) => rsx! {
+                        p { style: "color: red;", "❌ Error: {e}" }
                     },
                     None => rsx! {
                         p { "⏳ Loading dog image..." }
                     },
                 }
 
-                // Display breed information
                 p { style: "margin-top: 15px; font-size: 18px; font-weight: bold;",
                     "{breed_info}"
+                }
+
+                p { style: "color: #888; font-size: 14px; margin-top: 10px;",
+                    "{analysis_result}"
                 }
 
                 p { style: "color: #888; font-size: 14px;", "Images fetched: {request_count}" }
             }
 
-            button {
-                onclick: move |_| dog_image.restart(),
-                style: "background: #4CAF50; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 4px; cursor: pointer;",
-                "🔄 Fetch Another Dog"
-            }
+            div { style: "display: flex; gap: 10px; justify-content: center; margin: 20px 0;",
+                button {
+                    onclick: move |_| dog_image.restart(),
+                    style: "background: #4CAF50; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 4px; cursor: pointer;",
+                    "🔄 Fetch Another Dog"
+                }
 
-            div { style: "margin-top: 30px; padding: 15px; background: #fff3cd; border-left: 4px solid #ffc107; text-align: left;",
-
-                h3 { "💡 How read_async() works:" }
-                ul { style: "text-align: left; line-height: 1.8;",
-                    li {
-                        strong { "Accepts values: " }
-                        "Pass guards or other values as parameters"
-                    }
-                    li {
-                        strong { "Waits safely: " }
-                        "Drops guards while waiting, preventing double borrow"
-                    }
-                    li {
-                        strong { "Returns values: " }
-                        "Returns the resource result AND your values back together if the resource is ready"
-                    }
-                    li {
-                        strong { "Compiler reminder: " }
-                        "Forces acknowledgment that you're holding guards across await"
-                    }
+                button {
+                    onclick: move |_| async move {
+                        // This demonstrates using read_async in an onclick callback
+                        let breed_result = process_image.read_async().await;
+                        if let Ok(breed) = &*breed_result {
+                            let mut analysis = analysis_result.write();
+                            *analysis = format!("Manual trigger: Analyzing {} breed...", breed);
+                        }
+                    },
+                    style: "background: #2196F3; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 4px; cursor: pointer;",
+                    "🔍 Re-analyze Breed"
                 }
             }
         }

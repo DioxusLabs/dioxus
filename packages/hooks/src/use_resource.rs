@@ -454,12 +454,61 @@ impl<T> Resource<T> {
 
     /// Asynchronously wait for the resource to be ready and read its value.
     ///
-    /// **Note:** The returned value still works like any other `read`- it should never be held held
-    /// across await points. Instead, if there is another async call you should clone this value.
-    /// Unlike other sync `read` calls, it may not be possible to `drop` and re-call if the other
-    /// async call also returns a lock. As in alternative to cloning, in hooks that cancel at await
-    /// points, such as `use_resource`, one can safely drop the returned value and call the sync
-    /// `read` method with an unwrap. As to get to this point, the value must exist.
+    /// This method waits until the resource completes, then returns a read guard to the value.
+    /// The guard works like any other `read()` guard and follows the same borrowing rules.
+    ///
+    /// ## Important: Handling Guards Across Await Points
+    ///
+    /// **Never hold the returned guard across await points.** If you need to do more async work
+    /// after reading the value, you must either:
+    ///
+    /// 1. **Clone the data and drop the guard:**
+    ///    ```rust,ignore
+    ///    let guard = resource.read_async().await;
+    ///    let data = guard.clone();
+    ///    drop(guard);
+    ///    // Now safe to do more async work
+    ///    ```
+    ///
+    /// 2. **Drop and use sync `read()`:**
+    ///    ```rust,ignore
+    ///    let guard1 = resource1.read_async().await;
+    ///    drop(guard1);
+    ///    let guard2 = resource2.read_async().await;
+    ///    // Value exists
+    ///    let guard1 = resource1.read().as_ref().unwrap();
+    ///    ```
+    ///
+    /// ```rust,ignore
+    /// // ❌ WRONG - holding guard across await
+    /// let guard = resource.read_async().await;
+    /// some_async_call().await; // Guard is still held!
+    /// println!("{}", guard.value);
+    /// ```
+    /// ## Example
+    ///
+    /// Chaining two resources where the second depends on the first:
+    ///
+    /// ```rust,no_run
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     let user_id = use_resource(|| async { fetch_user_id().await });
+    ///     
+    ///     let user_profile = use_resource(move || async move {
+    ///         // Wait for user_id to be ready
+    ///         let id_guard = user_id.read_async().await;
+    ///         let id = *id_guard; // Copy the ID
+    ///         drop(id_guard);     // Drop before async work
+    ///         
+    ///         // Now safe to make another async call
+    ///         fetch_profile(id).await
+    ///     });
+    ///     
+    ///     rsx! { "Profile: {user_profile:?}" }
+    /// }
+    /// # async fn fetch_user_id() -> u32 { 42 }
+    /// # async fn fetch_profile(id: u32) -> String { format!("User {}", id) }
+    /// ```
     pub async fn read_async<'a>(
         &'a self,
     ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
