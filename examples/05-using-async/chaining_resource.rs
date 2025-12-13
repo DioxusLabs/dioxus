@@ -1,27 +1,20 @@
 //! Chaining Resources with `read_async()`
 //!
-//! This example demonstrates how to use `read_async()` to chain resources together while
-//! maintaining guards across await points. The key benefit is that you can pass values
-//! (like write guards) to `read_async()`, and it will return them back after the await,
-//! reminding you that you're holding these guards across an await point and helping prevent
-//! common async pitfalls.
+//! This example demonstrates how to use `read_async()` to chain resources together.
 
-use core::error;
-
-use dioxus::{core::Runtime, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::launch(app)
 }
 
 fn app() -> Element {
-    let mut image_url = use_signal(|| "No Image".to_owned());
-    let mut breed_info = use_signal(|| "No Breed Info".to_owned());
+    let mut image_url = use_signal(|| "Loading...".to_owned());
+    let mut breed_info = use_signal(|| "Waiting for dog image...".to_owned());
     let mut request_count = use_signal(|| 0);
 
     #[derive(serde::Deserialize, Clone)]
     struct DogImageResponse {
-        /// URL of the dog image
         message: String,
     }
 
@@ -33,28 +26,11 @@ fn app() -> Element {
     });
 
     let _process_image = use_resource(move || async move {
-        // Guards we want to hold across the await point
-        let mut image_url_write = image_url.write();
-        let mut breed_info_write = breed_info.write();
-
-        *image_url_write = "Loading...".to_owned();
-        *breed_info_write = "Waiting for dog image...".to_owned();
-        drop(image_url_write);
-        drop(breed_info_write);
-
-        // ⚠️ WARNING: Normally, holding guards across await points is dangerous!
-        // `read_async()` solves this by:
-        // 1. Forcing you to acknowledge you have some or no guards and accepting them as parameters
-        // 2. Dropping them if the resource is currently unavailable
-        // 3. Returning them back with the resource if the resource is available
-
-        // Wait for the first resource and get guards back
         let result_ref = dog_image.read_async().await;
         let mut image_url_write = image_url.write();
         let mut breed_info_write = breed_info.write();
 
         let mut count_write = request_count.write();
-        // Now we can safely use the result and our write guards together
         match &*result_ref {
             Ok(response) => {
                 let url = &response.message;

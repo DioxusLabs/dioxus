@@ -452,67 +452,14 @@ impl<T> Resource<T> {
         }
     }
 
-    /// Asynchronously wait for the resource to be ready and read its value, while safely managing guards across the await point.
+    /// Asynchronously wait for the resource to be ready and read its value.
     ///
-    /// This method solves a common problem when chaining resources: holding guards (like write guards from signals)
-    /// across await points can cause deadlocks or borrowing issues. `read_async()` accepts these guards as parameters,
-    /// drops them temporarily while waiting for the resource, and returns them back along with the resource value.
-    ///
-    /// ## How it works
-    ///
-    /// 1. **Accepts values**: Pass guards or other values as a tuple parameter (or `()` for no values)
-    /// 2. **Waits safely**: If the resource isn't ready, drops the guards to prevent deadlocks while waiting
-    /// 3. **Returns together**: Once ready, returns the resource value and your guards as a tuple
-    /// 4. **Compiler reminder**: Forces explicit acknowledgment that you're managing guards across an await
-    ///
-    /// ## Example
-    ///
-    /// Chaining two resources while maintaining write guards:
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// fn app() -> Element {
-    ///     let mut result = use_signal(|| "Waiting...".to_string());
-    ///     
-    ///     // First resource fetches data
-    ///     let mut data = use_resource(move || async move {
-    ///         reqwest::get("https://api.example.com/data")
-    ///             .await?
-    ///             .json::<String>()
-    ///             .await
-    ///     });
-    ///     
-    ///     // Second resource chains off the first using read_async
-    ///     let _process = use_resource(move || async move {
-    ///         // Get a write guard that we need to hold across the await
-    ///         let result_write = result.write();
-    ///         
-    ///         // Wait for the first resource and get our guard back
-    ///         let (data_ref, mut result_write) = data.read_async((result_write,)).await;
-    ///         
-    ///         // Now we can safely use both the data and our guard
-    ///         match &*data_ref {
-    ///             Ok(value) => *result_write = value.clone(),
-    ///             Err(e) => *result_write = format!("Error: {}", e),
-    ///         }
-    ///         
-    ///         Ok::<(), Box<dyn std::error::Error>>(())
-    ///     });
-    ///     
-    ///     rsx! { "{result}" }
-    /// }
-    /// ```
-    ///
-    /// If you don't need to hold any guards, pass `()`:
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # let data = use_resource(move || async move { Ok::<String, ()>("test".to_string()) });
-    /// # async {
-    /// // Just wait for the resource without any guards
-    /// let data_ref = data.read_async(()).await;
-    /// # };
-    /// ```
+    /// **Note:** The returned value still works like any other `read`- it should never be held held
+    /// across await points. Instead, if there is another async call you should clone this value.
+    /// Unlike other sync `read` calls, it may not be possible to `drop` and re-call if the other
+    /// async call also returns a lock. As in alternative to cloning, in hooks that cancel at await
+    /// points, such as `use_resource`, one can safely drop the returned value and call the sync
+    /// `read` method with an unwrap. As to get to this point, the value must exist.
     pub async fn read_async<'a>(
         &'a self,
     ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
@@ -524,89 +471,6 @@ impl<T> Resource<T> {
             read = self.read();
         }
         read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
-    }
-}
-
-pub trait MaybeDrop<T>
-where
-    Self: Sized,
-{
-    type Out;
-
-    fn alive(self, v: T) -> Self::Out;
-}
-
-impl<T> MaybeDrop<T> for () {
-    type Out = T;
-
-    fn alive(self, v: T) -> Self::Out {
-        v
-    }
-}
-
-impl<T, A> MaybeDrop<T> for (A,) {
-    type Out = (T, A);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0)
-    }
-}
-
-impl<T, A, B> MaybeDrop<T> for (A, B) {
-    type Out = (T, A, B);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1)
-    }
-}
-
-impl<T, A, B, C> MaybeDrop<T> for (A, B, C) {
-    type Out = (T, A, B, C);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1, self.2)
-    }
-}
-
-impl<T, A, B, C, D> MaybeDrop<T> for (A, B, C, D) {
-    type Out = (T, A, B, C, D);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1, self.2, self.3)
-    }
-}
-
-impl<T, A, B, C, D, E> MaybeDrop<T> for (A, B, C, D, E) {
-    type Out = (T, A, B, C, D, E);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1, self.2, self.3, self.4)
-    }
-}
-
-impl<T, A, B, C, D, E, F> MaybeDrop<T> for (A, B, C, D, E, F) {
-    type Out = (T, A, B, C, D, E, F);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1, self.2, self.3, self.4, self.5)
-    }
-}
-
-impl<T, A, B, C, D, E, F, G> MaybeDrop<T> for (A, B, C, D, E, F, G) {
-    type Out = (T, A, B, C, D, E, F, G);
-
-    fn alive(self, v: T) -> Self::Out {
-        (v, self.0, self.1, self.2, self.3, self.4, self.5, self.6)
-    }
-}
-
-impl<T, A, B, C, D, E, F, G, H> MaybeDrop<T> for (A, B, C, D, E, F, G, H) {
-    type Out = (T, A, B, C, D, E, F, G, H);
-
-    fn alive(self, v: T) -> Self::Out {
-        (
-            v, self.0, self.1, self.2, self.3, self.4, self.5, self.6, self.7,
-        )
     }
 }
 
@@ -710,25 +574,6 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-// impl<T> std::future::Future for Resource<T> {
-//     type Output = ();
-
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         // SAFETY: We're not moving out of the pinned data, only accessing a field
-//         let this = unsafe { self.get_unchecked_mut() };
-//         match this.waker.clone().poll_unpin(cx) {
-//             std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-//             std::task::Poll::Pending => {
-//                 this.future_wakers.push(cx.waker().clone());
-//                 std::task::Poll::Pending
-//             }
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone)]
 pub struct ResourceFuture<T>
 where
@@ -737,27 +582,6 @@ where
     id: usize,
     resource: Resource<T>,
 }
-
-// impl<T> std::future::Future for ResourceFuture<T>
-// where
-//     T: 'static,
-// {
-//     type Output = ();
-
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         match self.resource.waker.clone().poll_unpin(cx) {
-//             std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-//             std::task::Poll::Pending => {
-//                 let mut waiting_futures = self.resource.waiting_futures.clone();
-//                 waiting_futures.insert(self.id, cx.waker().clone());
-//                 std::task::Poll::Pending
-//             }
-//         }
-//     }
-// }
 
 impl<T> std::future::Future for ResourceFuture<T>
 where
@@ -803,20 +627,3 @@ where
         ResourceFuture { id, resource: self }
     }
 }
-
-// impl<T> std::future::Future for Resource<T>
-// where
-//     T: Clone,
-// {
-//     type Output = Option<T>;
-
-//     fn poll(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//     ) -> std::task::Poll<Self::Output> {
-//         match self.waker.clone().poll_unpin(cx) {
-//             std::task::Poll::Ready(v) => std::task::Poll::Ready(v),
-//             std::task::Poll::Pending => std::task::Poll::Pending,
-//         }
-//     }
-// }
