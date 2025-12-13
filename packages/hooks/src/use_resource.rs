@@ -41,7 +41,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waiting_futures: Signal<HashMap<usize, Waker>> = use_signal(|| HashMap::new());
+    let mut waiting_futures: Signal<HashMap<usize, Waker>> = use_signal(HashMap::new);
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -646,7 +646,7 @@ where
             return std::task::Poll::Ready(());
         }
         {
-            let mut waiting_futures = self.resource.waiting_futures.clone();
+            let mut waiting_futures = self.resource.waiting_futures;
             waiting_futures.insert(self.id, cx.waker().clone());
         }
         std::task::Poll::Pending
