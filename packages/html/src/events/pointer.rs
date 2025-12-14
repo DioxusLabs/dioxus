@@ -136,6 +136,9 @@ impl_event![
 
     /// pointerout
     onpointerout
+
+    /// auxclick
+    onauxclick
 ];
 
 impl PointerData {
