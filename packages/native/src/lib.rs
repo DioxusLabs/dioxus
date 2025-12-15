@@ -15,6 +15,9 @@ mod dioxus_application;
 mod dioxus_renderer;
 mod link_handler;
 
+#[cfg(feature = "prelude")]
+pub mod prelude;
+
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
