@@ -2194,7 +2194,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args: Vec<_> = rustc_args.link_args.iter().skip(1).cloned().collect();
+        let mut args: Vec<_> = rustc_args.link_args.clone();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
