@@ -521,7 +521,7 @@ impl AppBuilder {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
-        if let Some(base_path) = krate.base_path() {
+        if let Some(base_path) = krate.trimmed_base_path() {
             envs.push((
                 dioxus_cli_config::ASSET_ROOT_ENV.into(),
                 base_path.to_string(),
