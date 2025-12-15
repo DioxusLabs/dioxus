@@ -266,7 +266,7 @@ jobs:
           npm install -D @playwright/test
           npx playwright install
           npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: playwright-report-${{ matrix.platform.toolchain }}-${{ runner.os }}
