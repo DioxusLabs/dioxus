@@ -81,6 +81,23 @@ pub enum ServerFnError {
     /// Occurs on the server if there is an error creating an HTTP response.
     #[error("error creating response {0}")]
     Response(String),
+
+    /// A redirect response returned while running a server function or extractor.
+    ///
+    /// This is treated as control-flow rather than an ordinary error so we can preserve the
+    /// `Location` header (which is otherwise lost when converting axum responses into `ServerFnError`).
+    #[error("redirect ({code}) to {location}")]
+    Redirect {
+        /// HTTP status code associated with the redirect (typically 302/303/307/308).
+        code: u16,
+        /// The value of the `Location` header.
+        location: String,
+        /// Marker source to let core treat this as expected control-flow (not an error log).
+        #[doc(hidden)]
+        #[serde(skip, default)]
+        #[source]
+        control_flow: dioxus_core::RedirectControlFlow,
+    },
 }
 
 impl ServerFnError {
@@ -90,6 +107,15 @@ impl ServerFnError {
             message: f.to_string(),
             details: None,
             code: 500,
+        }
+    }
+
+    /// Create a redirect error (control-flow) with a status code and `Location`.
+    pub fn redirect(code: u16, location: impl Into<String>) -> Self {
+        ServerFnError::Redirect {
+            code,
+            location: location.into(),
+            control_flow: dioxus_core::RedirectControlFlow::default(),
         }
     }
 
@@ -138,6 +164,9 @@ impl From<ServerFnError> for http::StatusCode {
             ServerFnError::ServerError { code, .. } => {
                 http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
             }
+            ServerFnError::Redirect { code, .. } => {
+                http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
+            }
             ServerFnError::Request(err) => match err {
                 RequestError::Status(_, code) => http::StatusCode::from_u16(code)
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
@@ -166,6 +195,7 @@ impl From<ServerFnError> for HttpError {
     fn from(value: ServerFnError) -> Self {
         let status = StatusCode::from_u16(match &value {
             ServerFnError::ServerError { code, .. } => *code,
+            ServerFnError::Redirect { code, .. } => *code,
             _ => 500,
         })
         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -195,6 +225,23 @@ impl From<HttpError> for ServerFnError {
 impl IntoResponse for ServerFnError {
     fn into_response(self) -> axum_core::response::Response {
         match self {
+            Self::Redirect { code, location, .. } => {
+                use http::header::LOCATION;
+                let status =
+                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+                axum_core::response::Response::builder()
+                    .status(status)
+                    .header(LOCATION, location)
+                    .body(axum_core::body::Body::empty())
+                    .unwrap_or_else(|_| {
+                        axum_core::response::Response::builder()
+                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                            .body(axum_core::body::Body::from(
+                                "{\"error\":\"Internal Server Error\"}",
+                            ))
+                            .unwrap()
+                    })
+            }
             Self::ServerError {
                 message,
                 code,

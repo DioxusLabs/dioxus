@@ -428,6 +428,11 @@ mod decode_ok {
                                 .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
                         }
 
+                        ServerFnError::Redirect { code, .. } => {
+                            Err(StatusCode::from_u16(code)
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR))
+                        }
+
                         ServerFnError::Registration(_) | ServerFnError::MiddlewareError(_) => {
                             Err(StatusCode::INTERNAL_SERVER_ERROR)
                         }

@@ -17,7 +17,7 @@ use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::{request::Parts, HeaderMap, StatusCode};
+use http::{header::LOCATION, request::Parts, HeaderMap, HeaderValue, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -37,6 +37,7 @@ pub enum SSRError {
     HttpError {
         status: StatusCode,
         message: Option<String>,
+        headers: HeaderMap,
     },
 }
 
@@ -140,6 +141,7 @@ impl SsrRendererPool {
             .ok_or_else(|| SSRError::HttpError {
                 status: StatusCode::BAD_REQUEST,
                 message: None,
+                headers: HeaderMap::new(),
             })?
             .to_string();
 
@@ -244,6 +246,7 @@ impl SsrRendererPool {
             if let Some(error) = error {
                 let mut status_code = None;
                 let mut out_message = None;
+                let mut out_headers = HeaderMap::new();
 
                 // If the errors include an `HttpError` or `StatusCode` or `ServerFnError`, we need
                 // to try and return the appropriate status code
@@ -258,15 +261,30 @@ impl SsrRendererPool {
 
                 // todo - the user is allowed to return anything that impls `From<ServerFnError>`
                 // we need to eventually be able to downcast that and get the status code from it
-                if let Some(ServerFnError::ServerError { message, code, .. }) = error.downcast_ref()
-                {
-                    status_code = Some(
-                        (*code)
-                            .try_into()
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                    );
-
-                    out_message = Some(message.clone());
+                if let Some(server_fn_error) = error.downcast_ref::<ServerFnError>() {
+                    match server_fn_error {
+                        ServerFnError::ServerError { message, code, .. } => {
+                            status_code = Some(
+                                (*code)
+                                    .try_into()
+                                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            );
+                            out_message = Some(message.clone());
+                        }
+                        ServerFnError::Redirect { code, location, .. } => {
+                            status_code = Some(
+                                (*code)
+                                    .try_into()
+                                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            );
+                            // Redirects are control-flow; no message body by default.
+                            out_message = None;
+                            if let Ok(value) = HeaderValue::from_str(location) {
+                                out_headers.insert(LOCATION, value);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
 
                 // If there was an error while routing, return the error with a 404 status
@@ -281,6 +299,7 @@ impl SsrRendererPool {
                     _ = initial_result_tx.send(Err(SSRError::HttpError {
                         status: status_code,
                         message: out_message,
+                        headers: out_headers,
                     }));
                     return;
                 }

@@ -2,6 +2,7 @@ use crate::{HttpError, ServerFnError};
 use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
+use http::header::LOCATION;
 use http::StatusCode;
 use http::{request::Parts, HeaderMap};
 use parking_lot::RwLock;
@@ -146,6 +147,19 @@ impl FullstackContext {
             Ok(res) => Ok(res),
             Err(err) => {
                 let resp = err.into_response();
+
+                // Preserve redirects from axum-style extractors (3xx + Location) as control-flow.
+                // If we collapse this response into `ServerFnError::ServerError`, we lose headers like
+                // `Location` and redirects silently stop working.
+                let status = resp.status();
+                if status.is_redirection() {
+                    if let Some(location) = resp.headers().get(LOCATION) {
+                        if let Ok(location) = location.to_str() {
+                            return Err(ServerFnError::redirect(status.as_u16(), location));
+                        }
+                    }
+                }
+
                 Err(ServerFnError::from_axum_response(resp).await)
             }
         }
@@ -335,4 +349,61 @@ pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     }
 
     StatusCode::INTERNAL_SERVER_ERROR
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum_core::extract::{FromRequest, Request};
+    use http::header::LOCATION;
+
+    #[derive(Debug)]
+    struct RedirectingExtractor;
+
+    impl FromRequest<FullstackContext, ()> for RedirectingExtractor {
+        type Rejection = (StatusCode, HeaderMap);
+
+        fn from_request(
+            _req: Request,
+            _state: &FullstackContext,
+        ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move {
+                let mut headers = HeaderMap::new();
+                headers.insert(LOCATION, http::HeaderValue::from_static("/sign-in"));
+                Err((StatusCode::TEMPORARY_REDIRECT, headers))
+            }
+        }
+    }
+
+    #[test]
+    fn extract_preserves_redirect_location() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
+        rt.block_on(async move {
+            let parts = axum_core::extract::Request::builder()
+                .method("GET")
+                .uri("/")
+                .body(())
+                .unwrap()
+                .into_parts()
+                .0;
+
+            let ctx = FullstackContext::new(parts);
+            let err = ctx
+                .clone()
+                .scope(async move { FullstackContext::extract::<RedirectingExtractor, ()>().await })
+                .await
+                .unwrap_err();
+
+            match err {
+                ServerFnError::Redirect { code, location, .. } => {
+                    assert_eq!(code, StatusCode::TEMPORARY_REDIRECT.as_u16());
+                    assert_eq!(location, "/sign-in");
+                }
+                other => panic!("expected ServerFnError::Redirect, got {other:?}"),
+            }
+        });
+    }
 }

@@ -10,6 +10,7 @@ mod effect;
 mod error_boundary;
 mod events;
 mod fragment;
+mod control_flow;
 mod generational_box;
 mod global_context;
 mod launch;
@@ -29,6 +30,11 @@ mod tasks;
 mod virtual_dom;
 
 mod hotreload_utils;
+
+// This is intentionally public (but hidden from docs) so integration crates can use it without
+// creating dependency cycles back into core.
+#[doc(hidden)]
+pub use control_flow::RedirectControlFlow;
 
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
