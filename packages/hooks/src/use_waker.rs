@@ -50,20 +50,6 @@ impl<T: Clone + 'static> UseWaker<T> {
     }
 }
 
-// Can await the waker to be woken.
-// We use `.peek()` here to avoid reacting to changes in the underlying task_rx which could lead
-// to an effect/future loop.
-impl<T: Clone + 'static> std::future::Future for UseWaker<T> {
-    type Output = Result<T, Canceled>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.task_rx.peek().clone().poll_unpin(cx)
-    }
-}
-
 impl<T> Copy for UseWaker<T> {}
 impl<T> Clone for UseWaker<T> {
     fn clone(&self) -> Self {
