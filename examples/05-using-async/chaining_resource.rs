@@ -106,7 +106,7 @@ fn app() -> Element {
             p { style: "color: #666; margin-bottom: 20px;",
                 "This example demonstrates chaining resources with "
                 code { "read_async()" }
-                " to safely handle guards across await points."
+                "."
             }
 
             div { style: "background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;",
