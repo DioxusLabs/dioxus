@@ -201,12 +201,6 @@ mod field_info {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
-                // children field is automatically defaulted to None
-                if name == "children" {
-                    builder_attr.default =
-                        Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
-                }
-
                 // String fields automatically use impl Display
                 if field.ty == parse_quote!(::std::string::String)
                     || field.ty == parse_quote!(std::string::String)
@@ -226,11 +220,11 @@ mod field_info {
                     builder_attr.auto_into = true;
                 }
 
-                // extended field is automatically empty
-                if !builder_attr.extends.is_empty() {
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                // If this is a child field or extends, default to Default::default() if a default isn't set
+                if !builder_attr.extends.is_empty() || name == "children" {
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
                 }
 
                 // auto detect optional
