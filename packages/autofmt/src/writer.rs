@@ -58,10 +58,10 @@ impl<'a> Writer<'a> {
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
         if let Some(span) = body.span {
             self.out.indent_level += 1;
-            let comments = self.accumulate_comments(span.span().end());
+            let comments = self.accumulate_full_line_comments(span.span().end());
             if !comments.is_empty() {
                 self.out.new_line()?;
-                self.apply_comments(comments)?;
+                self.apply_line_comments(comments)?;
                 self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
             }
             self.out.indent_level -= 1;
@@ -425,9 +425,9 @@ impl<'a> Writer<'a> {
             ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
         ) && self.leading_row_is_empty(brace.span.span().end())
         {
-            let comments = self.accumulate_comments(brace.span.span().end());
+            let comments = self.accumulate_full_line_comments(brace.span.span().end());
             if !comments.is_empty() {
-                self.apply_comments(comments)?;
+                self.apply_line_comments(comments)?;
                 self.out.tab()?;
             }
         }
@@ -487,7 +487,7 @@ impl<'a> Writer<'a> {
                     .comma
                     .as_ref()
                     .map(|c| c.span())
-                    .unwrap_or_else(|| self.final_span_of_attr(attr)),
+                    .unwrap_or_else(|| self.totoal_span_of_attr(attr)),
                 AttrType::Spread(attr) => attr.span(),
             };
 
@@ -565,7 +565,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
-        let cond = self.unparse_expr(&if_chain.condition);
+        let cond = self.unparse_expr(&if_chain.if_expr.cond);
         write!(self.out, "if {cond} {{ ")?;
         self.write_attribute_value(&if_chain.then_value)?;
         write!(self.out, " }}")?;
@@ -619,13 +619,20 @@ impl<'a> Writer<'a> {
 
         whitespace = whitespace[offset..].trim();
 
+        println!("Writing inline {final_span:?}: {:?}", whitespace);
+
+        if final_span.line == 1 {
+            panic!("Bad span!")
+        };
+
         if whitespace.starts_with("//") {
             write!(self.out, " {whitespace}")?;
         }
 
         Ok(())
     }
-    fn accumulate_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
+
+    fn accumulate_full_line_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
         // collect all comments upwards
         // make sure we don't collect the comments of the node that we're currently under.
         let start = loc;
@@ -649,7 +656,8 @@ impl<'a> Writer<'a> {
 
         comments
     }
-    fn apply_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
+
+    fn apply_line_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
         while let Some(comment_line) = comments.pop_front() {
             let Some(line) = self.src.get(comment_line) else {
                 continue;
@@ -668,16 +676,15 @@ impl<'a> Writer<'a> {
     }
 
     fn write_comments(&mut self, loc: LineColumn) -> Result {
-        let comments = self.accumulate_comments(loc);
-        self.apply_comments(comments)?;
-
+        let comments = self.accumulate_full_line_comments(loc);
+        self.apply_line_comments(comments)?;
         Ok(())
     }
 
     fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
         match value {
             AttributeValue::IfExpr(if_chain) => {
-                let condition_len = self.retrieve_formatted_expr(&if_chain.condition).len();
+                let condition_len = self.retrieve_formatted_expr(&if_chain.if_expr.cond).len();
                 let value_len = self.attr_value_len(&if_chain.then_value);
                 let if_len = 2;
                 let brace_len = 2;
@@ -1069,18 +1076,18 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn final_span_of_attr(&self, attr: &Attribute) -> Span {
-        match &attr.value {
+    fn totoal_span_of_attr(&self, attr: &Attribute) -> Span {
+        let span = match &attr.value {
             AttributeValue::Shorthand(s) => s.span(),
             AttributeValue::AttrLiteral(l) => l.span(),
             AttributeValue::EventTokens(closure) => closure.body.span(),
             AttributeValue::AttrExpr(exp) => exp.span(),
-            AttributeValue::IfExpr(ex) => ex
-                .else_value
-                .as_ref()
-                .map(|v| v.span())
-                .unwrap_or_else(|| ex.then_value.span()),
-        }
+            AttributeValue::IfExpr(ex) => ex.span(),
+        };
+
+        println!("span: {span:?} for {attr:#?}");
+
+        span
     }
 
     fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
