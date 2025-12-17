@@ -729,7 +729,7 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ResourceFuture<T>
 where
     T: 'static,
