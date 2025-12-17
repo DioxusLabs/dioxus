@@ -10,7 +10,6 @@ mod effect;
 mod error_boundary;
 mod events;
 mod fragment;
-mod control_flow;
 mod generational_box;
 mod global_context;
 mod launch;
@@ -30,11 +29,6 @@ mod tasks;
 mod virtual_dom;
 
 mod hotreload_utils;
-
-// This is intentionally public (but hidden from docs) so integration crates can use it without
-// creating dependency cycles back into core.
-#[doc(hidden)]
-pub use control_flow::RedirectControlFlow;
 
 /// Items exported from this module are used in macros and should not be used directly.
 #[doc(hidden)]
@@ -109,10 +103,10 @@ pub use crate::innerlude::{
     ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
     Mutations, NoOpMutations, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
-    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
-    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-    SuspenseContext, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    RenderRedirect, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.

@@ -108,16 +108,7 @@ impl VirtualDom {
     fn handle_element_return(&self, node: &mut Element, scope: &Scope) {
         match node {
             Err(RenderError::Error(e)) => {
-                // Redirects are expected control-flow in some integrations (like fullstack SSR)
-                // and shouldn't be logged as errors.
-                //
-                // We detect these via a core-owned marker error (`RedirectControlFlow`) attached
-                // as a `source()` by integration crates to avoid dependency cycles.
-                let is_redirect = e
-                    .chain()
-                    .any(|cause| cause.is::<crate::RedirectControlFlow>());
-
-                if is_redirect {
+                if e.downcast_ref::<crate::RenderRedirect>().is_some() {
                     tracing::info!("Redirect while rendering component `{}`: {e}", scope.name);
                 } else {
                     tracing::error!("Error while rendering component `{}`: {e}", scope.name);

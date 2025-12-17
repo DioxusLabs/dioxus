@@ -1,8 +1,8 @@
 use axum_core::response::IntoResponse;
 use futures_util::TryStreamExt;
+use http::header::LOCATION;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
 use crate::HttpError;
 
@@ -81,23 +81,19 @@ pub enum ServerFnError {
     /// Occurs on the server if there is an error creating an HTTP response.
     #[error("error creating response {0}")]
     Response(String),
+}
 
-    /// A redirect response returned while running a server function or extractor.
-    ///
-    /// This is treated as control-flow rather than an ordinary error so we can preserve the
-    /// `Location` header (which is otherwise lost when converting axum responses into `ServerFnError`).
-    #[error("redirect ({code}) to {location}")]
-    Redirect {
-        /// HTTP status code associated with the redirect (typically 302/303/307/308).
-        code: u16,
-        /// The value of the `Location` header.
-        location: String,
-        /// Marker source to let core treat this as expected control-flow (not an error log).
-        #[doc(hidden)]
-        #[serde(skip, default)]
-        #[source]
-        control_flow: dioxus_core::RedirectControlFlow,
-    },
+// Reserved key used to encode redirects in `ServerFnError::ServerError.details`.
+const REDIRECT_DETAILS_KEY: &str = "__dioxus_redirect";
+
+fn is_redirection_code(code: u16) -> bool {
+    (300..400).contains(&code)
+}
+
+fn redirect_location_from_details(details: &Option<serde_json::Value>) -> Option<&str> {
+    let details = details.as_ref()?;
+    let obj = details.as_object()?;
+    obj.get(REDIRECT_DETAILS_KEY)?.as_str()
 }
 
 impl ServerFnError {
@@ -112,18 +108,38 @@ impl ServerFnError {
 
     /// Create a redirect error (control-flow) with a status code and `Location`.
     pub fn redirect(code: u16, location: impl Into<String>) -> Self {
-        ServerFnError::Redirect {
+        let location = location.into();
+        ServerFnError::ServerError {
+            message: format!("redirect ({code}) to {location}"),
+            details: Some(serde_json::json!({ REDIRECT_DETAILS_KEY: location })),
             code,
-            location: location.into(),
-            control_flow: dioxus_core::RedirectControlFlow::default(),
+        }
+    }
+
+    /// Returns the redirect location if this error represents a redirect.
+    pub fn redirect_location(&self) -> Option<&str> {
+        match self {
+            ServerFnError::ServerError { code, details, .. } if is_redirection_code(*code) => {
+                redirect_location_from_details(details)
+            }
+            _ => None,
         }
     }
 
     /// Create a new server error (status code 500) with a message and details.
     pub async fn from_axum_response(resp: axum_core::response::Response) -> Self {
-        let status = resp.status();
-        let message = resp
-            .into_body()
+        let (parts, body) = resp.into_parts();
+        let status = parts.status;
+
+        // If this is a redirect, preserve the location in structured details so other layers
+        // (like SSR) can turn it back into a redirect response.
+        if status.is_redirection() {
+            if let Some(location) = parts.headers.get(LOCATION).and_then(|v| v.to_str().ok()) {
+                return ServerFnError::redirect(status.as_u16(), location);
+            }
+        }
+
+        let message = body
             .into_data_stream()
             .try_fold(Vec::new(), |mut acc, chunk| async move {
                 acc.extend_from_slice(&chunk);
@@ -164,9 +180,6 @@ impl From<ServerFnError> for http::StatusCode {
             ServerFnError::ServerError { code, .. } => {
                 http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
             }
-            ServerFnError::Redirect { code, .. } => {
-                http::StatusCode::from_u16(code).unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR)
-            }
             ServerFnError::Request(err) => match err {
                 RequestError::Status(_, code) => http::StatusCode::from_u16(code)
                     .unwrap_or(http::StatusCode::INTERNAL_SERVER_ERROR),
@@ -195,7 +208,6 @@ impl From<ServerFnError> for HttpError {
     fn from(value: ServerFnError) -> Self {
         let status = StatusCode::from_u16(match &value {
             ServerFnError::ServerError { code, .. } => *code,
-            ServerFnError::Redirect { code, .. } => *code,
             _ => 500,
         })
         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -225,23 +237,6 @@ impl From<HttpError> for ServerFnError {
 impl IntoResponse for ServerFnError {
     fn into_response(self) -> axum_core::response::Response {
         match self {
-            Self::Redirect { code, location, .. } => {
-                use http::header::LOCATION;
-                let status =
-                    StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-                axum_core::response::Response::builder()
-                    .status(status)
-                    .header(LOCATION, location)
-                    .body(axum_core::body::Body::empty())
-                    .unwrap_or_else(|_| {
-                        axum_core::response::Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(axum_core::body::Body::from(
-                                "{\"error\":\"Internal Server Error\"}",
-                            ))
-                            .unwrap()
-                    })
-            }
             Self::ServerError {
                 message,
                 code,

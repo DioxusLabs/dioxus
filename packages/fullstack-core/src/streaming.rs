@@ -2,7 +2,6 @@ use crate::{HttpError, ServerFnError};
 use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
-use http::header::LOCATION;
 use http::StatusCode;
 use http::{request::Parts, HeaderMap};
 use parking_lot::RwLock;
@@ -147,19 +146,6 @@ impl FullstackContext {
             Ok(res) => Ok(res),
             Err(err) => {
                 let resp = err.into_response();
-
-                // Preserve redirects from axum-style extractors (3xx + Location) as control-flow.
-                // If we collapse this response into `ServerFnError::ServerError`, we lose headers like
-                // `Location` and redirects silently stop working.
-                let status = resp.status();
-                if status.is_redirection() {
-                    if let Some(location) = resp.headers().get(LOCATION) {
-                        if let Ok(location) = location.to_str() {
-                            return Err(ServerFnError::redirect(status.as_u16(), location));
-                        }
-                    }
-                }
-
                 Err(ServerFnError::from_axum_response(resp).await)
             }
         }
@@ -397,12 +383,12 @@ mod tests {
                 .await
                 .unwrap_err();
 
-            match err {
-                ServerFnError::Redirect { code, location, .. } => {
-                    assert_eq!(code, StatusCode::TEMPORARY_REDIRECT.as_u16());
-                    assert_eq!(location, "/sign-in");
+            match &err {
+                ServerFnError::ServerError { code, .. } => {
+                    assert_eq!(*code, StatusCode::TEMPORARY_REDIRECT.as_u16());
+                    assert_eq!(err.redirect_location(), Some("/sign-in"));
                 }
-                other => panic!("expected ServerFnError::Redirect, got {other:?}"),
+                other => panic!("expected redirect-like ServerFnError, got {other:?}"),
             }
         });
     }
