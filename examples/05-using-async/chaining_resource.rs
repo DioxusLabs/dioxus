@@ -39,7 +39,7 @@ fn app() -> Element {
         drop(result_ref);
 
         // Simulate some async processing (e.g., image validation, metadata fetch)
-        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 500)); return null;"#)
+        document::eval(r#"await new Promise(resolve => setTimeout(resolve, 2000)); return null;"#)
             .await
             .unwrap();
 
@@ -116,14 +116,18 @@ fn app() -> Element {
                         img {
                             src: "{response.message}",
                             alt: "Random dog",
-                            style: "max-width: 100%; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);",
+                            style: "width: 400px; height: 400px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);",
                         }
                     },
                     Some(Err(e)) => rsx! {
-                        p { style: "color: red;", "❌ Error: {e}" }
+                        div { style: "width: 400px; height: 400px;",
+                            p { style: "color: red;", "❌ Error: {e}" }
+                        }
                     },
                     None => rsx! {
-                        p { "⏳ Loading dog image..." }
+                        div { style: "width: 400px; height: 400px;",
+                            p { "⏳ Loading dog image..." }
+                        }
                     },
                 }
 
@@ -152,7 +156,9 @@ fn app() -> Element {
                             *analysis = format!("Manual trigger: Analyzing {} breed...", breed);
                             drop(breed_result);
                             drop(analysis);
-                            document::eval(r#"await new Promise(resolve => setTimeout(resolve, 2000)); return null;"#)
+                            document::eval(
+                                    r#"await new Promise(resolve => setTimeout(resolve, 2000)); return null;"#,
+                                )
                                 .await
                                 .unwrap();
                             let mut analysis = analysis_result.write();
