@@ -11,14 +11,8 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use std::{
-    cell::Cell,
-    collections::HashMap,
-    future::Future,
-    rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering},
-    task::Waker,
-};
+use slab::Slab;
+use std::{cell::Cell, future::Future, rc::Rc, task::Waker};
 use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
@@ -41,7 +35,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waiting_futures: Signal<HashMap<usize, Waker>> = use_signal(HashMap::new);
+    let mut waiting_futures: Signal<(usize, Slab<Waker>)> = use_signal(|| (0, Slab::new()));
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -71,9 +65,11 @@ where
             value.set(Some(res));
 
             let mut waiting_futures = waiting_futures.write();
-            for (_, waker) in waiting_futures.drain() {
+            let (version, wakers) = &mut *waiting_futures;
+            for waker in wakers.drain() {
                 waker.wake();
             }
+            *version += 1;
         })
     });
 
@@ -131,7 +127,10 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
-    waiting_futures: Signal<HashMap<usize, Waker>>,
+    /// (slab version, wakers)
+    /// When the slab is drained, ids are reclaimed. We need version to ensure [`ResourceFuture`]
+    /// does not overwrite another futures waker when polled.
+    waiting_futures: Signal<(usize, Slab<Waker>)>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -729,14 +728,12 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-static NEXT_RESOURCE_FUTURE_ID: AtomicUsize = AtomicUsize::new(0);
-
 #[derive(Debug)]
 pub struct ResourceFuture<T>
 where
     T: 'static,
 {
-    id: usize,
+    id: Option<(usize, usize)>,
     resource: Resource<T>,
 }
 
@@ -750,12 +747,24 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        if matches!(*self.resource.state.peek(), UseResourceState::Ready) {
+        let this = unsafe { self.get_unchecked_mut() };
+        if matches!(*this.resource.state.peek(), UseResourceState::Ready) {
             return std::task::Poll::Ready(());
         }
-        {
-            let mut waiting_futures = self.resource.waiting_futures;
-            waiting_futures.insert(self.id, cx.waker().clone());
+        let mut waiting_futures = this.resource.waiting_futures.write();
+        let (current_slab_version, wakers) = &mut *waiting_futures;
+        if let Some((slab_version, id)) = &mut this.id {
+            if *current_slab_version == *slab_version {
+                let old_waker = wakers.get_mut(*id).unwrap();
+                let _ = std::mem::replace(old_waker, cx.waker().clone());
+            } else {
+                let new_id = wakers.insert(cx.waker().clone());
+                *slab_version = *current_slab_version;
+                *id = new_id;
+            }
+        } else {
+            let id = wakers.insert(cx.waker().clone());
+            this.id = Some((*current_slab_version, id));
         }
         std::task::Poll::Pending
     }
@@ -766,9 +775,8 @@ where
     T: 'static,
 {
     fn clone(&self) -> Self {
-        let id = NEXT_RESOURCE_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
-        ResourceFuture {
-            id,
+        Self {
+            id: None,
             resource: self.resource,
         }
     }
@@ -779,7 +787,13 @@ where
     T: 'static,
 {
     fn drop(&mut self) {
-        self.resource.waiting_futures.write().remove(&self.id);
+        if let Some((slab_version, id)) = &self.id {
+            let mut waiting_futures = self.resource.waiting_futures.write();
+            let (current_slab_version, wakers) = &mut *waiting_futures;
+            if *current_slab_version == *slab_version {
+                wakers.remove(*id);
+            }
+        }
     }
 }
 
@@ -792,7 +806,9 @@ where
     type IntoFuture = ResourceFuture<T>;
 
     fn into_future(self) -> Self::IntoFuture {
-        let id = NEXT_RESOURCE_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
-        ResourceFuture { id, resource: self }
+        ResourceFuture {
+            id: None,
+            resource: self,
+        }
     }
 }
