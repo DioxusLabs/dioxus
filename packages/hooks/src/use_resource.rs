@@ -729,6 +729,8 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
+static NEXT_RESOURCE_FUTURE_ID: AtomicUsize = AtomicUsize::new(0);
+
 #[derive(Debug)]
 pub struct ResourceFuture<T>
 where
@@ -759,6 +761,19 @@ where
     }
 }
 
+impl<T> Clone for ResourceFuture<T>
+where
+    T: 'static,
+{
+    fn clone(&self) -> Self {
+        let id = NEXT_RESOURCE_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
+        ResourceFuture {
+            id,
+            resource: self.resource,
+        }
+    }
+}
+
 impl<T> Drop for ResourceFuture<T>
 where
     T: 'static,
@@ -777,8 +792,7 @@ where
     type IntoFuture = ResourceFuture<T>;
 
     fn into_future(self) -> Self::IntoFuture {
-        static NEXT_FUTURE_ID: AtomicUsize = AtomicUsize::new(0);
-        let id = NEXT_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
+        let id = NEXT_RESOURCE_FUTURE_ID.fetch_add(1, Ordering::Relaxed);
         ResourceFuture { id, resource: self }
     }
 }
