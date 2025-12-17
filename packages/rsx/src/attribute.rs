@@ -533,8 +533,10 @@ impl AttributeValue {
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct IfAttributeValue {
     pub if_expr: ExprIf,
+    pub condition: Expr,
     pub then_value: Box<AttributeValue>,
     pub else_value: Option<Box<AttributeValue>>,
+    _priv: (),
 }
 
 impl IfAttributeValue {
@@ -723,7 +725,7 @@ impl IfAttributeValue {
         };
 
         let condition = &if_expr.cond;
-        tokens.append_all(quote_spanned! {if_expr.span()=>
+        tokens.append_all(quote_spanned! { if_expr.span()=>
             if #condition {
                 #then_value
             } else {
@@ -765,9 +767,11 @@ impl Parse for IfAttributeValue {
         };
 
         Ok(Self {
+            condition: *if_expr.cond.clone(),
             if_expr,
             then_value,
             else_value,
+            _priv: (),
         })
     }
 }

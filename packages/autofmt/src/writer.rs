@@ -619,10 +619,9 @@ impl<'a> Writer<'a> {
 
         whitespace = whitespace[offset..].trim();
 
-        println!("Writing inline {final_span:?}: {:?}", whitespace);
-
-        if final_span.line == 1 {
-            panic!("Bad span!")
+        // don't emit whitespace if the span is messed up for some reason
+        if final_span.line == 1 && final_span.column == 0 {
+            return Ok(());
         };
 
         if whitespace.starts_with("//") {
@@ -639,6 +638,11 @@ impl<'a> Writer<'a> {
         let line_start = start.line - 1;
 
         let mut comments = VecDeque::new();
+
+        // don't emit whitespace if the span is messed up for some reason
+        if loc.line == 1 && loc.column == 0 {
+            return comments;
+        };
 
         let Some(lines) = self.src.get(..line_start) else {
             return comments;
@@ -1077,17 +1081,13 @@ impl<'a> Writer<'a> {
     }
 
     fn totoal_span_of_attr(&self, attr: &Attribute) -> Span {
-        let span = match &attr.value {
+        match &attr.value {
             AttributeValue::Shorthand(s) => s.span(),
             AttributeValue::AttrLiteral(l) => l.span(),
-            AttributeValue::EventTokens(closure) => closure.body.span(),
+            AttributeValue::EventTokens(closure) => closure.span(),
             AttributeValue::AttrExpr(exp) => exp.span(),
             AttributeValue::IfExpr(ex) => ex.span(),
-        };
-
-        println!("span: {span:?} for {attr:#?}");
-
-        span
+        }
     }
 
     fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
