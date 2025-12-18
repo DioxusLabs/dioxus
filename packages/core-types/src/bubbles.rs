@@ -99,6 +99,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "toggle" => false,
         "beforetoggle" => false,
         "mounted" => false,
+        "unmounted" => false,
         "visible" => false,
         _ => true,
     }

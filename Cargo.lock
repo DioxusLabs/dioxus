@@ -6215,6 +6215,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-fullstack-unmounted-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "serde",
+ "tokio",
+ "web-sys",
+]
+
+[[package]]
 name = "dioxus-playwright-liveview-test"
 version = "0.0.1"
 dependencies = [

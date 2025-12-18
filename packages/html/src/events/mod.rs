@@ -223,6 +223,13 @@ impl From<&PlatformEventData> for MountedData {
     }
 }
 
+impl From<&PlatformEventData> for UnmountedData {
+    fn from(_val: &PlatformEventData) -> Self {
+        // UnmountedData contains no element information since the element is already gone
+        UnmountedData::new()
+    }
+}
+
 impl From<&PlatformEventData> for MouseData {
     fn from(val: &PlatformEventData) -> Self {
         with_event_converter(|c| c.convert_mouse_data(val))

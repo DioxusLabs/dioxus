@@ -11,7 +11,7 @@ use std::{any::Any, rc::Rc};
 use dioxus_core::Runtime;
 use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Event, Node};
 
@@ -29,6 +29,11 @@ pub struct WebsysDom {
 
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
+
+    /// Track elements that have onunmounted listeners registered.
+    /// When these elements are removed, we fire the unmounted event.
+    #[cfg(feature = "mounted")]
+    pub(crate) elements_with_unmounted_listeners: FxHashSet<ElementId>,
 
     // We originally started with a different `WriteMutations` for collecting templates during hydration.
     // When profiling the binary size of web applications, this caused a large increase in binary size
@@ -125,6 +130,8 @@ impl WebsysDom {
             runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "mounted")]
+            elements_with_unmounted_listeners: Default::default(),
             #[cfg(feature = "hydrate")]
             skip_mutations: false,
             #[cfg(feature = "hydrate")]

@@ -280,6 +280,72 @@ impl_event! [
 
 pub use onmounted as onmount;
 
+/// Data associated with an unmounted event.
+///
+/// This event fires after an element has been removed from the DOM.
+/// Since the element no longer exists, no element data is available.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnmountedData {}
+
+impl UnmountedData {
+    /// Create a new UnmountedData
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl Default for UnmountedData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub type UnmountedEvent = Event<UnmountedData>;
+
+impl_event! [
+    UnmountedData;
+
+    /// The onunmounted event is fired when the element is removed from the DOM.
+    ///
+    /// This event is the complement to `onmounted` and allows you to clean up any state
+    /// associated with the element, such as deregistering from an animation engine or
+    /// clearing cached references.
+    ///
+    /// Since the element has already been removed when this event fires, no element data
+    /// is available.
+    ///
+    /// # Examples
+    ///
+    /// ```rust, no_run
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     let mut element_ref = use_signal(|| None as Option<Rc<MountedData>>);
+    ///     let mut show = use_signal(|| true);
+    ///
+    ///     rsx! {
+    ///         button {
+    ///             onclick: move |_| show.toggle(),
+    ///             "Toggle element"
+    ///         }
+    ///
+    ///         if show() {
+    ///             div {
+    ///                 onmounted: move |e| element_ref.set(Some(e.data())),
+    ///                 onunmounted: move |_| {
+    ///                     // Element is gone - clean up the reference
+    ///                     element_ref.set(None);
+    ///                 },
+    ///                 "I can be toggled"
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    onunmounted
+];
+
+pub use onunmounted as onunmount;
+
 /// The MountedResult type for the MountedData
 pub type MountedResult<T> = Result<T, MountedError>;
 

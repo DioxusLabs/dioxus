@@ -80,6 +80,18 @@ impl WebsysDom {
         self.queued_mounted_events.push(id);
     }
 
+    #[cfg(feature = "mounted")]
+    pub(crate) fn send_unmount_event(&mut self, id: ElementId) {
+        // Fire the unmounted event immediately since the element is about to be removed
+        let event = dioxus_core::Event::new(
+            std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(())))
+                as std::rc::Rc<dyn std::any::Any>,
+            false,
+        );
+        let name = "unmounted";
+        self.runtime.handle_event(name, event, id)
+    }
+
     #[inline]
     fn skip_mutations(&self) -> bool {
         #[cfg(feature = "hydrate")]
@@ -146,6 +158,13 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
+
+        // Fire onunmounted event before replacing the element
+        #[cfg(feature = "mounted")]
+        if self.elements_with_unmounted_listeners.remove(&id) {
+            self.send_unmount_event(id);
+        }
+
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
@@ -220,13 +239,26 @@ impl WriteMutations for WebsysDom {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
-        if self.skip_mutations() {
-            return;
-        }
         // mounted events are fired immediately after the element is mounted.
+        // During hydration, we still need to queue the mounted event since the element
+        // already exists in the DOM.
         if name == "mounted" {
             #[cfg(feature = "mounted")]
             self.send_mount_event(id);
+            return;
+        }
+
+        // unmounted events must be tracked even during hydration, so that when the
+        // element is later removed, we can fire the unmounted event.
+        if name == "unmounted" {
+            #[cfg(feature = "mounted")]
+            self.elements_with_unmounted_listeners.insert(id);
+            return;
+        }
+
+        // Skip creating actual DOM event listeners during hydration since the
+        // elements already exist with their listeners attached.
+        if self.skip_mutations() {
             return;
         }
 
@@ -235,10 +267,20 @@ impl WriteMutations for WebsysDom {
     }
 
     fn remove_event_listener(&mut self, name: &'static str, id: ElementId) {
-        if self.skip_mutations() {
+        // mounted events don't have actual DOM listeners to remove
+        if name == "mounted" {
             return;
         }
-        if name == "mounted" {
+
+        // unmounted listeners must be removed from tracking even during hydration
+        if name == "unmounted" {
+            #[cfg(feature = "mounted")]
+            self.elements_with_unmounted_listeners.remove(&id);
+            return;
+        }
+
+        // Skip removing actual DOM event listeners during hydration
+        if self.skip_mutations() {
             return;
         }
 
@@ -250,6 +292,13 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
+
+        // Fire onunmounted event before removing the element
+        #[cfg(feature = "mounted")]
+        if self.elements_with_unmounted_listeners.remove(&id) {
+            self.send_unmount_event(id);
+        }
+
         self.interpreter.remove(id.0 as u32)
     }
 
