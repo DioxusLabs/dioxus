@@ -30,6 +30,11 @@ pub struct WebsysDom {
     #[cfg(feature = "mounted")]
     pub(crate) queued_mounted_events: Vec<ElementId>,
 
+    /// Storage for cleanup closures returned from onmounted handlers.
+    /// When these elements are removed, we invoke the cleanup closure.
+    #[cfg(feature = "mounted")]
+    pub(crate) element_cleanup_closures: FxHashMap<ElementId, Box<dyn FnOnce()>>,
+
     // We originally started with a different `WriteMutations` for collecting templates during hydration.
     // When profiling the binary size of web applications, this caused a large increase in binary size
     // because diffing code in core is generic over the `WriteMutation` object.
@@ -125,6 +130,8 @@ impl WebsysDom {
             runtime,
             #[cfg(feature = "mounted")]
             queued_mounted_events: Default::default(),
+            #[cfg(feature = "mounted")]
+            element_cleanup_closures: Default::default(),
             #[cfg(feature = "hydrate")]
             skip_mutations: false,
             #[cfg(feature = "hydrate")]

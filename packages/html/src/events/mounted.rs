@@ -207,76 +207,219 @@ impl MountedData {
     }
 }
 
+use std::cell::RefCell;
+
 use dioxus_core::Event;
 
 use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
+use crate::PlatformEventData;
 
 pub type MountedEvent = Event<MountedData>;
 
-impl_event! [
-    MountedData;
+// ============================================================================
+// Cleanup support for onmounted
+// ============================================================================
 
-    #[doc(alias = "ref")]
-    #[doc(alias = "createRef")]
-    #[doc(alias = "useRef")]
-    /// The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element.
-    ///
-    /// This event is fired once per element. If you need to access the element multiple times, you can store the [`MountedData`] object in a [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) hook and use it as needed.
-    ///
-    /// # Examples
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// fn App() -> Element {
-    ///     let mut header_element = use_signal(|| None);
-    ///
-    ///     rsx! {
-    ///         div {
-    ///             h1 {
-    ///                 // The onmounted event will run the first time the h1 element is mounted
-    ///                 onmounted: move |element| header_element.set(Some(element.data())),
-    ///                 "Scroll to top example"
-    ///             }
-    ///
-    ///             for i in 0..100 {
-    ///                 div { "Item {i}" }
-    ///             }
-    ///
-    ///             button {
-    ///                 // When you click the button, if the header element has been mounted, we scroll to that element
-    ///                 onclick: move |_| async move {
-    ///                     if let Some(header) = header_element.cloned() {
-    ///                         let _ = header.scroll_to(ScrollBehavior::Smooth).await;
-    ///                     }
-    ///                 },
-    ///                 "Scroll to top"
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// The `MountedData` struct contains cross platform APIs that work on the desktop, mobile, liveview and web platforms. For the web platform, you can also downcast the `MountedData` event to the `web-sys::Element` type for more web specific APIs:
-    ///
-    /// ```rust, ignore
-    /// use dioxus::prelude::*;
-    /// use dioxus_web::WebEventExt; // provides [`as_web_event()`] method
-    ///
-    /// fn App() -> Element {
-    ///     rsx! {
-    ///         div {
-    ///             id: "some-id",
-    ///             onmounted: move |element| {
-    ///                 // You can use the web_event trait to downcast the element to a web specific event. For the mounted event, this will be a web_sys::Element
-    ///                 let web_sys_element = element.as_web_event();
-    ///                 assert_eq!(web_sys_element.id(), "some-id");
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    onmounted
-];
+/// A cleanup function to run when the element is unmounted.
+pub type MountedCleanup = Box<dyn FnOnce() + 'static>;
+
+thread_local! {
+    /// Storage for cleanup closures returned by onmounted handlers.
+    /// After firing a mounted event, the renderer should call `take_mounted_cleanup()`
+    /// to retrieve any cleanup closure that was registered.
+    static MOUNTED_CLEANUP: RefCell<Option<MountedCleanup>> = const { RefCell::new(None) };
+}
+
+/// Retrieve and clear any pending cleanup from the last mounted event.
+///
+/// Renderers should call this after firing a mounted event to capture
+/// any cleanup closure that was returned by the handler.
+pub fn take_mounted_cleanup() -> Option<MountedCleanup> {
+    MOUNTED_CLEANUP.with(|c| c.borrow_mut().take())
+}
+
+/// Trait to allow onmounted handlers to optionally return a cleanup closure.
+///
+/// This enables the pattern:
+/// ```rust,ignore
+/// onmounted: move |e| {
+///     start_animation(e.data());
+///     move || stop_animation(e.data())  // cleanup returned
+/// }
+/// ```
+///
+/// Handlers can return:
+/// - `()` - no cleanup
+/// - Any `FnOnce()` closure - cleanup to run on unmount
+/// - `async {}` block - spawned as task, no cleanup support
+pub trait SpawnIfAsyncWithCleanup<Marker>: Sized {
+    /// Process the return value, storing any cleanup closure and spawning async blocks.
+    fn spawn_with_cleanup(self);
+}
+
+// No cleanup - handler returns ()
+impl SpawnIfAsyncWithCleanup<()> for () {
+    fn spawn_with_cleanup(self) {
+        // No cleanup needed
+    }
+}
+
+/// Marker for cleanup closures
+#[doc(hidden)]
+pub struct CleanupMarker;
+
+// Handler returns a cleanup closure
+impl<F: FnOnce() + 'static> SpawnIfAsyncWithCleanup<CleanupMarker> for F {
+    fn spawn_with_cleanup(self) {
+        MOUNTED_CLEANUP.with(|c| *c.borrow_mut() = Some(Box::new(self)));
+    }
+}
+
+/// Marker for async handlers (no cleanup support for async yet)
+#[doc(hidden)]
+pub struct AsyncMountedMarker;
+
+impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsyncWithCleanup<AsyncMountedMarker>
+    for F
+{
+    fn spawn_with_cleanup(self) {
+        // Spawn the async block but no cleanup support
+        use futures_util::FutureExt;
+        let mut fut = Box::pin(self);
+        let res = fut.as_mut().now_or_never();
+
+        if res.is_none() {
+            dioxus_core::spawn(async move {
+                fut.await;
+            });
+        }
+    }
+}
+
+// ============================================================================
+// onmounted event handler
+// ============================================================================
+
+#[doc(alias = "ref")]
+#[doc(alias = "createRef")]
+#[doc(alias = "useRef")]
+/// The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element.
+///
+/// This event is fired once per element. If you need to access the element multiple times, you can store the [`MountedData`] object in a [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) hook and use it as needed.
+///
+/// You can optionally return a cleanup closure that will be called when the element is removed from the DOM:
+///
+/// # Examples
+///
+/// ## Basic usage (no cleanup)
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     let mut header_element = use_signal(|| None);
+///
+///     rsx! {
+///         div {
+///             h1 {
+///                 // The onmounted event will run the first time the h1 element is mounted
+///                 onmounted: move |element| header_element.set(Some(element.data())),
+///                 "Scroll to top example"
+///             }
+///
+///             for i in 0..100 {
+///                 div { "Item {i}" }
+///             }
+///
+///             button {
+///                 // When you click the button, if the header element has been mounted, we scroll to that element
+///                 onclick: move |_| async move {
+///                     if let Some(header) = header_element.cloned() {
+///                         let _ = header.scroll_to(ScrollBehavior::Smooth).await;
+///                     }
+///                 },
+///                 "Scroll to top"
+///             }
+///         }
+///     }
+/// }
+/// ```
+///
+/// ## With cleanup closure
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     let mut cleanup_called = use_signal(|| false);
+///
+///     rsx! {
+///         div {
+///             onmounted: move |_| {
+///                 // Return a cleanup closure that runs when the element is removed
+///                 move || {
+///                     cleanup_called.set(true);
+///                 }
+///             },
+///             "Element with cleanup"
+///         }
+///     }
+/// }
+/// ```
+///
+/// The `MountedData` struct contains cross platform APIs that work on the desktop, mobile, liveview and web platforms. For the web platform, you can also downcast the `MountedData` event to the `web-sys::Element` type for more web specific APIs:
+///
+/// ```rust, ignore
+/// use dioxus::prelude::*;
+/// use dioxus_web::WebEventExt; // provides [`as_web_event()`] method
+///
+/// fn App() -> Element {
+///     rsx! {
+///         div {
+///             id: "some-id",
+///             onmounted: move |element| {
+///                 // You can use the web_event trait to downcast the element to a web specific event. For the mounted event, this will be a web_sys::Element
+///                 let web_sys_element = element.as_web_event();
+///                 assert_eq!(web_sys_element.id(), "some-id");
+///             }
+///         }
+///     }
+/// }
+/// ```
+#[inline]
+pub fn onmounted<__Marker>(
+    f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<MountedData>, __Marker>,
+) -> ::dioxus_core::Attribute {
+    let event_handler = f.super_into();
+    ::dioxus_core::Attribute::new(
+        "onmounted", // Core strips "on" prefix when matching
+        ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<PlatformEventData>| {
+            let event: ::dioxus_core::Event<MountedData> = e.map(|data| {
+                data.into()
+            });
+            event_handler.call(event.into_any());
+        }),
+        None,
+        false,
+    )
+}
+
+#[doc(hidden)]
+pub mod onmounted {
+    use super::*;
+
+    /// Called by RSX macro when explicit closure is detected.
+    /// Uses SpawnIfAsyncWithCleanup to handle cleanup return values.
+    pub fn call_with_explicit_closure<
+        __Marker,
+        Return: SpawnIfAsyncWithCleanup<__Marker> + 'static,
+    >(
+        mut handler: impl FnMut(::dioxus_core::Event<MountedData>) -> Return + 'static,
+    ) -> ::dioxus_core::Attribute {
+        // Wrap the handler to process the return value for cleanup
+        super::onmounted(move |event: ::dioxus_core::Event<MountedData>| {
+            let result = handler(event);
+            // Process the result - this handles (), FnOnce cleanup closures, and async futures
+            result.spawn_with_cleanup();
+        })
+    }
+}
 
 pub use onmounted as onmount;
 

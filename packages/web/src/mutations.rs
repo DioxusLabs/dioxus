@@ -70,8 +70,21 @@ impl WebsysDom {
                     false,
                 );
                 let name = "mounted";
-                self.runtime.handle_event(name, event, id)
+                self.runtime.handle_event(name, event, id);
+
+                // Check if the mounted handler returned a cleanup closure
+                if let Some(cleanup) = dioxus_html::take_mounted_cleanup() {
+                    self.element_cleanup_closures.insert(id, cleanup);
+                }
             }
+        }
+    }
+
+    /// Invoke the cleanup closure for an element, if one was registered.
+    #[cfg(feature = "mounted")]
+    pub(crate) fn invoke_cleanup(&mut self, id: ElementId) {
+        if let Some(cleanup) = self.element_cleanup_closures.remove(&id) {
+            cleanup();
         }
     }
 
@@ -146,6 +159,11 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
+
+        // Invoke cleanup closure BEFORE replacing the element
+        #[cfg(feature = "mounted")]
+        self.invoke_cleanup(id);
+
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
@@ -250,6 +268,11 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
+
+        // Invoke cleanup closure BEFORE removing the element
+        #[cfg(feature = "mounted")]
+        self.invoke_cleanup(id);
+
         self.interpreter.remove(id.0 as u32)
     }
 
