@@ -54,16 +54,31 @@ pub(crate) fn process_css_module(
     let mut src_name = source
         .file_name()
         .and_then(|x| x.to_str())
-        .ok_or(anyhow!("Failed to read name of css module source file."))?
+        .ok_or_else(|| {
+            anyhow!(
+                "Failed to read name of css module file `{}`.",
+                source.display()
+            )
+        })?
         .strip_suffix(".css")
-        .unwrap()
+        .ok_or_else(|| {
+            anyhow!(
+                "Css module file `{}` should end with a `.css` suffix.",
+                source.display(),
+            )
+        })?
         .to_string();
 
     src_name.push('-');
 
     let hash = create_module_hash(source);
-    let css = transform_css(css.as_str(), hash.as_str())
-        .unwrap_or_else(|_| panic!("Invalid css for file `{}`", source.display()));
+    let css = transform_css(css.as_str(), hash.as_str()).map_err(|error| {
+        anyhow!(
+            "Invalid css for file `{}`\nError:\n{}",
+            source.display(),
+            error
+        )
+    })?;
 
     // Minify CSS
     let css = if css_options.minified() {
