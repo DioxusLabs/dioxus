@@ -63,17 +63,21 @@ impl WebsysDom {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
             if let Some(element) = node.dyn_ref::<web_sys::Element>() {
+                // Create MountedData directly so we can access cleanup after handler returns.
+                // The handler stores cleanup on this shared Rc<MountedData> via set_on_cleanup().
+                // Wrap in Synthetic to get the RenderedElementBacking implementation.
+                let synthetic = crate::events::Synthetic::new(element.clone());
+                let mounted_data = std::rc::Rc::new(dioxus_html::MountedData::new(synthetic));
+
                 let event = dioxus_core::Event::new(
-                    std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(
-                        element.clone(),
-                    ))) as std::rc::Rc<dyn std::any::Any>,
+                    mounted_data.clone() as std::rc::Rc<dyn std::any::Any>,
                     false,
                 );
                 let name = "mounted";
                 self.runtime.handle_event(name, event, id);
 
-                // Check if the mounted handler returned a cleanup closure
-                if let Some(cleanup) = dioxus_html::take_mounted_cleanup() {
+                // Retrieve cleanup from shared MountedData after handler returns
+                if let Some(cleanup) = mounted_data.take_cleanup() {
                     self.element_cleanup_closures.insert(id, cleanup);
                 }
             }
@@ -159,11 +163,6 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
-
-        // Invoke cleanup closure BEFORE replacing the element
-        #[cfg(feature = "mounted")]
-        self.invoke_cleanup(id);
-
         self.interpreter.replace_with(id.0 as u32, m as u16)
     }
 
@@ -268,11 +267,6 @@ impl WriteMutations for WebsysDom {
         if self.skip_mutations() {
             return;
         }
-
-        // Invoke cleanup closure BEFORE removing the element
-        #[cfg(feature = "mounted")]
-        self.invoke_cleanup(id);
-
         self.interpreter.remove(id.0 as u32)
     }
 
@@ -281,5 +275,18 @@ impl WriteMutations for WebsysDom {
             return;
         }
         self.interpreter.push_root(id.0 as u32)
+    }
+
+    fn free_id(&mut self, id: ElementId) {
+        if self.skip_mutations() {
+            return;
+        }
+
+        // Invoke cleanup closure for this element
+        #[cfg(feature = "mounted")]
+        self.invoke_cleanup(id);
+
+        // Free the JS heap reference (enables garbage collection)
+        self.interpreter.free_id(id.0 as u32)
     }
 }

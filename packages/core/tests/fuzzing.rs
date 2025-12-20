@@ -362,4 +362,6 @@ impl WriteMutations for InsertEventListenerMutationHandler<'_> {
     fn remove_node(&mut self, _: ElementId) {}
 
     fn push_root(&mut self, _: ElementId) {}
+
+    fn free_id(&mut self, _: ElementId) {}
 }

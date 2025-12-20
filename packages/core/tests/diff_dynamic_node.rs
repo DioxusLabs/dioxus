@@ -35,6 +35,7 @@ fn toggle_option_text() {
         [
             CreateTextNode { value: "hello".to_string(), id: ElementId(3,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -45,6 +46,7 @@ fn toggle_option_text() {
         [
             CreatePlaceholder { id: ElementId(2,) },
             ReplaceWith { id: ElementId(3,), m: 1 },
+            FreeId { id: ElementId(3) },
         ]
     );
 }
@@ -83,6 +85,7 @@ fn toggle_template() {
         [
             CreatePlaceholder { id: ElementId(2) },
             ReplaceWith { id: ElementId(1), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -92,6 +95,7 @@ fn toggle_template() {
         [
             CreateTextNode { value: "true".to_string(), id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -101,6 +105,7 @@ fn toggle_template() {
         [
             CreatePlaceholder { id: ElementId(2) },
             ReplaceWith { id: ElementId(1), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -110,6 +115,7 @@ fn toggle_template() {
         [
             CreateTextNode { value: "true".to_string(), id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 }

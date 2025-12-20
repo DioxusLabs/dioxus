@@ -37,15 +37,20 @@ fn attrs_cycle() {
             SetAttribute { name: "class", value: "1".into_value(), id: ElementId(3,), ns: None },
             SetAttribute { name: "id", value: "1".into_value(), id: ElementId(3,), ns: None },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
+    // Going from div { h1 { ... } } back to div {}
+    // ElementId(2) is the outer div, ElementId(3) is the h1
+    // Only ElementId(2) is freed because ElementId(3) was a child (handled internally)
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
+            ReplaceWith { id: ElementId(2), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -67,7 +72,8 @@ fn attrs_cycle() {
                 id: ElementId(3),
                 ns: None
             },
-            ReplaceWith { id: ElementId(1), m: 1 }
+            ReplaceWith { id: ElementId(1), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -77,7 +83,8 @@ fn attrs_cycle() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
+            ReplaceWith { id: ElementId(2), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 }

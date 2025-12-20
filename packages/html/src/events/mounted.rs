@@ -120,6 +120,9 @@ impl Default for ScrollToOptions {
 /// Different platforms will have different implementations and different levels of support for this trait. Renderers that do not support specific features will return `None` for those queries.
 pub struct MountedData {
     inner: Box<dyn RenderedElementBacking>,
+    /// Cleanup closure to run when the element is unmounted.
+    /// Stored via interior mutability so handlers can set it on shared references.
+    cleanup: RefCell<Option<Box<dyn FnOnce() + 'static>>>,
 }
 
 impl Debug for MountedData {
@@ -130,7 +133,10 @@ impl Debug for MountedData {
 
 impl<E: RenderedElementBacking> From<E> for MountedData {
     fn from(e: E) -> Self {
-        Self { inner: Box::new(e) }
+        Self {
+            inner: Box::new(e),
+            cleanup: RefCell::new(None),
+        }
     }
 }
 
@@ -139,7 +145,24 @@ impl MountedData {
     pub fn new(registry: impl RenderedElementBacking + 'static) -> Self {
         Self {
             inner: Box::new(registry),
+            cleanup: RefCell::new(None),
         }
+    }
+
+    /// Store a cleanup closure to run when the element is unmounted.
+    ///
+    /// This is called by the handler via `event.data().set_on_cleanup(closure)`.
+    /// The renderer will retrieve and invoke this cleanup when the element is freed.
+    pub fn set_on_cleanup(&self, cleanup: impl FnOnce() + 'static) {
+        *self.cleanup.borrow_mut() = Some(Box::new(cleanup));
+    }
+
+    /// Take the cleanup closure, if any was registered.
+    ///
+    /// Called by renderers after the mounted event handler returns to retrieve
+    /// any cleanup closure that should be invoked when the element is unmounted.
+    pub fn take_cleanup(&self) -> Option<Box<dyn FnOnce() + 'static>> {
+        self.cleanup.borrow_mut().take()
     }
 
     /// Get the number of pixels that an element's content is scrolled
@@ -220,24 +243,6 @@ pub type MountedEvent = Event<MountedData>;
 // Cleanup support for onmounted
 // ============================================================================
 
-/// A cleanup function to run when the element is unmounted.
-pub type MountedCleanup = Box<dyn FnOnce() + 'static>;
-
-thread_local! {
-    /// Storage for cleanup closures returned by onmounted handlers.
-    /// After firing a mounted event, the renderer should call `take_mounted_cleanup()`
-    /// to retrieve any cleanup closure that was registered.
-    static MOUNTED_CLEANUP: RefCell<Option<MountedCleanup>> = const { RefCell::new(None) };
-}
-
-/// Retrieve and clear any pending cleanup from the last mounted event.
-///
-/// Renderers should call this after firing a mounted event to capture
-/// any cleanup closure that was returned by the handler.
-pub fn take_mounted_cleanup() -> Option<MountedCleanup> {
-    MOUNTED_CLEANUP.with(|c| c.borrow_mut().take())
-}
-
 /// Trait to allow onmounted handlers to optionally return a cleanup closure.
 ///
 /// This enables the pattern:
@@ -253,13 +258,13 @@ pub fn take_mounted_cleanup() -> Option<MountedCleanup> {
 /// - Any `FnOnce()` closure - cleanup to run on unmount
 /// - `async {}` block - spawned as task, no cleanup support
 pub trait SpawnIfAsyncWithCleanup<Marker>: Sized {
-    /// Process the return value, storing any cleanup closure and spawning async blocks.
-    fn spawn_with_cleanup(self);
+    /// Process the return value, storing any cleanup closure on the MountedData.
+    fn spawn_with_cleanup(self, data: &MountedData);
 }
 
 // No cleanup - handler returns ()
 impl SpawnIfAsyncWithCleanup<()> for () {
-    fn spawn_with_cleanup(self) {
+    fn spawn_with_cleanup(self, _data: &MountedData) {
         // No cleanup needed
     }
 }
@@ -270,8 +275,8 @@ pub struct CleanupMarker;
 
 // Handler returns a cleanup closure
 impl<F: FnOnce() + 'static> SpawnIfAsyncWithCleanup<CleanupMarker> for F {
-    fn spawn_with_cleanup(self) {
-        MOUNTED_CLEANUP.with(|c| *c.borrow_mut() = Some(Box::new(self)));
+    fn spawn_with_cleanup(self, data: &MountedData) {
+        data.set_on_cleanup(self);
     }
 }
 
@@ -282,7 +287,7 @@ pub struct AsyncMountedMarker;
 impl<F: std::future::Future<Output = ()> + 'static> SpawnIfAsyncWithCleanup<AsyncMountedMarker>
     for F
 {
-    fn spawn_with_cleanup(self) {
+    fn spawn_with_cleanup(self, _data: &MountedData) {
         // Spawn the async block but no cleanup support
         use futures_util::FutureExt;
         let mut fut = Box::pin(self);
@@ -387,14 +392,33 @@ pub fn onmounted<__Marker>(
     f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<MountedData>, __Marker>,
 ) -> ::dioxus_core::Attribute {
     let event_handler = f.super_into();
+    // Use new_raw to handle both MountedData (from renderer) and PlatformEventData (legacy)
+    let listener = ::dioxus_core::ListenerCallback::<MountedData>::new_raw(
+        move |e: ::dioxus_core::Event<dyn std::any::Any>| {
+            // Try to get MountedData directly (renderer-created for cleanup support)
+            // Otherwise fall back to PlatformEventData for backwards compatibility
+            let mounted_data: std::rc::Rc<MountedData> =
+                if let Ok(data) = e.data.clone().downcast::<MountedData>() {
+                    // Renderer passed MountedData directly - use the same Rc for cleanup retrieval
+                    data
+                } else if let Ok(platform_data) = e.data.clone().downcast::<PlatformEventData>() {
+                    // Legacy path: convert PlatformEventData to MountedData
+                    // Note: cleanup callbacks won't work with this path - renderers should send Rc<MountedData> directly
+                    std::rc::Rc::new((&*platform_data).into())
+                } else {
+                    // Unexpected type - log error and return
+                    tracing::error!("onmounted received unexpected event data type");
+                    return;
+                };
+
+            // Use with_data to create event with same metadata but our MountedData
+            let event = e.with_data(mounted_data);
+            event_handler.call(event.into_any());
+        },
+    );
     ::dioxus_core::Attribute::new(
         "onmounted", // Core strips "on" prefix when matching
-        ::dioxus_core::AttributeValue::listener(move |e: ::dioxus_core::Event<PlatformEventData>| {
-            let event: ::dioxus_core::Event<MountedData> = e.map(|data| {
-                data.into()
-            });
-            event_handler.call(event.into_any());
-        }),
+        ::dioxus_core::AttributeValue::Listener(listener.erase()),
         None,
         false,
     )
@@ -414,9 +438,10 @@ pub mod onmounted {
     ) -> ::dioxus_core::Attribute {
         // Wrap the handler to process the return value for cleanup
         super::onmounted(move |event: ::dioxus_core::Event<MountedData>| {
-            let result = handler(event);
+            let result = handler(event.clone());
             // Process the result - this handles (), FnOnce cleanup closures, and async futures
-            result.spawn_with_cleanup();
+            // Store cleanup on the shared MountedData so renderers can retrieve it
+            result.spawn_with_cleanup(&event.data);
         })
     }
 }

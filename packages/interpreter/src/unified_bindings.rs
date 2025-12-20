@@ -65,6 +65,9 @@ mod js {
     fn remove(id: u32) {
         "{let node = this.nodes[$id$]; if (node !== undefined) { if (node.listening) { this.removeAllNonBubblingListeners(node); } node.remove(); }}"
     }
+    fn free_id(id: u32) {
+        "{delete this.nodes[$id$];}"
+    }
     fn create_raw_text(text: &str) {
         "{this.stack.push(document.createTextNode($text$));}"
     }
