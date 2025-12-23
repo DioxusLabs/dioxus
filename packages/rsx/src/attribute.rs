@@ -536,7 +536,6 @@ pub struct IfAttributeValue {
     pub condition: Expr,
     pub then_value: Box<AttributeValue>,
     pub else_value: Option<Box<AttributeValue>>,
-    _priv: (),
 }
 
 impl IfAttributeValue {
@@ -771,7 +770,6 @@ impl Parse for IfAttributeValue {
             if_expr,
             then_value,
             else_value,
-            _priv: (),
         })
     }
 }

@@ -487,7 +487,7 @@ impl<'a> Writer<'a> {
                     .comma
                     .as_ref()
                     .map(|c| c.span())
-                    .unwrap_or_else(|| self.totoal_span_of_attr(attr)),
+                    .unwrap_or_else(|| self.total_span_of_attr(attr)),
                 AttrType::Spread(attr) => attr.span(),
             };
 
@@ -1080,7 +1080,7 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn totoal_span_of_attr(&self, attr: &Attribute) -> Span {
+    fn total_span_of_attr(&self, attr: &Attribute) -> Span {
         match &attr.value {
             AttributeValue::Shorthand(s) => s.span(),
             AttributeValue::AttrLiteral(l) => l.span(),
