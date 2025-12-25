@@ -47,6 +47,8 @@ pub fn DogView() -> Element {
                 .await?
                 .json::<serde_json::Value>()
                 .await?["message"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Invalid response"))?		
                 .to_string(),
         )
     })?;
