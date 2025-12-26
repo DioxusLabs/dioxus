@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use crate::{use_callback, use_signal};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
@@ -11,7 +11,8 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use std::{cell::Cell, future::Future, rc::Rc};
+use slab::Slab;
+use std::{cell::Cell, future::Future, rc::Rc, task::Waker};
 use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
@@ -34,7 +35,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waker = use_waker::<()>();
+    let mut waiting_futures: Signal<(usize, Slab<Waker>)> = use_signal(|| (0, Slab::new()));
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -63,8 +64,12 @@ where
             state.set(UseResourceState::Ready);
             value.set(Some(res));
 
-            // Notify that the value has changed
-            waker.wake(());
+            let mut waiting_futures = waiting_futures.write();
+            let (version, wakers) = &mut *waiting_futures;
+            for waker in wakers.drain() {
+                waker.wake();
+            }
+            *version += 1;
         })
     });
 
@@ -90,7 +95,7 @@ where
         task,
         value,
         state,
-        waker,
+        waiting_futures,
         callback: cb,
     }
 }
@@ -122,7 +127,10 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
-    waker: UseWaker<()>,
+    /// (slab version, wakers)
+    /// When the slab is drained, ids are reclaimed. We need version to ensure [`ResourceFuture`]
+    /// does not overwrite another futures waker when polled.
+    waiting_futures: Signal<(usize, Slab<Waker>)>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -442,6 +450,182 @@ impl<T> Resource<T> {
             _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
         }
     }
+
+    /// Asynchronously wait for the resource to be ready and read its value.
+    ///
+    /// This method waits until the resource completes, then returns a read guard to the value.
+    /// The guard works like any other `read()` guard and follows the same borrowing rules.
+    ///
+    /// ## Important: Handling Guards Across Await Points
+    ///
+    /// **Never hold the returned guard across await points.** If you need to do more async work
+    /// after reading the value, you must either:
+    ///
+    /// 1. **Clone the data and drop the guard:**
+    ///    ```rust,ignore
+    ///    let guard = resource.read_async().await;
+    ///    let data = guard.clone();
+    ///    drop(guard);
+    ///    // Now safe to do more async work
+    ///    ```
+    ///
+    /// 2. **Drop and use sync `read()`:**
+    ///    ```rust,ignore
+    ///    let guard1 = resource1.read_async().await;
+    ///    drop(guard1);
+    ///    let guard2 = resource2.read_async().await;
+    ///    // Value exists if used inside another `use_resource`,
+    ///    // since otherwise the resource would have restarted
+    ///    let guard1 = resource1.read().as_ref().unwrap();
+    ///    ```
+    ///
+    /// ```rust,ignore
+    /// // ❌ WRONG - holding guard across await
+    /// let guard = resource.read_async().await;
+    /// some_async_call().await; // Guard is still held!
+    /// println!("{}", guard.value);
+    /// ```
+    /// ## Example
+    ///
+    /// Chaining two resources where the second depends on the first:
+    ///
+    /// ```rust,no_run
+    /// # use dioxus::prelude::*;
+    /// fn App() -> Element {
+    ///     let user_id = use_resource(|| async { fetch_user_id().await });
+    ///     
+    ///     let user_profile = use_resource(move || async move {
+    ///         // Wait for user_id to be ready
+    ///         let id_guard = user_id.read_async().await;
+    ///         let id = *id_guard; // Copy the ID
+    ///         drop(id_guard);     // Drop before async work
+    ///         
+    ///         // Now safe to make another async call
+    ///         fetch_profile(id).await
+    ///     });
+    ///     
+    ///     rsx! { "Profile: {user_profile:?}" }
+    /// }
+    /// # async fn fetch_user_id() -> u32 { 42 }
+    /// # async fn fetch_profile(id: u32) -> String { format!("User {}", id) }
+    /// ```
+    pub async fn read_async<'a>(
+        &'a self,
+    ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
+        let mut read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> =
+            self.read();
+        while read.is_none() {
+            drop(read);
+            let _: () = (*self).await;
+            read = self.read();
+        }
+        read.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
+    }
+
+    /// Asynchronously wait for the resource to be ready and return a clone of its value.
+    ///
+    /// The primary advantage of `cloned_async` is that it avoids the complex
+    /// borrowing rules of `read_async` by immediately cloning the value, allowing
+    /// it to be used freely across further `.await` points.
+    ///
+    /// **This method requires `T` to implement `Clone`.**
+    ///
+    /// ## Example
+    ///
+    /// ```rust,no_run
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone, Debug)]
+    /// struct User { id: u32, name: String }
+    ///
+    /// fn App() -> Element {
+    ///     let user_id = use_signal(|| 42);
+    ///     let user_resource = use_resource(move || async move {
+    ///         // Some expensive fetch that returns a User
+    ///         fetch_user(*user_id.read()).await
+    ///     });
+    ///     
+    ///     let cloned_user = use_resource(move || async move {
+    ///         // Wait for user_resource, clone the User struct, and then continue
+    ///         let user: User = user_resource.cloned_async().await;
+    ///         
+    ///         // Safe to use 'user' across async boundaries
+    ///         log_user_activity(user.id).await;
+    ///         
+    ///         // Return the cloned value for this resource
+    ///         user
+    ///     });
+    ///     
+    ///     rsx! {
+    ///         "Fetched User: {cloned_user:?}"
+    ///     }
+    /// }
+    /// # async fn fetch_user(_id: u32) -> User { User { id: 42, name: "Alice".to_string() } }
+    /// # async fn log_user_activity(_id: u32) {}
+    /// ```
+    pub async fn cloned_async<'a>(&'a self) -> T
+    where
+        T: Clone,
+    {
+        let mut read: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> =
+            self.read();
+        while read.is_none() {
+            drop(read);
+            let _: () = (*self).await;
+            read = self.read();
+        }
+        read.as_ref().unwrap().clone()
+    }
+
+    /// Asynchronously wait for the resource to be ready and return a guard to its value, *without* subscribing the current component.
+    ///
+    /// This method is identical to `read_async`, but uses `peek()` internally instead of `read()`.
+    /// This means the component rendering this code **will not** be re-rendered when the resource value changes.
+    ///
+    /// ## Important: Handling Guards Across Await Points
+    ///
+    /// Like `read_async`, **never hold the returned guard across await points.**
+    /// You must drop the guard or clone the data before awaiting.
+    ///
+    /// ## Example
+    ///
+    /// Reading a prerequisite resource without causing a re-render:
+    ///
+    /// ```rust,no_run
+    /// # use dioxus::prelude::*;
+    /// #[derive(Clone, Debug)]
+    /// struct Config { version: String }
+    ///
+    /// fn App() -> Element {
+    ///     let config_resource = use_resource(|| async { fetch_config().await });
+    ///     
+    ///     let final_data = use_resource(move || async move {
+    ///         // Use peek_async to wait for the config, but not subscribe this
+    ///         // resource's internal future to config_resource's changes.
+    ///         let config_guard = config_resource.peek_async().await;
+    ///         let version = config_guard.version.clone();
+    ///         drop(config_guard); // Drop guard
+    ///         
+    ///         // Now safe to proceed
+    ///         fetch_data_for_version(&version).await
+    ///     });
+    ///     
+    ///     rsx! { "Data: {final_data:?}" }
+    /// }
+    /// # async fn fetch_config() -> Config { Config { version: "v1".to_string() } }
+    /// # async fn fetch_data_for_version(_v: &str) -> String { "Some Data".to_string() }
+    /// ```
+    pub async fn peek_async<'a>(
+        &'a self,
+    ) -> generational_box::GenerationalRef<std::cell::Ref<'a, T>> {
+        let mut peek: generational_box::GenerationalRef<std::cell::Ref<'a, Option<T>>> =
+            self.peek();
+        while peek.is_none() {
+            drop(peek);
+            let _: () = (*self).await;
+            peek = self.peek();
+        }
+        peek.map(|e| std::cell::Ref::map(e, |option| option.as_ref().unwrap()))
+    }
 }
 
 impl<T, E> Resource<Result<T, E>> {
@@ -544,16 +728,87 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-impl<T> std::future::Future for Resource<T> {
+#[derive(Debug)]
+pub struct ResourceFuture<T>
+where
+    T: 'static,
+{
+    id: Option<(usize, usize)>,
+    resource: Resource<T>,
+}
+
+impl<T> std::future::Future for ResourceFuture<T>
+where
+    T: 'static,
+{
     type Output = ();
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        match self.waker.clone().poll_unpin(cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+        let this = unsafe { self.get_unchecked_mut() };
+        if matches!(*this.resource.state.peek(), UseResourceState::Ready) {
+            return std::task::Poll::Ready(());
+        }
+        let mut waiting_futures = this.resource.waiting_futures.write();
+        let (current_slab_version, wakers) = &mut *waiting_futures;
+        if let Some((slab_version, id)) = &mut this.id {
+            if *current_slab_version == *slab_version {
+                let old_waker = wakers.get_mut(*id).unwrap();
+                let _ = std::mem::replace(old_waker, cx.waker().clone());
+            } else {
+                let new_id = wakers.insert(cx.waker().clone());
+                *slab_version = *current_slab_version;
+                *id = new_id;
+            }
+        } else {
+            let id = wakers.insert(cx.waker().clone());
+            this.id = Some((*current_slab_version, id));
+        }
+        std::task::Poll::Pending
+    }
+}
+
+impl<T> Clone for ResourceFuture<T>
+where
+    T: 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            id: None,
+            resource: self.resource,
+        }
+    }
+}
+
+impl<T> Drop for ResourceFuture<T>
+where
+    T: 'static,
+{
+    fn drop(&mut self) {
+        if let Some((slab_version, id)) = &self.id {
+            let mut waiting_futures = self.resource.waiting_futures.write();
+            let (current_slab_version, wakers) = &mut *waiting_futures;
+            if *current_slab_version == *slab_version {
+                wakers.remove(*id);
+            }
+        }
+    }
+}
+
+impl<T> std::future::IntoFuture for Resource<T>
+where
+    T: 'static,
+{
+    type Output = ();
+
+    type IntoFuture = ResourceFuture<T>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        ResourceFuture {
+            id: None,
+            resource: self,
         }
     }
 }
