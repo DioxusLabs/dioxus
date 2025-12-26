@@ -335,7 +335,7 @@
       } else if (data.type === "ClientInit") {
         // Get project info
         APPLICATION_NAME = data.data.application_name;
-        const platform = data.data.platform;
+        const platform = data.data.bundle;
 
         // Set project info
         let projectInfo = document.getElementById("project-info");
