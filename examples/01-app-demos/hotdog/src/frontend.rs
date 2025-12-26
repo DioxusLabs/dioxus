@@ -42,13 +42,16 @@ pub fn NavBar() -> Element {
 #[component]
 pub fn DogView() -> Element {
     let mut img_src = use_loader(|| async move {
-        dioxus::Ok(
-            reqwest::get("https://dog.ceo/api/breeds/image/random")
-                .await?
-                .json::<serde_json::Value>()
-                .await?["message"]
-                .to_string(),
-        )
+        let json = reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await?
+            .json::<serde_json::Value>()
+            .await?;
+        let url = json["message"]
+            .as_str()
+            .expect("Failed to deserialize img URL")
+            .to_owned();
+
+        dioxus::Ok(url)
     })?;
 
     rsx! {
