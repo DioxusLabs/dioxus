@@ -5704,6 +5704,7 @@ version = "0.7.2"
 name = "dioxus-desktop"
 version = "0.7.2"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.22.1",
  "bytes",
@@ -5728,6 +5729,7 @@ dependencies = [
  "generational-box",
  "global-hotkey",
  "http-range",
+ "image",
  "infer",
  "jni 0.21.1",
  "lazy-js-bundle",
