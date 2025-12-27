@@ -1,0 +1,11 @@
+.container {
+    background-color: lightblue;
+    padding: 20px;
+    border-radius: 8px;
+}
+
+/* The `:global` selector can be used to define global styles that are not scoped */
+:global(.global-class) {
+    color: red;
+    font-weight: bold;
+}
