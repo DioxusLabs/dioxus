@@ -826,12 +826,12 @@ impl BuildRequest {
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
-            features.push(Self::feature_for_platform_and_renderer(
-                main_package,
-                &triple,
-                renderer,
-            ));
-            features.dedup();
+            if let Some(feature) =
+                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+            {
+                features.push(feature);
+                features.dedup();
+            }
         }
 
         // Set the profile of the build if it's not already set
@@ -3571,7 +3571,7 @@ impl BuildRequest {
         package: &krates::cm::Package,
         triple: &Triple,
         renderer: Renderer,
-    ) -> String {
+    ) -> Option<String> {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = renderer.feature_name(triple);
 
@@ -3611,12 +3611,17 @@ impl BuildRequest {
             None
         });
 
-        res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{dioxus_feature}");
-            tracing::debug!(
-                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
-            );
-            fallback
+        res.or_else(|| {
+            let depends_on_dioxus = package.dependencies.iter().any(|dep| dep.name == "dioxus");
+            if depends_on_dioxus {
+                let fallback = format!("dioxus/{dioxus_feature}");
+                tracing::debug!(
+                    "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
+                );
+                Some(fallback)
+            } else {
+                None
+            }
         })
     }
 
