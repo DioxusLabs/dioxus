@@ -10,6 +10,19 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::ops::Deref;
 use std::{cmp::PartialEq, future::Future};
 
+#[cfg(any(feature = "server", test))]
+fn remap_redirect_error(captured: CapturedError) -> CapturedError {
+    if let Some(server_fn_error) = captured.downcast_ref::<crate::ServerFnError>() {
+        if let Some(location) = server_fn_error.redirect_location() {
+            if let crate::ServerFnError::ServerError { code, .. } = server_fn_error {
+                return CapturedError::new(dioxus_core::RenderRedirect::new(*code, location));
+            }
+        }
+    }
+
+    captured
+}
+
 /// A hook to create a resource that loads data asynchronously.
 ///
 /// This hook takes a closure that returns a future. This future will be executed on both the client
@@ -101,8 +114,14 @@ where
             // Remap the error to the captured error type so it's cheap to clone and pass out, just
             // slightly more cumbersome to access the inner error.
             let out = out.map_err(|e| {
-                let anyhow_err: CapturedError = e.into();
-                anyhow_err
+                let captured: CapturedError = e.into();
+
+                // On the server, treat redirects originating from fullstack extractor/server-fn
+                // machinery as control-flow so core logging can remain clean.
+                #[cfg(feature = "server")]
+                let captured = remap_redirect_error(captured);
+
+                captured
             });
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
@@ -363,6 +382,35 @@ impl std::fmt::Display for Loading {
             Loading::Pending(_) => write!(f, "Loading is still pending"),
             Loading::Failed(_) => write!(f, "Loading has failed"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remap_redirect_error_converts_server_fn_redirect_to_render_redirect() {
+        let captured: CapturedError = crate::ServerFnError::redirect(307, "/sign-up").into();
+        let remapped = remap_redirect_error(captured);
+
+        let redirect = remapped
+            .downcast_ref::<dioxus_core::RenderRedirect>()
+            .expect("expected RenderRedirect");
+
+        assert_eq!(redirect.code, 307);
+        assert_eq!(redirect.location, "/sign-up");
+    }
+
+    #[test]
+    fn remap_redirect_error_leaves_non_redirect_errors_untouched() {
+        let captured: CapturedError = crate::ServerFnError::new("oops").into();
+        let remapped = remap_redirect_error(captured);
+
+        assert!(remapped
+            .downcast_ref::<dioxus_core::RenderRedirect>()
+            .is_none());
+        assert!(remapped.downcast_ref::<crate::ServerFnError>().is_some());
     }
 }
 

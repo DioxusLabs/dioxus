@@ -1,8 +1,8 @@
 use axum_core::response::IntoResponse;
 use futures_util::TryStreamExt;
+use http::header::LOCATION;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
 
 use crate::HttpError;
 
@@ -83,6 +83,19 @@ pub enum ServerFnError {
     Response(String),
 }
 
+// Reserved key used to encode redirects in `ServerFnError::ServerError.details`.
+const REDIRECT_DETAILS_KEY: &str = "__dioxus_redirect";
+
+fn is_redirection_code(code: u16) -> bool {
+    (300..400).contains(&code)
+}
+
+fn redirect_location_from_details(details: &Option<serde_json::Value>) -> Option<&str> {
+    let details = details.as_ref()?;
+    let obj = details.as_object()?;
+    obj.get(REDIRECT_DETAILS_KEY)?.as_str()
+}
+
 impl ServerFnError {
     /// Create a new server error (status code 500) with a message.
     pub fn new(f: impl ToString) -> Self {
@@ -93,11 +106,40 @@ impl ServerFnError {
         }
     }
 
+    /// Create a redirect error (control-flow) with a status code and `Location`.
+    pub fn redirect(code: u16, location: impl Into<String>) -> Self {
+        let location = location.into();
+        ServerFnError::ServerError {
+            message: format!("redirect ({code}) to {location}"),
+            details: Some(serde_json::json!({ REDIRECT_DETAILS_KEY: location })),
+            code,
+        }
+    }
+
+    /// Returns the redirect location if this error represents a redirect.
+    pub fn redirect_location(&self) -> Option<&str> {
+        match self {
+            ServerFnError::ServerError { code, details, .. } if is_redirection_code(*code) => {
+                redirect_location_from_details(details)
+            }
+            _ => None,
+        }
+    }
+
     /// Create a new server error (status code 500) with a message and details.
     pub async fn from_axum_response(resp: axum_core::response::Response) -> Self {
-        let status = resp.status();
-        let message = resp
-            .into_body()
+        let (parts, body) = resp.into_parts();
+        let status = parts.status;
+
+        // If this is a redirect, preserve the location in structured details so other layers
+        // (like SSR) can turn it back into a redirect response.
+        if status.is_redirection() {
+            if let Some(location) = parts.headers.get(LOCATION).and_then(|v| v.to_str().ok()) {
+                return ServerFnError::redirect(status.as_u16(), location);
+            }
+        }
+
+        let message = body
             .into_data_stream()
             .try_fold(Vec::new(), |mut acc, chunk| async move {
                 acc.extend_from_slice(&chunk);

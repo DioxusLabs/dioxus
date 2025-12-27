@@ -108,7 +108,11 @@ impl VirtualDom {
     fn handle_element_return(&self, node: &mut Element, scope: &Scope) {
         match node {
             Err(RenderError::Error(e)) => {
-                tracing::error!("Error while rendering component `{}`: {e}", scope.name);
+                if e.downcast_ref::<crate::RenderRedirect>().is_some() {
+                    tracing::info!("Redirect while rendering component `{}`: {e}", scope.name);
+                } else {
+                    tracing::error!("Error while rendering component `{}`: {e}", scope.name);
+                }
                 self.runtime.throw_error(scope.id, e.clone());
             }
             Err(RenderError::Suspended(e)) => {

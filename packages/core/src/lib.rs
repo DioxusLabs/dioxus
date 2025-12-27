@@ -103,10 +103,10 @@ pub use crate::innerlude::{
     ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
     Mutations, NoOpMutations, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
-    Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
-    SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-    SuspenseContext, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
-    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    RenderRedirect, Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync,
+    SubscriberList, Subscribers, SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary,
+    SuspenseBoundaryProps, SuspenseContext, Task, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
 
 /// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
