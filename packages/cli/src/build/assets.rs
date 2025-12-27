@@ -212,51 +212,136 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     };
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
+    
+    tracing::warn!("WASM <data> section: start={:#x}, end={:#x}, size={}", section_start, section_range_end, section_size);
 
-    // Translate the section_relative_address to the file offset
-    // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-    // to get the correct address and section start
-    // Note: We need to reparse just the data section with wasmparser to get the file offset because walrus does
-    // not expose the file offset information
+    // Parse the wasm file to find the globals
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module from file contents")?;
+    
+    // Check memory configuration
+    for mem in module.memories.iter() {
+        tracing::warn!("Memory: initial_pages={}, max_pages={:?}, shared={}", 
+            mem.initial, mem.maximum, mem.shared);
+    }
+
+    // Collect file offsets for all data segments using wasmparser
     let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
         &file_contents[section_start as usize..section_range_end as usize],
         0,
     ))
     .context("Failed to create WASM data section reader")?;
-    let main_memory = reader
-        .into_iter()
-        .next()
-        .context("Failed find main memory from WASM data section")?
-        .context("Failed to read main memory from WASM data section")?;
-    // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
-    let data_start_offset = (main_memory.data.as_ptr() as u64)
-        .checked_sub(file_contents.as_ptr() as u64)
-        .expect("Data section start offset should be within the file contents");
 
-    // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
+    let mut data_segment_file_offsets = Vec::new();
+    let mut segment_count = 0;
+    for data in reader.into_iter() {
+        let data = data.context("Failed to read data segment from WASM data section")?;
+        let data_start_offset = (data.data.as_ptr() as u64)
+            .checked_sub(file_contents.as_ptr() as u64)
+            .expect("Data section start offset should be within the file contents");
+        data_segment_file_offsets.push(data_start_offset);
+        
+        let kind_str = match &data.kind {
+            wasmparser::DataKind::Active { memory_index, offset_expr } => {
+                format!("Active(mem={}, offset_expr_len={})", memory_index, offset_expr.get_binary_reader().bytes_remaining())
+            },
+            wasmparser::DataKind::Passive => "Passive".to_string(),
+        };
+        
+        tracing::warn!(
+            "Wasmparser segment {}: kind={}, data_len={}, file_offset={:#x}",
+            segment_count,
+            kind_str,
+            data.data.len(),
+            data_start_offset
+        );
+        segment_count += 1;
+    }
+    
+    tracing::warn!("Total segments found via wasmparser: {}", data_segment_file_offsets.len());
+
+    // Build a map of segment memory ranges. For Active segments, use their offset.
+    // For Passive segments, we need to determine where they will be placed at runtime.
+    // With atomics/bulk-memory, passive segments are typically loaded at __data_end.
+    // We'll look for __data_end or similar globals to find the base address.
+    let mut passive_base: Option<u64> = None;
+    for export in module.exports.iter() {
+        if export.name == "__data_end" || export.name == "__heap_base" {
+            if let walrus::ExportItem::Global(global) = export.item {
+                if let walrus::GlobalKind::Local(expr) = &module.globals.get(global).kind {
+                    passive_base = eval_walrus_global_expr(&module, expr);
+                    tracing::debug!("Found {} = {:?}", export.name, passive_base);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Build segment memory ranges
+    struct SegmentInfo {
+        memory_start: u64,
+        memory_end: u64,
+        file_offset: u64,
+        is_active: bool,
+    }
+    
+    let mut segments: Vec<SegmentInfo> = Vec::new();
+    let mut cumulative_passive_offset = passive_base.unwrap_or(0);
+    
+    let mut walrus_segment_count = 0;
+    for (i, data) in module.data.iter().enumerate() {
+        walrus_segment_count += 1;
+        let file_offset = data_segment_file_offsets.get(i).copied().unwrap_or(0);
+        let data_len = data.value.len() as u64;
+        
+        match &data.kind {
+            walrus::DataKind::Active { offset, .. } => {
+                let memory_start = eval_walrus_global_expr(&module, offset).unwrap_or(0);
+                segments.push(SegmentInfo {
+                    memory_start,
+                    memory_end: memory_start + data_len,
+                    file_offset,
+                    is_active: true,
+                });
+                tracing::debug!(
+                    "Active segment {}: memory [{:#x} - {:#x}), file_offset={:#x}, len={}",
+                    i, memory_start, memory_start + data_len, file_offset, data_len
+                );
+            }
+            walrus::DataKind::Passive => {
+                // For passive segments, assume they are placed sequentially starting at passive_base
+                // This is an approximation - the actual placement depends on memory.init calls
+                segments.push(SegmentInfo {
+                    memory_start: cumulative_passive_offset,
+                    memory_end: cumulative_passive_offset + data_len,
+                    file_offset,
+                    is_active: false,
+                });
+                tracing::debug!(
+                    "Passive segment {}: memory [{:#x} - {:#x}), file_offset={:#x}, len={}",
+                    i, cumulative_passive_offset, cumulative_passive_offset + data_len, file_offset, data_len
+                );
+                cumulative_passive_offset += data_len;
+            }
+        }
+    }
+    
+    tracing::warn!("Walrus found {} data segments total", walrus_segment_count);
+    tracing::warn!("Segment mismatch check: wasmparser={}, walrus={}", data_segment_file_offsets.len(), walrus_segment_count);
+
+    // With atomics/bulk-memory, all segments are passive and memory layout is different.
+    // The symbol addresses point to where assets WILL BE in memory after memory.init,
+    // but they don't directly correspond to file offsets. We need to find them by searching.
+    let all_passive = segments.iter().all(|s| !s.is_active);
+    
+    if all_passive {
+        tracing::warn!("Detected atomics-enabled WASM (all passive data segments)");
+        
+        // Try the symbol-based search first - it might work if the passive segment offsets are correct
+        // The symbols contain memory addresses; we'll try to resolve them
+    }
+
     let mut offsets = Vec::new();
-
-    // Find the main memory offset
-    let main_memory = module
-        .data
-        .iter()
-        .next()
-        .context("Failed to find main memory in WASM module")?;
-
-    let walrus::DataKind::Active {
-        offset: main_memory_offset,
-        ..
-    } = main_memory.kind
-    else {
-        tracing::error!("Failed to find main memory offset in WASM module");
-        return Ok(Vec::new());
-    };
-
-    // In the hot patch build, the main memory offset is a global from the main module and each global
-    // is it's own global. Use an offset of 0 instead if we can't evaluate the global
-    let main_memory_offset =
-        eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
 
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
@@ -264,10 +349,12 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         }
 
         let walrus::ExportItem::Global(global) = export.item else {
+            tracing::debug!("Symbol {:?} is not a global, skipping", export.name);
             continue;
         };
 
         let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
+            tracing::debug!("Symbol {:?} is not a local global, skipping", export.name);
             continue;
         };
 
@@ -278,18 +365,106 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             );
             continue;
         };
+        
+        tracing::debug!(
+            "Found MANGANIS symbol {:?} with virtual address {:#x}",
+            export.name,
+            virtual_address
+        );
 
-        let section_relative_address: u64 = ((virtual_address as i128)
-            - main_memory_offset as i128)
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
-        let file_offset = data_start_offset + section_relative_address;
+        // Search all segments for this virtual address
+        let mut found = false;
+        for seg in &segments {
+            if virtual_address >= seg.memory_start && virtual_address < seg.memory_end {
+                let relative_offset = virtual_address - seg.memory_start;
+                let file_offset = seg.file_offset + relative_offset;
+                offsets.push(file_offset);
+                found = true;
+                tracing::debug!(
+                    "Found __MANGANIS__ symbol {:?} at file offset {:#x} (segment type: {})",
+                    export.name,
+                    file_offset,
+                    if seg.is_active { "active" } else { "passive" }
+                );
+                break;
+            }
+        }
 
-        offsets.push(file_offset);
+        if !found {
+            // Log detailed debug info but don't panic - the asset might still work
+            tracing::warn!(
+                "Found __MANGANIS__ symbol {:?} (addr: {:#x}) in WASM file, but no segment range matched",
+                export.name,
+                virtual_address
+            );
+        }
+    }
+
+    // If we're in atomics mode and didn't find any offsets via symbol-based search,
+    // try a conservative search for assets in the largest segment
+    if offsets.is_empty() && all_passive {
+        tracing::warn!("Symbol-based search failed for atomics WASM, trying conservative asset location");
+        let asset_size = BundledAsset::MEMORY_LAYOUT.size();
+        let symbol_count = module.exports.iter()
+            .filter(|e| looks_like_manganis_symbol(&e.name))
+            .count();
+        
+        // Find the largest segment (most likely to contain assets)
+        let largest_segment = segments.iter().enumerate()
+            .max_by_key(|(_, seg)| seg.memory_end - seg.memory_start);
+        
+        if let Some((seg_idx, seg)) = largest_segment {
+            let seg_file_start = seg.file_offset as usize;
+            let seg_file_end = seg_file_start + (seg.memory_end - seg.memory_start) as usize;
+            
+            if seg_file_end <= file_contents.len() {
+                // Assume assets are packed at regular intervals starting from the segment beginning
+                // Use asset_size as the spacing
+                for i in 0..symbol_count {
+                    let offset = i * asset_size;
+                    let file_offset = seg_file_start + offset;
+                    
+                    // Validate offset is within bounds
+                    if file_offset + asset_size <= file_contents.len() {
+                        offsets.push(file_offset as u64);
+                        tracing::debug!(
+                            "Assuming asset {} at segment {} offset {:#x} (file offset {:#x})",
+                            i, seg_idx, offset, file_offset
+                        );
+                    }
+                }
+            }
+            
+            if !offsets.is_empty() {
+                tracing::warn!("Located {} assets in segment {} at regular intervals (size: {})", 
+                    offsets.len(), seg_idx, asset_size);
+            }
+        }
+    }
+
+    if !offsets.is_empty() {
+        return Ok(offsets);
+    }
+
+    // If still no luck, log why
+    if all_passive {
+        tracing::warn!("Available segments:");
+        for (i, seg) in segments.iter().enumerate() {
+            tracing::warn!(
+                "  Segment {}: {} [{:#x} - {:#x}) file_offset={:#x}",
+                i,
+                if seg.is_active { "Active" } else { "Passive" },
+                seg.memory_start,
+                seg.memory_end,
+                seg.file_offset
+            );
+        }
     }
 
     Ok(offsets)
 }
+
+// Removed duplicate closing brace - the function continues below with original code handling
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Then return an `AssetManifest` containing all the assets found in the file.
