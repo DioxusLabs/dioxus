@@ -21,7 +21,6 @@ dioxus-cli-config = { workspace = true, optional = true }
 
 [dev-dependencies]
 manganis = { workspace = true }
-dioxus = { workspace = true }
 
 [features]
 dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]

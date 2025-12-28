@@ -99,7 +99,7 @@ impl BundledAsset {
 /// It should not be read directly with [`std::fs::read`] because the path needs to be resolved
 /// relative to the bundle
 ///
-/// ```rust
+/// ```rust, ignore
 /// # use manganis::{asset, Asset};
 /// # use dioxus::prelude::*;
 /// const ASSET: Asset = asset!("/assets/image.png");

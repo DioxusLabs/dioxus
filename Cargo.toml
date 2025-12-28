@@ -213,7 +213,7 @@ manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.2" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.2" }
 
 # The version of assets published with 0.7.0 and 0.7.1 that the CLI should still support
-manganis-core-07 = { package = "manganis-core", version = "0.7.1" }
+manganis-core-07 = { package = "manganis-core", version = "=0.7.2" }
 
 # wasm-split
 wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.2" }
