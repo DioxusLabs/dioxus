@@ -41,25 +41,6 @@ fn redirect_from_render_redirect(
     Some((status, headers))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn redirect_from_render_redirect_extracts_status_and_location() {
-        let captured =
-            dioxus_core::CapturedError::new(dioxus_core::RenderRedirect::new(307, "/sign-up"));
-
-        let (status, headers) =
-            redirect_from_render_redirect(&captured).expect("expected redirect");
-        assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
-        assert_eq!(
-            headers.get(LOCATION).and_then(|v| v.to_str().ok()).unwrap(),
-            "/sign-up"
-        );
-    }
-}
-
 /// Errors that can occur during server side rendering before the initial chunk is sent down
 pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
@@ -822,5 +803,24 @@ impl SsrRendererPool {
         to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redirect_from_render_redirect_extracts_status_and_location() {
+        let captured =
+            dioxus_core::CapturedError::new(dioxus_core::RenderRedirect::new(307, "/sign-up"));
+
+        let (status, headers) =
+            redirect_from_render_redirect(&captured).expect("expected redirect");
+        assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            headers.get(LOCATION).and_then(|v| v.to_str().ok()).unwrap(),
+            "/sign-up"
+        );
     }
 }

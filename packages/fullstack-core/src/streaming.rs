@@ -349,15 +349,13 @@ mod tests {
     impl FromRequest<FullstackContext, ()> for RedirectingExtractor {
         type Rejection = (StatusCode, HeaderMap);
 
-        fn from_request(
+        async fn from_request(
             _req: Request,
             _state: &FullstackContext,
-        ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
-            async move {
-                let mut headers = HeaderMap::new();
-                headers.insert(LOCATION, http::HeaderValue::from_static("/sign-in"));
-                Err((StatusCode::TEMPORARY_REDIRECT, headers))
-            }
+        ) -> Result<Self, Self::Rejection> {
+            let mut headers = HeaderMap::new();
+            headers.insert(LOCATION, http::HeaderValue::from_static("/sign-in"));
+            Err((StatusCode::TEMPORARY_REDIRECT, headers))
         }
     }
 

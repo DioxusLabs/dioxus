@@ -385,6 +385,20 @@ impl std::fmt::Display for Loading {
     }
 }
 
+/// Convert a Loading into a RenderError for use with the `?` operator in components
+impl From<Loading> for RenderError {
+    fn from(val: Loading) -> Self {
+        match val {
+            Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.resource.task())),
+            Loading::Failed(err) => RenderError::Error(
+                err.error
+                    .cloned()
+                    .expect("LoaderHandle in Failed state should always have an error"),
+            ),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,19 +425,5 @@ mod tests {
             .downcast_ref::<dioxus_core::RenderRedirect>()
             .is_none());
         assert!(remapped.downcast_ref::<crate::ServerFnError>().is_some());
-    }
-}
-
-/// Convert a Loading into a RenderError for use with the `?` operator in components
-impl From<Loading> for RenderError {
-    fn from(val: Loading) -> Self {
-        match val {
-            Loading::Pending(t) => RenderError::Suspended(SuspendedFuture::new(t.resource.task())),
-            Loading::Failed(err) => RenderError::Error(
-                err.error
-                    .cloned()
-                    .expect("LoaderHandle in Failed state should always have an error"),
-            ),
-        }
     }
 }
