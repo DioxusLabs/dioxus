@@ -94,7 +94,7 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
         // Pointer
         "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
         | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
-        | "lostpointercapture" => Pointer(de(data)?),
+        | "lostpointercapture" | "auxclick" => Pointer(de(data)?),
 
         // Selection
         "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
@@ -106,7 +106,7 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
         "resize" => Resize(de(data)?),
 
         // Scroll
-        "scroll" => Scroll(de(data)?),
+        "scroll" | "scrollend" => Scroll(de(data)?),
 
         // Visible
         "visible" => Visible(de(data)?),

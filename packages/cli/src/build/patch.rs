@@ -678,14 +678,6 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
             map.insert(*old_idx as u64, *idx as u64);
             continue;
         }
-
-        // Warn if there might be a null entry
-        if !name.contains("breaks_if_inlined") {
-            tracing::warn!(
-                "[hotpatching]: Failed to find ifunc entry in old module for function: {}",
-                name
-            );
-        }
     }
 
     Ok(JumpTable {

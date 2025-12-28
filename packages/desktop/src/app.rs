@@ -32,6 +32,7 @@ pub(crate) struct App {
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
+    pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -61,6 +62,7 @@ impl App {
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
+            disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -100,6 +102,9 @@ impl App {
         #[cfg(debug_assertions)]
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.connect_preserve_window_state_handler();
+
+        // Make sure to disable DMA buffer rendering on Linux Wayland sessions
+        app.disable_dma_buf();
 
         (event_loop, app)
     }
@@ -295,16 +300,6 @@ impl App {
         }
 
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
-    }
-
-    /// Todo: maybe we should poll the virtualdom asking if it has any final actions to apply before closing the webview
-    ///
-    /// Technically you can handle this with the use_window_event hook
-    pub fn handle_close_msg(&mut self, id: WindowId) {
-        self.webviews.remove(&id);
-        if self.webviews.is_empty() {
-            self.control_flow = ControlFlow::Exit
-        }
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -605,6 +600,28 @@ impl App {
                         // give it a moment for the event to be processed
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
+                }
+            });
+        }
+    }
+
+    /// Disable DMA buffer rendering on Linux Wayland sessions to avoid bugs with WebKitGTK
+    fn disable_dma_buf(&self) {
+        if cfg!(target_os = "linux") && self.disable_dma_buf_on_wayland {
+            static INIT: std::sync::Once = std::sync::Once::new();
+            INIT.call_once(|| {
+                if std::path::Path::new("/dev/dri").exists()
+                    && std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
+                {
+                    // Gnome Webkit is currently buggy under Wayland and KDE, so we will run it with XWayland mode.
+                    // See: https://github.com/DioxusLabs/dioxus/issues/3667
+                    unsafe {
+                        // Disable explicit sync for NVIDIA drivers on Linux when using Way
+                        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                    }
+                }
+                unsafe {
+                    std::env::set_var("GDK_BACKEND", "x11");
                 }
             });
         }

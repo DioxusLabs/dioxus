@@ -2,6 +2,7 @@
 name = "windows-headless"
 edition = "2024"
 version.workspace = true
+publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["desktop"] }
