@@ -4269,7 +4269,7 @@ version = "0.8.0"
 dependencies = [
  "const-serialize 0.7.2",
  "const-serialize 0.8.0",
- "const-serialize-macro 0.8.0",
+ "const-serialize-macro 0.8.0-alpha.0",
  "rand 0.9.2",
  "serde",
 ]
@@ -4287,7 +4287,7 @@ dependencies = [
 
 [[package]]
 name = "const-serialize-macro"
-version = "0.8.0"
+version = "0.8.0-alpha.0"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -5,7 +5,6 @@ fn test_serialize_const_layout_primitive() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&1234u32, buf);
     let buf = buf.as_ref();
-    println!("{:?}", buf);
     assert_eq!(deserialize_const!(u32, buf).unwrap().1, 1234u32);
 
     let mut buf = ConstVec::new();

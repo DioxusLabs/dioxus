@@ -9,7 +9,6 @@ fn test_serialize_const_layout_str() {
     let buf = buf.as_ref();
     assert!(buf.len() < 10);
     let str = deserialize_const!(ConstStr, buf).unwrap().1;
-    eprintln!("{str:?}");
     assert_eq!(str.as_str(), "hello");
 }
 
