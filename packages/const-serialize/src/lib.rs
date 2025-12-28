@@ -3,6 +3,8 @@
 
 use std::mem::MaybeUninit;
 
+mod const_buffers;
+pub use const_buffers::ConstReadBuffer;
 mod cbor;
 mod const_vec;
 mod r#enum;

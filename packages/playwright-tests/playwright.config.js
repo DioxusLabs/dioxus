@@ -151,10 +151,11 @@ if (process.platform === "win32") {
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
     },
+    // todo: remove when we get to dioxus 0.8. in 0.7.3 we diverged to use cbor for assets
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
       command:
-        'cargo binstall dioxus-cli@0.7.1 --install-path dx-07 -y && ./dx-07/dx run --addr "127.0.0.1" --port 8181 --bin cli-optimization-old-cli && rm -rf dx-07',
+        'cargo binstall dioxus-cli@0.7.2 --install-path dx-07 -y && ./dx-07/dx run --addr "127.0.0.1" --port 8181 --bin cli-optimization-old-cli && rm -rf dx-07',
       port: 8181,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,
