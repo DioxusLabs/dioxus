@@ -1,13 +1,21 @@
 use crate::*;
-use std::{char, hash::Hash, mem::MaybeUninit};
+use std::{char, fmt::Debug, hash::Hash, mem::MaybeUninit};
 
 const MAX_STR_SIZE: usize = 256;
 
 /// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct ConstStr {
     bytes: [MaybeUninit<u8>; MAX_STR_SIZE],
     len: u32,
+}
+
+impl Debug for ConstStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConstStr")
+            .field("str", &self.as_str())
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]

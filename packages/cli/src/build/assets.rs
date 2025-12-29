@@ -527,7 +527,6 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
     for (symbol, asset) in offsets.into_iter().zip(&assets) {
         let version = symbol.version;
         let offset = symbol.offset;
-        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = version.serialize(asset);
 
         file.seek(std::io::SeekFrom::Start(offset))?;
