@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
+    pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
@@ -605,6 +606,7 @@ impl BuildRequest {
         */
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
+        let all_features = args.all_features;
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
         let mut bundle_format = args.bundle;
@@ -986,6 +988,7 @@ impl BuildRequest {
             features,
             bundle,
             no_default_features,
+            all_features,
             crate_package,
             crate_target,
             profile,
@@ -2610,6 +2613,10 @@ impl BuildRequest {
 
         if self.no_default_features {
             cargo_args.push("--no-default-features".to_string());
+        }
+
+        if self.all_features {
+            cargo_args.push("--all-features".to_string());
         }
 
         if !self.features.is_empty() {
