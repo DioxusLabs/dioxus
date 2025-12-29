@@ -595,6 +595,15 @@ impl<'a> Writer<'a> {
         let attr_line = attr_span.start().line;
 
         if brace_line != attr_line {
+            // Get the raw line of the attribute
+            let line = self.src.get(attr_line - 1).unwrap_or(&"");
+
+            // Only write comments if the line is empty before the attribute start
+            let row_start = line.get(..attr_span.start().column - 1).unwrap_or("");
+            if !row_start.trim().is_empty() {
+                return Ok(());
+            }
+
             self.write_comments(attr_span.start())?;
         }
 
@@ -648,11 +657,19 @@ impl<'a> Writer<'a> {
             return comments;
         };
 
-        for (id, line) in lines.iter().enumerate().rev() {
-            if line.trim().starts_with("//") || line.is_empty() && id != 0 {
-                if id != 0 {
+        for (idx, (id, line)) in lines.iter().enumerate().rev().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                // if trimmed.starts_with("//") || trimmed.is_empty() && id != 0 {
+                // if id != 0 {
+                comments.push_front(id);
+                // }
+            } else if trimmed.is_empty() {
+                if idx == 0 {
                     comments.push_front(id);
                 }
+
+                continue;
             } else {
                 break;
             }

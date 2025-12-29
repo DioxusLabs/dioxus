@@ -11,14 +11,14 @@ fn App() -> Element {
             img {
                 // blah
                 src: HEADER_SVG,
-                id: "header"
+                id: "header",
             }
             div { id: "links",
                 a { href: "https://discord.gg/XgGxMSkvUM", "👋 Community Discord" }
                 div {
                     // blah
                     src: HEADER_SVG,
-                    id: "header"
+                    id: "header",
                 }
             }
         }
