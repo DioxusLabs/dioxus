@@ -4359,39 +4359,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        match self.bundle {
-            BundleFormat::Android => {
-                ctx.status_running_gradle();
+        if let BundleFormat::Android = self.bundle {
+            ctx.status_running_gradle();
 
-                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-                let build_type = if self.release && self.config.bundle.android.is_some() {
-                    "assembleRelease"
-                } else {
-                    "assembleDebug"
-                };
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
 
-                let output = Command::new(self.gradle_exe()?)
-                    .arg(build_type)
-                    .current_dir(self.root_dir())
-                    .output()
-                    .await
-                    .context("Failed to run gradle")?;
+            let output = Command::new(self.gradle_exe()?)
+                .arg(build_type)
+                .current_dir(self.root_dir())
+                .output()
+                .await
+                .context("Failed to run gradle")?;
 
-                if !output.status.success() {
-                    bail!(
-                        "Failed to assemble apk: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
+            if !output.status.success() {
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
-            BundleFormat::MacOS | BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_apple().await?;
-                }
-            }
+        }
 
-            _ => {}
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        ) && self.should_codesign
+        {
+            self.codesign_apple(ctx).await?;
         }
 
         Ok(())
@@ -5268,7 +5267,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_apple(&self) -> Result<()> {
+    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_codesigning();
+
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
@@ -5303,6 +5304,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             app_dev_name
         );
 
+        // determine the target exe - the server and macos bundles are different
+        let target_exe = match self.bundle {
+            BundleFormat::MacOS => self.root_dir(),
+            BundleFormat::Ios => self.root_dir(),
+            BundleFormat::Server => self.main_exe(),
+            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
+        };
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
@@ -5312,7 +5321,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.root_dir())
+            .arg(target_exe)
             .output()
             .await
             .context("Failed to codesign the app - is `codesign` in your path?")?;
