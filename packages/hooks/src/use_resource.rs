@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal};
+use crate::{use_callback, use_signal, use_waker, UseWaker, UseWakerFuture};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
@@ -11,8 +11,7 @@ use futures_util::{
     future::{self},
     pin_mut, FutureExt, StreamExt,
 };
-use slab::Slab;
-use std::{cell::Cell, future::Future, rc::Rc, task::Waker};
+use std::{cell::Cell, future::Future, rc::Rc};
 use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
@@ -35,7 +34,7 @@ where
         (rc, Rc::new(Cell::new(Some(changed))))
     });
 
-    let mut waiting_futures: Signal<(usize, Slab<Waker>)> = use_signal(|| (0, Slab::new()));
+    let mut waker = use_waker::<()>();
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -64,12 +63,8 @@ where
             state.set(UseResourceState::Ready);
             value.set(Some(res));
 
-            let mut waiting_futures = waiting_futures.write();
-            let (version, wakers) = &mut *waiting_futures;
-            for waker in wakers.drain() {
-                waker.wake();
-            }
-            *version += 1;
+            // Notify that the value has changed
+            waker.wake(());
         })
     });
 
@@ -95,7 +90,7 @@ where
         task,
         value,
         state,
-        waiting_futures,
+        waker,
         callback: cb,
     }
 }
@@ -127,10 +122,7 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
-    /// (slab version, wakers)
-    /// When the slab is drained, ids are reclaimed. We need version to ensure [`ResourceFuture`]
-    /// does not overwrite another futures waker when polled.
-    waiting_futures: Signal<(usize, Slab<Waker>)>,
+    waker: UseWaker<()>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -728,71 +720,21 @@ impl<T: Clone> Deref for Resource<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct ResourceFuture<T>
-where
-    T: 'static,
-{
-    id: Option<(usize, usize)>,
-    resource: Resource<T>,
+/// A future that resolves when the resource's value changes.
+pub struct ResourceFuture {
+    future: UseWakerFuture<()>,
 }
 
-impl<T> std::future::Future for ResourceFuture<T>
-where
-    T: 'static,
-{
+impl std::future::Future for ResourceFuture {
     type Output = ();
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        let this = unsafe { self.get_unchecked_mut() };
-        if matches!(*this.resource.state.peek(), UseResourceState::Ready) {
-            return std::task::Poll::Ready(());
-        }
-        let mut waiting_futures = this.resource.waiting_futures.write();
-        let (current_slab_version, wakers) = &mut *waiting_futures;
-        if let Some((slab_version, id)) = &mut this.id {
-            if *current_slab_version == *slab_version {
-                let old_waker = wakers.get_mut(*id).unwrap();
-                let _ = std::mem::replace(old_waker, cx.waker().clone());
-            } else {
-                let new_id = wakers.insert(cx.waker().clone());
-                *slab_version = *current_slab_version;
-                *id = new_id;
-            }
-        } else {
-            let id = wakers.insert(cx.waker().clone());
-            this.id = Some((*current_slab_version, id));
-        }
-        std::task::Poll::Pending
-    }
-}
-
-impl<T> Clone for ResourceFuture<T>
-where
-    T: 'static,
-{
-    fn clone(&self) -> Self {
-        Self {
-            id: None,
-            resource: self.resource,
-        }
-    }
-}
-
-impl<T> Drop for ResourceFuture<T>
-where
-    T: 'static,
-{
-    fn drop(&mut self) {
-        if let Some((slab_version, id)) = &self.id {
-            let mut waiting_futures = self.resource.waiting_futures.write();
-            let (current_slab_version, wakers) = &mut *waiting_futures;
-            if *current_slab_version == *slab_version {
-                wakers.remove(*id);
-            }
+        match std::pin::Pin::new(&mut self.get_mut().future).poll(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => std::task::Poll::Pending,
         }
     }
 }
@@ -803,12 +745,11 @@ where
 {
     type Output = ();
 
-    type IntoFuture = ResourceFuture<T>;
+    type IntoFuture = ResourceFuture;
 
     fn into_future(self) -> Self::IntoFuture {
         ResourceFuture {
-            id: None,
-            resource: self,
+            future: self.waker.into_future(),
         }
     }
 }
