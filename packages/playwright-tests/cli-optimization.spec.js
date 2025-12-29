@@ -2,9 +2,7 @@
 const { test, expect } = require("@playwright/test");
 
 const test_variants = [
-  { port: 9191, name: "0.7.1" },
   { port: 8989, name: "current version" },
-  { port: 8181, name: "Old CLI" },
 ];
 
 for (let { port, name } of test_variants) {
