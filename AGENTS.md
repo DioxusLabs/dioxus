@@ -58,6 +58,7 @@ For deeper understanding, see `notes/architecture/`:
 - **RSX**: Proc macro that compiles JSX-like syntax to `VNode` construction
 - **Server Functions**: `#[server]` macro generates client RPC stubs and server handlers
 - **Subsecond**: Hot-patches Rust code via jump table indirection (no memory modification)
+- **Manganis**: `asset!("/main.css")` macro for including assets by embedding data via linker symbols
 
 ## Common Patterns
 
