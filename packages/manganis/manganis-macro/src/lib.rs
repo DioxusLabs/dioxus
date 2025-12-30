@@ -83,32 +83,38 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 
 /// Generate type-safe styles with scoped CSS class names.
 ///
-/// The `styles!()` macro creates scoped CSS modules that prevent class name collisions by making
-/// each class globally unique. It generates a `Styles` struct with type-safe identifiers for your
-/// CSS classes, allowing you to reference styles in your Rust code with compile-time guarantees.
+/// The `css_module` attribute macro creates scoped CSS modules that prevent class name collisions
+/// by making each class globally unique. It expands the annotated struct to provide type-safe
+/// identifiers for your CSS classes, allowing you to reference styles in your Rust code with
+/// compile-time guarantees.
 ///
 /// # Syntax
 ///
-/// The `styles!()` macro takes:
+/// The `css_module` attribute takes:
 /// - The asset string path - the absolute path (from the crate root) to your CSS file.
 /// - Optional `AssetOptions` to configure the processing of your CSS module.
 ///
+/// It must be applied to a unit struct:
 /// ```rust, ignore
-/// styles!("/assets/my-styles.css");
-/// styles!("/assets/my-styles.css", AssetOptions::css_module().with_minify(true));
+/// #[css_module("/assets/my-styles.css")]
+/// struct Styles;
+///
+/// #[css_module("/assets/my-styles.css", AssetOptions::css_module().with_minify(true))]
+/// struct Styles;
 /// ```
 ///
 /// # Generation
 ///
-/// The `styles!()` macro does two things:
+/// The `css_module` attribute macro does two things:
 /// - It generates an asset and automatically inserts it as a stylesheet link in the document.
-/// - It generates a `Styles` struct with snake-case associated constants for your CSS class names.
+/// - It expands the annotated struct with snake-case associated constants for your CSS class names.
 ///
 /// ```rust, ignore
 /// // This macro usage:
-/// styles!("/assets/mycss.css");
+/// #[css_module("/assets/mycss.css")]
+/// struct Styles;
 ///
-/// // Will generate this (simplified):
+/// // Will expand the struct to (simplified):
 /// struct Styles {}
 ///
 /// impl Styles {
@@ -146,21 +152,20 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 ///
 /// # Using Multiple CSS Modules
 ///
-/// Multiple `styles!()` macros can be used in the same file by placing them in different modules:
+/// Multiple `css_module` attributes can be used in the same scope by applying them to different structs:
 /// ```rust, ignore
-/// // First CSS module creates `Styles` in the current scope
-/// styles!("/assets/styles1.css");
+/// // First CSS module
+/// #[css_module("/assets/styles1.css")]
+/// struct Styles;
 ///
-/// mod other {
-///     use dioxus::prelude::*;
-///     // Second CSS module creates `Styles` in the `other` module
-///     styles!("/assets/styles2.css");
-/// }
+/// // Second CSS module with a different struct name
+/// #[css_module("/assets/styles2.css")]
+/// struct OtherStyles;
 ///
 /// // Access classes from both:
 /// rsx! {
 ///     div { class: Styles::container }
-///     div { class: other::Styles::button }
+///     div { class: OtherStyles::button }
 /// }
 /// ```
 ///
@@ -168,12 +173,13 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 ///
 /// Similar to the `asset!()` macro, you can pass optional `AssetOptions` to configure processing:
 /// ```rust, ignore
-/// styles!(
+/// #[css_module(
 ///     "/assets/mycss.css",
 ///     AssetOptions::css_module()
 ///         .with_minify(true)
 ///         .with_preload(false)
-/// );
+/// )]
+/// struct Styles;
 /// ```
 ///
 /// # Example
@@ -195,12 +201,13 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
-/// Then use the `styles!()` macro:
+/// Then use the `css_module` attribute:
 /// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn app() -> Element {
-///     styles!("/assets/styles.css");
+///     #[css_module("/assets/styles.css")]
+///     struct Styles;
 ///     
 ///     rsx! {
 ///         div { class: Styles::container,
