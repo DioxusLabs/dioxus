@@ -1,7 +1,12 @@
+use std::{
+    collections::HashSet,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::Path,
+};
+
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 use const_serialize_07 as const_serialize;
 use const_serialize_08::SerializeConst;
-use std::collections::HashSet;
 
 /// Options for a css module asset
 #[derive(
@@ -94,6 +99,15 @@ impl AssetOptionsBuilder<CssModuleAssetOptions> {
     }
 }
 
+/// Create a hash for a css module based on the file path
+pub fn create_module_hash(css_path: &Path) -> String {
+    let path_string = css_path.to_string_lossy();
+    let mut hasher = DefaultHasher::new();
+    path_string.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{:016x}", hash)[..8].to_string()
+}
+
 /// Collect CSS classes & ids.
 ///
 /// This is a rudementary css classes & ids collector.
@@ -102,6 +116,10 @@ impl AssetOptionsBuilder<CssModuleAssetOptions> {
 /// There are likely a number of edge cases that will show up.
 ///
 /// Returns `(HashSet<Classes>, HashSet<Ids>)`
+#[deprecated(
+    since = "0.7.3",
+    note = "This function is no longer used by the css module system and will be removed in a future release."
+)]
 pub fn collect_css_idents(css: &str) -> (HashSet<String>, HashSet<String>) {
     const ALLOWED: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
 
