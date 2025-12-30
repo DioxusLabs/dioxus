@@ -657,21 +657,32 @@ impl<'a> Writer<'a> {
             return comments;
         };
 
-        for (idx, (id, line)) in lines.iter().enumerate().rev().enumerate() {
+        // We go backwards to collect comments and empty lines. We only want to keep one empty line,
+        // the rest should be `//` comments
+        let mut last_line_was_empty = false;
+        for (id, line) in lines.iter().enumerate().rev() {
             let trimmed = line.trim();
             if trimmed.starts_with("//") {
-                // if trimmed.starts_with("//") || trimmed.is_empty() && id != 0 {
-                // if id != 0 {
                 comments.push_front(id);
-                // }
+                last_line_was_empty = false;
             } else if trimmed.is_empty() {
-                if idx == 0 {
+                if !last_line_was_empty {
                     comments.push_front(id);
+                    last_line_was_empty = true;
                 }
 
                 continue;
             } else {
                 break;
+            }
+        }
+
+        // If there is more than 1 comment, make sure the first comment is not an empty line
+        if comments.len() > 1 {
+            if let Some(&first) = comments.back() {
+                if self.src[first].trim().is_empty() {
+                    comments.pop_back();
+                }
             }
         }
 
