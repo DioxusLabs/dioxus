@@ -336,3 +336,58 @@ pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
 
     StatusCode::INTERNAL_SERVER_ERROR
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum_core::extract::{FromRequest, Request};
+    use http::header::LOCATION;
+
+    #[derive(Debug)]
+    struct RedirectingExtractor;
+
+    impl FromRequest<FullstackContext, ()> for RedirectingExtractor {
+        type Rejection = (StatusCode, HeaderMap);
+
+        async fn from_request(
+            _req: Request,
+            _state: &FullstackContext,
+        ) -> Result<Self, Self::Rejection> {
+            let mut headers = HeaderMap::new();
+            headers.insert(LOCATION, http::HeaderValue::from_static("/sign-in"));
+            Err((StatusCode::TEMPORARY_REDIRECT, headers))
+        }
+    }
+
+    #[test]
+    fn extract_preserves_redirect_location() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+
+        rt.block_on(async move {
+            let parts = axum_core::extract::Request::builder()
+                .method("GET")
+                .uri("/")
+                .body(())
+                .unwrap()
+                .into_parts()
+                .0;
+
+            let ctx = FullstackContext::new(parts);
+            let err = ctx
+                .clone()
+                .scope(async move { FullstackContext::extract::<RedirectingExtractor, ()>().await })
+                .await
+                .unwrap_err();
+
+            match &err {
+                ServerFnError::ServerError { code, .. } => {
+                    assert_eq!(*code, StatusCode::TEMPORARY_REDIRECT.as_u16());
+                    assert_eq!(err.redirect_location(), Some("/sign-in"));
+                }
+                other => panic!("expected redirect-like ServerFnError, got {other:?}"),
+            }
+        });
+    }
+}
