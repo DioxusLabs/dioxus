@@ -204,7 +204,15 @@ where
 
         match res {
             futures_util::future::Either::Left(_completed) => _ = rx.next().await,
-            futures_util::future::Either::Right(_reload) => {}
+            futures_util::future::Either::Right((None, callback)) => {
+                // Receiving `None` here means that the sender is not connected, which
+                // typically means the dioxus devtools protocol has never connected.
+                // We want to run the future to completion and return instead of
+                // re-running the future constantly in the loop.
+                callback.await;
+                return;
+            }
+            futures_util::future::Either::Right((Some(_), _)) => {}
         }
 
         cur_future = hotfn.call((args.clone(),));
