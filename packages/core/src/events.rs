@@ -79,6 +79,17 @@ impl<T: ?Sized> Event<T> {
         }
     }
 
+    /// Create a new event with different data but the same metadata.
+    ///
+    /// Unlike `map`, this takes an `Rc` directly, allowing you to share
+    /// ownership of the data (e.g., for accessing it after the handler returns).
+    pub fn with_data<U: 'static>(&self, data: Rc<U>) -> Event<U> {
+        Event {
+            data,
+            metadata: self.metadata.clone(),
+        }
+    }
+
     /// Prevent this event from continuing to bubble up the tree to parent elements.
     ///
     /// # Example
@@ -652,6 +663,20 @@ impl<T> ListenerCallback<T> {
                 })
                 .spawn();
             })),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Create a new [`ListenerCallback`] from a raw callback that receives `Event<dyn Any>`.
+    ///
+    /// This is useful when you need custom downcast logic, such as handling multiple
+    /// possible event data types.
+    ///
+    /// This is expected to be called within a runtime scope.
+    pub fn new_raw(f: impl FnMut(Event<dyn Any>) + 'static) -> Self {
+        Self {
+            origin: current_scope_id(),
+            callback: Rc::new(RefCell::new(f)),
             _marker: PhantomData,
         }
     }
