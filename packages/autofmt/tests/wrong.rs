@@ -39,3 +39,5 @@ twoway!("oneline-expand" => online_expand (IndentOptions::new(IndentType::Spaces
 twoway!("shortened" => shortened (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("syntax_error" => syntax_error (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("skipfail" => skipfail (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("comments-inline-4sp" => comments_inline_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("comments-attributes-4sp" => comments_attributes_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));

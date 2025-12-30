@@ -1,12 +1,12 @@
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
-use syn::{parse_macro_input, DeriveInput, LitInt};
+use syn::{parse_macro_input, DeriveInput, LitInt, Path};
 use syn::{parse_quote, Generics, WhereClause, WherePredicate};
 
-fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics) {
+fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics, krate: &Path) {
     let bounds = generics.params.iter().filter_map(|param| match param {
         syn::GenericParam::Type(ty) => {
-            Some::<WherePredicate>(parse_quote! { #ty: const_serialize::SerializeConst, })
+            Some::<WherePredicate>(parse_quote! { #ty: #krate::SerializeConst, })
         }
         syn::GenericParam::Lifetime(_) => None,
         syn::GenericParam::Const(_) => None,
@@ -19,10 +19,33 @@ fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics) {
 }
 
 /// Derive the const serialize trait for a struct
-#[proc_macro_derive(SerializeConst)]
-pub fn derive_parse(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(SerializeConst, attributes(const_serialize))]
+pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
-    let input = parse_macro_input!(input as DeriveInput);
+    let input = parse_macro_input!(raw_input as DeriveInput);
+    let krate = input.attrs.iter().find_map(|attr| {
+        attr.path()
+            .is_ident("const_serialize")
+            .then(|| {
+                let mut path = None;
+                if let Err(err) = attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("crate") {
+                        let ident: Path = meta.value()?.parse()?;
+                        path = Some(ident);
+                    }
+                    Ok(())
+                }) {
+                    return Some(Err(err));
+                }
+                path.map(Ok)
+            })
+            .flatten()
+    });
+    let krate = match krate {
+        Some(Ok(path)) => path,
+        Some(Err(err)) => return err.into_compile_error().into(),
+        None => parse_quote! { const_serialize },
+    };
 
     match input.data {
         syn::Data::Struct(data) => match data.fields {
@@ -30,7 +53,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 let ty = &input.ident;
                 let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
                 let mut where_clause = where_clause.cloned();
-                add_bounds(&mut where_clause, &input.generics);
+                add_bounds(&mut where_clause, &input.generics, &krate);
                 let field_names = data.fields.iter().enumerate().map(|(i, field)| {
                     field
                         .ident
@@ -43,13 +66,14 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 });
                 let field_types = data.fields.iter().map(|field| &field.ty);
                 quote! {
-                    unsafe impl #impl_generics const_serialize::SerializeConst for #ty #ty_generics #where_clause {
-                        const MEMORY_LAYOUT: const_serialize::Layout = const_serialize::Layout::Struct(const_serialize::StructLayout::new(
+                    unsafe impl #impl_generics #krate::SerializeConst for #ty #ty_generics #where_clause {
+                        const MEMORY_LAYOUT: #krate::Layout = #krate::Layout::Struct(#krate::StructLayout::new(
                             std::mem::size_of::<Self>(),
                             &[#(
-                                const_serialize::StructFieldLayout::new(
+                                #krate::StructFieldLayout::new(
+                                    stringify!(#field_names),
                                     std::mem::offset_of!(#ty, #field_names),
-                                    <#field_types as const_serialize::SerializeConst>::MEMORY_LAYOUT,
+                                    <#field_types as #krate::SerializeConst>::MEMORY_LAYOUT,
                                 ),
                             )*],
                         ));
@@ -60,10 +84,10 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 let ty = &input.ident;
                 let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
                 let mut where_clause = where_clause.cloned();
-                add_bounds(&mut where_clause, &input.generics);
+                add_bounds(&mut where_clause, &input.generics, &krate);
                 quote! {
-                    unsafe impl #impl_generics const_serialize::SerializeConst for #ty #ty_generics #where_clause {
-                        const MEMORY_LAYOUT: const_serialize::Layout = const_serialize::Layout::Struct(const_serialize::StructLayout::new(
+                    unsafe impl #impl_generics #krate::SerializeConst for #ty #ty_generics #where_clause {
+                        const MEMORY_LAYOUT: #krate::Layout = #krate::Layout::Struct(#krate::StructLayout::new(
                             std::mem::size_of::<Self>(),
                             &[],
                         ));
@@ -137,7 +161,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                 let ty = &input.ident;
                 let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
                 let mut where_clause = where_clause.cloned();
-                add_bounds(&mut where_clause, &input.generics);
+                add_bounds(&mut where_clause, &input.generics, &krate);
                 let mut last_discriminant = None;
                 let variants = data.variants.iter().map(|variant| {
                     let discriminant = variant
@@ -151,6 +175,7 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                             }
                         });
                     last_discriminant = Some(discriminant.clone());
+                    let variant_name = &variant.ident;
                     let field_names = variant.fields.iter().enumerate().map(|(i, field)| {
                         field
                             .ident
@@ -162,17 +187,19 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     quote! {
                         {
                             #[allow(unused)]
-                            #[derive(const_serialize::SerializeConst)]
+                            #[derive(#krate::SerializeConst)]
+                            #[const_serialize(crate = #krate)]
                             #[repr(C)]
                             struct VariantStruct #generics {
                                 #(
                                     #field_names: #field_types,
                                 )*
                             }
-                            const_serialize::EnumVariant::new(
+                            #krate::EnumVariant::new(
+                                stringify!(#variant_name),
                                 #discriminant as u32,
-                                match VariantStruct::MEMORY_LAYOUT {
-                                    const_serialize::Layout::Struct(layout) => layout,
+                                match <VariantStruct #generics as #krate::SerializeConst>::MEMORY_LAYOUT {
+                                    #krate::Layout::Struct(layout) => layout,
                                     _ => panic!("VariantStruct::MEMORY_LAYOUT must be a struct"),
                                 },
                                 ::std::mem::align_of::<VariantStruct>(),
@@ -181,14 +208,14 @@ pub fn derive_parse(input: TokenStream) -> TokenStream {
                     }
                 });
                 quote! {
-                    unsafe impl #impl_generics const_serialize::SerializeConst for #ty #ty_generics #where_clause {
-                        const MEMORY_LAYOUT: const_serialize::Layout = const_serialize::Layout::Enum(const_serialize::EnumLayout::new(
+                    unsafe impl #impl_generics #krate::SerializeConst for #ty #ty_generics #where_clause {
+                        const MEMORY_LAYOUT: #krate::Layout = #krate::Layout::Enum(#krate::EnumLayout::new(
                             ::std::mem::size_of::<Self>(),
-                            const_serialize::PrimitiveLayout::new(
+                            #krate::PrimitiveLayout::new(
                                 #discriminant_size as usize,
                             ),
                             {
-                                const DATA: &'static [const_serialize::EnumVariant] = &[
+                                const DATA: &'static [#krate::EnumVariant] = &[
                                     #(
                                         #variants,
                                     )*

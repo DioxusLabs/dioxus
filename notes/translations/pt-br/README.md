@@ -42,9 +42,9 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.7/"> Guia </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ja-jp/README.md"> 日本語 </a>
   </h3>
 </div>
 

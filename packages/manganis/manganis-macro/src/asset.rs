@@ -119,9 +119,10 @@ impl AssetParser {
 
                 #link_section
 
-                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
-
-                manganis::Asset::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
+                manganis::Asset::new(
+                    || unsafe { std::ptr::read_volatile(&__LINK_SECTION) },
+                    || unsafe { std::ptr::read_volatile(&__LEGACY_LINK_SECTION) }
+                )
             }
         }
     }
