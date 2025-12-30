@@ -313,7 +313,9 @@ impl<'a> Writer<'a> {
 
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes, spreads);
-        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
+        let has_postbrace_comments = self.brace_has_trailing_comments(brace);
+        let is_short_attr_list =
+            ((attr_len + self.out.indent_level * 4) < 80) && !has_postbrace_comments;
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
@@ -331,6 +333,7 @@ impl<'a> Writer<'a> {
             && attributes.len() <= 1
             && spreads.is_empty()
             && !has_trailing_comments
+            && !has_postbrace_comments
         {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
@@ -1116,6 +1119,13 @@ impl<'a> Writer<'a> {
             AttributeValue::AttrExpr(exp) => exp.span(),
             AttributeValue::IfExpr(ex) => ex.span(),
         }
+    }
+
+    fn brace_has_trailing_comments(&self, brace: &Brace) -> bool {
+        let span = brace.span.span();
+        let line = self.src.get(span.start().line - 1).unwrap_or(&"");
+        let after_brace = line.get(span.start().column + 1..).unwrap_or("").trim();
+        after_brace.starts_with("//")
     }
 
     fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
