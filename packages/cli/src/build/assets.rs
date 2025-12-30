@@ -180,6 +180,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
     Ok(offsets)
 }
 
+/// Evaluate a walrus global expression to get its value.
 fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) -> Option<u64> {
     match expr {
         walrus::ConstExpr::Value(walrus::ir::Value::I32(value)) => Some(*value as u64),
@@ -196,58 +197,49 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
     }
 }
 
+/// Find the value of a global export by name.
+fn find_global_export_value(module: &walrus::Module, name: &str) -> Option<u64> {
+    for export in module.exports.iter() {
+        if export.name == name {
+            if let walrus::ExportItem::Global(g) = export.item {
+                if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
+                    return eval_walrus_global_expr(module, expr);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Find the offsets of any manganis symbols in the wasm file.
+///
+/// This handles both standard WASM builds and builds with advanced features like:
+/// - Bulk memory operations (passive data segments)
+/// - Thread Local Storage (TLS)
+/// - Atomics and shared memory
 fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
 ) -> Result<Vec<u64>> {
-    tracing::debug!("=== WASM Module Analysis ===");
-    tracing::debug!("File size: {} bytes", file_contents.len());
-
-    // Log all sections from the object file
-    tracing::debug!("--- Object file sections ---");
-    for section in file.sections() {
-        let name = section.name().unwrap_or("<unknown>");
-        let address = section.address();
-        let size = section.size();
-        let file_range = section.file_range();
-        tracing::debug!(
-            "  Section: {:?}, address: 0x{:x}, size: {}, file_range: {:?}",
-            name,
-            address,
-            size,
-            file_range
-        );
-    }
-
     let Some(section) = file
         .sections()
         .find(|section| section.name() == Ok("<data>"))
     else {
-        tracing::error!("Failed to find <data> section in WASM file");
+        // No data section means no assets
         return Ok(Vec::new());
     };
+
     let Some((_, section_range_end)) = section.file_range() else {
         tracing::error!("Failed to find file range for <data> section in WASM file");
         return Ok(Vec::new());
     };
+
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
-    tracing::debug!(
-        "Data section: start=0x{:x}, end=0x{:x}, size={}",
-        section_start,
-        section_range_end,
-        section_size
-    );
 
-    // Translate the section_relative_address to the file offset
-    // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-    // to get the correct address and section start.
-    // Note: We need to reparse just the data section with wasmparser to get the file offset because
-    // walrus does not expose the file offset information.
-    //
-    // With bulk memory operations, there may be MULTIPLE data segments. We need to collect all
-    // of them to properly map virtual addresses to file offsets.
+    // Parse data segments with wasmparser to get file offsets.
+    // Walrus doesn't expose file offset information, so we need wasmparser for this.
+    // With bulk memory operations, there may be multiple data segments.
     let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
         &file_contents[section_start as usize..section_range_end as usize],
         0,
@@ -255,8 +247,6 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     .context("Failed to create WASM data section reader")?;
 
     // Collect all data segments with their file offsets and sizes
-    // Each entry is (file_offset, size)
-    tracing::debug!("--- Data segments (wasmparser) ---");
     let mut segment_file_info: Vec<(u64, u64)> = Vec::new();
     for segment in reader.into_iter() {
         let segment = segment.context("Failed to read data segment")?;
@@ -264,131 +254,18 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             .checked_sub(file_contents.as_ptr() as u64)
             .expect("Data segment should be within file contents");
         let size = segment.data.len() as u64;
-        let kind_str = match segment.kind {
-            wasmparser::DataKind::Active { .. } => "Active",
-            wasmparser::DataKind::Passive => "Passive",
-        };
-        tracing::debug!(
-            "  Segment {}: kind={}, file_offset=0x{:x}, size={}",
-            segment_file_info.len(),
-            kind_str,
-            file_offset,
-            size
-        );
         segment_file_info.push((file_offset, size));
     }
 
     if segment_file_info.is_empty() {
-        tracing::error!("No data segments found in WASM file");
         return Ok(Vec::new());
     }
-    tracing::debug!(
-        "Found {} data segments from wasmparser",
-        segment_file_info.len()
-    );
 
-    // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
-    let mut offsets = Vec::new();
+    // Parse the wasm file with walrus to find globals and exports
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module with walrus")?;
 
-    // Log walrus module structure
-    tracing::debug!("--- Walrus module analysis ---");
-    tracing::debug!("Memories: {}", module.memories.iter().count());
-    tracing::debug!("Tables: {}", module.tables.iter().count());
-    tracing::debug!("Functions: {}", module.funcs.iter().count());
-    tracing::debug!("Globals: {}", module.globals.iter().count());
-    tracing::debug!("Exports: {}", module.exports.iter().count());
-    tracing::debug!("Data segments: {}", module.data.iter().count());
-
-    // Log all data segments from walrus
-    tracing::debug!("--- Data segments (walrus) ---");
-    for (i, data) in module.data.iter().enumerate() {
-        match &data.kind {
-            walrus::DataKind::Active { memory, offset } => {
-                let offset_val = eval_walrus_global_expr(&module, offset);
-                tracing::debug!(
-                    "  Data segment {}: Active, memory={:?}, offset_expr={:?}, evaluated_offset={:?}, data_len={}",
-                    i,
-                    memory,
-                    offset,
-                    offset_val,
-                    data.value.len()
-                );
-            }
-            walrus::DataKind::Passive => {
-                tracing::debug!(
-                    "  Data segment {}: Passive, data_len={}",
-                    i,
-                    data.value.len()
-                );
-            }
-        }
-    }
-
-    // Log all exports (filtering out wasm-bindgen noise)
-    tracing::debug!("--- Exports ---");
-    let mut wbindgen_count = 0usize;
-
-    // Track key memory layout exports
-    let mut data_end: Option<u64> = None;
-    let mut heap_base: Option<u64> = None;
-    let mut stack_pointer: Option<u64> = None;
-    let mut tls_base: Option<u64> = None;
-
-    for export in module.exports.iter() {
-        // Skip wasm-bindgen internals to reduce noise
-        if export.name.starts_with("__wbindgen") || export.name.starts_with("__wbg") {
-            wbindgen_count += 1;
-            continue;
-        }
-        let item_str = match &export.item {
-            walrus::ExportItem::Function(id) => format!("Function({:?})", id),
-            walrus::ExportItem::Global(id) => {
-                let global = module.globals.get(*id);
-                let val = match &global.kind {
-                    walrus::GlobalKind::Local(expr) => eval_walrus_global_expr(&module, expr),
-                    _ => None,
-                };
-
-                // Track key symbols for memory layout analysis
-                match export.name.as_str() {
-                    "__data_end" => data_end = val,
-                    "__heap_base" => heap_base = val,
-                    "__stack_pointer" => stack_pointer = val,
-                    "__tls_base" => tls_base = val,
-                    _ => {}
-                }
-
-                format!("Global({:?}) = {:?}", id, val)
-            }
-            walrus::ExportItem::Memory(id) => format!("Memory({:?})", id),
-            walrus::ExportItem::Table(id) => format!("Table({:?})", id),
-        };
-        tracing::debug!("  Export {:?}: {}", export.name, item_str);
-    }
-    if wbindgen_count > 0 {
-        tracing::debug!("  (skipped {} __wbindgen/__wbg exports)", wbindgen_count);
-    }
-
-    // Summary of key memory layout values
-    tracing::debug!("--- Memory layout summary ---");
-    if let Some(v) = stack_pointer {
-        tracing::debug!("  __stack_pointer = 0x{:x} ({})", v, v);
-    }
-    if let Some(v) = heap_base {
-        tracing::debug!("  __heap_base = 0x{:x} ({})", v, v);
-    }
-    if let Some(v) = data_end {
-        tracing::debug!("  __data_end = 0x{:x} ({})", v, v);
-    }
-    if let Some(v) = tls_base {
-        tracing::debug!("  __tls_base = 0x{:x} ({})", v, v);
-    }
-
-    // Find the main memory offset
-    // With bulk memory operations enabled, data segments may be Passive instead of Active.
-    // - Active segments: have an offset expression that determines where data goes in linear memory
-    // - Passive segments: initialized at runtime via memory.init, no static offset
+    // Determine the memory base address for symbol lookup
     let main_memory_walrus = module
         .data
         .iter()
@@ -397,157 +274,60 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
     let main_memory_offset = match &main_memory_walrus.kind {
         walrus::DataKind::Active { offset, .. } => {
-            // In the hot patch build, the main memory offset is a global from the main module
-            // and each global is its own global. Use an offset of 0 if we can't evaluate.
-            let evaluated = eval_walrus_global_expr(&module, offset).unwrap_or_default();
-            tracing::debug!(
-                "Main data segment is Active with offset expression {:?}, evaluated to 0x{:x}",
-                offset,
-                evaluated
-            );
-            evaluated
+            // Active segments have an explicit offset expression
+            eval_walrus_global_expr(&module, offset).unwrap_or_default()
         }
         walrus::DataKind::Passive => {
-            // For passive segments (bulk memory operations), there's no static offset expression.
+            // For passive segments (bulk memory operations), there's no static offset.
             // The memory.init instruction determines placement at runtime.
             //
-            // For Rust/LLVM compiled WASM with bulk memory, static data segments are typically
-            // placed starting at 1MB (0x100000) in linear memory, leaving the first 1MB for stack.
+            // Rust/LLVM places static data at 0x100000 (1MB) in linear memory.
             //
-            // IMPORTANT: With TLS (Thread Local Storage) support, the first segment may be TLS
-            // template data that is NOT part of the contiguous linear memory layout. TLS data
-            // is copied per-thread via __wasm_init_tls and should be excluded from our calculations.
+            // With TLS support, the linker calculates symbol addresses as if TLS data
+            // is at 0x100000 followed by main data. But at runtime, TLS is stored
+            // separately per-thread via __wasm_init_tls. The main data segment starts
+            // at 0x100000 in the file, but symbol addresses include the TLS offset.
+            //
+            // We detect TLS by looking for __tls_size and remove the TLS segment from
+            // our file info, then add the TLS size to the base address.
+            let tls_size = find_global_export_value(&module, "__tls_size");
 
-            // Check for TLS by looking for __tls_size export
-            let mut tls_size: Option<u64> = None;
-            let mut found_data_end: Option<u64> = None;
-            let mut found_heap_base: Option<u64> = None;
-            for export in module.exports.iter() {
-                match export.name.as_str() {
-                    "__tls_size" => {
-                        if let walrus::ExportItem::Global(g) = export.item {
-                            if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
-                                tls_size = eval_walrus_global_expr(&module, expr);
-                                if let Some(size) = tls_size {
-                                    tracing::debug!("Found __tls_size: {} bytes", size);
-                                }
-                            }
-                        }
-                    }
-                    "__data_end" => {
-                        if let walrus::ExportItem::Global(g) = export.item {
-                            if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
-                                found_data_end = eval_walrus_global_expr(&module, expr);
-                            }
-                        }
-                    }
-                    "__heap_base" => {
-                        if let walrus::ExportItem::Global(g) = export.item {
-                            if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
-                                found_heap_base = eval_walrus_global_expr(&module, expr);
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // If TLS is present and segment 0 matches TLS size, remove it from segment_file_info
-            // TLS data is NOT part of the contiguous linear memory - it's a template copied per-thread
+            // If TLS is present and segment 0 matches TLS size, remove TLS segment
             if let Some(tls) = tls_size {
                 if !segment_file_info.is_empty() && segment_file_info[0].1 == tls {
-                    tracing::debug!(
-                        "Segment 0 matches __tls_size ({}), removing TLS segment from file info",
-                        tls
-                    );
                     segment_file_info.remove(0);
-                    tracing::debug!(
-                        "Remaining {} non-TLS segments for asset lookup",
-                        segment_file_info.len()
-                    );
                 }
             }
 
-            // Calculate total non-TLS data size
-            let total_non_tls_size: u64 = segment_file_info.iter().map(|(_, sz)| sz).sum();
-            tracing::debug!("Total non-TLS data size: {} bytes (0x{:x})", total_non_tls_size, total_non_tls_size);
-
-            // For WASM with bulk memory, the data segments contain ONLY initialized data.
-            // BSS (zero-initialized data) is NOT stored in segments - it's implicitly zero.
-            //
-            // The memory layout is:
-            //   [0x100000, 0x100000 + initialized_size) = initialized data from segments
-            //   [0x100000 + initialized_size, __data_end) = BSS (zeros, not in file)
-            //
-            // IMPORTANT: When TLS exists, the linker calculates symbol addresses as if TLS
-            // data is at 0x100000 followed by main data. But at runtime, TLS is stored
-            // separately per-thread via __wasm_init_tls. So the main data segment actually
-            // starts at 0x100000 in the file, but symbol addresses include the TLS offset.
-            //
-            // We need to add TLS size to the base so that:
-            //   symbol_address - (0x100000 + tls_size) = correct offset into main data segment
-            let tls_offset = tls_size.unwrap_or(0);
-            let base = 0x100000u64 + tls_offset;
-            tracing::debug!(
-                "Using WASM data base: 0x{:x} (0x100000 + tls_size {}), initialized data ends at 0x{:x}, __data_end at {:?}",
-                base,
-                tls_offset,
-                base + total_non_tls_size,
-                found_data_end
-            );
-
-            tracing::debug!(
-                "Main data segment is Passive (bulk memory), using base offset: 0x{:x}",
-                base
-            );
-
-            base
+            // Base = 0x100000 + TLS size (to account for TLS offset in symbol addresses)
+            0x100000u64 + tls_size.unwrap_or(0)
         }
     };
-    tracing::debug!("Using main memory offset: 0x{:x}", main_memory_offset);
 
-    // Calculate total data segment size for sanity checking
-    let total_data_size: u64 = segment_file_info.iter().map(|(_, sz)| sz).sum();
-    tracing::debug!(
-        "Total data segment size (after TLS removal): {} bytes (0x{:x})",
-        total_data_size,
-        total_data_size
-    );
+    // Find all manganis symbols and calculate their file offsets
+    let mut offsets = Vec::new();
 
-    tracing::debug!("--- Searching for manganis symbols ---");
     for export in module.exports.iter() {
         if !looks_like_manganis_symbol(&export.name) {
             continue;
         }
-        tracing::debug!("Found manganis symbol: {:?}", export.name);
 
         let walrus::ExportItem::Global(global) = export.item else {
-            tracing::debug!("  Skipping: export is not a global");
             continue;
         };
 
         let global_data = module.globals.get(global);
-        tracing::debug!(
-            "  Global id={:?}, ty={:?}, mutable={}",
-            global,
-            global_data.ty,
-            global_data.mutable
-        );
-
         let walrus::GlobalKind::Local(pointer) = global_data.kind else {
-            tracing::debug!("  Skipping: global is not local (is an import)");
             continue;
         };
 
         let Some(virtual_address) = eval_walrus_global_expr(&module, &pointer) else {
             tracing::error!(
-                "Found __MANGANIS__ symbol {:?} in WASM file, but the global expression could not be evaluated. expr={:?}",
-                export.name,
-                pointer
+                "Found __MANGANIS__ symbol {:?} in WASM file, but the global expression could not be evaluated",
+                export.name
             );
             continue;
         };
-        tracing::debug!("  Virtual address: 0x{:x}", virtual_address);
 
         // Calculate offset relative to the data base address
         let data_relative_offset =
@@ -563,69 +343,15 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
                 }
             };
 
-        // Find which segment this offset falls into
-        // Segments are laid out contiguously in memory: [0, size0), [size0, size0+size1), etc.
+        // Find which segment this offset falls into.
+        // Segments are laid out contiguously in memory.
         let mut cumulative_offset = 0u64;
         let mut file_offset = None;
-        tracing::debug!(
-            "  Looking for data_relative_offset 0x{:x} in {} segments",
-            data_relative_offset,
-            segment_file_info.len()
-        );
-        for (i, (seg_file_offset, seg_size)) in segment_file_info.iter().enumerate() {
-            tracing::debug!(
-                "    Segment {}: file_offset=0x{:x}, size={}, memory_range=[0x{:x}, 0x{:x})",
-                i,
-                seg_file_offset,
-                seg_size,
-                cumulative_offset,
-                cumulative_offset + seg_size
-            );
+
+        for (seg_file_offset, seg_size) in segment_file_info.iter() {
             if data_relative_offset < cumulative_offset + seg_size {
-                // Found the segment - calculate offset within it
                 let offset_in_segment = data_relative_offset - cumulative_offset;
                 file_offset = Some(seg_file_offset + offset_in_segment);
-                tracing::debug!(
-                    "  MATCH: Data relative offset: 0x{:x}, in segment {}, offset_in_segment: 0x{:x}, file_offset: 0x{:x}",
-                    data_relative_offset,
-                    i,
-                    offset_in_segment,
-                    seg_file_offset + offset_in_segment
-                );
-
-                // Dump the raw bytes at this file offset to verify
-                let fo = (seg_file_offset + offset_in_segment) as usize;
-                if fo + 64 <= file_contents.len() {
-                    let preview: Vec<String> = file_contents[fo..fo + 64]
-                        .iter()
-                        .map(|b| format!("{:02x}", b))
-                        .collect();
-                    tracing::debug!("  Raw file bytes at 0x{:x}: {}", fo, preview.join(" "));
-                }
-
-                // Also dump bytes BEFORE the symbol to check if BundledAsset starts earlier
-                // The symbol might point to something other than the struct start
-                let asset_size = BundledAsset::MEMORY_LAYOUT.size();
-                if fo >= asset_size {
-                    let before_start = fo - asset_size;
-                    let preview_before: Vec<String> = file_contents[before_start..before_start + 64]
-                        .iter()
-                        .map(|b| format!("{:02x}", b))
-                        .collect();
-                    tracing::debug!(
-                        "  Raw file bytes {} BEFORE (0x{:x}): {}",
-                        asset_size,
-                        before_start,
-                        preview_before.join(" ")
-                    );
-
-                    // Try to interpret as ASCII if it looks like a path
-                    let ascii_preview: String = file_contents[before_start..before_start + 64]
-                        .iter()
-                        .map(|&b| if b >= 0x20 && b < 0x7f { b as char } else { '.' })
-                        .collect();
-                    tracing::debug!("  As ASCII: {:?}", ascii_preview);
-                }
                 break;
             }
             cumulative_offset += seg_size;
@@ -633,64 +359,13 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
         let Some(file_offset) = file_offset else {
             tracing::error!(
-                "Virtual address 0x{:x} (data_relative: 0x{:x}) is beyond all data segments (total size: 0x{:x})",
-                virtual_address,
-                data_relative_offset,
-                cumulative_offset
+                "Virtual address 0x{:x} is beyond all data segments",
+                virtual_address
             );
             continue;
         };
 
         offsets.push(file_offset);
-    }
-
-    tracing::debug!("Found {} manganis symbol offsets", offsets.len());
-
-    // Debug: Search for actual asset paths in the data section
-    // This helps determine if asset data exists but at wrong offsets
-    if !segment_file_info.is_empty() {
-        let (first_seg_offset, first_seg_size) = segment_file_info[0];
-        let seg_start = first_seg_offset as usize;
-        let seg_end = (first_seg_offset + first_seg_size) as usize;
-
-        if seg_end <= file_contents.len() {
-            let segment_data = &file_contents[seg_start..seg_end];
-
-            // Search for "/Users/" pattern which would indicate asset paths
-            let search_pattern = b"/Users/";
-            let mut found_paths = Vec::new();
-            for (i, window) in segment_data.windows(search_pattern.len()).enumerate() {
-                if window == search_pattern {
-                    // Found a match - extract some context
-                    let ctx_start = i;
-                    let ctx_end = (i + 100).min(segment_data.len());
-                    let context: String = segment_data[ctx_start..ctx_end]
-                        .iter()
-                        .take_while(|&&b| b != 0)
-                        .map(|&b| if b >= 0x20 && b < 0x7f { b as char } else { '?' })
-                        .collect();
-                    found_paths.push((i, seg_start + i, context));
-                    if found_paths.len() >= 10 {
-                        break; // Limit output
-                    }
-                }
-            }
-
-            if !found_paths.is_empty() {
-                tracing::debug!("--- Found '/Users/' paths in data segment ---");
-                for (seg_offset, file_offset, context) in &found_paths {
-                    tracing::debug!(
-                        "  seg_offset=0x{:x}, file_offset=0x{:x}, virtual_addr=0x{:x}: {:?}",
-                        seg_offset,
-                        file_offset,
-                        0x100000u64 + *seg_offset as u64,
-                        context
-                    );
-                }
-            } else {
-                tracing::debug!("No '/Users/' paths found in data segment");
-            }
-        }
     }
 
     Ok(offsets)
@@ -717,61 +392,16 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 
     // Read each asset from the data section using the offsets
     let asset_size = BundledAsset::MEMORY_LAYOUT.size();
-    tracing::debug!("BundledAsset::MEMORY_LAYOUT.size() = {} bytes", asset_size);
 
     for offset in offsets.iter().copied() {
         file.seek(std::io::SeekFrom::Start(offset))?;
         let mut data_in_range = vec![0; asset_size];
         file.read_exact(&mut data_in_range)?;
 
-        // Debug: show structure of the data
-        // BundledAsset layout: ConstStr (256 bytes + 4 len) + ConstStr (256 + 4) + AssetOptions
-        // Show bytes around key boundaries
-        tracing::debug!("Offset 0x{:x} ({}):", offset, offset);
-
-        // First ConstStr bytes[0..32] - start of absolute_source_path string content
-        let preview: Vec<String> = data_in_range[..32].iter().map(|b| format!("{:02x}", b)).collect();
-        tracing::debug!("  bytes[0..32] (path start): {}", preview.join(" "));
-
-        // First ConstStr len field at offset 256
-        if data_in_range.len() > 260 {
-            let len1 = u32::from_le_bytes([data_in_range[256], data_in_range[257], data_in_range[258], data_in_range[259]]);
-            tracing::debug!("  bytes[256..260] (path1 len): {} (0x{:x})", len1, len1);
-
-            // Show first 32 bytes of actual path content if len > 0
-            if len1 > 0 && len1 < 256 {
-                let path_preview: String = data_in_range[..len1.min(64) as usize]
-                    .iter()
-                    .filter(|&&b| b >= 0x20 && b < 0x7f)
-                    .map(|&b| b as char)
-                    .collect();
-                tracing::debug!("  path1 content: {:?}", path_preview);
-            }
-        }
-
-        // Second ConstStr len field at offset 260 + 256 = 516
-        if data_in_range.len() > 520 {
-            let len2 = u32::from_le_bytes([data_in_range[516], data_in_range[517], data_in_range[518], data_in_range[519]]);
-            tracing::debug!("  bytes[516..520] (path2 len): {} (0x{:x})", len2, len2);
-        }
-
-        // AssetOptions starts at offset 520
-        if data_in_range.len() > 520 {
-            let options_preview: Vec<String> = data_in_range[520..std::cmp::min(544, data_in_range.len())]
-                .iter()
-                .map(|b| format!("{:02x}", b))
-                .collect();
-            tracing::debug!("  bytes[520..544] (options): {}", options_preview.join(" "));
-        }
-
         let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
 
         if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
         {
-            tracing::debug!(
-                "Found asset at offset {offset}: {:?}",
-                bundled_asset.absolute_source_path()
-            );
             assets.push(bundled_asset);
         } else {
             tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
@@ -785,12 +415,10 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 
     // Write back the assets to the binary file
     for (offset, asset) in offsets.into_iter().zip(&assets) {
-        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
         let new_data = ConstVec::new();
         let new_data = const_serialize::serialize_const(asset, new_data);
 
         file.seek(std::io::SeekFrom::Start(offset))?;
-        // Write the modified binary data back to the file
         file.write_all(new_data.as_ref())?;
     }
 
@@ -800,11 +428,10 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 
     // If the file is a macos binary, we need to re-sign the modified binary
     if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
-        // Spawn the codesign command to re-sign the binary
         let output = std::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
-            .arg("-") // Sign with an empty identity
+            .arg("-")
             .arg(path)
             .output()
             .context("Failed to run codesign - is `codesign` in your path?")?;
@@ -840,7 +467,6 @@ async fn open_file_for_writing_with_timeout(
             Ok(file) => return Ok(file),
             Err(e) => {
                 if cfg!(windows) && e.raw_os_error() == Some(32) && start_time.elapsed() < timeout {
-                    // File is already open, wait and retry
                     tracing::trace!(
                         "Failed to open file because another process is using it. Retrying..."
                     );
