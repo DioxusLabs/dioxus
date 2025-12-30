@@ -603,7 +603,7 @@ fn test_get_class_mappings() {
     }"#;
     let hash = "abc1234";
     let mappings = get_class_mappings(css, hash).unwrap();
-    let expected = vec![
+    let expected = [
         ("bag", "bag"),
         ("bar", "bar-abc1234"),
         ("baz", "baz"),

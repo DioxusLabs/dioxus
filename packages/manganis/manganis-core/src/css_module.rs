@@ -6,7 +6,6 @@ use std::{
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 use const_serialize_07 as const_serialize;
 use const_serialize_08::SerializeConst;
-use std::collections::HashSet;
 
 /// Options for a css module asset
 #[derive(
