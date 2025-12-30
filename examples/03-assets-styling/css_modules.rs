@@ -1,4 +1,4 @@
-//! This example shows how to use css modules with the `styles!` macro. Css modules convert css
+//! This example shows how to use css modules with the `css_module` macro. Css modules convert css
 //! class names to unique names to avoid class name collisions.
 
 use dioxus::prelude::*;
@@ -8,25 +8,23 @@ fn main() {
 }
 
 fn app() -> Element {
-    // Each `style!` macro will generate a `Styles` struct in the current scope
-    styles!("/examples/assets/css_module1.css");
+    // Each `css_module` macro will expand the annotated struct in the current scope
+    #[css_module("/examples/assets/css_module1.css")]
+    struct Styles;
 
-    mod other {
-        use dioxus::prelude::*;
-        // Multiple `styles!` macros can be used in the same scope by placing them in modules
-        styles!(
-            "/examples/assets/css_module2.css",
-            // `styles!` can take `AssetOptions` as well
-            AssetOptions::css_module()
-                .with_minify(true)
-                .with_preload(false)
-        );
-    }
+    #[css_module(
+        "/examples/assets/css_module2.css",
+        // `css_module` can take `AssetOptions` as well
+        AssetOptions::css_module()
+            .with_minify(true)
+            .with_preload(false)
+    )]
+    struct OtherStyles;
 
     rsx! {
         div { class: Styles::container,
-            div { class: other::Styles::test, "Hello, world!" }
-            div { class: other::Styles::highlight, "This is highlighted" }
+            div { class: OtherStyles::test, "Hello, world!" }
+            div { class: OtherStyles::highlight, "This is highlighted" }
             div { class: Styles::global_class, "This uses a global class (no hash)" }
         }
     }

@@ -3,13 +3,12 @@
 
 use std::path::PathBuf;
 
-use css_module::CssModuleParser;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input,
+    parse_macro_input, ItemStruct,
 };
 
 pub(crate) mod asset;
@@ -17,6 +16,8 @@ pub(crate) mod css_module;
 pub(crate) mod linker;
 
 use linker::generate_link_section;
+
+use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 
 /// The asset macro collects assets that will be included in the final binary
 ///
@@ -209,10 +210,13 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 ///     }
 /// }
 /// ```
-#[proc_macro]
-pub fn styles(input: TokenStream) -> TokenStream {
-    let style = parse_macro_input!(input as CssModuleParser);
-    quote! { #style }.into_token_stream().into()
+#[proc_macro_attribute]
+pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
+    let attribute = parse_macro_input!(input as CssModuleAttribute);
+    let item_struct = parse_macro_input!(item as ItemStruct);
+    let mut tokens = proc_macro2::TokenStream::new();
+    expand_css_module_struct(&mut tokens, &attribute, &item_struct);
+    tokens.into()
 }
 
 fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
