@@ -312,7 +312,7 @@ impl<'a> Writer<'a> {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let attr_len = self.is_short_attrs(attributes, spreads);
+        let attr_len = self.is_short_attrs(brace, attributes, spreads);
         let has_postbrace_comments = self.brace_has_trailing_comments(brace);
         let is_short_attr_list =
             ((attr_len + self.out.indent_level * 4) < 80) && !has_postbrace_comments;
@@ -756,7 +756,12 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn is_short_attrs(&mut self, attributes: &[Attribute], spreads: &[Spread]) -> usize {
+    fn is_short_attrs(
+        &mut self,
+        _brace: &Brace,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+    ) -> usize {
         let mut total = 0;
 
         // No more than 3 attributes before breaking the line
@@ -777,7 +782,7 @@ impl<'a> Writer<'a> {
                 };
             }
 
-            let name_len = match &attr.name {
+            total += match &attr.name {
                 AttributeName::BuiltIn(name) => {
                     let name = name.to_string();
                     name.len()
@@ -785,7 +790,6 @@ impl<'a> Writer<'a> {
                 AttributeName::Custom(name) => name.value().len() + 2,
                 AttributeName::Spread(_) => unreachable!(),
             };
-            total += name_len;
 
             if attr.can_be_shorthand() {
                 total += 2;
