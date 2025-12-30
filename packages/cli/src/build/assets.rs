@@ -412,7 +412,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         .sections()
         .find(|section| section.name() == Ok("<data>"))
     else {
-        // No data section means no assets
+        tracing::error!("Failed to find <data> section in WASM file");
         return Ok(Vec::new());
     };
 
@@ -437,11 +437,12 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let mut segment_file_info: Vec<(u64, u64)> = Vec::new();
     for segment in reader.into_iter() {
         let segment = segment.context("Failed to read data segment")?;
-        let file_offset = (segment.data.as_ptr() as u64)
-            .checked_sub(file_contents.as_ptr() as u64)
-            .expect("Data segment should be within file contents");
-        let size = segment.data.len() as u64;
-        segment_file_info.push((file_offset, size));
+        segment_file_info.push((
+            (segment.data.as_ptr() as u64)
+                .checked_sub(file_contents.as_ptr() as u64)
+                .expect("Data segment should be within file contents"),
+            segment.data.len() as u64,
+        ));
     }
 
     if segment_file_info.is_empty() {
