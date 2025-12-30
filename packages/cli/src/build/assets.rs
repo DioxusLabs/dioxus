@@ -617,14 +617,14 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 
     // If the file is a macos binary, we need to re-sign the modified binary
     if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
+        // Spawn the codesign command to re-sign the binary
         let output = std::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
-            .arg("-")
+            .arg("-") // Sign with an empty identity
             .arg(path)
             .output()
             .context("Failed to run codesign - is `codesign` in your path?")?;
-
         if !output.status.success() {
             bail!(
                 "Failed to re-sign the binary with codesign after finalizing the assets: {}",
@@ -656,6 +656,7 @@ async fn open_file_for_writing_with_timeout(
             Ok(file) => return Ok(file),
             Err(e) => {
                 if cfg!(windows) && e.raw_os_error() == Some(32) && start_time.elapsed() < timeout {
+                    // File is already open, wait and retry
                     tracing::trace!(
                         "Failed to open file because another process is using it. Retrying..."
                     );
