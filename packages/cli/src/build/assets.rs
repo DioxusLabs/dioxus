@@ -62,9 +62,7 @@ fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
 }
 
 fn looks_like_manganis_symbol(name: &str) -> bool {
-    // __MANGANIS__ = Legacy format (0.7.0-0.7.1, uses const_serialize_07)
-    // __ASSETS__ = New format (0.7.2+, uses const_serialize/CBOR)
-    name.contains("__MANGANIS__") || name.contains("__ASSETS__")
+    name.contains("__MANGANIS__")
 }
 
 /// Find the offsets of any manganis symbols in the given file.
