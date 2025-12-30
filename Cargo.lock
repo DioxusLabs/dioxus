@@ -11024,6 +11024,7 @@ dependencies = [
  "dioxus-core-types",
  "manganis",
  "serde",
+ "winnow 0.5.31",
 ]
 
 [[package]]
