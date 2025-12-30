@@ -11,10 +11,10 @@
 //! process in the build system.
 //!
 //! We use the same lessons learned from the hot-patching engine which parses the binary file and its
-//! symbol table to find symbols that match the `__MANGANIS__` prefix. These symbols are ideally data
+//! symbol table to find symbols that match the `__ASSETS__` prefix. These symbols are ideally data
 //! symbols and contain the BundledAsset data type which implements ConstSerialize and ConstDeserialize.
 //!
-//! When the binary is built, the `dioxus asset!()` macro will emit its metadata into the __MANGANIS__
+//! When the binary is built, the `dioxus asset!()` macro will emit its metadata into the __ASSETS__
 //! symbols, which we process here. After reading the metadata directly from the executable, we then
 //! hash it and write the hash directly into the binary file.
 //!
@@ -23,7 +23,7 @@
 //! can be found relative to the current exe. Unfortunately, on android, the `current_exe` path is wrong,
 //! so the assets are resolved against the "asset root" - which is covered by the asset loader crate.
 //!
-//! Finding the __MANGANIS__ symbols is not quite straightforward when hotpatching, especially on WASM
+//! Finding the __ASSETS__ symbols is not quite straightforward when hotpatching, especially on WASM
 //! since we build and link the module as relocatable, which is not a stable WASM proposal. In this
 //! implementation, we handle both the non-PIE *and* PIC cases which are rather bespoke to our whole
 //! build system.
@@ -35,9 +35,9 @@ use std::{
 
 use crate::Result;
 use anyhow::{bail, Context};
-use const_serialize::{ConstVec, SerializeConst};
+use const_serialize::{serialize_const, ConstVec, SerializeConst};
 use dioxus_cli_opt::AssetManifest;
-use manganis::BundledAsset;
+use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -45,24 +45,208 @@ use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 /// Extract all manganis symbols and their sections from the given object file.
 fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
     file: &'b File<'a, R>,
-) -> impl Iterator<Item = (Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
-    file.symbols()
-        .filter(|symbol| {
-            if let Ok(name) = symbol.name() {
-                looks_like_manganis_symbol(name)
-            } else {
-                false
-            }
-        })
-        .filter_map(move |symbol| {
-            let section_index = symbol.section_index()?;
-            let section = file.section_by_index(section_index).ok()?;
-            Some((symbol, section))
-        })
+) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+    file.symbols().filter_map(move |symbol| {
+        let name = symbol.name().ok()?;
+        let version = looks_like_manganis_symbol(name)?;
+        let section_index = symbol.section_index()?;
+        let section = file.section_by_index(section_index).ok()?;
+        Some((version, symbol, section))
+    })
 }
 
-fn looks_like_manganis_symbol(name: &str) -> bool {
-    name.contains("__MANGANIS__")
+#[derive(Copy, Clone)]
+enum ManganisVersion {
+    /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
+    Legacy,
+    /// The new version of the manganis format 0.7.2 onward
+    New,
+}
+
+impl ManganisVersion {
+    fn size(&self) -> usize {
+        match self {
+            ManganisVersion::Legacy => {
+                <manganis_core_07::BundledAsset as const_serialize_07::SerializeConst>::MEMORY_LAYOUT.size()
+            }
+            ManganisVersion::New => BundledAsset::MEMORY_LAYOUT.size(),
+        }
+    }
+
+    fn deserialize(&self, data: &[u8]) -> Option<BundledAsset> {
+        match self {
+            ManganisVersion::Legacy => {
+                let buffer = const_serialize_07::ConstReadBuffer::new(data);
+
+                let (_, legacy_asset) =
+                    const_serialize_07::deserialize_const!(manganis_core_07::BundledAsset, buffer)?;
+
+                Some(legacy_asset_to_modern_asset(&legacy_asset))
+            }
+            ManganisVersion::New => {
+                let (_, asset) =
+                    const_serialize::deserialize_const!(manganis_core::BundledAsset, data)?;
+
+                Some(asset)
+            }
+        }
+    }
+
+    fn serialize(&self, asset: &BundledAsset) -> Vec<u8> {
+        match self {
+            ManganisVersion::Legacy => {
+                let legacy_asset = modern_asset_to_legacy_asset(asset);
+                let buffer = const_serialize_07::serialize_const(
+                    &legacy_asset,
+                    const_serialize_07::ConstVec::new(),
+                );
+                buffer.as_ref().to_vec()
+            }
+            ManganisVersion::New => {
+                let buffer = serialize_const(asset, ConstVec::new());
+                buffer.as_ref().to_vec()
+            }
+        }
+    }
+}
+
+fn legacy_asset_to_modern_asset(
+    legacy_asset: &manganis_core_07::BundledAsset,
+) -> manganis_core::BundledAsset {
+    let bundled_path = legacy_asset.bundled_path();
+    let absolute_path = legacy_asset.absolute_source_path();
+    let legacy_options = legacy_asset.options();
+    let add_hash = legacy_options.hash_suffix();
+    let options = match legacy_options.variant() {
+        manganis_core_07::AssetVariant::Image(image) => {
+            let format = match image.format() {
+                manganis_core_07::ImageFormat::Png => ImageFormat::Png,
+                manganis_core_07::ImageFormat::Jpg => ImageFormat::Jpg,
+                manganis_core_07::ImageFormat::Webp => ImageFormat::Webp,
+                manganis_core_07::ImageFormat::Avif => ImageFormat::Avif,
+                manganis_core_07::ImageFormat::Unknown => ImageFormat::Unknown,
+            };
+            let size = match image.size() {
+                manganis_core_07::ImageSize::Automatic => ImageSize::Automatic,
+                manganis_core_07::ImageSize::Manual { width, height } => {
+                    ImageSize::Manual { width, height }
+                }
+            };
+            let preload = image.preloaded();
+
+            AssetOptions::image()
+                .with_format(format)
+                .with_size(size)
+                .with_preload(preload)
+                .with_hash_suffix(add_hash)
+                .into_asset_options()
+        }
+        manganis_core_07::AssetVariant::Folder(_) => AssetOptions::folder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
+        manganis_core_07::AssetVariant::Css(css) => AssetOptions::css()
+            .with_hash_suffix(add_hash)
+            .with_minify(css.minified())
+            .with_preload(css.preloaded())
+            .with_static_head(css.static_head())
+            .into_asset_options(),
+        manganis_core_07::AssetVariant::CssModule(css_module) => AssetOptions::css_module()
+            .with_hash_suffix(add_hash)
+            .with_minify(css_module.minified())
+            .with_preload(css_module.preloaded())
+            .into_asset_options(),
+        manganis_core_07::AssetVariant::Js(js) => AssetOptions::js()
+            .with_hash_suffix(add_hash)
+            .with_minify(js.minified())
+            .with_preload(js.preloaded())
+            .with_static_head(js.static_head())
+            .into_asset_options(),
+        _ => AssetOptions::builder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
+    };
+
+    BundledAsset::new(absolute_path, bundled_path, options)
+}
+
+fn modern_asset_to_legacy_asset(modern_asset: &BundledAsset) -> manganis_core_07::BundledAsset {
+    let bundled_path = modern_asset.bundled_path();
+    let absolute_path = modern_asset.absolute_source_path();
+    let legacy_options = modern_asset.options();
+    let add_hash = legacy_options.hash_suffix();
+    let options = match legacy_options.variant() {
+        AssetVariant::Image(image) => {
+            let format = match image.format() {
+                ImageFormat::Png => manganis_core_07::ImageFormat::Png,
+                ImageFormat::Jpg => manganis_core_07::ImageFormat::Jpg,
+                ImageFormat::Webp => manganis_core_07::ImageFormat::Webp,
+                ImageFormat::Avif => manganis_core_07::ImageFormat::Avif,
+                ImageFormat::Unknown => manganis_core_07::ImageFormat::Unknown,
+            };
+            let size = match image.size() {
+                ImageSize::Automatic => manganis_core_07::ImageSize::Automatic,
+                ImageSize::Manual { width, height } => {
+                    manganis_core_07::ImageSize::Manual { width, height }
+                }
+            };
+            let preload = image.preloaded();
+
+            manganis_core_07::AssetOptions::image()
+                .with_format(format)
+                .with_size(size)
+                .with_preload(preload)
+                .with_hash_suffix(add_hash)
+                .into_asset_options()
+        }
+        AssetVariant::Folder(_) => manganis_core_07::AssetOptions::folder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
+        AssetVariant::Css(css) => manganis_core_07::AssetOptions::css()
+            .with_hash_suffix(add_hash)
+            .with_minify(css.minified())
+            .with_preload(css.preloaded())
+            .with_static_head(css.static_head())
+            .into_asset_options(),
+        AssetVariant::CssModule(css_module) => manganis_core_07::AssetOptions::css_module()
+            .with_hash_suffix(add_hash)
+            .with_minify(css_module.minified())
+            .with_preload(css_module.preloaded())
+            .into_asset_options(),
+        AssetVariant::Js(js) => manganis_core_07::AssetOptions::js()
+            .with_hash_suffix(add_hash)
+            .with_minify(js.minified())
+            .with_preload(js.preloaded())
+            .with_static_head(js.static_head())
+            .into_asset_options(),
+        _ => manganis_core_07::AssetOptions::builder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
+    };
+
+    manganis_core_07::BundledAsset::new(absolute_path, bundled_path, options)
+}
+
+fn looks_like_manganis_symbol(name: &str) -> Option<ManganisVersion> {
+    if name.contains("__MANGANIS__") {
+        Some(ManganisVersion::Legacy)
+    } else if name.contains("__ASSETS__") {
+        Some(ManganisVersion::New)
+    } else {
+        None
+    }
+}
+
+/// An asset offset in the binary
+#[derive(Clone, Copy)]
+struct ManganisSymbolOffset {
+    version: ManganisVersion,
+    offset: u64,
+}
+
+impl ManganisSymbolOffset {
+    fn new(version: ManganisVersion, offset: u64) -> Self {
+        Self { version, offset }
+    }
 }
 
 /// Find the offsets of any manganis symbols in the given file.
@@ -70,7 +254,7 @@ fn find_symbol_offsets<'a, R: ReadRef<'a>>(
     path: &Path,
     file_contents: &[u8],
     file: &File<'a, R>,
-) -> Result<Vec<u64>> {
+) -> Result<Vec<ManganisSymbolOffset>> {
     let pdb_file = find_pdb_file(path);
 
     match file.format() {
@@ -118,7 +302,7 @@ fn find_pdb_file(path: &Path) -> Option<PathBuf> {
 }
 
 /// Find the offsets of any manganis symbols in a pdb file.
-fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
+fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<ManganisSymbolOffset>> {
     let pdb_file_handle = std::fs::File::open(pdb_file)?;
     let mut pdb_file = pdb::PDB::open(pdb_file_handle).context("Failed to open PDB file")?;
     let Ok(Some(sections)) = pdb_file.sections() else {
@@ -142,26 +326,31 @@ fn find_pdb_symbol_offsets(pdb_file: &Path) -> Result<Vec<u64>> {
         };
 
         let name = data.name.to_string();
-        if name.contains("__MANGANIS__") {
+        if let Some(version) = looks_like_manganis_symbol(&name) {
             let section = sections
                 .get(rva.section as usize - 1)
                 .expect("Section index out of bounds");
 
-            addresses.push((section.pointer_to_raw_data + rva.offset) as u64);
+            addresses.push(ManganisSymbolOffset::new(
+                version,
+                (section.pointer_to_raw_data + rva.offset) as u64,
+            ));
         }
     }
     Ok(addresses)
 }
 
 /// Find the offsets of any manganis symbols in a native object file.
-fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<Vec<u64>> {
+fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
+    file: &File<'a, R>,
+) -> Result<Vec<ManganisSymbolOffset>> {
     let mut offsets = Vec::new();
-    for (symbol, section) in manganis_symbols(file) {
+    for (version, symbol, section) in manganis_symbols(file) {
         let virtual_address = symbol.address();
 
         let Some((section_range_start, _)) = section.file_range() else {
             tracing::error!(
-                "Found __MANGANIS__ symbol {:?} in section {}, but the section has no file range",
+                "Found __ASSETS__ symbol {:?} in section {}, but the section has no file range",
                 symbol.name(),
                 section.index()
             );
@@ -172,7 +361,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(file: &File<'a, R>) -> Result<
             .try_into()
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = section_range_start + section_relative_address;
-        offsets.push(file_offset);
+        offsets.push(ManganisSymbolOffset::new(version, file_offset));
     }
 
     Ok(offsets)
@@ -198,7 +387,7 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
 fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
-) -> Result<Vec<u64>> {
+) -> Result<Vec<ManganisSymbolOffset>> {
     let Some(section) = file
         .sections()
         .find(|section| section.name() == Ok("<data>"))
@@ -259,9 +448,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
 
     for export in module.exports.iter() {
-        if !looks_like_manganis_symbol(&export.name) {
+        let Some(version) = looks_like_manganis_symbol(&export.name) else {
             continue;
-        }
+        };
 
         let walrus::ExportItem::Global(global) = export.item else {
             continue;
@@ -273,7 +462,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
         let Some(virtual_address) = eval_walrus_global_expr(&module, &pointer) else {
             tracing::error!(
-                "Found __MANGANIS__ symbol {:?} in WASM file, but the global expression could not be evaluated",
+                "Found __ASSETS__ symbol {:?} in WASM file, but the global expression could not be evaluated",
                 export.name
             );
             continue;
@@ -285,7 +474,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             .expect("Virtual address should be greater than or equal to section address");
         let file_offset = data_start_offset + section_relative_address;
 
-        offsets.push(file_offset);
+        offsets.push(ManganisSymbolOffset::new(version, file_offset));
     }
 
     Ok(offsets)
@@ -311,15 +500,14 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
     let mut assets = Vec::new();
 
     // Read each asset from the data section using the offsets
-    for offset in offsets.iter().copied() {
+    for symbol in offsets.iter().copied() {
+        let version = symbol.version;
+        let offset = symbol.offset;
         file.seek(std::io::SeekFrom::Start(offset))?;
-        let mut data_in_range = vec![0; BundledAsset::MEMORY_LAYOUT.size()];
+        let mut data_in_range = vec![0; version.size()];
         file.read_exact(&mut data_in_range)?;
 
-        let buffer = const_serialize::ConstReadBuffer::new(&data_in_range);
-
-        if let Some((_, bundled_asset)) = const_serialize::deserialize_const!(BundledAsset, buffer)
-        {
+        if let Some(bundled_asset) = version.deserialize(&data_in_range) {
             tracing::debug!(
                 "Found asset at offset {offset}: {:?}",
                 bundled_asset.absolute_source_path()
@@ -336,10 +524,10 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
     // Write back the assets to the binary file
-    for (offset, asset) in offsets.into_iter().zip(&assets) {
-        tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
-        let new_data = ConstVec::new();
-        let new_data = const_serialize::serialize_const(asset, new_data);
+    for (symbol, asset) in offsets.into_iter().zip(&assets) {
+        let version = symbol.version;
+        let offset = symbol.offset;
+        let new_data = version.serialize(asset);
 
         file.seek(std::io::SeekFrom::Start(offset))?;
         // Write the modified binary data back to the file

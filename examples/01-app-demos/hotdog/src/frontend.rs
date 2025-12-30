@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     backend::{list_dogs, remove_dog, save_dog},
@@ -42,13 +43,17 @@ pub fn NavBar() -> Element {
 #[component]
 pub fn DogView() -> Element {
     let mut img_src = use_loader(|| async move {
-        dioxus::Ok(
-            reqwest::get("https://dog.ceo/api/breeds/image/random")
-                .await?
-                .json::<serde_json::Value>()
-                .await?["message"]
-                .to_string(),
-        )
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
+        struct DogApi {
+            message: String,
+        }
+        let json = reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await?
+            .json::<DogApi>()
+            .await?;
+        let url = json.message;
+
+        dioxus::Ok(url)
     })?;
 
     rsx! {

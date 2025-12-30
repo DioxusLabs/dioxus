@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
+    pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
@@ -605,6 +606,7 @@ impl BuildRequest {
         */
         let mut features = args.features.clone();
         let mut no_default_features = args.no_default_features;
+        let all_features = args.all_features;
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
         let mut bundle_format = args.bundle;
@@ -826,12 +828,12 @@ impl BuildRequest {
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
-            features.push(Self::feature_for_platform_and_renderer(
-                main_package,
-                &triple,
-                renderer,
-            ));
-            features.dedup();
+            if let Some(feature) =
+                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+            {
+                features.push(feature);
+                features.dedup();
+            }
         }
 
         // Set the profile of the build if it's not already set
@@ -986,6 +988,7 @@ impl BuildRequest {
             features,
             bundle,
             no_default_features,
+            all_features,
             crate_package,
             crate_target,
             profile,
@@ -2194,7 +2197,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args: Vec<_> = rustc_args.link_args.iter().skip(1).cloned().collect();
+        let mut args: Vec<_> = rustc_args.link_args.clone();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
@@ -2610,6 +2613,10 @@ impl BuildRequest {
 
         if self.no_default_features {
             cargo_args.push("--no-default-features".to_string());
+        }
+
+        if self.all_features {
+            cargo_args.push("--all-features".to_string());
         }
 
         if !self.features.is_empty() {
@@ -3571,7 +3578,7 @@ impl BuildRequest {
         package: &krates::cm::Package,
         triple: &Triple,
         renderer: Renderer,
-    ) -> String {
+    ) -> Option<String> {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = renderer.feature_name(triple);
 
@@ -3611,12 +3618,17 @@ impl BuildRequest {
             None
         });
 
-        res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{dioxus_feature}");
-            tracing::debug!(
-                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
-            );
-            fallback
+        res.or_else(|| {
+            let depends_on_dioxus = package.dependencies.iter().any(|dep| dep.name == "dioxus");
+            if depends_on_dioxus {
+                let fallback = format!("dioxus/{dioxus_feature}");
+                tracing::debug!(
+                    "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
+                );
+                Some(fallback)
+            } else {
+                None
+            }
         })
     }
 
@@ -3979,10 +3991,18 @@ impl BuildRequest {
         };
         if let Some(strip_arg) = strip_arg {
             let rustc_objcopy = self.workspace.rustc_objcopy();
+            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
             let mut command = Command::new(rustc_objcopy);
+            command.env("LD_LIBRARY_PATH", &dylib_path);
             command.arg(strip_arg).arg(exe).arg(exe);
             let output = command.output().await?;
             if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
                 return Err(anyhow::anyhow!("Failed to strip binary"));
             }
         }
@@ -4346,39 +4366,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        match self.bundle {
-            BundleFormat::Android => {
-                ctx.status_running_gradle();
+        if let BundleFormat::Android = self.bundle {
+            ctx.status_running_gradle();
 
-                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-                let build_type = if self.release && self.config.bundle.android.is_some() {
-                    "assembleRelease"
-                } else {
-                    "assembleDebug"
-                };
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
 
-                let output = Command::new(self.gradle_exe()?)
-                    .arg(build_type)
-                    .current_dir(self.root_dir())
-                    .output()
-                    .await
-                    .context("Failed to run gradle")?;
+            let output = Command::new(self.gradle_exe()?)
+                .arg(build_type)
+                .current_dir(self.root_dir())
+                .output()
+                .await
+                .context("Failed to run gradle")?;
 
-                if !output.status.success() {
-                    bail!(
-                        "Failed to assemble apk: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
+            if !output.status.success() {
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
-            BundleFormat::MacOS | BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_apple().await?;
-                }
-            }
+        }
 
-            _ => {}
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        ) && self.should_codesign
+        {
+            self.codesign_apple(ctx).await?;
         }
 
         Ok(())
@@ -5255,7 +5274,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_apple(&self) -> Result<()> {
+    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_codesigning();
+
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
@@ -5290,6 +5311,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             app_dev_name
         );
 
+        // determine the target exe - the server and macos bundles are different
+        let target_exe = match self.bundle {
+            BundleFormat::MacOS => self.root_dir(),
+            BundleFormat::Ios => self.root_dir(),
+            BundleFormat::Server => self.main_exe(),
+            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
+        };
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
@@ -5299,7 +5328,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.root_dir())
+            .arg(target_exe)
             .output()
             .await
             .context("Failed to codesign the app - is `codesign` in your path?")?;
