@@ -42,9 +42,9 @@ for (let { port, name } of test_variants) {
   test(`unused external assets are bundled in ${name}`, async ({ page }) => {
     await page.goto(`http://localhost:${port}`);
 
-    // Assert http://localhost:9090/assets/toasts.png is found even though it is not used in the page
+    // Assert http://localhost:{port}/assets/toasts.png is found even though it is not used in the page
     const response = await page.request.get(
-      "http://localhost:9090/assets/toasts.png"
+      `http://localhost:${port}/assets/toasts.png`
     );
     // Expect the response to be ok
     expect(response.status()).toBe(200);

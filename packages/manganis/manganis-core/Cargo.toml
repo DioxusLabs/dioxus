@@ -14,13 +14,14 @@ keywords = ["dom", "ui", "gui", "assets"]
 # prevent the main code from compiling!
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-const-serialize = { workspace = true, features = ["serde"] }
+const-serialize-08 = { workspace = true, features = ["serde", "const-serialize-07"] }
+const-serialize-07 = { workspace = true }
 dioxus-core-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
+winnow = { workspace = true }
 
 [dev-dependencies]
 manganis = { workspace = true }
-dioxus = { workspace = true }
 
 [features]
 dioxus = ["dep:dioxus-core-types", "dep:dioxus-cli-config"]

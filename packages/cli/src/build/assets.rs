@@ -285,7 +285,9 @@ fn legacy_asset_to_modern_asset(
             .with_preload(js.preloaded())
             .with_static_head(js.static_head())
             .into_asset_options(),
-        _ => AssetOptions::builder().into_asset_options(),
+        _ => AssetOptions::builder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
     };
 
     BundledAsset::new(absolute_path, bundled_path, options)
@@ -340,7 +342,9 @@ fn modern_asset_to_legacy_asset(modern_asset: &BundledAsset) -> manganis_core_07
             .with_preload(js.preloaded())
             .with_static_head(js.static_head())
             .into_asset_options(),
-        _ => manganis_core_07::AssetOptions::builder().into_asset_options(),
+        _ => manganis_core_07::AssetOptions::builder()
+            .with_hash_suffix(add_hash)
+            .into_asset_options(),
     };
 
     manganis_core_07::BundledAsset::new(absolute_path, bundled_path, options)

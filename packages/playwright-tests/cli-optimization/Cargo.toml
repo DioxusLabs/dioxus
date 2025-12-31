@@ -22,3 +22,7 @@ serde_json.workspace = true
 default = ["dioxus"]
 dioxus = ["dep:dioxus"]
 dioxus_07 = ["dep:dioxus_07"]
+# We need a separate bin for the old CLI build to avoid conflicting caches
+[[bin]]
+name = "cli-optimization-old-cli"
+path = "src/old_cli.rs"

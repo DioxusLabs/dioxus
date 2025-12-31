@@ -1,14 +1,20 @@
-// Re-export const_serialize types for convenience
-pub use const_serialize::{self, ConstStr, ConstVec, SerializeConst};
-// Re-export copy_bytes so generated code can use it without dx-macro-helpers dependency
+// Re-export const_serialize types for generated code.
+pub use const_serialize;
+pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
+pub use const_serialize_07;
+// Re-export copy_bytes so generated code can use it without a dx-macro-helpers dependency.
 pub use dx_macro_helpers::copy_bytes;
-use manganis_core::{AssetOptions, BundledAsset};
 
-const PLACEHOLDER_HASH: &str = "This should be replaced by dx as part of the build process. If you see this error, make sure you are using a matching version of dx and dioxus and you are not stripping symbols from your binary.";
+use const_serialize::serialize_const;
+use const_serialize_07::{
+    serialize_const as serialize_const_07, ConstVec as ConstVec07,
+    SerializeConst as SerializeConst07,
+};
+use manganis_core::{AssetOptions, BundledAsset};
 
 /// Create a bundled asset from the input path, the content hash, and the asset options
 pub const fn create_bundled_asset(input_path: &str, asset_config: AssetOptions) -> BundledAsset {
-    BundledAsset::new(input_path, PLACEHOLDER_HASH, asset_config)
+    BundledAsset::new(input_path, BundledAsset::PLACEHOLDER_HASH, asset_config)
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options with a relative asset deprecation warning
@@ -32,12 +38,23 @@ pub const fn create_bundled_asset_relative(
 /// linker section size. const-serialize deserialization will ignore
 /// the padding (zeros) at the end.
 pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
-    // Serialize using the default buffer, then expand into the fixed-size buffer
-    let serialized = const_serialize::serialize_const(asset, ConstVec::new());
+    // Serialize using the default buffer, then expand into the fixed-size buffer.
+    let serialized = serialize_const(asset, const_serialize::ConstVec::new());
     let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
     data = data.extend(serialized.as_ref());
-    // Pad to full buffer size (4096) to match linker section size
+    // Pad to full buffer size (4096) to match linker section size.
     while data.len() < 4096 {
+        data = data.push(0);
+    }
+    data
+}
+
+/// Serialize an asset to a const buffer in the legacy 0.7 format
+pub const fn serialize_asset_07(asset: &BundledAsset) -> ConstVec07<u8> {
+    let data = ConstVec07::new();
+    let mut data = serialize_const_07(asset, data);
+    // Reserve the maximum size of the asset
+    while data.len() < <BundledAsset as SerializeConst07>::MEMORY_LAYOUT.size() {
         data = data.push(0);
     }
     data
@@ -45,8 +62,7 @@ pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
 
 /// Deserialize a const buffer into a BundledAsset
 pub const fn deserialize_asset(bytes: &[u8]) -> BundledAsset {
-    let bytes = ConstVec::new().extend(bytes);
-    match const_serialize::deserialize_const!(BundledAsset, bytes.as_ref()) {
+    match const_serialize::deserialize_const!(BundledAsset, bytes) {
         Some((_, asset)) => asset,
         None => panic!("Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"),
     }

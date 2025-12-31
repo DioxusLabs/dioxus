@@ -49,65 +49,40 @@ impl SelectorNode {
             .get_mut_or_default(rest)
     }
 
-    /// Visit this node and all of its children in depth-first order, calling the provided function on each node.
+    /// Get the path to each node under this node
     ///
     /// This is used to mark nodes dirty recursively when a Store is written to.
-    fn visit_depth_first_mut(&mut self, f: &mut dyn FnMut(&mut SelectorNode)) {
-        f(self);
-        for child in self.root.values_mut() {
-            child.visit_depth_first_mut(f);
+    fn paths_under(&self, current_path: &[PathKey], paths: &mut Vec<Box<[PathKey]>>) {
+        paths.push(current_path.into());
+        for (i, child) in self.root.iter() {
+            let mut child_path: Vec<PathKey> = current_path.into();
+            child_path.push(*i);
+            child.paths_under(&child_path, paths);
         }
     }
 
-    /// Mark this selector and all children as dirty. This should be called any time a raw mutable reference to a store
-    /// is exposed to the user. They could write to any level of the store, so we need to mark all nodes as dirty.
-    fn mark_children_dirty(&mut self, path: &[PathKey]) {
-        let Some(node) = self.get_mut(path) else {
-            return;
-        };
-
-        // Mark the node and all its children as dirty
-        node.visit_depth_first_mut(&mut |node| {
-            node.mark_dirty();
-        });
-    }
-
-    /// Mark only children after a certain index as dirty. This is used when inserting a new item into a list.
+    /// Get paths to only children before a certain index.
+    ///
+    /// This is used when inserting a new item into a list.
     /// Items after the index that is inserted need to be marked dirty because the value that index points to may have changed.
-    fn mark_dirty_at_and_after_index(&mut self, path: &[PathKey], index: usize) {
-        let Some(node) = self.get_mut(path) else {
+    fn paths_at_and_after_index(
+        &self,
+        path: &[PathKey],
+        index: usize,
+        paths: &mut Vec<Box<[PathKey]>>,
+    ) {
+        let Some(node) = self.get(path) else {
             return;
         };
 
         // Mark the nodes before the index as dirty
-        for (i, child) in node.root.iter_mut() {
+        for (i, child) in node.root.iter() {
             if *i as usize >= index {
-                child.visit_depth_first_mut(&mut |node| {
-                    node.mark_dirty();
-                });
+                let mut child_path: Vec<PathKey> = path.into();
+                child_path.push(*i);
+                child.paths_under(&child_path, paths);
             }
         }
-    }
-
-    /// Mark a specific node as dirty without marking its children. This is used for data structures like HashMaps
-    /// when inserting or removing items. Inserting an item into a HashMap only changes the length of the map and the
-    /// specific value that was inserted or removed.
-    fn mark_dirty_shallow(&mut self, path: &[PathKey]) {
-        let Some(node) = self.get_mut(path) else {
-            return;
-        };
-
-        node.mark_dirty();
-    }
-
-    /// Mark this node as dirty, which will notify all subscribers that the value has changed.
-    fn mark_dirty(&mut self) {
-        // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
-        #[allow(clippy::mutable_key_type)]
-        let mut subscribers = std::mem::take(&mut self.subscribers);
-        subscribers.retain(|reactive_context| reactive_context.mark_dirty());
-        // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
-        self.subscribers.extend(subscribers);
     }
 
     /// Remove a path from the subscription tree
@@ -253,19 +228,53 @@ impl StoreSubscriptions {
         }
     }
 
+    /// Mark the node and all its children as dirty
     pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
-        self.inner.write_unchecked().root.mark_children_dirty(key);
+        let paths = {
+            let read = &self.inner.read_unchecked();
+            let Some(node) = read.root.get(key) else {
+                return;
+            };
+            let mut paths = Vec::new();
+            node.paths_under(key, &mut paths);
+            paths
+        };
+        for path in paths {
+            self.mark_dirty_shallow(&path);
+        }
     }
 
+    /// Mark a single node as dirty
     pub(crate) fn mark_dirty_shallow(&self, key: &[PathKey]) {
-        self.inner.write_unchecked().root.mark_dirty_shallow(key);
+        // We cannot hold the subscribers lock while calling mark_dirty, because mark_dirty can run user code which may cause a new subscriber to be added. If we hold the lock, we will deadlock.
+        #[allow(clippy::mutable_key_type)]
+        let mut subscribers = {
+            let mut write = self.inner.write_unchecked();
+            let Some(node) = write.root.get_mut(key) else {
+                return;
+            };
+            std::mem::take(&mut node.subscribers)
+        };
+        subscribers.retain(|reactive_context| reactive_context.mark_dirty());
+        // Extend the subscribers list instead of overwriting it in case a subscriber is added while reactive contexts are marked dirty
+        let mut write = self.inner.write_unchecked();
+        let Some(node) = write.root.get_mut(key) else {
+            return;
+        };
+        node.subscribers.extend(subscribers);
     }
 
+    /// Mark all nodes after the index and their children as dirty
     pub(crate) fn mark_dirty_at_and_after_index(&self, key: &[PathKey], index: usize) {
-        self.inner
-            .write_unchecked()
-            .root
-            .mark_dirty_at_and_after_index(key, index);
+        let paths = {
+            let read = self.inner.read_unchecked();
+            let mut paths = Vec::new();
+            read.root.paths_at_and_after_index(key, index, &mut paths);
+            paths
+        };
+        for path in paths {
+            self.mark_dirty_shallow(&path);
+        }
     }
 
     /// Get a subscriber list for a specific path in the store. This is used to subscribe to changes

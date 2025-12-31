@@ -1,13 +1,21 @@
 use crate::*;
-use std::{char, hash::Hash, mem::MaybeUninit};
+use std::{char, fmt::Debug, hash::Hash, mem::MaybeUninit};
 
 const MAX_STR_SIZE: usize = 256;
 
 /// A string that is stored in a constant sized buffer that can be serialized and deserialized at compile time
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct ConstStr {
-    pub(crate) bytes: [MaybeUninit<u8>; MAX_STR_SIZE],
-    pub(crate) len: u32,
+    bytes: [MaybeUninit<u8>; MAX_STR_SIZE],
+    len: u32,
+}
+
+impl Debug for ConstStr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConstStr")
+            .field("str", &self.as_str())
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]
@@ -53,11 +61,41 @@ unsafe impl SerializeConst for ConstStr {
     ));
 }
 
+#[cfg(feature = "const-serialize-07")]
+unsafe impl const_serialize_07::SerializeConst for ConstStr {
+    const MEMORY_LAYOUT: const_serialize_07::Layout =
+        const_serialize_07::Layout::Struct(const_serialize_07::StructLayout::new(
+            std::mem::size_of::<Self>(),
+            &[
+                const_serialize_07::StructFieldLayout::new(
+                    std::mem::offset_of!(Self, bytes),
+                    const_serialize_07::Layout::List(const_serialize_07::ListLayout::new(
+                        MAX_STR_SIZE,
+                        &const_serialize_07::Layout::Primitive(
+                            const_serialize_07::PrimitiveLayout::new(std::mem::size_of::<u8>()),
+                        ),
+                    )),
+                ),
+                const_serialize_07::StructFieldLayout::new(
+                    std::mem::offset_of!(Self, len),
+                    const_serialize_07::Layout::Primitive(
+                        const_serialize_07::PrimitiveLayout::new(std::mem::size_of::<u32>()),
+                    ),
+                ),
+            ],
+        ));
+}
+
 impl ConstStr {
     /// Create a new constant string
     pub const fn new(s: &str) -> Self {
         let str_bytes = s.as_bytes();
-        let mut bytes = [MaybeUninit::uninit(); MAX_STR_SIZE];
+        // This is serialized as a constant sized array in const-serialize-07 which requires all memory to be initialized
+        let mut bytes = if cfg!(feature = "const-serialize-07") {
+            [MaybeUninit::new(0); MAX_STR_SIZE]
+        } else {
+            [MaybeUninit::uninit(); MAX_STR_SIZE]
+        };
         let mut i = 0;
         while i < str_bytes.len() {
             bytes[i] = MaybeUninit::new(str_bytes[i]);
