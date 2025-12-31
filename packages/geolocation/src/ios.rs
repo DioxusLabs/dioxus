@@ -50,6 +50,12 @@ impl Geolocation {
 
                 let instance: *mut objc2::runtime::Object = msg_send![class, alloc];
                 let instance: *mut objc2::runtime::Object = msg_send![instance, init];
+                if instance.is_null() {
+                    return Err(Error::Ios(
+                        "GeolocationPlugin failed to initialize (nil instance)."
+                            .to_string(),
+                    ));
+                }
                 Ok::<*mut objc2::runtime::Object, Error>(instance)
             })?;
 

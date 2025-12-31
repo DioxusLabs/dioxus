@@ -127,10 +127,6 @@ unsafe extern "C" fn rust_callback<'a>(
     // Convert to our callback function pointer
     let callback: fn(&mut JNIEnv, JObject) = unsafe { std::mem::transmute(handler_ptr_raw) };
 
-    // Create a global reference to the location object
-    if let Ok(global_location) = env.new_global_ref(&location) {
-        callback(&mut env, unsafe {
-            JObject::from_raw(global_location.as_obj().as_raw())
-        });
-    }
+    // Use the local reference for this JNI frame; avoid leaking a global ref.
+    callback(&mut env, location);
 }
