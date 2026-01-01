@@ -152,16 +152,6 @@ if (process.platform === "win32") {
       stdout: "pipe",
     },
     {
-      cwd: path.join(process.cwd(), "cli-optimization"),
-      // Remove the cache folder for the cli-optimization build to force a full cache reset
-      command:
-        'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 9090 --no-default-features --features dioxus_07',
-      port: 9090,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
       cwd: path.join(process.cwd(), "wasm-split-harness"),
       command:
         'cargo run --package dioxus-cli --release -- run --bin wasm-split-harness --web --addr "127.0.0.1" --port 8001 --wasm-split --profile wasm-split-release',

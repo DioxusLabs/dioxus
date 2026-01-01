@@ -2,7 +2,6 @@
 const { test, expect } = require("@playwright/test");
 
 const test_variants = [
-  { port: 9090, name: "0.7.1" },
   { port: 8989, name: "current version" },
 ];
 

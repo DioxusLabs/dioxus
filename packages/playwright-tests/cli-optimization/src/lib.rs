@@ -1,8 +1,5 @@
 // This test checks the CLI optimizes assets correctly without breaking them
 
-#[cfg(feature = "dioxus_07")]
-use dioxus_07 as dioxus;
-
 use dioxus::prelude::*;
 
 const SOME_IMAGE: Asset = asset!("/images/toasts.png", AssetOptions::image().with_avif());
