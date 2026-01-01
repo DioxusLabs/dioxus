@@ -59,4 +59,19 @@ pub const fn serialize_to_const_with_max<const MAX_SIZE: usize>(
     data
 }
 
+/// Serialize a value to a const buffer and pad to the full buffer size
+///
+/// This is useful for linker section generation that expects a fixed-size buffer.
+pub const fn serialize_to_const_with_max_padded<const MAX_SIZE: usize>(
+    value: &impl SerializeConst,
+) -> ConstVec<u8, MAX_SIZE> {
+    let serialized = const_serialize::serialize_const(value, ConstVec::new());
+    let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
+    data = data.extend(serialized.as_ref());
+    while data.len() < MAX_SIZE {
+        data = data.push(0);
+    }
+    data
+}
+
 pub mod linker;

@@ -2,10 +2,10 @@
 pub use const_serialize;
 pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
 pub use const_serialize_07;
-// Re-export copy_bytes so generated code can use it without a dx-macro-helpers dependency.
+// Re-export dx-macro-helpers so generated code can use it without a direct dependency.
+pub use dx_macro_helpers as dx_macro_helpers;
 pub use dx_macro_helpers::copy_bytes;
 
-use const_serialize::serialize_const;
 use const_serialize_07::{
     serialize_const as serialize_const_07, ConstVec as ConstVec07,
     SerializeConst as SerializeConst07,
@@ -33,20 +33,9 @@ pub const fn create_bundled_asset_relative(
 /// Serialize an asset to a const buffer
 ///
 /// Serializes the asset directly (not wrapped in SymbolData) for simplicity.
-/// Uses a 4096-byte buffer to accommodate assets with large data.
-/// The buffer is padded to the full buffer size (4096) to match the
-/// linker section size. const-serialize deserialization will ignore
-/// the padding (zeros) at the end.
+/// Uses a 4096-byte buffer and pads to the full size to match linker section size.
 pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
-    // Serialize using the default buffer, then expand into the fixed-size buffer.
-    let serialized = serialize_const(asset, const_serialize::ConstVec::new());
-    let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
-    data = data.extend(serialized.as_ref());
-    // Pad to full buffer size (4096) to match linker section size.
-    while data.len() < 4096 {
-        data = data.push(0);
-    }
-    data
+    dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(asset)
 }
 
 /// Serialize an asset to a const buffer in the legacy 0.7 format

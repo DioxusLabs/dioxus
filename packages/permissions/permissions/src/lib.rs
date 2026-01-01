@@ -51,13 +51,7 @@ pub mod macro_helpers {
     pub use permissions_core::{Permission, SymbolData};
 
     const fn serialize_symbol_data(symbol_data: SymbolData) -> ConstVec<u8, 4096> {
-        let serialized = const_serialize::serialize_const(&symbol_data, ConstVec::new());
-        let mut data: ConstVec<u8, 4096> = ConstVec::new_with_max_size();
-        data = data.extend(serialized.as_ref());
-        while data.len() < 4096 {
-            data = data.push(0);
-        }
-        data
+        dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(&symbol_data)
     }
 
     /// Serialize a permission into a const buffer (wrapped in `SymbolData::Permission`).
