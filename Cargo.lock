@@ -5696,7 +5696,6 @@ dependencies = [
 name = "dioxus-cli-optimization-test"
 version = "0.0.1"
 dependencies = [
- "dioxus 0.7.1",
  "dioxus 0.7.2",
  "serde",
  "serde_json",
