@@ -6,10 +6,7 @@ pub use const_serialize_07;
 pub use dx_macro_helpers as dx_macro_helpers;
 pub use dx_macro_helpers::copy_bytes;
 
-use const_serialize_07::{
-    serialize_const as serialize_const_07, ConstVec as ConstVec07,
-    SerializeConst as SerializeConst07,
-};
+use const_serialize_07::ConstVec as ConstVec07;
 use manganis_core::{AssetOptions, BundledAsset};
 
 /// Create a bundled asset from the input path, the content hash, and the asset options
@@ -40,13 +37,7 @@ pub const fn serialize_asset(asset: &BundledAsset) -> ConstVec<u8, 4096> {
 
 /// Serialize an asset to a const buffer in the legacy 0.7 format
 pub const fn serialize_asset_07(asset: &BundledAsset) -> ConstVec07<u8> {
-    let data = ConstVec07::new();
-    let mut data = serialize_const_07(asset, data);
-    // Reserve the maximum size of the asset
-    while data.len() < <BundledAsset as SerializeConst07>::MEMORY_LAYOUT.size() {
-        data = data.push(0);
-    }
-    data
+    dx_macro_helpers::serialize_to_const_with_layout_padded_07(asset)
 }
 
 /// Deserialize a const buffer into a BundledAsset

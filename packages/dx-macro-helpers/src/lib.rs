@@ -5,6 +5,7 @@
 //! by any crate that needs to embed serialized data in executables using linker sections.
 
 pub use const_serialize::{ConstVec, SerializeConst};
+pub use const_serialize_07 as const_serialize_07;
 
 /// Copy a slice into a constant sized buffer at compile time
 ///
@@ -69,6 +70,18 @@ pub const fn serialize_to_const_with_max_padded<const MAX_SIZE: usize>(
     let mut data: ConstVec<u8, MAX_SIZE> = ConstVec::new_with_max_size();
     data = data.extend(serialized.as_ref());
     while data.len() < MAX_SIZE {
+        data = data.push(0);
+    }
+    data
+}
+
+/// Serialize a value using the legacy 0.7 const-serialize format and pad to layout size
+pub const fn serialize_to_const_with_layout_padded_07<T: const_serialize_07::SerializeConst>(
+    value: &T,
+) -> const_serialize_07::ConstVec<u8> {
+    let data = const_serialize_07::ConstVec::new();
+    let mut data = const_serialize_07::serialize_const(value, data);
+    while data.len() < T::MEMORY_LAYOUT.size() {
         data = data.push(0);
     }
     data
