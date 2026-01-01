@@ -13,6 +13,7 @@ use crate::Permission;
 /// matched by name (string), not by position or tag value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
 #[repr(C, u8)]
+#[allow(clippy::large_enum_variant)]
 pub enum SymbolData {
     /// An asset that should be bundled with the application
     Asset(BundledAsset),
