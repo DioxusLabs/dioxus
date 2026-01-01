@@ -3,7 +3,7 @@ pub use const_serialize;
 pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
 pub use const_serialize_07;
 // Re-export dx-macro-helpers so generated code can use it without a direct dependency.
-pub use dx_macro_helpers as dx_macro_helpers;
+pub use dx_macro_helpers;
 pub use dx_macro_helpers::copy_bytes;
 
 use const_serialize_07::ConstVec as ConstVec07;

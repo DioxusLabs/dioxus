@@ -5,7 +5,7 @@
 //! by any crate that needs to embed serialized data in executables using linker sections.
 
 pub use const_serialize::{ConstVec, SerializeConst};
-pub use const_serialize_07 as const_serialize_07;
+pub use const_serialize_07;
 
 /// Copy a slice into a constant sized buffer at compile time
 ///
