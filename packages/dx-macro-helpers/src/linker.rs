@@ -67,3 +67,54 @@ pub fn generate_link_section(
         static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
     }
 }
+
+/// Generate a pair of linker sections for legacy + current formats
+///
+/// This is useful when emitting both old and new symbol formats for compatibility.
+pub fn generate_link_sections_with_legacy(
+    item: impl ToTokens,
+    hash: &str,
+    prefix_current: &str,
+    prefix_legacy: &str,
+    serialize_fn_current: TokenStream2,
+    serialize_fn_legacy: TokenStream2,
+    copy_bytes_fn: TokenStream2,
+    buffer_type_current: TokenStream2,
+    buffer_type_legacy: TokenStream2,
+    add_used_attribute: bool,
+) -> TokenStream2 {
+    let position = proc_macro2::Span::call_site();
+    let export_name = syn::LitStr::new(&format!("{}{}", prefix_current, hash), position);
+    let legacy_export_name = syn::LitStr::new(&format!("{}{}", prefix_legacy, hash), position);
+
+    let used_attr = if add_used_attribute {
+        quote! { #[used] }
+    } else {
+        quote! {}
+    };
+
+    quote! {
+        // We bundle both the legacy and new link sections for compatibility.
+        static __LEGACY_LINK_SECTION: &'static [u8] = {
+            const __BUFFER: #buffer_type_legacy = #serialize_fn_legacy(&#item);
+            const __BYTES: &[u8] = __BUFFER.as_ref();
+            const __LEN: usize = __BYTES.len();
+
+            #used_attr
+            #[unsafe(export_name = #legacy_export_name)]
+            static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
+            &__LINK_SECTION
+        };
+
+        static __LINK_SECTION: &'static [u8] = {
+            const __BUFFER: #buffer_type_current = #serialize_fn_current(&#item);
+            const __BYTES: &[u8] = __BUFFER.as_ref();
+            const __LEN: usize = __BYTES.len();
+
+            #used_attr
+            #[unsafe(export_name = #export_name)]
+            static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
+            &__LINK_SECTION
+        };
+    }
+}

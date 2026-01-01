@@ -1,4 +1,5 @@
 use proc_macro2::TokenStream as TokenStream2;
+use quote::quote;
 use quote::ToTokens;
 
 /// Generate a linker section for embedding asset data in the binary
@@ -7,38 +8,16 @@ use quote::ToTokens;
 /// and exports it with the __ASSETS__ prefix for unified symbol collection.
 /// Uses the generic linker helper from dx-macro-helpers for consistency.
 pub fn generate_link_section(asset: impl ToTokens, asset_hash: &str) -> TokenStream2 {
-    let position = proc_macro2::Span::call_site();
-    let export_name = syn::LitStr::new(&format!("__ASSETS__{}", asset_hash), position);
-    let legacy_export_name = syn::LitStr::new(&format!("__MANGANIS__{}", asset_hash), position);
-
-    quote::quote! {
-        // We bundle both the legacy and new link sections for compatibility with older CLIs
-        static __LEGACY_LINK_SECTION: &'static [u8] = {
-            // First serialize the asset into a constant sized buffer
-            const __BUFFER: manganis::macro_helpers::const_serialize_07::ConstVec<u8> = manganis::macro_helpers::serialize_asset_07(&#asset);
-            // Then pull out the byte slice
-            const __BYTES: &[u8] = __BUFFER.as_ref();
-            // And the length of the byte slice
-            const __LEN: usize = __BYTES.len();
-
-            // Now that we have the size of the asset, copy the bytes into a static array
-            #[unsafe(export_name = #legacy_export_name)]
-            static __LINK_SECTION: [u8; __LEN]  = manganis::macro_helpers::copy_bytes(__BYTES);
-            &__LINK_SECTION
-        };
-
-        static __LINK_SECTION: &'static [u8] = {
-            // First serialize the asset into a constant sized buffer
-            const __BUFFER: manganis::macro_helpers::ConstVec<u8, 4096> = manganis::macro_helpers::serialize_asset(&#asset);
-            // Then pull out the byte slice
-            const __BYTES: &[u8] = __BUFFER.as_ref();
-            // And the length of the byte slice
-            const __LEN: usize = __BYTES.len();
-
-            // Now that we have the size of the asset, copy the bytes into a static array
-            #[unsafe(export_name = #export_name)]
-            static __LINK_SECTION: [u8; __LEN]  = manganis::macro_helpers::copy_bytes(__BYTES);
-            &__LINK_SECTION
-        };
-    }
+    dx_macro_helpers::linker::generate_link_sections_with_legacy(
+        asset,
+        asset_hash,
+        "__ASSETS__",
+        "__MANGANIS__",
+        quote! { manganis::macro_helpers::serialize_asset },
+        quote! { manganis::macro_helpers::serialize_asset_07 },
+        quote! { manganis::macro_helpers::copy_bytes },
+        quote! { manganis::macro_helpers::ConstVec<u8, 4096> },
+        quote! { manganis::macro_helpers::const_serialize_07::ConstVec<u8> },
+        false,
+    )
 }
