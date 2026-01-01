@@ -71,6 +71,7 @@ pub fn generate_link_section(
 /// Generate a pair of linker sections for legacy + current formats
 ///
 /// This is useful when emitting both old and new symbol formats for compatibility.
+#[allow(clippy::too_many_arguments)]
 pub fn generate_link_sections_with_legacy(
     item: impl ToTokens,
     hash: &str,

@@ -4,7 +4,7 @@
 //! manifest files for platforms that require build-time permission declarations.
 //!
 //! Platforms requiring build-time manifests:
-//! - Android: AndroidManifest.xml with <uses-permission> declarations
+//! - Android: AndroidManifest.xml with `uses-permission` declarations
 //! - iOS/macOS: Info.plist with usage description keys
 //!
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
