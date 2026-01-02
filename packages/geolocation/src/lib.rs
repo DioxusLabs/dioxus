@@ -51,7 +51,7 @@ use ios::Geolocation as PlatformGeolocation;
 /// # Example
 ///
 /// ```rust,no_run
-/// use dioxus_geolocation::{Geolocation, PositionOptions};
+/// use dioxus_geolocation::{Geolocation, PermissionState, PositionOptions};
 ///
 /// let mut geolocation = Geolocation::new();
 ///

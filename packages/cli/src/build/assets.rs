@@ -108,7 +108,7 @@ impl ManganisVersion {
                         || remaining.len() <= data.len(); // Allow any amount of padding as long as it's not larger than data
 
                     if is_valid {
-                        return Some(SymbolDataOrAsset::SymbolData(symbol_data));
+                        return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
                     } else {
                         tracing::debug!(
                             "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
@@ -200,7 +200,7 @@ impl ManganisVersion {
 #[derive(Debug, Clone)]
 enum SymbolDataOrAsset {
     /// New unified format (can contain Asset or Permission)
-    SymbolData(SymbolData),
+    SymbolData(Box<SymbolData>),
     /// Old asset format (backward compatibility)
     Asset(BundledAsset),
 }
@@ -668,7 +668,7 @@ pub(crate) async fn extract_symbols_from_file(
         if let Some(result) = version.deserialize(data_in_range) {
             match result {
                 SymbolDataOrAsset::SymbolData(symbol_data) => {
-                    match symbol_data {
+                    match *symbol_data {
                         SymbolData::Asset(asset) => {
                             tracing::debug!(
                                 "Found asset (via SymbolData) at offset {offset}: {:?}",

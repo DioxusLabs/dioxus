@@ -21,9 +21,9 @@ fn App() -> Element {
     let max_age_input = use_signal(|| String::from("0"));
 
     let on_check_permissions = {
-        let mut geolocation = geolocation.clone();
-        let mut permission_status = permission_status.clone();
-        let mut error = error.clone();
+        let mut geolocation = geolocation;
+        let mut permission_status = permission_status;
+        let mut error = error;
         move |_| match geolocation.write().check_permissions() {
             Ok(status) => {
                 permission_status.set(Some(status));
@@ -34,9 +34,9 @@ fn App() -> Element {
     };
 
     let on_request_permissions = {
-        let mut geolocation = geolocation.clone();
-        let mut permission_status = permission_status.clone();
-        let mut error = error.clone();
+        let mut geolocation = geolocation;
+        let mut permission_status = permission_status;
+        let mut error = error;
         move |_| {
             let mut geo = geolocation.write();
             match geo.request_permissions(None) {
@@ -53,7 +53,7 @@ fn App() -> Element {
     };
 
     let on_toggle_accuracy = {
-        let mut use_high_accuracy = use_high_accuracy.clone();
+        let mut use_high_accuracy = use_high_accuracy;
         move |_| {
             let next = !use_high_accuracy();
             use_high_accuracy.set(next);
@@ -61,16 +61,16 @@ fn App() -> Element {
     };
 
     let on_max_age_input = {
-        let mut max_age_input = max_age_input.clone();
+        let mut max_age_input = max_age_input;
         move |evt: FormEvent| max_age_input.set(evt.value())
     };
 
     let on_fetch_position = {
-        let mut geolocation = geolocation.clone();
-        let mut last_position = last_position.clone();
-        let mut error = error.clone();
-        let use_high_accuracy = use_high_accuracy.clone();
-        let max_age_input = max_age_input.clone();
+        let mut geolocation = geolocation;
+        let mut last_position = last_position;
+        let mut error = error;
+        let use_high_accuracy = use_high_accuracy;
+        let max_age_input = max_age_input;
         move |_| {
             let maximum_age = max_age_input.read().trim().parse::<u32>().unwrap_or(0);
 
