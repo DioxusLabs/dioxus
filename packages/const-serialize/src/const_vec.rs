@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use std::{fmt::Debug, hash::Hash, mem::MaybeUninit};
 
+use crate::ConstReadBuffer;
+
 const DEFAULT_MAX_SIZE: usize = 2usize.pow(10);
 
 /// [`ConstVec`] is a version of [`Vec`] that is usable in const contexts. It has
@@ -322,6 +324,22 @@ impl<T, const MAX_SIZE: usize> ConstVec<T, MAX_SIZE> {
             i += 1;
         }
         (left_vec, right_vec)
+    }
+}
+
+impl<const MAX_SIZE: usize> ConstVec<u8, MAX_SIZE> {
+    /// Convert the [`ConstVec`] into a [`ConstReadBuffer`]
+    ///
+    /// # Example
+    /// ```rust
+    /// # use const_serialize::{ConstVec, ConstReadBuffer};
+    /// const EMPTY: ConstVec<u8> = ConstVec::new();
+    /// const ONE: ConstVec<u8> = EMPTY.push(1);
+    /// const TWO: ConstVec<u8> = ONE.push(2);
+    /// const READ: ConstReadBuffer = TWO.read();
+    /// ```
+    pub const fn read(&self) -> ConstReadBuffer<'_> {
+        ConstReadBuffer::new(self.as_ref())
     }
 }
 
