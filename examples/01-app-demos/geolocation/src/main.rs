@@ -69,8 +69,6 @@ fn App() -> Element {
         let mut geolocation = geolocation;
         let mut last_position = last_position;
         let mut error = error;
-        let use_high_accuracy = use_high_accuracy;
-        let max_age_input = max_age_input;
         move |_| {
             let maximum_age = max_age_input.read().trim().parse::<u32>().unwrap_or(0);
 

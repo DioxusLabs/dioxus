@@ -11,13 +11,19 @@
 //! ## Usage
 //!
 //! ```rust
-//! use permissions::{static_permission, Permission};
+//! use permissions::{static_permission, Permission, PermissionBuilder, PermissionKind, LocationPrecision};
 //!
 //! // Declare a camera permission (static / compile-time)
-//! const CAMERA: Permission = static_permission!(Camera, description = "Take photos");
+//! const CAMERA: Permission = static_permission!(
+//!     Permission::new(PermissionKind::Camera, "Take photos")
+//! );
 //!
 //! // Declare a location permission with precision
-//! const LOCATION: Permission = static_permission!(Location(Fine), description = "Track your runs");
+//! const LOCATION: Permission = static_permission!(
+//!     PermissionBuilder::location(LocationPrecision::Fine)
+//!         .with_description("Track your runs")
+//!         .build()
+//! );
 //!
 //! // Use the permission
 //! println!("Camera permission: {}", CAMERA.description());
