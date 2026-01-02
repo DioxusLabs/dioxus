@@ -18,7 +18,7 @@ The macro accepts any expression that evaluates to a `Permission`. There are two
 Location and custom permissions use the builder pattern:
 
 ```rust
-use permissions_core::{Permission, PermissionBuilder, LocationPrecision};
+use permissions::{Permission, PermissionBuilder, LocationPrecision};
 use permissions_macro::static_permission;
 
 // Location permission with fine precision
@@ -51,7 +51,7 @@ const CUSTOM: Permission = static_permission!(
 Simple permissions like Camera, Microphone, and Notifications use direct construction:
 
 ```rust
-use permissions_core::{Permission, PermissionKind};
+use permissions::{Permission, PermissionKind};
 use permissions_macro::static_permission;
 
 // Camera permission

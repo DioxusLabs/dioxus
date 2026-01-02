@@ -13543,6 +13543,7 @@ version = "0.7.2"
 dependencies = [
  "const-serialize 0.8.0",
  "dx-macro-helpers",
+ "permissions",
  "permissions-core",
  "proc-macro2",
  "quote",

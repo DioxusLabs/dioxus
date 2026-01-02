@@ -20,7 +20,7 @@ use permission::PermissionParser;
 ///
 /// Location permissions use the builder pattern:
 /// ```rust
-/// use permissions_core::{Permission, PermissionBuilder, LocationPrecision};
+/// use permissions::{Permission, PermissionBuilder, LocationPrecision};
 /// use permissions_macro::static_permission;
 ///
 /// // Fine location
@@ -52,7 +52,7 @@ use permission::PermissionParser;
 ///
 /// Simple permissions like Camera, Microphone, and Notifications use direct construction:
 /// ```rust
-/// use permissions_core::{Permission, PermissionKind};
+/// use permissions::{Permission, PermissionKind};
 /// use permissions_macro::static_permission;
 ///
 /// const CAMERA: Permission = static_permission!(
