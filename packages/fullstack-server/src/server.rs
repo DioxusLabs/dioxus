@@ -133,11 +133,7 @@ impl DioxusRouterExt for Router<FullstackState> {
 
         for func in ServerFunction::collect() {
             if seen.insert(format!("{} {}", func.method(), func.path())) {
-                tracing::info!(
-                    "Registering server function: {} {}",
-                    func.method(),
-                    func.path()
-                );
+                tracing::info!("Registering: {} {}", func.method(), func.path());
 
                 self = self.route(func.path(), func.method_router())
             }
