@@ -1,12 +1,3 @@
-//! Shared macro helpers for linker-based binary embedding
-//!
-//! This crate provides generic utilities for serializing data at compile time
-//! and generating linker sections for embedding data in binaries. It can be used
-//! by any crate that needs to embed serialized data in executables using linker sections.
-
-pub use const_serialize::{ConstVec, SerializeConst};
-pub use const_serialize_07;
-
 /// Copy a slice into a constant sized buffer at compile time
 ///
 /// This is a generic utility that works with any byte slice and can be used
@@ -86,5 +77,3 @@ pub const fn serialize_to_const_with_layout_padded_07<T: const_serialize_07::Ser
     }
     data
 }
-
-pub mod linker;

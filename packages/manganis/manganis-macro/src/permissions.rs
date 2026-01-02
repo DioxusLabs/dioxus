@@ -12,7 +12,7 @@ use quote::{quote, ToTokens};
 /// wrapped in SymbolData::Permission and exports it with the __ASSETS__ prefix
 /// for unified symbol collection with assets.
 pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -> TokenStream2 {
-    dx_macro_helpers::linker::generate_link_section(
+    generate_link_section_inner(
         permission,
         permission_hash,
         "__ASSETS__",
@@ -21,6 +21,71 @@ pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -
         quote! { permissions::macro_helpers::ConstVec<u8, 4096> },
         true, // permissions needs #[used] attribute
     )
+}
+
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{quote, ToTokens};
+
+/// Generate a linker section for embedding serialized data in the binary
+///
+/// This function creates a static array containing serialized data and exports it
+/// with a unique symbol name that can be found by build tools. The exported symbol
+/// follows the pattern `{prefix}{hash}` and can be extracted from the binary after linking.
+///
+/// # Parameters
+///
+/// - `item`: The item to serialize (must implement `ToTokens`)
+/// - `hash`: Unique hash string for the export name
+/// - `prefix`: Export prefix (e.g., `"__MY_CRATE__"`)
+/// - `serialize_fn`: Path to the serialization function (as a `TokenStream`)
+/// - `copy_bytes_fn`: Path to the `copy_bytes` function (as a `TokenStream`)
+/// - `buffer_type`: The type of the buffer (e.g., `ConstVec<u8>` or `ConstVec<u8, 4096>`)
+/// - `add_used_attribute`: Whether to add the `#[used]` attribute (some crates need it)
+///
+/// # Example
+///
+/// ```ignore
+/// generate_link_section(
+///     my_data,
+///     "abc123",
+///     "__MY_CRATE__",
+///     quote! { my_crate::macro_helpers::serialize_data },
+///     quote! { my_crate::macro_helpers::copy_bytes },
+///     quote! { my_crate::macro_helpers::const_serialize::ConstVec<u8> },
+///     false,
+/// )
+/// ```
+pub fn generate_link_section_inner(
+    item: impl ToTokens,
+    hash: &str,
+    prefix: &str,
+    serialize_fn: TokenStream2,
+    copy_bytes_fn: TokenStream2,
+    buffer_type: TokenStream2,
+    add_used_attribute: bool,
+) -> TokenStream2 {
+    let position = proc_macro2::Span::call_site();
+    let export_name = syn::LitStr::new(&format!("{}{}", prefix, hash), position);
+
+    let used_attr = if add_used_attribute {
+        quote! { #[used] }
+    } else {
+        quote! {}
+    };
+
+    quote! {
+        // First serialize the item into a constant sized buffer
+        const __BUFFER: #buffer_type = #serialize_fn(&#item);
+        // Then pull out the byte slice
+        const __BYTES: &[u8] = __BUFFER.as_ref();
+        // And the length of the byte slice
+        const __LEN: usize = __BYTES.len();
+
+        // Now that we have the size of the item, copy the bytes into a static array
+        #used_attr
+        #[unsafe(export_name = #export_name)]
+        static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
+    }
 }
 
 /// Parser for the `static_permission!()` macro syntax (and `permission!()` alias)

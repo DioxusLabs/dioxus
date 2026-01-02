@@ -18,6 +18,8 @@ pub(crate) mod permissions;
 
 use linker::generate_link_section;
 
+pub(crate) mod helpers;
+
 use crate::{
     css_module::{expand_css_module_struct, CssModuleAttribute},
     permissions::PermissionParser,

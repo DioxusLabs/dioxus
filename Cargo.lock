@@ -7241,17 +7241,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
 
 [[package]]
-name = "dx-macro-helpers"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.7.2",
- "const-serialize 0.8.0",
- "proc-macro2",
- "quote",
- "syn 2.0.112",
-]
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11548,7 +11537,6 @@ version = "0.7.2"
 dependencies = [
  "const-serialize 0.7.2",
  "const-serialize 0.8.0",
- "dx-macro-helpers",
  "manganis-core 0.7.2",
  "manganis-macro 0.7.2",
  "thiserror 2.0.17",
@@ -11595,7 +11583,6 @@ name = "manganis-macro"
 version = "0.7.2"
 dependencies = [
  "dunce",
- "dx-macro-helpers",
  "macro-string",
  "manganis 0.7.2",
  "manganis-core 0.7.2",

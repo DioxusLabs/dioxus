@@ -41,7 +41,6 @@ members = [
     "packages/stores-macro",
     "packages/const-serialize",
     "packages/const-serialize-macro",
-    "packages/dx-macro-helpers",
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
@@ -171,8 +170,6 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.2" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.2" }
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.2" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.2" }
-
-dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "0.7.2" }
 
 # mobile plugin tooling
 dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "0.7.2" }

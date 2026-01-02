@@ -29,11 +29,11 @@ dioxus_platform_bridge::android_plugin!(
 
 ### Parameters
 
-| Name   | Required | Description |
-|--------|----------|-------------|
-| `plugin` | ✅ | Logical plugin identifier used for grouping in diagnostics. |
-| `aar` | ✅ | `{ path = "relative/path.aar" }` or `{ env = "ENV_WITH_PATH" }` to locate the artifact. Paths are resolved relative to `CARGO_MANIFEST_DIR`. |
-| `deps` | optional | Array of strings (typically Gradle `implementation(...)` lines) appended verbatim to the generated `build.gradle.kts`. |
+| Name     | Required | Description                                                                                                                                  |
+| -------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `plugin` | ✅        | Logical plugin identifier used for grouping in diagnostics.                                                                                  |
+| `aar`    | ✅        | `{ path = "relative/path.aar" }` or `{ env = "ENV_WITH_PATH" }` to locate the artifact. Paths are resolved relative to `CARGO_MANIFEST_DIR`. |
+| `deps`   | optional | Array of strings (typically Gradle `implementation(...)` lines) appended verbatim to the generated `build.gradle.kts`.                       |
 
 The macro resolves the artifact path at compile time, wraps it together with the plugin identifier
 and dependency strings in `SymbolData::AndroidArtifact`, and emits it via a linker symbol. No Java
@@ -57,11 +57,11 @@ dioxus_platform_bridge::ios_plugin!(
 
 ### Parameters
 
-| Name   | Required | Description |
-|--------|----------|-------------|
-| `plugin` | ✅ | Logical plugin identifier. |
-| `spm.path` | ✅ | Relative path (from `CARGO_MANIFEST_DIR`) to the Swift package folder. |
-| `spm.product` | ✅ | The SwiftPM product name that was linked into the Rust binary. |
+| Name          | Required | Description                                                            |
+| ------------- | -------- | ---------------------------------------------------------------------- |
+| `plugin`      | ✅        | Logical plugin identifier.                                             |
+| `spm.path`    | ✅        | Relative path (from `CARGO_MANIFEST_DIR`) to the Swift package folder. |
+| `spm.product` | ✅        | The SwiftPM product name that was linked into the Rust binary.         |
 
 The macro emits `SymbolData::SwiftPackage` entries containing the absolute package path and product
 name. The CLI uses those entries as a signal to run `swift-stdlib-tool` and embed the Swift runtime
@@ -69,8 +69,6 @@ frameworks when bundling for Apple platforms.
 
 ## Implementation Notes
 
-- Serialization uses `dx-macro-helpers` which ensures each record is padded to 4 KB for consistent
-  linker output.
 - Because all metadata ends up in the shared `__ASSETS__*` section, plugin authors do not need any
   additional build steps—the CLI automatically consumes the data in the same pass as assets and
   permissions.
