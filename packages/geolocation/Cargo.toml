@@ -20,15 +20,14 @@ ios = { level = "full", notes = "" }
 
 [features]
 default = []
-metadata = ["dioxus-platform-bridge/metadata"]
+# metadata = ["dioxus-platform-bridge/metadata"]
 
 [dependencies]
 serde = "1.0"
 serde_json = "1.0"
 log = "0.4"
 thiserror = "1.0"
-dioxus-platform-bridge = { workspace = true }
-permissions = { workspace = true }
+manganis = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"

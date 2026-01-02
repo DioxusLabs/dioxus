@@ -28,8 +28,6 @@ depinfo = { workspace = true }
 subsecond-types = { workspace = true }
 dioxus-cli-telemetry = { workspace =  true }
 dioxus-component-manifest = { workspace = true }
-permissions = { workspace = true }
-dioxus-platform-bridge = { workspace = true, features = ["metadata"] }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }

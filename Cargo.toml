@@ -42,9 +42,6 @@ members = [
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-macro-helpers",
-    "packages/permissions/permissions-core",
-    "packages/permissions/permissions-macro",
-    "packages/permissions/permissions",
     "packages/dx-wire-format",
     "packages/logger",
     "packages/config-macros",
@@ -81,10 +78,6 @@ members = [
     "packages/manganis/manganis",
     "packages/manganis/manganis-core",
     "packages/manganis/manganis-macro",
-
-    # platform-bridge
-    "packages/platform-bridge",
-    "packages/platform-bridge-macro",
 
     # wasm-split
     "packages/wasm-split/wasm-split",
@@ -182,20 +175,12 @@ dioxus-cli-config = { path = "packages/cli-config", version = "0.7.2" }
 
 dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "0.7.2" }
 
-# permissions
-permissions-core = { path = "packages/permissions/permissions-core", version = "=0.7.2" }
-permissions-macro = { path = "packages/permissions/permissions-macro", version = "=0.7.2" }
-permissions = { path = "packages/permissions/permissions", version = "=0.7.2" }
-
-# platform bridge
-dioxus-platform-bridge = { path = "packages/platform-bridge", version = "=0.7.2" }
-platform-bridge-macro = { path = "packages/platform-bridge-macro", version = "=0.7.2" }
-
 # geolocation
-dioxus-geolocation = { path = "packages/geolocation", version = "=0.7.2" }
+dioxus-geolocation = { path = "packages/geolocation", version = "0.7.2" }
 
 # mobile plugin tooling
-dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "=0.7.2" }
+dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "0.7.2" }
+
 # const-serialize
 # const-serialize. these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
 # once the workspace moves onto 0.8, we can clean this up, moving the const-serialize stuff back to normal versions

@@ -5540,7 +5540,6 @@ dependencies = [
  "dioxus-dx-wire-format",
  "dioxus-fullstack 0.7.2",
  "dioxus-html 0.7.2",
- "dioxus-platform-bridge",
  "dioxus-rsx 0.7.2",
  "dioxus-rsx-hotreload",
  "dioxus-rsx-rosetta",
@@ -5578,7 +5577,6 @@ dependencies = [
  "open",
  "path-absolutize",
  "pdb",
- "permissions",
  "plist",
  "posthog-rs",
  "prettyplease",
@@ -5660,7 +5658,6 @@ dependencies = [
  "manganis-core 0.7.2",
  "mozjpeg",
  "object 0.37.3",
- "permissions",
  "png",
  "rayon",
  "serde",
@@ -6324,11 +6321,10 @@ name = "dioxus-geolocation"
 version = "0.7.2"
 dependencies = [
  "dioxus-mobile-plugin-build",
- "dioxus-platform-bridge",
  "jni 0.21.1",
  "log",
+ "manganis 0.7.2",
  "objc2 0.6.3",
- "permissions",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -6609,20 +6605,6 @@ dependencies = [
  "keyboard-types",
  "rustc-hash 2.1.1",
  "tracing",
-]
-
-[[package]]
-name = "dioxus-platform-bridge"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.8.0",
- "const-serialize-macro 0.8.0-alpha.0",
- "jni 0.21.1",
- "ndk-context",
- "objc2 0.6.3",
- "permissions",
- "platform-bridge-macro",
- "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -11584,6 +11566,7 @@ dependencies = [
  "dx-macro-helpers",
  "manganis-core 0.7.2",
  "manganis-macro 0.7.2",
+ "thiserror 2.0.17",
 ]
 
 [[package]]
@@ -13518,39 +13501,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
-name = "permissions"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.8.0",
- "dx-macro-helpers",
- "permissions-core",
- "permissions-macro",
-]
-
-[[package]]
-name = "permissions-core"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.8.0",
- "const-serialize-macro 0.8.0-alpha.0",
- "manganis-core 0.7.2",
- "serde",
-]
-
-[[package]]
-name = "permissions-macro"
-version = "0.7.2"
-dependencies = [
- "const-serialize 0.8.0",
- "dx-macro-helpers",
- "permissions",
- "permissions-core",
- "proc-macro2",
- "quote",
- "syn 2.0.112",
-]
-
-[[package]]
 name = "pest"
 version = "2.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13933,16 +13883,6 @@ name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
-
-[[package]]
-name = "platform-bridge-macro"
-version = "0.7.2"
-dependencies = [
- "dx-macro-helpers",
- "proc-macro2",
- "quote",
- "syn 2.0.112",
-]
 
 [[package]]
 name = "plist"

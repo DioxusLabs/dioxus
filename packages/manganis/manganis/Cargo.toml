@@ -18,7 +18,26 @@ dx-macro-helpers = { workspace = true }
 const-serialize-07 = { workspace = true }
 manganis-core = { workspace = true }
 manganis-macro = { workspace = true }
+thiserror = { workspace = true }
+
+# [target.'cfg(target_os = "android")'.dependencies]
+# jni = "0.21"
+# ndk-context = "0.1.1"
+
+# [target.'cfg(target_os = "ios")'.dependencies]
+# objc2 = "0.6.3"
+
+# [target.'cfg(target_os = "macos")'.dependencies]
+# objc2 = "0.6.3"
 
 [features]
 default = []
 dioxus = ["manganis-core/dioxus"]
+
+
+# metadata = [
+#     "dep:const-serialize",
+#     "dep:const-serialize-macro",
+#     "dep:platform-bridge-macro",
+#     "dep:manganis",
+# ]
