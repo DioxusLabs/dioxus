@@ -98,7 +98,7 @@ members = [
     "examples/01-app-demos/bluetooth-scanner",
     "examples/01-app-demos/file-explorer",
     "examples/01-app-demos/hotdog",
-    "examples/01-app-demos/geolocation",
+    "examples/01-app-demos/geolocation-native-plugin",
 
     # Fullstack examples
     "examples/07-fullstack/hello-world",
@@ -116,7 +116,6 @@ members = [
     "examples/10-integrations/bevy",
 
     # misc packages
-    "packages/geolocation",
     "packages/mobile-plugin-build",
 ]
 
@@ -174,9 +173,6 @@ dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.2" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.2" }
 
 dx-macro-helpers = { path = "packages/dx-macro-helpers", version = "0.7.2" }
-
-# geolocation
-dioxus-geolocation = { path = "packages/geolocation", version = "0.7.2" }
 
 # mobile plugin tooling
 dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "0.7.2" }

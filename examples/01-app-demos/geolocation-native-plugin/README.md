@@ -1,6 +1,6 @@
 # Geolocation demo
 
-A minimal Dioxus application that exercises the `dioxus-geolocation` plugin. The UI lets you:
+A minimal Dioxus application that implements a native plugin.
 
 - Inspect and request location permissions using the native Android/iOS dialogs.
 - Configure one-shot position requests (high-accuracy toggle + maximum cached age).

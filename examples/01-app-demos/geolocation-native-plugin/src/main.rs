@@ -1,3 +1,5 @@
+//! A simple Dioxus app demonstrating how to build a native plugin using manganis.
+
 use dioxus::prelude::*;
 use dioxus_geolocation::{
     Geolocation, PermissionState, PermissionStatus, Position, PositionOptions,
