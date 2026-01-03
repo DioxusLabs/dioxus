@@ -1112,6 +1112,7 @@ impl BuildRequest {
                 {
                     // Compile Swift packages from source
                     self.compile_swift_sources(&artifacts.swift_sources)
+                        .await
                         .context("Failed to compile Swift packages")?;
 
                     // Then embed Swift standard libraries
@@ -1633,7 +1634,11 @@ impl BuildRequest {
     }
 
     /// Add a module include to settings.gradle if not already present.
-    fn ensure_settings_gradle_include(&self, settings_gradle: &Path, plugin_name: &str) -> Result<()> {
+    fn ensure_settings_gradle_include(
+        &self,
+        settings_gradle: &Path,
+        plugin_name: &str,
+    ) -> Result<()> {
         use std::fs;
 
         let include_line = format!("include ':plugins:{}'", plugin_name);
@@ -1657,7 +1662,7 @@ impl BuildRequest {
     /// 2. Creates an umbrella Package.swift that includes all plugins as dependencies
     /// 3. Runs a single `swift build` to compile everything together
     /// 4. The resulting static libraries are linked into the final executable
-    fn compile_swift_sources(
+    async fn compile_swift_sources(
         &self,
         swift_sources: &super::ios_swift::SwiftSourceManifest,
     ) -> Result<()> {
@@ -1727,9 +1732,10 @@ impl BuildRequest {
         };
 
         // Get SDK path
-        let sdk_output = Command::new("xcrun")
+        let sdk_output = tokio::process::Command::new("xcrun")
             .args(["--sdk", sdk_name, "--show-sdk-path"])
             .output()
+            .await
             .context("Failed to run xcrun to find SDK path")?;
 
         if !sdk_output.status.success() {
@@ -1758,23 +1764,26 @@ impl BuildRequest {
             bundled_packages.len()
         );
 
-        let status = Command::new("xcrun")
+        let output = tokio::process::Command::new("xcrun")
             .args(["swift", "build"])
             .args(["--package-path", swift_plugins_dir.to_str().unwrap()])
             .args(["--configuration", configuration])
             .args(["--triple", swift_target])
             .args(["--sdk", &sdk_path])
             .args(["--build-path", build_dir.to_str().unwrap()])
-            .status()
-            .context(format!(
-                "Failed to run swift build for plugins at {}",
-                swift_plugins_dir.display()
-            ))?;
+            .output()
+            .await?;
+        // .context(format!(
+        //     "Failed to run swift build for plugins at {}",
+        //     swift_plugins_dir.display()
+        // ))?;
 
-        if !status.success() {
+        if !output.status.success() {
             anyhow::bail!(
-                "Swift build failed for plugins at {}",
-                swift_plugins_dir.display()
+                "Swift build failed for plugins at {}.\n{}\n{}",
+                swift_plugins_dir.display(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
             );
         }
 
@@ -1802,10 +1811,7 @@ impl BuildRequest {
 
         for (name, path) in packages {
             let rel_path = path.file_name().unwrap().to_string_lossy();
-            dependencies.push_str(&format!(
-                "        .package(path: \"./{}\"),\n",
-                rel_path
-            ));
+            dependencies.push_str(&format!("        .package(path: \"./{}\"),\n", rel_path));
             target_deps.push_str(&format!(
                 "            .product(name: \"{}\", package: \"{}\"),\n",
                 name, rel_path
