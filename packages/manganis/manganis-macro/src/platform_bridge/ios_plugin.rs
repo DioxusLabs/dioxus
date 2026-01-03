@@ -7,6 +7,7 @@ use syn::{parse::Parse, parse::ParseStream, Token};
 pub struct IosPluginParser {
     /// Plugin identifier (e.g., "geolocation")
     plugin_name: String,
+
     /// Swift Package declaration
     spm: SpmDeclaration,
 }
