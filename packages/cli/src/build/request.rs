@@ -355,7 +355,7 @@ use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
-use super::HotpatchModuleCache;
+use super::{permissions::PermissionManifest, HotpatchModuleCache};
 
 /// This struct is used to plan the build process.
 ///
@@ -455,7 +455,7 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
-    pub(crate) permissions: super::permissions::PermissionManifest,
+    pub(crate) permissions: PermissionManifest,
     pub(crate) android_artifacts: crate::build::ios_swift::AndroidArtifactManifest,
     pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
     pub(crate) mode: BuildMode,
@@ -1088,9 +1088,11 @@ impl BuildRequest {
                 ctx.status_start_bundle();
 
                 self.strip_binary(&artifacts).await?;
+
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
+
                 self.write_frameworks(ctx, &artifacts.direct_rustc)
                     .await
                     .context("Failed to write frameworks")?;
@@ -1129,40 +1131,23 @@ impl BuildRequest {
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
+
                 self.assemble(ctx)
                     .await
                     .context("Failed to assemble build")?;
+
+                // Populate the patch cache if we're in fat mode
+                if matches!(ctx.mode, BuildMode::Fat) {
+                    artifacts.patch_cache =
+                        Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
+                }
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
         }
 
-        // Populate the patch cache if we're in fat mode
-        if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
-        }
-
-        // Calculate some final metadata for logging
-        let time_taken = SystemTime::now()
-            .duration_since(time_start)
-            .map(|d| d.as_millis())
-            .unwrap_or_default();
-        tracing::debug!(
-            telemetry = %serde_json::json!({
-                "event": "build_and_bundle_complete",
-                "time_taken": time_taken,
-                "mode": match ctx.mode {
-                    BuildMode::Base { .. } => "base",
-                    BuildMode::Fat => "fat",
-                    BuildMode::Thin { .. } => "thin",
-                },
-                "blah": 123,
-                "triple": self.triple.to_string(),
-                "format": self.bundle.to_string(),
-                "num_dependencies": self.workspace.krates.len(),
-            }),
-            "Build completed in {time_taken}ms",
-        );
+        // Record the build duration as a telemetry event
+        self.record_build_duration(time_start, &ctx);
 
         Ok(artifacts)
     }
@@ -1397,7 +1382,7 @@ impl BuildRequest {
         ctx: &BuildContext,
     ) -> Result<(
         AssetManifest,
-        super::permissions::PermissionManifest,
+        PermissionManifest,
         super::ios_swift::AndroidArtifactManifest,
         super::ios_swift::SwiftSourceManifest,
     )> {
@@ -1411,7 +1396,7 @@ impl BuildRequest {
         if skip_assets && skip_permissions && !needs_android_artifacts && !needs_swift_packages {
             return Ok((
                 AssetManifest::default(),
-                super::permissions::PermissionManifest::default(),
+                PermissionManifest::default(),
                 super::ios_swift::AndroidArtifactManifest::default(),
                 super::ios_swift::SwiftSourceManifest::default(),
             ));
@@ -1460,10 +1445,9 @@ impl BuildRequest {
         };
 
         let permission_manifest = if skip_permissions {
-            super::permissions::PermissionManifest::default()
+            PermissionManifest::default()
         } else {
-            let manifest =
-                super::permissions::PermissionManifest::from_permissions(extracted_permissions);
+            let manifest = PermissionManifest::from_permissions(extracted_permissions);
 
             let platform = match self.bundle {
                 BundleFormat::Android => Some(manganis_core::Platform::Android),
@@ -2011,7 +1995,7 @@ let package = Package(
     /// Update platform manifests with permissions after they're collected
     pub(crate) fn update_manifests_with_permissions(
         &self,
-        permissions: &super::permissions::PermissionManifest,
+        permissions: &PermissionManifest,
     ) -> Result<()> {
         match self.bundle {
             BundleFormat::Android => self.update_android_manifest_with_permissions(permissions),
@@ -2029,7 +2013,7 @@ let package = Package(
 
     fn update_android_manifest_with_permissions(
         &self,
-        permissions: &super::permissions::PermissionManifest,
+        permissions: &PermissionManifest,
     ) -> Result<()> {
         let android_permissions = super::permissions::get_android_permissions(permissions);
         if android_permissions.is_empty() {
@@ -2080,10 +2064,7 @@ let package = Package(
         Ok(())
     }
 
-    fn update_ios_manifest_with_permissions(
-        &self,
-        permissions: &super::permissions::PermissionManifest,
-    ) -> Result<()> {
+    fn update_ios_manifest_with_permissions(&self, permissions: &PermissionManifest) -> Result<()> {
         let ios_permissions = super::permissions::get_ios_permissions(permissions);
         if ios_permissions.is_empty() {
             tracing::debug!("No iOS permissions found to add to manifest");
@@ -2130,7 +2111,7 @@ let package = Package(
 
     fn update_macos_manifest_with_permissions(
         &self,
-        permissions: &super::permissions::PermissionManifest,
+        permissions: &PermissionManifest,
     ) -> Result<()> {
         let macos_permissions = super::permissions::get_macos_permissions(permissions);
         if macos_permissions.is_empty() {
@@ -6561,5 +6542,31 @@ We checked the folders:
         std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
 
         Ok(())
+    }
+
+    /// Log the build duration and some metadata about the build, saving a telemetry event.
+    fn record_build_duration(&self, time_start: SystemTime, ctx: &BuildContext) {
+        // Calculate some final metadata for logging
+        let time_taken = SystemTime::now()
+            .duration_since(time_start)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match ctx.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.triple.to_string(),
+                "format": self.bundle.to_string(),
+                "num_dependencies": self.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
     }
 }

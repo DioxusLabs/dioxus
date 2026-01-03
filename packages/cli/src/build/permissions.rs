@@ -9,11 +9,57 @@
 //!
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
 //! and do not require build-time manifest generation.
-use manganis_core::Platform;
+use manganis_core::{Permission, Platform};
 use serde::Serialize;
 
-/// Alias the shared manifest type from the permissions crate for CLI-specific helpers
-pub type PermissionManifest = manganis_core::PermissionManifest;
+/// A collection of permissions that can be serialized and embedded
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct PermissionManifest {
+    /// All permissions declared in the application
+    permissions: Vec<Permission>,
+}
+
+impl PermissionManifest {
+    /// Create a new empty permission manifest
+    pub fn new() -> Self {
+        Self {
+            permissions: Vec::new(),
+        }
+    }
+
+    /// Create a manifest from an existing list of permissions
+    pub fn from_permissions(permissions: Vec<Permission>) -> Self {
+        Self { permissions }
+    }
+
+    /// Add a permission to the manifest
+    pub fn add_permission(&mut self, permission: Permission) {
+        self.permissions.push(permission);
+    }
+
+    /// Get all permissions in the manifest
+    pub fn permissions(&self) -> &[Permission] {
+        &self.permissions
+    }
+
+    /// Get permissions for a specific platform
+    pub fn permissions_for_platform(&self, platform: Platform) -> Vec<&Permission> {
+        self.permissions
+            .iter()
+            .filter(|p| p.supports_platform(platform))
+            .collect()
+    }
+
+    /// Check if the manifest contains any permissions
+    pub fn is_empty(&self) -> bool {
+        self.permissions.is_empty()
+    }
+
+    /// Get the number of permissions in the manifest
+    pub fn len(&self) -> usize {
+        self.permissions.len()
+    }
+}
 
 /// Android permission for Handlebars template
 #[derive(Debug, Clone, Serialize)]
@@ -77,13 +123,4 @@ pub(crate) fn get_macos_permissions(manifest: &PermissionManifest) -> Vec<MacosP
             })
         })
         .collect()
-}
-
-/// Check if permissions are needed for the platform
-#[allow(dead_code)]
-pub(crate) fn needs_permission_manifest(platform: Platform) -> bool {
-    matches!(
-        platform,
-        Platform::Android | Platform::Ios | Platform::Macos
-    )
 }

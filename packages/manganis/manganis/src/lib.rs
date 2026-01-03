@@ -50,7 +50,7 @@ pub mod permissions {
 
     pub use manganis_core::{
         CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
-        PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
+        Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
     };
     pub use manganis_macro::permission;
 

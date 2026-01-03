@@ -99,55 +99,6 @@ impl Hash for Permission {
     }
 }
 
-/// A collection of permissions that can be serialized and embedded
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct PermissionManifest {
-    /// All permissions declared in the application
-    permissions: Vec<Permission>,
-}
-
-impl PermissionManifest {
-    /// Create a new empty permission manifest
-    pub fn new() -> Self {
-        Self {
-            permissions: Vec::new(),
-        }
-    }
-
-    /// Create a manifest from an existing list of permissions
-    pub fn from_permissions(permissions: Vec<Permission>) -> Self {
-        Self { permissions }
-    }
-
-    /// Add a permission to the manifest
-    pub fn add_permission(&mut self, permission: Permission) {
-        self.permissions.push(permission);
-    }
-
-    /// Get all permissions in the manifest
-    pub fn permissions(&self) -> &[Permission] {
-        &self.permissions
-    }
-
-    /// Get permissions for a specific platform
-    pub fn permissions_for_platform(&self, platform: Platform) -> Vec<&Permission> {
-        self.permissions
-            .iter()
-            .filter(|p| p.supports_platform(platform))
-            .collect()
-    }
-
-    /// Check if the manifest contains any permissions
-    pub fn is_empty(&self) -> bool {
-        self.permissions.is_empty()
-    }
-
-    /// Get the number of permissions in the manifest
-    pub fn len(&self) -> usize {
-        self.permissions.len()
-    }
-}
-
 /// Builder for custom permissions with platform-specific identifiers
 ///
 /// This builder uses named methods to specify platform identifiers,
