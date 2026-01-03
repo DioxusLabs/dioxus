@@ -347,20 +347,57 @@ impl FfiBridgeParser {
         // Generate opaque type wrappers
         for ty in &self.types {
             let name = &ty.name;
+            // Convert CamelCase to com.example.ClassName format
+            let class_name = format!("com/example/{}", name);
+            let class_name_lit = syn::LitStr::new(&class_name, proc_macro2::Span::call_site());
+
             let type_def = quote! {
                 /// Opaque wrapper around a JNI GlobalRef
                 pub struct #name {
-                    inner: ::jni::objects::GlobalRef,
+                    inner: manganis::jni::objects::GlobalRef,
                 }
 
                 impl #name {
+                    /// Create a new instance by looking up the Java class at runtime
+                    pub fn new() -> Result<Self, String> {
+                        // Use with_activity which returns Option<R>, wrapping our Result in the Option
+                        let inner_result: Option<Result<Self, String>> = manganis::android::with_activity(|mut env, _activity| {
+                            // Find the class
+                            let class_result = env.find_class(#class_name_lit);
+                            let class = match class_result {
+                                Ok(c) => c,
+                                Err(e) => return Some(Err(format!("Failed to find class {}: {:?}", #class_name_lit, e))),
+                            };
+
+                            // Create a new instance
+                            let instance = match env.new_object(&class, "()V", &[]) {
+                                Ok(i) => i,
+                                Err(e) => return Some(Err(format!("Failed to create instance of {}: {:?}", #class_name_lit, e))),
+                            };
+
+                            // Convert to global ref
+                            let global = match env.new_global_ref(&instance) {
+                                Ok(g) => g,
+                                Err(e) => return Some(Err(format!("Failed to create global ref: {:?}", e))),
+                            };
+
+                            Some(Ok(Self { inner: global }))
+                        });
+
+                        // Convert Option<Result<T, E>> to Result<T, E>
+                        match inner_result {
+                            Some(result) => result,
+                            None => Err("Failed to get JNI environment".to_string()),
+                        }
+                    }
+
                     /// Create from an existing GlobalRef
-                    pub fn from_global_ref(global: ::jni::objects::GlobalRef) -> Self {
+                    pub fn from_global_ref(global: manganis::jni::objects::GlobalRef) -> Self {
                         Self { inner: global }
                     }
 
                     /// Get the underlying JObject
-                    pub fn as_obj(&self) -> &::jni::objects::JObject<'_> {
+                    pub fn as_obj(&self) -> &manganis::jni::objects::JObject<'_> {
                         self.inner.as_obj()
                     }
                 }
@@ -414,106 +451,59 @@ impl FfiBridgeParser {
         let jni_sig = format!("({}){}", jni_args, jni_ret);
         let jni_sig_lit = syn::LitStr::new(&jni_sig, proc_macro2::Span::call_site());
 
-        // Build JNI call arguments
+        // Build JNI call arguments - each arg needs separate binding before the call
+        let mut arg_bindings = Vec::new();
         let mut jni_call_args = Vec::new();
-        for arg in &func.args {
+        for (i, arg) in func.args.iter().enumerate() {
             let name = &arg.name;
-            let conversion = match &arg.ty {
-                ForeignType::Bool => quote! {
-                    ::jni::objects::JValue::Bool(if #name { 1 } else { 0 })
-                },
-                ForeignType::I8 | ForeignType::U8 => quote! {
-                    ::jni::objects::JValue::Byte(#name as i8)
-                },
-                ForeignType::I16 | ForeignType::U16 => quote! {
-                    ::jni::objects::JValue::Short(#name as i16)
-                },
-                ForeignType::I32 | ForeignType::U32 => quote! {
-                    ::jni::objects::JValue::Int(#name as i32)
-                },
-                ForeignType::I64 | ForeignType::U64 => quote! {
-                    ::jni::objects::JValue::Long(#name as i64)
-                },
-                ForeignType::F32 => quote! {
-                    ::jni::objects::JValue::Float(#name)
-                },
-                ForeignType::F64 => quote! {
-                    ::jni::objects::JValue::Double(#name)
-                },
-                ForeignType::String | ForeignType::StrRef => quote! {
-                    {
-                        let jstr = env.new_string(#name).ok()?;
-                        ::jni::objects::JValue::Object(&jstr)
-                    }
-                },
-                _ => quote! {
-                    ::jni::objects::JValue::Object(&#name.inner.as_obj())
-                },
-            };
-            jni_call_args.push(conversion);
-        }
+            let binding_name = format_ident!("__jni_arg_{}", i);
 
-        // Build result conversion
-        let result_conversion = match &func.return_type {
-            ForeignType::Unit => quote! { Some(()) },
-            ForeignType::Bool => quote! {
-                result.z().ok().map(|v| v != 0)
-            },
-            ForeignType::I32 | ForeignType::U32 => quote! {
-                result.i().ok().map(|v| v as _)
-            },
-            ForeignType::I64 | ForeignType::U64 => quote! {
-                result.j().ok().map(|v| v as _)
-            },
-            ForeignType::F32 => quote! {
-                result.f().ok()
-            },
-            ForeignType::F64 => quote! {
-                result.d().ok()
-            },
-            ForeignType::String => quote! {
-                {
-                    let obj = result.l().ok()?;
-                    if obj.is_null() {
-                        return Some(String::new());
-                    }
-                    let jstr = ::jni::objects::JString::from(obj);
-                    let rust_str: String = env.get_string(&jstr).ok()?.into();
-                    Some(rust_str)
-                }
-            },
-            ForeignType::Option(inner) => {
-                // Handle Option<String> specially
-                match inner.as_ref() {
-                    ForeignType::String => quote! {
-                        {
-                            let obj = result.l().ok()?;
-                            if obj.is_null() {
-                                Some(None)
-                            } else {
-                                let jstr = ::jni::objects::JString::from(obj);
-                                let rust_str: String = env.get_string(&jstr).ok()?.into();
-                                Some(Some(rust_str))
-                            }
-                        }
+            let (binding, arg_expr) = match &arg.ty {
+                ForeignType::Bool => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Bool(if #name { 1 } else { 0 }); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::I8 | ForeignType::U8 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Byte(#name as i8); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::I16 | ForeignType::U16 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Short(#name as i16); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::I32 | ForeignType::U32 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Int(#name as i32); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::I64 | ForeignType::U64 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Long(#name as i64); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::F32 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Float(#name); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::F64 => (
+                    quote! { let #binding_name = manganis::jni::objects::JValue::Double(#name); },
+                    quote! { #binding_name.borrow() },
+                ),
+                ForeignType::String | ForeignType::StrRef => (
+                    quote! {
+                        let #binding_name = match env.new_string(#name) {
+                            Ok(s) => s,
+                            Err(e) => return Some(Err(format!("Failed to create JNI string: {:?}", e))),
+                        };
                     },
-                    _ => quote! {
-                        {
-                            let obj = result.l().ok()?;
-                            if obj.is_null() {
-                                Some(None)
-                            } else {
-                                // TODO: Handle other optional types
-                                Some(Some(Default::default()))
-                            }
-                        }
-                    },
-                }
-            }
-            _ => quote! {
-                Some(Default::default()) // TODO: Handle other return types
-            },
-        };
+                    quote! { (&&#binding_name).into() },
+                ),
+                _ => (
+                    quote! { let #binding_name = #name.inner.as_obj(); },
+                    quote! { (&#binding_name).into() },
+                ),
+            };
+            arg_bindings.push(binding);
+            jni_call_args.push(arg_expr);
+        }
 
         // Build the call expression
         let call_target = if func.receiver.is_some() {
@@ -524,18 +514,124 @@ impl FfiBridgeParser {
 
         let method_name_lit = syn::LitStr::new(&method_name, proc_macro2::Span::call_site());
 
+        // Generate result conversion that takes env as a parameter
+        // Note: call_method returns JValueGen<JObject<'_>> (owned), not a reference
+        let result_conversion_fn = match &func.return_type {
+            ForeignType::Unit => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, _result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<(), String> {
+                    Ok(())
+                }
+            },
+            ForeignType::Bool => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<bool, String> {
+                    result.z()
+                        .map(|v| v != 0)
+                        .map_err(|e| format!("Failed to get boolean result: {:?}", e))
+                }
+            },
+            ForeignType::I32 | ForeignType::U32 => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<i32, String> {
+                    result.i()
+                        .map_err(|e| format!("Failed to get int result: {:?}", e))
+                }
+            },
+            ForeignType::I64 | ForeignType::U64 => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<i64, String> {
+                    result.j()
+                        .map_err(|e| format!("Failed to get long result: {:?}", e))
+                }
+            },
+            ForeignType::F32 => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<f32, String> {
+                    result.f()
+                        .map_err(|e| format!("Failed to get float result: {:?}", e))
+                }
+            },
+            ForeignType::F64 => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<f64, String> {
+                    result.d()
+                        .map_err(|e| format!("Failed to get double result: {:?}", e))
+                }
+            },
+            ForeignType::String => quote! {
+                fn convert_result<'a>(env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<String, String> {
+                    let obj = result.l()
+                        .map_err(|e| format!("Failed to get object result: {:?}", e))?;
+                    if obj.is_null() {
+                        return Ok(String::new());
+                    }
+                    let jstr: manganis::jni::objects::JString = obj.into();
+                    let rust_str: String = env.get_string(&jstr)
+                        .map_err(|e| format!("Failed to get string: {:?}", e))?
+                        .into();
+                    Ok(rust_str)
+                }
+            },
+            ForeignType::Option(inner) => {
+                match inner.as_ref() {
+                    ForeignType::String => quote! {
+                        fn convert_result<'a>(env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<String>, String> {
+                            let obj = result.l()
+                                .map_err(|e| format!("Failed to get object result: {:?}", e))?;
+                            if obj.is_null() {
+                                Ok(None)
+                            } else {
+                                let jstr: manganis::jni::objects::JString = obj.into();
+                                let rust_str: String = env.get_string(&jstr)
+                                    .map_err(|e| format!("Failed to get string: {:?}", e))?
+                                    .into();
+                                Ok(Some(rust_str))
+                            }
+                        }
+                    },
+                    _ => quote! {
+                        fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<()>, String> {
+                            let obj = result.l()
+                                .map_err(|e| format!("Failed to get object result: {:?}", e))?;
+                            if obj.is_null() {
+                                Ok(None)
+                            } else {
+                                Ok(Some(()))
+                            }
+                        }
+                    },
+                }
+            }
+            _ => quote! {
+                fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, _result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<(), String> {
+                    Ok(())
+                }
+            },
+        };
+
         quote! {
-            pub fn #fn_name(#(#rust_args),*) -> Option<#return_type> {
-                manganis::android::with_activity(|env, _activity| {
-                    let result = env.call_method(
+            pub fn #fn_name(#(#rust_args),*) -> Result<#return_type, String> {
+                // Use with_activity which returns Option<R>, wrapping our Result in the Option
+                let inner_result: Option<Result<#return_type, String>> = manganis::android::with_activity(|mut env, _activity| {
+                    // Define result conversion as a local function to avoid closure capture issues
+                    #result_conversion_fn
+
+                    // Perform the JNI call directly in the closure
+                    #(#arg_bindings)*
+
+                    let call_result = env.call_method(
                         #call_target,
                         #method_name_lit,
                         #jni_sig_lit,
                         &[#(#jni_call_args),*],
-                    ).ok()?;
+                    );
 
-                    #result_conversion
-                })?
+                    match call_result {
+                        Ok(result) => Some(convert_result(&mut env, result)),
+                        Err(e) => Some(Err(format!("JNI call failed: {:?}", e))),
+                    }
+                });
+
+                // Convert Option<Result<T, E>> to Result<T, E>
+                match inner_result {
+                    Some(result) => result,
+                    None => Err("Failed to get JNI environment".to_string()),
+                }
             }
         }
     }

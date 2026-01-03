@@ -1566,6 +1566,9 @@ impl BuildRequest {
                 let module_dir = plugins_dir.join(plugin_name);
                 self.copy_dir_recursive(&artifact_path, &module_dir)?;
 
+                // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
+                self.strip_gradle_plugin_versions(&module_dir)?;
+
                 // Add to settings.gradle
                 self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
 
@@ -1651,6 +1654,41 @@ impl BuildRequest {
             } else {
                 std::fs::copy(&src_path, &dst_path)?;
             }
+        }
+
+        Ok(())
+    }
+
+    /// Strip version specifiers from build.gradle.kts plugins block.
+    ///
+    /// When a plugin module is included as a subproject, having version specifiers in the
+    /// plugins block causes conflicts because the parent project already has the plugins
+    /// on the classpath. This function removes version specifications like:
+    /// - `version "8.4.2"` or `version "1.9.24"`
+    /// - Entire version calls from plugin declarations
+    fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
+        use std::fs;
+
+        let build_gradle = module_dir.join("build.gradle.kts");
+        if !build_gradle.exists() {
+            return Ok(());
+        }
+
+        let contents = fs::read_to_string(&build_gradle)?;
+
+        // Remove version specifications from plugin declarations
+        // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
+        // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
+        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#)
+            .expect("Invalid regex");
+        let cleaned = version_pattern.replace_all(&contents, "");
+
+        if cleaned != contents {
+            fs::write(&build_gradle, cleaned.as_ref())?;
+            tracing::debug!(
+                "Stripped version specifiers from {}",
+                build_gradle.display()
+            );
         }
 
         Ok(())

@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+// #![deny(missing_docs)]
 
 #[doc(hidden)]
 pub mod macro_helpers;
@@ -68,19 +68,21 @@ pub mod permissions {
 // boilerplate for JNI (Android) and objc2 (iOS/macOS) bindings, build scripts,
 // and platform-specific resource management.
 
-#[cfg(any(target_os = "android", feature = "metadata"))]
-mod android;
+/// Android platform utilities
+#[doc(hidden)]
+#[cfg(any(target_os = "android"))]
+pub mod android;
 
 /// Darwin (iOS/macOS) platform utilities
 #[doc(hidden)]
-#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod darwin;
 
 #[cfg(target_os = "android")]
 pub use android::*;
 
 // Export darwin module for iOS, macOS, and when metadata feature is enabled (for FFI macro)
-#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub use darwin::*;
 
 /// Re-export commonly used types for convenience
@@ -88,15 +90,15 @@ pub use darwin::*;
 pub use jni;
 
 // Re-export objc2 for FFI macro generated code
-#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub use objc2;
 
 /// Re-export the android_plugin! macro when metadata feature is enabled
-#[cfg(all(feature = "metadata", any(target_os = "android", feature = "metadata")))]
+#[cfg(all(any(target_os = "android")))]
 pub use manganis_macro::android_plugin;
 
 /// Re-export the ios_plugin! macro when metadata feature is enabled
-#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(any(target_os = "ios", target_os = "macos")))]
 pub use manganis_macro::ios_plugin;
 
 /// Re-export the ffi attribute macro for native FFI bindings

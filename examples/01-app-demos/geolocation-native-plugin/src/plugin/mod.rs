@@ -27,7 +27,7 @@ pub use error::{Error, Result};
 
 /// iOS/macOS native bindings - the macro generates all FFI code automatically.
 /// The path "src/ios" points to the SwiftPM package containing GeolocationPlugin.swift
-#[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(any(target_os = "ios", target_os = "macos")))]
 #[manganis::ffi("src/ios")]
 extern "Swift" {
     /// The native GeolocationPlugin class
@@ -52,7 +52,7 @@ extern "Swift" {
 
 /// Android native bindings - the macro generates all JNI code automatically.
 /// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
-#[cfg(all(feature = "metadata", target_os = "android"))]
+#[cfg(target_os = "android")]
 #[manganis::ffi("src/android")]
 extern "Kotlin" {
     /// The native GeolocationPlugin class
@@ -76,14 +76,14 @@ extern "Kotlin" {
 // =============================================================================
 
 #[cfg(not(any(
-    all(feature = "metadata", any(target_os = "ios", target_os = "macos")),
-    all(feature = "metadata", target_os = "android")
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
 )))]
 pub struct GeolocationPlugin;
 
 #[cfg(not(any(
-    all(feature = "metadata", any(target_os = "ios", target_os = "macos")),
-    all(feature = "metadata", target_os = "android")
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
 )))]
 impl GeolocationPlugin {
     pub fn new() -> Result<Self> {
@@ -94,8 +94,8 @@ impl GeolocationPlugin {
 }
 
 #[cfg(not(any(
-    all(feature = "metadata", any(target_os = "ios", target_os = "macos")),
-    all(feature = "metadata", target_os = "android")
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
 )))]
 fn get_current_position_json(_: &GeolocationPlugin, _: String) -> Result<String> {
     Err(Error::PlatformBridge(
@@ -104,8 +104,8 @@ fn get_current_position_json(_: &GeolocationPlugin, _: String) -> Result<String>
 }
 
 #[cfg(not(any(
-    all(feature = "metadata", any(target_os = "ios", target_os = "macos")),
-    all(feature = "metadata", target_os = "android")
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
 )))]
 fn check_permissions_json(_: &GeolocationPlugin) -> Result<String> {
     Err(Error::PlatformBridge(
@@ -114,8 +114,8 @@ fn check_permissions_json(_: &GeolocationPlugin) -> Result<String> {
 }
 
 #[cfg(not(any(
-    all(feature = "metadata", any(target_os = "ios", target_os = "macos")),
-    all(feature = "metadata", target_os = "android")
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
 )))]
 fn request_permissions_json(_: &GeolocationPlugin, _: String) -> Result<String> {
     Err(Error::PlatformBridge(

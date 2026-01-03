@@ -32,5 +32,3 @@ objc2 = "0.6.3"
 [features]
 default = []
 dioxus = ["manganis-core/dioxus"]
-# Enable metadata embedding for native plugin sources (used by CLI build)
-metadata = []

@@ -15,9 +15,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
-default = ["mobile", "metadata"]
+default = ["mobile"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
-# Enable native plugin metadata embedding for CLI to discover and bundle sources
-metadata = ["manganis/metadata"]

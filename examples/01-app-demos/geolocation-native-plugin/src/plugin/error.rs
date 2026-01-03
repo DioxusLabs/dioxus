@@ -8,11 +8,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Android-specific error
-    #[cfg(target_os = "android")]
-    #[error("Android error: {0}")]
-    Android(#[from] jni::errors::Error),
-
+    // /// Android-specific error
+    // #[cfg(target_os = "android")]
+    // #[error("Android error: {0}")]
+    // Android(#[from] jni::errors::Error),
     /// iOS-specific error
     #[cfg(target_os = "ios")]
     #[error("iOS error: {0}")]
@@ -55,5 +54,11 @@ impl Serialize for Error {
 impl From<&str> for Error {
     fn from(s: &str) -> Self {
         Error::PlatformBridge(s.to_string())
+    }
+}
+
+impl From<String> for Error {
+    fn from(s: String) -> Self {
+        Error::PlatformBridge(s)
     }
 }

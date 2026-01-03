@@ -6,7 +6,7 @@ pub mod activity;
 pub mod callback;
 #[cfg(target_os = "android")]
 pub mod java;
-#[cfg(any(target_os = "android", feature = "metadata"))]
+#[cfg(target_os = "android")]
 pub mod metadata;
 
 #[doc(hidden)]
@@ -35,5 +35,5 @@ pub use callback::*;
 #[cfg(target_os = "android")]
 pub use java::*;
 
-#[cfg(any(target_os = "android", feature = "metadata"))]
+#[cfg(target_os = "android")]
 pub use metadata::*;
