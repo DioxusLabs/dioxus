@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 // Copyright 2019-2023 Tauri Programme within The Commons Conservancy
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
@@ -27,7 +28,6 @@ pub use error::{Error, Result};
 
 /// iOS/macOS native bindings - the macro generates all FFI code automatically.
 /// The path "src/ios" points to the SwiftPM package containing GeolocationPlugin.swift
-#[allow(non_snake_case)]
 #[cfg(all(any(target_os = "ios", target_os = "macos")))]
 #[manganis::ffi("src/ios")]
 extern "Swift" {
@@ -47,13 +47,8 @@ extern "Swift" {
     pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
 }
 
-// =============================================================================
-// Android FFI Bridge using #[manganis::ffi]
-// =============================================================================
-
 /// Android native bindings - the macro generates all JNI code automatically.
 /// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
-#[allow(non_snake_case)]
 #[cfg(target_os = "android")]
 #[manganis::ffi("src/android")]
 extern "Kotlin" {
