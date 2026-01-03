@@ -143,10 +143,16 @@ class GeolocationPlugin(private val activity: Activity) {
   }
 
   // Synchronous wrapper returning JSON for getCurrentPosition
-  fun getCurrentPositionJson(options: Map<String, Any?>): String {
-    val enableHighAccuracy = (options["enableHighAccuracy"] as? Boolean) ?: false
-    val timeout = (options["timeout"] as? Number)?.toLong() ?: 10000L
-    val maximumAge = (options["maximumAge"] as? Number)?.toLong() ?: 0L
+  // Accepts a JSON string with options: {"enableHighAccuracy": bool, "timeout": number, "maximumAge": number}
+  fun getCurrentPositionJson(optionsJson: String?): String {
+    val options = try {
+      if (optionsJson.isNullOrEmpty()) JSONObject() else JSONObject(optionsJson)
+    } catch (e: Exception) {
+      JSONObject()
+    }
+    val enableHighAccuracy = options.optBoolean("enableHighAccuracy", false)
+    val timeout = options.optLong("timeout", 10000L)
+    val maximumAge = options.optLong("maximumAge", 0L)
 
     var output: String? = null
     val latch = CountDownLatch(1)

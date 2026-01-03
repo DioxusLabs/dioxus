@@ -27,6 +27,7 @@ pub use error::{Error, Result};
 
 /// iOS/macOS native bindings - the macro generates all FFI code automatically.
 /// The path "src/ios" points to the SwiftPM package containing GeolocationPlugin.swift
+#[allow(non_snake_case)]
 #[cfg(all(any(target_os = "ios", target_os = "macos")))]
 #[manganis::ffi("src/ios")]
 extern "Swift" {
@@ -35,15 +36,15 @@ extern "Swift" {
 
     /// Get current position as JSON string
     /// Swift signature: func getCurrentPositionJson(_ optionsJson: String) -> String
-    pub fn get_current_position_json(this: &GeolocationPlugin, options_json: String) -> String;
+    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
 
     /// Check permissions and return status as JSON
     /// Swift signature: func checkPermissionsJson() -> String
-    pub fn check_permissions_json(this: &GeolocationPlugin) -> String;
+    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
 
     /// Request permissions with optional types list as JSON, return status as JSON
     /// Swift signature: func requestPermissionsJson(_ permissionsJson: String) -> String
-    pub fn request_permissions_json(this: &GeolocationPlugin, permissions_json: String) -> String;
+    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
 }
 
 // =============================================================================
@@ -52,6 +53,7 @@ extern "Swift" {
 
 /// Android native bindings - the macro generates all JNI code automatically.
 /// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
+#[allow(non_snake_case)]
 #[cfg(target_os = "android")]
 #[manganis::ffi("src/android")]
 extern "Kotlin" {
@@ -60,15 +62,15 @@ extern "Kotlin" {
 
     /// Get current position as JSON string
     /// Kotlin signature: fun getCurrentPositionJson(optionsJson: String): String
-    pub fn get_current_position_json(this: &GeolocationPlugin, options_json: String) -> String;
+    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
 
     /// Check permissions and return status as JSON
     /// Kotlin signature: fun checkPermissionsJson(): String
-    pub fn check_permissions_json(this: &GeolocationPlugin) -> String;
+    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
 
     /// Request permissions with optional types list as JSON, return status as JSON
     /// Kotlin signature: fun requestPermissionsJson(permissionsJson: String): String
-    pub fn request_permissions_json(this: &GeolocationPlugin, permissions_json: String) -> String;
+    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
 }
 
 // =============================================================================
@@ -93,31 +95,34 @@ impl GeolocationPlugin {
     }
 }
 
+#[allow(non_snake_case)]
 #[cfg(not(any(
     all(any(target_os = "ios", target_os = "macos")),
     all(target_os = "android")
 )))]
-fn get_current_position_json(_: &GeolocationPlugin, _: String) -> Result<String> {
+fn getCurrentPositionJson(_: &GeolocationPlugin, _: String) -> Result<String> {
     Err(Error::PlatformBridge(
         "Geolocation is only supported on Android, iOS, and macOS".to_string(),
     ))
 }
 
+#[allow(non_snake_case)]
 #[cfg(not(any(
     all(any(target_os = "ios", target_os = "macos")),
     all(target_os = "android")
 )))]
-fn check_permissions_json(_: &GeolocationPlugin) -> Result<String> {
+fn checkPermissionsJson(_: &GeolocationPlugin) -> Result<String> {
     Err(Error::PlatformBridge(
         "Geolocation is only supported on Android, iOS, and macOS".to_string(),
     ))
 }
 
+#[allow(non_snake_case)]
 #[cfg(not(any(
     all(any(target_os = "ios", target_os = "macos")),
     all(target_os = "android")
 )))]
-fn request_permissions_json(_: &GeolocationPlugin, _: String) -> Result<String> {
+fn requestPermissionsJson(_: &GeolocationPlugin, _: String) -> Result<String> {
     Err(Error::PlatformBridge(
         "Geolocation is only supported on Android, iOS, and macOS".to_string(),
     ))
@@ -189,7 +194,7 @@ impl Geolocation {
         let options_json = serde_json::to_string(&options).map_err(Error::Json)?;
 
         let plugin = self.get_plugin()?;
-        let result_json = get_current_position_json(plugin, options_json)?;
+        let result_json = getCurrentPositionJson(plugin, options_json)?;
 
         // Check for error in response
         let json_value: serde_json::Value =
@@ -211,7 +216,7 @@ impl Geolocation {
     /// Returns the permission status for location and coarse location permissions.
     pub fn check_permissions(&mut self) -> Result<PermissionStatus> {
         let plugin = self.get_plugin()?;
-        let result_json = check_permissions_json(plugin)?;
+        let result_json = checkPermissionsJson(plugin)?;
         let status: PermissionStatus = serde_json::from_str(&result_json).map_err(Error::Json)?;
         Ok(status)
     }
@@ -232,7 +237,7 @@ impl Geolocation {
     ) -> Result<PermissionStatus> {
         let perms_json = serde_json::to_string(&permissions).map_err(Error::Json)?;
         let plugin = self.get_plugin()?;
-        let result_json = request_permissions_json(plugin, perms_json)?;
+        let result_json = requestPermissionsJson(plugin, perms_json)?;
         let status: PermissionStatus = serde_json::from_str(&result_json).map_err(Error::Json)?;
         Ok(status)
     }

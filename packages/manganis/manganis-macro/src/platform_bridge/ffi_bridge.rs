@@ -340,15 +340,50 @@ impl FfiBridgeParser {
         }
     }
 
+    /// Extract Android namespace from build.gradle.kts
+    /// Looks for `namespace = "com.example.foo"` and converts to JNI format `com/example/foo`
+    fn extract_android_namespace(&self) -> Option<String> {
+        // Get the manifest dir from environment (set by cargo during compilation)
+        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+        let source_path = std::path::Path::new(&manifest_dir).join(&self.source_path);
+        let build_gradle = source_path.join("build.gradle.kts");
+
+        if !build_gradle.exists() {
+            return None;
+        }
+
+        let contents = std::fs::read_to_string(&build_gradle).ok()?;
+
+        // Look for namespace = "com.example.foo" pattern
+        for line in contents.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("namespace") {
+                // Extract the quoted string
+                if let Some(start) = trimmed.find('"') {
+                    if let Some(end) = trimmed[start + 1..].find('"') {
+                        let namespace = &trimmed[start + 1..start + 1 + end];
+                        // Convert dots to slashes for JNI format
+                        return Some(namespace.replace('.', "/"));
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     /// Generate Android JNI code
     fn generate_android(&self) -> TokenStream2 {
         let mut output = TokenStream2::new();
 
+        // Try to extract namespace from build.gradle.kts
+        let namespace = self.extract_android_namespace().unwrap_or_else(|| "com/example".to_string());
+
         // Generate opaque type wrappers
         for ty in &self.types {
             let name = &ty.name;
-            // Convert CamelCase to com.example.ClassName format
-            let class_name = format!("com/example/{}", name);
+            // Use namespace from build.gradle.kts or default
+            let class_name = format!("{}/{}", namespace, name);
             let class_name_lit = syn::LitStr::new(&class_name, proc_macro2::Span::call_site());
 
             let type_def = quote! {
@@ -361,7 +396,7 @@ impl FfiBridgeParser {
                     /// Create a new instance by looking up the Java class at runtime
                     pub fn new() -> Result<Self, String> {
                         // Use with_activity which returns Option<R>, wrapping our Result in the Option
-                        let inner_result: Option<Result<Self, String>> = manganis::android::with_activity(|mut env, _activity| {
+                        let inner_result: Option<Result<Self, String>> = manganis::android::with_activity(|mut env, activity| {
                             // Find the class
                             let class_result = env.find_class(#class_name_lit);
                             let class = match class_result {
@@ -369,8 +404,13 @@ impl FfiBridgeParser {
                                 Err(e) => return Some(Err(format!("Failed to find class {}: {:?}", #class_name_lit, e))),
                             };
 
-                            // Create a new instance
-                            let instance = match env.new_object(&class, "()V", &[]) {
+                            // Create a new instance with Activity parameter
+                            // The Kotlin plugin constructor takes (Activity) as parameter
+                            let instance = match env.new_object(
+                                &class,
+                                "(Landroid/app/Activity;)V",
+                                &[manganis::jni::objects::JValue::Object(&activity)],
+                            ) {
                                 Ok(i) => i,
                                 Err(e) => return Some(Err(format!("Failed to create instance of {}: {:?}", #class_name_lit, e))),
                             };
@@ -429,7 +469,8 @@ impl FfiBridgeParser {
 
     fn generate_android_function(&self, func: &ForeignFunctionDecl) -> TokenStream2 {
         let fn_name = &func.name;
-        let method_name = func.name.to_string();
+        // Convert snake_case to camelCase for Kotlin/Java method name
+        let method_name = to_camel_case(&func.name.to_string());
 
         // Build argument list for Rust function
         let mut rust_args = Vec::new();
