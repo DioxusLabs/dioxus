@@ -23,9 +23,6 @@ pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
     out
 }
 
-// use permissions_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
-// pub use permissions_core::{Permission, SymbolData};
-
 const fn serialize_symbol_data(symbol_data: SymbolData) -> ConstVec<u8, 4096> {
     dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(&symbol_data)
 }

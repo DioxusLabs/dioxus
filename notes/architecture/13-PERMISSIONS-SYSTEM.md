@@ -1,6 +1,6 @@
-# Permissions Macro
+# Dioxus Permissions System
 
-Procedural macro for declaring permissions with linker embedding.
+Declare permissions for your plugin by using manganis linker embedding system.
 
 This crate provides the `permission!()` and `permission!()` macros that allow you to declare permissions
 that will be embedded in the binary using linker sections, similar to how Manganis
