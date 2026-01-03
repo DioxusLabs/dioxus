@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "app.tauri.geolocation"
+    namespace = "com.dioxus.geolocation"
     compileSdk = 34
 
     defaultConfig {

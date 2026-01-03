@@ -2,6 +2,8 @@
 
 A minimal Dioxus application that implements a native plugin.
 
+The plugin demonstrated here makes it possible to access the user's geolocation. It does a few things:
+
 - Inspect and request location permissions using the native Android/iOS dialogs.
 - Configure one-shot position requests (high-accuracy toggle + maximum cached age).
 - Inspect the last reported coordinates, accuracy, altitude, heading, and speed.
