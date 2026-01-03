@@ -113,9 +113,7 @@ impl ForeignType {
                     }
                     // Check for &OpaqueType
                     if path.path.segments.len() == 1 {
-                        return Ok(ForeignType::OpaqueRef(
-                            path.path.segments[0].ident.clone(),
-                        ));
+                        return Ok(ForeignType::OpaqueRef(path.path.segments[0].ident.clone()));
                     }
                 }
                 Err(syn::Error::new(ty.span(), "Unsupported reference type"))
@@ -377,7 +375,9 @@ impl FfiBridgeParser {
         let mut output = TokenStream2::new();
 
         // Try to extract namespace from build.gradle.kts
-        let namespace = self.extract_android_namespace().unwrap_or_else(|| "com/example".to_string());
+        let namespace = self
+            .extract_android_namespace()
+            .unwrap_or_else(|| "com/example".to_string());
 
         // Generate opaque type wrappers
         for ty in &self.types {
@@ -608,36 +608,34 @@ impl FfiBridgeParser {
                     Ok(rust_str)
                 }
             },
-            ForeignType::Option(inner) => {
-                match inner.as_ref() {
-                    ForeignType::String => quote! {
-                        fn convert_result<'a>(env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<String>, String> {
-                            let obj = result.l()
-                                .map_err(|e| format!("Failed to get object result: {:?}", e))?;
-                            if obj.is_null() {
-                                Ok(None)
-                            } else {
-                                let jstr: manganis::jni::objects::JString = obj.into();
-                                let rust_str: String = env.get_string(&jstr)
-                                    .map_err(|e| format!("Failed to get string: {:?}", e))?
-                                    .into();
-                                Ok(Some(rust_str))
-                            }
+            ForeignType::Option(inner) => match inner.as_ref() {
+                ForeignType::String => quote! {
+                    fn convert_result<'a>(env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<String>, String> {
+                        let obj = result.l()
+                            .map_err(|e| format!("Failed to get object result: {:?}", e))?;
+                        if obj.is_null() {
+                            Ok(None)
+                        } else {
+                            let jstr: manganis::jni::objects::JString = obj.into();
+                            let rust_str: String = env.get_string(&jstr)
+                                .map_err(|e| format!("Failed to get string: {:?}", e))?
+                                .into();
+                            Ok(Some(rust_str))
                         }
-                    },
-                    _ => quote! {
-                        fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<()>, String> {
-                            let obj = result.l()
-                                .map_err(|e| format!("Failed to get object result: {:?}", e))?;
-                            if obj.is_null() {
-                                Ok(None)
-                            } else {
-                                Ok(Some(()))
-                            }
+                    }
+                },
+                _ => quote! {
+                    fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<Option<()>, String> {
+                        let obj = result.l()
+                            .map_err(|e| format!("Failed to get object result: {:?}", e))?;
+                        if obj.is_null() {
+                            Ok(None)
+                        } else {
+                            Ok(Some(()))
                         }
-                    },
-                }
-            }
+                    }
+                },
+            },
             _ => quote! {
                 fn convert_result<'a>(_env: &mut manganis::jni::JNIEnv<'a>, _result: manganis::jni::objects::JValueGen<manganis::jni::objects::JObject<'a>>) -> Result<(), String> {
                     Ok(())
@@ -685,8 +683,7 @@ impl FfiBridgeParser {
             .map(|t| t.name.to_string().to_lowercase())
             .unwrap_or_else(|| "plugin".to_string());
 
-        let source_path_lit =
-            syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
+        let source_path_lit = syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
         let plugin_name_lit = syn::LitStr::new(&plugin_name, proc_macro2::Span::call_site());
 
         let mut hash = DefaultHasher::new();
@@ -944,9 +941,9 @@ impl FfiBridgeParser {
             .map(|t| t.name.to_string())
             .unwrap_or_else(|| "Plugin".to_string());
 
-        let source_path_lit =
-            syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
-        let plugin_name_lit = syn::LitStr::new(&plugin_name.to_lowercase(), proc_macro2::Span::call_site());
+        let source_path_lit = syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
+        let plugin_name_lit =
+            syn::LitStr::new(&plugin_name.to_lowercase(), proc_macro2::Span::call_site());
         let product_lit = syn::LitStr::new(&plugin_name, proc_macro2::Span::call_site());
 
         let mut hash = DefaultHasher::new();

@@ -13,6 +13,7 @@ use syn::{
 
 pub(crate) mod asset;
 pub(crate) mod css_module;
+pub(crate) mod ffi;
 pub(crate) mod linker;
 pub(crate) mod permissions;
 
@@ -24,8 +25,6 @@ use crate::{
     css_module::{expand_css_module_struct, CssModuleAttribute},
     permissions::PermissionParser,
 };
-
-mod platform_bridge;
 
 /// The asset macro collects assets that will be included in the final binary
 ///
@@ -362,7 +361,7 @@ pub fn permission(input: TokenStream) -> TokenStream {
 /// - Opaque refs: `&TypeName` for foreign type references
 #[proc_macro_attribute]
 pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
-    use platform_bridge::ffi_bridge::{FfiAttribute, FfiBridgeParser};
+    use ffi::{FfiAttribute, FfiBridgeParser};
 
     let attr = parse_macro_input!(attr as FfiAttribute);
     let item = parse_macro_input!(item as syn::ItemForeignMod);
