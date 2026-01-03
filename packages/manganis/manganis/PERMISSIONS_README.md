@@ -39,7 +39,7 @@ const MICROPHONE: Permission = static_permission!(
 
 ### Custom Permissions (For Untested or Special Use Cases)
 
-For permissions that aren't yet tested or for special use cases, use the `Custom` variant 
+For permissions that aren't yet tested or for special use cases, use the `Custom` variant
 with platform-specific identifiers:
 
 ```rust
@@ -56,8 +56,8 @@ const STORAGE: Permission = static_permission!(
 );
 ```
 
-> **💡 Contributing Back**: If you test a custom permission and verify it works across platforms, 
-> please consider creating a PR to add it as an officially tested permission! This helps the 
+> **💡 Contributing Back**: If you test a custom permission and verify it works across platforms,
+> please consider creating a PR to add it as an officially tested permission! This helps the
 > entire Dioxus community.
 
 ### Using Permissions
@@ -110,11 +110,11 @@ see the Custom Permissions section below.
 
 Each permission kind automatically maps to the appropriate platform-specific requirements:
 
-| Permission | Android | iOS | macOS |
-|------------|---------|-----|-------|
-| Camera | `android.permission.CAMERA` | `NSCameraUsageDescription` | `NSCameraUsageDescription` |
-| Location(Fine) | `android.permission.ACCESS_FINE_LOCATION` | `NSLocationAlwaysAndWhenInUseUsageDescription` | `NSLocationUsageDescription` |
-| Microphone | `android.permission.RECORD_AUDIO` | `NSMicrophoneUsageDescription` | `NSMicrophoneUsageDescription` |
+| Permission     | Android                                   | iOS                                            | macOS                          |
+| -------------- | ----------------------------------------- | ---------------------------------------------- | ------------------------------ |
+| Camera         | `android.permission.CAMERA`               | `NSCameraUsageDescription`                     | `NSCameraUsageDescription`     |
+| Location(Fine) | `android.permission.ACCESS_FINE_LOCATION` | `NSLocationAlwaysAndWhenInUseUsageDescription` | `NSLocationUsageDescription`   |
+| Microphone     | `android.permission.RECORD_AUDIO`         | `NSMicrophoneUsageDescription`                 | `NSMicrophoneUsageDescription` |
 
 ## How It Works
 

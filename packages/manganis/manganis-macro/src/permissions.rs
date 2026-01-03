@@ -114,7 +114,7 @@ impl ToTokens for PermissionParser {
 
         let expr = &self.expr;
         let link_section =
-            crate::linker::generate_link_section(quote!(__PERMISSION), &permission_hash);
+            crate::permissions::generate_link_section(quote!(__PERMISSION), &permission_hash);
 
         tokens.extend(quote! {
             {

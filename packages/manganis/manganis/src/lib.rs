@@ -54,6 +54,11 @@ pub mod permissions {
         PlatformIdentifiers, SwiftPackageMetadata, SymbolData,
     };
     pub use manganis_macro::{permission, static_permission};
+
+    /// Re-export macro helpers for use in generated code
+    pub mod macro_helpers {
+        pub use crate::macro_helpers::*;
+    }
 }
 
 // FFI utilities and plugin metadata for Dioxus mobile platform APIs

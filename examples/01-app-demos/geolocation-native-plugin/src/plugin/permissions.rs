@@ -8,7 +8,8 @@
 //! These permissions are embedded in the binary and can be extracted by build tools
 //! to inject into platform-specific configuration files.
 
-use permissions::{static_permission, LocationPrecision, Permission, PermissionBuilder};
+use manganis::permissions;
+use manganis::permissions::{static_permission, LocationPrecision, Permission, PermissionBuilder};
 
 /// Fine location permission
 ///

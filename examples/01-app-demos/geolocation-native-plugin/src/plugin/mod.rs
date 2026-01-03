@@ -15,7 +15,7 @@ pub use models::*;
 mod error;
 mod models;
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
+// #[cfg(any(target_os = "android", target_os = "ios"))]
 mod permissions;
 
 pub use error::{Error, Result};

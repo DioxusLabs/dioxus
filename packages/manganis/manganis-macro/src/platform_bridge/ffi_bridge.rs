@@ -588,16 +588,11 @@ impl FfiBridgeParser {
         // Generate opaque type wrappers
         for ty in &self.types {
             let name = &ty.name;
-            let init_fn_name = format_ident!("dioxus_{}_init", name.to_string().to_lowercase());
             let class_name_bytes = format!("{}\0", name);
 
             let type_def = quote! {
-                /// Linker anchor to ensure Swift class is linked
-                extern "C" {
-                    fn #init_fn_name();
-                }
-
                 /// Opaque wrapper around an Objective-C object pointer
+                /// The actual Swift class is looked up dynamically at runtime after dx links everything
                 pub struct #name {
                     inner: *mut manganis::objc2::runtime::AnyObject,
                 }
@@ -606,16 +601,15 @@ impl FfiBridgeParser {
                 unsafe impl Sync for #name {}
 
                 impl #name {
-                    /// Create a new instance by looking up the ObjC class
+                    /// Create a new instance by looking up the ObjC class dynamically at runtime
                     pub fn new() -> Result<Self, &'static str> {
                         unsafe {
-                            // Force Swift static library linkage
-                            #init_fn_name();
-
+                            // Dynamic runtime lookup - the class will be available after dx compiles
+                            // and links the Swift sources
                             let class_name = ::std::ffi::CStr::from_bytes_with_nul(#class_name_bytes.as_bytes())
                                 .expect("Invalid class name");
                             let class = manganis::objc2::runtime::AnyClass::get(class_name)
-                                .ok_or("Class not found")?;
+                                .ok_or("Class not found - ensure Swift sources are compiled and linked")?;
 
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![class, alloc];
                             let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![instance, init];
