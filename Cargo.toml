@@ -113,9 +113,6 @@ members = [
     "examples/10-integrations/native-headless",
     "examples/10-integrations/native-headless-in-bevy",
     "examples/10-integrations/bevy",
-
-    # misc packages
-    "packages/mobile-plugin-build",
 ]
 
 
@@ -170,9 +167,6 @@ lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.2" }
 dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.2" }
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.2" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.2" }
-
-# mobile plugin tooling
-dioxus-mobile-plugin-build = { path = "packages/mobile-plugin-build", version = "0.7.2" }
 
 # const-serialize
 # const-serialize. these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
