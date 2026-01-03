@@ -695,20 +695,20 @@ pub(crate) async fn extract_symbols_from_file(
                             permissions.push(permission);
                             // Permissions are not written back, so don't store the symbol
                         }
-                        // SymbolData::AndroidArtifact(meta) => {
-                        //     tracing::debug!(
-                        //         "Found Android artifact declaration for plugin {}",
-                        //         meta.plugin_name.as_str()
-                        //     );
-                        //     android_artifacts.push(meta);
-                        // }
-                        // SymbolData::SwiftPackage(meta) => {
-                        //     tracing::debug!(
-                        //         "Found Swift package declaration for plugin {}",
-                        //         meta.plugin_name.as_str()
-                        //     );
-                        //     swift_packages.push(meta);
-                        // }
+                        SymbolData::AndroidArtifact(meta) => {
+                            tracing::debug!(
+                                "Found Android artifact declaration for plugin {}",
+                                meta.plugin_name.as_str()
+                            );
+                            android_artifacts.push(meta);
+                        }
+                        SymbolData::SwiftPackage(meta) => {
+                            tracing::debug!(
+                                "Found Swift package declaration for plugin {}",
+                                meta.plugin_name.as_str()
+                            );
+                            swift_packages.push(meta);
+                        }
                         _ => {}
                     }
                 }

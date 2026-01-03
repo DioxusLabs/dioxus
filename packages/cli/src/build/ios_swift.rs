@@ -485,9 +485,9 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
                             const_serialize::deserialize_const!(SymbolData, symbol_data)
                         {
                             // swift pm is no longer stored as a metadata symbol.
-                            // if let SymbolData::SwiftPackage(meta) = symbol_data {
-                            //     results.push(meta);
-                            // }
+                            if let SymbolData::SwiftPackage(meta) = symbol_data {
+                                results.push(meta);
+                            }
                         }
                     }
                 }
