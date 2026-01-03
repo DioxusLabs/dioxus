@@ -1,12 +1,13 @@
 //! Swift package metadata wrappers for linker-based collection.
 
-#[cfg(feature = "metadata")]
-pub use permissions::SwiftPackageMetadata as SwiftSourceMetadata;
+pub use manganis_core::SwiftPackageMetadata as SwiftSourceMetadata;
 
-#[cfg(feature = "metadata")]
-pub type SwiftMetadataBuffer = permissions::macro_helpers::ConstVec<u8, 4096>;
+/// Buffer type for serialized Swift metadata
+#[doc(hidden)]
+pub type SwiftMetadataBuffer = crate::macro_helpers::ConstVec<u8, 4096>;
 
-#[cfg(feature = "metadata")]
+/// Serialize Swift package metadata for linker embedding
+#[doc(hidden)]
 pub const fn serialize_swift_metadata(meta: &SwiftSourceMetadata) -> SwiftMetadataBuffer {
-    permissions::macro_helpers::serialize_swift_package(meta)
+    crate::macro_helpers::serialize_swift_package(meta)
 }

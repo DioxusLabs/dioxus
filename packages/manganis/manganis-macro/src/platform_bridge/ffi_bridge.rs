@@ -1,0 +1,911 @@
+//! FFI bridge macro for native plugin interop.
+//!
+//! This module implements the `#[ffi]` attribute macro that generates direct FFI bindings
+//! between Rust and native platforms (Swift/Kotlin).
+
+use proc_macro2::TokenStream as TokenStream2;
+use quote::{format_ident, quote};
+use std::hash::{DefaultHasher, Hash, Hasher};
+use syn::{
+    parse::{Parse, ParseStream},
+    spanned::Spanned,
+    ForeignItem, ForeignItemFn, Ident, ItemForeignMod, LitStr, Pat, ReturnType, Type,
+};
+
+/// The foreign ABI being targeted
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ForeignAbi {
+    /// Swift (iOS/macOS)
+    Swift,
+    /// Kotlin (Android)
+    Kotlin,
+}
+
+/// A foreign type declaration (`type Foo;`)
+#[derive(Debug, Clone)]
+pub struct ForeignTypeDecl {
+    pub name: Ident,
+}
+
+/// A parsed foreign type in function signatures
+#[derive(Debug, Clone)]
+pub enum ForeignType {
+    Bool,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
+    String,
+    StrRef,
+    Option(Box<ForeignType>),
+    Result(Box<ForeignType>, Box<ForeignType>),
+    OpaqueRef(Ident),
+    Unit,
+}
+
+impl ForeignType {
+    /// Parse a Rust type into a ForeignType
+    fn from_type(ty: &Type) -> syn::Result<Self> {
+        match ty {
+            Type::Path(type_path) => {
+                let path = &type_path.path;
+                if path.segments.len() == 1 {
+                    let segment = &path.segments[0];
+                    let ident = segment.ident.to_string();
+                    match ident.as_str() {
+                        "bool" => return Ok(ForeignType::Bool),
+                        "i8" => return Ok(ForeignType::I8),
+                        "i16" => return Ok(ForeignType::I16),
+                        "i32" => return Ok(ForeignType::I32),
+                        "i64" => return Ok(ForeignType::I64),
+                        "u8" => return Ok(ForeignType::U8),
+                        "u16" => return Ok(ForeignType::U16),
+                        "u32" => return Ok(ForeignType::U32),
+                        "u64" => return Ok(ForeignType::U64),
+                        "f32" => return Ok(ForeignType::F32),
+                        "f64" => return Ok(ForeignType::F64),
+                        "String" => return Ok(ForeignType::String),
+                        "Option" => {
+                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                                if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                                    let inner_type = Self::from_type(inner)?;
+                                    return Ok(ForeignType::Option(Box::new(inner_type)));
+                                }
+                            }
+                            return Err(syn::Error::new(ty.span(), "Invalid Option type"));
+                        }
+                        "Result" => {
+                            if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                                let mut iter = args.args.iter();
+                                if let (
+                                    Some(syn::GenericArgument::Type(ok_ty)),
+                                    Some(syn::GenericArgument::Type(err_ty)),
+                                ) = (iter.next(), iter.next())
+                                {
+                                    let ok_type = Self::from_type(ok_ty)?;
+                                    let err_type = Self::from_type(err_ty)?;
+                                    return Ok(ForeignType::Result(
+                                        Box::new(ok_type),
+                                        Box::new(err_type),
+                                    ));
+                                }
+                            }
+                            return Err(syn::Error::new(ty.span(), "Invalid Result type"));
+                        }
+                        _ => {
+                            // Assume it's an opaque type reference
+                            return Ok(ForeignType::OpaqueRef(segment.ident.clone()));
+                        }
+                    }
+                }
+                Err(syn::Error::new(ty.span(), "Unsupported type path"))
+            }
+            Type::Reference(type_ref) => {
+                if let Type::Path(path) = &*type_ref.elem {
+                    if path.path.is_ident("str") {
+                        return Ok(ForeignType::StrRef);
+                    }
+                    // Check for &OpaqueType
+                    if path.path.segments.len() == 1 {
+                        return Ok(ForeignType::OpaqueRef(
+                            path.path.segments[0].ident.clone(),
+                        ));
+                    }
+                }
+                Err(syn::Error::new(ty.span(), "Unsupported reference type"))
+            }
+            Type::Tuple(tuple) if tuple.elems.is_empty() => Ok(ForeignType::Unit),
+            _ => Err(syn::Error::new(ty.span(), "Unsupported type")),
+        }
+    }
+
+    /// Get the JNI signature for this type
+    fn jni_signature(&self) -> String {
+        match self {
+            ForeignType::Bool => "Z".into(),
+            ForeignType::I8 => "B".into(),
+            ForeignType::I16 => "S".into(),
+            ForeignType::I32 => "I".into(),
+            ForeignType::I64 => "J".into(),
+            ForeignType::U8 => "B".into(), // JNI doesn't have unsigned, use signed
+            ForeignType::U16 => "S".into(),
+            ForeignType::U32 => "I".into(),
+            ForeignType::U64 => "J".into(),
+            ForeignType::F32 => "F".into(),
+            ForeignType::F64 => "D".into(),
+            ForeignType::String | ForeignType::StrRef => "Ljava/lang/String;".into(),
+            ForeignType::Option(inner) => inner.jni_signature(),
+            ForeignType::Result(ok, _) => ok.jni_signature(),
+            ForeignType::OpaqueRef(name) => format!("L{};", name),
+            ForeignType::Unit => "V".into(),
+        }
+    }
+
+    /// Generate Rust type tokens
+    fn to_rust_type(&self) -> TokenStream2 {
+        match self {
+            ForeignType::Bool => quote! { bool },
+            ForeignType::I8 => quote! { i8 },
+            ForeignType::I16 => quote! { i16 },
+            ForeignType::I32 => quote! { i32 },
+            ForeignType::I64 => quote! { i64 },
+            ForeignType::U8 => quote! { u8 },
+            ForeignType::U16 => quote! { u16 },
+            ForeignType::U32 => quote! { u32 },
+            ForeignType::U64 => quote! { u64 },
+            ForeignType::F32 => quote! { f32 },
+            ForeignType::F64 => quote! { f64 },
+            ForeignType::String => quote! { String },
+            ForeignType::StrRef => quote! { &str },
+            ForeignType::Option(inner) => {
+                let inner_ty = inner.to_rust_type();
+                quote! { Option<#inner_ty> }
+            }
+            ForeignType::Result(ok, err) => {
+                let ok_ty = ok.to_rust_type();
+                let err_ty = err.to_rust_type();
+                quote! { Result<#ok_ty, #err_ty> }
+            }
+            ForeignType::OpaqueRef(name) => quote! { #name },
+            ForeignType::Unit => quote! { () },
+        }
+    }
+}
+
+/// A foreign function argument
+#[derive(Debug, Clone)]
+pub struct ForeignArg {
+    pub name: Ident,
+    pub ty: ForeignType,
+}
+
+/// A foreign function declaration
+#[derive(Debug, Clone)]
+pub struct ForeignFunctionDecl {
+    pub name: Ident,
+    pub receiver: Option<Ident>, // The type name if first arg is `this: &TypeName`
+    pub args: Vec<ForeignArg>,
+    pub return_type: ForeignType,
+}
+
+impl ForeignFunctionDecl {
+    fn from_foreign_fn(func: &ForeignItemFn) -> syn::Result<Self> {
+        let name = func.sig.ident.clone();
+        let mut receiver = None;
+        let mut args = Vec::new();
+
+        for (i, input) in func.sig.inputs.iter().enumerate() {
+            match input {
+                syn::FnArg::Typed(pat_type) => {
+                    let arg_name = match &*pat_type.pat {
+                        Pat::Ident(pat_ident) => pat_ident.ident.clone(),
+                        _ => {
+                            return Err(syn::Error::new(
+                                pat_type.pat.span(),
+                                "Expected identifier pattern",
+                            ))
+                        }
+                    };
+
+                    let arg_ty = ForeignType::from_type(&pat_type.ty)?;
+
+                    // Check if first arg is `this: &SomeType`
+                    if i == 0 && arg_name == "this" {
+                        if let ForeignType::OpaqueRef(type_name) = &arg_ty {
+                            receiver = Some(type_name.clone());
+                            continue; // Don't add to args
+                        }
+                    }
+
+                    args.push(ForeignArg {
+                        name: arg_name,
+                        ty: arg_ty,
+                    });
+                }
+                syn::FnArg::Receiver(_) => {
+                    return Err(syn::Error::new(
+                        input.span(),
+                        "Use `this: &Self` instead of `self`",
+                    ));
+                }
+            }
+        }
+
+        let return_type = match &func.sig.output {
+            ReturnType::Default => ForeignType::Unit,
+            ReturnType::Type(_, ty) => ForeignType::from_type(ty)?,
+        };
+
+        Ok(Self {
+            name,
+            receiver,
+            args,
+            return_type,
+        })
+    }
+}
+
+/// The main parser for the `#[ffi]` attribute macro
+pub struct FfiBridgeParser {
+    /// Source folder path (relative to CARGO_MANIFEST_DIR)
+    pub source_path: String,
+    /// The foreign ABI (Swift or Kotlin)
+    pub abi: ForeignAbi,
+    /// Type declarations
+    pub types: Vec<ForeignTypeDecl>,
+    /// Function declarations
+    pub functions: Vec<ForeignFunctionDecl>,
+}
+
+/// Parser for the attribute: `#[ffi("/src/ios")]`
+pub struct FfiAttribute {
+    pub source_path: String,
+}
+
+impl Parse for FfiAttribute {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let lit: LitStr = input.parse()?;
+        Ok(FfiAttribute {
+            source_path: lit.value(),
+        })
+    }
+}
+
+impl FfiBridgeParser {
+    /// Parse the attribute and item together
+    pub fn parse_with_attr(attr: FfiAttribute, item: ItemForeignMod) -> syn::Result<Self> {
+        let source_path = attr.source_path;
+
+        // Determine the ABI
+        let abi = match &item.abi.name {
+            Some(name) => match name.value().as_str() {
+                "Swift" => ForeignAbi::Swift,
+                "Kotlin" => ForeignAbi::Kotlin,
+                other => {
+                    return Err(syn::Error::new(
+                        name.span(),
+                        format!("Unsupported ABI: {}. Expected 'Swift' or 'Kotlin'", other),
+                    ))
+                }
+            },
+            None => {
+                return Err(syn::Error::new(
+                    item.abi.extern_token.span,
+                    "Expected ABI string (e.g., extern \"Swift\")",
+                ))
+            }
+        };
+
+        let mut types = Vec::new();
+        let mut functions = Vec::new();
+
+        for item in &item.items {
+            match item {
+                ForeignItem::Type(ty) => {
+                    types.push(ForeignTypeDecl {
+                        name: ty.ident.clone(),
+                    });
+                }
+                ForeignItem::Fn(func) => {
+                    functions.push(ForeignFunctionDecl::from_foreign_fn(func)?);
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        item.span(),
+                        "Only type and function declarations are supported in FFI blocks",
+                    ));
+                }
+            }
+        }
+
+        Ok(Self {
+            source_path,
+            abi,
+            types,
+            functions,
+        })
+    }
+
+    /// Generate all the code
+    pub fn generate(&self) -> TokenStream2 {
+        match self.abi {
+            ForeignAbi::Kotlin => self.generate_android(),
+            ForeignAbi::Swift => self.generate_ios(),
+        }
+    }
+
+    /// Generate Android JNI code
+    fn generate_android(&self) -> TokenStream2 {
+        let mut output = TokenStream2::new();
+
+        // Generate opaque type wrappers
+        for ty in &self.types {
+            let name = &ty.name;
+            let type_def = quote! {
+                /// Opaque wrapper around a JNI GlobalRef
+                pub struct #name {
+                    inner: ::jni::objects::GlobalRef,
+                }
+
+                impl #name {
+                    /// Create from an existing GlobalRef
+                    pub fn from_global_ref(global: ::jni::objects::GlobalRef) -> Self {
+                        Self { inner: global }
+                    }
+
+                    /// Get the underlying JObject
+                    pub fn as_obj(&self) -> &::jni::objects::JObject<'_> {
+                        self.inner.as_obj()
+                    }
+                }
+            };
+            output.extend(type_def);
+        }
+
+        // Generate function implementations
+        for func in &self.functions {
+            let func_code = self.generate_android_function(func);
+            output.extend(func_code);
+        }
+
+        // Generate linker metadata
+        let metadata = self.generate_android_metadata();
+        output.extend(metadata);
+
+        // Wrap in cfg
+        quote! {
+            #[cfg(target_os = "android")]
+            mod __ffi_android {
+                #output
+            }
+
+            #[cfg(target_os = "android")]
+            pub use __ffi_android::*;
+        }
+    }
+
+    fn generate_android_function(&self, func: &ForeignFunctionDecl) -> TokenStream2 {
+        let fn_name = &func.name;
+        let method_name = func.name.to_string();
+
+        // Build argument list for Rust function
+        let mut rust_args = Vec::new();
+        if let Some(receiver_type) = &func.receiver {
+            rust_args.push(quote! { this: &#receiver_type });
+        }
+        for arg in &func.args {
+            let name = &arg.name;
+            let ty = arg.ty.to_rust_type();
+            rust_args.push(quote! { #name: #ty });
+        }
+
+        // Build return type
+        let return_type = func.return_type.to_rust_type();
+
+        // Build JNI signature
+        let jni_args: String = func.args.iter().map(|a| a.ty.jni_signature()).collect();
+        let jni_ret = func.return_type.jni_signature();
+        let jni_sig = format!("({}){}", jni_args, jni_ret);
+        let jni_sig_lit = syn::LitStr::new(&jni_sig, proc_macro2::Span::call_site());
+
+        // Build JNI call arguments
+        let mut jni_call_args = Vec::new();
+        for arg in &func.args {
+            let name = &arg.name;
+            let conversion = match &arg.ty {
+                ForeignType::Bool => quote! {
+                    ::jni::objects::JValue::Bool(if #name { 1 } else { 0 })
+                },
+                ForeignType::I8 | ForeignType::U8 => quote! {
+                    ::jni::objects::JValue::Byte(#name as i8)
+                },
+                ForeignType::I16 | ForeignType::U16 => quote! {
+                    ::jni::objects::JValue::Short(#name as i16)
+                },
+                ForeignType::I32 | ForeignType::U32 => quote! {
+                    ::jni::objects::JValue::Int(#name as i32)
+                },
+                ForeignType::I64 | ForeignType::U64 => quote! {
+                    ::jni::objects::JValue::Long(#name as i64)
+                },
+                ForeignType::F32 => quote! {
+                    ::jni::objects::JValue::Float(#name)
+                },
+                ForeignType::F64 => quote! {
+                    ::jni::objects::JValue::Double(#name)
+                },
+                ForeignType::String | ForeignType::StrRef => quote! {
+                    {
+                        let jstr = env.new_string(#name).ok()?;
+                        ::jni::objects::JValue::Object(&jstr)
+                    }
+                },
+                _ => quote! {
+                    ::jni::objects::JValue::Object(&#name.inner.as_obj())
+                },
+            };
+            jni_call_args.push(conversion);
+        }
+
+        // Build result conversion
+        let result_conversion = match &func.return_type {
+            ForeignType::Unit => quote! { Some(()) },
+            ForeignType::Bool => quote! {
+                result.z().ok().map(|v| v != 0)
+            },
+            ForeignType::I32 | ForeignType::U32 => quote! {
+                result.i().ok().map(|v| v as _)
+            },
+            ForeignType::I64 | ForeignType::U64 => quote! {
+                result.j().ok().map(|v| v as _)
+            },
+            ForeignType::F32 => quote! {
+                result.f().ok()
+            },
+            ForeignType::F64 => quote! {
+                result.d().ok()
+            },
+            ForeignType::String => quote! {
+                {
+                    let obj = result.l().ok()?;
+                    if obj.is_null() {
+                        return Some(String::new());
+                    }
+                    let jstr = ::jni::objects::JString::from(obj);
+                    let rust_str: String = env.get_string(&jstr).ok()?.into();
+                    Some(rust_str)
+                }
+            },
+            ForeignType::Option(inner) => {
+                // Handle Option<String> specially
+                match inner.as_ref() {
+                    ForeignType::String => quote! {
+                        {
+                            let obj = result.l().ok()?;
+                            if obj.is_null() {
+                                Some(None)
+                            } else {
+                                let jstr = ::jni::objects::JString::from(obj);
+                                let rust_str: String = env.get_string(&jstr).ok()?.into();
+                                Some(Some(rust_str))
+                            }
+                        }
+                    },
+                    _ => quote! {
+                        {
+                            let obj = result.l().ok()?;
+                            if obj.is_null() {
+                                Some(None)
+                            } else {
+                                // TODO: Handle other optional types
+                                Some(Some(Default::default()))
+                            }
+                        }
+                    },
+                }
+            }
+            _ => quote! {
+                Some(Default::default()) // TODO: Handle other return types
+            },
+        };
+
+        // Build the call expression
+        let call_target = if func.receiver.is_some() {
+            quote! { this.inner.as_obj() }
+        } else {
+            quote! { &class }
+        };
+
+        let method_name_lit = syn::LitStr::new(&method_name, proc_macro2::Span::call_site());
+
+        quote! {
+            pub fn #fn_name(#(#rust_args),*) -> Option<#return_type> {
+                manganis::android::with_activity(|env, _activity| {
+                    let result = env.call_method(
+                        #call_target,
+                        #method_name_lit,
+                        #jni_sig_lit,
+                        &[#(#jni_call_args),*],
+                    ).ok()?;
+
+                    #result_conversion
+                })?
+            }
+        }
+    }
+
+    fn generate_android_metadata(&self) -> TokenStream2 {
+        // Get the first type name or use "plugin" as default
+        let plugin_name = self
+            .types
+            .first()
+            .map(|t| t.name.to_string().to_lowercase())
+            .unwrap_or_else(|| "plugin".to_string());
+
+        let source_path_lit =
+            syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
+        let plugin_name_lit = syn::LitStr::new(&plugin_name, proc_macro2::Span::call_site());
+
+        let mut hash = DefaultHasher::new();
+        self.source_path.hash(&mut hash);
+        plugin_name.hash(&mut hash);
+        let plugin_hash = format!("{:016x}", hash.finish());
+
+        let link_section = crate::permissions::generate_link_section_inner(
+            quote! { __METADATA },
+            &plugin_hash,
+            "__ASSETS__",
+            quote! { manganis::android::metadata::serialize_android_metadata },
+            quote! { manganis::android::macro_helpers::copy_bytes },
+            quote! { manganis::android::metadata::AndroidMetadataBuffer },
+            true,
+        );
+
+        quote! {
+            const _: () = {
+                const __METADATA: manganis::android::AndroidArtifactMetadata =
+                    manganis::android::AndroidArtifactMetadata::new(
+                        #plugin_name_lit,
+                        concat!(env!("CARGO_MANIFEST_DIR"), "/", #source_path_lit),
+                        "", // No extra dependencies by default
+                    );
+
+                #link_section
+            };
+        }
+    }
+
+    /// Generate iOS Objective-C code
+    fn generate_ios(&self) -> TokenStream2 {
+        let mut output = TokenStream2::new();
+
+        // Generate opaque type wrappers
+        for ty in &self.types {
+            let name = &ty.name;
+            let init_fn_name = format_ident!("dioxus_{}_init", name.to_string().to_lowercase());
+            let class_name_bytes = format!("{}\0", name);
+
+            let type_def = quote! {
+                /// Linker anchor to ensure Swift class is linked
+                extern "C" {
+                    fn #init_fn_name();
+                }
+
+                /// Opaque wrapper around an Objective-C object pointer
+                pub struct #name {
+                    inner: *mut manganis::objc2::runtime::AnyObject,
+                }
+
+                unsafe impl Send for #name {}
+                unsafe impl Sync for #name {}
+
+                impl #name {
+                    /// Create a new instance by looking up the ObjC class
+                    pub fn new() -> Result<Self, &'static str> {
+                        unsafe {
+                            // Force Swift static library linkage
+                            #init_fn_name();
+
+                            let class_name = ::std::ffi::CStr::from_bytes_with_nul(#class_name_bytes.as_bytes())
+                                .expect("Invalid class name");
+                            let class = manganis::objc2::runtime::AnyClass::get(class_name)
+                                .ok_or("Class not found")?;
+
+                            let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![class, alloc];
+                            let instance: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![instance, init];
+
+                            if instance.is_null() {
+                                return Err("Failed to initialize instance");
+                            }
+
+                            Ok(Self { inner: instance })
+                        }
+                    }
+
+                    /// Create from an existing object pointer
+                    pub unsafe fn from_raw(ptr: *mut manganis::objc2::runtime::AnyObject) -> Self {
+                        Self { inner: ptr }
+                    }
+                }
+            };
+            output.extend(type_def);
+        }
+
+        // Generate function implementations
+        for func in &self.functions {
+            let func_code = self.generate_ios_function(func);
+            output.extend(func_code);
+        }
+
+        // Generate linker metadata
+        let metadata = self.generate_ios_metadata();
+        output.extend(metadata);
+
+        // Wrap in cfg
+        quote! {
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            mod __ffi_darwin {
+                #output
+            }
+
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            pub use __ffi_darwin::*;
+        }
+    }
+
+    fn generate_ios_function(&self, func: &ForeignFunctionDecl) -> TokenStream2 {
+        let fn_name = &func.name;
+
+        // Build Objective-C selector
+        let selector = self.rust_to_objc_selector(&func.name.to_string(), &func.args);
+
+        // Build argument list for Rust function
+        let mut rust_args = Vec::new();
+        if let Some(receiver_type) = &func.receiver {
+            rust_args.push(quote! { this: &#receiver_type });
+        }
+        for arg in &func.args {
+            let name = &arg.name;
+            let ty = arg.ty.to_rust_type();
+            rust_args.push(quote! { #name: #ty });
+        }
+
+        // Build return type
+        let return_type = func.return_type.to_rust_type();
+
+        // Build argument conversions (variable bindings before msg_send)
+        let mut arg_conversions = Vec::new();
+        let mut arg_names = Vec::new();
+        for (i, arg) in func.args.iter().enumerate() {
+            let name = &arg.name;
+            let converted_name = format_ident!("__arg_{}", i);
+            let conversion = match &arg.ty {
+                ForeignType::Bool => quote! {
+                    let #converted_name = manganis::objc2::runtime::Bool::new(#name);
+                },
+                ForeignType::String | ForeignType::StrRef => {
+                    quote! {
+                        let __cstr = ::std::ffi::CString::new(#name.as_bytes()).unwrap();
+                        let __nsstring_class = manganis::objc2::runtime::AnyClass::get(
+                            ::std::ffi::CStr::from_bytes_with_nul(b"NSString\0").unwrap()
+                        ).unwrap();
+                        let #converted_name: *mut manganis::objc2::runtime::AnyObject = manganis::objc2::msg_send![
+                            __nsstring_class,
+                            stringWithUTF8String: __cstr.as_ptr()
+                        ];
+                    }
+                }
+                _ => quote! { let #converted_name = #name; },
+            };
+            arg_conversions.push(conversion);
+            arg_names.push(converted_name);
+        }
+
+        // Build result conversion
+        let result_conversion = match &func.return_type {
+            ForeignType::Unit => quote! { Ok(()) },
+            ForeignType::Bool => quote! {
+                Ok(result.as_bool())
+            },
+            ForeignType::String => quote! {
+                {
+                    if result.is_null() {
+                        Ok(String::new())
+                    } else {
+                        let cstr: *const ::std::os::raw::c_char = manganis::objc2::msg_send![result, UTF8String];
+                        let rust_str = ::std::ffi::CStr::from_ptr(cstr)
+                            .to_str()
+                            .map_err(|_| "Invalid UTF-8")?;
+                        Ok(rust_str.to_owned())
+                    }
+                }
+            },
+            ForeignType::Option(inner) => match inner.as_ref() {
+                ForeignType::String => quote! {
+                    {
+                        if result.is_null() {
+                            Ok(None)
+                        } else {
+                            let cstr: *const ::std::os::raw::c_char = manganis::objc2::msg_send![result, UTF8String];
+                            let rust_str = ::std::ffi::CStr::from_ptr(cstr)
+                                .to_str()
+                                .map_err(|_| "Invalid UTF-8")?;
+                            Ok(Some(rust_str.to_owned()))
+                        }
+                    }
+                },
+                _ => quote! {
+                    if result.is_null() {
+                        Ok(None)
+                    } else {
+                        Ok(Some(Default::default()))
+                    }
+                },
+            },
+            _ => quote! { Ok(Default::default()) },
+        };
+
+        // Build the msg_send call
+        let this_expr = if func.receiver.is_some() {
+            quote! { this.inner }
+        } else {
+            // For static methods, we'd need the class
+            quote! { class }
+        };
+
+        // Build msg_send expression with proper selector syntax
+        let msg_send_call = if func.args.is_empty() {
+            // No arguments - use the simple selector
+            let selector_ident = format_ident!("{}", selector);
+            quote! {
+                manganis::objc2::msg_send![#this_expr, #selector_ident]
+            }
+        } else {
+            // Arguments - build the selector parts manually
+            // The selector is like "getCurrentPositionJsonWithOptionsJson:" for one arg
+            // We need to call it as: msg_send![obj, getCurrentPositionJsonWithOptionsJson: arg0]
+
+            // Parse the selector into parts (split by ':')
+            let selector_parts: Vec<&str> = selector.trim_end_matches(':').split(':').collect();
+
+            // Build the msg_send call tokens manually
+            let mut tokens = quote! { #this_expr, };
+            for (i, part) in selector_parts.iter().enumerate() {
+                if i < arg_names.len() {
+                    let part_ident = format_ident!("{}", part);
+                    let arg = &arg_names[i];
+                    if i == 0 {
+                        tokens.extend(quote! { #part_ident: #arg });
+                    } else {
+                        tokens.extend(quote! { , #part_ident: #arg });
+                    }
+                }
+            }
+
+            quote! {
+                manganis::objc2::msg_send![#tokens]
+            }
+        };
+
+        quote! {
+            pub fn #fn_name(#(#rust_args),*) -> Result<#return_type, &'static str> {
+                unsafe {
+                    #(#arg_conversions)*
+                    let result: *mut manganis::objc2::runtime::AnyObject = #msg_send_call;
+
+                    #result_conversion
+                }
+            }
+        }
+    }
+
+    fn generate_ios_metadata(&self) -> TokenStream2 {
+        // Get the first type name or use "plugin" as default
+        let plugin_name = self
+            .types
+            .first()
+            .map(|t| t.name.to_string())
+            .unwrap_or_else(|| "Plugin".to_string());
+
+        let source_path_lit =
+            syn::LitStr::new(&self.source_path, proc_macro2::Span::call_site());
+        let plugin_name_lit = syn::LitStr::new(&plugin_name.to_lowercase(), proc_macro2::Span::call_site());
+        let product_lit = syn::LitStr::new(&plugin_name, proc_macro2::Span::call_site());
+
+        let mut hash = DefaultHasher::new();
+        self.source_path.hash(&mut hash);
+        plugin_name.hash(&mut hash);
+        let plugin_hash = format!("{:016x}", hash.finish());
+
+        let link_section = crate::permissions::generate_link_section_inner(
+            quote! { __METADATA },
+            &plugin_hash,
+            "__ASSETS__",
+            quote! { manganis::darwin::metadata::serialize_swift_metadata },
+            quote! { manganis::darwin::macro_helpers::copy_bytes },
+            quote! { manganis::darwin::metadata::SwiftMetadataBuffer },
+            true,
+        );
+
+        quote! {
+            const _: () = {
+                const __METADATA: manganis::darwin::SwiftSourceMetadata =
+                    manganis::darwin::SwiftSourceMetadata::new(
+                        #plugin_name_lit,
+                        concat!(env!("CARGO_MANIFEST_DIR"), "/", #source_path_lit),
+                        #product_lit,
+                    );
+
+                #link_section
+            };
+        }
+    }
+
+    /// Convert a Rust function name to an Objective-C selector
+    fn rust_to_objc_selector(&self, fn_name: &str, args: &[ForeignArg]) -> String {
+        if args.is_empty() {
+            return to_camel_case(fn_name);
+        }
+
+        let mut selector = to_camel_case(fn_name);
+
+        for (i, arg) in args.iter().enumerate() {
+            if i == 0 {
+                selector.push_str("With");
+                selector.push_str(&to_upper_camel_case(&arg.name.to_string()));
+                selector.push(':');
+            } else {
+                selector.push_str(&to_camel_case(&arg.name.to_string()));
+                selector.push(':');
+            }
+        }
+
+        selector
+    }
+}
+
+/// Convert snake_case to camelCase
+fn to_camel_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = false;
+
+    for (i, c) in s.chars().enumerate() {
+        if c == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.push(c.to_ascii_uppercase());
+            capitalize_next = false;
+        } else if i == 0 {
+            result.push(c.to_ascii_lowercase());
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
+/// Convert snake_case to UpperCamelCase
+fn to_upper_camel_case(s: &str) -> String {
+    let mut result = String::new();
+    let mut capitalize_next = true;
+
+    for c in s.chars() {
+        if c == '_' {
+            capitalize_next = true;
+        } else if capitalize_next {
+            result.push(c.to_ascii_uppercase());
+            capitalize_next = false;
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}

@@ -1110,6 +1110,11 @@ impl BuildRequest {
                 if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
                     && !artifacts.swift_sources.is_empty()
                 {
+                    // Compile Swift packages from source
+                    self.compile_swift_sources(&artifacts.swift_sources)
+                        .context("Failed to compile Swift packages")?;
+
+                    // Then embed Swift standard libraries
                     self.embed_swift_stdlibs(&artifacts.swift_sources)
                         .await
                         .context("Failed to embed Swift standard libraries")?;
@@ -1437,9 +1442,9 @@ impl BuildRequest {
                 super::permissions::PermissionManifest::from_permissions(extracted_permissions);
 
             let platform = match self.bundle {
-                BundleFormat::Android => Some(permissions::Platform::Android),
-                BundleFormat::Ios => Some(permissions::Platform::Ios),
-                BundleFormat::MacOS => Some(permissions::Platform::Macos),
+                BundleFormat::Android => Some(manganis_core::Platform::Android),
+                BundleFormat::Ios => Some(manganis_core::Platform::Ios),
+                BundleFormat::MacOS => Some(manganis_core::Platform::Macos),
                 _ => None,
             };
 
@@ -1503,7 +1508,13 @@ impl BuildRequest {
         ))
     }
 
-    /// Copy collected Android AARs into the Gradle project and add dependencies.
+    /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
+    ///
+    /// This function handles both prebuilt AARs and source folders:
+    /// - If `artifact_path` is a file (ends in .aar), copy it to libs/ and add file dependency
+    /// - If `artifact_path` is a directory, copy it as a Gradle submodule and add project dependency
+    ///
+    /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
     fn install_android_artifacts(
         &self,
         android_artifacts: &super::android_java::AndroidArtifactManifest,
@@ -1511,39 +1522,77 @@ impl BuildRequest {
         let libs_dir = self.root_dir().join("app").join("libs");
         std::fs::create_dir_all(&libs_dir)?;
 
+        let plugins_dir = self.root_dir().join("plugins");
         let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
+        let settings_gradle = self.root_dir().join("settings.gradle");
+
         for artifact in android_artifacts.artifacts() {
             let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
-            if !artifact_path.exists() {
+            let plugin_name = artifact.plugin_name.as_str();
+
+            if artifact_path.is_dir() {
+                // It's a source folder - copy it as a Gradle submodule
+                tracing::info!(
+                    "Bundling Android plugin '{}' from source: {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+
+                // Create module directory
+                let module_dir = plugins_dir.join(plugin_name);
+                self.copy_dir_recursive(&artifact_path, &module_dir)?;
+
+                // Add to settings.gradle
+                self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
+
+                // Add project dependency to app/build.gradle.kts
+                let dep_line = format!("implementation(project(\":plugins:{}\"))", plugin_name);
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+
+                tracing::debug!(
+                    "Added Android plugin module :plugins:{} from {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+            } else if artifact_path.extension().is_some_and(|ext| ext == "aar") {
+                // It's a prebuilt AAR - copy directly to libs
+                if !artifact_path.exists() {
+                    anyhow::bail!(
+                        "Android plugin artifact not found: {}",
+                        artifact_path.display()
+                    );
+                }
+
+                let filename = artifact_path
+                    .file_name()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Android plugin artifact path has no filename: {}",
+                            artifact_path.display()
+                        )
+                    })?
+                    .to_owned();
+                let dest_file = libs_dir.join(&filename);
+                std::fs::copy(&artifact_path, &dest_file)?;
+                tracing::debug!(
+                    "Copied Android artifact {} -> {}",
+                    artifact_path.display(),
+                    dest_file.display()
+                );
+
+                let dep_line = format!(
+                    "implementation(files(\"libs/{}\"))",
+                    filename.to_string_lossy()
+                );
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+            } else {
                 anyhow::bail!(
-                    "Android plugin artifact not found: {}",
+                    "Android artifact path is neither a directory nor an AAR file: {}",
                     artifact_path.display()
                 );
             }
 
-            let filename = artifact_path
-                .file_name()
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Android plugin artifact path has no filename: {}",
-                        artifact_path.display()
-                    )
-                })?
-                .to_owned();
-            let dest_file = libs_dir.join(&filename);
-            std::fs::copy(&artifact_path, &dest_file)?;
-            tracing::debug!(
-                "Copied Android artifact {} -> {}",
-                artifact_path.display(),
-                dest_file.display()
-            );
-
-            let dep_line = format!(
-                "implementation(files(\"libs/{}\"))",
-                filename.to_string_lossy()
-            );
-            self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
-
+            // Add any extra Gradle dependencies specified by the plugin
             for dependency in artifact
                 .gradle_dependencies
                 .as_str()
@@ -1556,6 +1605,280 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    /// Recursively copy a directory and its contents.
+    fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+        std::fs::create_dir_all(dst)?;
+
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+
+            if src_path.is_dir() {
+                // Skip build directories and hidden folders
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
+                    continue;
+                }
+                self.copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                std::fs::copy(&src_path, &dst_path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Add a module include to settings.gradle if not already present.
+    fn ensure_settings_gradle_include(&self, settings_gradle: &Path, plugin_name: &str) -> Result<()> {
+        use std::fs;
+
+        let include_line = format!("include ':plugins:{}'", plugin_name);
+        let mut contents = fs::read_to_string(settings_gradle)?;
+
+        if contents.contains(&include_line) {
+            return Ok(());
+        }
+
+        // Add the include at the end
+        contents.push_str(&format!("\n{}\n", include_line));
+        fs::write(settings_gradle, contents)?;
+
+        Ok(())
+    }
+
+    /// Bundle and compile Swift packages from source.
+    ///
+    /// This function:
+    /// 1. Bundles all Swift plugin sources into a staging directory
+    /// 2. Creates an umbrella Package.swift that includes all plugins as dependencies
+    /// 3. Runs a single `swift build` to compile everything together
+    /// 4. The resulting static libraries are linked into the final executable
+    fn compile_swift_sources(
+        &self,
+        swift_sources: &super::ios_swift::SwiftSourceManifest,
+    ) -> Result<()> {
+        use std::process::Command;
+
+        if swift_sources.is_empty() {
+            return Ok(());
+        }
+
+        // Staging directory for all Swift plugins
+        let swift_plugins_dir = self.target_dir.join("swift-plugins");
+        std::fs::create_dir_all(&swift_plugins_dir)?;
+
+        // Collect valid source packages and copy them to staging
+        let mut bundled_packages: Vec<(String, PathBuf)> = Vec::new();
+
+        for package in swift_sources.sources() {
+            let package_path = PathBuf::from(package.package_path.as_str());
+            let product = package.product.as_str();
+
+            // Only include if it's a source directory (has Package.swift)
+            if !package_path.is_dir() || !package_path.join("Package.swift").exists() {
+                tracing::debug!(
+                    "Skipping Swift package at {} - not a source directory",
+                    package_path.display()
+                );
+                continue;
+            }
+
+            // Copy to staging directory
+            let staged_path = swift_plugins_dir.join(product);
+            tracing::info!(
+                "Bundling Swift plugin '{}' from {}",
+                product,
+                package_path.display()
+            );
+            self.copy_dir_recursive(&package_path, &staged_path)?;
+            bundled_packages.push((product.to_string(), staged_path));
+        }
+
+        if bundled_packages.is_empty() {
+            return Ok(());
+        }
+
+        // Create umbrella Package.swift that includes all plugins
+        let umbrella_package = self.generate_umbrella_swift_package(&bundled_packages)?;
+        std::fs::write(swift_plugins_dir.join("Package.swift"), umbrella_package)?;
+
+        // Determine Swift target triple based on Rust target
+        let triple_str = self.triple.to_string();
+        let (swift_target, sdk_name) = if triple_str.contains("aarch64-apple-ios-sim") {
+            ("arm64-apple-ios13.0-simulator", "iphonesimulator")
+        } else if triple_str.contains("aarch64-apple-ios") {
+            ("arm64-apple-ios13.0", "iphoneos")
+        } else if triple_str.contains("x86_64-apple-ios") {
+            ("x86_64-apple-ios13.0-simulator", "iphonesimulator")
+        } else if triple_str.contains("aarch64-apple-darwin") {
+            ("arm64-apple-macos11.0", "macosx")
+        } else if triple_str.contains("x86_64-apple-darwin") {
+            ("x86_64-apple-macos11.0", "macosx")
+        } else {
+            tracing::warn!(
+                "Unknown target {} for Swift compilation, skipping",
+                triple_str
+            );
+            return Ok(());
+        };
+
+        // Get SDK path
+        let sdk_output = Command::new("xcrun")
+            .args(["--sdk", sdk_name, "--show-sdk-path"])
+            .output()
+            .context("Failed to run xcrun to find SDK path")?;
+
+        if !sdk_output.status.success() {
+            anyhow::bail!(
+                "xcrun failed to find SDK {}: {}",
+                sdk_name,
+                String::from_utf8_lossy(&sdk_output.stderr)
+            );
+        }
+
+        let sdk_path = String::from_utf8(sdk_output.stdout)
+            .context("Invalid UTF-8 in SDK path")?
+            .trim()
+            .to_string();
+
+        // Build directory for Swift output
+        let build_dir = swift_plugins_dir.join(".build");
+        std::fs::create_dir_all(&build_dir)?;
+
+        // Determine configuration based on profile
+        let configuration = if self.release { "release" } else { "debug" };
+
+        // Run a single swift build for all plugins
+        tracing::info!(
+            "Compiling {} Swift plugin(s) with single build",
+            bundled_packages.len()
+        );
+
+        let status = Command::new("xcrun")
+            .args(["swift", "build"])
+            .args(["--package-path", swift_plugins_dir.to_str().unwrap()])
+            .args(["--configuration", configuration])
+            .args(["--triple", swift_target])
+            .args(["--sdk", &sdk_path])
+            .args(["--build-path", build_dir.to_str().unwrap()])
+            .status()
+            .context(format!(
+                "Failed to run swift build for plugins at {}",
+                swift_plugins_dir.display()
+            ))?;
+
+        if !status.success() {
+            anyhow::bail!(
+                "Swift build failed for plugins at {}",
+                swift_plugins_dir.display()
+            );
+        }
+
+        // Verify that all expected static libraries were built
+        for (product, _) in &bundled_packages {
+            let lib_name = format!("lib{}.a", product);
+            if let Some(lib_path) = self.find_swift_static_lib(&build_dir, &lib_name) {
+                tracing::info!("Built Swift plugin: {} -> {}", product, lib_path.display());
+            } else {
+                tracing::warn!(
+                    "Could not find Swift static library {} in {}",
+                    lib_name,
+                    build_dir.display()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Generate an umbrella Package.swift that includes all bundled Swift plugins as dependencies.
+    fn generate_umbrella_swift_package(&self, packages: &[(String, PathBuf)]) -> Result<String> {
+        let mut dependencies = String::new();
+        let mut target_deps = String::new();
+
+        for (name, path) in packages {
+            let rel_path = path.file_name().unwrap().to_string_lossy();
+            dependencies.push_str(&format!(
+                "        .package(path: \"./{}\"),\n",
+                rel_path
+            ));
+            target_deps.push_str(&format!(
+                "            .product(name: \"{}\", package: \"{}\"),\n",
+                name, rel_path
+            ));
+        }
+
+        let package_swift = format!(
+            r#"// swift-tools-version:5.7
+// Auto-generated umbrella package for Dioxus Swift plugins
+
+import PackageDescription
+
+let package = Package(
+    name: "DioxusPlugins",
+    platforms: [
+        .iOS(.v13),
+        .macOS(.v11),
+    ],
+    products: [
+        .library(
+            name: "DioxusPlugins",
+            type: .static,
+            targets: ["DioxusPlugins"]
+        ),
+    ],
+    dependencies: [
+{}    ],
+    targets: [
+        .target(
+            name: "DioxusPlugins",
+            dependencies: [
+{}            ],
+            path: "Sources"
+        ),
+    ]
+)
+"#,
+            dependencies, target_deps
+        );
+
+        // Create a minimal source file for the umbrella target
+        let sources_dir = self.target_dir.join("swift-plugins").join("Sources");
+        std::fs::create_dir_all(&sources_dir)?;
+        std::fs::write(
+            sources_dir.join("DioxusPlugins.swift"),
+            "// Umbrella module for Dioxus Swift plugins\n",
+        )?;
+
+        Ok(package_swift)
+    }
+
+    /// Recursively search for a Swift static library in the build directory.
+    fn find_swift_static_lib(&self, build_dir: &Path, lib_name: &str) -> Option<PathBuf> {
+        if !build_dir.exists() {
+            return None;
+        }
+
+        for entry in std::fs::read_dir(build_dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+
+            if path.is_file() && path.file_name().is_some_and(|n| n == lib_name) {
+                return Some(path);
+            }
+
+            if path.is_dir() {
+                if let Some(found) = self.find_swift_static_lib(&path, lib_name) {
+                    return Some(found);
+                }
+            }
+        }
+
+        None
     }
 
     /// Embed Swift standard libraries into the app bundle when Swift plugins are present.

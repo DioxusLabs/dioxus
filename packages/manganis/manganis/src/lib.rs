@@ -66,20 +66,24 @@ pub mod permissions {
 #[cfg(any(target_os = "android", feature = "metadata"))]
 mod android;
 
-#[cfg(any(target_os = "ios", target_os = "macos"))]
-mod darwin;
+/// Darwin (iOS/macOS) platform utilities
+#[doc(hidden)]
+#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
+pub mod darwin;
 
 #[cfg(target_os = "android")]
 pub use android::*;
 
-#[cfg(any(target_os = "ios", target_os = "macos"))]
+// Export darwin module for iOS, macOS, and when metadata feature is enabled (for FFI macro)
+#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
 pub use darwin::*;
 
 /// Re-export commonly used types for convenience
 #[cfg(target_os = "android")]
 pub use jni;
 
-#[cfg(any(target_os = "ios", target_os = "macos"))]
+// Re-export objc2 for FFI macro generated code
+#[cfg(any(target_os = "ios", target_os = "macos", feature = "metadata"))]
 pub use objc2;
 
 /// Re-export the android_plugin! macro when metadata feature is enabled
@@ -89,3 +93,7 @@ pub use manganis_macro::android_plugin;
 /// Re-export the ios_plugin! macro when metadata feature is enabled
 #[cfg(all(feature = "metadata", any(target_os = "ios", target_os = "macos")))]
 pub use manganis_macro::ios_plugin;
+
+/// Re-export the ffi attribute macro for native FFI bindings
+/// This macro generates direct FFI bindings between Rust and native platforms (Swift/Kotlin)
+pub use manganis_macro::ffi;

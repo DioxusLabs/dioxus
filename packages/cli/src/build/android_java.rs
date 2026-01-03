@@ -1,6 +1,6 @@
 //! Android artifact manifest helpers.
 
-use permissions::AndroidArtifactMetadata;
+use manganis_core::AndroidArtifactMetadata;
 
 /// Manifest of all Android artifacts declared by dependencies.
 #[derive(Debug, Clone, Default)]

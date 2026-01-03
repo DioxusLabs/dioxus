@@ -100,7 +100,7 @@ impl ToTokens for IosPluginParser {
         let product_lit = syn::LitStr::new(&self.spm.product, proc_macro2::Span::call_site());
 
         let metadata_expr = quote! {
-            dioxus_platform_bridge::darwin::SwiftSourceMetadata::new(
+            manganis::darwin::SwiftSourceMetadata::new(
                 #plugin_name,
                 concat!(env!("CARGO_MANIFEST_DIR"), "/", #path_lit),
                 #product_lit,
@@ -111,9 +111,9 @@ impl ToTokens for IosPluginParser {
             metadata_expr,
             &plugin_hash,
             "__ASSETS__",
-            quote! { dioxus_platform_bridge::darwin::metadata::serialize_swift_metadata },
-            quote! { dioxus_platform_bridge::android::macro_helpers::copy_bytes },
-            quote! { dioxus_platform_bridge::darwin::metadata::SwiftMetadataBuffer },
+            quote! { manganis::darwin::metadata::serialize_swift_metadata },
+            quote! { manganis::darwin::macro_helpers::copy_bytes },
+            quote! { manganis::darwin::metadata::SwiftMetadataBuffer },
             true,
         );
 

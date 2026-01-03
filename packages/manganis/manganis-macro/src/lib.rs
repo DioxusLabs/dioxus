@@ -413,6 +413,65 @@ pub fn ios_plugin(input: TokenStream) -> TokenStream {
     quote! { #ios_plugin }.into()
 }
 
+/// Generate FFI bindings between Rust and native platforms (Swift/Kotlin)
+///
+/// This attribute macro parses an `extern "Swift"` or `extern "Kotlin"` block and generates:
+/// 1. Opaque type wrappers for foreign types
+/// 2. Function implementations with direct JNI/ObjC bindings
+/// 3. Linker metadata for the CLI to compile the native source
+///
+/// # Syntax
+///
+/// ```rust,ignore
+/// #[manganis::ffi("/src/ios")]
+/// extern "Swift" {
+///     pub type GeolocationPlugin;
+///     pub fn get_position(this: &GeolocationPlugin, high_accuracy: bool) -> Option<String>;
+/// }
+///
+/// #[manganis::ffi("/src/android")]
+/// extern "Kotlin" {
+///     pub type GeolocationPlugin;
+///     pub fn get_position(this: &GeolocationPlugin, high_accuracy: bool) -> Option<String>;
+/// }
+/// ```
+///
+/// # Path Parameter
+///
+/// The path in the attribute specifies the native source folder relative to `CARGO_MANIFEST_DIR`:
+/// - For Swift: A SwiftPM package folder containing `Package.swift`
+/// - For Kotlin: A Gradle project folder containing `build.gradle.kts`
+///
+/// # Type Declarations
+///
+/// Use `type Name;` to declare opaque foreign types. These become Rust structs wrapping
+/// the native object handle (GlobalRef for JNI, raw pointer for ObjC).
+///
+/// # Function Declarations
+///
+/// Functions can be:
+/// - **Instance methods**: First argument is `this: &TypeName`
+/// - **Static methods**: No `this` argument
+///
+/// # Supported Types
+///
+/// - Primitives: `bool`, `i8`-`i64`, `u8`-`u64`, `f32`, `f64`
+/// - Strings: `String`, `&str`
+/// - Options: `Option<T>` where T is supported
+/// - Opaque refs: `&TypeName` for foreign type references
+#[proc_macro_attribute]
+pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
+    use platform_bridge::ffi_bridge::{FfiAttribute, FfiBridgeParser};
+
+    let attr = parse_macro_input!(attr as FfiAttribute);
+    let item = parse_macro_input!(item as syn::ItemForeignMod);
+
+    match FfiBridgeParser::parse_with_attr(attr, item) {
+        Ok(parser) => parser.generate().into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
 fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
     // Get the location of the root of the crate which is where all assets are relative to
     //

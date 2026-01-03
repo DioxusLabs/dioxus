@@ -9,11 +9,11 @@
 //!
 //! Other platforms (Linux, Web, Windows desktop) use runtime-only permissions
 //! and do not require build-time manifest generation.
-use permissions::Platform;
+use manganis_core::Platform;
 use serde::Serialize;
 
 /// Alias the shared manifest type from the permissions crate for CLI-specific helpers
-pub type PermissionManifest = permissions::PermissionManifest;
+pub type PermissionManifest = manganis_core::PermissionManifest;
 
 /// Android permission for Handlebars template
 #[derive(Debug, Clone, Serialize)]

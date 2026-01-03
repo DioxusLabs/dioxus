@@ -1,6 +1,6 @@
 //! iOS/macOS Swift package manifest helpers.
 
-use permissions::SwiftPackageMetadata as SwiftSourceMetadata;
+use manganis_core::SwiftPackageMetadata as SwiftSourceMetadata;
 
 /// Manifest of Swift packages embedded in the binary.
 #[derive(Debug, Clone, Default)]

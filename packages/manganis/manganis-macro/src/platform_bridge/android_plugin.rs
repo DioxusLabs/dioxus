@@ -141,7 +141,7 @@ impl ToTokens for AndroidPluginParser {
         let deps_lit = syn::LitStr::new(&deps_joined, proc_macro2::Span::call_site());
 
         let metadata_expr = quote! {
-            dioxus_platform_bridge::android::AndroidArtifactMetadata::new(
+            manganis::android::AndroidArtifactMetadata::new(
                 #plugin_name,
                 #artifact_expr,
                 #deps_lit,
@@ -152,9 +152,9 @@ impl ToTokens for AndroidPluginParser {
             metadata_expr,
             &plugin_hash,
             "__ASSETS__",
-            quote! { dioxus_platform_bridge::android::metadata::serialize_android_metadata },
-            quote! { dioxus_platform_bridge::android::macro_helpers::copy_bytes },
-            quote! { dioxus_platform_bridge::android::metadata::AndroidMetadataBuffer },
+            quote! { manganis::android::metadata::serialize_android_metadata },
+            quote! { manganis::android::macro_helpers::copy_bytes },
+            quote! { manganis::android::metadata::AndroidMetadataBuffer },
             true,
         );
 

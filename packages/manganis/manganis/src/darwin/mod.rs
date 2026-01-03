@@ -7,7 +7,7 @@
 /// manager
 pub mod manager;
 
-/// metdataa
+/// metadata for FFI macro
 #[cfg(feature = "metadata")]
 pub mod metadata;
 
@@ -18,3 +18,9 @@ pub use objc2::MainThreadMarker;
 
 #[cfg(feature = "metadata")]
 pub use metadata::*;
+
+/// Macro helpers for FFI code generation
+#[cfg(feature = "metadata")]
+pub mod macro_helpers {
+    pub use crate::macro_helpers::copy_bytes;
+}

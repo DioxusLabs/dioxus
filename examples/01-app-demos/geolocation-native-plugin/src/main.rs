@@ -1,9 +1,13 @@
 //! A simple Dioxus app demonstrating how to build a native plugin using manganis.
+//!
+//! This example shows how to use the `#[manganis::ffi]` macro to automatically generate
+//! FFI bindings between Rust and native platforms (Swift/Kotlin).
 
 use dioxus::prelude::*;
-use dioxus_geolocation::{
-    Geolocation, PermissionState, PermissionStatus, Position, PositionOptions,
-};
+
+// Import the local plugin module
+mod plugin;
+use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");

@@ -51,3 +51,9 @@ impl Serialize for Error {
         serializer.serialize_str(self.to_string().as_ref())
     }
 }
+
+impl From<&str> for Error {
+    fn from(s: &str) -> Self {
+        Error::PlatformBridge(s.to_string())
+    }
+}

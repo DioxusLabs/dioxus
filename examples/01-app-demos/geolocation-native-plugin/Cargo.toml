@@ -9,9 +9,15 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = [] }
+manganis = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [features]
-default = ["mobile"]
+default = ["mobile", "metadata"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
+# Enable native plugin metadata embedding for CLI to discover and bundle sources
+metadata = ["manganis/metadata"]

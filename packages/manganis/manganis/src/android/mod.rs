@@ -35,5 +35,5 @@ pub use callback::*;
 #[cfg(target_os = "android")]
 pub use java::*;
 
-#[cfg(feature = "metadata")]
-pub use metadata::AndroidArtifactMetadata;
+#[cfg(any(target_os = "android", feature = "metadata"))]
+pub use metadata::*;
