@@ -1679,8 +1679,7 @@ impl BuildRequest {
         // Remove version specifications from plugin declarations
         // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
         // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
-        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#)
-            .expect("Invalid regex");
+        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
         let cleaned = version_pattern.replace_all(&contents, "");
 
         if cleaned != contents {
@@ -1727,8 +1726,6 @@ impl BuildRequest {
         &self,
         swift_sources: &super::ios_swift::SwiftSourceManifest,
     ) -> Result<()> {
-        use std::process::Command;
-
         if swift_sources.is_empty() {
             return Ok(());
         }
@@ -3319,7 +3316,12 @@ let package = Package(
         // Run the linker
         let res = Command::new(&linker)
             .args(&args)
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .envs(
+                rustc_args
+                    .envs
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str())),
+            )
             .output()
             .await?;
 

@@ -245,24 +245,24 @@ pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
 /// Location permissions use the builder pattern:
 /// ```rust
 /// use permissions::{Permission, PermissionBuilder, LocationPrecision};
-/// use permissions_macro::static_permission;
+/// use permissions_macro::permission;
 ///
 /// // Fine location
-/// const LOCATION_FINE: Permission = static_permission!(
+/// const LOCATION_FINE: Permission = permission!(
 ///     PermissionBuilder::location(LocationPrecision::Fine)
 ///         .with_description("Track your runs")
 ///         .build()
 /// );
 ///
 /// // Coarse location
-/// const LOCATION_COARSE: Permission = static_permission!(
+/// const LOCATION_COARSE: Permission = permission!(
 ///     PermissionBuilder::location(LocationPrecision::Coarse)
 ///         .with_description("Approximate location")
 ///         .build()
 /// );
 ///
 /// // Custom permission
-/// const CUSTOM: Permission = static_permission!(
+/// const CUSTOM: Permission = permission!(
 ///     PermissionBuilder::custom()
 ///         .with_android("android.permission.MY_PERMISSION")
 ///         .with_ios("NSMyUsageDescription")
@@ -277,17 +277,17 @@ pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
 /// Simple permissions like Camera, Microphone, and Notifications use direct construction:
 /// ```rust
 /// use permissions::{Permission, PermissionKind};
-/// use permissions_macro::static_permission;
+/// use permissions_macro::permission;
 ///
-/// const CAMERA: Permission = static_permission!(
+/// const CAMERA: Permission = permission!(
 ///     Permission::new(PermissionKind::Camera, "Take photos")
 /// );
 ///
-/// const MICROPHONE: Permission = static_permission!(
+/// const MICROPHONE: Permission = permission!(
 ///     Permission::new(PermissionKind::Microphone, "Record audio")
 /// );
 ///
-/// const NOTIFICATIONS: Permission = static_permission!(
+/// const NOTIFICATIONS: Permission = permission!(
 ///     Permission::new(PermissionKind::Notifications, "Send notifications")
 /// );
 /// ```
@@ -308,109 +308,10 @@ pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
 /// See the main documentation for examples of using `Custom` permissions
 /// for untested or special use cases.
 #[proc_macro]
-pub fn static_permission(input: TokenStream) -> TokenStream {
+pub fn permission(input: TokenStream) -> TokenStream {
     let permission = parse_macro_input!(input as PermissionParser);
 
     quote! { #permission }.into()
-}
-
-/// Backward compatible alias for [`static_permission!`].
-#[proc_macro]
-pub fn permission(input: TokenStream) -> TokenStream {
-    static_permission(input)
-}
-
-/// Declare an Android plugin that will be embedded in the binary
-///
-/// This macro declares prebuilt Android artifacts (AARs) and embeds their metadata into the compiled
-/// binary using the shared `SymbolData` stream (the same linker section used for assets and
-/// permissions). The Dioxus CLI reads that metadata to copy the AARs into the generated Gradle
-/// project and to append any additional Gradle dependencies.
-///
-/// # Syntax
-///
-/// Basic plugin declaration with full relative paths:
-/// ```rust,no_run
-/// #[cfg(target_os = "android")]
-/// dioxus_platform_bridge::android_plugin!(
-///     plugin = "geolocation",
-///     aar = { path = "android/build/outputs/aar/geolocation-plugin-release.aar" }
-/// );
-/// ```
-///
-/// # Parameters
-///
-/// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
-/// - `aar`: A block with either `{ path = "relative/path/to.aar" }` or `{ env = "ENV_WITH_PATH" }`
-///
-/// When `path` is used, it is resolved relative to `CARGO_MANIFEST_DIR`. When `env` is used,
-/// the environment variable is read at compile time via `env!`.
-///
-/// The macro wraps the resolved artifact path and dependency strings in
-/// `SymbolData::AndroidArtifact` and stores it under the `__ASSETS__*` linker prefix. Because the CLI
-/// already scans that prefix for assets and permissions, no extra scanner is required.
-///
-/// # Example Structure
-///
-/// ```text
-/// your-plugin-crate/
-/// └── android/
-///     ├── build.gradle.kts        # Builds the AAR
-///     ├── settings.gradle.kts
-///     └── build/outputs/aar/
-///         └── geolocation-plugin-release.aar
-/// ```
-#[proc_macro]
-pub fn android_plugin(input: TokenStream) -> TokenStream {
-    let android_plugin =
-        parse_macro_input!(input as platform_bridge::android_plugin::AndroidPluginParser);
-
-    quote! { #android_plugin }.into()
-}
-
-/// Declare an iOS/macOS plugin that will be embedded in the binary
-///
-/// This macro declares Swift packages and embeds their metadata into the compiled binary using the
-/// shared `SymbolData` stream. The Dioxus CLI uses this metadata to ensure the Swift runtime is
-/// bundled correctly whenever Swift code is linked.
-///
-/// # Syntax
-///
-/// Basic plugin declaration:
-/// ```rust,no_run
-/// #[cfg(any(target_os = "ios", target_os = "macos"))]
-/// dioxus_platform_bridge::ios_plugin!(
-///     plugin = "geolocation",
-///     spm = { path = "ios", product = "GeolocationPlugin" }
-/// );
-/// ```
-///
-/// # Parameters
-///
-/// - `plugin`: The plugin identifier for organization (e.g., "geolocation")
-/// - `spm`: A Swift Package declaration with `{ path = "...", product = "MyPlugin" }` relative to
-///   `CARGO_MANIFEST_DIR`.
-///
-/// The macro expands paths using `env!("CARGO_MANIFEST_DIR")` so package manifests are
-/// resolved relative to the crate declaring the plugin.
-///
-/// The metadata is serialized as `SymbolData::SwiftPackage` and emitted under the `__ASSETS__*`
-/// prefix, alongside assets, permissions, and Android artifacts.
-///
-/// # Example Structure
-///
-/// ```text
-/// your-plugin-crate/
-/// └── ios/
-///     ├── Package.swift
-///     └── Sources/
-///         └── GeolocationPlugin.swift
-/// ```
-#[proc_macro]
-pub fn ios_plugin(input: TokenStream) -> TokenStream {
-    let ios_plugin = parse_macro_input!(input as platform_bridge::ios_plugin::IosPluginParser);
-
-    quote! { #ios_plugin }.into()
 }
 
 /// Generate FFI bindings between Rust and native platforms (Swift/Kotlin)

@@ -9,7 +9,7 @@
 //! to inject into platform-specific configuration files.
 
 use manganis::permissions;
-use manganis::permissions::{static_permission, LocationPrecision, Permission, PermissionBuilder};
+use manganis::permissions::{permission, LocationPrecision, Permission, PermissionBuilder};
 
 /// Fine location permission
 ///
@@ -17,7 +17,7 @@ use manganis::permissions::{static_permission, LocationPrecision, Permission, Pe
 /// On Android, this corresponds to `ACCESS_FINE_LOCATION`.
 /// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
 pub const FINE_LOCATION: Permission =
-    static_permission!(PermissionBuilder::location(LocationPrecision::Fine)
+    permission!(PermissionBuilder::location(LocationPrecision::Fine)
         .with_description("Access your precise location to provide location-based services")
         .build());
 
@@ -27,6 +27,6 @@ pub const FINE_LOCATION: Permission =
 /// On Android, this corresponds to `ACCESS_COARSE_LOCATION`.
 /// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
 pub const COARSE_LOCATION: Permission =
-    static_permission!(PermissionBuilder::location(LocationPrecision::Coarse)
+    permission!(PermissionBuilder::location(LocationPrecision::Coarse)
         .with_description("Access your approximate location to provide location-based services")
         .build());

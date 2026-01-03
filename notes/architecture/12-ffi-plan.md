@@ -44,7 +44,6 @@ pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Generate platform-specific code + linker metadata
 }
 Step 3: Emit Linker Metadata
-Use existing manganis primitives (like android_plugin!/ios_plugin! do):
 For Kotlin: Emit AndroidArtifactMetadata with source folder path
 For Swift: Emit SwiftPackageMetadata with package path and product name
 Note: Modify metadata types to store SOURCE folder path (for CLI to compile) rather than artifact path (for prebuilt AAR).

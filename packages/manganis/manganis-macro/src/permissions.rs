@@ -83,7 +83,7 @@ pub fn generate_link_section_inner(
     }
 }
 
-/// Parser for the `static_permission!()` macro syntax (and `permission!()` alias)
+/// Parser for the `permission!()` macro syntax (and `permission!()` alias)
 ///
 /// This parser accepts any expression that evaluates to a `Permission`:
 /// - Builder pattern: `PermissionBuilder::location(...).with_description(...).build()`

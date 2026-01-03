@@ -17,22 +17,22 @@ This crate provides a unified API for declaring permissions across supported pla
 ### Basic Permission Declaration
 
 ```rust
-use permissions::{static_permission, Permission, PermissionBuilder, PermissionKind};
+use permissions::{permission, Permission, PermissionBuilder, PermissionKind};
 
 // Declare a camera permission using the builder
-const CAMERA: Permission = static_permission!(
+const CAMERA: Permission = permission!(
     Permission::new(PermissionKind::Camera, "Take photos")
 );
 
 // Declare a fine-grained location permission
-const LOCATION: Permission = static_permission!(
+const LOCATION: Permission = permission!(
     PermissionBuilder::location(permissions::LocationPrecision::Fine)
         .with_description("Track your runs")
         .build()
 );
 
 // Declare a microphone permission
-const MICROPHONE: Permission = static_permission!(
+const MICROPHONE: Permission = permission!(
     Permission::new(PermissionKind::Microphone, "Record audio")
 );
 ```
@@ -43,10 +43,10 @@ For permissions that aren't yet tested or for special use cases, use the `Custom
 with platform-specific identifiers:
 
 ```rust
-use permissions::{static_permission, Permission, PermissionBuilder};
+use permissions::{permission, Permission, PermissionBuilder};
 
 // Example: Request storage permission
-const STORAGE: Permission = static_permission!(
+const STORAGE: Permission = permission!(
     PermissionBuilder::custom()
         .with_android("android.permission.READ_EXTERNAL_STORAGE")
         .with_ios("NSPhotoLibraryUsageDescription")
@@ -64,10 +64,10 @@ const STORAGE: Permission = static_permission!(
 
 ```rust
 use permissions::{
-    static_permission, Permission, PermissionBuilder, PermissionKind, Platform,
+    permission, Permission, PermissionBuilder, PermissionKind, Platform,
 };
 
-const CAMERA: Permission = static_permission!(
+const CAMERA: Permission = permission!(
     Permission::new(PermissionKind::Camera, "Take photos")
 );
 
@@ -118,7 +118,7 @@ Each permission kind automatically maps to the appropriate platform-specific req
 
 ## How It Works
 
-1. **Declaration**: Use the `static_permission!()` macro (or legacy `permission!()`) to declare permissions in your code
+1. **Declaration**: Use the `permission!()` macro (or legacy `permission!()`) to declare permissions in your code
 2. **Embedding**: The macro embeds permission data in linker sections with `__PERMISSION__*` symbols
 3. **Collection**: Build tools can extract permissions by scanning the binary for these symbols
 4. **Injection**: Permissions can be injected into platform-specific configuration files

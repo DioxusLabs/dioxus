@@ -24,15 +24,15 @@ pub mod permissions {
     //! ## Usage
     //!
     //! ```rust
-    //! use permissions::{static_permission, Permission, PermissionBuilder, PermissionKind, LocationPrecision};
+    //! use permissions::{permission, Permission, PermissionBuilder, PermissionKind, LocationPrecision};
     //!
     //! // Declare a camera permission (static / compile-time)
-    //! const CAMERA: Permission = static_permission!(
+    //! const CAMERA: Permission = permission!(
     //!     Permission::new(PermissionKind::Camera, "Take photos")
     //! );
     //!
     //! // Declare a location permission with precision
-    //! const LOCATION: Permission = static_permission!(
+    //! const LOCATION: Permission = permission!(
     //!     PermissionBuilder::location(LocationPrecision::Fine)
     //!         .with_description("Track your runs")
     //!         .build()
@@ -45,7 +45,7 @@ pub mod permissions {
     //! }
     //! ```
     //!
-    //! > **Note:** `permission!` remains available as an alias for `static_permission!`
+    //! > **Note:** `permission!` remains available as an alias for `permission!`
     //! > to preserve backward compatibility with existing code.
 
     pub use manganis_core::{
@@ -53,7 +53,7 @@ pub mod permissions {
         PermissionBuilder, PermissionKind, PermissionManifest, Platform, PlatformFlags,
         PlatformIdentifiers, SwiftPackageMetadata, SymbolData,
     };
-    pub use manganis_macro::{permission, static_permission};
+    pub use manganis_macro::permission;
 
     /// Re-export macro helpers for use in generated code
     pub mod macro_helpers {
@@ -92,14 +92,6 @@ pub use jni;
 // Re-export objc2 for FFI macro generated code
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 pub use objc2;
-
-/// Re-export the android_plugin! macro when metadata feature is enabled
-#[cfg(all(any(target_os = "android")))]
-pub use manganis_macro::android_plugin;
-
-/// Re-export the ios_plugin! macro when metadata feature is enabled
-#[cfg(all(any(target_os = "ios", target_os = "macos")))]
-pub use manganis_macro::ios_plugin;
 
 /// Re-export the ffi attribute macro for native FFI bindings
 /// This macro generates direct FFI bindings between Rust and native platforms (Swift/Kotlin)

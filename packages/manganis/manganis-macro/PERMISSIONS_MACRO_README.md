@@ -2,9 +2,9 @@
 
 Procedural macro for declaring permissions with linker embedding.
 
-This crate provides the `permission!()` and `static_permission!()` macros that allow you to declare permissions
+This crate provides the `permission!()` and `permission!()` macros that allow you to declare permissions
 that will be embedded in the binary using linker sections, similar to how Manganis
-embeds assets. Use `static_permission!()` when you want to make it explicit that a
+embeds assets. Use `permission!()` when you want to make it explicit that a
 permission is a compile-time (linker) declaration that should be emitted into
 platform manifests (Info.plist, AndroidManifest.xml, etc.). The `permission!()`
 alias is kept for backward compatibility.
@@ -19,24 +19,24 @@ Location and custom permissions use the builder pattern:
 
 ```rust
 use permissions::{Permission, PermissionBuilder, LocationPrecision};
-use permissions_macro::static_permission;
+use permissions_macro::permission;
 
 // Location permission with fine precision
-const LOCATION_FINE: Permission = static_permission!(
+const LOCATION_FINE: Permission = permission!(
     PermissionBuilder::location(LocationPrecision::Fine)
         .with_description("Track your runs")
         .build()
 );
 
 // Location permission with coarse precision
-const LOCATION_COARSE: Permission = static_permission!(
+const LOCATION_COARSE: Permission = permission!(
     PermissionBuilder::location(LocationPrecision::Coarse)
         .with_description("Approximate location")
         .build()
 );
 
 // Custom permission
-const CUSTOM: Permission = static_permission!(
+const CUSTOM: Permission = permission!(
     PermissionBuilder::custom()
         .with_android("android.permission.MY_PERMISSION")
         .with_ios("NSMyUsageDescription")
@@ -52,20 +52,20 @@ Simple permissions like Camera, Microphone, and Notifications use direct constru
 
 ```rust
 use permissions::{Permission, PermissionKind};
-use permissions_macro::static_permission;
+use permissions_macro::permission;
 
 // Camera permission
-const CAMERA: Permission = static_permission!(
+const CAMERA: Permission = permission!(
     Permission::new(PermissionKind::Camera, "Take photos")
 );
 
 // Microphone permission
-const MICROPHONE: Permission = static_permission!(
+const MICROPHONE: Permission = permission!(
     Permission::new(PermissionKind::Microphone, "Record audio")
 );
 
 // Notifications permission
-const NOTIFICATIONS: Permission = static_permission!(
+const NOTIFICATIONS: Permission = permission!(
     Permission::new(PermissionKind::Notifications, "Send notifications")
 );
 ```
