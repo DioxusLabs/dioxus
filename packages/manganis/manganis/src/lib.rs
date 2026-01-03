@@ -49,9 +49,8 @@ pub mod permissions {
     //! > to preserve backward compatibility with existing code.
 
     pub use manganis_core::{
-        AndroidArtifactMetadata, CustomPermissionBuilder, LocationPrecision, Permission,
-        PermissionBuilder, PermissionKind, PermissionManifest, Platform, PlatformFlags,
-        PlatformIdentifiers, SwiftPackageMetadata, SymbolData,
+        CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
+        PermissionManifest, Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
     };
     pub use manganis_macro::permission;
 

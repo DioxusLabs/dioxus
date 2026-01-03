@@ -2,10 +2,11 @@
 
 use crate::Result;
 use anyhow::Context;
-use manganis_core::SwiftPackageMetadata as SwiftSourceMetadata;
+use const_serialize::{ConstStr, SerializeConst};
 use std::path::{Path, PathBuf};
 use target_lexicon::Triple;
 use tokio::process::Command;
+use SwiftPackageMetadata as SwiftSourceMetadata;
 
 /// Manifest of Swift packages embedded in the binary.
 #[derive(Debug, Clone, Default)]
@@ -92,7 +93,10 @@ pub async fn compile_swift_sources(
     let package_swift = generate_umbrella_package_swift(&local_packages);
     let package_swift_path = umbrella_dir.join("Package.swift");
     std::fs::write(&package_swift_path, package_swift)?;
-    tracing::debug!("Generated umbrella Package.swift at {}", package_swift_path.display());
+    tracing::debug!(
+        "Generated umbrella Package.swift at {}",
+        package_swift_path.display()
+    );
 
     // Determine Swift target triple and SDK
     let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
@@ -105,7 +109,11 @@ pub async fn compile_swift_sources(
     let build_path = umbrella_dir.join(".build");
 
     for (plugin_name, product_name) in &local_packages {
-        tracing::info!("Building Swift plugin '{}' (product: {})", plugin_name, product_name);
+        tracing::info!(
+            "Building Swift plugin '{}' (product: {})",
+            plugin_name,
+            product_name
+        );
 
         let mut cmd = Command::new("xcrun");
         cmd.args(["swift", "build"])
@@ -198,7 +206,11 @@ pub async fn compile_swift_sources(
     }
 
     // Otherwise, merge all libraries into one using libtool
-    tracing::debug!("Merging {} Swift libraries into {}", all_libs.len(), merged_lib_path.display());
+    tracing::debug!(
+        "Merging {} Swift libraries into {}",
+        all_libs.len(),
+        merged_lib_path.display()
+    );
 
     let mut cmd = Command::new("xcrun");
     cmd.arg("libtool")
@@ -254,10 +266,7 @@ let package = Package(
 
     // Add local package dependencies
     for (plugin_name, _) in packages {
-        swift.push_str(&format!(
-            "        .package(path: \"./{}\")\n",
-            plugin_name
-        ));
+        swift.push_str(&format!("        .package(path: \"./{}\")\n", plugin_name));
     }
 
     swift.push_str(
@@ -296,10 +305,7 @@ fn swift_target_and_sdk(triple: &Triple) -> Result<(String, String)> {
         (Architecture::X86_64, OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)) => {
             "x86_64-apple-macosx"
         }
-        _ => anyhow::bail!(
-            "Unsupported target for Swift compilation: {}",
-            triple
-        ),
+        _ => anyhow::bail!("Unsupported target for Swift compilation: {}", triple),
     };
 
     let sdk_name = match &triple.operating_system {
@@ -478,9 +484,10 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftSourceMetadata>> {
                         if let Some((_, symbol_data)) =
                             const_serialize::deserialize_const!(SymbolData, symbol_data)
                         {
-                            if let SymbolData::SwiftPackage(meta) = symbol_data {
-                                results.push(meta);
-                            }
+                            // swift pm is no longer stored as a metadata symbol.
+                            // if let SymbolData::SwiftPackage(meta) = symbol_data {
+                            //     results.push(meta);
+                            // }
                         }
                     }
                 }
@@ -489,4 +496,68 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftSourceMetadata>> {
     }
 
     Ok(results)
+}
+
+/// Metadata describing an Android plugin artifact (.aar) that must be copied into the host Gradle project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+pub struct AndroidArtifactMetadata {
+    pub plugin_name: ConstStr,
+    pub artifact_path: ConstStr,
+    pub gradle_dependencies: ConstStr,
+}
+
+impl AndroidArtifactMetadata {
+    pub const fn new(
+        plugin_name: &'static str,
+        artifact_path: &'static str,
+        gradle_dependencies: &'static str,
+    ) -> Self {
+        Self {
+            plugin_name: ConstStr::new(plugin_name),
+            artifact_path: ConstStr::new(artifact_path),
+            gradle_dependencies: ConstStr::new(gradle_dependencies),
+        }
+    }
+}
+
+/// Metadata for a Swift package that needs to be linked into the app (iOS/macOS).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+pub struct SwiftPackageMetadata {
+    pub plugin_name: ConstStr,
+    pub package_path: ConstStr,
+    pub product: ConstStr,
+}
+
+impl SwiftPackageMetadata {
+    pub const fn new(
+        plugin_name: &'static str,
+        package_path: &'static str,
+        product: &'static str,
+    ) -> Self {
+        Self {
+            plugin_name: ConstStr::new(plugin_name),
+            package_path: ConstStr::new(package_path),
+            product: ConstStr::new(product),
+        }
+    }
+}
+
+/// Manifest of all Android artifacts declared by dependencies.
+#[derive(Debug, Clone, Default)]
+pub struct AndroidArtifactManifest {
+    artifacts: Vec<AndroidArtifactMetadata>,
+}
+
+impl AndroidArtifactManifest {
+    pub fn new(artifacts: Vec<AndroidArtifactMetadata>) -> Self {
+        Self { artifacts }
+    }
+
+    pub fn artifacts(&self) -> &[AndroidArtifactMetadata] {
+        &self.artifacts
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.artifacts.is_empty()
+    }
 }

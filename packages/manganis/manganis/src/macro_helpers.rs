@@ -4,10 +4,7 @@ pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
 pub use const_serialize_07;
 
 use const_serialize_07::ConstVec as ConstVec07;
-use manganis_core::{
-    AndroidArtifactMetadata, AssetOptions, BundledAsset, Permission, SwiftPackageMetadata,
-    SymbolData,
-};
+use manganis_core::{AssetOptions, BundledAsset, Permission, SymbolData};
 
 /// Copy a slice into a constant sized buffer at compile time
 ///
@@ -33,16 +30,6 @@ const fn serialize_symbol_data(symbol_data: SymbolData) -> ConstVec<u8, 4096> {
 /// Serialize a permission into a const buffer (wrapped in `SymbolData::Permission`).
 pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
     serialize_symbol_data(SymbolData::Permission(*permission))
-}
-
-/// Serialize Android artifact metadata (wrapped in `SymbolData::AndroidArtifact`).
-pub const fn serialize_android_artifact(meta: &AndroidArtifactMetadata) -> ConstVec<u8, 4096> {
-    serialize_symbol_data(SymbolData::AndroidArtifact(*meta))
-}
-
-/// Serialize Swift package metadata (wrapped in `SymbolData::SwiftPackage`).
-pub const fn serialize_swift_package(meta: &SwiftPackageMetadata) -> ConstVec<u8, 4096> {
-    serialize_symbol_data(SymbolData::SwiftPackage(*meta))
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options

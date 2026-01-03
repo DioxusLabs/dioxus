@@ -7,19 +7,12 @@
 /// manager
 pub mod manager;
 
-/// metadata for FFI macro
-pub mod metadata;
-
 pub use manager::*;
 
 /// Re-export MainThreadMarker for convenience
 pub use objc2::MainThreadMarker;
 
-// #[cfg(feature = "metadata")]
-pub use metadata::*;
-
 /// Macro helpers for FFI code generation
-// #[cfg(feature = "metadata")]
 pub mod macro_helpers {
     pub use crate::macro_helpers::copy_bytes;
 }

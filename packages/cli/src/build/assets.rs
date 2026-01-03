@@ -33,14 +33,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::build::ios_swift::{AndroidArtifactMetadata, SwiftPackageMetadata};
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
+use manganis_core::{Permission, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
-use manganis_core::{AndroidArtifactMetadata, Permission, SwiftPackageMetadata, SymbolData};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
 /// Extract all manganis symbols and their sections from the given object file.
@@ -609,10 +610,13 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 pub(crate) struct SymbolExtractionResult {
     /// Assets found in the binary
     pub assets: Vec<BundledAsset>,
+
     /// Permissions found in the binary
     pub permissions: Vec<Permission>,
+
     /// Android plugin artifacts discovered in the binary
     pub android_artifacts: Vec<AndroidArtifactMetadata>,
+
     /// Swift packages discovered in the binary
     pub swift_packages: Vec<SwiftPackageMetadata>,
 }
@@ -691,20 +695,21 @@ pub(crate) async fn extract_symbols_from_file(
                             permissions.push(permission);
                             // Permissions are not written back, so don't store the symbol
                         }
-                        SymbolData::AndroidArtifact(meta) => {
-                            tracing::debug!(
-                                "Found Android artifact declaration for plugin {}",
-                                meta.plugin_name.as_str()
-                            );
-                            android_artifacts.push(meta);
-                        }
-                        SymbolData::SwiftPackage(meta) => {
-                            tracing::debug!(
-                                "Found Swift package declaration for plugin {}",
-                                meta.plugin_name.as_str()
-                            );
-                            swift_packages.push(meta);
-                        }
+                        // SymbolData::AndroidArtifact(meta) => {
+                        //     tracing::debug!(
+                        //         "Found Android artifact declaration for plugin {}",
+                        //         meta.plugin_name.as_str()
+                        //     );
+                        //     android_artifacts.push(meta);
+                        // }
+                        // SymbolData::SwiftPackage(meta) => {
+                        //     tracing::debug!(
+                        //         "Found Swift package declaration for plugin {}",
+                        //         meta.plugin_name.as_str()
+                        //     );
+                        //     swift_packages.push(meta);
+                        // }
+                        _ => {}
                     }
                 }
                 SymbolDataOrAsset::Asset(asset) => {

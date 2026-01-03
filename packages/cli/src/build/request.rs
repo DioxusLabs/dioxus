@@ -456,7 +456,7 @@ pub struct BuildArtifacts {
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
     pub(crate) permissions: super::permissions::PermissionManifest,
-    pub(crate) android_artifacts: super::android_java::AndroidArtifactManifest,
+    pub(crate) android_artifacts: crate::build::ios_swift::AndroidArtifactManifest,
     pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
@@ -1398,7 +1398,7 @@ impl BuildRequest {
     ) -> Result<(
         AssetManifest,
         super::permissions::PermissionManifest,
-        super::android_java::AndroidArtifactManifest,
+        super::ios_swift::AndroidArtifactManifest,
         super::ios_swift::SwiftSourceManifest,
     )> {
         use super::assets::extract_symbols_from_file;
@@ -1412,7 +1412,7 @@ impl BuildRequest {
             return Ok((
                 AssetManifest::default(),
                 super::permissions::PermissionManifest::default(),
-                super::android_java::AndroidArtifactManifest::default(),
+                super::ios_swift::AndroidArtifactManifest::default(),
                 super::ios_swift::SwiftSourceManifest::default(),
             ));
         }
@@ -1492,7 +1492,8 @@ impl BuildRequest {
             manifest
         };
 
-        let android_manifest = super::android_java::AndroidArtifactManifest::new(android_artifacts);
+        let android_manifest =
+            crate::build::ios_swift::AndroidArtifactManifest::new(android_artifacts);
         if !android_manifest.is_empty() {
             tracing::debug!(
                 "Found {} Android artifact declaration(s)",
@@ -1541,7 +1542,7 @@ impl BuildRequest {
     /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
     fn install_android_artifacts(
         &self,
-        android_artifacts: &super::android_java::AndroidArtifactManifest,
+        android_artifacts: &crate::build::ios_swift::AndroidArtifactManifest,
     ) -> Result<()> {
         let libs_dir = self.root_dir().join("app").join("libs");
         std::fs::create_dir_all(&libs_dir)?;

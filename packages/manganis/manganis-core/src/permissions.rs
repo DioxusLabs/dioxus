@@ -3,13 +3,6 @@ use const_serialize::{ConstStr, SerializeConst};
 use const_serialize_08 as const_serialize;
 use std::hash::{Hash, Hasher};
 
-// // Re-export const_serialize types for use in macros
-// pub use const_serialize::ConstStr;
-// pub use symbol_data::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
-
-// // Re-export PermissionBuilder and CustomPermissionBuilder for convenience
-// pub use permission::{CustomPermissionBuilder, PermissionBuilder};
-
 /// A permission declaration that can be embedded in the binary
 ///
 /// This struct contains all the information needed to declare a permission
@@ -19,8 +12,10 @@ use std::hash::{Hash, Hasher};
 pub struct Permission {
     /// The kind of permission being declared
     kind: PermissionKind,
+
     /// User-facing description of why this permission is needed
     description: ConstStr,
+
     /// Platforms where this permission is supported
     supported_platforms: PlatformFlags,
 }
@@ -105,7 +100,7 @@ impl Hash for Permission {
 }
 
 /// A collection of permissions that can be serialized and embedded
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct PermissionManifest {
     /// All permissions declared in the application
     permissions: Vec<Permission>,
@@ -150,12 +145,6 @@ impl PermissionManifest {
     /// Get the number of permissions in the manifest
     pub fn len(&self) -> usize {
         self.permissions.len()
-    }
-}
-
-impl Default for PermissionManifest {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -338,6 +327,7 @@ impl CustomPermissionBuilder {
 pub struct PermissionBuilder {
     /// The permission kind being built
     kind: Option<PermissionKind>,
+
     /// The user-facing description
     description: Option<ConstStr>,
 }
@@ -488,10 +478,8 @@ mod tests {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SerializeConst)]
 pub enum Platform {
-    /// Mobile platforms
     Android,
     Ios,
-    /// Desktop Darwin platform
     Macos,
 }
 
@@ -550,12 +538,16 @@ pub enum LocationPrecision {
 pub enum PermissionKind {
     /// Camera access
     Camera,
+
     /// Location access with precision
     Location(LocationPrecision),
+
     /// Microphone access
     Microphone,
+
     /// Push notifications
     Notifications,
+
     /// Custom permission with platform-specific identifiers
     Custom {
         android: ConstStr,
@@ -655,60 +647,11 @@ pub struct PlatformIdentifiers {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
 #[repr(C, u8)]
 #[allow(clippy::large_enum_variant)]
+#[non_exhaustive]
 pub enum SymbolData {
     /// An asset that should be bundled with the application
     Asset(BundledAsset),
 
     /// A permission declaration for the application
     Permission(Permission),
-
-    /// Android plugin metadata (prebuilt artifacts + Gradle deps)
-    AndroidArtifact(AndroidArtifactMetadata),
-
-    /// Swift package metadata (SPM location + product)
-    SwiftPackage(SwiftPackageMetadata),
-}
-
-/// Metadata describing an Android plugin artifact (.aar) that must be copied into the host Gradle project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
-pub struct AndroidArtifactMetadata {
-    pub plugin_name: ConstStr,
-    pub artifact_path: ConstStr,
-    pub gradle_dependencies: ConstStr,
-}
-
-impl AndroidArtifactMetadata {
-    pub const fn new(
-        plugin_name: &'static str,
-        artifact_path: &'static str,
-        gradle_dependencies: &'static str,
-    ) -> Self {
-        Self {
-            plugin_name: ConstStr::new(plugin_name),
-            artifact_path: ConstStr::new(artifact_path),
-            gradle_dependencies: ConstStr::new(gradle_dependencies),
-        }
-    }
-}
-
-/// Metadata for a Swift package that needs to be linked into the app (iOS/macOS).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
-pub struct SwiftPackageMetadata {
-    pub plugin_name: ConstStr,
-    pub package_path: ConstStr,
-    pub product: ConstStr,
-}
-
-impl SwiftPackageMetadata {
-    pub const fn new(
-        plugin_name: &'static str,
-        package_path: &'static str,
-        product: &'static str,
-    ) -> Self {
-        Self {
-            plugin_name: ConstStr::new(plugin_name),
-            package_path: ConstStr::new(package_path),
-            product: ConstStr::new(product),
-        }
-    }
 }
