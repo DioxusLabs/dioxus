@@ -25,6 +25,8 @@ use crate::{
     permissions::PermissionParser,
 };
 
+mod platform_bridge;
+
 /// The asset macro collects assets that will be included in the final binary
 ///
 /// # Files
@@ -360,7 +362,8 @@ pub fn permission(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn android_plugin(input: TokenStream) -> TokenStream {
-    let android_plugin = parse_macro_input!(input as android_plugin::AndroidPluginParser);
+    let android_plugin =
+        parse_macro_input!(input as platform_bridge::android_plugin::AndroidPluginParser);
 
     quote! { #android_plugin }.into()
 }
@@ -405,7 +408,7 @@ pub fn android_plugin(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn ios_plugin(input: TokenStream) -> TokenStream {
-    let ios_plugin = parse_macro_input!(input as ios_plugin::IosPluginParser);
+    let ios_plugin = parse_macro_input!(input as platform_bridge::ios_plugin::IosPluginParser);
 
     quote! { #ios_plugin }.into()
 }

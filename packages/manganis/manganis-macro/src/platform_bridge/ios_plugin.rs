@@ -1,4 +1,4 @@
-use dx_macro_helpers::linker;
+// use dx_macro_helpers::linker;
 use quote::{quote, ToTokens};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::{parse::Parse, parse::ParseStream, Token};
@@ -106,7 +106,7 @@ impl ToTokens for IosPluginParser {
             )
         };
 
-        let link_section = linker::generate_link_section(
+        let link_section = crate::permissions::generate_link_section_inner(
             metadata_expr,
             &plugin_hash,
             "__ASSETS__",

@@ -1,10 +1,11 @@
-use dx_macro_helpers::linker;
 use quote::{quote, ToTokens};
 use std::{
     collections::BTreeSet,
     hash::{DefaultHasher, Hash, Hasher},
 };
 use syn::{parse::Parse, parse::ParseStream, Token};
+
+use crate::permissions::generate_link_section_inner;
 
 pub struct AndroidPluginParser {
     plugin_name: String,
@@ -147,7 +148,7 @@ impl ToTokens for AndroidPluginParser {
             )
         };
 
-        let link_section = linker::generate_link_section(
+        let link_section = generate_link_section_inner(
             metadata_expr,
             &plugin_hash,
             "__ASSETS__",

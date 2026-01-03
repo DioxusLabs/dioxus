@@ -11533,8 +11533,11 @@ version = "0.7.2"
 dependencies = [
  "const-serialize 0.7.2",
  "const-serialize 0.8.0",
+ "jni 0.21.1",
  "manganis-core 0.7.2",
  "manganis-macro 0.7.2",
+ "ndk-context",
+ "objc2 0.6.3",
  "thiserror 2.0.17",
 ]
 

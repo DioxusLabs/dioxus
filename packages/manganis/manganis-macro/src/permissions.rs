@@ -23,9 +23,6 @@ pub fn generate_link_section(permission: impl ToTokens, permission_hash: &str) -
     )
 }
 
-use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
-
 /// Generate a linker section for embedding serialized data in the binary
 ///
 /// This function creates a static array containing serialized data and exports it
