@@ -168,8 +168,8 @@ dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.2" }
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.2" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.2" }
 
-# const-serialize
-# const-serialize. these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
+# const-serialize.
+# these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
 # once the workspace moves onto 0.8, we can clean this up, moving the const-serialize stuff back to normal versions
 const-serialize = { path = "packages/const-serialize", version = "0.8.0-alpha.0" }
 const-serialize-08 = { package = "const-serialize", path = "packages/const-serialize", version = "0.8.0-alpha.0" }
