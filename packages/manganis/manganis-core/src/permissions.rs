@@ -295,9 +295,27 @@ impl PermissionBuilder {
     ///     .with_description("Track your runs")
     ///     .build();
     /// ```
-    pub const fn location(precision: crate::LocationPrecision) -> Self {
+    pub const fn coarse_location() -> Self {
         Self {
-            kind: Some(PermissionKind::Location(precision)),
+            kind: Some(PermissionKind::CoarseLocation),
+            description: None,
+        }
+    }
+
+    /// Create a new location permission builder with the specified precision
+    ////
+    /// # Examples
+    ////
+    /// ```rust
+    /// use permissions_core::{Permission, PermissionBuilder, LocationPrecision};
+    ////
+    /// const LOCATION: Permission = PermissionBuilder::fine_location()
+    ///     .with_description("Track your runs")
+    ///     .build();
+    /// ```
+    pub const fn fine_location() -> Self {
+        Self {
+            kind: Some(PermissionKind::FineLocation),
             description: None,
         }
     }
@@ -469,16 +487,6 @@ impl PlatformFlags {
     }
 }
 
-/// Location precision for location-based permissions
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SerializeConst)]
-pub enum LocationPrecision {
-    /// Fine location (GPS-level accuracy)
-    Fine,
-    /// Coarse location (network-based accuracy)
-    Coarse,
-}
-
 /// Core permission kinds that map to platform-specific requirements
 ///
 /// Only tested and verified permissions are included. For untested permissions,
@@ -491,7 +499,10 @@ pub enum PermissionKind {
     Camera,
 
     /// Location access with precision
-    Location(LocationPrecision),
+    CoarseLocation,
+
+    /// Location access with precision
+    FineLocation,
 
     /// Microphone access
     Microphone,
@@ -519,14 +530,14 @@ impl PermissionKind {
                 ios: Some(ConstStr::new("NSCameraUsageDescription")),
                 macos: Some(ConstStr::new("NSCameraUsageDescription")),
             },
-            PermissionKind::Location(LocationPrecision::Fine) => PlatformIdentifiers {
+            PermissionKind::FineLocation => PlatformIdentifiers {
                 android: Some(ConstStr::new("android.permission.ACCESS_FINE_LOCATION")),
                 ios: Some(ConstStr::new(
                     "NSLocationAlwaysAndWhenInUseUsageDescription",
                 )),
                 macos: Some(ConstStr::new("NSLocationUsageDescription")),
             },
-            PermissionKind::Location(LocationPrecision::Coarse) => PlatformIdentifiers {
+            PermissionKind::CoarseLocation => PlatformIdentifiers {
                 android: Some(ConstStr::new("android.permission.ACCESS_COARSE_LOCATION")),
                 ios: Some(ConstStr::new("NSLocationWhenInUseUsageDescription")),
                 macos: Some(ConstStr::new("NSLocationUsageDescription")),

@@ -49,8 +49,8 @@ pub mod permissions {
     //! > to preserve backward compatibility with existing code.
 
     pub use manganis_core::{
-        CustomPermissionBuilder, LocationPrecision, Permission, PermissionBuilder, PermissionKind,
-        Platform, PlatformFlags, PlatformIdentifiers, SymbolData,
+        CustomPermissionBuilder, Permission, PermissionBuilder, PermissionKind, Platform,
+        PlatformFlags, PlatformIdentifiers, SymbolData,
     };
     pub use manganis_macro::permission;
 
