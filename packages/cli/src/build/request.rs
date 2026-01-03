@@ -1329,6 +1329,29 @@ impl BuildRequest {
             );
         }
 
+        // For Darwin Base builds, we intercepted linking to enable Swift plugin compilation.
+        // Now we need to run the actual linker ourselves (with Swift support if Swift sources are present).
+        let is_darwin_base = matches!(ctx.mode, BuildMode::Base { .. })
+            && matches!(
+                self.triple.operating_system,
+                OperatingSystem::Darwin(_)
+                    | OperatingSystem::MacOSX { .. }
+                    | OperatingSystem::IOS(_)
+            );
+
+        if is_darwin_base {
+            ctx.status_starting_link();
+            let link_start = SystemTime::now();
+            self.run_darwin_link(&exe, &direct_rustc).await?;
+            tracing::debug!(
+                "Darwin linking completed in {}us",
+                SystemTime::now()
+                    .duration_since(link_start)
+                    .unwrap()
+                    .as_micros()
+            );
+        }
+
         // Extract all linker metadata (assets, permissions, Android/iOS plugins) in a single pass.
         let (assets, permissions, android_artifacts, swift_sources) =
             self.collect_assets_and_permissions(&exe, ctx).await?;
@@ -3052,6 +3075,60 @@ let package = Package(
             args.remove(flavor_idx);
         }
 
+        // Compile Swift sources if targeting Darwin platforms
+        // We extract Swift metadata from the rlibs, compile them, and add the resulting .a to link args
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::IOS(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
+        ) {
+            let workspace_dir = self.workspace_dir();
+            let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
+                &rustc_args.link_args,
+                &workspace_dir,
+            );
+
+            if !swift_sources.is_empty() {
+                tracing::info!(
+                    "Found {} Swift plugin source(s), compiling...",
+                    swift_sources.len()
+                );
+
+                let build_dir = exe.parent().unwrap_or(Path::new("."));
+                let release = self.release;
+
+                match super::ios_swift::compile_swift_sources(
+                    &swift_sources,
+                    &self.triple,
+                    build_dir,
+                    release,
+                )
+                .await
+                {
+                    Ok(Some(swift_lib)) => {
+                        tracing::info!("Linking Swift library: {}", swift_lib.display());
+                        // Add the Swift library to the link args
+                        // For Darwin, we use -force_load to ensure all symbols are included
+                        if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o"))
+                        {
+                            args.insert(last_object + 1, "-Wl,-force_load".to_string());
+                            args.insert(last_object + 2, swift_lib.display().to_string());
+                        } else {
+                            // Fallback: just add to the end
+                            args.push("-Wl,-force_load".to_string());
+                            args.push(swift_lib.display().to_string());
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!("No Swift libraries produced");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to compile Swift sources: {}", e);
+                        // Continue without Swift - this allows building when Swift isn't ready
+                    }
+                }
+            }
+        }
+
         // Set the output file
         match self.triple.operating_system {
             OperatingSystem::Windows => args.push(format!("/OUT:{}", exe.display())),
@@ -3123,6 +3200,101 @@ let package = Package(
                 .map(|s| s.display().to_string())
                 .join("\n"),
         );
+
+        Ok(())
+    }
+
+    /// Run the Darwin linker with Swift plugin support.
+    ///
+    /// This function is used for Darwin (macOS/iOS) Base builds where we intercept
+    /// the linker to enable Swift plugin compilation. It:
+    /// 1. Extracts Swift metadata from the rlibs in the link args
+    /// 2. Compiles any Swift sources found
+    /// 3. Runs the actual linker with the Swift library added if present
+    async fn run_darwin_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
+        let mut args = rustc_args.link_args.clone();
+
+        if args.is_empty() {
+            tracing::warn!("No link args found for Darwin link");
+            return Ok(());
+        }
+
+        // Check for Swift sources in the rlibs
+        let workspace_dir = self.workspace_dir();
+        let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
+            &rustc_args.link_args,
+            &workspace_dir,
+        );
+
+        // Compile Swift sources if any were found
+        if !swift_sources.is_empty() {
+            tracing::info!(
+                "Found {} Swift plugin source(s), compiling...",
+                swift_sources.len()
+            );
+
+            let build_dir = exe.parent().unwrap_or(Path::new("."));
+            let release = self.release;
+
+            match super::ios_swift::compile_swift_sources(
+                &swift_sources,
+                &self.triple,
+                build_dir,
+                release,
+            )
+            .await
+            {
+                Ok(Some(swift_lib)) => {
+                    tracing::info!("Linking Swift library: {}", swift_lib.display());
+                    // Add the Swift library to the link args
+                    // For Darwin, we use -force_load to ensure all symbols are included
+                    if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
+                        args.insert(last_object + 1, "-Wl,-force_load".to_string());
+                        args.insert(last_object + 2, swift_lib.display().to_string());
+                    } else {
+                        // Fallback: just add before -o flag
+                        if let Some(out_idx) = args.iter().position(|arg| *arg == "-o") {
+                            args.insert(out_idx, swift_lib.display().to_string());
+                            args.insert(out_idx, "-Wl,-force_load".to_string());
+                        } else {
+                            // Last resort: add at the end
+                            args.push("-Wl,-force_load".to_string());
+                            args.push(swift_lib.display().to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    tracing::debug!("No Swift libraries produced");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to compile Swift sources: {}", e);
+                    // Continue without Swift - this allows building when Swift isn't ready
+                }
+            }
+        }
+
+        // Select the appropriate linker
+        let linker = self.select_linker()?;
+
+        tracing::trace!("Darwin linking with: {:?} {:?}", linker, args);
+
+        // Run the linker
+        let res = Command::new(&linker)
+            .args(&args)
+            .envs(rustc_args.envs.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+            .output()
+            .await?;
+
+        if !res.status.success() {
+            let stderr = String::from_utf8_lossy(&res.stderr);
+            let stdout = String::from_utf8_lossy(&res.stdout);
+            anyhow::bail!("Darwin link failed:\n{}\n{}", stdout, stderr);
+        }
+
+        if !res.stderr.is_empty() {
+            let errs = String::from_utf8_lossy(&res.stderr);
+            tracing::trace!("Darwin linker warnings: {}", errs.trim());
+        }
 
         Ok(())
     }
@@ -3447,10 +3619,19 @@ let package = Package(
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
-        // dx *always* links android and thin builds
-        if self.custom_linker.is_some()
+        // dx *always* links android, thin builds, fat builds, and Darwin builds (for Swift support)
+        // For Darwin (macOS/iOS), we intercept the linker to enable Swift plugin compilation
+        let use_dx_linker = self.custom_linker.is_some()
             || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
+            || (matches!(build_mode, BuildMode::Base { .. })
+                && matches!(
+                    self.triple.operating_system,
+                    OperatingSystem::Darwin(_)
+                        | OperatingSystem::MacOSX { .. }
+                        | OperatingSystem::IOS(_)
+                ));
+
+        if use_dx_linker {
             cargo_args.push(format!(
                 "-Clinker={}",
                 Workspace::path_to_dx().expect("can't find dx").display()
@@ -3609,12 +3790,30 @@ let package = Package(
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        if self.custom_linker.is_some()
+        // For Darwin builds (macOS/iOS), we also intercept linking to enable Swift plugin compilation.
+        let is_darwin = matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::IOS(_)
+        );
+
+        let use_dx_linker = self.custom_linker.is_some()
             || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
+            || (matches!(build_mode, BuildMode::Base { .. }) && is_darwin);
+
+        if use_dx_linker {
+            // For Darwin Base builds, we use no-link mode (linker = None) so dx just captures
+            // the linker args. We'll run the actual linker ourselves after checking for Swift.
+            // For Android, we pass the actual linker so cargo can still link normally.
+            // For Fat/Thin builds, we also use no-link mode (linker = None).
+            let linker = if is_darwin && matches!(build_mode, BuildMode::Base { .. }) {
+                None // No-link mode for Darwin - we'll link ourselves
+            } else {
+                self.custom_linker.clone() // Android uses this, Fat/Thin use None
+            };
+
             LinkAction {
                 triple: self.triple.clone(),
-                linker: self.custom_linker.clone(),
+                linker,
                 link_err_file: dunce::canonicalize(self.link_err_file())?,
                 link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
