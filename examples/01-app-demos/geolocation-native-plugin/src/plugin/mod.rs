@@ -16,115 +16,28 @@ pub use models::*;
 mod error;
 mod models;
 
-mod permissions;
-
 pub use error::{Error, Result};
 
-// =============================================================================
-// iOS FFI Bridge using #[manganis::ffi]
-// Only enabled on actual iOS target (not macOS desktop)
-// =============================================================================
+use manganis::permissions;
+use manganis::permissions::{permission, Permission, PermissionBuilder};
 
-/// iOS/macOS native bindings - the macro generates all FFI code automatically.
-/// The path "src/ios" points to the SwiftPM package containing GeolocationPlugin.swift
-#[cfg(all(any(target_os = "ios", target_os = "macos")))]
-#[manganis::ffi("src/ios")]
-extern "Swift" {
-    /// The native GeolocationPlugin class
-    pub type GeolocationPlugin;
+/// Fine location permission
+///
+/// This permission allows the app to access precise location data using GPS.
+/// On Android, this corresponds to `ACCESS_FINE_LOCATION`.
+/// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
+pub const FINE_LOCATION: Permission = permission!(PermissionBuilder::fine_location()
+    .with_description("Access your precise location to provide location-based services")
+    .build());
 
-    /// Get current position as JSON string
-    /// Swift signature: func getCurrentPositionJson(_ optionsJson: String) -> String
-    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
-
-    /// Check permissions and return status as JSON
-    /// Swift signature: func checkPermissionsJson() -> String
-    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
-
-    /// Request permissions with optional types list as JSON, return status as JSON
-    /// Swift signature: func requestPermissionsJson(_ permissionsJson: String) -> String
-    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
-}
-
-/// Android native bindings - the macro generates all JNI code automatically.
-/// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
-#[cfg(target_os = "android")]
-#[manganis::ffi("src/android")]
-extern "Kotlin" {
-    /// The native GeolocationPlugin class
-    pub type GeolocationPlugin;
-
-    /// Get current position as JSON string
-    /// Kotlin signature: fun getCurrentPositionJson(optionsJson: String): String
-    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
-
-    /// Check permissions and return status as JSON
-    /// Kotlin signature: fun checkPermissionsJson(): String
-    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
-
-    /// Request permissions with optional types list as JSON, return status as JSON
-    /// Kotlin signature: fun requestPermissionsJson(permissionsJson: String): String
-    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
-}
-
-// =============================================================================
-// Stub for non-native platforms (web, Linux desktop, etc.)
-// =============================================================================
-
-#[cfg(not(any(
-    all(any(target_os = "ios", target_os = "macos")),
-    all(target_os = "android")
-)))]
-pub struct GeolocationPlugin;
-
-#[cfg(not(any(
-    all(any(target_os = "ios", target_os = "macos")),
-    all(target_os = "android")
-)))]
-impl GeolocationPlugin {
-    pub fn new() -> Result<Self> {
-        Err(Error::PlatformBridge(
-            "Geolocation is only supported on Android, iOS, and macOS".to_string(),
-        ))
-    }
-}
-
-#[allow(non_snake_case)]
-#[cfg(not(any(
-    all(any(target_os = "ios", target_os = "macos")),
-    all(target_os = "android")
-)))]
-fn getCurrentPositionJson(_: &GeolocationPlugin, _: String) -> Result<String> {
-    Err(Error::PlatformBridge(
-        "Geolocation is only supported on Android, iOS, and macOS".to_string(),
-    ))
-}
-
-#[allow(non_snake_case)]
-#[cfg(not(any(
-    all(any(target_os = "ios", target_os = "macos")),
-    all(target_os = "android")
-)))]
-fn checkPermissionsJson(_: &GeolocationPlugin) -> Result<String> {
-    Err(Error::PlatformBridge(
-        "Geolocation is only supported on Android, iOS, and macOS".to_string(),
-    ))
-}
-
-#[allow(non_snake_case)]
-#[cfg(not(any(
-    all(any(target_os = "ios", target_os = "macos")),
-    all(target_os = "android")
-)))]
-fn requestPermissionsJson(_: &GeolocationPlugin, _: String) -> Result<String> {
-    Err(Error::PlatformBridge(
-        "Geolocation is only supported on Android, iOS, and macOS".to_string(),
-    ))
-}
-
-// =============================================================================
-// Unified Geolocation API
-// =============================================================================
+/// Coarse location permission
+///
+/// This permission allows the app to access approximate location data.
+/// On Android, this corresponds to `ACCESS_COARSE_LOCATION`.
+/// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
+pub const COARSE_LOCATION: Permission = permission!(PermissionBuilder::coarse_location()
+    .with_description("Access your approximate location to provide location-based services")
+    .build());
 
 /// Access to the geolocation APIs.
 ///
@@ -240,5 +153,92 @@ impl Geolocation {
 impl Default for Geolocation {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// iOS/macOS native bindings - the macro generates all FFI code automatically.
+/// The path "src/ios" points to the SwiftPM package containing GeolocationPlugin.swift
+#[cfg(all(any(target_os = "ios", target_os = "macos")))]
+#[manganis::ffi("src/ios")]
+extern "Swift" {
+    /// The native GeolocationPlugin class
+    pub type GeolocationPlugin;
+
+    /// Get current position as JSON string
+    /// Swift signature: func getCurrentPositionJson(_ optionsJson: String) -> String
+    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
+
+    /// Check permissions and return status as JSON
+    /// Swift signature: func checkPermissionsJson() -> String
+    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
+
+    /// Request permissions with optional types list as JSON, return status as JSON
+    /// Swift signature: func requestPermissionsJson(_ permissionsJson: String) -> String
+    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
+}
+
+/// Android native bindings - the macro generates all JNI code automatically.
+/// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
+#[cfg(target_os = "android")]
+#[manganis::ffi("src/android")]
+extern "Kotlin" {
+    /// The native GeolocationPlugin class
+    pub type GeolocationPlugin;
+
+    /// Get current position as JSON string
+    /// Kotlin signature: fun getCurrentPositionJson(optionsJson: String): String
+    pub fn getCurrentPositionJson(this: &GeolocationPlugin, optionsJson: String) -> String;
+
+    /// Check permissions and return status as JSON
+    /// Kotlin signature: fun checkPermissionsJson(): String
+    pub fn checkPermissionsJson(this: &GeolocationPlugin) -> String;
+
+    /// Request permissions with optional types list as JSON, return status as JSON
+    /// Kotlin signature: fun requestPermissionsJson(permissionsJson: String): String
+    pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
+}
+
+// =============================================================================
+// Stub for non-native platforms (web, Linux desktop, etc.)
+// =============================================================================
+#[cfg(not(any(
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
+)))]
+use fallback::*;
+
+#[cfg(not(any(
+    all(any(target_os = "ios", target_os = "macos")),
+    all(target_os = "android")
+)))]
+mod fallback {
+    #![allow(non_snake_case)]
+
+    pub struct GeolocationPlugin;
+
+    impl GeolocationPlugin {
+        pub fn new() -> Result<Self> {
+            Err(Error::PlatformBridge(
+                "Geolocation is only supported on Android, iOS, and macOS".to_string(),
+            ))
+        }
+    }
+
+    fn getCurrentPositionJson(_: &GeolocationPlugin, _: String) -> Result<String> {
+        Err(Error::PlatformBridge(
+            "Geolocation is only supported on Android, iOS, and macOS".to_string(),
+        ))
+    }
+
+    fn checkPermissionsJson(_: &GeolocationPlugin) -> Result<String> {
+        Err(Error::PlatformBridge(
+            "Geolocation is only supported on Android, iOS, and macOS".to_string(),
+        ))
+    }
+
+    fn requestPermissionsJson(_: &GeolocationPlugin, _: String) -> Result<String> {
+        Err(Error::PlatformBridge(
+            "Geolocation is only supported on Android, iOS, and macOS".to_string(),
+        ))
     }
 }

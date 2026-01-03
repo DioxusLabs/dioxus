@@ -3,23 +3,23 @@
 use crate::Result;
 use anyhow::Context;
 use const_serialize::{ConstStr, SerializeConst};
+use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
 use std::path::{Path, PathBuf};
 use target_lexicon::Triple;
 use tokio::process::Command;
-use SwiftPackageMetadata as SwiftSourceMetadata;
 
 /// Manifest of Swift packages embedded in the binary.
 #[derive(Debug, Clone, Default)]
 pub struct SwiftSourceManifest {
-    sources: Vec<SwiftSourceMetadata>,
+    sources: Vec<SwiftPackageMetadata>,
 }
 
 impl SwiftSourceManifest {
-    pub fn new(sources: Vec<SwiftSourceMetadata>) -> Self {
+    pub fn new(sources: Vec<SwiftPackageMetadata>) -> Self {
         Self { sources }
     }
 
-    pub fn sources(&self) -> &[SwiftSourceMetadata] {
+    pub fn sources(&self) -> &[SwiftPackageMetadata] {
         &self.sources
     }
 
@@ -35,7 +35,7 @@ impl SwiftSourceManifest {
 /// 2. Runs `swift build` to compile into a static library
 /// 3. Returns the path to the resulting `.a` file
 pub async fn compile_swift_sources(
-    swift_sources: &[SwiftSourceMetadata],
+    swift_sources: &[SwiftPackageMetadata],
     target_triple: &Triple,
     build_dir: &Path,
     release: bool,
@@ -380,7 +380,7 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
 pub fn extract_swift_metadata_from_link_args(
     link_args: &[String],
     workspace_dir: &Path,
-) -> Vec<SwiftSourceMetadata> {
+) -> Vec<SwiftPackageMetadata> {
     let mut swift_packages = Vec::new();
 
     // Look through rlibs and object files for Swift metadata
@@ -414,7 +414,7 @@ pub fn extract_swift_metadata_from_link_args(
 }
 
 /// Extract Swift metadata from an rlib file
-fn extract_swift_from_rlib(rlib_path: &Path) -> Result<Vec<SwiftSourceMetadata>> {
+fn extract_swift_from_rlib(rlib_path: &Path) -> Result<Vec<SwiftPackageMetadata>> {
     let mut results = Vec::new();
 
     let rlib_contents = std::fs::read(rlib_path)?;
@@ -441,13 +441,13 @@ fn extract_swift_from_rlib(rlib_path: &Path) -> Result<Vec<SwiftSourceMetadata>>
 }
 
 /// Extract Swift metadata from an object file
-fn extract_swift_from_object(obj_path: &Path) -> Result<Vec<SwiftSourceMetadata>> {
+fn extract_swift_from_object(obj_path: &Path) -> Result<Vec<SwiftPackageMetadata>> {
     let obj_contents = std::fs::read(obj_path)?;
     extract_swift_from_bytes(&obj_contents)
 }
 
 /// Extract Swift metadata from raw object file bytes
-fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftSourceMetadata>> {
+fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
     use manganis_core::SymbolData;
     use object::{Object, ObjectSection, ObjectSymbol};
 
@@ -496,50 +496,6 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftSourceMetadata>> {
     }
 
     Ok(results)
-}
-
-/// Metadata describing an Android plugin artifact (.aar) that must be copied into the host Gradle project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
-pub struct AndroidArtifactMetadata {
-    pub plugin_name: ConstStr,
-    pub artifact_path: ConstStr,
-    pub gradle_dependencies: ConstStr,
-}
-
-impl AndroidArtifactMetadata {
-    pub const fn new(
-        plugin_name: &'static str,
-        artifact_path: &'static str,
-        gradle_dependencies: &'static str,
-    ) -> Self {
-        Self {
-            plugin_name: ConstStr::new(plugin_name),
-            artifact_path: ConstStr::new(artifact_path),
-            gradle_dependencies: ConstStr::new(gradle_dependencies),
-        }
-    }
-}
-
-/// Metadata for a Swift package that needs to be linked into the app (iOS/macOS).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
-pub struct SwiftPackageMetadata {
-    pub plugin_name: ConstStr,
-    pub package_path: ConstStr,
-    pub product: ConstStr,
-}
-
-impl SwiftPackageMetadata {
-    pub const fn new(
-        plugin_name: &'static str,
-        package_path: &'static str,
-        product: &'static str,
-    ) -> Self {
-        Self {
-            plugin_name: ConstStr::new(plugin_name),
-            package_path: ConstStr::new(package_path),
-            product: ConstStr::new(product),
-        }
-    }
 }
 
 /// Manifest of all Android artifacts declared by dependencies.

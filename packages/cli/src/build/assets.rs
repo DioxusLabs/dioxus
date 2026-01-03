@@ -33,12 +33,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::build::ios_swift::{AndroidArtifactMetadata, SwiftPackageMetadata};
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
+use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
 use manganis_core::{Permission, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;

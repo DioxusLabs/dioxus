@@ -9,15 +9,18 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "kebab-case")]
 #[derive(Default)]
 pub enum PermissionState {
-    /// Permission granted
-    Granted,
-    /// Permission denied
-    Denied,
     /// Permission not yet determined (user hasn't been asked)
     #[default]
     Prompt,
+
     /// Permission prompt shown with rationale (Android 12+)
     PromptWithRationale,
+
+    /// Permission granted
+    Granted,
+
+    /// Permission denied
+    Denied,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -29,6 +32,7 @@ pub struct PermissionStatus {
     ///
     /// On iOS it requests/checks location permissions.
     pub location: PermissionState,
+
     /// Permissions state for the coarseLocation alias.
     ///
     /// On Android it requests/checks ACCESS_COARSE_LOCATION.

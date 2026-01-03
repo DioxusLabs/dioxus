@@ -963,8 +963,8 @@ impl FfiBridgeParser {
 
         quote! {
             const _: () = {
-                const __METADATA: manganis::darwin::SwiftSourceMetadata =
-                    manganis::darwin::SwiftSourceMetadata::new(
+                const __METADATA: manganis::darwin::SwiftPackageMetadata =
+                    manganis::darwin::SwiftPackageMetadata::new(
                         #plugin_name_lit,
                         concat!(env!("CARGO_MANIFEST_DIR"), "/", #source_path_lit),
                         #product_lit,

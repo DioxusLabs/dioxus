@@ -4,7 +4,10 @@ pub use const_serialize::{ConstStr, ConstVec, SerializeConst};
 pub use const_serialize_07;
 
 use const_serialize_07::ConstVec as ConstVec07;
-use manganis_core::{AssetOptions, BundledAsset, Permission, SymbolData};
+use manganis_core::{
+    AndroidArtifactMetadata, AssetOptions, BundledAsset, Permission, SwiftPackageMetadata,
+    SymbolData,
+};
 
 /// Copy a slice into a constant sized buffer at compile time
 ///
@@ -69,6 +72,16 @@ pub const fn deserialize_asset(bytes: &[u8]) -> BundledAsset {
         Some((_, asset)) => asset,
         None => panic!("Failed to deserialize asset. This may be caused by a mismatch between your dioxus and dioxus-cli versions"),
     }
+}
+
+/// Serialize Android artifact metadata (wrapped in `SymbolData::AndroidArtifact`).
+pub const fn serialize_android_artifact(meta: &AndroidArtifactMetadata) -> ConstVec<u8, 4096> {
+    serialize_symbol_data(SymbolData::AndroidArtifact(*meta))
+}
+
+/// Serialize Swift package metadata (wrapped in `SymbolData::SwiftPackage`).
+pub const fn serialize_swift_package(meta: &SwiftPackageMetadata) -> ConstVec<u8, 4096> {
+    serialize_symbol_data(SymbolData::SwiftPackage(*meta))
 }
 
 pub mod dx_macro_helpers {
