@@ -146,7 +146,7 @@ fn calc_val(val: &str) -> f64 {
     let mut temp_value;
     let mut fin_index = 0;
 
-    if &val[0..1] == "-" {
+    if val.len() > 1 && &val[0..1] == "-" {
         temp_value = String::from("-");
         fin_index = 1;
         start_index += 1;
