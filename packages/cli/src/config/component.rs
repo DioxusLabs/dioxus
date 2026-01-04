@@ -1,9 +1,10 @@
 use crate::component::ComponentRegistry;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration for the `dioxus component` commands
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct ComponentConfig {
     /// The component registry to default to when adding components
     #[serde(default)]

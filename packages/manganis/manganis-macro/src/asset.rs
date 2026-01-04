@@ -1,4 +1,4 @@
-use crate::{resolve_path, AssetParseError};
+use crate::{linker::generate_link_section, resolve_path, AssetParseError};
 use macro_string::MacroString;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens};
@@ -88,7 +88,7 @@ impl AssetParser {
         // Generate the link section for the asset. The link section includes the source path and the
         // output path of the asset. We force the asset to be included in the binary even if it is unused
         // if the asset is unhashed
-        let link_section = crate::generate_link_section(quote!(__ASSET), &asset_hash);
+        let link_section = generate_link_section(quote!(__ASSET), &asset_hash);
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
         let constructor = if asset.is_relative() {

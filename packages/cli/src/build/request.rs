@@ -319,6 +319,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
+use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
@@ -333,8 +334,9 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset};
-use manganis_core::{AssetOptionsBuilder, AssetVariant};
+use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
+use manganis_core::{AndroidArtifactMetadata, AssetVariant};
+use super::permission_mapper::PermissionMapper;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -354,8 +356,6 @@ use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
-
-use super::HotpatchModuleCache;
 
 /// This struct is used to plan the build process.
 ///
@@ -454,6 +454,8 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
+    pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
+    pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -904,7 +906,12 @@ impl BuildRequest {
         }
 
         // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
-        if matches!(bundle, BundleFormat::Ios) {
+        if matches!(bundle, BundleFormat::Ios)
+            && matches!(
+                triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            )
+        {
             let xcode_path = Workspace::get_xcode_path()
                 .await
                 .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
@@ -1078,9 +1085,11 @@ impl BuildRequest {
                 ctx.status_start_bundle();
 
                 self.strip_binary(&artifacts).await?;
+
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
+
                 self.write_frameworks(ctx, &artifacts.direct_rustc)
                     .await
                     .context("Failed to write frameworks")?;
@@ -1090,43 +1099,50 @@ impl BuildRequest {
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
+
+                // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
+                if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+                    self.install_android_artifacts(&artifacts.android_artifacts)
+                        .context("Failed to install Android plugin artifacts")?;
+                }
+
+                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+                    && !artifacts.swift_sources.is_empty()
+                {
+                    // Compile Swift packages from source
+                    self.compile_swift_sources(&artifacts.swift_sources)
+                        .await
+                        .context("Failed to compile Swift packages")?;
+
+                    // Then embed Swift standard libraries
+                    self.embed_swift_stdlibs(&artifacts.swift_sources)
+                        .await
+                        .context("Failed to embed Swift standard libraries")?;
+                }
+
+                self.update_manifests_with_permissions()
+                    .context("Failed to update manifests with permissions")?;
+
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
+
                 self.assemble(ctx)
                     .await
                     .context("Failed to assemble build")?;
+
+                // Populate the patch cache if we're in fat mode
+                if matches!(ctx.mode, BuildMode::Fat) {
+                    artifacts.patch_cache =
+                        Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
+                }
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
         }
 
-        // Populate the patch cache if we're in fat mode
-        if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
-        }
-
-        // Calculate some final metadata for logging
-        let time_taken = SystemTime::now()
-            .duration_since(time_start)
-            .map(|d| d.as_millis())
-            .unwrap_or_default();
-        tracing::debug!(
-            telemetry = %serde_json::json!({
-                "event": "build_and_bundle_complete",
-                "time_taken": time_taken,
-                "mode": match ctx.mode {
-                    BuildMode::Base { .. } => "base",
-                    BuildMode::Fat => "fat",
-                    BuildMode::Thin { .. } => "thin",
-                },
-                "blah": 123,
-                "triple": self.triple.to_string(),
-                "format": self.bundle.to_string(),
-                "num_dependencies": self.workspace.krates.len(),
-            }),
-            "Build completed in {time_taken}ms",
-        );
+        // Record the build duration as a telemetry event
+        self.record_build_duration(time_start, &ctx);
 
         Ok(artifacts)
     }
@@ -1293,7 +1309,33 @@ impl BuildRequest {
             );
         }
 
-        let assets = self.collect_assets(&exe, ctx).await?;
+        // For Darwin Base builds, we intercepted linking to enable Swift plugin compilation.
+        // Now we need to run the actual linker ourselves (with Swift support if Swift sources are present).
+        let is_darwin_base = matches!(ctx.mode, BuildMode::Base { .. })
+            && matches!(
+                self.triple.operating_system,
+                OperatingSystem::Darwin(_)
+                    | OperatingSystem::MacOSX { .. }
+                    | OperatingSystem::IOS(_)
+            );
+
+        if is_darwin_base {
+            ctx.status_starting_link();
+            let link_start = SystemTime::now();
+            self.run_darwin_link(&exe, &direct_rustc).await?;
+            tracing::debug!(
+                "Darwin linking completed in {}us",
+                SystemTime::now()
+                    .duration_since(link_start)
+                    .unwrap()
+                    .as_micros()
+            );
+        }
+
+        // Extract all linker metadata (assets, Android/iOS plugins) in a single pass.
+        let (assets, android_artifacts, swift_sources) =
+            self.collect_assets_and_metadata(&exe, ctx).await?;
+
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
@@ -1310,6 +1352,8 @@ impl BuildRequest {
             direct_rustc,
             time_start,
             assets,
+            android_artifacts,
+            swift_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1318,46 +1362,828 @@ impl BuildRequest {
         })
     }
 
-    /// Collect the assets from the final executable and modify the binary in place to point to the right
-    /// hashed asset location.
-    async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if self.skip_assets {
-            return Ok(AssetManifest::default());
+    /// Collect assets and plugin metadata from the final executable in one pass
+    ///
+    /// This method extracts assets and FFI plugin metadata (Android/Swift) from the
+    /// binary. Permissions are now read from Dioxus.toml, not extracted from the binary.
+    async fn collect_assets_and_metadata(
+        &self,
+        exe: &Path,
+        ctx: &BuildContext,
+    ) -> Result<(
+        AssetManifest,
+        Vec<AndroidArtifactMetadata>,
+        Vec<SwiftPackageMetadata>,
+    )> {
+        use super::assets::extract_symbols_from_file;
+
+        let skip_assets = self.skip_assets;
+        let needs_android_artifacts = self.bundle == BundleFormat::Android;
+        let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
+
+        if skip_assets && !needs_android_artifacts && !needs_swift_packages {
+            return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
         }
 
         ctx.status_extracting_assets();
+        let super::assets::SymbolExtractionResult {
+            assets: extracted_assets,
+            android_artifacts,
+            swift_packages,
+        } = extract_symbols_from_file(exe).await?;
 
-        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+        let asset_manifest = if skip_assets {
+            AssetManifest::default()
+        } else {
+            let mut manifest = AssetManifest::default();
+            for asset in extracted_assets {
+                manifest.insert_asset(asset);
+            }
 
-        // If the user has a public dir, we submit all the entries there as assets too
-        //
-        // These don't receive a hash in their filename, since they're user-provided static assets
-        // We only do this for web builds
-        if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
-        {
-            if let Some(dir) = self.user_public_dir() {
-                for entry in walkdir::WalkDir::new(&dir)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let from = entry.path().to_path_buf();
-                    let relative_path = from.strip_prefix(&dir).unwrap();
-                    let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
-                        from.to_string_lossy().as_ref(),
-                        to.as_str(),
-                        AssetOptionsBuilder::new()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
-                    ));
+            if matches!(self.bundle, BundleFormat::Web)
+                && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            {
+                if let Some(dir) = self.user_public_dir() {
+                    for entry in walkdir::WalkDir::new(&dir)
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.file_type().is_file())
+                    {
+                        let from = entry.path().to_path_buf();
+                        let relative_path = from.strip_prefix(&dir).unwrap();
+                        let to = format!("../{}", relative_path.display());
+                        manifest.insert_asset(BundledAsset::new(
+                            from.to_string_lossy().as_ref(),
+                            to.as_str(),
+                            manganis_core::AssetOptions::builder()
+                                .with_hash_suffix(false)
+                                .into_asset_options(),
+                        ));
+                    }
+                }
+            }
+
+            manifest
+        };
+
+        if !android_artifacts.is_empty() {
+            tracing::debug!(
+                "Found {} Android artifact declaration(s)",
+                android_artifacts.len()
+            );
+            for artifact in android_artifacts.iter() {
+                tracing::debug!(
+                    "  Plugin: {} Artifact: {}",
+                    artifact.plugin_name.as_str(),
+                    artifact.artifact_path.as_str()
+                );
+            }
+        }
+
+        if !swift_packages.is_empty() {
+            tracing::debug!(
+                "Found {} Swift package declaration(s) for {:?}",
+                swift_packages.len(),
+                self.bundle
+            );
+            for source in &swift_packages {
+                tracing::debug!(
+                    "  Plugin: {} (Swift package path={} product={})",
+                    source.plugin_name.as_str(),
+                    source.package_path.as_str(),
+                    source.product.as_str()
+                );
+            }
+        }
+
+        Ok((asset_manifest, android_artifacts, swift_packages))
+    }
+
+    /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
+    ///
+    /// This function handles both prebuilt AARs and source folders:
+    /// - If `artifact_path` is a file (ends in .aar), copy it to libs/ and add file dependency
+    /// - If `artifact_path` is a directory, copy it as a Gradle submodule and add project dependency
+    ///
+    /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
+    fn install_android_artifacts(
+        &self,
+        android_artifacts: &[AndroidArtifactMetadata],
+    ) -> Result<()> {
+        let libs_dir = self.root_dir().join("app").join("libs");
+        std::fs::create_dir_all(&libs_dir)?;
+
+        let plugins_dir = self.root_dir().join("plugins");
+        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
+        let settings_gradle = self.root_dir().join("settings.gradle");
+
+        for artifact in android_artifacts {
+            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
+            let plugin_name = artifact.plugin_name.as_str();
+
+            if artifact_path.is_dir() {
+                // It's a source folder - copy it as a Gradle submodule
+                tracing::info!(
+                    "Bundling Android plugin '{}' from source: {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+
+                // Create module directory
+                let module_dir = plugins_dir.join(plugin_name);
+                self.copy_dir_recursive(&artifact_path, &module_dir)?;
+
+                // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
+                self.strip_gradle_plugin_versions(&module_dir)?;
+
+                // Add to settings.gradle
+                self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
+
+                // Add project dependency to app/build.gradle.kts
+                let dep_line = format!("implementation(project(\":plugins:{}\"))", plugin_name);
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+
+                tracing::debug!(
+                    "Added Android plugin module :plugins:{} from {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+            } else if artifact_path.extension().is_some_and(|ext| ext == "aar") {
+                // It's a prebuilt AAR - copy directly to libs
+                if !artifact_path.exists() {
+                    anyhow::bail!(
+                        "Android plugin artifact not found: {}",
+                        artifact_path.display()
+                    );
+                }
+
+                let filename = artifact_path
+                    .file_name()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Android plugin artifact path has no filename: {}",
+                            artifact_path.display()
+                        )
+                    })?
+                    .to_owned();
+                let dest_file = libs_dir.join(&filename);
+                std::fs::copy(&artifact_path, &dest_file)?;
+                tracing::debug!(
+                    "Copied Android artifact {} -> {}",
+                    artifact_path.display(),
+                    dest_file.display()
+                );
+
+                let dep_line = format!(
+                    "implementation(files(\"libs/{}\"))",
+                    filename.to_string_lossy()
+                );
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+            } else {
+                anyhow::bail!(
+                    "Android artifact path is neither a directory nor an AAR file: {}",
+                    artifact_path.display()
+                );
+            }
+
+            // Add any extra Gradle dependencies specified by the plugin
+            for dependency in artifact
+                .gradle_dependencies
+                .as_str()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+            {
+                self.ensure_gradle_dependency(&build_gradle, dependency)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Recursively copy a directory and its contents.
+    fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+        std::fs::create_dir_all(dst)?;
+
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+
+            if src_path.is_dir() {
+                // Skip build directories and hidden folders
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
+                    continue;
+                }
+                self.copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                std::fs::copy(&src_path, &dst_path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Strip version specifiers from build.gradle.kts plugins block.
+    ///
+    /// When a plugin module is included as a subproject, having version specifiers in the
+    /// plugins block causes conflicts because the parent project already has the plugins
+    /// on the classpath. This function removes version specifications like:
+    /// - `version "8.4.2"` or `version "1.9.24"`
+    /// - Entire version calls from plugin declarations
+    fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
+        use std::fs;
+
+        let build_gradle = module_dir.join("build.gradle.kts");
+        if !build_gradle.exists() {
+            return Ok(());
+        }
+
+        let contents = fs::read_to_string(&build_gradle)?;
+
+        // Remove version specifications from plugin declarations
+        // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
+        // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
+        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
+        let cleaned = version_pattern.replace_all(&contents, "");
+
+        if cleaned != contents {
+            fs::write(&build_gradle, cleaned.as_ref())?;
+            tracing::debug!(
+                "Stripped version specifiers from {}",
+                build_gradle.display()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Add a module include to settings.gradle if not already present.
+    fn ensure_settings_gradle_include(
+        &self,
+        settings_gradle: &Path,
+        plugin_name: &str,
+    ) -> Result<()> {
+        use std::fs;
+
+        let include_line = format!("include ':plugins:{}'", plugin_name);
+        let mut contents = fs::read_to_string(settings_gradle)?;
+
+        if contents.contains(&include_line) {
+            return Ok(());
+        }
+
+        // Add the include at the end
+        contents.push_str(&format!("\n{}\n", include_line));
+        fs::write(settings_gradle, contents)?;
+
+        Ok(())
+    }
+
+    /// Bundle and compile Swift packages from source.
+    ///
+    /// This function:
+    /// 1. Bundles all Swift plugin sources into a staging directory
+    /// 2. Creates an umbrella Package.swift that includes all plugins as dependencies
+    /// 3. Runs a single `swift build` to compile everything together
+    /// 4. The resulting static libraries are linked into the final executable
+    async fn compile_swift_sources(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
+        if swift_sources.is_empty() {
+            return Ok(());
+        }
+
+        // Staging directory for all Swift plugins
+        let swift_plugins_dir = self.target_dir.join("swift-plugins");
+        std::fs::create_dir_all(&swift_plugins_dir)?;
+
+        // Collect valid source packages and copy them to staging
+        let mut bundled_packages: Vec<(String, PathBuf)> = Vec::new();
+
+        for package in swift_sources {
+            let package_path = PathBuf::from(package.package_path.as_str());
+            let product = package.product.as_str();
+
+            // Only include if it's a source directory (has Package.swift)
+            if !package_path.is_dir() || !package_path.join("Package.swift").exists() {
+                tracing::debug!(
+                    "Skipping Swift package at {} - not a source directory",
+                    package_path.display()
+                );
+                continue;
+            }
+
+            // Copy to staging directory
+            let staged_path = swift_plugins_dir.join(product);
+            tracing::info!(
+                "Bundling Swift plugin '{}' from {}",
+                product,
+                package_path.display()
+            );
+            self.copy_dir_recursive(&package_path, &staged_path)?;
+            bundled_packages.push((product.to_string(), staged_path));
+        }
+
+        if bundled_packages.is_empty() {
+            return Ok(());
+        }
+
+        // Create umbrella Package.swift that includes all plugins
+        let umbrella_package = self.generate_umbrella_swift_package(&bundled_packages)?;
+        std::fs::write(swift_plugins_dir.join("Package.swift"), umbrella_package)?;
+
+        // Determine Swift target triple based on Rust target
+        let triple_str = self.triple.to_string();
+        let (swift_target, sdk_name) = if triple_str.contains("aarch64-apple-ios-sim") {
+            ("arm64-apple-ios13.0-simulator", "iphonesimulator")
+        } else if triple_str.contains("aarch64-apple-ios") {
+            ("arm64-apple-ios13.0", "iphoneos")
+        } else if triple_str.contains("x86_64-apple-ios") {
+            ("x86_64-apple-ios13.0-simulator", "iphonesimulator")
+        } else if triple_str.contains("aarch64-apple-darwin") {
+            ("arm64-apple-macos11.0", "macosx")
+        } else if triple_str.contains("x86_64-apple-darwin") {
+            ("x86_64-apple-macos11.0", "macosx")
+        } else {
+            tracing::warn!(
+                "Unknown target {} for Swift compilation, skipping",
+                triple_str
+            );
+            return Ok(());
+        };
+
+        // Get SDK path
+        let sdk_output = tokio::process::Command::new("xcrun")
+            .args(["--sdk", sdk_name, "--show-sdk-path"])
+            .output()
+            .await
+            .context("Failed to run xcrun to find SDK path")?;
+
+        if !sdk_output.status.success() {
+            anyhow::bail!(
+                "xcrun failed to find SDK {}: {}",
+                sdk_name,
+                String::from_utf8_lossy(&sdk_output.stderr)
+            );
+        }
+
+        let sdk_path = String::from_utf8(sdk_output.stdout)
+            .context("Invalid UTF-8 in SDK path")?
+            .trim()
+            .to_string();
+
+        // Build directory for Swift output
+        let build_dir = swift_plugins_dir.join(".build");
+        std::fs::create_dir_all(&build_dir)?;
+
+        // Determine configuration based on profile
+        let configuration = if self.release { "release" } else { "debug" };
+
+        // Run a single swift build for all plugins
+        tracing::info!(
+            "Compiling {} Swift plugin(s) with single build",
+            bundled_packages.len()
+        );
+
+        let output = tokio::process::Command::new("xcrun")
+            .args(["swift", "build"])
+            .args(["--package-path", swift_plugins_dir.to_str().unwrap()])
+            .args(["--configuration", configuration])
+            .args(["--triple", swift_target])
+            .args(["--sdk", &sdk_path])
+            .args(["--build-path", build_dir.to_str().unwrap()])
+            .output()
+            .await?;
+        // .context(format!(
+        //     "Failed to run swift build for plugins at {}",
+        //     swift_plugins_dir.display()
+        // ))?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "Swift build failed for plugins at {}.\n{}\n{}",
+                swift_plugins_dir.display(),
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        // Verify that all expected static libraries were built
+        for (product, _) in &bundled_packages {
+            let lib_name = format!("lib{}.a", product);
+            if let Some(lib_path) = self.find_swift_static_lib(&build_dir, &lib_name) {
+                tracing::info!("Built Swift plugin: {} -> {}", product, lib_path.display());
+            } else {
+                tracing::warn!(
+                    "Could not find Swift static library {} in {}",
+                    lib_name,
+                    build_dir.display()
+                );
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Generate an umbrella Package.swift that includes all bundled Swift plugins as dependencies.
+    fn generate_umbrella_swift_package(&self, packages: &[(String, PathBuf)]) -> Result<String> {
+        let mut dependencies = String::new();
+        let mut target_deps = String::new();
+
+        for (name, path) in packages {
+            let rel_path = path.file_name().unwrap().to_string_lossy();
+            dependencies.push_str(&format!("        .package(path: \"./{}\"),\n", rel_path));
+            target_deps.push_str(&format!(
+                "            .product(name: \"{}\", package: \"{}\"),\n",
+                name, rel_path
+            ));
+        }
+
+        let package_swift = format!(
+            r#"// swift-tools-version:5.7
+// Auto-generated umbrella package for Dioxus Swift plugins
+
+import PackageDescription
+
+let package = Package(
+    name: "DioxusPlugins",
+    platforms: [
+        .iOS(.v13),
+        .macOS(.v11),
+    ],
+    products: [
+        .library(
+            name: "DioxusPlugins",
+            type: .static,
+            targets: ["DioxusPlugins"]
+        ),
+    ],
+    dependencies: [
+{}    ],
+    targets: [
+        .target(
+            name: "DioxusPlugins",
+            dependencies: [
+{}            ],
+            path: "Sources"
+        ),
+    ]
+)
+"#,
+            dependencies, target_deps
+        );
+
+        // Create a minimal source file for the umbrella target
+        let sources_dir = self.target_dir.join("swift-plugins").join("Sources");
+        std::fs::create_dir_all(&sources_dir)?;
+        std::fs::write(
+            sources_dir.join("DioxusPlugins.swift"),
+            "// Umbrella module for Dioxus Swift plugins\n",
+        )?;
+
+        Ok(package_swift)
+    }
+
+    /// Recursively search for a Swift static library in the build directory.
+    fn find_swift_static_lib(&self, build_dir: &Path, lib_name: &str) -> Option<PathBuf> {
+        if !build_dir.exists() {
+            return None;
+        }
+
+        for entry in std::fs::read_dir(build_dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+
+            if path.is_file() && path.file_name().is_some_and(|n| n == lib_name) {
+                return Some(path);
+            }
+
+            if path.is_dir() {
+                if let Some(found) = self.find_swift_static_lib(&path, lib_name) {
+                    return Some(found);
                 }
             }
         }
 
-        Ok(manifest)
+        None
+    }
+
+    /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
+    async fn embed_swift_stdlibs(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
+        if swift_sources.is_empty() {
+            return Ok(());
+        }
+
+        let platform_flag = match self.bundle {
+            BundleFormat::Ios => {
+                let triple_str = self.triple.to_string();
+                if triple_str.contains("sim") || triple_str.contains("x86_64") {
+                    "iphonesimulator"
+                } else {
+                    "iphoneos"
+                }
+            }
+            BundleFormat::MacOS => "macosx",
+            _ => return Ok(()),
+        };
+
+        let frameworks_dir = self.frameworks_folder();
+        std::fs::create_dir_all(&frameworks_dir)?;
+
+        let exe_path = self.main_exe();
+        if !exe_path.exists() {
+            anyhow::bail!(
+                "Expected executable at {} when embedding Swift stdlibs",
+                exe_path.display()
+            );
+        }
+
+        let output = Command::new("xcrun")
+            .arg("swift-stdlib-tool")
+            .arg("--copy")
+            .arg("--platform")
+            .arg(platform_flag)
+            .arg("--scan-executable")
+            .arg(&exe_path)
+            .arg("--destination")
+            .arg(&frameworks_dir)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            anyhow::bail!(
+                "swift-stdlib-tool failed: {}{}",
+                stderr.trim(),
+                if stdout.trim().is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" | {}", stdout.trim())
+                }
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Update platform manifests with permissions from Dioxus.toml config
+    ///
+    /// This reads permissions from the unified `[permissions]` section in Dioxus.toml
+    /// and injects them into the appropriate platform manifest files.
+    pub(crate) fn update_manifests_with_permissions(&self) -> Result<()> {
+        // Create permission mapper from config
+        let mapper = PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
+        match self.bundle {
+            BundleFormat::Android => {
+                self.inject_android_permissions(&mapper)?;
+                self.inject_android_raw_config()?;
+            }
+            BundleFormat::Ios => {
+                self.inject_ios_permissions(&mapper)?;
+                self.inject_ios_raw_config()?;
+            }
+            BundleFormat::MacOS => {
+                self.inject_macos_permissions(&mapper)?;
+                self.inject_macos_raw_config()?;
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
+
+    /// Inject Android permissions from the permission mapper
+    fn inject_android_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.android_permissions.is_empty() && mapper.android_features.is_empty() {
+            tracing::debug!("No Android permissions found in Dioxus.toml");
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+
+        if !manifest_path.exists() {
+            tracing::warn!("AndroidManifest.xml not found, skipping permission injection");
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Find the position after the INTERNET permission
+        let internet_permission =
+            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+
+        if let Some(pos) = manifest_content.find(internet_permission) {
+            let insert_pos = pos + internet_permission.len();
+
+            // Generate permission and feature declarations
+            let mut declarations = String::new();
+            for perm in &mapper.android_permissions {
+                declarations.push_str(&format!(
+                    "\n    <uses-permission android:name=\"{}\" />",
+                    perm.permission
+                ));
+            }
+            for feature in &mapper.android_features {
+                declarations.push_str(&format!(
+                    "\n    <uses-feature android:name=\"{}\" android:required=\"true\" />",
+                    feature
+                ));
+            }
+
+            manifest_content.insert_str(insert_pos, &declarations);
+            std::fs::write(&manifest_path, manifest_content)?;
+
+            tracing::debug!(
+                "Added {} Android permissions and {} features to AndroidManifest.xml",
+                mapper.android_permissions.len(),
+                mapper.android_features.len()
+            );
+            for perm in &mapper.android_permissions {
+                tracing::debug!("  • {} - {}", perm.permission, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw Android config from Dioxus.toml
+    fn inject_android_raw_config(&self) -> Result<()> {
+        let raw = &self.config.android.raw;
+
+        if raw.manifest.is_none() {
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+
+        if !manifest_path.exists() {
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Inject raw manifest content after permissions
+        if let Some(raw_manifest) = &raw.manifest {
+            let internet_permission =
+                r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+            if let Some(pos) = manifest_content.find(internet_permission) {
+                let insert_pos = pos + internet_permission.len();
+                manifest_content.insert_str(insert_pos, &format!("\n{}", raw_manifest.trim()));
+                tracing::debug!("Injected raw manifest XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&manifest_path, manifest_content)?;
+        Ok(())
+    }
+
+    /// Inject iOS permissions from the permission mapper
+    fn inject_ios_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.ios_plist_entries.is_empty() {
+            tracing::debug!("No iOS permissions found in Dioxus.toml");
+            return Ok(());
+        }
+
+        // For iOS, Info.plist is at the root of the .app bundle
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::debug!(
+                "Info.plist not found at {:?}, skipping permission injection",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let permission_xml = mapper.generate_ios_plist_xml();
+            plist_content.insert_str(pos, &permission_xml);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} iOS permissions to Info.plist",
+                mapper.ios_plist_entries.len()
+            );
+            for entry in &mapper.ios_plist_entries {
+                tracing::debug!("  • {} - {}", entry.key, entry.value);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw iOS config from Dioxus.toml
+    fn inject_ios_raw_config(&self) -> Result<()> {
+        let raw = &self.config.ios.raw;
+
+        if raw.info_plist.is_none() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Inject raw plist content before closing </dict>
+        if let Some(raw_plist) = &raw.info_plist {
+            if let Some(pos) = plist_content.rfind("</dict>") {
+                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
+                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&plist_path, plist_content)?;
+        Ok(())
+    }
+
+    /// Inject macOS permissions from the permission mapper
+    fn inject_macos_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.macos_plist_entries.is_empty() {
+            return Ok(());
+        }
+
+        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission injection",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let permission_xml = mapper.generate_macos_plist_xml();
+            plist_content.insert_str(pos, &permission_xml);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} macOS permissions to Info.plist",
+                mapper.macos_plist_entries.len()
+            );
+            for entry in &mapper.macos_plist_entries {
+                tracing::debug!("  • {} - {}", entry.key, entry.value);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw macOS config from Dioxus.toml
+    fn inject_macos_raw_config(&self) -> Result<()> {
+        let raw = &self.config.macos.raw;
+
+        if raw.info_plist.is_none() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+
+        if !plist_path.exists() {
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Inject raw plist content before closing </dict>
+        if let Some(raw_plist) = &raw.info_plist {
+            if let Some(pos) = plist_content.rfind("</dict>") {
+                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
+                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&plist_path, plist_content)?;
+        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1817,10 +2643,13 @@ impl BuildRequest {
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
-        // Now extract the assets from the fat binary
-        artifacts.assets = self
-            .collect_assets(&self.patch_exe(artifacts.time_start), ctx)
+        // Now extract linker metadata from the fat binary (assets, plugin data)
+        let (assets, android_artifacts, swift_sources) = self
+            .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
+        artifacts.assets = assets;
+        artifacts.android_artifacts = android_artifacts;
+        artifacts.swift_sources = swift_sources;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -1904,7 +2733,11 @@ impl BuildRequest {
                         || *arg == "-arch"
                         || *arg == "-L"
                         || *arg == "-target"
-                        || *arg == "-isysroot"
+                        || (*arg == "-isysroot"
+                            && matches!(
+                                self.triple.operating_system,
+                                target_lexicon::OperatingSystem::IOS(_)
+                            ))
                     {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
@@ -1991,8 +2824,13 @@ impl BuildRequest {
         }
 
         if let Some(vale) = extract_value("-isysroot") {
-            out_args.push("-isysroot".to_string());
-            out_args.push(vale);
+            if matches!(
+                self.triple.operating_system,
+                target_lexicon::OperatingSystem::IOS(_)
+            ) {
+                out_args.push("-isysroot".to_string());
+                out_args.push(vale);
+            }
         }
 
         Ok(out_args)
@@ -2284,6 +3122,60 @@ impl BuildRequest {
             args.remove(flavor_idx);
         }
 
+        // Compile Swift sources if targeting Darwin platforms
+        // We extract Swift metadata from the rlibs, compile them, and add the resulting .a to link args
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::IOS(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
+        ) {
+            let workspace_dir = self.workspace_dir();
+            let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
+                &rustc_args.link_args,
+                &workspace_dir,
+            );
+
+            if !swift_sources.is_empty() {
+                tracing::info!(
+                    "Found {} Swift plugin source(s), compiling...",
+                    swift_sources.len()
+                );
+
+                let build_dir = exe.parent().unwrap_or(Path::new("."));
+                let release = self.release;
+
+                match super::ios_swift::compile_swift_sources(
+                    &swift_sources,
+                    &self.triple,
+                    build_dir,
+                    release,
+                )
+                .await
+                {
+                    Ok(Some(swift_lib)) => {
+                        tracing::info!("Linking Swift library: {}", swift_lib.display());
+                        // Add the Swift library to the link args
+                        // For Darwin, we use -force_load to ensure all symbols are included
+                        if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o"))
+                        {
+                            args.insert(last_object + 1, "-Wl,-force_load".to_string());
+                            args.insert(last_object + 2, swift_lib.display().to_string());
+                        } else {
+                            // Fallback: just add to the end
+                            args.push("-Wl,-force_load".to_string());
+                            args.push(swift_lib.display().to_string());
+                        }
+                    }
+                    Ok(None) => {
+                        tracing::debug!("No Swift libraries produced");
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to compile Swift sources: {}", e);
+                        // Continue without Swift - this allows building when Swift isn't ready
+                    }
+                }
+            }
+        }
+
         // Set the output file
         match self.triple.operating_system {
             OperatingSystem::Windows => args.push(format!("/OUT:{}", exe.display())),
@@ -2355,6 +3247,106 @@ impl BuildRequest {
                 .map(|s| s.display().to_string())
                 .join("\n"),
         );
+
+        Ok(())
+    }
+
+    /// Run the Darwin linker with Swift plugin support.
+    ///
+    /// This function is used for Darwin (macOS/iOS) Base builds where we intercept
+    /// the linker to enable Swift plugin compilation. It:
+    /// 1. Extracts Swift metadata from the rlibs in the link args
+    /// 2. Compiles any Swift sources found
+    /// 3. Runs the actual linker with the Swift library added if present
+    async fn run_darwin_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
+        let mut args = rustc_args.link_args.clone();
+
+        if args.is_empty() {
+            tracing::warn!("No link args found for Darwin link");
+            return Ok(());
+        }
+
+        // Check for Swift sources in the rlibs
+        let workspace_dir = self.workspace_dir();
+        let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
+            &rustc_args.link_args,
+            &workspace_dir,
+        );
+
+        // Compile Swift sources if any were found
+        if !swift_sources.is_empty() {
+            tracing::info!(
+                "Found {} Swift plugin source(s), compiling...",
+                swift_sources.len()
+            );
+
+            let build_dir = exe.parent().unwrap_or(Path::new("."));
+            let release = self.release;
+
+            match super::ios_swift::compile_swift_sources(
+                &swift_sources,
+                &self.triple,
+                build_dir,
+                release,
+            )
+            .await
+            {
+                Ok(Some(swift_lib)) => {
+                    tracing::info!("Linking Swift library: {}", swift_lib.display());
+                    // Add the Swift library to the link args
+                    // For Darwin, we use -force_load to ensure all symbols are included
+                    if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
+                        args.insert(last_object + 1, "-Wl,-force_load".to_string());
+                        args.insert(last_object + 2, swift_lib.display().to_string());
+                    } else {
+                        // Fallback: just add before -o flag
+                        if let Some(out_idx) = args.iter().position(|arg| *arg == "-o") {
+                            args.insert(out_idx, swift_lib.display().to_string());
+                            args.insert(out_idx, "-Wl,-force_load".to_string());
+                        } else {
+                            // Last resort: add at the end
+                            args.push("-Wl,-force_load".to_string());
+                            args.push(swift_lib.display().to_string());
+                        }
+                    }
+                }
+                Ok(None) => {
+                    tracing::debug!("No Swift libraries produced");
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to compile Swift sources: {}", e);
+                    // Continue without Swift - this allows building when Swift isn't ready
+                }
+            }
+        }
+
+        // Select the appropriate linker
+        let linker = self.select_linker()?;
+
+        tracing::trace!("Darwin linking with: {:?} {:?}", linker, args);
+
+        // Run the linker
+        let res = Command::new(&linker)
+            .args(&args)
+            .envs(
+                rustc_args
+                    .envs
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str())),
+            )
+            .output()
+            .await?;
+
+        if !res.status.success() {
+            let stderr = String::from_utf8_lossy(&res.stderr);
+            let stdout = String::from_utf8_lossy(&res.stdout);
+            anyhow::bail!("Darwin link failed:\n{}\n{}", stdout, stderr);
+        }
+
+        if !res.stderr.is_empty() {
+            let errs = String::from_utf8_lossy(&res.stderr);
+            tracing::trace!("Darwin linker warnings: {}", errs.trim());
+        }
 
         Ok(())
     }
@@ -2679,10 +3671,19 @@ impl BuildRequest {
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
-        // dx *always* links android and thin builds
-        if self.custom_linker.is_some()
+        // dx *always* links android, thin builds, fat builds, and Darwin builds (for Swift support)
+        // For Darwin (macOS/iOS), we intercept the linker to enable Swift plugin compilation
+        let use_dx_linker = self.custom_linker.is_some()
             || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
+            || (matches!(build_mode, BuildMode::Base { .. })
+                && matches!(
+                    self.triple.operating_system,
+                    OperatingSystem::Darwin(_)
+                        | OperatingSystem::MacOSX { .. }
+                        | OperatingSystem::IOS(_)
+                ));
+
+        if use_dx_linker {
             cargo_args.push(format!(
                 "-Clinker={}",
                 Workspace::path_to_dx().expect("can't find dx").display()
@@ -2841,12 +3842,30 @@ impl BuildRequest {
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        if self.custom_linker.is_some()
+        // For Darwin builds (macOS/iOS), we also intercept linking to enable Swift plugin compilation.
+        let is_darwin = matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::IOS(_)
+        );
+
+        let use_dx_linker = self.custom_linker.is_some()
             || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-        {
+            || (matches!(build_mode, BuildMode::Base { .. }) && is_darwin);
+
+        if use_dx_linker {
+            // For Darwin Base builds, we use no-link mode (linker = None) so dx just captures
+            // the linker args. We'll run the actual linker ourselves after checking for Swift.
+            // For Android, we pass the actual linker so cargo can still link normally.
+            // For Fat/Thin builds, we also use no-link mode (linker = None).
+            let linker = if is_darwin && matches!(build_mode, BuildMode::Base { .. }) {
+                None // No-link mode for Darwin - we'll link ourselves
+            } else {
+                self.custom_linker.clone() // Android uses this, Fat/Thin use None
+            };
+
             LinkAction {
                 triple: self.triple.clone(),
-                linker: self.custom_linker.clone(),
+                linker,
                 link_err_file: dunce::canonicalize(self.link_err_file())?,
                 link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
@@ -2928,6 +3947,8 @@ impl BuildRequest {
         let target_cxx = tools.target_cxx();
         let java_home = tools.java_home();
         let ndk_home = tools.ndk.clone();
+        let sdk_root = tools.sdk();
+        let artifact_dir = self.android_artifact_dir()?;
         tracing::debug!(
             r#"Using android:
             min_sdk_version: {min_sdk_version}
@@ -2936,13 +3957,36 @@ impl BuildRequest {
             target_cc: {target_cc:?}
             target_cxx: {target_cxx:?}
             java_home: {java_home:?}
+            sdk_root: {sdk_root:?}
+            artifact_dir: {artifact_dir:?}
             "#
         );
 
-        if let Some(java_home) = java_home {
+        if let Some(java_home) = &java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
+            env_vars.push((
+                "DX_ANDROID_JAVA_HOME".into(),
+                java_home.clone().into_os_string(),
+            ));
         }
+
+        env_vars.push((
+            "DX_ANDROID_ARTIFACT_DIR".into(),
+            artifact_dir.into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_NDK_HOME".into(),
+            ndk_home.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_SDK_ROOT".into(),
+            sdk_root.clone().into_os_string(),
+        ));
+        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
+        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
+        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
+        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
 
         let triple = self.triple.to_string();
 
@@ -3061,7 +4105,10 @@ impl BuildRequest {
                 ),
                 linker.into_os_string(),
             ),
-            ("ANDROID_NDK_ROOT".to_string(), ndk_home.into_os_string()),
+            (
+                "ANDROID_NDK_ROOT".to_string(),
+                ndk_home.clone().into_os_string(),
+            ),
             (
                 "OPENSSL_LIB_DIR".to_string(),
                 openssl_lib_dir.into_os_string(),
@@ -3081,10 +4128,16 @@ impl BuildRequest {
                 "WRY_ANDROID_LIBRARY".to_string(),
                 "dioxusmain".to_string().into(),
             ),
-            (
-                "WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(),
-                self.wry_android_kotlin_files_out_dir().into_os_string(),
-            ),
+            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
+                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                // Ensure the directory exists for WRY's canonicalize check
+                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                }
+                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                kotlin_dir.into_os_string()
+            }),
             // Found this through a comment related to bindgen using the wrong clang for cross compiles
             //
             // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
@@ -3105,6 +4158,17 @@ impl BuildRequest {
         }
 
         Ok(env_vars)
+    }
+
+    fn android_artifact_dir(&self) -> Result<PathBuf> {
+        let dir = self
+            .internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join("android-artifacts")
+            .join(self.triple.to_string());
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -3272,12 +4336,14 @@ impl BuildRequest {
         let app = root.join("app");
         let app_main = app.join("src").join("main");
         let app_kotlin = app_main.join("kotlin");
+        let app_java = app_main.join("java");
         let app_jnilibs = app_main.join("jniLibs");
         let app_assets = app_main.join("assets");
         let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
         create_dir_all(&app)?;
         create_dir_all(&app_main)?;
         create_dir_all(&app_kotlin)?;
+        create_dir_all(&app_java)?;
         create_dir_all(&app_jnilibs)?;
         create_dir_all(&app_assets)?;
         create_dir_all(&app_kotlin_out)?;
@@ -3300,11 +4366,42 @@ impl BuildRequest {
             application_id: String,
             app_name: String,
             android_bundle: Option<crate::AndroidSettings>,
+            /// Android permission strings (e.g., "android.permission.CAMERA")
+            permissions: Vec<String>,
+            /// Android hardware features (e.g., "android.hardware.location.gps")
+            features: Vec<String>,
+            /// Raw manifest XML to inject
+            raw_manifest: String,
         }
+
+        // Get permission mapper from config
+        let mapper = super::permission_mapper::PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
+        // Collect Android permissions
+        let permissions: Vec<String> = mapper
+            .android_permissions
+            .iter()
+            .map(|p| p.permission.clone())
+            .collect();
+
+        // Collect Android features from config
+        let features = self.config.android.features.clone();
+
+        // Get raw manifest XML
+        let raw_manifest = self.config.android.raw.manifest.clone().unwrap_or_default();
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             android_bundle: self.config.bundle.android.clone(),
+            permissions,
+            features,
+            raw_manifest,
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -3483,6 +4580,25 @@ impl BuildRequest {
         }
 
         kotlin_dir
+    }
+
+    fn ensure_gradle_dependency(&self, build_gradle: &Path, dependency_line: &str) -> Result<()> {
+        use std::fs;
+
+        let mut contents = fs::read_to_string(build_gradle)?;
+        if contents.contains(dependency_line) {
+            return Ok(());
+        }
+
+        if let Some(idx) = contents.find("dependencies {") {
+            let insert_pos = idx + "dependencies {".len();
+            contents.insert_str(insert_pos, &format!("\n    {dependency_line}"));
+        } else {
+            contents.push_str(&format!("\ndependencies {{\n    {dependency_line}\n}}\n"));
+        }
+
+        fs::write(build_gradle, contents)?;
+        Ok(())
     }
 
     /// Get the directory where this app can write to for this session that's guaranteed to be stable
@@ -4311,12 +5427,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     fn info_plist_contents(&self, bundle: BundleFormat) -> Result<String> {
+        /// A permission entry for plist (key + description)
+        #[derive(Serialize)]
+        struct PlistPermission {
+            key: String,
+            description: String,
+        }
+
         #[derive(Serialize)]
         pub struct InfoPlistData {
             pub display_name: String,
             pub bundle_name: String,
             pub bundle_identifier: String,
             pub executable_name: String,
+            /// Permission usage descriptions
+            pub permissions: Vec<PlistPermission>,
+            /// Additional plist entries as raw XML
+            pub plist_entries: String,
+            /// Raw plist XML to inject
+            pub raw_plist: String,
+            /// Minimum system version (macOS only)
+            pub minimum_system_version: String,
         }
 
         // Attempt to use the user's manually specified
@@ -4335,29 +5466,83 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             _ => {}
         }
 
+        // Get permission mapper from config
+        let mapper = super::permission_mapper::PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
         match bundle {
-            BundleFormat::MacOS => handlebars::Handlebars::new()
-                .render_template(
-                    include_str!("../../assets/macos/mac.plist.hbs"),
-                    &InfoPlistData {
-                        display_name: self.bundled_app_name(),
-                        bundle_name: self.bundled_app_name(),
-                        executable_name: self.platform_exe_name(),
-                        bundle_identifier: self.bundle_identifier(),
-                    },
-                )
-                .map_err(|e| e.into()),
-            BundleFormat::Ios => handlebars::Handlebars::new()
-                .render_template(
-                    include_str!("../../assets/ios/ios.plist.hbs"),
-                    &InfoPlistData {
-                        display_name: self.bundled_app_name(),
-                        bundle_name: self.bundled_app_name(),
-                        executable_name: self.platform_exe_name(),
-                        bundle_identifier: self.bundle_identifier(),
-                    },
-                )
-                .map_err(|e| e.into()),
+            BundleFormat::MacOS => {
+                // Convert macOS plist entries to permission structs
+                let permissions: Vec<PlistPermission> = mapper
+                    .macos_plist_entries
+                    .iter()
+                    .map(|p| PlistPermission {
+                        key: p.key.clone(),
+                        description: p.value.clone(),
+                    })
+                    .collect();
+
+                // Generate plist entries from config
+                let plist_entries = generate_plist_entries(&self.config.macos.plist);
+                let raw_plist = self.config.macos.raw.info_plist.clone().unwrap_or_default();
+                let minimum_system_version = self
+                    .config
+                    .macos
+                    .minimum_system_version
+                    .clone()
+                    .unwrap_or_else(|| "10.15".to_string());
+
+                handlebars::Handlebars::new()
+                    .render_template(
+                        include_str!("../../assets/macos/mac.plist.hbs"),
+                        &InfoPlistData {
+                            display_name: self.bundled_app_name(),
+                            bundle_name: self.bundled_app_name(),
+                            executable_name: self.platform_exe_name(),
+                            bundle_identifier: self.bundle_identifier(),
+                            permissions,
+                            plist_entries,
+                            raw_plist,
+                            minimum_system_version,
+                        },
+                    )
+                    .map_err(|e| e.into())
+            }
+            BundleFormat::Ios => {
+                // Convert iOS plist entries to permission structs
+                let permissions: Vec<PlistPermission> = mapper
+                    .ios_plist_entries
+                    .iter()
+                    .map(|p| PlistPermission {
+                        key: p.key.clone(),
+                        description: p.value.clone(),
+                    })
+                    .collect();
+
+                // Generate plist entries from config
+                let plist_entries = generate_plist_entries(&self.config.ios.plist);
+                let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
+
+                handlebars::Handlebars::new()
+                    .render_template(
+                        include_str!("../../assets/ios/ios.plist.hbs"),
+                        &InfoPlistData {
+                            display_name: self.bundled_app_name(),
+                            bundle_name: self.bundled_app_name(),
+                            executable_name: self.platform_exe_name(),
+                            bundle_identifier: self.bundle_identifier(),
+                            permissions,
+                            plist_entries,
+                            raw_plist,
+                            minimum_system_version: String::new(), // Not used for iOS
+                        },
+                    )
+                    .map_err(|e| e.into())
+            }
             _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist")),
         }
     }
@@ -5487,5 +6672,93 @@ We checked the folders:
         std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
 
         Ok(())
+    }
+
+    /// Log the build duration and some metadata about the build, saving a telemetry event.
+    fn record_build_duration(&self, time_start: SystemTime, ctx: &BuildContext) {
+        // Calculate some final metadata for logging
+        let time_taken = SystemTime::now()
+            .duration_since(time_start)
+            .map(|d| d.as_millis())
+            .unwrap_or_default();
+
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match ctx.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.triple.to_string(),
+                "format": self.bundle.to_string(),
+                "num_dependencies": self.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
+    }
+}
+
+/// Generate plist XML entries from a HashMap of key-value pairs
+///
+/// Converts a HashMap like `{ "UIBackgroundModes" = ["location", "fetch"] }` to plist XML:
+/// ```xml
+/// <key>UIBackgroundModes</key>
+/// <array>
+///     <string>location</string>
+///     <string>fetch</string>
+/// </array>
+/// ```
+fn generate_plist_entries(plist: &std::collections::HashMap<String, serde_json::Value>) -> String {
+    let mut output = String::new();
+
+    for (key, value) in plist {
+        output.push_str(&format!("\t<key>{}</key>\n", key));
+        output.push_str(&value_to_plist_xml(value, 1));
+    }
+
+    output
+}
+
+/// Convert a serde_json::Value to plist XML format
+fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
+    let tabs = "\t".repeat(indent);
+
+    match value {
+        serde_json::Value::String(s) => format!("{}<string>{}</string>\n", tabs, s),
+        serde_json::Value::Bool(b) => {
+            if *b {
+                format!("{}<true/>\n", tabs)
+            } else {
+                format!("{}<false/>\n", tabs)
+            }
+        }
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                format!("{}<integer>{}</integer>\n", tabs, n)
+            } else {
+                format!("{}<real>{}</real>\n", tabs, n)
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            let mut output = format!("{}<array>\n", tabs);
+            for item in arr {
+                output.push_str(&value_to_plist_xml(item, indent + 1));
+            }
+            output.push_str(&format!("{}</array>\n", tabs));
+            output
+        }
+        serde_json::Value::Object(obj) => {
+            let mut output = format!("{}<dict>\n", tabs);
+            for (k, v) in obj {
+                output.push_str(&format!("{}\t<key>{}</key>\n", tabs, k));
+                output.push_str(&value_to_plist_xml(v, indent + 1));
+            }
+            output.push_str(&format!("{}</dict>\n", tabs));
+            output
+        }
+        serde_json::Value::Null => String::new(),
     }
 }

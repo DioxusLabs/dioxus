@@ -1,10 +1,12 @@
 use crate::config::component::ComponentConfig;
 
 use super::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct DioxusConfig {
+    #[serde(default)]
     pub(crate) application: ApplicationConfig,
 
     #[serde(default)]
@@ -15,6 +17,44 @@ pub(crate) struct DioxusConfig {
 
     #[serde(default)]
     pub(crate) components: ComponentConfig,
+
+    /// Unified permissions configuration.
+    /// Permissions declared here are automatically mapped to platform-specific
+    /// identifiers (AndroidManifest.xml, Info.plist, etc.)
+    #[serde(default)]
+    pub(crate) permissions: PermissionsConfig,
+
+    /// Unified deep linking configuration.
+    /// URL schemes and universal links declared here are mapped to platform-specific
+    /// configurations. Use [ios], [android], [macos] sections for overrides.
+    #[serde(default)]
+    pub(crate) deep_links: DeepLinkConfig,
+
+    /// Unified background mode configuration.
+    /// Background capabilities declared here are mapped to platform-specific
+    /// configurations. Use [ios], [android] sections for overrides.
+    #[serde(default)]
+    pub(crate) background: BackgroundConfig,
+
+    /// iOS-specific configuration.
+    #[serde(default)]
+    pub(crate) ios: IosConfig,
+
+    /// Android-specific configuration.
+    #[serde(default)]
+    pub(crate) android: AndroidConfig,
+
+    /// macOS-specific configuration.
+    #[serde(default)]
+    pub(crate) macos: MacosConfig,
+
+    /// Windows-specific configuration.
+    #[serde(default)]
+    pub(crate) windows: WindowsConfig,
+
+    /// Linux-specific configuration.
+    #[serde(default)]
+    pub(crate) linux: LinuxConfig,
 }
 
 impl Default for DioxusConfig {
@@ -60,6 +100,14 @@ impl Default for DioxusConfig {
             },
             bundle: BundleConfig::default(),
             components: ComponentConfig::default(),
+            permissions: PermissionsConfig::default(),
+            deep_links: DeepLinkConfig::default(),
+            background: BackgroundConfig::default(),
+            ios: IosConfig::default(),
+            android: AndroidConfig::default(),
+            macos: MacosConfig::default(),
+            windows: WindowsConfig::default(),
+            linux: LinuxConfig::default(),
         }
     }
 }
