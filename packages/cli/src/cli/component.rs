@@ -293,7 +293,7 @@ impl ComponentCommand {
         let crate_package = workspace.find_main_package(None)?;
 
         Ok(workspace
-            .load_dioxus_config(crate_package)?
+            .load_dioxus_config(crate_package, None)?
             .unwrap_or_default())
     }
 

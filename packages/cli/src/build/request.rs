@@ -483,10 +483,6 @@ impl BuildRequest {
     pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
-        let config = workspace
-            .load_dioxus_config(crate_package)?
-            .unwrap_or_default();
-
         let target_kind = match args.example.is_some() {
             true => TargetKind::Example,
             false => TargetKind::Bin,
@@ -555,6 +551,12 @@ impl BuildRequest {
                 }
             })?
             .clone();
+
+        // Load config from Dioxus.toml and/or inline config in the target's source file.
+        // Inline config in doc comments takes precedence over Dioxus.toml.
+        let config = workspace
+            .load_dioxus_config(crate_package, Some(crate_target.src_path.as_std_path()))?
+            .unwrap_or_default();
 
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
