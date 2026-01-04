@@ -108,6 +108,106 @@ pub struct SimplePermission {
     pub description: String,
 }
 
+// ============================================================================
+// Unified Deep Linking
+// ============================================================================
+
+/// Unified deep linking configuration.
+///
+/// This provides a cross-platform interface for URL schemes and universal/app links.
+/// Platform-specific overrides can be configured in `[ios]` and `[android]` sections.
+///
+/// Example:
+/// ```toml
+/// [deep_links]
+/// schemes = ["myapp", "com.example.myapp"]
+/// hosts = ["example.com", "*.example.com"]
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DeepLinkConfig {
+    /// Custom URL schemes (e.g., "myapp" for myapp://path).
+    /// Maps to CFBundleURLSchemes on iOS/macOS and intent-filter on Android.
+    #[serde(default)]
+    pub schemes: Vec<String>,
+
+    /// Universal link / App link hosts (e.g., "example.com").
+    /// Maps to Associated Domains on iOS and App Links on Android.
+    /// Supports wildcards like "*.example.com".
+    #[serde(default)]
+    pub hosts: Vec<String>,
+
+    /// Path patterns for universal/app links (e.g., "/app/*", "/share/*").
+    /// If empty, all paths are matched.
+    #[serde(default)]
+    pub paths: Vec<String>,
+}
+
+// ============================================================================
+// Unified Background Modes
+// ============================================================================
+
+/// Unified background execution configuration.
+///
+/// This provides a cross-platform interface for background capabilities.
+/// Platform-specific overrides can be configured in `[ios]` and `[android]` sections.
+///
+/// Example:
+/// ```toml
+/// [background]
+/// location = true
+/// audio = true
+/// fetch = true
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct BackgroundConfig {
+    /// Background location updates.
+    /// iOS: UIBackgroundModes "location"
+    /// Android: ACCESS_BACKGROUND_LOCATION permission
+    #[serde(default)]
+    pub location: bool,
+
+    /// Background audio playback.
+    /// iOS: UIBackgroundModes "audio"
+    /// Android: FOREGROUND_SERVICE_MEDIA_PLAYBACK
+    #[serde(default)]
+    pub audio: bool,
+
+    /// Background data fetch.
+    /// iOS: UIBackgroundModes "fetch"
+    /// Android: WorkManager or foreground service
+    #[serde(default)]
+    pub fetch: bool,
+
+    /// Remote push notifications.
+    /// iOS: UIBackgroundModes "remote-notification"
+    /// Android: Firebase Cloud Messaging
+    #[serde(default, rename = "remote-notifications")]
+    pub remote_notifications: bool,
+
+    /// VoIP calls.
+    /// iOS: UIBackgroundModes "voip"
+    /// Android: FOREGROUND_SERVICE_PHONE_CALL
+    #[serde(default)]
+    pub voip: bool,
+
+    /// Bluetooth LE accessories.
+    /// iOS: UIBackgroundModes "bluetooth-central" and "bluetooth-peripheral"
+    /// Android: FOREGROUND_SERVICE_CONNECTED_DEVICE
+    #[serde(default)]
+    pub bluetooth: bool,
+
+    /// External accessory communication.
+    /// iOS: UIBackgroundModes "external-accessory"
+    #[serde(default, rename = "external-accessory")]
+    pub external_accessory: bool,
+
+    /// Background processing tasks.
+    /// iOS: UIBackgroundModes "processing"
+    /// Android: WorkManager
+    #[serde(default)]
+    pub processing: bool,
+}
+
 /// Location permission with precision control.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocationPermission {
@@ -194,6 +294,73 @@ pub struct IosConfig {
     /// Raw XML injection points.
     #[serde(default)]
     pub raw: IosRawConfig,
+
+    // === Platform-specific overrides (extend unified config) ===
+
+    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// These are merged with the unified schemes.
+    #[serde(default)]
+    pub url_schemes: Vec<String>,
+
+    /// Additional background modes beyond unified [background].
+    /// Valid values: "audio", "location", "voip", "fetch", "remote-notification",
+    /// "newsstand-content", "external-accessory", "bluetooth-central",
+    /// "bluetooth-peripheral", "processing"
+    #[serde(default)]
+    pub background_modes: Vec<String>,
+
+    /// Document types the app can open.
+    #[serde(default)]
+    pub document_types: Vec<IosDocumentType>,
+
+    /// Exported type identifiers (custom UTIs).
+    #[serde(default)]
+    pub exported_type_identifiers: Vec<IosTypeIdentifier>,
+
+    /// Imported type identifiers.
+    #[serde(default)]
+    pub imported_type_identifiers: Vec<IosTypeIdentifier>,
+}
+
+/// iOS document type declaration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IosDocumentType {
+    /// Document type name.
+    pub name: String,
+    /// File extensions (e.g., ["txt", "md"]).
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// MIME types.
+    #[serde(default)]
+    pub mime_types: Vec<String>,
+    /// UTI types.
+    #[serde(default)]
+    pub types: Vec<String>,
+    /// Icon file name.
+    #[serde(default)]
+    pub icon: Option<String>,
+    /// Role: "Editor", "Viewer", "Shell", or "None".
+    #[serde(default)]
+    pub role: Option<String>,
+}
+
+/// iOS Uniform Type Identifier declaration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IosTypeIdentifier {
+    /// UTI identifier (e.g., "com.example.myformat").
+    pub identifier: String,
+    /// Human-readable description.
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Conforms to these UTIs.
+    #[serde(default)]
+    pub conforms_to: Vec<String>,
+    /// File extensions.
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// MIME types.
+    #[serde(default)]
+    pub mime_types: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -307,6 +474,109 @@ pub struct AndroidConfig {
     /// Application-level config.
     #[serde(default)]
     pub application: AndroidApplicationConfig,
+
+    // === Platform-specific overrides (extend unified config) ===
+
+    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// These are merged with the unified schemes.
+    #[serde(default)]
+    pub url_schemes: Vec<String>,
+
+    /// Intent filters for deep linking.
+    /// These extend the unified [deep_links] configuration with Android-specific options.
+    #[serde(default)]
+    pub intent_filters: Vec<AndroidIntentFilter>,
+
+    /// Foreground service types for background operations.
+    /// Valid values: "camera", "connectedDevice", "dataSync", "health", "location",
+    /// "mediaPlayback", "mediaProjection", "microphone", "phoneCall", "remoteMessaging",
+    /// "shortService", "specialUse", "systemExempted"
+    #[serde(default)]
+    pub foreground_service_types: Vec<String>,
+
+    /// Queries for package visibility (required for Android 11+).
+    /// Specify packages or intents your app needs to query.
+    #[serde(default)]
+    pub queries: AndroidQueries,
+}
+
+/// Android intent filter for deep linking.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AndroidIntentFilter {
+    /// Actions (e.g., "android.intent.action.VIEW").
+    #[serde(default)]
+    pub actions: Vec<String>,
+
+    /// Categories (e.g., "android.intent.category.DEFAULT", "android.intent.category.BROWSABLE").
+    #[serde(default)]
+    pub categories: Vec<String>,
+
+    /// Data specifications.
+    #[serde(default)]
+    pub data: Vec<AndroidIntentData>,
+
+    /// Auto-verify for App Links (requires HTTPS and assetlinks.json).
+    #[serde(default)]
+    pub auto_verify: bool,
+}
+
+/// Android intent data specification.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AndroidIntentData {
+    /// URL scheme (e.g., "https", "myapp").
+    #[serde(default)]
+    pub scheme: Option<String>,
+
+    /// Host (e.g., "example.com").
+    #[serde(default)]
+    pub host: Option<String>,
+
+    /// Port number.
+    #[serde(default)]
+    pub port: Option<String>,
+
+    /// Path (exact match).
+    #[serde(default)]
+    pub path: Option<String>,
+
+    /// Path prefix.
+    #[serde(default)]
+    pub path_prefix: Option<String>,
+
+    /// Path pattern (with wildcards).
+    #[serde(default)]
+    pub path_pattern: Option<String>,
+
+    /// MIME type.
+    #[serde(default)]
+    pub mime_type: Option<String>,
+}
+
+/// Android package visibility queries.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AndroidQueries {
+    /// Package names to query.
+    #[serde(default)]
+    pub packages: Vec<String>,
+
+    /// Intent actions to query.
+    #[serde(default)]
+    pub intents: Vec<AndroidQueryIntent>,
+}
+
+/// Android query intent specification.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AndroidQueryIntent {
+    /// Action (e.g., "android.intent.action.SEND").
+    pub action: String,
+
+    /// Data scheme (e.g., "mailto").
+    #[serde(default)]
+    pub scheme: Option<String>,
+
+    /// MIME type (e.g., "text/plain").
+    #[serde(default)]
+    pub mime_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -373,6 +643,30 @@ pub struct MacosConfig {
     /// Raw injection points.
     #[serde(default)]
     pub raw: MacosRawConfig,
+
+    // === Platform-specific overrides (extend unified config) ===
+
+    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// These are merged with the unified schemes.
+    #[serde(default)]
+    pub url_schemes: Vec<String>,
+
+    /// Document types the app can open (uses same format as iOS).
+    #[serde(default)]
+    pub document_types: Vec<IosDocumentType>,
+
+    /// Exported type identifiers (custom UTIs).
+    #[serde(default)]
+    pub exported_type_identifiers: Vec<IosTypeIdentifier>,
+
+    /// Imported type identifiers.
+    #[serde(default)]
+    pub imported_type_identifiers: Vec<IosTypeIdentifier>,
+
+    /// App category for the Mac App Store.
+    /// E.g., "public.app-category.productivity"
+    #[serde(default)]
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -574,5 +868,141 @@ mod tests {
             .android
             .permissions
             .contains_key("android.permission.FOREGROUND_SERVICE"));
+    }
+
+    #[test]
+    fn test_parse_deep_links() {
+        let toml = r#"
+            [deep_links]
+            schemes = ["myapp", "com.example.app"]
+            hosts = ["example.com", "*.example.com"]
+            paths = ["/app/*", "/share/*"]
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            deep_links: DeepLinkConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.deep_links.schemes, vec!["myapp", "com.example.app"]);
+        assert_eq!(
+            config.deep_links.hosts,
+            vec!["example.com", "*.example.com"]
+        );
+        assert_eq!(config.deep_links.paths, vec!["/app/*", "/share/*"]);
+    }
+
+    #[test]
+    fn test_parse_background_modes() {
+        let toml = r#"
+            [background]
+            location = true
+            audio = true
+            fetch = true
+            remote-notifications = true
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            background: BackgroundConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert!(config.background.location);
+        assert!(config.background.audio);
+        assert!(config.background.fetch);
+        assert!(config.background.remote_notifications);
+        assert!(!config.background.voip);
+    }
+
+    #[test]
+    fn test_parse_ios_url_schemes_and_background() {
+        let toml = r#"
+            [ios]
+            deployment_target = "15.0"
+            url_schemes = ["myapp-ios"]
+            background_modes = ["location", "fetch", "remote-notification"]
+
+            [[ios.document_types]]
+            name = "My Document"
+            extensions = ["mydoc"]
+            role = "Editor"
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            ios: IosConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.ios.url_schemes, vec!["myapp-ios"]);
+        assert_eq!(
+            config.ios.background_modes,
+            vec!["location", "fetch", "remote-notification"]
+        );
+        assert_eq!(config.ios.document_types.len(), 1);
+        assert_eq!(config.ios.document_types[0].name, "My Document");
+    }
+
+    #[test]
+    fn test_parse_android_intent_filters() {
+        let toml = r#"
+            [android]
+            min_sdk = 24
+            url_schemes = ["myapp-android"]
+            foreground_service_types = ["location", "mediaPlayback"]
+
+            [[android.intent_filters]]
+            actions = ["android.intent.action.VIEW"]
+            categories = ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"]
+            auto_verify = true
+
+            [[android.intent_filters.data]]
+            scheme = "https"
+            host = "example.com"
+            path_prefix = "/app"
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            android: AndroidConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.android.url_schemes, vec!["myapp-android"]);
+        assert_eq!(
+            config.android.foreground_service_types,
+            vec!["location", "mediaPlayback"]
+        );
+        assert_eq!(config.android.intent_filters.len(), 1);
+        assert!(config.android.intent_filters[0].auto_verify);
+    }
+
+    #[test]
+    fn test_parse_macos_url_schemes() {
+        let toml = r#"
+            [macos]
+            minimum_system_version = "11.0"
+            url_schemes = ["myapp-macos"]
+            category = "public.app-category.productivity"
+
+            [[macos.document_types]]
+            name = "My Format"
+            extensions = ["myfmt"]
+        "#;
+
+        #[derive(Deserialize)]
+        struct Config {
+            macos: MacosConfig,
+        }
+
+        let config: Config = toml::from_str(toml).unwrap();
+        assert_eq!(config.macos.url_schemes, vec!["myapp-macos"]);
+        assert_eq!(
+            config.macos.category,
+            Some("public.app-category.productivity".to_string())
+        );
+        assert_eq!(config.macos.document_types.len(), 1);
     }
 }

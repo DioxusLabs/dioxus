@@ -22,6 +22,18 @@ pub(crate) struct DioxusConfig {
     #[serde(default)]
     pub(crate) permissions: PermissionsConfig,
 
+    /// Unified deep linking configuration.
+    /// URL schemes and universal links declared here are mapped to platform-specific
+    /// configurations. Use [ios], [android], [macos] sections for overrides.
+    #[serde(default)]
+    pub(crate) deep_links: DeepLinkConfig,
+
+    /// Unified background mode configuration.
+    /// Background capabilities declared here are mapped to platform-specific
+    /// configurations. Use [ios], [android] sections for overrides.
+    #[serde(default)]
+    pub(crate) background: BackgroundConfig,
+
     /// iOS-specific configuration.
     #[serde(default)]
     pub(crate) ios: IosConfig,
@@ -87,6 +99,8 @@ impl Default for DioxusConfig {
             bundle: BundleConfig::default(),
             components: ComponentConfig::default(),
             permissions: PermissionsConfig::default(),
+            deep_links: DeepLinkConfig::default(),
+            background: BackgroundConfig::default(),
             ios: IosConfig::default(),
             android: AndroidConfig::default(),
             macos: MacosConfig::default(),
