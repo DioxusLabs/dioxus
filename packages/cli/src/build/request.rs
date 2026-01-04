@@ -319,6 +319,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
+use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
@@ -333,8 +334,8 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset};
-use manganis_core::AssetVariant;
+use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
+use manganis_core::{AndroidArtifactMetadata, AssetVariant, Permission};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -354,8 +355,6 @@ use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
-
-use super::{permissions::PermissionManifest, HotpatchModuleCache};
 
 /// This struct is used to plan the build process.
 ///
@@ -455,9 +454,9 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
-    pub(crate) permissions: PermissionManifest,
-    pub(crate) android_artifacts: crate::build::ios_swift::AndroidArtifactManifest,
-    pub(crate) swift_sources: super::ios_swift::SwiftSourceManifest,
+    pub(crate) permissions: Vec<Permission>,
+    pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
+    pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1123,8 +1122,6 @@ impl BuildRequest {
                         .context("Failed to embed Swift standard libraries")?;
                 }
 
-                // Update platform manifests with permissions AFTER writing metadata
-                // to avoid having them overwritten by the template
                 self.update_manifests_with_permissions(&artifacts.permissions)
                     .context("Failed to update manifests with permissions")?;
 
@@ -1382,9 +1379,9 @@ impl BuildRequest {
         ctx: &BuildContext,
     ) -> Result<(
         AssetManifest,
-        PermissionManifest,
-        super::ios_swift::AndroidArtifactManifest,
-        super::ios_swift::SwiftSourceManifest,
+        Vec<Permission>,
+        Vec<AndroidArtifactMetadata>,
+        Vec<SwiftPackageMetadata>,
     )> {
         use super::assets::extract_symbols_from_file;
 
@@ -1396,9 +1393,9 @@ impl BuildRequest {
         if skip_assets && skip_permissions && !needs_android_artifacts && !needs_swift_packages {
             return Ok((
                 AssetManifest::default(),
-                PermissionManifest::default(),
-                super::ios_swift::AndroidArtifactManifest::default(),
-                super::ios_swift::SwiftSourceManifest::default(),
+                Vec::default(),
+                Vec::new(),
+                Vec::new(),
             ));
         }
 
@@ -1445,9 +1442,9 @@ impl BuildRequest {
         };
 
         let permission_manifest = if skip_permissions {
-            PermissionManifest::default()
+            Vec::default()
         } else {
-            let manifest = PermissionManifest::from_permissions(extracted_permissions);
+            let manifest = extracted_permissions;
 
             let platform = match self.bundle {
                 BundleFormat::Android => Some(manganis_core::Platform::Android),
@@ -1457,7 +1454,10 @@ impl BuildRequest {
             };
 
             if let Some(platform) = platform {
-                let perms = manifest.permissions_for_platform(platform);
+                let perms = manifest
+                    .iter()
+                    .filter(|p| p.supports_platform(platform))
+                    .collect::<Vec<_>>();
                 if !perms.is_empty() {
                     tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
                     for perm in &perms {
@@ -1476,14 +1476,12 @@ impl BuildRequest {
             manifest
         };
 
-        let android_manifest =
-            crate::build::ios_swift::AndroidArtifactManifest::new(android_artifacts);
-        if !android_manifest.is_empty() {
+        if !android_artifacts.is_empty() {
             tracing::debug!(
                 "Found {} Android artifact declaration(s)",
-                android_manifest.artifacts().len()
+                android_artifacts.len()
             );
-            for artifact in android_manifest.artifacts() {
+            for artifact in android_artifacts.iter() {
                 tracing::debug!(
                     "  Plugin: {} Artifact: {}",
                     artifact.plugin_name.as_str(),
@@ -1492,14 +1490,13 @@ impl BuildRequest {
             }
         }
 
-        let swift_manifest = super::ios_swift::SwiftSourceManifest::new(swift_packages);
-        if !swift_manifest.is_empty() {
+        if !swift_packages.is_empty() {
             tracing::debug!(
                 "Found {} Swift package declaration(s) for {:?}",
-                swift_manifest.sources().len(),
+                swift_packages.len(),
                 self.bundle
             );
-            for source in swift_manifest.sources() {
+            for source in &swift_packages {
                 tracing::debug!(
                     "  Plugin: {} (Swift package path={} product={})",
                     source.plugin_name.as_str(),
@@ -1512,8 +1509,8 @@ impl BuildRequest {
         Ok((
             asset_manifest,
             permission_manifest,
-            android_manifest,
-            swift_manifest,
+            android_artifacts,
+            swift_packages,
         ))
     }
 
@@ -1526,7 +1523,7 @@ impl BuildRequest {
     /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
     fn install_android_artifacts(
         &self,
-        android_artifacts: &crate::build::ios_swift::AndroidArtifactManifest,
+        android_artifacts: &[AndroidArtifactMetadata],
     ) -> Result<()> {
         let libs_dir = self.root_dir().join("app").join("libs");
         std::fs::create_dir_all(&libs_dir)?;
@@ -1535,7 +1532,7 @@ impl BuildRequest {
         let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
         let settings_gradle = self.root_dir().join("settings.gradle");
 
-        for artifact in android_artifacts.artifacts() {
+        for artifact in android_artifacts {
             let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
             let plugin_name = artifact.plugin_name.as_str();
 
@@ -1707,10 +1704,7 @@ impl BuildRequest {
     /// 2. Creates an umbrella Package.swift that includes all plugins as dependencies
     /// 3. Runs a single `swift build` to compile everything together
     /// 4. The resulting static libraries are linked into the final executable
-    async fn compile_swift_sources(
-        &self,
-        swift_sources: &super::ios_swift::SwiftSourceManifest,
-    ) -> Result<()> {
+    async fn compile_swift_sources(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
         if swift_sources.is_empty() {
             return Ok(());
         }
@@ -1722,7 +1716,7 @@ impl BuildRequest {
         // Collect valid source packages and copy them to staging
         let mut bundled_packages: Vec<(String, PathBuf)> = Vec::new();
 
-        for package in swift_sources.sources() {
+        for package in swift_sources {
             let package_path = PathBuf::from(package.package_path.as_str());
             let product = package.product.as_str();
 
@@ -1931,10 +1925,7 @@ let package = Package(
     }
 
     /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
-    async fn embed_swift_stdlibs(
-        &self,
-        swift_sources: &super::ios_swift::SwiftSourceManifest,
-    ) -> Result<()> {
+    async fn embed_swift_stdlibs(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
         if swift_sources.is_empty() {
             return Ok(());
         }
@@ -1995,165 +1986,175 @@ let package = Package(
     /// Update platform manifests with permissions after they're collected
     pub(crate) fn update_manifests_with_permissions(
         &self,
-        permissions: &PermissionManifest,
+        permissions: &Vec<Permission>,
     ) -> Result<()> {
         match self.bundle {
-            BundleFormat::Android => self.update_android_manifest_with_permissions(permissions),
-            BundleFormat::Ios => self.update_ios_manifest_with_permissions(permissions),
-            BundleFormat::MacOS => self.update_macos_manifest_with_permissions(permissions),
-            _ => {
-                tracing::debug!(
-                    "Skipping manifest update for {:?} - uses runtime-only permissions",
-                    self.bundle
-                );
+            BundleFormat::Android => {
+                let this = &self;
+                let android_permissions = permissions
+                    .iter()
+                    .filter(|p| p.supports_platform(manganis_core::Platform::Android))
+                    .collect::<Vec<_>>();
+                if android_permissions.is_empty() {
+                    tracing::debug!("No Android permissions found to add to manifest");
+                    return Ok(());
+                }
+
+                let manifest_path = this
+                    .root_dir()
+                    .join("app")
+                    .join("src")
+                    .join("main")
+                    .join("AndroidManifest.xml");
+                if !manifest_path.exists() {
+                    tracing::warn!("AndroidManifest.xml not found, skipping permission update");
+                    return Ok(());
+                }
+
+                let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+                // Find the position after the INTERNET permission
+                let internet_permission =
+                    r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+                if let Some(pos) = manifest_content.find(internet_permission) {
+                    let insert_pos = pos + internet_permission.len();
+
+                    // Generate permission declarations
+                    let mut permission_declarations = String::new();
+                    for perm in &android_permissions {
+                        permission_declarations.push_str(&format!(
+                            "\n    <uses-permission android:name=\"{}\" />",
+                            perm.android_permission()
+                                .context("Android permission without key")?
+                        ));
+                    }
+
+                    manifest_content.insert_str(insert_pos, &permission_declarations);
+                    std::fs::write(&manifest_path, manifest_content)?;
+
+                    tracing::debug!(
+                        "Added {} Android permissions to AndroidManifest.xml",
+                        android_permissions.len()
+                    );
+                    for perm in &android_permissions {
+                        tracing::debug!(
+                            "  • {} - {}",
+                            perm.android_permission().unwrap_or_default(),
+                            perm.description()
+                        );
+                    }
+                }
+
                 Ok(())
             }
-        }
-    }
 
-    fn update_android_manifest_with_permissions(
-        &self,
-        permissions: &PermissionManifest,
-    ) -> Result<()> {
-        let android_permissions = super::permissions::get_android_permissions(permissions);
-        if android_permissions.is_empty() {
-            tracing::debug!("No Android permissions found to add to manifest");
-            return Ok(());
-        }
+            BundleFormat::Ios => {
+                let this = &self;
+                let ios_permissions = permissions
+                    .iter()
+                    .filter(|p| p.supports_platform(manganis_core::Platform::Ios))
+                    .collect::<Vec<_>>();
+                if ios_permissions.is_empty() {
+                    tracing::debug!("No iOS permissions found to add to manifest");
+                    return Ok(());
+                }
 
-        let manifest_path = self
-            .root_dir()
-            .join("app")
-            .join("src")
-            .join("main")
-            .join("AndroidManifest.xml");
-        if !manifest_path.exists() {
-            tracing::warn!("AndroidManifest.xml not found, skipping permission update");
-            return Ok(());
-        }
+                // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
+                let plist_path = this.root_dir().join("Info.plist");
 
-        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+                if !plist_path.exists() {
+                    tracing::debug!(
+                        "Info.plist not found at {:?}, skipping permission update",
+                        plist_path
+                    );
+                    return Ok(());
+                }
 
-        // Find the position after the INTERNET permission
-        let internet_permission =
-            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
-        if let Some(pos) = manifest_content.find(internet_permission) {
-            let insert_pos = pos + internet_permission.len();
+                let mut plist_content = std::fs::read_to_string(&plist_path)?;
 
-            // Generate permission declarations
-            let mut permission_declarations = String::new();
-            for perm in &android_permissions {
-                permission_declarations.push_str(&format!(
-                    "\n    <uses-permission android:name=\"{}\" />",
-                    perm.name
-                ));
+                // Find the position before the closing </dict>
+                if let Some(pos) = plist_content.rfind("</dict>") {
+                    let mut permission_entries = String::new();
+                    for perm in &ios_permissions {
+                        permission_entries.push_str(&format!(
+                            "\n\t<key>{}</key>\n\t<string>{}</string>",
+                            perm.ios_key().context("ios permission without key")?,
+                            perm.description()
+                        ));
+                    }
+
+                    plist_content.insert_str(pos, &permission_entries);
+                    std::fs::write(&plist_path, plist_content)?;
+
+                    tracing::debug!(
+                        "Added {} iOS permissions to Info.plist",
+                        ios_permissions.len()
+                    );
+                    for perm in &ios_permissions {
+                        tracing::debug!(
+                            "  • {} - {}",
+                            perm.ios_key().unwrap_or_default(),
+                            perm.description()
+                        );
+                    }
+                }
+
+                Ok(())
             }
 
-            manifest_content.insert_str(insert_pos, &permission_declarations);
-            std::fs::write(&manifest_path, manifest_content)?;
+            BundleFormat::MacOS => {
+                let this = &self;
+                let macos_permissions = permissions
+                    .iter()
+                    .filter(|p| p.supports_platform(manganis_core::Platform::Macos))
+                    .collect::<Vec<_>>();
+                if macos_permissions.is_empty() {
+                    return Ok(());
+                }
 
-            tracing::debug!(
-                "Added {} Android permissions to AndroidManifest.xml",
-                android_permissions.len()
-            );
-            for perm in &android_permissions {
-                tracing::debug!("  • {} - {}", perm.name, perm.description);
+                // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+                let plist_path = this.root_dir().join("Contents").join("Info.plist");
+                if !plist_path.exists() {
+                    tracing::warn!(
+                        "Info.plist not found at {:?}, skipping permission update",
+                        plist_path
+                    );
+                    return Ok(());
+                }
+
+                let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+                // Find the position before the closing </dict>
+                if let Some(pos) = plist_content.rfind("</dict>") {
+                    let mut permission_entries = String::new();
+                    for perm in &macos_permissions {
+                        permission_entries.push_str(&format!(
+                            "\n\t<key>{}</key>\n\t<string>{}</string>",
+                            perm.macos_key().context("macos permission without key")?,
+                            perm.description()
+                        ));
+                    }
+
+                    plist_content.insert_str(pos, &permission_entries);
+                    std::fs::write(&plist_path, plist_content)?;
+
+                    tracing::info!(
+                        "🖥️ Added {} macOS permissions to Info.plist:",
+                        macos_permissions.len()
+                    );
+                    for perm in &macos_permissions {
+                        tracing::info!(
+                            "  • {} - {}",
+                            perm.macos_key().context("macos permission without key")?,
+                            perm.description()
+                        );
+                    }
+                }
+
+                Ok(())
             }
+            _ => Ok(()),
         }
-
-        Ok(())
-    }
-
-    fn update_ios_manifest_with_permissions(&self, permissions: &PermissionManifest) -> Result<()> {
-        let ios_permissions = super::permissions::get_ios_permissions(permissions);
-        if ios_permissions.is_empty() {
-            tracing::debug!("No iOS permissions found to add to manifest");
-            return Ok(());
-        }
-
-        // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
-        let plist_path = self.root_dir().join("Info.plist");
-
-        if !plist_path.exists() {
-            tracing::debug!(
-                "Info.plist not found at {:?}, skipping permission update",
-                plist_path
-            );
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Find the position before the closing </dict>
-        if let Some(pos) = plist_content.rfind("</dict>") {
-            let mut permission_entries = String::new();
-            for perm in &ios_permissions {
-                permission_entries.push_str(&format!(
-                    "\n\t<key>{}</key>\n\t<string>{}</string>",
-                    perm.key, perm.description
-                ));
-            }
-
-            plist_content.insert_str(pos, &permission_entries);
-            std::fs::write(&plist_path, plist_content)?;
-
-            tracing::debug!(
-                "Added {} iOS permissions to Info.plist",
-                ios_permissions.len()
-            );
-            for perm in &ios_permissions {
-                tracing::debug!("  • {} - {}", perm.key, perm.description);
-            }
-        }
-
-        Ok(())
-    }
-
-    fn update_macos_manifest_with_permissions(
-        &self,
-        permissions: &PermissionManifest,
-    ) -> Result<()> {
-        let macos_permissions = super::permissions::get_macos_permissions(permissions);
-        if macos_permissions.is_empty() {
-            tracing::debug!("No macOS permissions found to add to manifest");
-            return Ok(());
-        }
-
-        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
-        let plist_path = self.root_dir().join("Contents").join("Info.plist");
-        if !plist_path.exists() {
-            tracing::warn!(
-                "Info.plist not found at {:?}, skipping permission update",
-                plist_path
-            );
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Find the position before the closing </dict>
-        if let Some(pos) = plist_content.rfind("</dict>") {
-            let mut permission_entries = String::new();
-            for perm in &macos_permissions {
-                permission_entries.push_str(&format!(
-                    "\n\t<key>{}</key>\n\t<string>{}</string>",
-                    perm.key, perm.description
-                ));
-            }
-
-            plist_content.insert_str(pos, &permission_entries);
-            std::fs::write(&plist_path, plist_content)?;
-
-            tracing::info!(
-                "🖥️ Added {} macOS permissions to Info.plist:",
-                macos_permissions.len()
-            );
-            for perm in &macos_permissions {
-                tracing::info!("  • {} - {}", perm.key, perm.description);
-            }
-        }
-
-        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle

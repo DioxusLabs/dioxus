@@ -3,6 +3,32 @@ use const_serialize::{ConstStr, SerializeConst};
 use const_serialize_08 as const_serialize;
 use std::hash::{Hash, Hasher};
 
+/// Unified symbol data that can represent both assets and permissions
+///
+/// This enum is used to serialize different types of metadata into the binary
+/// using the same `__ASSETS__` symbol prefix. The CBOR format allows for
+/// self-describing data, making it easy to add new variants in the future.
+///
+/// Variant order does NOT matter for CBOR enum serialization - variants are
+/// matched by name (string), not by position or tag value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+#[repr(C, u8)]
+#[allow(clippy::large_enum_variant)]
+#[non_exhaustive]
+pub enum SymbolData {
+    /// An asset that should be bundled with the application
+    Asset(BundledAsset),
+
+    /// A permission declaration for the application
+    Permission(Permission),
+
+    /// Android plugin metadata (prebuilt artifacts + Gradle deps)
+    AndroidArtifact(AndroidArtifactMetadata),
+
+    /// Swift package metadata (SPM location + product)
+    SwiftPackage(SwiftPackageMetadata),
+}
+
 /// A permission declaration that can be embedded in the binary
 ///
 /// This struct contains all the information needed to declare a permission
@@ -1000,32 +1026,6 @@ pub struct PlatformIdentifiers {
     pub android: Option<ConstStr>,
     pub ios: Option<ConstStr>,
     pub macos: Option<ConstStr>,
-}
-
-/// Unified symbol data that can represent both assets and permissions
-///
-/// This enum is used to serialize different types of metadata into the binary
-/// using the same `__ASSETS__` symbol prefix. The CBOR format allows for
-/// self-describing data, making it easy to add new variants in the future.
-///
-/// Variant order does NOT matter for CBOR enum serialization - variants are
-/// matched by name (string), not by position or tag value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
-#[repr(C, u8)]
-#[allow(clippy::large_enum_variant)]
-#[non_exhaustive]
-pub enum SymbolData {
-    /// An asset that should be bundled with the application
-    Asset(BundledAsset),
-
-    /// A permission declaration for the application
-    Permission(Permission),
-
-    /// Android plugin metadata (prebuilt artifacts + Gradle deps)
-    AndroidArtifact(AndroidArtifactMetadata),
-
-    /// Swift package metadata (SPM location + product)
-    SwiftPackage(SwiftPackageMetadata),
 }
 
 /// Metadata describing an Android plugin artifact (.aar) that must be copied into the host Gradle project.

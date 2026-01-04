@@ -14,7 +14,6 @@ mod context;
 mod ios_swift;
 mod manifest;
 mod patch;
-mod permissions;
 mod pre_render;
 mod request;
 mod tools;

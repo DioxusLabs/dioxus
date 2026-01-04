@@ -2,31 +2,10 @@
 
 use crate::Result;
 use anyhow::Context;
-use const_serialize::{ConstStr, SerializeConst};
-use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
+use manganis_core::SwiftPackageMetadata;
 use std::path::{Path, PathBuf};
 use target_lexicon::Triple;
 use tokio::process::Command;
-
-/// Manifest of Swift packages embedded in the binary.
-#[derive(Debug, Clone, Default)]
-pub struct SwiftSourceManifest {
-    sources: Vec<SwiftPackageMetadata>,
-}
-
-impl SwiftSourceManifest {
-    pub fn new(sources: Vec<SwiftPackageMetadata>) -> Self {
-        Self { sources }
-    }
-
-    pub fn sources(&self) -> &[SwiftPackageMetadata] {
-        &self.sources
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.sources.is_empty()
-    }
-}
 
 /// Compile Swift sources and return the path to the static library.
 ///
@@ -496,24 +475,4 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
     }
 
     Ok(results)
-}
-
-/// Manifest of all Android artifacts declared by dependencies.
-#[derive(Debug, Clone, Default)]
-pub struct AndroidArtifactManifest {
-    artifacts: Vec<AndroidArtifactMetadata>,
-}
-
-impl AndroidArtifactManifest {
-    pub fn new(artifacts: Vec<AndroidArtifactMetadata>) -> Self {
-        Self { artifacts }
-    }
-
-    pub fn artifacts(&self) -> &[AndroidArtifactMetadata] {
-        &self.artifacts
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.artifacts.is_empty()
-    }
 }
