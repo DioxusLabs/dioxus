@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct DioxusConfig {
+    #[serde(default)]
     pub(crate) application: ApplicationConfig,
 
     #[serde(default)]

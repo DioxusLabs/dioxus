@@ -2,9 +2,6 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "DioxusConfig",
   "type": "object",
-  "required": [
-    "application"
-  ],
   "properties": {
     "android": {
       "description": "Android-specific configuration.",
@@ -44,7 +41,25 @@
       ]
     },
     "application": {
-      "$ref": "#/definitions/ApplicationConfig"
+      "default": {
+        "android_main_activity": null,
+        "android_manifest": null,
+        "android_min_sdk_version": null,
+        "asset_dir": null,
+        "ios_entitlements": null,
+        "ios_info_plist": null,
+        "macos_entitlements": null,
+        "macos_info_plist": null,
+        "out_dir": null,
+        "public_dir": null,
+        "tailwind_input": null,
+        "tailwind_output": null
+      },
+      "allOf": [
+        {
+          "$ref": "#/definitions/ApplicationConfig"
+        }
+      ]
     },
     "background": {
       "description": "Unified background mode configuration. Background capabilities declared here are mapped to platform-specific configurations. Use [ios], [android] sections for overrides.",

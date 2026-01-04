@@ -164,7 +164,7 @@ pub(crate) struct WebDevResourceConfig {
     pub(crate) script: Vec<PathBuf>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebHttpsConfig {
     pub(crate) enabled: Option<bool>,
     pub(crate) mkcert: Option<bool>,
