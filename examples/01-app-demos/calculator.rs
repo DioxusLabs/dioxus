@@ -12,15 +12,24 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 
+const TITLE: &str = "Calculator";
 const STYLE: Asset = asset!("/examples/assets/calculator.css");
 
 fn main() {
-    dioxus::LaunchBuilder::desktop()
+    dioxus::LaunchBuilder::new()
         .with_cfg(desktop!({
             use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
             Config::new().with_window(
                 WindowBuilder::default()
-                    .with_title("Calculator")
+                    .with_title(TITLE)
+                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+            )
+        }))
+        .with_cfg(native!({
+            use dioxus::native::{Config, LogicalSize, WindowAttributes};
+            Config::new().with_window_attributes(
+                WindowAttributes::default()
+                    .with_title(TITLE)
                     .with_inner_size(LogicalSize::new(300.0, 525.0)),
             )
         }))
