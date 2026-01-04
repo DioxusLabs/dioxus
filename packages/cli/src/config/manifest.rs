@@ -304,7 +304,6 @@ pub struct IosConfig {
     pub raw: IosRawConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-
     /// Additional URL schemes beyond unified [deep_links].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
@@ -335,18 +334,23 @@ pub struct IosConfig {
 pub struct IosDocumentType {
     /// Document type name.
     pub name: String,
+
     /// File extensions (e.g., ["txt", "md"]).
     #[serde(default)]
     pub extensions: Vec<String>,
+
     /// MIME types.
     #[serde(default)]
     pub mime_types: Vec<String>,
+
     /// UTI types.
     #[serde(default)]
     pub types: Vec<String>,
+
     /// Icon file name.
     #[serde(default)]
     pub icon: Option<String>,
+
     /// Role: "Editor", "Viewer", "Shell", or "None".
     #[serde(default)]
     pub role: Option<String>,
@@ -357,15 +361,19 @@ pub struct IosDocumentType {
 pub struct IosTypeIdentifier {
     /// UTI identifier (e.g., "com.example.myformat").
     pub identifier: String,
+
     /// Human-readable description.
     #[serde(default)]
     pub description: Option<String>,
+
     /// Conforms to these UTIs.
     #[serde(default)]
     pub conforms_to: Vec<String>,
+
     /// File extensions.
     #[serde(default)]
     pub extensions: Vec<String>,
+
     /// MIME types.
     #[serde(default)]
     pub mime_types: Vec<String>,
@@ -484,7 +492,6 @@ pub struct AndroidConfig {
     pub application: AndroidApplicationConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-
     /// Additional URL schemes beyond unified [deep_links].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
@@ -653,7 +660,6 @@ pub struct MacosConfig {
     pub raw: MacosRawConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-
     /// Additional URL schemes beyond unified [deep_links].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
