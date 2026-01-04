@@ -1,83 +1,188 @@
 # Dioxus Permissions System
 
-Declare permissions for your plugin by using manganis linker embedding system.
+Declare permissions and platform-specific manifest settings through `Dioxus.toml` configuration.
 
-This crate provides the `permission!()` and `permission!()` macros that allow you to declare permissions
-that will be embedded in the binary using linker sections, similar to how Manganis
-embeds assets. Use `permission!()` when you want to make it explicit that a
-permission is a compile-time (linker) declaration that should be emitted into
-platform manifests (Info.plist, AndroidManifest.xml, etc.). The `permission!()`
-alias is kept for backward compatibility.
+## Overview
 
-## Usage
+Dioxus provides a unified configuration system for cross-platform permissions and manifest customization. Instead of using macros or platform-specific files, all manifest configuration is centralized in your `Dioxus.toml` file.
 
-The macro accepts any expression that evaluates to a `Permission`. There are two patterns:
+## Basic Usage
 
-### Builder Pattern (for Location and Custom permissions)
+Add a `[permissions]` section to your `Dioxus.toml`:
 
-Location and custom permissions use the builder pattern:
+```toml
+[bundle]
+identifier = "com.example.myapp"
 
+[permissions]
+location = { precision = "fine", description = "Track your location for navigation" }
+camera = { description = "Take photos for your profile" }
+microphone = { description = "Record voice messages" }
+```
+
+The CLI automatically maps these unified permissions to platform-specific identifiers:
+
+| Unified Permission | Android | iOS/macOS |
+|-------------------|---------|-----------|
+| `location.fine` | `ACCESS_FINE_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+| `location.coarse` | `ACCESS_COARSE_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+| `background_location` | `ACCESS_BACKGROUND_LOCATION` | `NSLocationAlwaysAndWhenInUseUsageDescription` |
+| `camera` | `CAMERA` | `NSCameraUsageDescription` |
+| `microphone` | `RECORD_AUDIO` | `NSMicrophoneUsageDescription` |
+| `notifications` | `POST_NOTIFICATIONS` | (runtime only) |
+| `photos.read` | `READ_MEDIA_IMAGES` | `NSPhotoLibraryUsageDescription` |
+| `photos.write` | `WRITE_EXTERNAL_STORAGE` | `NSPhotoLibraryAddUsageDescription` |
+| `bluetooth` | `BLUETOOTH_CONNECT` | `NSBluetoothAlwaysUsageDescription` |
+| `contacts` | `READ_CONTACTS` | `NSContactsUsageDescription` |
+| `calendar` | `READ_CALENDAR` | `NSCalendarsUsageDescription` |
+| `biometrics` | `USE_BIOMETRIC` | `NSFaceIDUsageDescription` |
+| `nfc` | `NFC` | `NFCReaderUsageDescription` |
+| `motion` | `ACTIVITY_RECOGNITION` | `NSMotionUsageDescription` |
+| `health` | `BODY_SENSORS` | `NSHealthShareUsageDescription` |
+| `speech` | `RECORD_AUDIO` | `NSSpeechRecognitionUsageDescription` |
+
+## Platform-Specific Configuration
+
+### iOS Configuration
+
+```toml
+[ios]
+deployment_target = "15.0"
+
+# Add Info.plist entries as key-value pairs
+[ios.plist]
+UIBackgroundModes = ["location", "fetch"]
+ITSAppUsesNonExemptEncryption = false
+
+# Add entitlements
+[ios.entitlements]
+"com.apple.security.application-groups" = ["group.com.example.app"]
+"aps-environment" = "development"
+
+# Raw XML for advanced cases
+[ios.raw]
+info_plist = """
+<key>CustomKey</key>
+<string>custom-value</string>
+"""
+```
+
+### Android Configuration
+
+```toml
+[android]
+min_sdk = 24
+target_sdk = 34
+features = ["android.hardware.location.gps"]
+
+# Additional permissions not covered by unified permissions
+[android.permissions]
+"android.permission.FOREGROUND_SERVICE" = { description = "Run background service" }
+
+# Raw manifest XML for advanced cases
+[android.raw]
+manifest = """
+<uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+"""
+```
+
+### macOS Configuration
+
+```toml
+[macos]
+minimum_system_version = "11.0"
+frameworks = ["CoreLocation.framework"]
+
+# Add Info.plist entries
+[macos.plist]
+LSUIElement = true
+
+# Add entitlements
+[macos.entitlements]
+"com.apple.security.app-sandbox" = true
+"com.apple.security.network.client" = true
+
+# Raw XML for advanced cases
+[macos.raw]
+info_plist = """
+<key>CustomKey</key>
+<string>custom-value</string>
+"""
+```
+
+## Complete Example
+
+Here's a complete example for a geolocation app:
+
+```toml
+[application]
+name = "GeoTracker"
+
+[bundle]
+identifier = "com.example.geotracker"
+
+# Unified permissions - automatically mapped to each platform
+[permissions]
+location = { precision = "fine", description = "Track your precise location for navigation" }
+notifications = { description = "Send alerts when you arrive at destinations" }
+
+# iOS-specific settings
+[ios]
+deployment_target = "15.0"
+
+[ios.plist]
+UIBackgroundModes = ["location"]
+
+[ios.entitlements]
+"com.apple.developer.healthkit" = false
+
+# Android-specific settings
+[android]
+min_sdk = 24
+target_sdk = 34
+features = ["android.hardware.location.gps"]
+
+# macOS-specific settings
+[macos]
+minimum_system_version = "11.0"
+
+[macos.entitlements]
+"com.apple.security.app-sandbox" = true
+```
+
+## How it Works
+
+1. **Parse**: The CLI parses `Dioxus.toml` and extracts all permission and platform-specific configuration
+2. **Map**: The `PermissionMapper` converts unified permissions to platform-specific identifiers
+3. **Generate**: Handlebars templates inject the permissions and configuration into platform manifests:
+   - `AndroidManifest.xml` for Android
+   - `Info.plist` for iOS and macOS
+4. **Bundle**: The final app bundle includes the configured permissions
+
+## Migration from Macro-Based System
+
+If you were previously using the `permission!()` macro, migrate to `Dioxus.toml`:
+
+**Before (deprecated):**
 ```rust
-use permissions::{Permission, PermissionBuilder, LocationPrecision};
-use permissions_macro::permission;
+use manganis::permission;
 
-// Location permission with fine precision
-const LOCATION_FINE: Permission = permission!(
+const LOCATION: Permission = permission!(
     PermissionBuilder::location(LocationPrecision::Fine)
         .with_description("Track your runs")
         .build()
 );
-
-// Location permission with coarse precision
-const LOCATION_COARSE: Permission = permission!(
-    PermissionBuilder::location(LocationPrecision::Coarse)
-        .with_description("Approximate location")
-        .build()
-);
-
-// Custom permission
-const CUSTOM: Permission = permission!(
-    PermissionBuilder::custom()
-        .with_android("android.permission.MY_PERMISSION")
-        .with_ios("NSMyUsageDescription")
-        .with_macos("NSMyUsageDescription")
-        .with_description("Custom permission")
-        .build()
-);
 ```
 
-### Direct Construction (for simple permissions)
-
-Simple permissions like Camera, Microphone, and Notifications use direct construction:
-
-```rust
-use permissions::{Permission, PermissionKind};
-use permissions_macro::permission;
-
-// Camera permission
-const CAMERA: Permission = permission!(
-    Permission::new(PermissionKind::Camera, "Take photos")
-);
-
-// Microphone permission
-const MICROPHONE: Permission = permission!(
-    Permission::new(PermissionKind::Microphone, "Record audio")
-);
-
-// Notifications permission
-const NOTIFICATIONS: Permission = permission!(
-    Permission::new(PermissionKind::Notifications, "Send notifications")
-);
+**After:**
+```toml
+# Dioxus.toml
+[permissions]
+location = { precision = "fine", description = "Track your runs" }
 ```
 
-## How it works
+The `permission!()` macro has been removed. All permissions should now be declared in `Dioxus.toml`.
 
-The macro generates code that:
+## FFI Integration
 
-1. Creates a `Permission` instance with the specified kind and description
-2. Serializes the permission data into a const buffer
-3. Embeds the data in a linker section with a unique symbol name (`__PERMISSION__<hash>`)
-4. Returns a `Permission` that can read the embedded data at runtime
-
-This allows build tools to extract all permission declarations from the binary
-by scanning for `__PERMISSION__*` symbols.
+For native plugins that require specific permissions, declare them in your library's documentation and let the app developer add them to their `Dioxus.toml`. The `#[manganis::ffi]` macro for FFI bindings is still available for Swift/Kotlin integration.

@@ -1,6 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Default permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Permissions from Dioxus.toml [permissions] section -->
+    {{#each permissions}}
+    <uses-permission android:name="{{ this }}" />
+    {{/each}}
+
+    <!-- Hardware features from Dioxus.toml [android] section -->
+    {{#each features}}
+    <uses-feature android:name="{{ this }}" android:required="true" />
+    {{/each}}
+
+    <!-- Raw manifest XML from Dioxus.toml [android.raw.manifest] -->
+    {{{ raw_manifest }}}
+
     <application android:hasCode="true" android:supportsRtl="true" android:icon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
         android:allowNativeHeapPointerTagging="false"

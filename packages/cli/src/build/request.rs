@@ -4366,11 +4366,42 @@ let package = Package(
             application_id: String,
             app_name: String,
             android_bundle: Option<crate::AndroidSettings>,
+            /// Android permission strings (e.g., "android.permission.CAMERA")
+            permissions: Vec<String>,
+            /// Android hardware features (e.g., "android.hardware.location.gps")
+            features: Vec<String>,
+            /// Raw manifest XML to inject
+            raw_manifest: String,
         }
+
+        // Get permission mapper from config
+        let mapper = super::permission_mapper::PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
+        // Collect Android permissions
+        let permissions: Vec<String> = mapper
+            .android_permissions
+            .iter()
+            .map(|p| p.permission.clone())
+            .collect();
+
+        // Collect Android features from config
+        let features = self.config.android.features.clone();
+
+        // Get raw manifest XML
+        let raw_manifest = self.config.android.raw.manifest.clone().unwrap_or_default();
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
             android_bundle: self.config.bundle.android.clone(),
+            permissions,
+            features,
+            raw_manifest,
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -5396,12 +5427,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     fn info_plist_contents(&self, bundle: BundleFormat) -> Result<String> {
+        /// A permission entry for plist (key + description)
+        #[derive(Serialize)]
+        struct PlistPermission {
+            key: String,
+            description: String,
+        }
+
         #[derive(Serialize)]
         pub struct InfoPlistData {
             pub display_name: String,
             pub bundle_name: String,
             pub bundle_identifier: String,
             pub executable_name: String,
+            /// Permission usage descriptions
+            pub permissions: Vec<PlistPermission>,
+            /// Additional plist entries as raw XML
+            pub plist_entries: String,
+            /// Raw plist XML to inject
+            pub raw_plist: String,
+            /// Minimum system version (macOS only)
+            pub minimum_system_version: String,
         }
 
         // Attempt to use the user's manually specified
@@ -5420,29 +5466,83 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             _ => {}
         }
 
+        // Get permission mapper from config
+        let mapper = super::permission_mapper::PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
         match bundle {
-            BundleFormat::MacOS => handlebars::Handlebars::new()
-                .render_template(
-                    include_str!("../../assets/macos/mac.plist.hbs"),
-                    &InfoPlistData {
-                        display_name: self.bundled_app_name(),
-                        bundle_name: self.bundled_app_name(),
-                        executable_name: self.platform_exe_name(),
-                        bundle_identifier: self.bundle_identifier(),
-                    },
-                )
-                .map_err(|e| e.into()),
-            BundleFormat::Ios => handlebars::Handlebars::new()
-                .render_template(
-                    include_str!("../../assets/ios/ios.plist.hbs"),
-                    &InfoPlistData {
-                        display_name: self.bundled_app_name(),
-                        bundle_name: self.bundled_app_name(),
-                        executable_name: self.platform_exe_name(),
-                        bundle_identifier: self.bundle_identifier(),
-                    },
-                )
-                .map_err(|e| e.into()),
+            BundleFormat::MacOS => {
+                // Convert macOS plist entries to permission structs
+                let permissions: Vec<PlistPermission> = mapper
+                    .macos_plist_entries
+                    .iter()
+                    .map(|p| PlistPermission {
+                        key: p.key.clone(),
+                        description: p.value.clone(),
+                    })
+                    .collect();
+
+                // Generate plist entries from config
+                let plist_entries = generate_plist_entries(&self.config.macos.plist);
+                let raw_plist = self.config.macos.raw.info_plist.clone().unwrap_or_default();
+                let minimum_system_version = self
+                    .config
+                    .macos
+                    .minimum_system_version
+                    .clone()
+                    .unwrap_or_else(|| "10.15".to_string());
+
+                handlebars::Handlebars::new()
+                    .render_template(
+                        include_str!("../../assets/macos/mac.plist.hbs"),
+                        &InfoPlistData {
+                            display_name: self.bundled_app_name(),
+                            bundle_name: self.bundled_app_name(),
+                            executable_name: self.platform_exe_name(),
+                            bundle_identifier: self.bundle_identifier(),
+                            permissions,
+                            plist_entries,
+                            raw_plist,
+                            minimum_system_version,
+                        },
+                    )
+                    .map_err(|e| e.into())
+            }
+            BundleFormat::Ios => {
+                // Convert iOS plist entries to permission structs
+                let permissions: Vec<PlistPermission> = mapper
+                    .ios_plist_entries
+                    .iter()
+                    .map(|p| PlistPermission {
+                        key: p.key.clone(),
+                        description: p.value.clone(),
+                    })
+                    .collect();
+
+                // Generate plist entries from config
+                let plist_entries = generate_plist_entries(&self.config.ios.plist);
+                let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
+
+                handlebars::Handlebars::new()
+                    .render_template(
+                        include_str!("../../assets/ios/ios.plist.hbs"),
+                        &InfoPlistData {
+                            display_name: self.bundled_app_name(),
+                            bundle_name: self.bundled_app_name(),
+                            executable_name: self.platform_exe_name(),
+                            bundle_identifier: self.bundle_identifier(),
+                            permissions,
+                            plist_entries,
+                            raw_plist,
+                            minimum_system_version: String::new(), // Not used for iOS
+                        },
+                    )
+                    .map_err(|e| e.into())
+            }
             _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist")),
         }
     }
@@ -6598,5 +6698,67 @@ We checked the folders:
             }),
             "Build completed in {time_taken}ms",
         );
+    }
+}
+
+/// Generate plist XML entries from a HashMap of key-value pairs
+///
+/// Converts a HashMap like `{ "UIBackgroundModes" = ["location", "fetch"] }` to plist XML:
+/// ```xml
+/// <key>UIBackgroundModes</key>
+/// <array>
+///     <string>location</string>
+///     <string>fetch</string>
+/// </array>
+/// ```
+fn generate_plist_entries(plist: &std::collections::HashMap<String, serde_json::Value>) -> String {
+    let mut output = String::new();
+
+    for (key, value) in plist {
+        output.push_str(&format!("\t<key>{}</key>\n", key));
+        output.push_str(&value_to_plist_xml(value, 1));
+    }
+
+    output
+}
+
+/// Convert a serde_json::Value to plist XML format
+fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
+    let tabs = "\t".repeat(indent);
+
+    match value {
+        serde_json::Value::String(s) => format!("{}<string>{}</string>\n", tabs, s),
+        serde_json::Value::Bool(b) => {
+            if *b {
+                format!("{}<true/>\n", tabs)
+            } else {
+                format!("{}<false/>\n", tabs)
+            }
+        }
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                format!("{}<integer>{}</integer>\n", tabs, n)
+            } else {
+                format!("{}<real>{}</real>\n", tabs, n)
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            let mut output = format!("{}<array>\n", tabs);
+            for item in arr {
+                output.push_str(&value_to_plist_xml(item, indent + 1));
+            }
+            output.push_str(&format!("{}</array>\n", tabs));
+            output
+        }
+        serde_json::Value::Object(obj) => {
+            let mut output = format!("{}<dict>\n", tabs);
+            for (k, v) in obj {
+                output.push_str(&format!("{}\t<key>{}</key>\n", tabs, k));
+                output.push_str(&value_to_plist_xml(v, indent + 1));
+            }
+            output.push_str(&format!("{}</dict>\n", tabs));
+            output
+        }
+        serde_json::Value::Null => String::new(),
     }
 }

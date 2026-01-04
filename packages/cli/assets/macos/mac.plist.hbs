@@ -33,6 +33,18 @@
 		<string>public.app-category.social-networking</string>
 
 		<key>LSMinimumSystemVersion</key>
-		<string>10.15</string>
+		<string>{{ minimum_system_version }}</string>
+
+		<!-- Permission usage descriptions from Dioxus.toml [permissions] section -->
+		{{#each permissions}}
+		<key>{{ this.key }}</key>
+		<string>{{ this.description }}</string>
+		{{/each}}
+
+		<!-- Additional plist entries from Dioxus.toml [macos.plist] section -->
+		{{{ plist_entries }}}
+
+		<!-- Raw plist XML from Dioxus.toml [macos.raw.info_plist] -->
+		{{{ raw_plist }}}
 	</dict>
 </plist>
