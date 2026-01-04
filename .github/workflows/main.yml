@@ -119,6 +119,25 @@ jobs:
           cache-all-crates: "true"
       - run: cargo fmt --all -- --check
 
+  schema:
+    if: github.event.pull_request.draft == false
+    name: Check Schema
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Generate schema
+        run: cargo run -p dioxus-cli -- config schema --out packages/cli/schema.json
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code packages/cli/schema.json; then
+            echo "::error::Schema is out of date. Run 'dx config schema --out packages/cli/schema.json' and commit the changes."
+            exit 1
+          fi
+
   docs:
     if: github.event.pull_request.draft == false
     name: Docs

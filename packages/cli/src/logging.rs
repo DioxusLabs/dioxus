@@ -878,6 +878,7 @@ impl TraceController {
                 ),
                 Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
                 Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
+                Config::Schema { out } => ("config schema".to_string(), json!({ "out": out })),
                 Config::Set(setting) => (
                     format!("config set {}", setting),
                     match setting {

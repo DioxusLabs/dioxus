@@ -1,8 +1,9 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{collections::HashMap, str::FromStr};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) identifier: Option<String>,
@@ -32,7 +33,7 @@ pub(crate) struct BundleConfig {
     pub(crate) android: Option<AndroidSettings>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
@@ -88,7 +89,7 @@ pub(crate) struct DebianSettings {
     pub post_remove_script: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct WixSettings {
     #[serde(default)]
     pub(crate) language: Vec<(String, Option<PathBuf>)>,
@@ -137,10 +138,11 @@ pub(crate) struct WixSettings {
     /// It is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code
     /// whenever you want to change your product name.
     #[serde(default)]
+    #[schemars(with = "Option<String>")]
     pub upgrade_code: Option<uuid::Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct MacOsSettings {
     #[serde(default)]
     pub(crate) bundle_version: Option<String>,
@@ -177,7 +179,7 @@ fn default_hardened_runtime() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct WindowsSettings {
     #[serde(default)]
     pub(crate) digest_algorithm: Option<String>,
@@ -215,7 +217,7 @@ pub(crate) struct WindowsSettings {
     pub sign_command: Option<CustomSignCommandSettings>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct NsisSettings {
     #[serde(default)]
     pub(crate) template: Option<PathBuf>,
@@ -246,7 +248,7 @@ pub(crate) struct NsisSettings {
     pub minimum_webview2_version: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum NSISInstallerMode {
     #[default]
     CurrentUser,
@@ -254,7 +256,7 @@ pub(crate) enum NSISInstallerMode {
     Both,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum WebviewInstallMode {
     Skip,
     DownloadBootstrapper { silent: bool },
@@ -270,7 +272,7 @@ impl Default for WebviewInstallMode {
 }
 
 // Because all four fields must appear at the same time, there is no need for an Option
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct AndroidSettings {
     pub(crate) jks_file: PathBuf,
     pub(crate) jks_password: String,
@@ -278,7 +280,7 @@ pub(crate) struct AndroidSettings {
     pub(crate) key_password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CustomSignCommandSettings {
     /// The command to run to sign the binary.
     pub cmd: String,

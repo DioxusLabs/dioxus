@@ -1,9 +1,10 @@
 use crate::config::component::ComponentConfig;
 
 use super::*;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct DioxusConfig {
     pub(crate) application: ApplicationConfig,
 

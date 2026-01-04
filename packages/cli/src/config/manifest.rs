@@ -3,7 +3,15 @@
 //! This module provides configuration structs for permissions and platform-specific
 //! manifest customization. Permissions declared here are automatically mapped to
 //! platform-specific identifiers (AndroidManifest.xml, Info.plist, etc.)
+//!
+//! ## JSON Schema Generation
+//!
+//! Generate a JSON schema for IDE autocomplete:
+//! ```bash
+//! dx config --schema > dioxus-schema.json
+//! ```
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -20,7 +28,7 @@ use std::path::PathBuf;
 /// location = { precision = "fine", description = "Track your runs" }
 /// camera = { description = "Take photos for your profile" }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct PermissionsConfig {
     /// Location permission with precision level.
     /// Maps to ACCESS_FINE_LOCATION/ACCESS_COARSE_LOCATION on Android,
@@ -102,7 +110,7 @@ pub struct PermissionsConfig {
 }
 
 /// Simple permission with just a description.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SimplePermission {
     /// User-facing description shown in permission dialogs.
     pub description: String,
@@ -123,7 +131,7 @@ pub struct SimplePermission {
 /// schemes = ["myapp", "com.example.myapp"]
 /// hosts = ["example.com", "*.example.com"]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct DeepLinkConfig {
     /// Custom URL schemes (e.g., "myapp" for myapp://path).
     /// Maps to CFBundleURLSchemes on iOS/macOS and intent-filter on Android.
@@ -158,7 +166,7 @@ pub struct DeepLinkConfig {
 /// audio = true
 /// fetch = true
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct BackgroundConfig {
     /// Background location updates.
     /// iOS: UIBackgroundModes "location"
@@ -209,7 +217,7 @@ pub struct BackgroundConfig {
 }
 
 /// Location permission with precision control.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct LocationPermission {
     /// Precision level: "fine" (GPS) or "coarse" (network-based).
     #[serde(default)]
@@ -219,7 +227,7 @@ pub struct LocationPermission {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
 pub enum LocationPrecision {
     #[default]
     #[serde(rename = "fine")]
@@ -229,7 +237,7 @@ pub enum LocationPrecision {
 }
 
 /// Storage permission with access level control.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct StoragePermission {
     /// Access level: "read", "write", or "read-write".
     #[serde(default)]
@@ -239,7 +247,7 @@ pub struct StoragePermission {
     pub description: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
 pub enum StorageAccess {
     #[serde(rename = "read")]
     Read,
@@ -251,7 +259,7 @@ pub enum StorageAccess {
 }
 
 /// Raw platform permission entry.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RawPermission {
     pub description: String,
 }
@@ -273,7 +281,7 @@ pub struct RawPermission {
 /// [ios.plist]
 /// UIBackgroundModes = ["location", "fetch"]
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct IosConfig {
     /// Minimum iOS deployment target (e.g., "15.0").
     #[serde(default)]
@@ -323,7 +331,7 @@ pub struct IosConfig {
 }
 
 /// iOS document type declaration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IosDocumentType {
     /// Document type name.
     pub name: String,
@@ -345,7 +353,7 @@ pub struct IosDocumentType {
 }
 
 /// iOS Uniform Type Identifier declaration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct IosTypeIdentifier {
     /// UTI identifier (e.g., "com.example.myformat").
     pub identifier: String,
@@ -363,7 +371,7 @@ pub struct IosTypeIdentifier {
     pub mime_types: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct IosEntitlements {
     /// App groups for shared data.
     #[serde(default, rename = "app-groups")]
@@ -402,7 +410,7 @@ pub struct IosEntitlements {
     pub additional: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct IosRawConfig {
     /// Raw XML to inject into Info.plist.
     #[serde(default)]
@@ -429,7 +437,7 @@ pub struct IosRawConfig {
 /// [android.permissions]
 /// "android.permission.FOREGROUND_SERVICE" = { description = "Background service" }
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidConfig {
     /// Minimum SDK version.
     #[serde(default)]
@@ -501,7 +509,7 @@ pub struct AndroidConfig {
 }
 
 /// Android intent filter for deep linking.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AndroidIntentFilter {
     /// Actions (e.g., "android.intent.action.VIEW").
     #[serde(default)]
@@ -521,7 +529,7 @@ pub struct AndroidIntentFilter {
 }
 
 /// Android intent data specification.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidIntentData {
     /// URL scheme (e.g., "https", "myapp").
     #[serde(default)]
@@ -553,7 +561,7 @@ pub struct AndroidIntentData {
 }
 
 /// Android package visibility queries.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidQueries {
     /// Package names to query.
     #[serde(default)]
@@ -565,7 +573,7 @@ pub struct AndroidQueries {
 }
 
 /// Android query intent specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct AndroidQueryIntent {
     /// Action (e.g., "android.intent.action.SEND").
     pub action: String,
@@ -579,7 +587,7 @@ pub struct AndroidQueryIntent {
     pub mime_type: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidRawConfig {
     /// Raw XML to inject into manifest (after permissions).
     #[serde(default)]
@@ -594,7 +602,7 @@ pub struct AndroidRawConfig {
     pub application: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidApplicationConfig {
     /// Enable cleartext (HTTP) traffic.
     #[serde(default)]
@@ -618,7 +626,7 @@ pub struct AndroidApplicationConfig {
 // ============================================================================
 
 /// macOS-specific configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MacosConfig {
     /// Minimum macOS version (e.g., "11.0").
     #[serde(default)]
@@ -669,7 +677,7 @@ pub struct MacosConfig {
     pub category: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MacosEntitlements {
     /// Enable App Sandbox.
     #[serde(default, rename = "app-sandbox")]
@@ -740,7 +748,7 @@ pub struct MacosEntitlements {
     pub additional: HashMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MacosRawConfig {
     /// Raw XML to inject into Info.plist.
     #[serde(default)]
@@ -756,7 +764,7 @@ pub struct MacosRawConfig {
 // ============================================================================
 
 /// Windows-specific configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct WindowsConfig {
     /// UWP/MSIX capabilities.
     #[serde(default)]
@@ -776,7 +784,7 @@ pub struct WindowsConfig {
 // ============================================================================
 
 /// Linux-specific configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxConfig {
     /// Flatpak sandbox permissions.
     #[serde(default)]
@@ -797,6 +805,19 @@ pub struct LinuxConfig {
     /// MIME types the app can handle.
     #[serde(default)]
     pub mime_types: Vec<String>,
+}
+
+// ============================================================================
+// Schema Generation
+// ============================================================================
+
+/// Generate a JSON schema for the complete Dioxus.toml configuration.
+///
+/// This can be used for IDE autocomplete when editing Dioxus.toml files.
+/// The schema includes all configuration: application, web, bundle, permissions,
+/// platform-specific settings, and more.
+pub fn generate_manifest_schema() -> schemars::schema::RootSchema {
+    schemars::schema_for!(super::DioxusConfig)
 }
 
 #[cfg(test)]
@@ -1004,5 +1025,43 @@ mod tests {
             Some("public.app-category.productivity".to_string())
         );
         assert_eq!(config.macos.document_types.len(), 1);
+    }
+
+    #[test]
+    fn test_generate_schema() {
+        let schema = generate_manifest_schema();
+        let json = serde_json::to_string_pretty(&schema).unwrap();
+
+        // Verify the schema contains all top-level DioxusConfig types
+        assert!(json.contains("ApplicationConfig"));
+        assert!(json.contains("WebConfig"));
+        assert!(json.contains("BundleConfig"));
+        assert!(json.contains("ComponentConfig"));
+        assert!(json.contains("PermissionsConfig"));
+        assert!(json.contains("DeepLinkConfig"));
+        assert!(json.contains("BackgroundConfig"));
+        assert!(json.contains("IosConfig"));
+        assert!(json.contains("AndroidConfig"));
+        assert!(json.contains("MacosConfig"));
+        assert!(json.contains("WindowsConfig"));
+        assert!(json.contains("LinuxConfig"));
+
+        // Verify some specific properties exist
+        assert!(json.contains("location"));
+        assert!(json.contains("camera"));
+        assert!(json.contains("deployment_target"));
+        assert!(json.contains("min_sdk"));
+
+        // Verify application config properties
+        assert!(json.contains("asset_dir"));
+        assert!(json.contains("public_dir"));
+
+        // Verify web config properties
+        assert!(json.contains("pre_compress"));
+        assert!(json.contains("wasm_opt"));
+
+        // Verify bundle config properties
+        assert!(json.contains("identifier"));
+        assert!(json.contains("publisher"));
     }
 }
