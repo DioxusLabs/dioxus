@@ -5,302 +5,47 @@
   "properties": {
     "android": {
       "description": "Android-specific configuration.",
-      "default": {
-        "application": {
-          "large_heap": null,
-          "supports_rtl": null,
-          "theme": null,
-          "uses_cleartext_traffic": null
-        },
-        "compile_sdk": null,
-        "features": [],
-        "foreground_service_types": [],
-        "gradle_dependencies": [],
-        "gradle_plugins": [],
-        "intent_filters": [],
-        "manifest": null,
-        "min_sdk": null,
-        "permissions": {},
-        "proguard_rules": [],
-        "queries": {
-          "intents": [],
-          "packages": []
-        },
-        "raw": {
-          "application": null,
-          "application_attrs": null,
-          "manifest": null
-        },
-        "target_sdk": null,
-        "url_schemes": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/AndroidConfig"
-        }
-      ]
+      "$ref": "#/definitions/AndroidConfig"
     },
     "application": {
-      "default": {
-        "android_main_activity": null,
-        "android_manifest": null,
-        "android_min_sdk_version": null,
-        "asset_dir": null,
-        "ios_entitlements": null,
-        "ios_info_plist": null,
-        "macos_entitlements": null,
-        "macos_info_plist": null,
-        "out_dir": null,
-        "public_dir": null,
-        "tailwind_input": null,
-        "tailwind_output": null
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/ApplicationConfig"
-        }
-      ]
+      "$ref": "#/definitions/ApplicationConfig"
     },
     "background": {
       "description": "Unified background mode configuration. Background capabilities declared here are mapped to platform-specific configurations. Use [ios], [android] sections for overrides.",
-      "default": {
-        "audio": false,
-        "bluetooth": false,
-        "external-accessory": false,
-        "fetch": false,
-        "location": false,
-        "processing": false,
-        "remote-notifications": false,
-        "voip": false
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/BackgroundConfig"
-        }
-      ]
+      "$ref": "#/definitions/BackgroundConfig"
     },
     "bundle": {
-      "default": {
-        "android": null,
-        "category": null,
-        "copyright": null,
-        "deb": null,
-        "external_bin": null,
-        "icon": null,
-        "identifier": null,
-        "long_description": null,
-        "macos": null,
-        "publisher": null,
-        "resources": null,
-        "short_description": null,
-        "windows": null
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/BundleConfig"
-        }
-      ]
+      "$ref": "#/definitions/BundleConfig"
     },
     "components": {
-      "default": {
-        "components_dir": null,
-        "registry": {
-          "git": null,
-          "path": null,
-          "rev": null
-        }
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/ComponentConfig"
-        }
-      ]
+      "$ref": "#/definitions/ComponentConfig"
     },
     "deep_links": {
       "description": "Unified deep linking configuration. URL schemes and universal links declared here are mapped to platform-specific configurations. Use [ios], [android], [macos] sections for overrides.",
-      "default": {
-        "hosts": [],
-        "paths": [],
-        "schemes": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/DeepLinkConfig"
-        }
-      ]
+      "$ref": "#/definitions/DeepLinkConfig"
     },
     "ios": {
       "description": "iOS-specific configuration.",
-      "default": {
-        "background_modes": [],
-        "deployment_target": null,
-        "document_types": [],
-        "entitlements": {
-          "app-groups": [],
-          "apple-pay": false,
-          "aps-environment": null,
-          "associated-domains": [],
-          "healthkit": false,
-          "homekit": false,
-          "icloud": false,
-          "keychain-access-groups": []
-        },
-        "exported_type_identifiers": [],
-        "imported_type_identifiers": [],
-        "info_plist": null,
-        "plist": {},
-        "raw": {
-          "entitlements": null,
-          "info_plist": null
-        },
-        "url_schemes": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/IosConfig"
-        }
-      ]
+      "$ref": "#/definitions/IosConfig"
     },
     "linux": {
       "description": "Linux-specific configuration.",
-      "default": {
-        "categories": [],
-        "dbus_access": [],
-        "flatpak_permissions": [],
-        "keywords": [],
-        "mime_types": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/LinuxConfig"
-        }
-      ]
+      "$ref": "#/definitions/LinuxConfig"
     },
     "macos": {
       "description": "macOS-specific configuration.",
-      "default": {
-        "category": null,
-        "document_types": [],
-        "entitlements": {
-          "addressbook": null,
-          "allow-jit": null,
-          "allow-unsigned-executable-memory": null,
-          "app-sandbox": null,
-          "bluetooth": null,
-          "calendars": null,
-          "camera": null,
-          "disable-library-validation": null,
-          "files-user-selected": null,
-          "files-user-selected-readonly": null,
-          "location": null,
-          "microphone": null,
-          "network-client": null,
-          "network-server": null,
-          "print": null,
-          "usb": null
-        },
-        "exported_type_identifiers": [],
-        "frameworks": [],
-        "imported_type_identifiers": [],
-        "info_plist": null,
-        "minimum_system_version": null,
-        "plist": {},
-        "raw": {
-          "entitlements": null,
-          "info_plist": null
-        },
-        "url_schemes": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/MacosConfig"
-        }
-      ]
+      "$ref": "#/definitions/MacosConfig"
     },
     "permissions": {
       "description": "Unified permissions configuration. Permissions declared here are automatically mapped to platform-specific identifiers (AndroidManifest.xml, Info.plist, etc.)",
-      "default": {
-        "background-location": null,
-        "biometrics": null,
-        "bluetooth": null,
-        "calendar": null,
-        "camera": null,
-        "contacts": null,
-        "health": null,
-        "homekit": null,
-        "local-network": null,
-        "location": null,
-        "media-library": null,
-        "microphone": null,
-        "motion": null,
-        "nearby-wifi": null,
-        "nfc": null,
-        "notifications": null,
-        "photos": null,
-        "siri": null,
-        "speech": null
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/PermissionsConfig"
-        }
-      ]
+      "$ref": "#/definitions/PermissionsConfig"
     },
     "web": {
-      "default": {
-        "app": {
-          "base_path": null,
-          "title": "dioxus | ⛺"
-        },
-        "https": {
-          "cert_path": null,
-          "enabled": null,
-          "key_path": null,
-          "mkcert": null
-        },
-        "pre_compress": false,
-        "proxy": [],
-        "resource": {
-          "dev": {
-            "script": [],
-            "style": []
-          },
-          "script": null,
-          "style": null
-        },
-        "wasm_opt": {
-          "debug": false,
-          "extra_features": [],
-          "level": "z",
-          "memory_packing": false
-        },
-        "watcher": {
-          "index_on_404": true,
-          "reload_html": false,
-          "watch_path": [
-            "src",
-            "examples"
-          ]
-        }
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/WebConfig"
-        }
-      ]
+      "$ref": "#/definitions/WebConfig"
     },
     "windows": {
       "description": "Windows-specific configuration.",
-      "default": {
-        "capabilities": [],
-        "device_capabilities": [],
-        "restricted_capabilities": []
-      },
-      "allOf": [
-        {
-          "$ref": "#/definitions/WindowsConfig"
-        }
-      ]
+      "$ref": "#/definitions/WindowsConfig"
     }
   },
   "definitions": {
@@ -309,7 +54,6 @@
       "properties": {
         "large_heap": {
           "description": "Enable large heap.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -317,7 +61,6 @@
         },
         "supports_rtl": {
           "description": "RTL layout support.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -325,7 +68,6 @@
         },
         "theme": {
           "description": "Application theme.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -333,7 +75,6 @@
         },
         "uses_cleartext_traffic": {
           "description": "Enable cleartext (HTTP) traffic.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -347,21 +88,10 @@
       "properties": {
         "application": {
           "description": "Application-level config.",
-          "default": {
-            "large_heap": null,
-            "supports_rtl": null,
-            "theme": null,
-            "uses_cleartext_traffic": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/AndroidApplicationConfig"
-            }
-          ]
+          "$ref": "#/definitions/AndroidApplicationConfig"
         },
         "compile_sdk": {
           "description": "Compile SDK version.",
-          "default": null,
           "type": [
             "integer",
             "null"
@@ -371,7 +101,6 @@
         },
         "features": {
           "description": "Hardware/software features required.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -379,7 +108,6 @@
         },
         "foreground_service_types": {
           "description": "Foreground service types for background operations. Valid values: \"camera\", \"connectedDevice\", \"dataSync\", \"health\", \"location\", \"mediaPlayback\", \"mediaProjection\", \"microphone\", \"phoneCall\", \"remoteMessaging\", \"shortService\", \"specialUse\", \"systemExempted\"",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -387,7 +115,6 @@
         },
         "gradle_dependencies": {
           "description": "Gradle dependencies to add.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -395,7 +122,6 @@
         },
         "gradle_plugins": {
           "description": "Gradle plugins to apply.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -403,7 +129,6 @@
         },
         "intent_filters": {
           "description": "Intent filters for deep linking. These extend the unified [deep_links] configuration with Android-specific options.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/AndroidIntentFilter"
@@ -411,7 +136,6 @@
         },
         "manifest": {
           "description": "Path to custom AndroidManifest.xml to merge.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -419,7 +143,6 @@
         },
         "min_sdk": {
           "description": "Minimum SDK version.",
-          "default": null,
           "type": [
             "integer",
             "null"
@@ -429,7 +152,6 @@
         },
         "permissions": {
           "description": "Additional Android permissions not in unified config.",
-          "default": {},
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/RawPermission"
@@ -437,7 +159,6 @@
         },
         "proguard_rules": {
           "description": "ProGuard rule files.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -445,32 +166,14 @@
         },
         "queries": {
           "description": "Queries for package visibility (required for Android 11+). Specify packages or intents your app needs to query.",
-          "default": {
-            "intents": [],
-            "packages": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/AndroidQueries"
-            }
-          ]
+          "$ref": "#/definitions/AndroidQueries"
         },
         "raw": {
           "description": "Raw XML injection points.",
-          "default": {
-            "application": null,
-            "application_attrs": null,
-            "manifest": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/AndroidRawConfig"
-            }
-          ]
+          "$ref": "#/definitions/AndroidRawConfig"
         },
         "target_sdk": {
           "description": "Target SDK version.",
-          "default": null,
           "type": [
             "integer",
             "null"
@@ -480,7 +183,6 @@
         },
         "url_schemes": {
           "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -494,7 +196,6 @@
       "properties": {
         "host": {
           "description": "Host (e.g., \"example.com\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -502,7 +203,6 @@
         },
         "mime_type": {
           "description": "MIME type.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -510,7 +210,6 @@
         },
         "path": {
           "description": "Path (exact match).",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -518,7 +217,6 @@
         },
         "path_pattern": {
           "description": "Path pattern (with wildcards).",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -526,7 +224,6 @@
         },
         "path_prefix": {
           "description": "Path prefix.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -534,7 +231,6 @@
         },
         "port": {
           "description": "Port number.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -542,7 +238,6 @@
         },
         "scheme": {
           "description": "URL scheme (e.g., \"https\", \"myapp\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -556,7 +251,6 @@
       "properties": {
         "actions": {
           "description": "Actions (e.g., \"android.intent.action.VIEW\").",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -564,12 +258,10 @@
         },
         "auto_verify": {
           "description": "Auto-verify for App Links (requires HTTPS and assetlinks.json).",
-          "default": false,
           "type": "boolean"
         },
         "categories": {
           "description": "Categories (e.g., \"android.intent.category.DEFAULT\", \"android.intent.category.BROWSABLE\").",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -577,7 +269,6 @@
         },
         "data": {
           "description": "Data specifications.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/AndroidIntentData"
@@ -591,7 +282,6 @@
       "properties": {
         "intents": {
           "description": "Intent actions to query.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/AndroidQueryIntent"
@@ -599,7 +289,6 @@
         },
         "packages": {
           "description": "Package names to query.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -620,7 +309,6 @@
         },
         "mime_type": {
           "description": "MIME type (e.g., \"text/plain\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -628,7 +316,6 @@
         },
         "scheme": {
           "description": "Data scheme (e.g., \"mailto\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -641,7 +328,6 @@
       "properties": {
         "application": {
           "description": "Raw XML inside <application> element.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -649,7 +335,6 @@
         },
         "application_attrs": {
           "description": "Raw attributes for <application> element.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -657,7 +342,6 @@
         },
         "manifest": {
           "description": "Raw XML to inject into manifest (after permissions).",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -693,7 +377,6 @@
       "properties": {
         "android_main_activity": {
           "description": "Use this file for the MainActivity.kt associated with the Android app.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -701,7 +384,6 @@
         },
         "android_manifest": {
           "description": "Use this file for the AndroidManifest.xml associated with the Android app. `dx` will merge any required settings into this file required to build the app",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -709,7 +391,6 @@
         },
         "android_min_sdk_version": {
           "description": "Specified minimum sdk version for gradle to build the app with.",
-          "default": null,
           "type": [
             "integer",
             "null"
@@ -719,7 +400,6 @@
         },
         "asset_dir": {
           "description": "The path where global assets will be added when components are added with `dx components add`",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -727,7 +407,6 @@
         },
         "ios_entitlements": {
           "description": "Use this file for the entitlements.plist associated with the iOS app.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -735,7 +414,6 @@
         },
         "ios_info_plist": {
           "description": "Use this file for the info.plist associated with the iOS app. `dx` will merge any required settings into this file required to build the app",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -743,7 +421,6 @@
         },
         "macos_entitlements": {
           "description": "Use this file for the entitlements.plist associated with the macOS app.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -751,35 +428,30 @@
         },
         "macos_info_plist": {
           "description": "Use this file for the info.plist associated with the macOS app. `dx` will merge any required settings into this file required to build the app",
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "out_dir": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "public_dir": {
-          "default": "public",
           "type": [
             "string",
             "null"
           ]
         },
         "tailwind_input": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "tailwind_output": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -793,42 +465,34 @@
       "properties": {
         "audio": {
           "description": "Background audio playback. iOS: UIBackgroundModes \"audio\" Android: FOREGROUND_SERVICE_MEDIA_PLAYBACK",
-          "default": false,
           "type": "boolean"
         },
         "bluetooth": {
           "description": "Bluetooth LE accessories. iOS: UIBackgroundModes \"bluetooth-central\" and \"bluetooth-peripheral\" Android: FOREGROUND_SERVICE_CONNECTED_DEVICE",
-          "default": false,
           "type": "boolean"
         },
         "external-accessory": {
           "description": "External accessory communication. iOS: UIBackgroundModes \"external-accessory\"",
-          "default": false,
           "type": "boolean"
         },
         "fetch": {
           "description": "Background data fetch. iOS: UIBackgroundModes \"fetch\" Android: WorkManager or foreground service",
-          "default": false,
           "type": "boolean"
         },
         "location": {
           "description": "Background location updates. iOS: UIBackgroundModes \"location\" Android: ACCESS_BACKGROUND_LOCATION permission",
-          "default": false,
           "type": "boolean"
         },
         "processing": {
           "description": "Background processing tasks. iOS: UIBackgroundModes \"processing\" Android: WorkManager",
-          "default": false,
           "type": "boolean"
         },
         "remote-notifications": {
           "description": "Remote push notifications. iOS: UIBackgroundModes \"remote-notification\" Android: Firebase Cloud Messaging",
-          "default": false,
           "type": "boolean"
         },
         "voip": {
           "description": "VoIP calls. iOS: UIBackgroundModes \"voip\" Android: FOREGROUND_SERVICE_PHONE_CALL",
-          "default": false,
           "type": "boolean"
         }
       }
@@ -837,7 +501,6 @@
       "type": "object",
       "properties": {
         "android": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/AndroidSettings"
@@ -848,21 +511,18 @@
           ]
         },
         "category": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "copyright": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "deb": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/DebianSettings"
@@ -873,7 +533,6 @@
           ]
         },
         "external_bin": {
-          "default": null,
           "type": [
             "array",
             "null"
@@ -883,7 +542,6 @@
           }
         },
         "icon": {
-          "default": null,
           "type": [
             "array",
             "null"
@@ -893,21 +551,18 @@
           }
         },
         "identifier": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "long_description": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "macos": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/MacOsSettings"
@@ -918,14 +573,12 @@
           ]
         },
         "publisher": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "resources": {
-          "default": null,
           "type": [
             "array",
             "null"
@@ -935,14 +588,12 @@
           }
         },
         "short_description": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "windows": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/WindowsSettings"
@@ -960,7 +611,6 @@
       "properties": {
         "components_dir": {
           "description": "The path where components are stored when adding or removing components",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -968,16 +618,7 @@
         },
         "registry": {
           "description": "The component registry to default to when adding components",
-          "default": {
-            "git": null,
-            "path": null,
-            "rev": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/ComponentRegistry"
-            }
-          ]
+          "$ref": "#/definitions/ComponentRegistry"
         }
       }
     },
@@ -1033,7 +674,6 @@
       "properties": {
         "changelog": {
           "description": "Path of the uncompressed Changelog file, to be stored at /usr/share/doc/package-name/changelog.gz. See <https://www.debian.org/doc/debian-policy/ch-docs.html#changelog-files-and-release-notes>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1041,7 +681,6 @@
         },
         "conflicts": {
           "description": "the list of package conflicts.",
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1052,7 +691,6 @@
         },
         "depends": {
           "description": "the list of debian dependencies.",
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1063,7 +701,6 @@
         },
         "desktop_template": {
           "description": "Path to a custom desktop file Handlebars template.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1071,7 +708,6 @@
         },
         "files": {
           "description": "List of custom files to add to the deb package. Maps the path on the debian package to the path of the file to include (relative to the current working directory).",
-          "default": {},
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -1079,7 +715,6 @@
         },
         "post_install_script": {
           "description": "Path to script that will be executed after the package is unpacked. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1087,7 +722,6 @@
         },
         "post_remove_script": {
           "description": "Path to script that will be executed after the package is removed. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1095,7 +729,6 @@
         },
         "pre_install_script": {
           "description": "Path to script that will be executed before the package is unpacked. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1103,7 +736,6 @@
         },
         "pre_remove_script": {
           "description": "Path to script that will be executed before the package is removed. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1111,7 +743,6 @@
         },
         "priority": {
           "description": "Change the priority of the Debian Package. By default, it is set to `optional`. Recognized Priorities as of now are :  `required`, `important`, `standard`, `optional`, `extra`",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1119,7 +750,6 @@
         },
         "provides": {
           "description": "the list of dependencies the package provides.",
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1130,7 +760,6 @@
         },
         "recommends": {
           "description": "the list of recommended debian dependencies.",
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1141,7 +770,6 @@
         },
         "replaces": {
           "description": "the list of package replaces.",
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1152,7 +780,6 @@
         },
         "section": {
           "description": "Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1166,7 +793,6 @@
       "properties": {
         "hosts": {
           "description": "Universal link / App link hosts (e.g., \"example.com\"). Maps to Associated Domains on iOS and App Links on Android. Supports wildcards like \"*.example.com\".",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1174,7 +800,6 @@
         },
         "paths": {
           "description": "Path patterns for universal/app links (e.g., \"/app/*\", \"/share/*\"). If empty, all paths are matched.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1182,7 +807,6 @@
         },
         "schemes": {
           "description": "Custom URL schemes (e.g., \"myapp\" for myapp://path). Maps to CFBundleURLSchemes on iOS/macOS and intent-filter on Android.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1196,7 +820,6 @@
       "properties": {
         "background_modes": {
           "description": "Additional background modes beyond unified [background]. Valid values: \"audio\", \"location\", \"voip\", \"fetch\", \"remote-notification\", \"newsstand-content\", \"external-accessory\", \"bluetooth-central\", \"bluetooth-peripheral\", \"processing\"",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1204,7 +827,6 @@
         },
         "deployment_target": {
           "description": "Minimum iOS deployment target (e.g., \"15.0\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1212,7 +834,6 @@
         },
         "document_types": {
           "description": "Document types the app can open.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosDocumentType"
@@ -1220,25 +841,10 @@
         },
         "entitlements": {
           "description": "iOS entitlements configuration.",
-          "default": {
-            "app-groups": [],
-            "apple-pay": false,
-            "aps-environment": null,
-            "associated-domains": [],
-            "healthkit": false,
-            "homekit": false,
-            "icloud": false,
-            "keychain-access-groups": []
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/IosEntitlements"
-            }
-          ]
+          "$ref": "#/definitions/IosEntitlements"
         },
         "exported_type_identifiers": {
           "description": "Exported type identifiers (custom UTIs).",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosTypeIdentifier"
@@ -1246,7 +852,6 @@
         },
         "imported_type_identifiers": {
           "description": "Imported type identifiers.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosTypeIdentifier"
@@ -1254,7 +859,6 @@
         },
         "info_plist": {
           "description": "Path to custom Info.plist to merge with generated.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1262,25 +866,15 @@
         },
         "plist": {
           "description": "Additional Info.plist keys to merge.",
-          "default": {},
           "type": "object",
           "additionalProperties": true
         },
         "raw": {
           "description": "Raw XML injection points.",
-          "default": {
-            "entitlements": null,
-            "info_plist": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/IosRawConfig"
-            }
-          ]
+          "$ref": "#/definitions/IosRawConfig"
         },
         "url_schemes": {
           "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1297,7 +891,6 @@
       "properties": {
         "extensions": {
           "description": "File extensions (e.g., [\"txt\", \"md\"]).",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1305,7 +898,6 @@
         },
         "icon": {
           "description": "Icon file name.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1313,7 +905,6 @@
         },
         "mime_types": {
           "description": "MIME types.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1325,7 +916,6 @@
         },
         "role": {
           "description": "Role: \"Editor\", \"Viewer\", \"Shell\", or \"None\".",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1333,7 +923,6 @@
         },
         "types": {
           "description": "UTI types.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1346,7 +935,6 @@
       "properties": {
         "app-groups": {
           "description": "App groups for shared data.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1354,12 +942,10 @@
         },
         "apple-pay": {
           "description": "Enable Apple Pay.",
-          "default": false,
           "type": "boolean"
         },
         "aps-environment": {
           "description": "Push notification environment: \"development\" or \"production\".",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1367,7 +953,6 @@
         },
         "associated-domains": {
           "description": "Associated domains for universal links.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1375,22 +960,18 @@
         },
         "healthkit": {
           "description": "Enable HealthKit.",
-          "default": false,
           "type": "boolean"
         },
         "homekit": {
           "description": "Enable HomeKit.",
-          "default": false,
           "type": "boolean"
         },
         "icloud": {
           "description": "Enable iCloud container support.",
-          "default": false,
           "type": "boolean"
         },
         "keychain-access-groups": {
           "description": "Keychain access groups.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1404,7 +985,6 @@
       "properties": {
         "entitlements": {
           "description": "Raw XML to inject into entitlements.plist.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1412,7 +992,6 @@
         },
         "info_plist": {
           "description": "Raw XML to inject into Info.plist.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1429,7 +1008,6 @@
       "properties": {
         "conforms_to": {
           "description": "Conforms to these UTIs.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1437,7 +1015,6 @@
         },
         "description": {
           "description": "Human-readable description.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1445,7 +1022,6 @@
         },
         "extensions": {
           "description": "File extensions.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1457,7 +1033,6 @@
         },
         "mime_types": {
           "description": "MIME types.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1471,7 +1046,6 @@
       "properties": {
         "categories": {
           "description": "Desktop entry categories.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1479,7 +1053,6 @@
         },
         "dbus_access": {
           "description": "D-Bus interfaces to access.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1487,7 +1060,6 @@
         },
         "flatpak_permissions": {
           "description": "Flatpak sandbox permissions.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1495,7 +1067,6 @@
         },
         "keywords": {
           "description": "Desktop entry keywords.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1503,7 +1074,6 @@
         },
         "mime_types": {
           "description": "MIME types the app can handle.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1524,12 +1094,7 @@
         },
         "precision": {
           "description": "Precision level: \"fine\" (GPS) or \"coarse\" (network-based).",
-          "default": "fine",
-          "allOf": [
-            {
-              "$ref": "#/definitions/LocationPrecision"
-            }
-          ]
+          "$ref": "#/definitions/LocationPrecision"
         }
       }
     },
@@ -1544,28 +1109,24 @@
       "type": "object",
       "properties": {
         "bundle_name": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "bundle_version": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "entitlements": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "exception_domain": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1573,14 +1134,12 @@
         },
         "files": {
           "description": "List of custom files to add to the application bundle. Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).",
-          "default": {},
           "type": "object",
           "additionalProperties": {
             "type": "string"
           }
         },
         "frameworks": {
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1591,39 +1150,33 @@
         },
         "hardened_runtime": {
           "description": "Preserve the hardened runtime version flag, see <https://developer.apple.com/documentation/security/hardened_runtime>\n\nSettings this to `false` is useful when using an ad-hoc signature, making it less strict.",
-          "default": true,
           "type": "boolean"
         },
         "info_plist_path": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "license": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "minimum_system_version": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "provider_short_name": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "signing_identity": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1637,7 +1190,6 @@
       "properties": {
         "category": {
           "description": "App category for the Mac App Store. E.g., \"public.app-category.productivity\"",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1645,7 +1197,6 @@
         },
         "document_types": {
           "description": "Document types the app can open (uses same format as iOS).",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosDocumentType"
@@ -1653,33 +1204,10 @@
         },
         "entitlements": {
           "description": "macOS entitlements.",
-          "default": {
-            "addressbook": null,
-            "allow-jit": null,
-            "allow-unsigned-executable-memory": null,
-            "app-sandbox": null,
-            "bluetooth": null,
-            "calendars": null,
-            "camera": null,
-            "disable-library-validation": null,
-            "files-user-selected": null,
-            "files-user-selected-readonly": null,
-            "location": null,
-            "microphone": null,
-            "network-client": null,
-            "network-server": null,
-            "print": null,
-            "usb": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/MacosEntitlements"
-            }
-          ]
+          "$ref": "#/definitions/MacosEntitlements"
         },
         "exported_type_identifiers": {
           "description": "Exported type identifiers (custom UTIs).",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosTypeIdentifier"
@@ -1687,7 +1215,6 @@
         },
         "frameworks": {
           "description": "Frameworks to embed.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1695,7 +1222,6 @@
         },
         "imported_type_identifiers": {
           "description": "Imported type identifiers.",
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosTypeIdentifier"
@@ -1703,7 +1229,6 @@
         },
         "info_plist": {
           "description": "Path to custom Info.plist.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1711,7 +1236,6 @@
         },
         "minimum_system_version": {
           "description": "Minimum macOS version (e.g., \"11.0\").",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1719,25 +1243,15 @@
         },
         "plist": {
           "description": "Additional Info.plist keys.",
-          "default": {},
           "type": "object",
           "additionalProperties": true
         },
         "raw": {
           "description": "Raw injection points.",
-          "default": {
-            "entitlements": null,
-            "info_plist": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/MacosRawConfig"
-            }
-          ]
+          "$ref": "#/definitions/MacosRawConfig"
         },
         "url_schemes": {
           "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -1750,7 +1264,6 @@
       "properties": {
         "addressbook": {
           "description": "Address book access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1758,7 +1271,6 @@
         },
         "allow-jit": {
           "description": "Allow JIT.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1766,7 +1278,6 @@
         },
         "allow-unsigned-executable-memory": {
           "description": "Allow unsigned executable memory.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1774,7 +1285,6 @@
         },
         "app-sandbox": {
           "description": "Enable App Sandbox.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1782,7 +1292,6 @@
         },
         "bluetooth": {
           "description": "Bluetooth access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1790,7 +1299,6 @@
         },
         "calendars": {
           "description": "Calendars access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1798,7 +1306,6 @@
         },
         "camera": {
           "description": "Camera access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1806,7 +1313,6 @@
         },
         "disable-library-validation": {
           "description": "Disable library validation.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1814,7 +1320,6 @@
         },
         "files-user-selected": {
           "description": "User-selected file access (read-write).",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1822,7 +1327,6 @@
         },
         "files-user-selected-readonly": {
           "description": "User-selected file access (read-only).",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1830,7 +1334,6 @@
         },
         "location": {
           "description": "Location services.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1838,7 +1341,6 @@
         },
         "microphone": {
           "description": "Microphone access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1846,7 +1348,6 @@
         },
         "network-client": {
           "description": "Outgoing network connections.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1854,7 +1355,6 @@
         },
         "network-server": {
           "description": "Incoming network connections.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1862,7 +1362,6 @@
         },
         "print": {
           "description": "Printing.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1870,7 +1369,6 @@
         },
         "usb": {
           "description": "USB access.",
-          "default": null,
           "type": [
             "boolean",
             "null"
@@ -1884,7 +1382,6 @@
       "properties": {
         "entitlements": {
           "description": "Raw XML to inject into entitlements.plist.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1892,7 +1389,6 @@
         },
         "info_plist": {
           "description": "Raw XML to inject into Info.plist.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1912,7 +1408,6 @@
       "type": "object",
       "properties": {
         "custom_language_files": {
-          "default": null,
           "type": [
             "object",
             "null"
@@ -1922,40 +1417,30 @@
           }
         },
         "display_language_selector": {
-          "default": false,
           "type": "boolean"
         },
         "header_image": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "install_mode": {
-          "default": "CurrentUser",
-          "allOf": [
-            {
-              "$ref": "#/definitions/NSISInstallerMode"
-            }
-          ]
+          "$ref": "#/definitions/NSISInstallerMode"
         },
         "installer_hooks": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "installer_icon": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "languages": {
-          "default": null,
           "type": [
             "array",
             "null"
@@ -1965,7 +1450,6 @@
           }
         },
         "license": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -1973,28 +1457,24 @@
         },
         "minimum_webview2_version": {
           "description": "Try to ensure that the WebView2 version is equal to or newer than this version, if the user's WebView2 is older than this version, the installer will try to trigger a WebView2 update.",
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "sidebar_image": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "start_menu_folder": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "template": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -2008,7 +1488,6 @@
       "properties": {
         "background-location": {
           "description": "Background location updates.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2020,7 +1499,6 @@
         },
         "biometrics": {
           "description": "Biometric authentication (Face ID, fingerprint).",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2032,7 +1510,6 @@
         },
         "bluetooth": {
           "description": "Bluetooth connectivity.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2044,7 +1521,6 @@
         },
         "calendar": {
           "description": "Calendar access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/StoragePermission"
@@ -2056,7 +1532,6 @@
         },
         "camera": {
           "description": "Camera access permission.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2068,7 +1543,6 @@
         },
         "contacts": {
           "description": "Contacts access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/StoragePermission"
@@ -2080,7 +1554,6 @@
         },
         "health": {
           "description": "Health data access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/StoragePermission"
@@ -2092,7 +1565,6 @@
         },
         "homekit": {
           "description": "HomeKit integration (iOS only).",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2104,7 +1576,6 @@
         },
         "local-network": {
           "description": "Local network access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2116,7 +1587,6 @@
         },
         "location": {
           "description": "Location permission with precision level. Maps to ACCESS_FINE_LOCATION/ACCESS_COARSE_LOCATION on Android, NSLocationWhenInUseUsageDescription on iOS/macOS.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/LocationPermission"
@@ -2128,7 +1598,6 @@
         },
         "media-library": {
           "description": "Media library access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2140,7 +1609,6 @@
         },
         "microphone": {
           "description": "Microphone access permission.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2152,7 +1620,6 @@
         },
         "motion": {
           "description": "Motion and fitness data.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2164,7 +1631,6 @@
         },
         "nearby-wifi": {
           "description": "Nearby Wi-Fi devices (Android).",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2176,7 +1642,6 @@
         },
         "nfc": {
           "description": "NFC access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2188,7 +1653,6 @@
         },
         "notifications": {
           "description": "Push notifications permission.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2200,7 +1664,6 @@
         },
         "photos": {
           "description": "Photo library access.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/StoragePermission"
@@ -2212,7 +1675,6 @@
         },
         "siri": {
           "description": "Siri integration (iOS only).",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2224,7 +1686,6 @@
         },
         "speech": {
           "description": "Speech recognition.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/SimplePermission"
@@ -2278,12 +1739,7 @@
       "properties": {
         "access": {
           "description": "Access level: \"read\", \"write\", or \"read-write\".",
-          "default": "read-write",
-          "allOf": [
-            {
-              "$ref": "#/definitions/StorageAccess"
-            }
-          ]
+          "$ref": "#/definitions/StorageAccess"
         },
         "description": {
           "description": "User-facing description shown in permission dialogs.",
@@ -2297,12 +1753,10 @@
       "properties": {
         "debug": {
           "description": "Keep debug symbols in the wasm file",
-          "default": false,
           "type": "boolean"
         },
         "extra_features": {
           "description": "Extra arguments to pass to wasm-opt\n\nFor example, to enable simd, you can set this to `[\"--enable-simd\"]`.\n\nYou can also disable features by prefixing them with `--disable-`, e.g. `[\"--disable-bulk-memory\"]`.\n\nCurrently only --enable and --disable flags are supported.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -2310,16 +1764,10 @@
         },
         "level": {
           "description": "The wasm-opt level to use for release builds [default: s] Options: - z: optimize aggressively for size - s: optimize for size - 1: optimize for speed - 2: optimize for more for speed - 3: optimize for even more for speed - 4: optimize aggressively for speed",
-          "default": "z",
-          "allOf": [
-            {
-              "$ref": "#/definitions/WasmOptLevel"
-            }
-          ]
+          "$ref": "#/definitions/WasmOptLevel"
         },
         "memory_packing": {
           "description": "Enable memory packing",
-          "default": false,
           "type": "boolean"
         }
       }
@@ -2388,7 +1836,6 @@
           ]
         },
         "title": {
-          "default": "dioxus | ⛺",
           "type": "string"
         }
       }
@@ -2397,84 +1844,30 @@
       "type": "object",
       "properties": {
         "app": {
-          "default": {
-            "base_path": null,
-            "title": "dioxus | ⛺"
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebAppConfig"
-            }
-          ]
+          "$ref": "#/definitions/WebAppConfig"
         },
         "https": {
-          "default": {
-            "cert_path": null,
-            "enabled": null,
-            "key_path": null,
-            "mkcert": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebHttpsConfig"
-            }
-          ]
+          "$ref": "#/definitions/WebHttpsConfig"
         },
         "pre_compress": {
           "description": "Whether to enable pre-compression of assets and wasm during a web build in release mode",
-          "default": false,
           "type": "boolean"
         },
         "proxy": {
-          "default": [],
           "type": "array",
           "items": {
             "$ref": "#/definitions/WebProxyConfig"
           }
         },
         "resource": {
-          "default": {
-            "dev": {
-              "script": [],
-              "style": []
-            },
-            "script": null,
-            "style": null
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebResourceConfig"
-            }
-          ]
+          "$ref": "#/definitions/WebResourceConfig"
         },
         "wasm_opt": {
           "description": "The wasm-opt configuration",
-          "default": {
-            "debug": false,
-            "extra_features": [],
-            "level": "z",
-            "memory_packing": false
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WasmOptConfig"
-            }
-          ]
+          "$ref": "#/definitions/WasmOptConfig"
         },
         "watcher": {
-          "default": {
-            "index_on_404": true,
-            "reload_html": false,
-            "watch_path": [
-              "src",
-              "examples"
-            ]
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebWatcherConfig"
-            }
-          ]
+          "$ref": "#/definitions/WebWatcherConfig"
         }
       }
     },
@@ -2482,14 +1875,12 @@
       "type": "object",
       "properties": {
         "script": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "style": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -2570,18 +1961,12 @@
       "type": "object",
       "properties": {
         "index_on_404": {
-          "default": true,
           "type": "boolean"
         },
         "reload_html": {
-          "default": false,
           "type": "boolean"
         },
         "watch_path": {
-          "default": [
-            "src",
-            "examples"
-          ],
           "type": "array",
           "items": {
             "type": "string"
@@ -2685,7 +2070,6 @@
       "properties": {
         "capabilities": {
           "description": "UWP/MSIX capabilities.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -2693,7 +2077,6 @@
         },
         "device_capabilities": {
           "description": "Device capabilities.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -2701,7 +2084,6 @@
         },
         "restricted_capabilities": {
           "description": "Restricted capabilities.",
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
@@ -2713,32 +2095,27 @@
       "type": "object",
       "properties": {
         "allow_downgrades": {
-          "default": false,
           "type": "boolean"
         },
         "certificate_thumbprint": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "digest_algorithm": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "icon_path": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "nsis": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/NsisSettings"
@@ -2750,7 +2127,6 @@
         },
         "sign_command": {
           "description": "Specify a custom command to sign the binaries. This command needs to have a `%1` in it which is just a placeholder for the binary path, which we will detect and replace before calling the command.\n\nExample: ```text sign-cli --arg1 --arg2 %1 ```\n\nBy Default we use `signtool.exe` which can be found only on Windows so if you are on another platform and want to cross-compile and sign you will need to use another tool like `osslsigncode`.",
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/CustomSignCommandSettings"
@@ -2761,37 +2137,24 @@
           ]
         },
         "timestamp_url": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "tsp": {
-          "default": false,
           "type": "boolean"
         },
         "webview_fixed_runtime_path": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "webview_install_mode": {
-          "default": {
-            "OfflineInstaller": {
-              "silent": false
-            }
-          },
-          "allOf": [
-            {
-              "$ref": "#/definitions/WebviewInstallMode"
-            }
-          ]
+          "$ref": "#/definitions/WebviewInstallMode"
         },
         "wix": {
-          "default": null,
           "anyOf": [
             {
               "$ref": "#/definitions/WixSettings"
@@ -2807,64 +2170,54 @@
       "type": "object",
       "properties": {
         "banner_path": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "component_group_refs": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "component_refs": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "dialog_image_path": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "enable_elevated_update_task": {
-          "default": false,
           "type": "boolean"
         },
         "feature_group_refs": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "feature_refs": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "fips_compliant": {
-          "default": false,
           "type": "boolean"
         },
         "fragment_paths": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "language": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "array",
@@ -2884,25 +2237,21 @@
           }
         },
         "license": {
-          "default": null,
           "type": [
             "string",
             "null"
           ]
         },
         "merge_refs": {
-          "default": [],
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "skip_webview_install": {
-          "default": false,
           "type": "boolean"
         },
         "template": {
-          "default": null,
           "type": [
             "string",
             "null"
@@ -2910,7 +2259,6 @@
         },
         "upgrade_code": {
           "description": "A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**, otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.\n\nBy default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace. You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.\n\nIt is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code whenever you want to change your product name.",
-          "default": null,
           "type": [
             "string",
             "null"
@@ -2918,7 +2266,6 @@
         },
         "version": {
           "description": "MSI installer version in the format `major.minor.patch.build` (build is optional).\n\nBecause a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.\n\nThe first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255. The third and fourth fields have a maximum value of 65,535.\n\nSee <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.",
-          "default": null,
           "type": [
             "string",
             "null"

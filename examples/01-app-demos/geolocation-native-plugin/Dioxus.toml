@@ -1,3 +1,4 @@
+#:schema ../../../packages/cli/cli-schema.json
 
 [bundle]
 identifier = "com.dioxuslabs.geolocation"

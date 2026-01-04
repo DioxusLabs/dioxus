@@ -816,8 +816,113 @@ pub struct LinuxConfig {
 /// This can be used for IDE autocomplete when editing Dioxus.toml files.
 /// The schema includes all configuration: application, web, bundle, permissions,
 /// platform-specific settings, and more.
+///
+/// Note: Default values are stripped and allOf wrappers simplified to prevent
+/// stack overflow in some TOML LSP implementations (e.g., Taplo's WASM build).
 pub fn generate_manifest_schema() -> schemars::schema::RootSchema {
-    schemars::schema_for!(super::DioxusConfig)
+    let mut schema = schemars::schema_for!(super::DioxusConfig);
+
+    // Simplify schema to prevent Taplo WASM LSP stack overflow.
+    // 1. Strip default values (large nested objects cause issues)
+    // 2. Simplify allOf wrappers around single $refs
+    simplify_schema(&mut schema.schema);
+    for def in schema.definitions.values_mut() {
+        if let schemars::schema::Schema::Object(obj) = def {
+            simplify_schema(obj);
+        }
+    }
+
+    schema
+}
+
+/// Recursively simplify a schema object for LSP compatibility.
+/// - Removes default values (large nested objects cause stack overflow)
+/// - Simplifies `allOf: [$ref]` to just `$ref` (reduces recursion depth)
+fn simplify_schema(schema: &mut schemars::schema::SchemaObject) {
+    // Remove the default value from this schema
+    schema.metadata().default = None;
+
+    // Simplify allOf with single $ref: { allOf: [{ $ref: "..." }] } -> { $ref: "..." }
+    let mut ref_to_promote = None;
+    if let Some(subschemas) = &schema.subschemas {
+        if let Some(all_of) = &subschemas.all_of {
+            if all_of.len() == 1 {
+                if let schemars::schema::Schema::Object(inner) = &all_of[0] {
+                    if inner.reference.is_some()
+                        && inner.instance_type.is_none()
+                        && inner.object.is_none()
+                        && inner.array.is_none()
+                        && inner.subschemas.is_none()
+                    {
+                        ref_to_promote = inner.reference.clone();
+                    }
+                }
+            }
+        }
+    }
+    if let Some(r) = ref_to_promote {
+        schema.subschemas = None;
+        schema.reference = Some(r);
+    }
+
+    // Process remaining subschemas
+    if let Some(subschemas) = &mut schema.subschemas {
+        if let Some(all_of) = &mut subschemas.all_of {
+            for s in all_of {
+                if let schemars::schema::Schema::Object(obj) = s {
+                    simplify_schema(obj);
+                }
+            }
+        }
+        if let Some(any_of) = &mut subschemas.any_of {
+            for s in any_of {
+                if let schemars::schema::Schema::Object(obj) = s {
+                    simplify_schema(obj);
+                }
+            }
+        }
+        if let Some(one_of) = &mut subschemas.one_of {
+            for s in one_of {
+                if let schemars::schema::Schema::Object(obj) = s {
+                    simplify_schema(obj);
+                }
+            }
+        }
+    }
+
+    // Process object properties
+    if let Some(object) = &mut schema.object {
+        for prop in object.properties.values_mut() {
+            if let schemars::schema::Schema::Object(obj) = prop {
+                simplify_schema(obj);
+            }
+        }
+        if let Some(additional) = &mut object.additional_properties {
+            if let schemars::schema::Schema::Object(obj) = additional.as_mut() {
+                simplify_schema(obj);
+            }
+        }
+    }
+
+    // Process array items
+    if let Some(array) = &mut schema.array {
+        if let Some(items) = &mut array.items {
+            match items {
+                schemars::schema::SingleOrVec::Single(s) => {
+                    if let schemars::schema::Schema::Object(obj) = s.as_mut() {
+                        simplify_schema(obj);
+                    }
+                }
+                schemars::schema::SingleOrVec::Vec(v) => {
+                    for s in v {
+                        if let schemars::schema::Schema::Object(obj) = s {
+                            simplify_schema(obj);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
