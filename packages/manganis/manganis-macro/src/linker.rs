@@ -2,6 +2,34 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use quote::ToTokens;
 
+/// Generate a linker section for embedding arbitrary data in the binary
+///
+/// This is a generic version that allows customizing the serialization function,
+/// buffer type, and copy bytes function. Used by both asset and FFI metadata embedding.
+pub fn generate_link_section_inner(
+    item: TokenStream2,
+    hash: &str,
+    prefix: &str,
+    serialize_fn: TokenStream2,
+    copy_bytes_fn: TokenStream2,
+    buffer_type: TokenStream2,
+) -> TokenStream2 {
+    let position = proc_macro2::Span::call_site();
+    let export_name = syn::LitStr::new(&format!("{}{}", prefix, hash), position);
+
+    quote! {
+        static __LINK_SECTION: &'static [u8] = {
+            const __BUFFER: #buffer_type = #serialize_fn(&#item);
+            const __BYTES: &[u8] = __BUFFER.as_ref();
+            const __LEN: usize = __BYTES.len();
+
+            #[unsafe(export_name = #export_name)]
+            static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
+            &__LINK_SECTION
+        };
+    }
+}
+
 /// Generate a linker section for embedding asset data in the binary
 ///
 /// This function creates a static array containing the serialized asset data

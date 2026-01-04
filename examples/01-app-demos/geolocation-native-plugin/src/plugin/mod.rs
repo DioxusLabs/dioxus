@@ -18,26 +18,15 @@ mod models;
 
 pub use error::{Error, Result};
 
-use manganis::permissions;
-use manganis::permissions::{permission, Permission, PermissionBuilder};
-
-/// Fine location permission
-///
-/// This permission allows the app to access precise location data using GPS.
-/// On Android, this corresponds to `ACCESS_FINE_LOCATION`.
-/// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
-pub const FINE_LOCATION: Permission = permission!(PermissionBuilder::fine_location()
-    .with_description("Access your precise location to provide location-based services")
-    .build());
-
-/// Coarse location permission
-///
-/// This permission allows the app to access approximate location data.
-/// On Android, this corresponds to `ACCESS_COARSE_LOCATION`.
-/// On iOS, this corresponds to `NSLocationWhenInUseUsageDescription`.
-pub const COARSE_LOCATION: Permission = permission!(PermissionBuilder::coarse_location()
-    .with_description("Access your approximate location to provide location-based services")
-    .build());
+// Note: Permissions are now declared in Dioxus.toml using the unified manifest system.
+// See Dioxus.toml in the project root for the permission configuration:
+//
+// [permissions]
+// location = { precision = "fine", description = "Access your precise location..." }
+//
+// The CLI automatically maps these to platform-specific identifiers:
+// - Android: ACCESS_FINE_LOCATION in AndroidManifest.xml
+// - iOS: NSLocationWhenInUseUsageDescription in Info.plist
 
 /// Access to the geolocation APIs.
 ///

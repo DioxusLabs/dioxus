@@ -335,7 +335,8 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
-use manganis_core::{AndroidArtifactMetadata, AssetVariant, Permission};
+use manganis_core::{AndroidArtifactMetadata, AssetVariant};
+use super::permission_mapper::PermissionMapper;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -390,7 +391,6 @@ pub(crate) struct BuildRequest {
     pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
-    pub(crate) skip_permissions: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
@@ -454,7 +454,6 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
-    pub(crate) permissions: Vec<Permission>,
     pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
     pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
     pub(crate) mode: BuildMode,
@@ -1016,7 +1015,6 @@ impl BuildRequest {
             should_codesign,
             session_cache_dir,
             skip_assets: args.skip_assets,
-            skip_permissions: args.skip_permissions,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
             debug_symbols: args.debug_symbols,
@@ -1122,7 +1120,7 @@ impl BuildRequest {
                         .context("Failed to embed Swift standard libraries")?;
                 }
 
-                self.update_manifests_with_permissions(&artifacts.permissions)
+                self.update_manifests_with_permissions()
                     .context("Failed to update manifests with permissions")?;
 
                 self.optimize(ctx)
@@ -1334,12 +1332,9 @@ impl BuildRequest {
             );
         }
 
-        // Extract all linker metadata (assets, permissions, Android/iOS plugins) in a single pass.
-        let (assets, permissions, android_artifacts, swift_sources) =
-            self.collect_assets_and_permissions(&exe, ctx).await?;
-
-        // Note: We'll update platform manifests with permissions AFTER write_metadata()
-        // to avoid having them overwritten by the template
+        // Extract all linker metadata (assets, Android/iOS plugins) in a single pass.
+        let (assets, android_artifacts, swift_sources) =
+            self.collect_assets_and_metadata(&exe, ctx).await?;
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1357,7 +1352,6 @@ impl BuildRequest {
             direct_rustc,
             time_start,
             assets,
-            permissions,
             android_artifacts,
             swift_sources,
             mode,
@@ -1368,41 +1362,32 @@ impl BuildRequest {
         })
     }
 
-    /// Collect both assets and permissions from the final executable in one pass
+    /// Collect assets and plugin metadata from the final executable in one pass
     ///
-    /// This method combines both asset and permission extraction to read the binary
-    /// file only once, since both use the __ASSETS__ prefix. This avoids reading
-    /// the file twice and improves performance.
-    async fn collect_assets_and_permissions(
+    /// This method extracts assets and FFI plugin metadata (Android/Swift) from the
+    /// binary. Permissions are now read from Dioxus.toml, not extracted from the binary.
+    async fn collect_assets_and_metadata(
         &self,
         exe: &Path,
         ctx: &BuildContext,
     ) -> Result<(
         AssetManifest,
-        Vec<Permission>,
         Vec<AndroidArtifactMetadata>,
         Vec<SwiftPackageMetadata>,
     )> {
         use super::assets::extract_symbols_from_file;
 
         let skip_assets = self.skip_assets;
-        let skip_permissions = self.skip_permissions || self.bundle == BundleFormat::Web;
         let needs_android_artifacts = self.bundle == BundleFormat::Android;
         let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
-        if skip_assets && skip_permissions && !needs_android_artifacts && !needs_swift_packages {
-            return Ok((
-                AssetManifest::default(),
-                Vec::default(),
-                Vec::new(),
-                Vec::new(),
-            ));
+        if skip_assets && !needs_android_artifacts && !needs_swift_packages {
+            return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
         }
 
         ctx.status_extracting_assets();
         let super::assets::SymbolExtractionResult {
             assets: extracted_assets,
-            permissions: extracted_permissions,
             android_artifacts,
             swift_packages,
         } = extract_symbols_from_file(exe).await?;
@@ -1441,41 +1426,6 @@ impl BuildRequest {
             manifest
         };
 
-        let permission_manifest = if skip_permissions {
-            Vec::default()
-        } else {
-            let manifest = extracted_permissions;
-
-            let platform = match self.bundle {
-                BundleFormat::Android => Some(manganis_core::Platform::Android),
-                BundleFormat::Ios => Some(manganis_core::Platform::Ios),
-                BundleFormat::MacOS => Some(manganis_core::Platform::Macos),
-                _ => None,
-            };
-
-            if let Some(platform) = platform {
-                let perms = manifest
-                    .iter()
-                    .filter(|p| p.supports_platform(platform))
-                    .collect::<Vec<_>>();
-                if !perms.is_empty() {
-                    tracing::info!("Found {} permissions for {:?}:", perms.len(), platform);
-                    for perm in &perms {
-                        tracing::debug!("  • {:?} - {}", perm.kind(), perm.description());
-                    }
-                } else {
-                    tracing::debug!("No permissions found for {:?}", platform);
-                }
-            } else {
-                tracing::debug!(
-                    "Skipping permission manifest generation for {:?} - uses runtime-only permissions",
-                    self.bundle
-                );
-            }
-
-            manifest
-        };
-
         if !android_artifacts.is_empty() {
             tracing::debug!(
                 "Found {} Android artifact declaration(s)",
@@ -1506,12 +1456,7 @@ impl BuildRequest {
             }
         }
 
-        Ok((
-            asset_manifest,
-            permission_manifest,
-            android_artifacts,
-            swift_packages,
-        ))
+        Ok((asset_manifest, android_artifacts, swift_packages))
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -1983,178 +1928,262 @@ let package = Package(
         Ok(())
     }
 
-    /// Update platform manifests with permissions after they're collected
-    pub(crate) fn update_manifests_with_permissions(
-        &self,
-        permissions: &Vec<Permission>,
-    ) -> Result<()> {
+    /// Update platform manifests with permissions from Dioxus.toml config
+    ///
+    /// This reads permissions from the unified `[permissions]` section in Dioxus.toml
+    /// and injects them into the appropriate platform manifest files.
+    pub(crate) fn update_manifests_with_permissions(&self) -> Result<()> {
+        // Create permission mapper from config
+        let mapper = PermissionMapper::from_config(
+            &self.config.permissions,
+            &self.config.android,
+            &self.config.ios,
+            &self.config.macos,
+        );
+
         match self.bundle {
             BundleFormat::Android => {
-                let this = &self;
-                let android_permissions = permissions
-                    .iter()
-                    .filter(|p| p.supports_platform(manganis_core::Platform::Android))
-                    .collect::<Vec<_>>();
-                if android_permissions.is_empty() {
-                    tracing::debug!("No Android permissions found to add to manifest");
-                    return Ok(());
-                }
-
-                let manifest_path = this
-                    .root_dir()
-                    .join("app")
-                    .join("src")
-                    .join("main")
-                    .join("AndroidManifest.xml");
-                if !manifest_path.exists() {
-                    tracing::warn!("AndroidManifest.xml not found, skipping permission update");
-                    return Ok(());
-                }
-
-                let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
-
-                // Find the position after the INTERNET permission
-                let internet_permission =
-                    r#"<uses-permission android:name="android.permission.INTERNET" />"#;
-                if let Some(pos) = manifest_content.find(internet_permission) {
-                    let insert_pos = pos + internet_permission.len();
-
-                    // Generate permission declarations
-                    let mut permission_declarations = String::new();
-                    for perm in &android_permissions {
-                        permission_declarations.push_str(&format!(
-                            "\n    <uses-permission android:name=\"{}\" />",
-                            perm.android_permission()
-                                .context("Android permission without key")?
-                        ));
-                    }
-
-                    manifest_content.insert_str(insert_pos, &permission_declarations);
-                    std::fs::write(&manifest_path, manifest_content)?;
-
-                    tracing::debug!(
-                        "Added {} Android permissions to AndroidManifest.xml",
-                        android_permissions.len()
-                    );
-                    for perm in &android_permissions {
-                        tracing::debug!(
-                            "  • {} - {}",
-                            perm.android_permission().unwrap_or_default(),
-                            perm.description()
-                        );
-                    }
-                }
-
-                Ok(())
+                self.inject_android_permissions(&mapper)?;
+                self.inject_android_raw_config()?;
             }
-
             BundleFormat::Ios => {
-                let this = &self;
-                let ios_permissions = permissions
-                    .iter()
-                    .filter(|p| p.supports_platform(manganis_core::Platform::Ios))
-                    .collect::<Vec<_>>();
-                if ios_permissions.is_empty() {
-                    tracing::debug!("No iOS permissions found to add to manifest");
-                    return Ok(());
-                }
-
-                // For iOS, Info.plist is at the root of the .app bundle (not in Contents/)
-                let plist_path = this.root_dir().join("Info.plist");
-
-                if !plist_path.exists() {
-                    tracing::debug!(
-                        "Info.plist not found at {:?}, skipping permission update",
-                        plist_path
-                    );
-                    return Ok(());
-                }
-
-                let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-                // Find the position before the closing </dict>
-                if let Some(pos) = plist_content.rfind("</dict>") {
-                    let mut permission_entries = String::new();
-                    for perm in &ios_permissions {
-                        permission_entries.push_str(&format!(
-                            "\n\t<key>{}</key>\n\t<string>{}</string>",
-                            perm.ios_key().context("ios permission without key")?,
-                            perm.description()
-                        ));
-                    }
-
-                    plist_content.insert_str(pos, &permission_entries);
-                    std::fs::write(&plist_path, plist_content)?;
-
-                    tracing::debug!(
-                        "Added {} iOS permissions to Info.plist",
-                        ios_permissions.len()
-                    );
-                    for perm in &ios_permissions {
-                        tracing::debug!(
-                            "  • {} - {}",
-                            perm.ios_key().unwrap_or_default(),
-                            perm.description()
-                        );
-                    }
-                }
-
-                Ok(())
+                self.inject_ios_permissions(&mapper)?;
+                self.inject_ios_raw_config()?;
             }
-
             BundleFormat::MacOS => {
-                let this = &self;
-                let macos_permissions = permissions
-                    .iter()
-                    .filter(|p| p.supports_platform(manganis_core::Platform::Macos))
-                    .collect::<Vec<_>>();
-                if macos_permissions.is_empty() {
-                    return Ok(());
-                }
-
-                // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
-                let plist_path = this.root_dir().join("Contents").join("Info.plist");
-                if !plist_path.exists() {
-                    tracing::warn!(
-                        "Info.plist not found at {:?}, skipping permission update",
-                        plist_path
-                    );
-                    return Ok(());
-                }
-
-                let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-                // Find the position before the closing </dict>
-                if let Some(pos) = plist_content.rfind("</dict>") {
-                    let mut permission_entries = String::new();
-                    for perm in &macos_permissions {
-                        permission_entries.push_str(&format!(
-                            "\n\t<key>{}</key>\n\t<string>{}</string>",
-                            perm.macos_key().context("macos permission without key")?,
-                            perm.description()
-                        ));
-                    }
-
-                    plist_content.insert_str(pos, &permission_entries);
-                    std::fs::write(&plist_path, plist_content)?;
-
-                    tracing::info!(
-                        "🖥️ Added {} macOS permissions to Info.plist:",
-                        macos_permissions.len()
-                    );
-                    for perm in &macos_permissions {
-                        tracing::info!(
-                            "  • {} - {}",
-                            perm.macos_key().context("macos permission without key")?,
-                            perm.description()
-                        );
-                    }
-                }
-
-                Ok(())
+                self.inject_macos_permissions(&mapper)?;
+                self.inject_macos_raw_config()?;
             }
-            _ => Ok(()),
+            _ => {}
         }
+
+        Ok(())
+    }
+
+    /// Inject Android permissions from the permission mapper
+    fn inject_android_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.android_permissions.is_empty() && mapper.android_features.is_empty() {
+            tracing::debug!("No Android permissions found in Dioxus.toml");
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+
+        if !manifest_path.exists() {
+            tracing::warn!("AndroidManifest.xml not found, skipping permission injection");
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Find the position after the INTERNET permission
+        let internet_permission =
+            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+
+        if let Some(pos) = manifest_content.find(internet_permission) {
+            let insert_pos = pos + internet_permission.len();
+
+            // Generate permission and feature declarations
+            let mut declarations = String::new();
+            for perm in &mapper.android_permissions {
+                declarations.push_str(&format!(
+                    "\n    <uses-permission android:name=\"{}\" />",
+                    perm.permission
+                ));
+            }
+            for feature in &mapper.android_features {
+                declarations.push_str(&format!(
+                    "\n    <uses-feature android:name=\"{}\" android:required=\"true\" />",
+                    feature
+                ));
+            }
+
+            manifest_content.insert_str(insert_pos, &declarations);
+            std::fs::write(&manifest_path, manifest_content)?;
+
+            tracing::debug!(
+                "Added {} Android permissions and {} features to AndroidManifest.xml",
+                mapper.android_permissions.len(),
+                mapper.android_features.len()
+            );
+            for perm in &mapper.android_permissions {
+                tracing::debug!("  • {} - {}", perm.permission, perm.description);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw Android config from Dioxus.toml
+    fn inject_android_raw_config(&self) -> Result<()> {
+        let raw = &self.config.android.raw;
+
+        if raw.manifest.is_none() {
+            return Ok(());
+        }
+
+        let manifest_path = self
+            .root_dir()
+            .join("app")
+            .join("src")
+            .join("main")
+            .join("AndroidManifest.xml");
+
+        if !manifest_path.exists() {
+            return Ok(());
+        }
+
+        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
+
+        // Inject raw manifest content after permissions
+        if let Some(raw_manifest) = &raw.manifest {
+            let internet_permission =
+                r#"<uses-permission android:name="android.permission.INTERNET" />"#;
+            if let Some(pos) = manifest_content.find(internet_permission) {
+                let insert_pos = pos + internet_permission.len();
+                manifest_content.insert_str(insert_pos, &format!("\n{}", raw_manifest.trim()));
+                tracing::debug!("Injected raw manifest XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&manifest_path, manifest_content)?;
+        Ok(())
+    }
+
+    /// Inject iOS permissions from the permission mapper
+    fn inject_ios_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.ios_plist_entries.is_empty() {
+            tracing::debug!("No iOS permissions found in Dioxus.toml");
+            return Ok(());
+        }
+
+        // For iOS, Info.plist is at the root of the .app bundle
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::debug!(
+                "Info.plist not found at {:?}, skipping permission injection",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let permission_xml = mapper.generate_ios_plist_xml();
+            plist_content.insert_str(pos, &permission_xml);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} iOS permissions to Info.plist",
+                mapper.ios_plist_entries.len()
+            );
+            for entry in &mapper.ios_plist_entries {
+                tracing::debug!("  • {} - {}", entry.key, entry.value);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw iOS config from Dioxus.toml
+    fn inject_ios_raw_config(&self) -> Result<()> {
+        let raw = &self.config.ios.raw;
+
+        if raw.info_plist.is_none() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Info.plist");
+
+        if !plist_path.exists() {
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Inject raw plist content before closing </dict>
+        if let Some(raw_plist) = &raw.info_plist {
+            if let Some(pos) = plist_content.rfind("</dict>") {
+                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
+                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&plist_path, plist_content)?;
+        Ok(())
+    }
+
+    /// Inject macOS permissions from the permission mapper
+    fn inject_macos_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
+        if mapper.macos_plist_entries.is_empty() {
+            return Ok(());
+        }
+
+        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+
+        if !plist_path.exists() {
+            tracing::warn!(
+                "Info.plist not found at {:?}, skipping permission injection",
+                plist_path
+            );
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Find the position before the closing </dict>
+        if let Some(pos) = plist_content.rfind("</dict>") {
+            let permission_xml = mapper.generate_macos_plist_xml();
+            plist_content.insert_str(pos, &permission_xml);
+            std::fs::write(&plist_path, plist_content)?;
+
+            tracing::debug!(
+                "Added {} macOS permissions to Info.plist",
+                mapper.macos_plist_entries.len()
+            );
+            for entry in &mapper.macos_plist_entries {
+                tracing::debug!("  • {} - {}", entry.key, entry.value);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Inject raw macOS config from Dioxus.toml
+    fn inject_macos_raw_config(&self) -> Result<()> {
+        let raw = &self.config.macos.raw;
+
+        if raw.info_plist.is_none() {
+            return Ok(());
+        }
+
+        let plist_path = self.root_dir().join("Contents").join("Info.plist");
+
+        if !plist_path.exists() {
+            return Ok(());
+        }
+
+        let mut plist_content = std::fs::read_to_string(&plist_path)?;
+
+        // Inject raw plist content before closing </dict>
+        if let Some(raw_plist) = &raw.info_plist {
+            if let Some(pos) = plist_content.rfind("</dict>") {
+                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
+                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
+            }
+        }
+
+        std::fs::write(&plist_path, plist_content)?;
+        Ok(())
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -2614,9 +2643,9 @@ let package = Package(
             _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
-        // Now extract linker metadata from the fat binary (assets, permissions, plugin data)
-        let (assets, _permissions, android_artifacts, swift_sources) = self
-            .collect_assets_and_permissions(&self.patch_exe(artifacts.time_start), ctx)
+        // Now extract linker metadata from the fat binary (assets, plugin data)
+        let (assets, android_artifacts, swift_sources) = self
+            .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
         artifacts.assets = assets;
         artifacts.android_artifacts = android_artifacts;

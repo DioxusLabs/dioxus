@@ -12,53 +12,8 @@ pub use manganis_core::{
     FolderAssetOptions, ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
 };
 
-pub mod permissions {
-
-    //! # Permissions
-    //!
-    //! A cross-platform permission management system with linker-based collection.
-    //!
-    //! This crate provides a unified API for declaring permissions across supported platforms
-    //! (Android, iOS, macOS) and embeds them in the binary for extraction by build tools.
-    //!
-    //! ## Usage
-    //!
-    //! ```rust
-    //! use permissions::{permission, Permission, PermissionBuilder, PermissionKind, LocationPrecision};
-    //!
-    //! // Declare a camera permission (static / compile-time)
-    //! const CAMERA: Permission = permission!(
-    //!     Permission::new(PermissionKind::Camera, "Take photos")
-    //! );
-    //!
-    //! // Declare a location permission with precision
-    //! const LOCATION: Permission = permission!(
-    //!     PermissionBuilder::location(LocationPrecision::Fine)
-    //!         .with_description("Track your runs")
-    //!         .build()
-    //! );
-    //!
-    //! // Use the permission
-    //! println!("Camera permission: {}", CAMERA.description());
-    //! if let Some(android_perm) = CAMERA.android_permission() {
-    //!     println!("Android permission: {}", android_perm);
-    //! }
-    //! ```
-    //!
-    //! > **Note:** `permission!` remains available as an alias for `permission!`
-    //! > to preserve backward compatibility with existing code.
-
-    pub use manganis_core::{
-        CustomPermissionBuilder, Permission, PermissionBuilder, PermissionKind, Platform,
-        PlatformFlags, PlatformIdentifiers, SymbolData,
-    };
-    pub use manganis_macro::permission;
-
-    /// Re-export macro helpers for use in generated code
-    pub mod macro_helpers {
-        pub use crate::macro_helpers::*;
-    }
-}
+// Re-export Swift package metadata type for FFI macros
+pub use manganis_core::SwiftPackageMetadata;
 
 // FFI utilities and plugin metadata for Dioxus mobile platform APIs
 //

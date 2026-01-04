@@ -1,0 +1,15 @@
+[bundle]
+  identifier = "com.dioxuslabs.geolocation"
+  publisher = "Dioxus Labs"
+
+[permissions]
+  location = { precision = "fine", description = "Access your precise location to provide location-based services" }
+
+[ios]
+  deployment_target = "15.0"
+  plist = { UIBackgroundModes = ["location"] }
+
+[android]
+  min_sdk = 24
+  target_sdk = 34
+  features = ["android.hardware.location.gps"]

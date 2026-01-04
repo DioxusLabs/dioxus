@@ -38,8 +38,7 @@ use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
-use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata};
-use manganis_core::{Permission, SymbolData};
+use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -611,9 +610,6 @@ pub(crate) struct SymbolExtractionResult {
     /// Assets found in the binary
     pub assets: Vec<BundledAsset>,
 
-    /// Permissions found in the binary
-    pub permissions: Vec<Permission>,
-
     /// Android plugin artifacts discovered in the binary
     pub android_artifacts: Vec<AndroidArtifactMetadata>,
 
@@ -621,8 +617,8 @@ pub(crate) struct SymbolExtractionResult {
     pub swift_packages: Vec<SwiftPackageMetadata>,
 }
 
-/// Find all assets and permissions in the given file, hash assets, and write them back to the file.
-/// Then return both assets and permissions found in the file.
+/// Find all assets in the given file, hash them, and write them back to the file.
+/// Also extracts Android/Swift plugin metadata for FFI bindings.
 pub(crate) async fn extract_symbols_from_file(
     path: impl AsRef<Path>,
 ) -> Result<SymbolExtractionResult> {
@@ -641,7 +637,6 @@ pub(crate) async fn extract_symbols_from_file(
     let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
     let mut assets = Vec::new();
-    let mut permissions = Vec::new();
     let mut android_artifacts = Vec::new();
     let mut swift_packages = Vec::new();
     let mut write_entries = Vec::new();
@@ -686,14 +681,11 @@ pub(crate) async fn extract_symbols_from_file(
                                 AssetRepresentation::SymbolData,
                             ));
                         }
-                        SymbolData::Permission(permission) => {
-                            tracing::debug!(
-                                "Found permission at offset {offset}: {:?} - {}",
-                                permission.kind(),
-                                permission.description()
+                        SymbolData::Permission(_) => {
+                            // Permissions are now configured via Dioxus.toml, not extracted from binary
+                            tracing::trace!(
+                                "Ignoring legacy permission! macro at offset {offset} - use [permissions] in Dioxus.toml instead"
                             );
-                            permissions.push(permission);
-                            // Permissions are not written back, so don't store the symbol
                         }
                         SymbolData::AndroidArtifact(meta) => {
                             tracing::debug!(
@@ -804,7 +796,6 @@ pub(crate) async fn extract_symbols_from_file(
 
     Ok(SymbolExtractionResult {
         assets,
-        permissions,
         android_artifacts,
         swift_packages,
     })
@@ -814,8 +805,6 @@ pub(crate) async fn extract_symbols_from_file(
 /// Then return an `AssetManifest` containing all the assets found in the file.
 ///
 /// This is a convenience function that extracts symbols and returns only assets.
-/// (Permissions can be read from the [`SymbolExtractionResult`] returned by
-/// `extract_symbols_from_file`.)
 pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let result = extract_symbols_from_file(path).await?;
     let mut manifest = AssetManifest::default();

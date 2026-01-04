@@ -15,12 +15,8 @@ pub(crate) mod asset;
 pub(crate) mod css_module;
 pub(crate) mod ffi;
 pub(crate) mod linker;
-pub(crate) mod permissions;
 
-use crate::{
-    css_module::{expand_css_module_struct, CssModuleAttribute},
-    permissions::PermissionParser,
-};
+use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 
 /// The asset macro collects assets that will be included in the final binary
 ///
@@ -227,86 +223,6 @@ pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
     let mut tokens = proc_macro2::TokenStream::new();
     expand_css_module_struct(&mut tokens, &attribute, &item_struct);
     tokens.into()
-}
-
-/// Declare a permission that will be embedded in the binary
-///
-/// # Syntax
-///
-/// The macro accepts any expression that evaluates to a `Permission`. There are two patterns:
-///
-/// ## Builder Pattern (for Location and Custom permissions)
-///
-/// Location permissions use the builder pattern:
-/// ```rust
-/// use permissions::{Permission, PermissionBuilder, LocationPrecision};
-/// use permissions_macro::permission;
-///
-/// // Fine location
-/// const LOCATION_FINE: Permission = permission!(
-///     PermissionBuilder::location(LocationPrecision::Fine)
-///         .with_description("Track your runs")
-///         .build()
-/// );
-///
-/// // Coarse location
-/// const LOCATION_COARSE: Permission = permission!(
-///     PermissionBuilder::location(LocationPrecision::Coarse)
-///         .with_description("Approximate location")
-///         .build()
-/// );
-///
-/// // Custom permission
-/// const CUSTOM: Permission = permission!(
-///     PermissionBuilder::custom()
-///         .with_android("android.permission.MY_PERMISSION")
-///         .with_ios("NSMyUsageDescription")
-///         .with_macos("NSMyUsageDescription")
-///         .with_description("Custom permission")
-///         .build()
-/// );
-/// ```
-///
-/// ## Direct Construction (for simple permissions)
-///
-/// Simple permissions like Camera, Microphone, and Notifications use direct construction:
-/// ```rust
-/// use permissions::{Permission, PermissionKind};
-/// use permissions_macro::permission;
-///
-/// const CAMERA: Permission = permission!(
-///     Permission::new(PermissionKind::Camera, "Take photos")
-/// );
-///
-/// const MICROPHONE: Permission = permission!(
-///     Permission::new(PermissionKind::Microphone, "Record audio")
-/// );
-///
-/// const NOTIFICATIONS: Permission = permission!(
-///     Permission::new(PermissionKind::Notifications, "Send notifications")
-/// );
-/// ```
-///
-/// # Supported Permission Kinds
-///
-/// Only tested and verified permissions are included. For any other permissions,
-/// use the `Custom` variant with platform-specific identifiers.
-///
-/// ## ✅ Tested Permissions (Only for requesting permissions)
-///
-/// - `Camera` - Camera access (tested across all platforms)
-/// - `Location(Fine)` / `Location(Coarse)` - Location access with precision (tested across all platforms)
-/// - `Microphone` - Microphone access (tested across all platforms)
-/// - `Notifications` - Push notifications (tested on Android and Web)
-/// - `Custom` - Custom permission with platform-specific identifiers
-///
-/// See the main documentation for examples of using `Custom` permissions
-/// for untested or special use cases.
-#[proc_macro]
-pub fn permission(input: TokenStream) -> TokenStream {
-    let permission = parse_macro_input!(input as PermissionParser);
-
-    quote! { #permission }.into()
 }
 
 /// Generate FFI bindings between Rust and native platforms (Swift/Kotlin)

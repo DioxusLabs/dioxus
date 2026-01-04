@@ -691,14 +691,13 @@ impl FfiBridgeParser {
         plugin_name.hash(&mut hash);
         let plugin_hash = format!("{:016x}", hash.finish());
 
-        let link_section = crate::permissions::generate_link_section_inner(
+        let link_section = crate::linker::generate_link_section_inner(
             quote! { __METADATA },
             &plugin_hash,
             "__ASSETS__",
             quote! { manganis::android::metadata::serialize_android_metadata },
             quote! { manganis::android::macro_helpers::copy_bytes },
             quote! { manganis::android::metadata::AndroidMetadataBuffer },
-            true,
         );
 
         quote! {
@@ -951,14 +950,13 @@ impl FfiBridgeParser {
         plugin_name.hash(&mut hash);
         let plugin_hash = format!("{:016x}", hash.finish());
 
-        let link_section = crate::permissions::generate_link_section_inner(
+        let link_section = crate::linker::generate_link_section_inner(
             quote! { __METADATA },
             &plugin_hash,
             "__ASSETS__",
             quote! { manganis::darwin::metadata::serialize_swift_metadata },
             quote! { manganis::darwin::macro_helpers::copy_bytes },
             quote! { manganis::darwin::metadata::SwiftMetadataBuffer },
-            true,
         );
 
         quote! {

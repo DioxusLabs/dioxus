@@ -15,6 +15,32 @@ pub(crate) struct DioxusConfig {
 
     #[serde(default)]
     pub(crate) components: ComponentConfig,
+
+    /// Unified permissions configuration.
+    /// Permissions declared here are automatically mapped to platform-specific
+    /// identifiers (AndroidManifest.xml, Info.plist, etc.)
+    #[serde(default)]
+    pub(crate) permissions: PermissionsConfig,
+
+    /// iOS-specific configuration.
+    #[serde(default)]
+    pub(crate) ios: IosConfig,
+
+    /// Android-specific configuration.
+    #[serde(default)]
+    pub(crate) android: AndroidConfig,
+
+    /// macOS-specific configuration.
+    #[serde(default)]
+    pub(crate) macos: MacosConfig,
+
+    /// Windows-specific configuration.
+    #[serde(default)]
+    pub(crate) windows: WindowsConfig,
+
+    /// Linux-specific configuration.
+    #[serde(default)]
+    pub(crate) linux: LinuxConfig,
 }
 
 impl Default for DioxusConfig {
@@ -60,6 +86,12 @@ impl Default for DioxusConfig {
             },
             bundle: BundleConfig::default(),
             components: ComponentConfig::default(),
+            permissions: PermissionsConfig::default(),
+            ios: IosConfig::default(),
+            android: AndroidConfig::default(),
+            macos: MacosConfig::default(),
+            windows: WindowsConfig::default(),
+            linux: LinuxConfig::default(),
         }
     }
 }
