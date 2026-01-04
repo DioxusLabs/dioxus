@@ -8,7 +8,12 @@ publish = false
 
 [dependencies]
 tokio = { workspace = true, features = ["full"] }
-dioxus = { workspace = true, features = ["desktop"] }
+dioxus = { workspace = true }
 futures-channel = { workspace = true }
 futures = { workspace = true }
 btleplug = "0.11.8"
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
+native = ["dioxus/native"]
