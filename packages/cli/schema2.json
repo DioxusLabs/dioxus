@@ -83,12 +83,19 @@
       }
     },
     "AndroidConfig": {
-      "description": "Android-specific configuration.\n\nExample: ```toml [android] min_sdk = 24 target_sdk = 34 features = [\"android.hardware.location.gps\"]\n\n[android.permissions] \"android.permission.FOREGROUND_SERVICE\" = { description = \"Background service\" } ```",
+      "description": "Android-specific configuration.\n\nExample: ```toml [android] min_sdk = 24 target_sdk = 34 identifier = \"com.example.myapp.android\"  # Override bundle.identifier for Android features = [\"android.hardware.location.gps\"]\n\n# Android signing configuration (previously in [bundle.android]) [android.signing] jks_file = \"keystore.jks\" jks_password = \"password\" key_alias = \"mykey\" key_password = \"keypassword\"\n\n[android.permissions] \"android.permission.FOREGROUND_SERVICE\" = { description = \"Background service\" } ```",
       "type": "object",
       "properties": {
         "application": {
           "description": "Application-level config.",
           "$ref": "#/definitions/AndroidApplicationConfig"
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "compile_sdk": {
           "description": "Compile SDK version.",
@@ -98,6 +105,13 @@
           ],
           "format": "uint32",
           "minimum": 0.0
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "features": {
           "description": "Hardware/software features required.",
@@ -127,12 +141,36 @@
             "type": "string"
           }
         },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Android builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "intent_filters": {
           "description": "Intent filters for deep linking. These extend the unified [deep_links] configuration with Android-specific options.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AndroidIntentFilter"
           }
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "manifest": {
           "description": "Path to custom AndroidManifest.xml to merge.",
@@ -164,6 +202,13 @@
             "type": "string"
           }
         },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "queries": {
           "description": "Queries for package visibility (required for Android 11+). Specify packages or intents your app needs to query.",
           "$ref": "#/definitions/AndroidQueries"
@@ -171,6 +216,34 @@
         "raw": {
           "description": "Raw XML injection points.",
           "$ref": "#/definitions/AndroidRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Android builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signing": {
+          "description": "Android signing configuration for release builds. This replaces the deprecated `[bundle.android]` section.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AndroidSigningConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "target_sdk": {
           "description": "Target SDK version.",
@@ -368,6 +441,34 @@
           "type": "string"
         },
         "key_password": {
+          "type": "string"
+        }
+      }
+    },
+    "AndroidSigningConfig": {
+      "description": "Android signing configuration for release builds.",
+      "type": "object",
+      "required": [
+        "jks_file",
+        "jks_password",
+        "key_alias",
+        "key_password"
+      ],
+      "properties": {
+        "jks_file": {
+          "description": "Path to the Java keystore file.",
+          "type": "string"
+        },
+        "jks_password": {
+          "description": "Password for the keystore.",
+          "type": "string"
+        },
+        "key_alias": {
+          "description": "Alias of the key in the keystore.",
+          "type": "string"
+        },
+        "key_password": {
+          "description": "Password for the key.",
           "type": "string"
         }
       }
@@ -815,7 +916,7 @@
       }
     },
     "IosConfig": {
-      "description": "iOS-specific configuration.\n\nExample: ```toml [ios] deployment_target = \"15.0\"\n\n[ios.entitlements] app-groups = [\"group.com.example.app\"]\n\n[ios.plist] UIBackgroundModes = [\"location\", \"fetch\"] ```",
+      "description": "iOS-specific configuration.\n\nExample: ```toml [ios] deployment_target = \"15.0\" identifier = \"com.example.myapp.ios\"  # Override bundle.identifier for iOS\n\n[ios.entitlements] app-groups = [\"group.com.example.app\"]\n\n[ios.plist] UIBackgroundModes = [\"location\", \"fetch\"] ```",
       "type": "object",
       "properties": {
         "background_modes": {
@@ -824,6 +925,20 @@
           "items": {
             "type": "string"
           }
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "deployment_target": {
           "description": "Minimum iOS deployment target (e.g., \"15.0\").",
@@ -850,6 +965,23 @@
             "$ref": "#/definitions/IosTypeIdentifier"
           }
         },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for iOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "imported_type_identifiers": {
           "description": "Imported type identifiers.",
           "type": "array",
@@ -864,14 +996,45 @@
             "null"
           ]
         },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "plist": {
           "description": "Additional Info.plist keys to merge.",
           "type": "object",
           "additionalProperties": true
         },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "raw": {
           "description": "Raw XML injection points.",
           "$ref": "#/definitions/IosRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for iOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "url_schemes": {
           "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
@@ -1041,7 +1204,7 @@
       }
     },
     "LinuxConfig": {
-      "description": "Linux-specific configuration.",
+      "description": "Linux-specific configuration.\n\nExample: ```toml [linux] identifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux categories = [\"Utility\"]\n\n# Debian package settings (previously in [bundle.deb]) [linux.deb] depends = [\"libwebkit2gtk-4.0-37\"] section = \"utils\" ```",
       "type": "object",
       "properties": {
         "categories": {
@@ -1051,12 +1214,37 @@
             "type": "string"
           }
         },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "dbus_access": {
           "description": "D-Bus interfaces to access.",
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "deb": {
+          "description": "Debian-specific package settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LinuxDebSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "flatpak_permissions": {
           "description": "Flatpak sandbox permissions.",
@@ -1065,6 +1253,23 @@
             "type": "string"
           }
         },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "keywords": {
           "description": "Desktop entry keywords.",
           "type": "array",
@@ -1072,12 +1277,162 @@
             "type": "string"
           }
         },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "mime_types": {
           "description": "MIME types the app can handle.",
           "type": "array",
           "items": {
             "type": "string"
           }
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "LinuxDebSettings": {
+      "description": "Debian package settings.",
+      "type": "object",
+      "properties": {
+        "changelog": {
+          "description": "Path to changelog file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflicts": {
+          "description": "Package conflicts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "depends": {
+          "description": "Package dependencies.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "desktop_template": {
+          "description": "Path to custom desktop template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "Additional files to include. Maps package path to source path.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "post_install_script": {
+          "description": "Post-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_remove_script": {
+          "description": "Post-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_install_script": {
+          "description": "Pre-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_remove_script": {
+          "description": "Pre-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "Package priority (\"required\", \"important\", \"standard\", \"optional\", \"extra\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provides": {
+          "description": "Packages this provides.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "Recommended packages.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "replaces": {
+          "description": "Packages this replaces.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "section": {
+          "description": "Debian section (e.g., \"utils\", \"web\").",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -1185,11 +1540,32 @@
       }
     },
     "MacosConfig": {
-      "description": "macOS-specific configuration.",
+      "description": "macOS-specific configuration.\n\nExample: ```toml [macos] minimum_system_version = \"11.0\" identifier = \"com.example.myapp.macos\"  # Override bundle.identifier for macOS\n\n# macOS signing (previously in [bundle.macos]) signing_identity = \"Developer ID Application: My Company\" provider_short_name = \"MYCOMPANY\" ```",
       "type": "object",
       "properties": {
+        "bundle_name": {
+          "description": "The bundle short version string (CFBundleShortVersionString).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundle_version": {
+          "description": "The bundle version string (CFBundleVersion).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "category": {
           "description": "App category for the Mac App Store. E.g., \"public.app-category.productivity\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for macOS builds.",
           "type": [
             "string",
             "null"
@@ -1206,11 +1582,32 @@
           "description": "macOS entitlements.",
           "$ref": "#/definitions/MacosEntitlements"
         },
+        "entitlements_file": {
+          "description": "Path to custom entitlements file for code signing. This overrides the generated entitlements.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exception_domain": {
+          "description": "Exception domain for App Transport Security.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "exported_type_identifiers": {
           "description": "Exported type identifiers (custom UTIs).",
           "type": "array",
           "items": {
             "$ref": "#/definitions/IosTypeIdentifier"
+          }
+        },
+        "files": {
+          "description": "Additional files to include in the app bundle. Maps the path in the Contents directory to the source file path.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
           }
         },
         "frameworks": {
@@ -1219,6 +1616,30 @@
           "items": {
             "type": "string"
           }
+        },
+        "hardened_runtime": {
+          "description": "Preserve the hardened runtime version flag. Setting this to false is useful when using an ad-hoc signature.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for macOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "imported_type_identifiers": {
           "description": "Imported type identifiers.",
@@ -1229,6 +1650,20 @@
         },
         "info_plist": {
           "description": "Path to custom Info.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license": {
+          "description": "License file to include in DMG.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for macOS builds.",
           "type": [
             "string",
             "null"
@@ -1246,9 +1681,47 @@
           "type": "object",
           "additionalProperties": true
         },
+        "provider_short_name": {
+          "description": "The provider short name for notarization.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "raw": {
           "description": "Raw injection points.",
           "$ref": "#/definitions/MacosRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for macOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signing_identity": {
+          "description": "The signing identity to use for code signing. E.g., \"Developer ID Application: My Company (TEAMID)\"",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "url_schemes": {
           "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
@@ -2065,9 +2538,16 @@
       ]
     },
     "WindowsConfig": {
-      "description": "Windows-specific configuration.",
+      "description": "Windows-specific configuration.\n\nExample: ```toml [windows] identifier = \"com.example.myapp.windows\"  # Override bundle.identifier for Windows\n\n# Windows installer settings (previously in [bundle.windows]) [windows.nsis] install_mode = \"PerMachine\"\n\n[windows.wix] language = [[\"en-US\", null]] ```",
       "type": "object",
       "properties": {
+        "allow_downgrades": {
+          "description": "Allow downgrades when installing.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "capabilities": {
           "description": "UWP/MSIX capabilities.",
           "type": "array",
@@ -2075,9 +2555,96 @@
             "type": "string"
           }
         },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "certificate_thumbprint": {
+          "description": "Certificate thumbprint for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "device_capabilities": {
           "description": "Device capabilities.",
           "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "digest_algorithm": {
+          "description": "Digest algorithm for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Windows builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon_path": {
+          "description": "Path to custom Windows icon.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nsis": {
+          "description": "NSIS installer settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsNsisSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Windows builds.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -2088,6 +2655,156 @@
           "items": {
             "type": "string"
           }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sign_command": {
+          "description": "Custom sign command.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsSignCommand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp_url": {
+          "description": "Timestamp server URL for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tsp": {
+          "description": "Use TSP (RFC 3161) timestamp.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webview_install_mode": {
+          "description": "WebView2 installation mode.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsWebviewInstallMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wix": {
+          "description": "WiX installer settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsWixSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "WindowsNsisSettings": {
+      "description": "NSIS installer settings.",
+      "type": "object",
+      "properties": {
+        "custom_language_files": {
+          "description": "Custom language files.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "display_language_selector": {
+          "description": "Display language selector.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "header_image": {
+          "description": "Header image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install_mode": {
+          "description": "Installation mode: \"CurrentUser\", \"PerMachine\", or \"Both\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installer_hooks": {
+          "description": "Installer hooks script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installer_icon": {
+          "description": "Installer icon path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languages": {
+          "description": "Languages to include.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "license": {
+          "description": "License file path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_webview2_version": {
+          "description": "Minimum WebView2 version required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sidebar_image": {
+          "description": "Sidebar image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_menu_folder": {
+          "description": "Start menu folder name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Path to custom NSIS template.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -2162,6 +2879,251 @@
             {
               "type": "null"
             }
+          ]
+        }
+      }
+    },
+    "WindowsSignCommand": {
+      "description": "Custom sign command for Windows code signing.",
+      "type": "object",
+      "required": [
+        "args",
+        "cmd"
+      ],
+      "properties": {
+        "args": {
+          "description": "Command arguments. Use \"%1\" as placeholder for binary path.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cmd": {
+          "description": "The command to run.",
+          "type": "string"
+        }
+      }
+    },
+    "WindowsWebviewInstallMode": {
+      "description": "WebView2 installation mode.",
+      "oneOf": [
+        {
+          "description": "Skip WebView2 installation.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "Skip"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Download bootstrapper.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "DownloadBootstrapper"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Embed bootstrapper.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "EmbedBootstrapper"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Use offline installer.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "OfflineInstaller"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Use fixed runtime from path.",
+          "type": "object",
+          "required": [
+            "path",
+            "type"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "FixedRuntime"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WindowsWixSettings": {
+      "description": "WiX installer settings.",
+      "type": "object",
+      "properties": {
+        "banner_path": {
+          "description": "Banner image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "component_group_refs": {
+          "description": "Component group references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "component_refs": {
+          "description": "Component references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dialog_image_path": {
+          "description": "Dialog image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_elevated_update_task": {
+          "description": "Enable elevated update task.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "feature_group_refs": {
+          "description": "Feature group references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feature_refs": {
+          "description": "Feature references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fips_compliant": {
+          "description": "FIPS compliant mode.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fragment_paths": {
+          "description": "WiX fragment files to include.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "language": {
+          "description": "Languages and their locale paths.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        },
+        "license": {
+          "description": "License file path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_refs": {
+          "description": "Merge module references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skip_webview_install": {
+          "description": "Skip WebView2 installation.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Path to custom WiX template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upgrade_code": {
+          "description": "MSI upgrade code (GUID).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "MSI version string.",
+          "type": [
+            "string",
+            "null"
           ]
         }
       }

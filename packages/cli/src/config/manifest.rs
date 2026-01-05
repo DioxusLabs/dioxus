@@ -274,6 +274,7 @@ pub struct RawPermission {
 /// ```toml
 /// [ios]
 /// deployment_target = "15.0"
+/// identifier = "com.example.myapp.ios"  # Override bundle.identifier for iOS
 ///
 /// [ios.entitlements]
 /// app-groups = ["group.com.example.app"]
@@ -283,6 +284,48 @@ pub struct RawPermission {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct IosConfig {
+    // === Bundle settings (override [bundle] section) ===
+    /// The app's identifier (e.g., "com.example.myapp").
+    /// Overrides `bundle.identifier` for iOS builds.
+    #[serde(default)]
+    pub identifier: Option<String>,
+
+    /// The app's publisher.
+    /// Overrides `bundle.publisher` for iOS builds.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Icons for the app.
+    /// Overrides `bundle.icon` for iOS builds.
+    #[serde(default)]
+    pub icon: Option<Vec<String>>,
+
+    /// Additional resources to bundle.
+    /// Overrides `bundle.resources` for iOS builds.
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Copyright notice.
+    /// Overrides `bundle.copyright` for iOS builds.
+    #[serde(default)]
+    pub copyright: Option<String>,
+
+    /// App category.
+    /// Overrides `bundle.category` for iOS builds.
+    #[serde(default)]
+    pub category: Option<String>,
+
+    /// Short description.
+    /// Overrides `bundle.short_description` for iOS builds.
+    #[serde(default)]
+    pub short_description: Option<String>,
+
+    /// Long description.
+    /// Overrides `bundle.long_description` for iOS builds.
+    #[serde(default)]
+    pub long_description: Option<String>,
+
+    // === iOS-specific settings ===
     /// Minimum iOS deployment target (e.g., "15.0").
     #[serde(default)]
     pub deployment_target: Option<String>,
@@ -440,13 +483,69 @@ pub struct IosRawConfig {
 /// [android]
 /// min_sdk = 24
 /// target_sdk = 34
+/// identifier = "com.example.myapp.android"  # Override bundle.identifier for Android
 /// features = ["android.hardware.location.gps"]
+///
+/// # Android signing configuration (previously in [bundle.android])
+/// [android.signing]
+/// jks_file = "keystore.jks"
+/// jks_password = "password"
+/// key_alias = "mykey"
+/// key_password = "keypassword"
 ///
 /// [android.permissions]
 /// "android.permission.FOREGROUND_SERVICE" = { description = "Background service" }
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct AndroidConfig {
+    // === Bundle settings (override [bundle] section) ===
+    /// The app's identifier (e.g., "com.example.myapp").
+    /// Overrides `bundle.identifier` for Android builds.
+    #[serde(default)]
+    pub identifier: Option<String>,
+
+    /// The app's publisher.
+    /// Overrides `bundle.publisher` for Android builds.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Icons for the app.
+    /// Overrides `bundle.icon` for Android builds.
+    #[serde(default)]
+    pub icon: Option<Vec<String>>,
+
+    /// Additional resources to bundle.
+    /// Overrides `bundle.resources` for Android builds.
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Copyright notice.
+    /// Overrides `bundle.copyright` for Android builds.
+    #[serde(default)]
+    pub copyright: Option<String>,
+
+    /// App category.
+    /// Overrides `bundle.category` for Android builds.
+    #[serde(default)]
+    pub category: Option<String>,
+
+    /// Short description.
+    /// Overrides `bundle.short_description` for Android builds.
+    #[serde(default)]
+    pub short_description: Option<String>,
+
+    /// Long description.
+    /// Overrides `bundle.long_description` for Android builds.
+    #[serde(default)]
+    pub long_description: Option<String>,
+
+    // === Android signing settings (previously in bundle.android) ===
+    /// Android signing configuration for release builds.
+    /// This replaces the deprecated `[bundle.android]` section.
+    #[serde(default)]
+    pub signing: Option<AndroidSigningConfig>,
+
+    // === Android-specific settings ===
     /// Minimum SDK version.
     #[serde(default)]
     pub min_sdk: Option<u32>,
@@ -513,6 +612,22 @@ pub struct AndroidConfig {
     /// Specify packages or intents your app needs to query.
     #[serde(default)]
     pub queries: AndroidQueries,
+}
+
+/// Android signing configuration for release builds.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct AndroidSigningConfig {
+    /// Path to the Java keystore file.
+    pub jks_file: PathBuf,
+
+    /// Password for the keystore.
+    pub jks_password: String,
+
+    /// Alias of the key in the keystore.
+    pub key_alias: String,
+
+    /// Password for the key.
+    pub key_password: String,
 }
 
 /// Android intent filter for deep linking.
@@ -633,8 +748,97 @@ pub struct AndroidApplicationConfig {
 // ============================================================================
 
 /// macOS-specific configuration.
+///
+/// Example:
+/// ```toml
+/// [macos]
+/// minimum_system_version = "11.0"
+/// identifier = "com.example.myapp.macos"  # Override bundle.identifier for macOS
+///
+/// # macOS signing (previously in [bundle.macos])
+/// signing_identity = "Developer ID Application: My Company"
+/// provider_short_name = "MYCOMPANY"
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct MacosConfig {
+    // === Bundle settings (override [bundle] section) ===
+    /// The app's identifier (e.g., "com.example.myapp").
+    /// Overrides `bundle.identifier` for macOS builds.
+    #[serde(default)]
+    pub identifier: Option<String>,
+
+    /// The app's publisher.
+    /// Overrides `bundle.publisher` for macOS builds.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Icons for the app.
+    /// Overrides `bundle.icon` for macOS builds.
+    #[serde(default)]
+    pub icon: Option<Vec<String>>,
+
+    /// Additional resources to bundle.
+    /// Overrides `bundle.resources` for macOS builds.
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Copyright notice.
+    /// Overrides `bundle.copyright` for macOS builds.
+    #[serde(default)]
+    pub copyright: Option<String>,
+
+    /// Short description.
+    /// Overrides `bundle.short_description` for macOS builds.
+    #[serde(default)]
+    pub short_description: Option<String>,
+
+    /// Long description.
+    /// Overrides `bundle.long_description` for macOS builds.
+    #[serde(default)]
+    pub long_description: Option<String>,
+
+    // === macOS bundle settings (previously in bundle.macos) ===
+    /// The bundle version string (CFBundleVersion).
+    #[serde(default)]
+    pub bundle_version: Option<String>,
+
+    /// The bundle short version string (CFBundleShortVersionString).
+    #[serde(default)]
+    pub bundle_name: Option<String>,
+
+    /// The signing identity to use for code signing.
+    /// E.g., "Developer ID Application: My Company (TEAMID)"
+    #[serde(default)]
+    pub signing_identity: Option<String>,
+
+    /// The provider short name for notarization.
+    #[serde(default)]
+    pub provider_short_name: Option<String>,
+
+    /// Path to custom entitlements file for code signing.
+    /// This overrides the generated entitlements.
+    #[serde(default)]
+    pub entitlements_file: Option<String>,
+
+    /// Exception domain for App Transport Security.
+    #[serde(default)]
+    pub exception_domain: Option<String>,
+
+    /// License file to include in DMG.
+    #[serde(default)]
+    pub license: Option<String>,
+
+    /// Preserve the hardened runtime version flag.
+    /// Setting this to false is useful when using an ad-hoc signature.
+    #[serde(default)]
+    pub hardened_runtime: Option<bool>,
+
+    /// Additional files to include in the app bundle.
+    /// Maps the path in the Contents directory to the source file path.
+    #[serde(default)]
+    pub files: HashMap<PathBuf, PathBuf>,
+
+    // === macOS-specific settings ===
     /// Minimum macOS version (e.g., "11.0").
     #[serde(default)]
     pub minimum_system_version: Option<String>,
@@ -770,8 +974,104 @@ pub struct MacosRawConfig {
 // ============================================================================
 
 /// Windows-specific configuration.
+///
+/// Example:
+/// ```toml
+/// [windows]
+/// identifier = "com.example.myapp.windows"  # Override bundle.identifier for Windows
+///
+/// # Windows installer settings (previously in [bundle.windows])
+/// [windows.nsis]
+/// install_mode = "PerMachine"
+///
+/// [windows.wix]
+/// language = [["en-US", null]]
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct WindowsConfig {
+    // === Bundle settings (override [bundle] section) ===
+    /// The app's identifier (e.g., "com.example.myapp").
+    /// Overrides `bundle.identifier` for Windows builds.
+    #[serde(default)]
+    pub identifier: Option<String>,
+
+    /// The app's publisher.
+    /// Overrides `bundle.publisher` for Windows builds.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Icons for the app.
+    /// Overrides `bundle.icon` for Windows builds.
+    #[serde(default)]
+    pub icon: Option<Vec<String>>,
+
+    /// Additional resources to bundle.
+    /// Overrides `bundle.resources` for Windows builds.
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Copyright notice.
+    /// Overrides `bundle.copyright` for Windows builds.
+    #[serde(default)]
+    pub copyright: Option<String>,
+
+    /// App category.
+    /// Overrides `bundle.category` for Windows builds.
+    #[serde(default)]
+    pub category: Option<String>,
+
+    /// Short description.
+    /// Overrides `bundle.short_description` for Windows builds.
+    #[serde(default)]
+    pub short_description: Option<String>,
+
+    /// Long description.
+    /// Overrides `bundle.long_description` for Windows builds.
+    #[serde(default)]
+    pub long_description: Option<String>,
+
+    // === Windows bundle settings (previously in bundle.windows) ===
+    /// Digest algorithm for code signing.
+    #[serde(default)]
+    pub digest_algorithm: Option<String>,
+
+    /// Certificate thumbprint for code signing.
+    #[serde(default)]
+    pub certificate_thumbprint: Option<String>,
+
+    /// Timestamp server URL for code signing.
+    #[serde(default)]
+    pub timestamp_url: Option<String>,
+
+    /// Use TSP (RFC 3161) timestamp.
+    #[serde(default)]
+    pub tsp: Option<bool>,
+
+    /// WiX installer settings.
+    #[serde(default)]
+    pub wix: Option<WindowsWixSettings>,
+
+    /// NSIS installer settings.
+    #[serde(default)]
+    pub nsis: Option<WindowsNsisSettings>,
+
+    /// Path to custom Windows icon.
+    #[serde(default)]
+    pub icon_path: Option<PathBuf>,
+
+    /// WebView2 installation mode.
+    #[serde(default)]
+    pub webview_install_mode: Option<WindowsWebviewInstallMode>,
+
+    /// Allow downgrades when installing.
+    #[serde(default)]
+    pub allow_downgrades: Option<bool>,
+
+    /// Custom sign command.
+    #[serde(default)]
+    pub sign_command: Option<WindowsSignCommand>,
+
+    // === Windows-specific settings ===
     /// UWP/MSIX capabilities.
     #[serde(default)]
     pub capabilities: Vec<String>,
@@ -785,13 +1085,227 @@ pub struct WindowsConfig {
     pub device_capabilities: Vec<String>,
 }
 
+/// WiX installer settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct WindowsWixSettings {
+    /// Languages and their locale paths.
+    #[serde(default)]
+    pub language: Vec<(String, Option<PathBuf>)>,
+
+    /// Path to custom WiX template.
+    #[serde(default)]
+    pub template: Option<PathBuf>,
+
+    /// WiX fragment files to include.
+    #[serde(default)]
+    pub fragment_paths: Vec<PathBuf>,
+
+    /// Component group references.
+    #[serde(default)]
+    pub component_group_refs: Vec<String>,
+
+    /// Component references.
+    #[serde(default)]
+    pub component_refs: Vec<String>,
+
+    /// Feature group references.
+    #[serde(default)]
+    pub feature_group_refs: Vec<String>,
+
+    /// Feature references.
+    #[serde(default)]
+    pub feature_refs: Vec<String>,
+
+    /// Merge module references.
+    #[serde(default)]
+    pub merge_refs: Vec<String>,
+
+    /// Skip WebView2 installation.
+    #[serde(default)]
+    pub skip_webview_install: Option<bool>,
+
+    /// License file path.
+    #[serde(default)]
+    pub license: Option<PathBuf>,
+
+    /// Enable elevated update task.
+    #[serde(default)]
+    pub enable_elevated_update_task: Option<bool>,
+
+    /// Banner image path.
+    #[serde(default)]
+    pub banner_path: Option<PathBuf>,
+
+    /// Dialog image path.
+    #[serde(default)]
+    pub dialog_image_path: Option<PathBuf>,
+
+    /// FIPS compliant mode.
+    #[serde(default)]
+    pub fips_compliant: Option<bool>,
+
+    /// MSI version string.
+    #[serde(default)]
+    pub version: Option<String>,
+
+    /// MSI upgrade code (GUID).
+    #[serde(default)]
+    #[schemars(with = "Option<String>")]
+    pub upgrade_code: Option<uuid::Uuid>,
+}
+
+/// NSIS installer settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct WindowsNsisSettings {
+    /// Path to custom NSIS template.
+    #[serde(default)]
+    pub template: Option<PathBuf>,
+
+    /// License file path.
+    #[serde(default)]
+    pub license: Option<PathBuf>,
+
+    /// Header image path.
+    #[serde(default)]
+    pub header_image: Option<PathBuf>,
+
+    /// Sidebar image path.
+    #[serde(default)]
+    pub sidebar_image: Option<PathBuf>,
+
+    /// Installer icon path.
+    #[serde(default)]
+    pub installer_icon: Option<PathBuf>,
+
+    /// Installation mode: "CurrentUser", "PerMachine", or "Both".
+    #[serde(default)]
+    pub install_mode: Option<String>,
+
+    /// Languages to include.
+    #[serde(default)]
+    pub languages: Option<Vec<String>>,
+
+    /// Custom language files.
+    #[serde(default)]
+    pub custom_language_files: Option<HashMap<String, PathBuf>>,
+
+    /// Display language selector.
+    #[serde(default)]
+    pub display_language_selector: Option<bool>,
+
+    /// Start menu folder name.
+    #[serde(default)]
+    pub start_menu_folder: Option<String>,
+
+    /// Installer hooks script path.
+    #[serde(default)]
+    pub installer_hooks: Option<PathBuf>,
+
+    /// Minimum WebView2 version required.
+    #[serde(default)]
+    pub minimum_webview2_version: Option<String>,
+}
+
+/// WebView2 installation mode.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "type")]
+pub enum WindowsWebviewInstallMode {
+    /// Skip WebView2 installation.
+    Skip,
+    /// Download bootstrapper.
+    DownloadBootstrapper {
+        #[serde(default)]
+        silent: bool,
+    },
+    /// Embed bootstrapper.
+    EmbedBootstrapper {
+        #[serde(default)]
+        silent: bool,
+    },
+    /// Use offline installer.
+    OfflineInstaller {
+        #[serde(default)]
+        silent: bool,
+    },
+    /// Use fixed runtime from path.
+    FixedRuntime { path: PathBuf },
+}
+
+/// Custom sign command for Windows code signing.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct WindowsSignCommand {
+    /// The command to run.
+    pub cmd: String,
+    /// Command arguments. Use "%1" as placeholder for binary path.
+    pub args: Vec<String>,
+}
+
 // ============================================================================
 // Linux Configuration
 // ============================================================================
 
 /// Linux-specific configuration.
+///
+/// Example:
+/// ```toml
+/// [linux]
+/// identifier = "com.example.myapp.linux"  # Override bundle.identifier for Linux
+/// categories = ["Utility"]
+///
+/// # Debian package settings (previously in [bundle.deb])
+/// [linux.deb]
+/// depends = ["libwebkit2gtk-4.0-37"]
+/// section = "utils"
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub struct LinuxConfig {
+    // === Bundle settings (override [bundle] section) ===
+    /// The app's identifier (e.g., "com.example.myapp").
+    /// Overrides `bundle.identifier` for Linux builds.
+    #[serde(default)]
+    pub identifier: Option<String>,
+
+    /// The app's publisher.
+    /// Overrides `bundle.publisher` for Linux builds.
+    #[serde(default)]
+    pub publisher: Option<String>,
+
+    /// Icons for the app.
+    /// Overrides `bundle.icon` for Linux builds.
+    #[serde(default)]
+    pub icon: Option<Vec<String>>,
+
+    /// Additional resources to bundle.
+    /// Overrides `bundle.resources` for Linux builds.
+    #[serde(default)]
+    pub resources: Option<Vec<String>>,
+
+    /// Copyright notice.
+    /// Overrides `bundle.copyright` for Linux builds.
+    #[serde(default)]
+    pub copyright: Option<String>,
+
+    /// App category.
+    /// Overrides `bundle.category` for Linux builds.
+    #[serde(default)]
+    pub category: Option<String>,
+
+    /// Short description.
+    /// Overrides `bundle.short_description` for Linux builds.
+    #[serde(default)]
+    pub short_description: Option<String>,
+
+    /// Long description.
+    /// Overrides `bundle.long_description` for Linux builds.
+    #[serde(default)]
+    pub long_description: Option<String>,
+
+    // === Debian package settings (previously in bundle.deb) ===
+    /// Debian-specific package settings.
+    #[serde(default)]
+    pub deb: Option<LinuxDebSettings>,
+
+    // === Linux-specific settings ===
     /// Flatpak sandbox permissions.
     #[serde(default)]
     pub flatpak_permissions: Vec<String>,
@@ -811,6 +1325,66 @@ pub struct LinuxConfig {
     /// MIME types the app can handle.
     #[serde(default)]
     pub mime_types: Vec<String>,
+}
+
+/// Debian package settings.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub struct LinuxDebSettings {
+    /// Package dependencies.
+    #[serde(default)]
+    pub depends: Option<Vec<String>>,
+
+    /// Recommended packages.
+    #[serde(default)]
+    pub recommends: Option<Vec<String>>,
+
+    /// Packages this provides.
+    #[serde(default)]
+    pub provides: Option<Vec<String>>,
+
+    /// Package conflicts.
+    #[serde(default)]
+    pub conflicts: Option<Vec<String>>,
+
+    /// Packages this replaces.
+    #[serde(default)]
+    pub replaces: Option<Vec<String>>,
+
+    /// Additional files to include. Maps package path to source path.
+    #[serde(default)]
+    pub files: HashMap<PathBuf, PathBuf>,
+
+    /// Path to custom desktop template.
+    #[serde(default)]
+    pub desktop_template: Option<PathBuf>,
+
+    /// Debian section (e.g., "utils", "web").
+    #[serde(default)]
+    pub section: Option<String>,
+
+    /// Package priority ("required", "important", "standard", "optional", "extra").
+    #[serde(default)]
+    pub priority: Option<String>,
+
+    /// Path to changelog file.
+    #[serde(default)]
+    pub changelog: Option<PathBuf>,
+
+    /// Pre-install script path.
+    #[serde(default)]
+    pub pre_install_script: Option<PathBuf>,
+
+    /// Post-install script path.
+    #[serde(default)]
+    pub post_install_script: Option<PathBuf>,
+
+    /// Pre-remove script path.
+    #[serde(default)]
+    pub pre_remove_script: Option<PathBuf>,
+
+    /// Post-remove script path.
+    #[serde(default)]
+    pub post_remove_script: Option<PathBuf>,
 }
 
 // ============================================================================

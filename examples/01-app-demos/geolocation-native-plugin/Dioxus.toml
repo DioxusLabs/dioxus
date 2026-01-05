@@ -1,13 +1,8 @@
-#:schema ../../../packages/cli/cli-schema.json
+#:schema ../../../packages/cli/schema2.json
 
 [bundle]
 identifier = "com.dioxuslabs.geolocation"
 publisher = "Dioxus Labs"
-
-[permissions]
-location = { precision = "fine", description = "Access your precise location to provide location-based services" }
-bluetooth = { description = "Need to access your bluetooth" }
-calendar = { description = "Need to access your calendar!" }
 
 [ios]
 deployment_target = "15.0"
@@ -17,3 +12,6 @@ background_modes = ["location"]
 min_sdk = 24
 target_sdk = 34
 features = ["android.hardware.location.gps"]
+
+[permissions]
+location = { precision = "fine", description = "Access your precise location to provide location-based services" }
