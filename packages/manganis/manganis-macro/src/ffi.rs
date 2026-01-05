@@ -734,11 +734,84 @@ impl FfiBridgeParser {
                 unsafe impl Sync for #name {}
 
                 impl #name {
+                    /// Load the Swift framework bundle to make classes available
+                    fn load_swift_framework() -> Result<(), &'static str> {
+                        use std::sync::Once;
+                        static LOAD_ONCE: Once = Once::new();
+                        static mut LOAD_RESULT: Result<(), &'static str> = Ok(());
+
+                        // FFI declarations for dlopen
+                        #[link(name = "System")]
+                        extern "C" {
+                            fn dlopen(filename: *const std::ffi::c_char, flags: std::ffi::c_int) -> *mut std::ffi::c_void;
+                            fn dlerror() -> *const std::ffi::c_char;
+                        }
+                        const RTLD_NOW: std::ffi::c_int = 0x2;
+                        const RTLD_GLOBAL: std::ffi::c_int = 0x8;
+
+                        LOAD_ONCE.call_once(|| {
+                            unsafe {
+                                // Get the path to the executable
+                                let exe_path = std::env::current_exe()
+                                    .map_err(|_| "Failed to get executable path")
+                                    .ok();
+
+                                let framework_path = if let Some(exe) = exe_path {
+                                    // For macOS: App.app/Contents/MacOS/binary -> App.app/Contents/Frameworks/
+                                    // For iOS: App.app/binary -> App.app/Frameworks/
+                                    let parent = exe.parent().unwrap_or(&exe);
+
+                                    #[cfg(target_os = "macos")]
+                                    let frameworks_dir = parent.parent().unwrap_or(parent).join("Frameworks");
+                                    #[cfg(target_os = "ios")]
+                                    let frameworks_dir = parent.join("Frameworks");
+
+                                    let path = frameworks_dir.join("DioxusSwiftPlugins.framework/DioxusSwiftPlugins");
+                                    if path.exists() {
+                                        Some(path)
+                                    } else {
+                                        // Try versioned path for macOS
+                                        let versioned = frameworks_dir.join("DioxusSwiftPlugins.framework/Versions/Current/DioxusSwiftPlugins");
+                                        if versioned.exists() {
+                                            Some(versioned)
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                } else {
+                                    None
+                                };
+
+                                if let Some(path) = framework_path {
+                                    let path_cstr = std::ffi::CString::new(path.to_string_lossy().as_bytes())
+                                        .expect("Invalid framework path");
+
+                                    // Use dlopen to load the framework
+                                    let handle = dlopen(path_cstr.as_ptr(), RTLD_NOW | RTLD_GLOBAL);
+                                    if handle.is_null() {
+                                        let err = dlerror();
+                                        if !err.is_null() {
+                                            let msg = std::ffi::CStr::from_ptr(err).to_string_lossy();
+                                            eprintln!("Failed to load Swift framework: {}", msg);
+                                        }
+                                        LOAD_RESULT = Err("Failed to load Swift framework with dlopen");
+                                    }
+                                } else {
+                                    LOAD_RESULT = Err("Swift framework not found at expected path");
+                                }
+                            }
+                        });
+
+                        unsafe { LOAD_RESULT }
+                    }
+
                     /// Create a new instance by looking up the ObjC class dynamically at runtime
                     pub fn new() -> Result<Self, &'static str> {
+                        // First ensure the framework is loaded
+                        Self::load_swift_framework()?;
+
                         unsafe {
-                            // Dynamic runtime lookup - the class will be available after dx compiles
-                            // and links the Swift sources
+                            // Dynamic runtime lookup - the class will be available after the framework is loaded
                             let class_name = ::std::ffi::CStr::from_bytes_with_nul(#class_name_bytes.as_bytes())
                                 .expect("Invalid class name");
                             let class = manganis::objc2::runtime::AnyClass::get(class_name)
@@ -887,32 +960,35 @@ impl FfiBridgeParser {
         };
 
         // Build msg_send expression with proper selector syntax
+        // For Swift methods with `_` external labels, the selector is just `methodName:`
+        // and we call it as: msg_send![obj, methodName: arg0]
         let msg_send_call = if func.args.is_empty() {
-            // No arguments - use the simple selector
+            // No arguments - use the simple selector (no colons)
             let selector_ident = format_ident!("{}", selector);
             quote! {
                 manganis::objc2::msg_send![#this_expr, #selector_ident]
             }
         } else {
-            // Arguments - build the selector parts manually
-            // The selector is like "getCurrentPositionJsonWithOptionsJson:" for one arg
-            // We need to call it as: msg_send![obj, getCurrentPositionJsonWithOptionsJson: arg0]
+            // With arguments - the selector is `methodName:` for one arg, `methodName::` for two, etc.
+            // The msg_send syntax is: msg_send![obj, methodName: arg0, _: arg1, _: arg2]
+            // where `_` is used for subsequent unlabeled parameters
 
-            // Parse the selector into parts (split by ':')
-            let selector_parts: Vec<&str> = selector.trim_end_matches(':').split(':').collect();
+            let method_name = to_camel_case(&func.name.to_string());
+            let method_ident = format_ident!("{}", method_name);
 
-            // Build the msg_send call tokens manually
+            // Build the msg_send call tokens
             let mut tokens = quote! { #this_expr, };
-            for (i, part) in selector_parts.iter().enumerate() {
-                if i < arg_names.len() {
-                    let part_ident = format_ident!("{}", part);
-                    let arg = &arg_names[i];
-                    if i == 0 {
-                        tokens.extend(quote! { #part_ident: #arg });
-                    } else {
-                        tokens.extend(quote! { , #part_ident: #arg });
-                    }
-                }
+
+            // First argument uses the method name
+            if !arg_names.is_empty() {
+                let first_arg = &arg_names[0];
+                tokens.extend(quote! { #method_ident: #first_arg });
+            }
+
+            // Subsequent arguments use `_` as the label (for Swift's unlabeled parameters)
+            for arg in arg_names.iter().skip(1) {
+                let underscore = format_ident!("_");
+                tokens.extend(quote! { , #underscore: #arg });
             }
 
             quote! {
@@ -974,22 +1050,16 @@ impl FfiBridgeParser {
     }
 
     /// Convert a Rust function name to an Objective-C selector
+    ///
+    /// For Swift methods that use `_` as the external parameter label (like most FFI methods),
+    /// the selector is just the method name followed by colons for each parameter.
+    /// e.g., `func getCurrentPositionJson(_ optionsJson: String)` -> `getCurrentPositionJson:`
     fn rust_to_objc_selector(&self, fn_name: &str, args: &[ForeignArg]) -> String {
-        if args.is_empty() {
-            return to_camel_case(fn_name);
-        }
-
         let mut selector = to_camel_case(fn_name);
 
-        for (i, arg) in args.iter().enumerate() {
-            if i == 0 {
-                selector.push_str("With");
-                selector.push_str(&to_upper_camel_case(&arg.name.to_string()));
-                selector.push(':');
-            } else {
-                selector.push_str(&to_camel_case(&arg.name.to_string()));
-                selector.push(':');
-            }
+        // For each argument, just add a colon (assuming Swift uses _ for external labels)
+        for _ in args {
+            selector.push(':');
         }
 
         selector

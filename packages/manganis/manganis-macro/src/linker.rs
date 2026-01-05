@@ -18,12 +18,14 @@ pub fn generate_link_section_inner(
     let export_name = syn::LitStr::new(&format!("{}{}", prefix, hash), position);
 
     quote! {
+        #[used]
         static __LINK_SECTION: &'static [u8] = {
             const __BUFFER: #buffer_type = #serialize_fn(&#item);
             const __BYTES: &[u8] = __BUFFER.as_ref();
             const __LEN: usize = __BYTES.len();
 
             #[unsafe(export_name = #export_name)]
+            #[used]
             static __LINK_SECTION: [u8; __LEN] = #copy_bytes_fn(__BYTES);
             &__LINK_SECTION
         };

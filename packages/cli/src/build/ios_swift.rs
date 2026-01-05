@@ -4,15 +4,177 @@ use crate::Result;
 use anyhow::Context;
 use manganis_core::SwiftPackageMetadata;
 use std::path::{Path, PathBuf};
-use target_lexicon::Triple;
+use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
-/// Compile Swift sources and return the path to the static library.
+/// Create a proper framework bundle from a dylib for iOS/macOS.
+///
+/// iOS uses a flat structure while macOS uses a versioned structure.
+/// Both require an Info.plist for proper App Store submission.
+pub async fn create_framework_bundle(
+    dylib_path: &Path,
+    framework_name: &str,
+    output_dir: &Path,
+    target_triple: &Triple,
+    bundle_identifier: &str,
+) -> Result<PathBuf> {
+    let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
+    let min_os_version = if is_ios { "13.0" } else { "11.0" };
+
+    let framework_dir = output_dir.join(format!("{}.framework", framework_name));
+
+    // Remove existing framework if present
+    if framework_dir.exists() {
+        std::fs::remove_dir_all(&framework_dir)?;
+    }
+
+    if is_ios {
+        // iOS uses flat structure: Framework.framework/FrameworkName + Info.plist
+        std::fs::create_dir_all(&framework_dir)?;
+
+        // Copy dylib as the framework executable (no extension)
+        let exec_path = framework_dir.join(framework_name);
+        std::fs::copy(dylib_path, &exec_path)?;
+
+        // Set the install name using install_name_tool
+        let output = Command::new("xcrun")
+            .arg("install_name_tool")
+            .arg("-id")
+            .arg(format!(
+                "@rpath/{}.framework/{}",
+                framework_name, framework_name
+            ))
+            .arg(&exec_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("install_name_tool failed: {}", stderr);
+        }
+
+        // Create Info.plist
+        let info_plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>{framework_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>{bundle_identifier}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>{framework_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>MinimumOSVersion</key>
+    <string>{min_os_version}</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+</dict>
+</plist>"#
+        );
+
+        std::fs::write(framework_dir.join("Info.plist"), info_plist)?;
+    } else {
+        // macOS uses versioned structure with symlinks
+        let versions_a = framework_dir.join("Versions").join("A");
+        let resources_dir = versions_a.join("Resources");
+        std::fs::create_dir_all(&resources_dir)?;
+
+        // Copy dylib as the framework executable
+        let exec_path = versions_a.join(framework_name);
+        std::fs::copy(dylib_path, &exec_path)?;
+
+        // Set install name
+        let output = Command::new("xcrun")
+            .arg("install_name_tool")
+            .arg("-id")
+            .arg(format!(
+                "@rpath/{}.framework/Versions/A/{}",
+                framework_name, framework_name
+            ))
+            .arg(&exec_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("install_name_tool failed: {}", stderr);
+        }
+
+        // Create Info.plist in Resources
+        let info_plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>{framework_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>{bundle_identifier}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>{framework_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>{min_os_version}</string>
+</dict>
+</plist>"#
+        );
+
+        std::fs::write(resources_dir.join("Info.plist"), info_plist)?;
+
+        // Create symbolic links (required for macOS framework structure)
+        let versions_dir = framework_dir.join("Versions");
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("A", versions_dir.join("Current"))?;
+            std::os::unix::fs::symlink(
+                format!("Versions/Current/{}", framework_name),
+                framework_dir.join(framework_name),
+            )?;
+            std::os::unix::fs::symlink(
+                "Versions/Current/Resources",
+                framework_dir.join("Resources"),
+            )?;
+        }
+    }
+
+    tracing::info!(
+        "Created {} framework bundle: {}",
+        if is_ios { "iOS" } else { "macOS" },
+        framework_dir.display()
+    );
+
+    Ok(framework_dir)
+}
+
+/// Compile Swift sources and return the path to the dynamic framework bundle.
 ///
 /// This function:
 /// 1. Generates an umbrella Package.swift that includes all Swift plugins
-/// 2. Runs `swift build` to compile into a static library
-/// 3. Returns the path to the resulting `.a` file
+/// 2. Runs `swift build` to compile into a dynamic library
+/// 3. Wraps the dylib in a proper .framework bundle for iOS/macOS
+/// 4. Returns the path to the resulting `.framework` bundle
 pub async fn compile_swift_sources(
     swift_sources: &[SwiftPackageMetadata],
     target_triple: &Triple,
@@ -29,15 +191,16 @@ pub async fn compile_swift_sources(
         target_triple
     );
 
-    // Create the umbrella package directory
-    let umbrella_dir = build_dir.join("swift-plugins");
-    std::fs::create_dir_all(&umbrella_dir)?;
+    // Create the plugins build directory
+    let plugins_dir = build_dir.join("swift-plugins");
+    std::fs::create_dir_all(&plugins_dir)?;
 
-    // Copy all Swift source packages to the umbrella directory
-    let mut local_packages = Vec::new();
+    // Copy and prepare all Swift source packages
+    let mut plugin_paths = Vec::new();
     for source in swift_sources {
         let source_path = PathBuf::from(source.package_path.as_str());
         let plugin_name = source.plugin_name.as_str();
+        let product_name = source.product.as_str();
 
         if !source_path.exists() {
             tracing::warn!(
@@ -48,34 +211,33 @@ pub async fn compile_swift_sources(
             continue;
         }
 
-        let dest_path = umbrella_dir.join(plugin_name);
+        let dest_path = plugins_dir.join(plugin_name);
         if dest_path.exists() {
             std::fs::remove_dir_all(&dest_path)?;
         }
         copy_dir_recursive(&source_path, &dest_path)?;
 
-        local_packages.push((plugin_name.to_string(), source.product.as_str().to_string()));
+        // Modify the Package.swift to produce a dynamic library
+        if let Err(e) = modify_package_for_dynamic_library(&dest_path, product_name) {
+            tracing::warn!(
+                "Failed to modify Package.swift for dynamic library: {}",
+                e
+            );
+        }
+
+        plugin_paths.push((plugin_name.to_string(), product_name.to_string(), dest_path));
         tracing::debug!(
             "Copied Swift plugin '{}' from {} to {}",
             plugin_name,
             source_path.display(),
-            dest_path.display()
+            plugins_dir.join(plugin_name).display()
         );
     }
 
-    if local_packages.is_empty() {
+    if plugin_paths.is_empty() {
         tracing::warn!("No valid Swift packages found to compile");
         return Ok(None);
     }
-
-    // Generate the umbrella Package.swift
-    let package_swift = generate_umbrella_package_swift(&local_packages);
-    let package_swift_path = umbrella_dir.join("Package.swift");
-    std::fs::write(&package_swift_path, package_swift)?;
-    tracing::debug!(
-        "Generated umbrella Package.swift at {}",
-        package_swift_path.display()
-    );
 
     // Determine Swift target triple and SDK
     let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
@@ -84,20 +246,20 @@ pub async fn compile_swift_sources(
     // Build configuration
     let configuration = if release { "release" } else { "debug" };
 
-    // Build all products
-    let build_path = umbrella_dir.join(".build");
-
-    for (plugin_name, product_name) in &local_packages {
+    // Build each plugin package individually
+    for (plugin_name, product_name, package_path) in &plugin_paths {
         tracing::info!(
             "Building Swift plugin '{}' (product: {})",
             plugin_name,
             product_name
         );
 
+        let build_path = package_path.join(".build");
+
         let mut cmd = Command::new("xcrun");
         cmd.args(["swift", "build"])
             .arg("--package-path")
-            .arg(&umbrella_dir)
+            .arg(package_path)
             .arg("--configuration")
             .arg(configuration)
             .arg("--triple")
@@ -107,10 +269,7 @@ pub async fn compile_swift_sources(
             .arg("--product")
             .arg(product_name)
             .arg("--build-path")
-            .arg(&build_path)
-            // Build as static library
-            .arg("-Xswiftc")
-            .arg("-static");
+            .arg(&build_path);
 
         tracing::debug!("Running: xcrun swift build for {}", product_name);
 
@@ -133,150 +292,135 @@ pub async fn compile_swift_sources(
         }
     }
 
-    // Find the output static library
-    // Swift puts the output in .build/<triple>/<configuration>/lib<ProductName>.a
-    // or .build/<configuration>/lib<ProductName>.a depending on the version
-    let lib_search_paths = [
-        build_path.join(&swift_triple).join(configuration),
-        build_path.join(configuration),
-    ];
+    // Find the output dynamic library for each plugin
+    // Swift puts the output in .build/<triple>/<configuration>/lib<ProductName>.dylib
+    // or .build/<configuration>/lib<ProductName>.dylib depending on the version
+    let mut all_dylibs = Vec::new();
 
-    // Create a merged static library from all plugins
-    let merged_lib_path = build_dir.join("libswift_plugins.a");
-    let mut all_libs = Vec::new();
+    for (_, product_name, package_path) in &plugin_paths {
+        let build_path = package_path.join(".build");
+        let lib_name = format!("lib{}.dylib", product_name);
 
-    for (_, product_name) in &local_packages {
-        let lib_name = format!("lib{}.a", product_name);
+        let lib_search_paths = [
+            build_path.join(&swift_triple).join(configuration),
+            build_path.join(configuration),
+            build_path.clone(),
+        ];
+
         let mut found = false;
-
         for search_path in &lib_search_paths {
             let lib_path = search_path.join(&lib_name);
             if lib_path.exists() {
-                tracing::debug!("Found Swift library: {}", lib_path.display());
-                all_libs.push(lib_path);
+                tracing::debug!("Found Swift dynamic library: {}", lib_path.display());
+                all_dylibs.push((product_name.clone(), lib_path));
                 found = true;
                 break;
             }
         }
 
         if !found {
-            // Also check for the static library directly
-            let lib_path = build_path.join(&lib_name);
-            if lib_path.exists() {
-                all_libs.push(lib_path);
-            } else {
-                tracing::warn!(
-                    "Could not find compiled Swift library for product '{}' (expected {})",
-                    product_name,
-                    lib_name
-                );
-            }
+            tracing::warn!(
+                "Could not find compiled Swift dynamic library for product '{}' (expected {})",
+                product_name,
+                lib_name
+            );
         }
     }
 
-    if all_libs.is_empty() {
-        tracing::warn!("No Swift libraries were compiled successfully");
+    if all_dylibs.is_empty() {
+        tracing::warn!("No Swift dynamic libraries were compiled successfully");
         return Ok(None);
     }
 
-    // If there's only one library, just return it
-    if all_libs.len() == 1 {
-        return Ok(Some(all_libs.remove(0)));
+    // For dynamic libraries, we need to wrap each in a framework bundle
+    // If there's only one library, create a single framework
+    // If there are multiple, we'll create frameworks for each (they're independent)
+    // The first one is the "primary" framework that gets returned
+
+    let (_primary_name, primary_dylib) = all_dylibs.remove(0);
+
+    // Create the framework bundle from the dylib
+    // Use "DioxusSwiftPlugins" as the umbrella framework name
+    let framework_name = "DioxusSwiftPlugins";
+    let bundle_identifier = "com.dioxus.swift.plugins";
+
+    let framework_path = create_framework_bundle(
+        &primary_dylib,
+        framework_name,
+        build_dir,
+        target_triple,
+        bundle_identifier,
+    )
+    .await?;
+
+    // If there are additional dylibs, create separate framework bundles for them
+    for (name, dylib_path) in all_dylibs {
+        let extra_framework = create_framework_bundle(
+            &dylib_path,
+            &name,
+            build_dir,
+            target_triple,
+            &format!("com.dioxus.swift.{}", name.to_lowercase()),
+        )
+        .await?;
+        tracing::info!("Created additional framework: {}", extra_framework.display());
     }
 
-    // Otherwise, merge all libraries into one using libtool
-    tracing::debug!(
-        "Merging {} Swift libraries into {}",
-        all_libs.len(),
-        merged_lib_path.display()
-    );
-
-    let mut cmd = Command::new("xcrun");
-    cmd.arg("libtool")
-        .arg("-static")
-        .arg("-o")
-        .arg(&merged_lib_path);
-
-    for lib in &all_libs {
-        cmd.arg(lib);
-    }
-
-    let output = cmd.output().await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("Failed to merge Swift libraries: {}", stderr);
-    }
-
-    Ok(Some(merged_lib_path))
+    Ok(Some(framework_path))
 }
 
-/// Generate an umbrella Package.swift that includes all local Swift packages
-fn generate_umbrella_package_swift(packages: &[(String, String)]) -> String {
-    let mut swift = String::from(
-        r#"// swift-tools-version:5.7
-// Auto-generated umbrella package for Dioxus Swift plugins
-
-import PackageDescription
-
-let package = Package(
-    name: "DioxusSwiftPlugins",
-    platforms: [
-        .iOS(.v13),
-        .macOS(.v10_15)
-    ],
-    products: [
-"#,
-    );
-
-    // Add products
-    for (_, product_name) in packages {
-        swift.push_str(&format!(
-            "        .library(name: \"{}\", type: .static, targets: [\"{}\"]),\n",
-            product_name, product_name
-        ));
+/// Modify a Package.swift to produce a dynamic library instead of static.
+/// This is needed for runtime class lookup via NSClassFromString.
+fn modify_package_for_dynamic_library(package_path: &Path, product_name: &str) -> Result<()> {
+    let package_swift_path = package_path.join("Package.swift");
+    if !package_swift_path.exists() {
+        anyhow::bail!(
+            "Package.swift not found at {}",
+            package_swift_path.display()
+        );
     }
 
-    swift.push_str(
-        r#"    ],
-    dependencies: [
-"#,
+    let content = std::fs::read_to_string(&package_swift_path)?;
+
+    // Replace .static with .dynamic for the library type
+    let modified = content
+        .replace("type: .static", "type: .dynamic")
+        .replace("type:.static", "type: .dynamic");
+
+    // If no library type was specified, we need to add it
+    // Look for .library(name: "ProductName", targets: [...]) and change to
+    // .library(name: "ProductName", type: .dynamic, targets: [...])
+    let pattern = format!(
+        r#".library\s*\(\s*name\s*:\s*"{}"\s*,\s*targets"#,
+        regex::escape(product_name)
     );
+    let replacement = format!(r#".library(name: "{}", type: .dynamic, targets"#, product_name);
 
-    // Add local package dependencies
-    for (plugin_name, _) in packages {
-        swift.push_str(&format!("        .package(path: \"./{}\")\n", plugin_name));
-    }
+    let modified = if let Ok(re) = regex::Regex::new(&pattern) {
+        re.replace_all(&modified, replacement.as_str()).to_string()
+    } else {
+        modified
+    };
 
-    swift.push_str(
-        r#"    ],
-    targets: [
-"#,
-    );
-
-    // Add targets that depend on the local packages
-    for (plugin_name, product_name) in packages {
-        swift.push_str(&format!(
-            "        .target(name: \"{}\", dependencies: [.product(name: \"{}\", package: \"{}\")]),\n",
-            product_name, product_name, plugin_name
-        ));
-    }
-
-    swift.push_str(
-        r#"    ]
-)
-"#,
-    );
-
-    swift
+    std::fs::write(&package_swift_path, modified)?;
+    Ok(())
 }
 
 /// Convert a Rust target triple to Swift target triple and SDK name
 fn swift_target_and_sdk(triple: &Triple) -> Result<(String, String)> {
-    use target_lexicon::{Architecture, OperatingSystem};
+    use target_lexicon::{Architecture, Environment, OperatingSystem};
+
+    // Check if this is a simulator target using the environment field
+    let is_simulator = triple.environment == Environment::Sim;
 
     let swift_triple = match (&triple.architecture, &triple.operating_system) {
-        (Architecture::Aarch64(_), OperatingSystem::IOS(_)) => "arm64-apple-ios",
+        (Architecture::Aarch64(_), OperatingSystem::IOS(_)) => {
+            if is_simulator {
+                "arm64-apple-ios-simulator"
+            } else {
+                "arm64-apple-ios"
+            }
+        }
         (Architecture::Aarch64(_), OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)) => {
             "arm64-apple-macosx"
         }
@@ -289,8 +433,8 @@ fn swift_target_and_sdk(triple: &Triple) -> Result<(String, String)> {
 
     let sdk_name = match &triple.operating_system {
         OperatingSystem::IOS(_) => {
-            // Check if this is a simulator target
-            if triple.architecture == Architecture::X86_64 {
+            // Check if this is a simulator target using the environment field
+            if is_simulator {
                 "iphonesimulator"
             } else {
                 "iphoneos"

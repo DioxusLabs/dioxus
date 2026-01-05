@@ -1311,29 +1311,6 @@ impl BuildRequest {
             );
         }
 
-        // For Darwin Base builds, we intercepted linking to enable Swift plugin compilation.
-        // Now we need to run the actual linker ourselves (with Swift support if Swift sources are present).
-        let is_darwin_base = matches!(ctx.mode, BuildMode::Base { .. })
-            && matches!(
-                self.triple.operating_system,
-                OperatingSystem::Darwin(_)
-                    | OperatingSystem::MacOSX { .. }
-                    | OperatingSystem::IOS(_)
-            );
-
-        if is_darwin_base {
-            ctx.status_starting_link();
-            let link_start = SystemTime::now();
-            self.run_darwin_link(&exe, &direct_rustc).await?;
-            tracing::debug!(
-                "Darwin linking completed in {}us",
-                SystemTime::now()
-                    .duration_since(link_start)
-                    .unwrap()
-                    .as_micros()
-            );
-        }
-
         // Extract all linker metadata (assets, Android/iOS plugins) in a single pass.
         let (assets, android_artifacts, swift_sources) =
             self.collect_assets_and_metadata(&exe, ctx).await?;
@@ -1644,231 +1621,62 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Bundle and compile Swift packages from source.
+    /// Bundle and compile Swift packages from source into dynamic frameworks.
     ///
     /// This function:
-    /// 1. Bundles all Swift plugin sources into a staging directory
-    /// 2. Creates an umbrella Package.swift that includes all plugins as dependencies
-    /// 3. Runs a single `swift build` to compile everything together
-    /// 4. The resulting static libraries are linked into the final executable
+    /// 1. Calls ios_swift::compile_swift_sources to compile Swift packages
+    /// 2. The function creates proper .framework bundles from the dylibs
+    /// 3. Installs the frameworks to the app's Frameworks folder
     async fn compile_swift_sources(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
         if swift_sources.is_empty() {
             return Ok(());
         }
 
-        // Staging directory for all Swift plugins
-        let swift_plugins_dir = self.target_dir.join("swift-plugins");
-        std::fs::create_dir_all(&swift_plugins_dir)?;
-
-        // Collect valid source packages and copy them to staging
-        let mut bundled_packages: Vec<(String, PathBuf)> = Vec::new();
-
-        for package in swift_sources {
-            let package_path = PathBuf::from(package.package_path.as_str());
-            let product = package.product.as_str();
-
-            // Only include if it's a source directory (has Package.swift)
-            if !package_path.is_dir() || !package_path.join("Package.swift").exists() {
-                tracing::debug!(
-                    "Skipping Swift package at {} - not a source directory",
-                    package_path.display()
-                );
-                continue;
-            }
-
-            // Copy to staging directory
-            let staged_path = swift_plugins_dir.join(product);
-            tracing::info!(
-                "Bundling Swift plugin '{}' from {}",
-                product,
-                package_path.display()
-            );
-            self.copy_dir_recursive(&package_path, &staged_path)?;
-            bundled_packages.push((product.to_string(), staged_path));
-        }
-
-        if bundled_packages.is_empty() {
-            return Ok(());
-        }
-
-        // Create umbrella Package.swift that includes all plugins
-        let umbrella_package = self.generate_umbrella_swift_package(&bundled_packages)?;
-        std::fs::write(swift_plugins_dir.join("Package.swift"), umbrella_package)?;
-
-        // Determine Swift target triple based on Rust target
-        let triple_str = self.triple.to_string();
-        let (swift_target, sdk_name) = if triple_str.contains("aarch64-apple-ios-sim") {
-            ("arm64-apple-ios13.0-simulator", "iphonesimulator")
-        } else if triple_str.contains("aarch64-apple-ios") {
-            ("arm64-apple-ios13.0", "iphoneos")
-        } else if triple_str.contains("x86_64-apple-ios") {
-            ("x86_64-apple-ios13.0-simulator", "iphonesimulator")
-        } else if triple_str.contains("aarch64-apple-darwin") {
-            ("arm64-apple-macos11.0", "macosx")
-        } else if triple_str.contains("x86_64-apple-darwin") {
-            ("x86_64-apple-macos11.0", "macosx")
-        } else {
-            tracing::warn!(
-                "Unknown target {} for Swift compilation, skipping",
-                triple_str
-            );
-            return Ok(());
-        };
-
-        // Get SDK path
-        let sdk_output = tokio::process::Command::new("xcrun")
-            .args(["--sdk", sdk_name, "--show-sdk-path"])
-            .output()
-            .await
-            .context("Failed to run xcrun to find SDK path")?;
-
-        if !sdk_output.status.success() {
-            anyhow::bail!(
-                "xcrun failed to find SDK {}: {}",
-                sdk_name,
-                String::from_utf8_lossy(&sdk_output.stderr)
-            );
-        }
-
-        let sdk_path = String::from_utf8(sdk_output.stdout)
-            .context("Invalid UTF-8 in SDK path")?
-            .trim()
-            .to_string();
-
-        // Build directory for Swift output
-        let build_dir = swift_plugins_dir.join(".build");
+        let build_dir = self.target_dir.join("swift-build");
         std::fs::create_dir_all(&build_dir)?;
 
-        // Determine configuration based on profile
-        let configuration = if self.release { "release" } else { "debug" };
+        // Compile Swift sources and get the framework bundle path
+        let framework_path = super::ios_swift::compile_swift_sources(
+            swift_sources,
+            &self.triple,
+            &build_dir,
+            self.release,
+        )
+        .await?;
 
-        // Run a single swift build for all plugins
-        tracing::info!(
-            "Compiling {} Swift plugin(s) with single build",
-            bundled_packages.len()
-        );
-
-        let output = tokio::process::Command::new("xcrun")
-            .args(["swift", "build"])
-            .args(["--package-path", swift_plugins_dir.to_str().unwrap()])
-            .args(["--configuration", configuration])
-            .args(["--triple", swift_target])
-            .args(["--sdk", &sdk_path])
-            .args(["--build-path", build_dir.to_str().unwrap()])
-            .output()
-            .await?;
-        // .context(format!(
-        //     "Failed to run swift build for plugins at {}",
-        //     swift_plugins_dir.display()
-        // ))?;
-
-        if !output.status.success() {
-            anyhow::bail!(
-                "Swift build failed for plugins at {}.\n{}\n{}",
-                swift_plugins_dir.display(),
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        // Verify that all expected static libraries were built
-        for (product, _) in &bundled_packages {
-            let lib_name = format!("lib{}.a", product);
-            if let Some(lib_path) = self.find_swift_static_lib(&build_dir, &lib_name) {
-                tracing::info!("Built Swift plugin: {} -> {}", product, lib_path.display());
-            } else {
-                tracing::warn!(
-                    "Could not find Swift static library {} in {}",
-                    lib_name,
-                    build_dir.display()
-                );
-            }
+        // If a framework was created, install it to the Frameworks folder
+        if let Some(framework) = framework_path {
+            self.install_swift_framework(&framework).await?;
         }
 
         Ok(())
     }
 
-    /// Generate an umbrella Package.swift that includes all bundled Swift plugins as dependencies.
-    fn generate_umbrella_swift_package(&self, packages: &[(String, PathBuf)]) -> Result<String> {
-        let mut dependencies = String::new();
-        let mut target_deps = String::new();
+    /// Install a Swift framework bundle into the app's Frameworks directory.
+    async fn install_swift_framework(&self, framework_path: &Path) -> Result<()> {
+        let frameworks_dir = self.frameworks_folder();
+        std::fs::create_dir_all(&frameworks_dir)?;
 
-        for (name, path) in packages {
-            let rel_path = path.file_name().unwrap().to_string_lossy();
-            dependencies.push_str(&format!("        .package(path: \"./{}\"),\n", rel_path));
-            target_deps.push_str(&format!(
-                "            .product(name: \"{}\", package: \"{}\"),\n",
-                name, rel_path
-            ));
+        let framework_name = framework_path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid framework path: no filename"))?;
+        let dest = frameworks_dir.join(framework_name);
+
+        // Remove existing framework if present
+        if dest.exists() {
+            std::fs::remove_dir_all(&dest)?;
         }
 
-        let package_swift = format!(
-            r#"// swift-tools-version:5.7
-// Auto-generated umbrella package for Dioxus Swift plugins
+        // Copy the entire framework bundle
+        self.copy_dir_recursive(framework_path, &dest)?;
 
-import PackageDescription
-
-let package = Package(
-    name: "DioxusPlugins",
-    platforms: [
-        .iOS(.v13),
-        .macOS(.v11),
-    ],
-    products: [
-        .library(
-            name: "DioxusPlugins",
-            type: .static,
-            targets: ["DioxusPlugins"]
-        ),
-    ],
-    dependencies: [
-{}    ],
-    targets: [
-        .target(
-            name: "DioxusPlugins",
-            dependencies: [
-{}            ],
-            path: "Sources"
-        ),
-    ]
-)
-"#,
-            dependencies, target_deps
+        tracing::info!(
+            "Installed Swift framework '{}' to {}",
+            framework_name.to_string_lossy(),
+            frameworks_dir.display()
         );
 
-        // Create a minimal source file for the umbrella target
-        let sources_dir = self.target_dir.join("swift-plugins").join("Sources");
-        std::fs::create_dir_all(&sources_dir)?;
-        std::fs::write(
-            sources_dir.join("DioxusPlugins.swift"),
-            "// Umbrella module for Dioxus Swift plugins\n",
-        )?;
-
-        Ok(package_swift)
-    }
-
-    /// Recursively search for a Swift static library in the build directory.
-    fn find_swift_static_lib(&self, build_dir: &Path, lib_name: &str) -> Option<PathBuf> {
-        if !build_dir.exists() {
-            return None;
-        }
-
-        for entry in std::fs::read_dir(build_dir).ok()? {
-            let entry = entry.ok()?;
-            let path = entry.path();
-
-            if path.is_file() && path.file_name().is_some_and(|n| n == lib_name) {
-                return Some(path);
-            }
-
-            if path.is_dir() {
-                if let Some(found) = self.find_swift_static_lib(&path, lib_name) {
-                    return Some(found);
-                }
-            }
-        }
-
-        None
+        Ok(())
     }
 
     /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
@@ -1901,6 +1709,9 @@ let package = Package(
             );
         }
 
+        // Use swift-stdlib-tool to copy Swift runtime libraries needed by:
+        // 1. The main executable (--scan-executable)
+        // 2. Any Swift frameworks in the Frameworks folder (--scan-folder)
         let output = Command::new("xcrun")
             .arg("swift-stdlib-tool")
             .arg("--copy")
@@ -1908,6 +1719,8 @@ let package = Package(
             .arg(platform_flag)
             .arg("--scan-executable")
             .arg(&exe_path)
+            .arg("--scan-folder")
+            .arg(&frameworks_dir)
             .arg("--destination")
             .arg(&frameworks_dir)
             .output()
@@ -3124,8 +2937,10 @@ let package = Package(
             args.remove(flavor_idx);
         }
 
-        // Compile Swift sources if targeting Darwin platforms
-        // We extract Swift metadata from the rlibs, compile them, and add the resulting .a to link args
+        // Note: Swift sources are now compiled as dynamic frameworks during the main build flow.
+        // Dynamic frameworks are loaded at runtime, not linked statically, so we don't add
+        // them to the linker args here. The framework will be installed to the Frameworks
+        // folder by compile_swift_sources() in the main bundle creation phase.
         if matches!(
             self.triple.operating_system,
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
@@ -3137,44 +2952,10 @@ let package = Package(
             );
 
             if !swift_sources.is_empty() {
-                tracing::info!(
-                    "Found {} Swift plugin source(s), compiling...",
+                tracing::debug!(
+                    "Found {} Swift plugin source(s) - will be compiled as dynamic framework during bundle creation",
                     swift_sources.len()
                 );
-
-                let build_dir = exe.parent().unwrap_or(Path::new("."));
-                let release = self.release;
-
-                match super::ios_swift::compile_swift_sources(
-                    &swift_sources,
-                    &self.triple,
-                    build_dir,
-                    release,
-                )
-                .await
-                {
-                    Ok(Some(swift_lib)) => {
-                        tracing::info!("Linking Swift library: {}", swift_lib.display());
-                        // Add the Swift library to the link args
-                        // For Darwin, we use -force_load to ensure all symbols are included
-                        if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o"))
-                        {
-                            args.insert(last_object + 1, "-Wl,-force_load".to_string());
-                            args.insert(last_object + 2, swift_lib.display().to_string());
-                        } else {
-                            // Fallback: just add to the end
-                            args.push("-Wl,-force_load".to_string());
-                            args.push(swift_lib.display().to_string());
-                        }
-                    }
-                    Ok(None) => {
-                        tracing::debug!("No Swift libraries produced");
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to compile Swift sources: {}", e);
-                        // Continue without Swift - this allows building when Swift isn't ready
-                    }
-                }
             }
         }
 
@@ -3249,106 +3030,6 @@ let package = Package(
                 .map(|s| s.display().to_string())
                 .join("\n"),
         );
-
-        Ok(())
-    }
-
-    /// Run the Darwin linker with Swift plugin support.
-    ///
-    /// This function is used for Darwin (macOS/iOS) Base builds where we intercept
-    /// the linker to enable Swift plugin compilation. It:
-    /// 1. Extracts Swift metadata from the rlibs in the link args
-    /// 2. Compiles any Swift sources found
-    /// 3. Runs the actual linker with the Swift library added if present
-    async fn run_darwin_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
-        let mut args = rustc_args.link_args.clone();
-
-        if args.is_empty() {
-            tracing::warn!("No link args found for Darwin link");
-            return Ok(());
-        }
-
-        // Check for Swift sources in the rlibs
-        let workspace_dir = self.workspace_dir();
-        let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
-            &rustc_args.link_args,
-            &workspace_dir,
-        );
-
-        // Compile Swift sources if any were found
-        if !swift_sources.is_empty() {
-            tracing::info!(
-                "Found {} Swift plugin source(s), compiling...",
-                swift_sources.len()
-            );
-
-            let build_dir = exe.parent().unwrap_or(Path::new("."));
-            let release = self.release;
-
-            match super::ios_swift::compile_swift_sources(
-                &swift_sources,
-                &self.triple,
-                build_dir,
-                release,
-            )
-            .await
-            {
-                Ok(Some(swift_lib)) => {
-                    tracing::info!("Linking Swift library: {}", swift_lib.display());
-                    // Add the Swift library to the link args
-                    // For Darwin, we use -force_load to ensure all symbols are included
-                    if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
-                        args.insert(last_object + 1, "-Wl,-force_load".to_string());
-                        args.insert(last_object + 2, swift_lib.display().to_string());
-                    } else {
-                        // Fallback: just add before -o flag
-                        if let Some(out_idx) = args.iter().position(|arg| *arg == "-o") {
-                            args.insert(out_idx, swift_lib.display().to_string());
-                            args.insert(out_idx, "-Wl,-force_load".to_string());
-                        } else {
-                            // Last resort: add at the end
-                            args.push("-Wl,-force_load".to_string());
-                            args.push(swift_lib.display().to_string());
-                        }
-                    }
-                }
-                Ok(None) => {
-                    tracing::debug!("No Swift libraries produced");
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to compile Swift sources: {}", e);
-                    // Continue without Swift - this allows building when Swift isn't ready
-                }
-            }
-        }
-
-        // Select the appropriate linker
-        let linker = self.select_linker()?;
-
-        tracing::trace!("Darwin linking with: {:?} {:?}", linker, args);
-
-        // Run the linker
-        let res = Command::new(&linker)
-            .args(&args)
-            .envs(
-                rustc_args
-                    .envs
-                    .iter()
-                    .map(|(k, v)| (k.as_str(), v.as_str())),
-            )
-            .output()
-            .await?;
-
-        if !res.status.success() {
-            let stderr = String::from_utf8_lossy(&res.stderr);
-            let stdout = String::from_utf8_lossy(&res.stdout);
-            anyhow::bail!("Darwin link failed:\n{}\n{}", stdout, stderr);
-        }
-
-        if !res.stderr.is_empty() {
-            let errs = String::from_utf8_lossy(&res.stderr);
-            tracing::trace!("Darwin linker warnings: {}", errs.trim());
-        }
 
         Ok(())
     }
@@ -3673,17 +3354,11 @@ let package = Package(
             cargo_args.push("-Clink-args=--emit-relocs".to_string());
         }
 
-        // dx *always* links android, thin builds, fat builds, and Darwin builds (for Swift support)
-        // For Darwin (macOS/iOS), we intercept the linker to enable Swift plugin compilation
+        // dx links android, thin builds, and fat builds with a custom linker.
+        // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
+        // frameworks that load at runtime, not linked statically into the binary.
         let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-            || (matches!(build_mode, BuildMode::Base { .. })
-                && matches!(
-                    self.triple.operating_system,
-                    OperatingSystem::Darwin(_)
-                        | OperatingSystem::MacOSX { .. }
-                        | OperatingSystem::IOS(_)
-                ));
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
 
         if use_dx_linker {
             cargo_args.push(format!(
@@ -3699,11 +3374,17 @@ let package = Package(
         }
 
         // Handle frameworks/dylibs by setting the rpath
-        // This is dependent on the bundle structure - in this case, appimage and appbundle for mac/linux
+        // This is dependent on the bundle structure - iOS uses a flat structure while macOS uses nested
         // todo: we need to figure out what to do for windows
         match self.triple.operating_system {
-            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_) => {
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } => {
+                // macOS: App.app/Contents/MacOS/exe -> ../Frameworks/
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/../Frameworks".to_string());
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
+            }
+            OperatingSystem::IOS(_) => {
+                // iOS: App.app/exe -> Frameworks/ (flat bundle structure)
+                cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path/Frameworks".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,@executable_path".to_string());
             }
             OperatingSystem::Linux => {
@@ -3844,30 +3525,17 @@ let package = Package(
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
-        // For Darwin builds (macOS/iOS), we also intercept linking to enable Swift plugin compilation.
-        let is_darwin = matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::IOS(_)
-        );
-
+        // Note: We don't intercept Darwin Base builds since Swift plugins are compiled as dynamic
+        // frameworks that load at runtime, not linked statically into the binary.
         let use_dx_linker = self.custom_linker.is_some()
-            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
-            || (matches!(build_mode, BuildMode::Base { .. }) && is_darwin);
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat);
 
         if use_dx_linker {
-            // For Darwin Base builds, we use no-link mode (linker = None) so dx just captures
-            // the linker args. We'll run the actual linker ourselves after checking for Swift.
             // For Android, we pass the actual linker so cargo can still link normally.
-            // For Fat/Thin builds, we also use no-link mode (linker = None).
-            let linker = if is_darwin && matches!(build_mode, BuildMode::Base { .. }) {
-                None // No-link mode for Darwin - we'll link ourselves
-            } else {
-                self.custom_linker.clone() // Android uses this, Fat/Thin use None
-            };
-
+            // For Fat/Thin builds, we use no-link mode (linker = None).
             LinkAction {
                 triple: self.triple.clone(),
-                linker,
+                linker: self.custom_linker.clone(),
                 link_err_file: dunce::canonicalize(self.link_err_file())?,
                 link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
