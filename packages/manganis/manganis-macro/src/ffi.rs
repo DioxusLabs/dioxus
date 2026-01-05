@@ -734,13 +734,20 @@ impl FfiBridgeParser {
                 unsafe impl Sync for #name {}
 
                 impl #name {
-                    /// Load the Swift framework bundle to make classes available
+                    /// Load the Swift framework bundle to make classes available.
+                    ///
+                    /// We use dlopen rather than build-time linking because Swift packages are compiled
+                    /// after the Rust binary (we extract plugin metadata from the linker args).
+                    ///
+                    /// This is App Store compliant because:
+                    /// - The framework is bundled inside the .app bundle (not downloaded)
+                    /// - The framework is code-signed as part of the app
+                    /// - No external code is loaded - only bundled, reviewed code
                     fn load_swift_framework() -> Result<(), &'static str> {
                         use std::sync::Once;
                         static LOAD_ONCE: Once = Once::new();
                         static mut LOAD_RESULT: Result<(), &'static str> = Ok(());
 
-                        // FFI declarations for dlopen
                         #[link(name = "System")]
                         extern "C" {
                             fn dlopen(filename: *const std::ffi::c_char, flags: std::ffi::c_int) -> *mut std::ffi::c_void;

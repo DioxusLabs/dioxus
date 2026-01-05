@@ -209,12 +209,3 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
   }
 
 }
-
-// /**
-//  * Anchor function to force the Swift object file into linked binaries.
-//  * Rust calls this symbol at startup to ensure the class is registered with the ObjC runtime.
-//  */
-// @_cdecl("dioxus_geolocation_plugin_init")
-// public func dioxus_geolocation_plugin_init() {
-//   _ = GeolocationPlugin.self
-// }
