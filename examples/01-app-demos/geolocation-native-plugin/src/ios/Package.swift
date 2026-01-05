@@ -8,8 +8,8 @@ import PackageDescription
 let package = Package(
   name: "GeolocationPlugin",
   platforms: [
-    .iOS(.v13),
-    .macOS(.v12),
+    .iOS(.v16),  // iOS 16.1+ required for Live Activities
+    .macOS(.v13),
   ],
   products: [
     .library(
@@ -25,6 +25,7 @@ let package = Package(
       linkerSettings: [
         .linkedFramework("CoreLocation"),
         .linkedFramework("Foundation"),
+        .linkedFramework("ActivityKit", .when(platforms: [.iOS])),
       ])
   ]
 )

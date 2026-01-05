@@ -100,3 +100,25 @@ pub struct Position {
     /// The GPS coordinates along with the accuracy of the data.
     pub coords: Coordinates,
 }
+
+// =============================================================================
+// Live Activity types (iOS 16.1+)
+// =============================================================================
+
+/// Result from starting a Live Activity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveActivityResult {
+    /// Unique identifier for the activity
+    pub activity_id: String,
+    /// Current permission status displayed in the activity
+    pub permission_status: String,
+}
+
+/// Result from updating a Live Activity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveActivityUpdate {
+    /// Current permission status after update
+    pub permission_status: String,
+}

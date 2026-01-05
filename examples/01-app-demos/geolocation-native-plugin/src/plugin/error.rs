@@ -40,6 +40,10 @@ pub enum Error {
     /// Timeout waiting for location
     #[error("Timeout waiting for location")]
     Timeout,
+
+    /// Live Activity error (iOS 16.1+)
+    #[error("Live Activity error: {0}")]
+    LiveActivity(String),
 }
 
 impl Serialize for Error {

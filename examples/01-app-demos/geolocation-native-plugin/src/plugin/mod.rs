@@ -137,6 +137,70 @@ impl Geolocation {
         let status: PermissionStatus = serde_json::from_str(&result_json).map_err(Error::Json)?;
         Ok(status)
     }
+
+    // =========================================================================
+    // Live Activity methods (iOS 16.1+)
+    // =========================================================================
+
+    /// Start a Live Activity showing the current permission status.
+    ///
+    /// Live Activities appear on the lock screen and Dynamic Island (on supported devices).
+    /// Requires iOS 16.1+ and a Widget Extension for the UI (see docs).
+    ///
+    /// # Returns
+    ///
+    /// Returns the activity ID and current permission status, or an error.
+    pub fn start_live_activity(&mut self) -> Result<LiveActivityResult> {
+        let plugin = self.get_plugin()?;
+        let result_json = startLiveActivityJson(plugin)?;
+
+        // Check for error in response
+        let json_value: serde_json::Value =
+            serde_json::from_str(&result_json).map_err(Error::Json)?;
+        if let Some(error_msg) = json_value.get("error") {
+            return Err(Error::LiveActivity(
+                error_msg.as_str().unwrap_or("Unknown error").to_string(),
+            ));
+        }
+
+        let result: LiveActivityResult = serde_json::from_str(&result_json).map_err(Error::Json)?;
+        Ok(result)
+    }
+
+    /// Update the Live Activity with the current permission status.
+    ///
+    /// Call this after permission changes to reflect the new state.
+    pub fn update_live_activity(&mut self) -> Result<LiveActivityUpdate> {
+        let plugin = self.get_plugin()?;
+        let result_json = updateLiveActivityJson(plugin, "{}".to_string())?;
+
+        let json_value: serde_json::Value =
+            serde_json::from_str(&result_json).map_err(Error::Json)?;
+        if let Some(error_msg) = json_value.get("error") {
+            return Err(Error::LiveActivity(
+                error_msg.as_str().unwrap_or("Unknown error").to_string(),
+            ));
+        }
+
+        let result: LiveActivityUpdate = serde_json::from_str(&result_json).map_err(Error::Json)?;
+        Ok(result)
+    }
+
+    /// End all Live Activities for this app.
+    pub fn end_live_activity(&mut self) -> Result<()> {
+        let plugin = self.get_plugin()?;
+        let result_json = endLiveActivityJson(plugin)?;
+
+        let json_value: serde_json::Value =
+            serde_json::from_str(&result_json).map_err(Error::Json)?;
+        if let Some(error_msg) = json_value.get("error") {
+            return Err(Error::LiveActivity(
+                error_msg.as_str().unwrap_or("Unknown error").to_string(),
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 impl Default for Geolocation {
@@ -164,6 +228,18 @@ extern "Swift" {
     /// Request permissions with optional types list as JSON, return status as JSON
     /// Swift signature: func requestPermissionsJson(_ permissionsJson: String) -> String
     pub fn requestPermissionsJson(this: &GeolocationPlugin, permissionsJson: String) -> String;
+
+    /// Start a Live Activity showing permission status (iOS 16.1+)
+    /// Swift signature: func startLiveActivityJson() -> String
+    pub fn startLiveActivityJson(this: &GeolocationPlugin) -> String;
+
+    /// Update the Live Activity with current permission status
+    /// Swift signature: func updateLiveActivityJson(_ statusJson: String) -> String
+    pub fn updateLiveActivityJson(this: &GeolocationPlugin, statusJson: String) -> String;
+
+    /// End all Live Activities
+    /// Swift signature: func endLiveActivityJson() -> String
+    pub fn endLiveActivityJson(this: &GeolocationPlugin) -> String;
 }
 
 /// Android native bindings - the macro generates all JNI code automatically.
@@ -202,6 +278,7 @@ use fallback::*;
 )))]
 mod fallback {
     #![allow(non_snake_case)]
+    use super::{Error, Result};
 
     pub struct GeolocationPlugin;
 
@@ -213,21 +290,39 @@ mod fallback {
         }
     }
 
-    fn getCurrentPositionJson(_: &GeolocationPlugin, _: String) -> Result<String> {
+    pub fn getCurrentPositionJson(_: &GeolocationPlugin, _: String) -> Result<String> {
         Err(Error::PlatformBridge(
             "Geolocation is only supported on Android, iOS, and macOS".to_string(),
         ))
     }
 
-    fn checkPermissionsJson(_: &GeolocationPlugin) -> Result<String> {
+    pub fn checkPermissionsJson(_: &GeolocationPlugin) -> Result<String> {
         Err(Error::PlatformBridge(
             "Geolocation is only supported on Android, iOS, and macOS".to_string(),
         ))
     }
 
-    fn requestPermissionsJson(_: &GeolocationPlugin, _: String) -> Result<String> {
+    pub fn requestPermissionsJson(_: &GeolocationPlugin, _: String) -> Result<String> {
         Err(Error::PlatformBridge(
             "Geolocation is only supported on Android, iOS, and macOS".to_string(),
+        ))
+    }
+
+    pub fn startLiveActivityJson(_: &GeolocationPlugin) -> Result<String> {
+        Err(Error::LiveActivity(
+            "Live Activities are only supported on iOS 16.1+".to_string(),
+        ))
+    }
+
+    pub fn updateLiveActivityJson(_: &GeolocationPlugin, _: String) -> Result<String> {
+        Err(Error::LiveActivity(
+            "Live Activities are only supported on iOS 16.1+".to_string(),
+        ))
+    }
+
+    pub fn endLiveActivityJson(_: &GeolocationPlugin) -> Result<String> {
+        Err(Error::LiveActivity(
+            "Live Activities are only supported on iOS 16.1+".to_string(),
         ))
     }
 }

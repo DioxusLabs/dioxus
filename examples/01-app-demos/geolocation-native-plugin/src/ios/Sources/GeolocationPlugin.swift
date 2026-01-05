@@ -5,6 +5,21 @@
 import CoreLocation
 import Foundation
 import Dispatch
+import ActivityKit
+
+/// Live Activity attributes for displaying location permission status
+@available(iOS 16.2, *)
+public struct LocationPermissionAttributes: ActivityAttributes {
+  public struct ContentState: Codable, Hashable {
+    /// Current permission status: "prompt", "granted", "denied"
+    public var permissionStatus: String
+    /// Last update timestamp
+    public var lastUpdated: Date
+  }
+
+  /// App name to display
+  public var appName: String
+}
 
 /**
  * Simplified GeolocationPlugin for Dioxus that works without Tauri dependencies.
@@ -206,6 +221,120 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
     }
 
     return "{\"error\":\"Failed to serialize location\"}"
+  }
+
+  //
+  // Live Activity methods
+  //
+
+  /// Start a Live Activity showing permission status
+  /// Returns JSON with activity ID or error
+  @objc public func startLiveActivityJson() -> String {
+    if #available(iOS 16.2, *) {
+      // Check if Live Activities are enabled
+      guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+        return "{\"error\":\"Live Activities are not enabled\"}"
+      }
+
+      // Get current permission status
+      let status = self.getCurrentPermissionStatus()
+
+      let attributes = LocationPermissionAttributes(appName: "Geolocation Demo")
+      let contentState = LocationPermissionAttributes.ContentState(
+        permissionStatus: status,
+        lastUpdated: Date()
+      )
+
+      do {
+        let activity = try Activity.request(
+          attributes: attributes,
+          content: .init(state: contentState, staleDate: nil),
+          pushType: nil
+        )
+
+        // Store reference (note: this won't persist across method calls in current setup)
+        // In a real app, you'd store the activity ID and look it up
+
+        let result: [String: Any] = [
+          "activityId": activity.id,
+          "permissionStatus": status
+        ]
+
+        if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+          return jsonString
+        }
+        return "{\"error\":\"Failed to serialize result\"}"
+      } catch {
+        return "{\"error\":\"Failed to start Live Activity: \(error.localizedDescription)\"}"
+      }
+    } else {
+      return "{\"error\":\"Live Activities require iOS 16.2+\"}"
+    }
+  }
+
+  /// Update the Live Activity with new permission status
+  /// Takes JSON with activityId
+  @objc public func updateLiveActivityJson(_ statusJson: String) -> String {
+    if #available(iOS 16.2, *) {
+      // Get current permission status
+      let status = self.getCurrentPermissionStatus()
+
+      let contentState = LocationPermissionAttributes.ContentState(
+        permissionStatus: status,
+        lastUpdated: Date()
+      )
+
+      // Update all running activities of this type
+      Task {
+        for activity in Activity<LocationPermissionAttributes>.activities {
+          await activity.update(
+            ActivityContent(state: contentState, staleDate: nil)
+          )
+        }
+      }
+
+      let result: [String: String] = ["permissionStatus": status]
+      if let jsonData = try? JSONSerialization.data(withJSONObject: result),
+         let jsonString = String(data: jsonData, encoding: .utf8) {
+        return jsonString
+      }
+      return "{\"error\":\"Failed to serialize result\"}"
+    } else {
+      return "{\"error\":\"Live Activities require iOS 16.2+\"}"
+    }
+  }
+
+  /// End all Live Activities
+  @objc public func endLiveActivityJson() -> String {
+    if #available(iOS 16.2, *) {
+      Task {
+        for activity in Activity<LocationPermissionAttributes>.activities {
+          await activity.end(nil, dismissalPolicy: .immediate)
+        }
+      }
+      return "{\"success\":true}"
+    } else {
+      return "{\"error\":\"Live Activities require iOS 16.2+\"}"
+    }
+  }
+
+  /// Helper to get current permission status string
+  private func getCurrentPermissionStatus() -> String {
+    if CLLocationManager.locationServicesEnabled() {
+      switch CLLocationManager.authorizationStatus() {
+      case .notDetermined:
+        return "prompt"
+      case .restricted, .denied:
+        return "denied"
+      case .authorizedAlways, .authorizedWhenInUse:
+        return "granted"
+      @unknown default:
+        return "unknown"
+      }
+    } else {
+      return "disabled"
+    }
   }
 
 }

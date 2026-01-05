@@ -7,7 +7,7 @@ use dioxus::prelude::*;
 
 // Import the local plugin module
 mod plugin;
-use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions};
+use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions, LiveActivityResult};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -25,6 +25,7 @@ fn App() -> Element {
     let error = use_signal(|| None::<String>);
     let use_high_accuracy = use_signal(|| true);
     let max_age_input = use_signal(|| String::from("0"));
+    let live_activity = use_signal(|| None::<LiveActivityResult>);
 
     let on_check_permissions = {
         let mut geolocation = geolocation;
@@ -98,6 +99,48 @@ fn App() -> Element {
         "High accuracy: on"
     } else {
         "High accuracy: off"
+    };
+
+    // Live Activity handlers
+    let on_start_live_activity = {
+        let mut geolocation = geolocation;
+        let mut live_activity = live_activity;
+        let mut error = error;
+        move |_| {
+            match geolocation.write().start_live_activity() {
+                Ok(result) => {
+                    live_activity.set(Some(result));
+                    error.set(None);
+                }
+                Err(err) => error.set(Some(err.to_string())),
+            }
+        }
+    };
+
+    let on_update_live_activity = {
+        let mut geolocation = geolocation;
+        let mut error = error;
+        move |_| {
+            match geolocation.write().update_live_activity() {
+                Ok(_) => error.set(None),
+                Err(err) => error.set(Some(err.to_string())),
+            }
+        }
+    };
+
+    let on_end_live_activity = {
+        let mut geolocation = geolocation;
+        let mut live_activity = live_activity;
+        let mut error = error;
+        move |_| {
+            match geolocation.write().end_live_activity() {
+                Ok(_) => {
+                    live_activity.set(None);
+                    error.set(None);
+                }
+                Err(err) => error.set(Some(err.to_string())),
+            }
+        }
     };
 
     rsx! {
@@ -181,6 +224,34 @@ fn App() -> Element {
                             }
                         }
                         None => rsx!(p { class: "muted", "No location fetched yet." }),
+                    }
+                }
+
+                // Live Activity card (iOS 16.1+)
+                section { class: "card",
+                    h2 { "Live Activity" }
+                    p { class: "muted",
+                        "Start a Live Activity to show permission status on the lock screen. \
+                        Requires iOS 16.1+ and a Widget Extension for full UI support." }
+                    div { class: "button-row",
+                        button { onclick: on_start_live_activity, "Start Activity" }
+                        button { class: "secondary", onclick: on_update_live_activity, "Update" }
+                        button { class: "secondary", onclick: on_end_live_activity, "End" }
+                    }
+                    match live_activity() {
+                        Some(activity) => rsx! {
+                            div { class: "status-grid",
+                                div { class: "permission-row",
+                                    span { class: "muted", "Activity ID" }
+                                    span { "{activity.activity_id}" }
+                                }
+                                div { class: "permission-row",
+                                    span { class: "muted", "Status" }
+                                    span { class: "badge badge--granted", "{activity.permission_status}" }
+                                }
+                            }
+                        },
+                        None => rsx!(p { class: "muted", "No Live Activity running." }),
                     }
                 }
             }
