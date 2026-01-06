@@ -89,3 +89,30 @@ fn test_builder_hydration_matches_rsx() {
     assert_eq!(rsx_html, builder_html);
     assert!(builder_html.contains("click:1"));
 }
+
+#[test]
+fn test_builder_merges_class_attributes() {
+    fn builder_app() -> Element {
+        div().class("one").class("two").build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("class=\"one two\""));
+}
+
+#[test]
+fn test_builder_attr_if() {
+    fn builder_app() -> Element {
+        let enabled = false;
+        div().attr_if(enabled, "data-test", "present").build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(!html.contains("data-test"));
+}

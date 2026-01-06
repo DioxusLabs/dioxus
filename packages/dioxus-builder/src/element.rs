@@ -1,32 +1,85 @@
 //! Core element builder implementation.
 
 use dioxus_core::{
-    Attribute, DynamicNode, HasAttributes, IntoAttributeValue, IntoDynNode,
+    Attribute, AttributeValue, DynamicNode, HasAttributes, IntoAttributeValue, IntoDynNode,
     Template, TemplateAttribute, TemplateNode, VNode,
 };
-use dioxus_html::events::{MouseData, FormData, FocusData, KeyboardData};
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-static TEMPLATES: RwLock<Option<HashMap<(&'static str, Option<&'static str>, usize, bool), Template>>> = RwLock::new(None);
+pub use dioxus_html::GlobalAttributesExtension;
+pub use dioxus_html::SvgAttributesExtension;
 
-fn get_template(tag: &'static str, namespace: Option<&'static str>, num_children: usize, has_attributes: bool) -> Template {
-    if let Some(template) = TEMPLATES.read().as_ref().and_then(|m| m.get(&(tag, namespace, num_children, has_attributes))) {
-        return *template;
+impl GlobalAttributesExtension for ElementBuilder {}
+impl SvgAttributesExtension for ElementBuilder {}
+
+const TEMPLATE_CACHE_CAP: usize = 1024;
+type TemplateKey = (&'static str, Option<&'static str>, usize, bool);
+
+struct TemplateCache {
+    map: HashMap<TemplateKey, Template>,
+    order: VecDeque<TemplateKey>,
+}
+
+impl TemplateCache {
+    fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+
+    fn get(&self, key: &TemplateKey) -> Option<Template> {
+        self.map.get(key).copied()
+    }
+
+    fn insert(&mut self, key: TemplateKey, template: Template) {
+        if let std::collections::hash_map::Entry::Occupied(mut e) = self.map.entry(key) {
+            e.insert(template);
+            return;
+        }
+
+        self.map.insert(key, template);
+        self.order.push_back(key);
+
+        if self.order.len() > TEMPLATE_CACHE_CAP {
+            if let Some(oldest) = self.order.pop_front() {
+                self.map.remove(&oldest);
+            }
+        }
+    }
+}
+
+static TEMPLATES: RwLock<Option<TemplateCache>> = RwLock::new(None);
+
+fn get_template(
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    num_children: usize,
+    has_attributes: bool,
+) -> Template {
+    let key = (tag, namespace, num_children, has_attributes);
+    if let Some(template) = TEMPLATES.read().as_ref().and_then(|cache| cache.get(&key)) {
+        return template;
     }
 
     let mut write = TEMPLATES.write();
-    let map = write.get_or_insert_with(HashMap::new);
-    if let Some(template) = map.get(&(tag, namespace, num_children, has_attributes)) {
-        return *template;
+    let cache = write.get_or_insert_with(TemplateCache::new);
+    if let Some(template) = cache.get(&key) {
+        return template;
     }
 
     let template = create_template(tag, namespace, num_children, has_attributes);
-    map.insert((tag, namespace, num_children, has_attributes), template);
+    cache.insert(key, template);
     template
 }
 
-fn create_template(tag: &'static str, namespace: Option<&'static str>, num_children: usize, has_attributes: bool) -> Template {
+fn create_template(
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    num_children: usize,
+    has_attributes: bool,
+) -> Template {
     let mut children_list = Vec::with_capacity(num_children);
     let mut node_paths = Vec::with_capacity(num_children);
 
@@ -54,9 +107,7 @@ fn create_template(tag: &'static str, namespace: Option<&'static str>, num_child
     }]));
 
     let attr_paths: &'static [&'static [u8]] = if has_attributes {
-        Box::leak(Box::new([
-            Box::leak(Box::new([0u8])) as &'static [u8]
-        ]))
+        Box::leak(Box::new([Box::leak(Box::new([0u8])) as &'static [u8]]))
     } else {
         &[]
     };
@@ -115,6 +166,29 @@ impl ElementBuilder {
         self
     }
 
+    /// Add a child element or text node only if the condition is true.
+    pub fn child_if(self, condition: bool, child: impl IntoDynNode) -> Self {
+        if condition {
+            self.child(child)
+        } else {
+            self
+        }
+    }
+
+    /// Add a child element or text node from one of two branches.
+    pub fn child_if_else(
+        self,
+        condition: bool,
+        then_child: impl IntoDynNode,
+        else_child: impl IntoDynNode,
+    ) -> Self {
+        if condition {
+            self.child(then_child)
+        } else {
+            self.child(else_child)
+        }
+    }
+
     /// Add multiple children from an iterator.
     pub fn children(mut self, children: impl IntoIterator<Item = impl IntoDynNode>) -> Self {
         for child in children {
@@ -136,6 +210,7 @@ impl ElementBuilder {
         let mut dynamic_attrs = Vec::new();
         if has_attributes {
             let mut attributes = self.attributes;
+            merge_class_attributes(&mut attributes);
             attributes.sort_by(|a, b| a.name.cmp(b.name));
             dynamic_attrs.push(attributes.into_boxed_slice());
         }
@@ -143,6 +218,52 @@ impl ElementBuilder {
 
         Ok(VNode::new(None, template, dynamic_nodes, dynamic_attrs))
     }
+}
+
+fn merge_class_attributes(attributes: &mut Vec<Attribute>) {
+    if attributes.len() < 2 {
+        return;
+    }
+
+    let mut merged_classes: Vec<String> = Vec::new();
+    let mut class_volatile = false;
+    let mut retained: Vec<Attribute> = Vec::with_capacity(attributes.len());
+
+    for attr in attributes.drain(..) {
+        if attr.name == "class" && attr.namespace.is_none() {
+            class_volatile |= attr.volatile;
+            match attr.value {
+                AttributeValue::Text(value) => {
+                    if !value.is_empty() {
+                        merged_classes.push(value);
+                    }
+                }
+                AttributeValue::Int(value) => merged_classes.push(value.to_string()),
+                AttributeValue::Float(value) => merged_classes.push(value.to_string()),
+                AttributeValue::Bool(value) => merged_classes.push(value.to_string()),
+                AttributeValue::None => {}
+                other => {
+                    retained.push(Attribute {
+                        value: other,
+                        ..attr
+                    });
+                }
+            }
+        } else {
+            retained.push(attr);
+        }
+    }
+
+    if !merged_classes.is_empty() {
+        retained.push(Attribute {
+            name: "class",
+            namespace: None,
+            value: AttributeValue::Text(merged_classes.join(" ")),
+            volatile: class_volatile,
+        });
+    }
+
+    *attributes = retained;
 }
 
 impl IntoDynNode for ElementBuilder {
@@ -168,6 +289,76 @@ impl HasAttributes for ElementBuilder {
             volatile,
         });
         self
+    }
+}
+
+// =============================================================================
+// Attribute Helpers
+// =============================================================================
+
+impl ElementBuilder {
+    /// Set a custom attribute with a static name.
+    pub fn attr<T>(self, name: &'static str, value: impl IntoAttributeValue<T>) -> Self {
+        self.push_attribute(name, None, value, false)
+    }
+
+    /// Set a custom attribute with a static name and namespace.
+    pub fn attr_ns<T>(
+        self,
+        name: &'static str,
+        namespace: &'static str,
+        value: impl IntoAttributeValue<T>,
+    ) -> Self {
+        self.push_attribute(name, Some(namespace), value, false)
+    }
+
+    /// Set a custom attribute only when the condition is true.
+    pub fn attr_if<T>(
+        self,
+        condition: bool,
+        name: &'static str,
+        value: impl IntoAttributeValue<T>,
+    ) -> Self {
+        if condition {
+            self.push_attribute(name, None, value, false)
+        } else {
+            self
+        }
+    }
+
+    /// Append a list of pre-built attributes.
+    pub fn attrs(self, attrs: impl IntoIterator<Item = Attribute>) -> Self {
+        attrs.into_iter().fold(self, |builder, attr| {
+            builder.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
+        })
+    }
+
+    /// Conditionally add a class name.
+    pub fn class_if(self, condition: bool, value: impl IntoAttributeValue) -> Self {
+        if condition {
+            self.class(value)
+        } else {
+            self
+        }
+    }
+
+    /// Add multiple class names from an iterator.
+    pub fn class_list<I, S>(self, classes: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let joined = classes
+            .into_iter()
+            .map(|c| c.as_ref().to_string())
+            .filter(|c| !c.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ");
+        if joined.is_empty() {
+            self
+        } else {
+            self.class(joined)
+        }
     }
 }
 
@@ -224,115 +415,10 @@ impl ElementBuilder {
 }
 
 // =============================================================================
-// Event Handlers
+// Event Handlers (generated from dioxus-html)
 // =============================================================================
 
-impl ElementBuilder {
-    /// Set the onclick handler.
-    pub fn onclick(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onclick(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the ondblclick handler.
-    pub fn ondblclick(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        #[allow(deprecated)]
-        let attr = dioxus_html::ondblclick(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmousedown handler.
-    pub fn onmousedown(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmousedown(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmouseup handler.
-    pub fn onmouseup(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmouseup(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmouseover handler.
-    pub fn onmouseover(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmouseover(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmousemove handler.
-    pub fn onmousemove(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmousemove(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmouseout handler.
-    pub fn onmouseout(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmouseout(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmouseenter handler.
-    pub fn onmouseenter(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmouseenter(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onmouseleave handler.
-    pub fn onmouseleave(self, handler: impl FnMut(dioxus_core::Event<MouseData>) + 'static) -> Self {
-        let attr = dioxus_html::onmouseleave(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onkeydown handler.
-    pub fn onkeydown(self, handler: impl FnMut(dioxus_core::Event<KeyboardData>) + 'static) -> Self {
-        let attr = dioxus_html::onkeydown(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onkeyup handler.
-    pub fn onkeyup(self, handler: impl FnMut(dioxus_core::Event<KeyboardData>) + 'static) -> Self {
-        let attr = dioxus_html::onkeyup(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onkeypress handler.
-    pub fn onkeypress(
-        self,
-        handler: impl FnMut(dioxus_core::Event<KeyboardData>) + 'static,
-    ) -> Self {
-        let attr = dioxus_html::onkeypress(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onfocus handler.
-    pub fn onfocus(self, handler: impl FnMut(dioxus_core::Event<FocusData>) + 'static) -> Self {
-        let attr = dioxus_html::onfocus(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onblur handler.
-    pub fn onblur(self, handler: impl FnMut(dioxus_core::Event<FocusData>) + 'static) -> Self {
-        let attr = dioxus_html::onblur(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-    /// Set the oninput handler.
-    pub fn oninput(self, handler: impl FnMut(dioxus_core::Event<FormData>) + 'static) -> Self {
-        let attr = dioxus_html::oninput(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onchange handler.
-    pub fn onchange(self, handler: impl FnMut(dioxus_core::Event<FormData>) + 'static) -> Self {
-        let attr = dioxus_html::onchange(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-
-    /// Set the onsubmit handler.
-    pub fn onsubmit(self, handler: impl FnMut(dioxus_core::Event<FormData>) + 'static) -> Self {
-        let attr = dioxus_html::onsubmit(handler);
-        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)
-    }
-}
+include!(concat!(env!("OUT_DIR"), "/builder_events.rs"));
 
 // =============================================================================
 // Form Element Attributes
@@ -488,143 +574,371 @@ impl ElementBuilder {
 // =============================================================================
 
 // Document Metadata
-pub fn head() -> ElementBuilder { ElementBuilder::new("head") }
-pub fn title() -> ElementBuilder { ElementBuilder::new("title") }
-pub fn base() -> ElementBuilder { ElementBuilder::new("base") }
-pub fn link() -> ElementBuilder { ElementBuilder::new("link") }
-pub fn meta() -> ElementBuilder { ElementBuilder::new("meta") }
-pub fn style() -> ElementBuilder { ElementBuilder::new("style") }
+pub fn head() -> ElementBuilder {
+    ElementBuilder::new("head")
+}
+pub fn title() -> ElementBuilder {
+    ElementBuilder::new("title")
+}
+pub fn base() -> ElementBuilder {
+    ElementBuilder::new("base")
+}
+pub fn link() -> ElementBuilder {
+    ElementBuilder::new("link")
+}
+pub fn meta() -> ElementBuilder {
+    ElementBuilder::new("meta")
+}
+pub fn style() -> ElementBuilder {
+    ElementBuilder::new("style")
+}
 
 // Sectioning Root
-pub fn body() -> ElementBuilder { ElementBuilder::new("body") }
+pub fn body() -> ElementBuilder {
+    ElementBuilder::new("body")
+}
 
 // Content Sectioning
-pub fn address() -> ElementBuilder { ElementBuilder::new("address") }
-pub fn article() -> ElementBuilder { ElementBuilder::new("article") }
-pub fn aside() -> ElementBuilder { ElementBuilder::new("aside") }
-pub fn footer() -> ElementBuilder { ElementBuilder::new("footer") }
-pub fn header() -> ElementBuilder { ElementBuilder::new("header") }
-pub fn h1() -> ElementBuilder { ElementBuilder::new("h1") }
-pub fn h2() -> ElementBuilder { ElementBuilder::new("h2") }
-pub fn h3() -> ElementBuilder { ElementBuilder::new("h3") }
-pub fn h4() -> ElementBuilder { ElementBuilder::new("h4") }
-pub fn h5() -> ElementBuilder { ElementBuilder::new("h5") }
-pub fn h6() -> ElementBuilder { ElementBuilder::new("h6") }
-pub fn main() -> ElementBuilder { ElementBuilder::new("main") }
-pub fn nav() -> ElementBuilder { ElementBuilder::new("nav") }
-pub fn section() -> ElementBuilder { ElementBuilder::new("section") }
-pub fn hgroup() -> ElementBuilder { ElementBuilder::new("hgroup") }
+pub fn address() -> ElementBuilder {
+    ElementBuilder::new("address")
+}
+pub fn article() -> ElementBuilder {
+    ElementBuilder::new("article")
+}
+pub fn aside() -> ElementBuilder {
+    ElementBuilder::new("aside")
+}
+pub fn footer() -> ElementBuilder {
+    ElementBuilder::new("footer")
+}
+pub fn header() -> ElementBuilder {
+    ElementBuilder::new("header")
+}
+pub fn h1() -> ElementBuilder {
+    ElementBuilder::new("h1")
+}
+pub fn h2() -> ElementBuilder {
+    ElementBuilder::new("h2")
+}
+pub fn h3() -> ElementBuilder {
+    ElementBuilder::new("h3")
+}
+pub fn h4() -> ElementBuilder {
+    ElementBuilder::new("h4")
+}
+pub fn h5() -> ElementBuilder {
+    ElementBuilder::new("h5")
+}
+pub fn h6() -> ElementBuilder {
+    ElementBuilder::new("h6")
+}
+pub fn main() -> ElementBuilder {
+    ElementBuilder::new("main")
+}
+pub fn nav() -> ElementBuilder {
+    ElementBuilder::new("nav")
+}
+pub fn section() -> ElementBuilder {
+    ElementBuilder::new("section")
+}
+pub fn hgroup() -> ElementBuilder {
+    ElementBuilder::new("hgroup")
+}
 
 // Text Content
-pub fn blockquote() -> ElementBuilder { ElementBuilder::new("blockquote") }
-pub fn dd() -> ElementBuilder { ElementBuilder::new("dd") }
-pub fn div() -> ElementBuilder { ElementBuilder::new("div") }
-pub fn dl() -> ElementBuilder { ElementBuilder::new("dl") }
-pub fn dt() -> ElementBuilder { ElementBuilder::new("dt") }
-pub fn figcaption() -> ElementBuilder { ElementBuilder::new("figcaption") }
-pub fn figure() -> ElementBuilder { ElementBuilder::new("figure") }
-pub fn hr() -> ElementBuilder { ElementBuilder::new("hr") }
-pub fn li() -> ElementBuilder { ElementBuilder::new("li") }
-pub fn ol() -> ElementBuilder { ElementBuilder::new("ol") }
-pub fn p() -> ElementBuilder { ElementBuilder::new("p") }
-pub fn pre() -> ElementBuilder { ElementBuilder::new("pre") }
-pub fn ul() -> ElementBuilder { ElementBuilder::new("ul") }
-pub fn menu() -> ElementBuilder { ElementBuilder::new("menu") }
+pub fn blockquote() -> ElementBuilder {
+    ElementBuilder::new("blockquote")
+}
+pub fn dd() -> ElementBuilder {
+    ElementBuilder::new("dd")
+}
+pub fn div() -> ElementBuilder {
+    ElementBuilder::new("div")
+}
+pub fn dl() -> ElementBuilder {
+    ElementBuilder::new("dl")
+}
+pub fn dt() -> ElementBuilder {
+    ElementBuilder::new("dt")
+}
+pub fn figcaption() -> ElementBuilder {
+    ElementBuilder::new("figcaption")
+}
+pub fn figure() -> ElementBuilder {
+    ElementBuilder::new("figure")
+}
+pub fn hr() -> ElementBuilder {
+    ElementBuilder::new("hr")
+}
+pub fn li() -> ElementBuilder {
+    ElementBuilder::new("li")
+}
+pub fn ol() -> ElementBuilder {
+    ElementBuilder::new("ol")
+}
+pub fn p() -> ElementBuilder {
+    ElementBuilder::new("p")
+}
+pub fn pre() -> ElementBuilder {
+    ElementBuilder::new("pre")
+}
+pub fn ul() -> ElementBuilder {
+    ElementBuilder::new("ul")
+}
+pub fn menu() -> ElementBuilder {
+    ElementBuilder::new("menu")
+}
 
 // Inline Text Semantics
-pub fn a() -> ElementBuilder { ElementBuilder::new("a") }
-pub fn abbr() -> ElementBuilder { ElementBuilder::new("abbr") }
-pub fn b() -> ElementBuilder { ElementBuilder::new("b") }
-pub fn bdi() -> ElementBuilder { ElementBuilder::new("bdi") }
-pub fn bdo() -> ElementBuilder { ElementBuilder::new("bdo") }
-pub fn br() -> ElementBuilder { ElementBuilder::new("br") }
-pub fn cite() -> ElementBuilder { ElementBuilder::new("cite") }
-pub fn code() -> ElementBuilder { ElementBuilder::new("code") }
-pub fn data() -> ElementBuilder { ElementBuilder::new("data") }
-pub fn dfn() -> ElementBuilder { ElementBuilder::new("dfn") }
-pub fn em() -> ElementBuilder { ElementBuilder::new("em") }
-pub fn i() -> ElementBuilder { ElementBuilder::new("i") }
-pub fn kbd() -> ElementBuilder { ElementBuilder::new("kbd") }
-pub fn mark() -> ElementBuilder { ElementBuilder::new("mark") }
-pub fn q() -> ElementBuilder { ElementBuilder::new("q") }
-pub fn rp() -> ElementBuilder { ElementBuilder::new("rp") }
-pub fn rt() -> ElementBuilder { ElementBuilder::new("rt") }
-pub fn ruby() -> ElementBuilder { ElementBuilder::new("ruby") }
-pub fn s() -> ElementBuilder { ElementBuilder::new("s") }
-pub fn samp() -> ElementBuilder { ElementBuilder::new("samp") }
-pub fn small() -> ElementBuilder { ElementBuilder::new("small") }
-pub fn span() -> ElementBuilder { ElementBuilder::new("span") }
-pub fn strong() -> ElementBuilder { ElementBuilder::new("strong") }
-pub fn sub() -> ElementBuilder { ElementBuilder::new("sub") }
-pub fn sup() -> ElementBuilder { ElementBuilder::new("sup") }
-pub fn time() -> ElementBuilder { ElementBuilder::new("time") }
-pub fn u() -> ElementBuilder { ElementBuilder::new("u") }
-pub fn var() -> ElementBuilder { ElementBuilder::new("var") }
-pub fn wbr() -> ElementBuilder { ElementBuilder::new("wbr") }
+pub fn a() -> ElementBuilder {
+    ElementBuilder::new("a")
+}
+pub fn abbr() -> ElementBuilder {
+    ElementBuilder::new("abbr")
+}
+pub fn b() -> ElementBuilder {
+    ElementBuilder::new("b")
+}
+pub fn bdi() -> ElementBuilder {
+    ElementBuilder::new("bdi")
+}
+pub fn bdo() -> ElementBuilder {
+    ElementBuilder::new("bdo")
+}
+pub fn br() -> ElementBuilder {
+    ElementBuilder::new("br")
+}
+pub fn cite() -> ElementBuilder {
+    ElementBuilder::new("cite")
+}
+pub fn code() -> ElementBuilder {
+    ElementBuilder::new("code")
+}
+pub fn data() -> ElementBuilder {
+    ElementBuilder::new("data")
+}
+pub fn dfn() -> ElementBuilder {
+    ElementBuilder::new("dfn")
+}
+pub fn em() -> ElementBuilder {
+    ElementBuilder::new("em")
+}
+pub fn i() -> ElementBuilder {
+    ElementBuilder::new("i")
+}
+pub fn kbd() -> ElementBuilder {
+    ElementBuilder::new("kbd")
+}
+pub fn mark() -> ElementBuilder {
+    ElementBuilder::new("mark")
+}
+pub fn q() -> ElementBuilder {
+    ElementBuilder::new("q")
+}
+pub fn rp() -> ElementBuilder {
+    ElementBuilder::new("rp")
+}
+pub fn rt() -> ElementBuilder {
+    ElementBuilder::new("rt")
+}
+pub fn ruby() -> ElementBuilder {
+    ElementBuilder::new("ruby")
+}
+pub fn s() -> ElementBuilder {
+    ElementBuilder::new("s")
+}
+pub fn samp() -> ElementBuilder {
+    ElementBuilder::new("samp")
+}
+pub fn small() -> ElementBuilder {
+    ElementBuilder::new("small")
+}
+pub fn span() -> ElementBuilder {
+    ElementBuilder::new("span")
+}
+pub fn strong() -> ElementBuilder {
+    ElementBuilder::new("strong")
+}
+pub fn sub() -> ElementBuilder {
+    ElementBuilder::new("sub")
+}
+pub fn sup() -> ElementBuilder {
+    ElementBuilder::new("sup")
+}
+pub fn time() -> ElementBuilder {
+    ElementBuilder::new("time")
+}
+pub fn u() -> ElementBuilder {
+    ElementBuilder::new("u")
+}
+pub fn var() -> ElementBuilder {
+    ElementBuilder::new("var")
+}
+pub fn wbr() -> ElementBuilder {
+    ElementBuilder::new("wbr")
+}
 
 // Image and Multimedia
-pub fn area() -> ElementBuilder { ElementBuilder::new("area") }
-pub fn audio() -> ElementBuilder { ElementBuilder::new("audio") }
-pub fn img() -> ElementBuilder { ElementBuilder::new("img") }
-pub fn map() -> ElementBuilder { ElementBuilder::new("map") }
-pub fn track() -> ElementBuilder { ElementBuilder::new("track") }
-pub fn video() -> ElementBuilder { ElementBuilder::new("video") }
+pub fn area() -> ElementBuilder {
+    ElementBuilder::new("area")
+}
+pub fn audio() -> ElementBuilder {
+    ElementBuilder::new("audio")
+}
+pub fn img() -> ElementBuilder {
+    ElementBuilder::new("img")
+}
+pub fn map() -> ElementBuilder {
+    ElementBuilder::new("map")
+}
+pub fn track() -> ElementBuilder {
+    ElementBuilder::new("track")
+}
+pub fn video() -> ElementBuilder {
+    ElementBuilder::new("video")
+}
 
 // Embedded Content
-pub fn embed() -> ElementBuilder { ElementBuilder::new("embed") }
-pub fn iframe() -> ElementBuilder { ElementBuilder::new("iframe") }
-pub fn object() -> ElementBuilder { ElementBuilder::new("object") }
-pub fn param() -> ElementBuilder { ElementBuilder::new("param") }
-pub fn picture() -> ElementBuilder { ElementBuilder::new("picture") }
-pub fn portal() -> ElementBuilder { ElementBuilder::new("portal") }
-pub fn source() -> ElementBuilder { ElementBuilder::new("source") }
+pub fn embed() -> ElementBuilder {
+    ElementBuilder::new("embed")
+}
+pub fn iframe() -> ElementBuilder {
+    ElementBuilder::new("iframe")
+}
+pub fn object() -> ElementBuilder {
+    ElementBuilder::new("object")
+}
+pub fn param() -> ElementBuilder {
+    ElementBuilder::new("param")
+}
+pub fn picture() -> ElementBuilder {
+    ElementBuilder::new("picture")
+}
+pub fn portal() -> ElementBuilder {
+    ElementBuilder::new("portal")
+}
+pub fn source() -> ElementBuilder {
+    ElementBuilder::new("source")
+}
 
 // SVG and MathML (with namespace)
-pub fn svg() -> ElementBuilder { ElementBuilder::new_with_namespace("svg", "http://www.w3.org/2000/svg") }
-pub fn math() -> ElementBuilder { ElementBuilder::new_with_namespace("math", "http://www.w3.org/1998/Math/MathML") }
+pub fn svg() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("svg", "http://www.w3.org/2000/svg")
+}
+pub fn math() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("math", "http://www.w3.org/1998/Math/MathML")
+}
 
 // Scripting
-pub fn canvas() -> ElementBuilder { ElementBuilder::new("canvas") }
-pub fn noscript() -> ElementBuilder { ElementBuilder::new("noscript") }
-pub fn script() -> ElementBuilder { ElementBuilder::new("script") }
+pub fn canvas() -> ElementBuilder {
+    ElementBuilder::new("canvas")
+}
+pub fn noscript() -> ElementBuilder {
+    ElementBuilder::new("noscript")
+}
+pub fn script() -> ElementBuilder {
+    ElementBuilder::new("script")
+}
 
 // Demarcating Edits
-pub fn del() -> ElementBuilder { ElementBuilder::new("del") }
-pub fn ins() -> ElementBuilder { ElementBuilder::new("ins") }
+pub fn del() -> ElementBuilder {
+    ElementBuilder::new("del")
+}
+pub fn ins() -> ElementBuilder {
+    ElementBuilder::new("ins")
+}
 
 // Table Content
-pub fn caption() -> ElementBuilder { ElementBuilder::new("caption") }
-pub fn col() -> ElementBuilder { ElementBuilder::new("col") }
-pub fn colgroup() -> ElementBuilder { ElementBuilder::new("colgroup") }
-pub fn table() -> ElementBuilder { ElementBuilder::new("table") }
-pub fn tbody() -> ElementBuilder { ElementBuilder::new("tbody") }
-pub fn td() -> ElementBuilder { ElementBuilder::new("td") }
-pub fn tfoot() -> ElementBuilder { ElementBuilder::new("tfoot") }
-pub fn th() -> ElementBuilder { ElementBuilder::new("th") }
-pub fn thead() -> ElementBuilder { ElementBuilder::new("thead") }
-pub fn tr() -> ElementBuilder { ElementBuilder::new("tr") }
+pub fn caption() -> ElementBuilder {
+    ElementBuilder::new("caption")
+}
+pub fn col() -> ElementBuilder {
+    ElementBuilder::new("col")
+}
+pub fn colgroup() -> ElementBuilder {
+    ElementBuilder::new("colgroup")
+}
+pub fn table() -> ElementBuilder {
+    ElementBuilder::new("table")
+}
+pub fn tbody() -> ElementBuilder {
+    ElementBuilder::new("tbody")
+}
+pub fn td() -> ElementBuilder {
+    ElementBuilder::new("td")
+}
+pub fn tfoot() -> ElementBuilder {
+    ElementBuilder::new("tfoot")
+}
+pub fn th() -> ElementBuilder {
+    ElementBuilder::new("th")
+}
+pub fn thead() -> ElementBuilder {
+    ElementBuilder::new("thead")
+}
+pub fn tr() -> ElementBuilder {
+    ElementBuilder::new("tr")
+}
 
 // Forms
-pub fn button() -> ElementBuilder { ElementBuilder::new("button") }
-pub fn datalist() -> ElementBuilder { ElementBuilder::new("datalist") }
-pub fn fieldset() -> ElementBuilder { ElementBuilder::new("fieldset") }
-pub fn form() -> ElementBuilder { ElementBuilder::new("form") }
-pub fn input() -> ElementBuilder { ElementBuilder::new("input") }
-pub fn label() -> ElementBuilder { ElementBuilder::new("label") }
-pub fn legend() -> ElementBuilder { ElementBuilder::new("legend") }
-pub fn meter() -> ElementBuilder { ElementBuilder::new("meter") }
-pub fn optgroup() -> ElementBuilder { ElementBuilder::new("optgroup") }
-pub fn option() -> ElementBuilder { ElementBuilder::new("option") }
-pub fn output() -> ElementBuilder { ElementBuilder::new("output") }
-pub fn progress() -> ElementBuilder { ElementBuilder::new("progress") }
-pub fn select() -> ElementBuilder { ElementBuilder::new("select") }
-pub fn textarea() -> ElementBuilder { ElementBuilder::new("textarea") }
+pub fn button() -> ElementBuilder {
+    ElementBuilder::new("button")
+}
+pub fn datalist() -> ElementBuilder {
+    ElementBuilder::new("datalist")
+}
+pub fn fieldset() -> ElementBuilder {
+    ElementBuilder::new("fieldset")
+}
+pub fn form() -> ElementBuilder {
+    ElementBuilder::new("form")
+}
+pub fn input() -> ElementBuilder {
+    ElementBuilder::new("input")
+}
+pub fn label() -> ElementBuilder {
+    ElementBuilder::new("label")
+}
+pub fn legend() -> ElementBuilder {
+    ElementBuilder::new("legend")
+}
+pub fn meter() -> ElementBuilder {
+    ElementBuilder::new("meter")
+}
+pub fn optgroup() -> ElementBuilder {
+    ElementBuilder::new("optgroup")
+}
+pub fn option() -> ElementBuilder {
+    ElementBuilder::new("option")
+}
+pub fn output() -> ElementBuilder {
+    ElementBuilder::new("output")
+}
+pub fn progress() -> ElementBuilder {
+    ElementBuilder::new("progress")
+}
+pub fn select() -> ElementBuilder {
+    ElementBuilder::new("select")
+}
+pub fn textarea() -> ElementBuilder {
+    ElementBuilder::new("textarea")
+}
 
 // Interactive Elements
-pub fn details() -> ElementBuilder { ElementBuilder::new("details") }
-pub fn dialog() -> ElementBuilder { ElementBuilder::new("dialog") }
-pub fn summary() -> ElementBuilder { ElementBuilder::new("summary") }
+pub fn details() -> ElementBuilder {
+    ElementBuilder::new("details")
+}
+pub fn dialog() -> ElementBuilder {
+    ElementBuilder::new("dialog")
+}
+pub fn summary() -> ElementBuilder {
+    ElementBuilder::new("summary")
+}
 
 // Web Components
-pub fn slot() -> ElementBuilder { ElementBuilder::new("slot") }
-pub fn template() -> ElementBuilder { ElementBuilder::new("template") }
+pub fn slot() -> ElementBuilder {
+    ElementBuilder::new("slot")
+}
+pub fn template() -> ElementBuilder {
+    ElementBuilder::new("template")
+}
