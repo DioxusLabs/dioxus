@@ -7,20 +7,6 @@ import Foundation
 import Dispatch
 import ActivityKit
 
-/// Live Activity attributes for displaying location permission status
-@available(iOS 16.2, *)
-public struct LocationPermissionAttributes: ActivityAttributes {
-  public struct ContentState: Codable, Hashable {
-    /// Current permission status: "prompt", "granted", "denied"
-    public var permissionStatus: String
-    /// Last update timestamp
-    public var lastUpdated: Date
-  }
-
-  /// App name to display
-  public var appName: String
-}
-
 /**
  * Simplified GeolocationPlugin for Dioxus that works without Tauri dependencies.
  * This can be shared with Tauri plugins with minimal changes.

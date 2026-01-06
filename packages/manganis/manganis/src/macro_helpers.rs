@@ -148,12 +148,21 @@ pub mod dx_macro_helpers {
     }
 
     /// Serialize a value using the legacy 0.7 const-serialize format and pad to layout size
+    ///
+    /// Note: The legacy ConstVec has a 1024-byte limit. If MEMORY_LAYOUT.size() exceeds this,
+    /// we pad only up to the buffer limit to avoid overflow.
     pub const fn serialize_to_const_with_layout_padded_07<T: const_serialize_07::SerializeConst>(
         value: &T,
     ) -> const_serialize_07::ConstVec<u8> {
         let data = const_serialize_07::ConstVec::new();
         let mut data = const_serialize_07::serialize_const(value, data);
-        while data.len() < T::MEMORY_LAYOUT.size() {
+        // Pad to MEMORY_LAYOUT size, but cap at 1024 bytes (the legacy buffer limit)
+        let target_size = if T::MEMORY_LAYOUT.size() > 1024 {
+            1024
+        } else {
+            T::MEMORY_LAYOUT.size()
+        };
+        while data.len() < target_size {
             data = data.push(0);
         }
         data

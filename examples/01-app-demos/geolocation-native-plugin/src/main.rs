@@ -10,7 +10,9 @@ use dioxus::prelude::*;
 
 // Import the local plugin module
 mod plugin;
-use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions, LiveActivityResult};
+use plugin::{
+    Geolocation, LiveActivityResult, PermissionState, PermissionStatus, Position, PositionOptions,
+};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -19,16 +21,16 @@ const HEADER_SVG: Asset = asset!("/assets/header.svg");
 /// Widget Extension for displaying Live Activity on lock screen (iOS 16.2+)
 ///
 /// This widget!() macro tells the CLI to:
-/// 1. Compile the Swift package at `widgets/LocationWidget`
+/// 1. Compile the Swift package at `src/ios/widget`
 /// 2. Create a `.appex` bundle with proper Info.plist
 /// 3. Install it to the app's `PlugIns/` folder
 ///
 /// The widget provides the lock screen UI for Live Activities started by the plugin.
 manganis::widget!(
-    "/widgets/LocationWidget",
+    "/src/ios/widget",
     display_name = "Location Widget",
     bundle_id_suffix = "location-widget",
-    deployment_target = "17.0"
+    deployment_target = "16.2"
 );
 
 fn main() {
@@ -124,25 +126,21 @@ fn App() -> Element {
         let mut geolocation = geolocation;
         let mut live_activity = live_activity;
         let mut error = error;
-        move |_| {
-            match geolocation.write().start_live_activity() {
-                Ok(result) => {
-                    live_activity.set(Some(result));
-                    error.set(None);
-                }
-                Err(err) => error.set(Some(err.to_string())),
+        move |_| match geolocation.write().start_live_activity() {
+            Ok(result) => {
+                live_activity.set(Some(result));
+                error.set(None);
             }
+            Err(err) => error.set(Some(err.to_string())),
         }
     };
 
     let on_update_live_activity = {
         let mut geolocation = geolocation;
         let mut error = error;
-        move |_| {
-            match geolocation.write().update_live_activity() {
-                Ok(_) => error.set(None),
-                Err(err) => error.set(Some(err.to_string())),
-            }
+        move |_| match geolocation.write().update_live_activity() {
+            Ok(_) => error.set(None),
+            Err(err) => error.set(Some(err.to_string())),
         }
     };
 
@@ -150,14 +148,12 @@ fn App() -> Element {
         let mut geolocation = geolocation;
         let mut live_activity = live_activity;
         let mut error = error;
-        move |_| {
-            match geolocation.write().end_live_activity() {
-                Ok(_) => {
-                    live_activity.set(None);
-                    error.set(None);
-                }
-                Err(err) => error.set(Some(err.to_string())),
+        move |_| match geolocation.write().end_live_activity() {
+            Ok(_) => {
+                live_activity.set(None);
+                error.set(None);
             }
+            Err(err) => error.set(Some(err.to_string())),
         }
     };
 

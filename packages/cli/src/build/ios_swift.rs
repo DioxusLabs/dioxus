@@ -840,6 +840,8 @@ pub async fn compile_apple_widget(
         <key>NSExtensionPointIdentifier</key>
         <string>com.apple.widgetkit-extension</string>
     </dict>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
 </dict>
 </plist>"#,
         display_name = widget.display_name,
