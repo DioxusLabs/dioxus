@@ -14,10 +14,6 @@ use plugin::{
     Geolocation, LiveActivityResult, PermissionState, PermissionStatus, Position, PositionOptions,
 };
 
-const FAVICON: Asset = asset!("/assets/favicon.ico");
-const MAIN_CSS: Asset = asset!("/assets/main.css");
-const HEADER_SVG: Asset = asset!("/assets/header.svg");
-
 /// Widget Extension for displaying Live Activity on lock screen (iOS 16.2+)
 ///
 /// This widget!() macro tells the CLI to:
@@ -42,18 +38,15 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let geolocation = use_signal(Geolocation::new);
-    let permission_status = use_signal(|| None::<PermissionStatus>);
-    let last_position = use_signal(|| None::<Position>);
-    let error = use_signal(|| None::<String>);
-    let use_high_accuracy = use_signal(|| true);
-    let max_age_input = use_signal(|| String::from("0"));
-    let live_activity = use_signal(|| None::<LiveActivityResult>);
+    let mut geolocation = use_signal(Geolocation::new);
+    let mut permission_status = use_signal(|| None::<PermissionStatus>);
+    let mut last_position = use_signal(|| None::<Position>);
+    let mut error = use_signal(|| None::<String>);
+    let mut use_high_accuracy = use_signal(|| true);
+    let mut max_age_input = use_signal(|| String::from("0"));
+    let mut live_activity = use_signal(|| None::<LiveActivityResult>);
 
     let on_check_permissions = {
-        let mut geolocation = geolocation;
-        let mut permission_status = permission_status;
-        let mut error = error;
         move |_| match geolocation.write().check_permissions() {
             Ok(status) => {
                 permission_status.set(Some(status));
@@ -63,58 +56,39 @@ fn App() -> Element {
         }
     };
 
-    let on_request_permissions = {
-        let mut geolocation = geolocation;
-        let mut permission_status = permission_status;
-        let mut error = error;
-        move |_| {
-            let mut geo = geolocation.write();
-            match geo.request_permissions(None) {
-                Ok(_) => match geo.check_permissions() {
-                    Ok(status) => {
-                        permission_status.set(Some(status));
-                        error.set(None);
-                    }
-                    Err(err) => error.set(Some(err.to_string())),
-                },
-                Err(err) => error.set(Some(err.to_string())),
-            }
-        }
-    };
-
-    let on_toggle_accuracy = {
-        let mut use_high_accuracy = use_high_accuracy;
-        move |_| {
-            let next = !use_high_accuracy();
-            use_high_accuracy.set(next);
-        }
-    };
-
-    let on_max_age_input = {
-        let mut max_age_input = max_age_input;
-        move |evt: FormEvent| max_age_input.set(evt.value())
-    };
-
-    let on_fetch_position = {
-        let mut geolocation = geolocation;
-        let mut last_position = last_position;
-        let mut error = error;
-        move |_| {
-            let maximum_age = max_age_input.read().trim().parse::<u32>().unwrap_or(0);
-
-            let options = PositionOptions {
-                enable_high_accuracy: use_high_accuracy(),
-                timeout: 10_000,
-                maximum_age,
-            };
-
-            match geolocation.write().get_current_position(Some(options)) {
-                Ok(position) => {
-                    last_position.set(Some(position));
+    let on_request_permissions = move |_| {
+        let mut geo = geolocation.write();
+        match geo.request_permissions(None) {
+            Ok(_) => match geo.check_permissions() {
+                Ok(status) => {
+                    permission_status.set(Some(status));
                     error.set(None);
                 }
                 Err(err) => error.set(Some(err.to_string())),
+            },
+            Err(err) => error.set(Some(err.to_string())),
+        }
+    };
+
+    let on_toggle_accuracy = move |_| use_high_accuracy.toggle();
+
+    let on_max_age_input = move |evt: FormEvent| max_age_input.set(evt.value());
+
+    let on_fetch_position = move |_| {
+        let maximum_age = max_age_input.read().trim().parse::<u32>().unwrap_or(0);
+
+        let options = PositionOptions {
+            enable_high_accuracy: use_high_accuracy(),
+            timeout: 10_000,
+            maximum_age,
+        };
+
+        match geolocation.write().get_current_position(Some(options)) {
+            Ok(position) => {
+                last_position.set(Some(position));
+                error.set(None);
             }
+            Err(err) => error.set(Some(err.to_string())),
         }
     };
 
@@ -125,48 +99,32 @@ fn App() -> Element {
     };
 
     // Live Activity handlers
-    let on_start_live_activity = {
-        let mut geolocation = geolocation;
-        let mut live_activity = live_activity;
-        let mut error = error;
-        move |_| match geolocation.write().start_live_activity() {
-            Ok(result) => {
-                live_activity.set(Some(result));
-                error.set(None);
-            }
-            Err(err) => error.set(Some(err.to_string())),
+    let on_start_live_activity = move |_| match geolocation.write().start_live_activity() {
+        Ok(result) => {
+            live_activity.set(Some(result));
+            error.set(None);
         }
+        Err(err) => error.set(Some(err.to_string())),
     };
 
-    let on_update_live_activity = {
-        let mut geolocation = geolocation;
-        let mut error = error;
-        move |_| match geolocation.write().update_live_activity() {
-            Ok(_) => error.set(None),
-            Err(err) => error.set(Some(err.to_string())),
-        }
+    let on_update_live_activity = move |_| match geolocation.write().update_live_activity() {
+        Ok(_) => error.set(None),
+        Err(err) => error.set(Some(err.to_string())),
     };
 
-    let on_end_live_activity = {
-        let mut geolocation = geolocation;
-        let mut live_activity = live_activity;
-        let mut error = error;
-        move |_| match geolocation.write().end_live_activity() {
-            Ok(_) => {
-                live_activity.set(None);
-                error.set(None);
-            }
-            Err(err) => error.set(Some(err.to_string())),
+    let on_end_live_activity = move |_| match geolocation.write().end_live_activity() {
+        Ok(_) => {
+            live_activity.set(None);
+            error.set(None);
         }
+        Err(err) => error.set(Some(err.to_string())),
     };
 
     rsx! {
-        document::Link { rel: "icon", href: FAVICON }
-        document::Link { rel: "stylesheet", href: MAIN_CSS }
+        Stylesheet { href: asset!("/assets/main.css") }
 
         main { class: "app",
             header { class: "hero",
-                img { src: HEADER_SVG, alt: "Map illustration" }
                 div { class: "hero__copy",
                     h1 { "Geolocation plugin demo" }
                     p { "One-shot location fetching through the Dioxus geolocation plugin.
@@ -276,7 +234,9 @@ fn App() -> Element {
                                 }
                             }
                         },
-                        None => rsx!(p { class: "muted", "No Live Activity running." }),
+                        None => rsx! {
+                            p { class: "muted", "No Live Activity running." }
+                        },
                     }
                 }
             }
@@ -290,7 +250,14 @@ fn App() -> Element {
 
 #[component]
 fn PermissionBadge(label: String, state: PermissionState) -> Element {
-    let (text, class) = permission_state_badge(state);
+    let (text, class) = match state {
+        PermissionState::Granted => ("Granted", "badge badge--granted"),
+        PermissionState::Denied => ("Denied", "badge badge--denied"),
+        PermissionState::Prompt | PermissionState::PromptWithRationale => {
+            ("Needs prompt", "badge badge--prompt")
+        }
+    };
+
     rsx! {
         div { class: "permission-row",
             span { class: "muted", "{label}" }
@@ -305,16 +272,6 @@ fn CoordinateRow(label: String, value: String) -> Element {
         div { class: "coordinate-row",
             span { class: "muted", "{label}" }
             strong { "{value}" }
-        }
-    }
-}
-
-fn permission_state_badge(state: PermissionState) -> (&'static str, &'static str) {
-    match state {
-        PermissionState::Granted => ("Granted", "badge badge--granted"),
-        PermissionState::Denied => ("Denied", "badge badge--denied"),
-        PermissionState::Prompt | PermissionState::PromptWithRationale => {
-            ("Needs prompt", "badge badge--prompt")
         }
     }
 }
