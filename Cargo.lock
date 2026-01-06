@@ -3379,6 +3379,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "builder_demo"
+version = "0.7.2"
+dependencies = [
+ "dioxus",
+ "dioxus-builder",
+]
+
+[[package]]
 name = "built"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5440,6 +5448,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-builder"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "dioxus-core",
+ "dioxus-html",
+ "dioxus-ssr",
+ "parking_lot",
+]
+
+[[package]]
 name = "dioxus-check"
 version = "0.7.2"
 dependencies = [
@@ -5851,6 +5870,7 @@ dependencies = [
  "bytes",
  "ciborium",
  "dioxus",
+ "dioxus-builder",
  "dioxus-html",
  "dioxus-ssr",
  "dioxus-stores",
