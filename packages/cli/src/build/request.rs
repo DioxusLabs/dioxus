@@ -1801,6 +1801,7 @@ impl BuildRequest {
                 display_name: meta.display_name.as_str().to_string(),
                 bundle_id_suffix: meta.bundle_id_suffix.as_str().to_string(),
                 deployment_target: meta.deployment_target.as_str().to_string(),
+                module_name: meta.module_name.as_str().to_string(),
             };
 
             // Compile the widget extension

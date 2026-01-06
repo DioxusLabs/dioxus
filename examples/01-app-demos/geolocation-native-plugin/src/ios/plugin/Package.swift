@@ -8,13 +8,13 @@ import PackageDescription
 let package = Package(
     name: "GeolocationPlugin",
     platforms: [
-        .iOS(.v16),  // iOS 16.1+ required for Live Activities
-        .macOS(.v13),
+        .iOS(.v17),  // iOS 17+ for latest ActivityKit APIs
+        .macOS(.v14),
     ],
     products: [
         .library(
             name: "GeolocationPlugin",
-            type: .dynamic,
+            type: .static,
             targets: ["GeolocationPlugin"]
         )
     ],

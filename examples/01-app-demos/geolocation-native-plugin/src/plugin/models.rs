@@ -111,14 +111,22 @@ pub struct Position {
 pub struct LiveActivityResult {
     /// Unique identifier for the activity
     pub activity_id: String,
-    /// Current permission status displayed in the activity
-    pub permission_status: String,
+    /// Current latitude displayed in the activity
+    pub latitude: f64,
+    /// Current longitude displayed in the activity
+    pub longitude: f64,
+    /// Horizontal accuracy in meters
+    pub accuracy: f64,
 }
 
 /// Result from updating a Live Activity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LiveActivityUpdate {
-    /// Current permission status after update
-    pub permission_status: String,
+    /// Current latitude after update
+    pub latitude: f64,
+    /// Current longitude after update
+    pub longitude: f64,
+    /// Horizontal accuracy in meters
+    pub accuracy: f64,
 }

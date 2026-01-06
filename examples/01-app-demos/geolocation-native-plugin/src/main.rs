@@ -26,11 +26,14 @@ const HEADER_SVG: Asset = asset!("/assets/header.svg");
 /// 3. Install it to the app's `PlugIns/` folder
 ///
 /// The widget provides the lock screen UI for Live Activities started by the plugin.
+/// The `module_name` MUST match the main Swift plugin's module name for ActivityKit
+/// type matching to work (both must define `GeolocationPlugin.LocationPermissionAttributes`).
 manganis::widget!(
     "/src/ios/widget",
     display_name = "Location Widget",
     bundle_id_suffix = "location-widget",
-    deployment_target = "16.2"
+    module_name = "GeolocationPlugin",
+    deployment_target = "17.0"
 );
 
 fn main() {
@@ -245,8 +248,8 @@ fn App() -> Element {
                 section { class: "card",
                     h2 { "Live Activity" }
                     p { class: "muted",
-                        "Start a Live Activity to show permission status on the lock screen. \
-                        Requires iOS 16.1+ and a Widget Extension for full UI support." }
+                        "Start a Live Activity to show your current location on the lock screen. \
+                        Fetch your position first, then start the activity." }
                     div { class: "button-row",
                         button { onclick: on_start_live_activity, "Start Activity" }
                         button { class: "secondary", onclick: on_update_live_activity, "Update" }
@@ -260,8 +263,16 @@ fn App() -> Element {
                                     span { "{activity.activity_id}" }
                                 }
                                 div { class: "permission-row",
-                                    span { class: "muted", "Status" }
-                                    span { class: "badge badge--granted", "{activity.permission_status}" }
+                                    span { class: "muted", "Latitude" }
+                                    span { "{activity.latitude:.6}" }
+                                }
+                                div { class: "permission-row",
+                                    span { class: "muted", "Longitude" }
+                                    span { "{activity.longitude:.6}" }
+                                }
+                                div { class: "permission-row",
+                                    span { class: "muted", "Accuracy" }
+                                    span { class: "badge badge--granted", "{activity.accuracy:.1}m" }
                                 }
                             }
                         },

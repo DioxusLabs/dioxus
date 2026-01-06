@@ -14,7 +14,7 @@ use crate::resolve_path;
 
 /// Parser for the widget!() macro
 ///
-/// Syntax: `widget!("/path/to/widget", display_name = "Name", bundle_id_suffix = "suffix", deployment_target = "17.0")`
+/// Syntax: `widget!("/path/to/widget", display_name = "Name", bundle_id_suffix = "suffix", module_name = "ModuleName", deployment_target = "17.0")`
 pub struct WidgetParser {
     /// Relative path to the widget Swift package (from crate root)
     pub relative_path: String,
@@ -24,6 +24,8 @@ pub struct WidgetParser {
     pub bundle_id_suffix: String,
     /// Deployment target (e.g., "17.0")
     pub deployment_target: String,
+    /// Swift module name for ActivityKit type matching (must match main app's plugin module)
+    pub module_name: String,
 }
 
 impl Parse for WidgetParser {
@@ -83,6 +85,7 @@ impl Parse for WidgetParser {
         let mut display_name = None;
         let mut bundle_id_suffix = None;
         let mut deployment_target = String::from("17.0");
+        let mut module_name = None;
 
         while !input.is_empty() {
             let key: syn::Ident = input.parse()?;
@@ -93,10 +96,11 @@ impl Parse for WidgetParser {
                 "display_name" => display_name = Some(value.value()),
                 "bundle_id_suffix" => bundle_id_suffix = Some(value.value()),
                 "deployment_target" => deployment_target = value.value(),
+                "module_name" => module_name = Some(value.value()),
                 _ => {
                     return Err(syn::Error::new_spanned(
                         key,
-                        format!("Unknown widget option. Expected: display_name, bundle_id_suffix, deployment_target"),
+                        format!("Unknown widget option. Expected: display_name, bundle_id_suffix, module_name, deployment_target"),
                     ));
                 }
             }
@@ -115,11 +119,16 @@ impl Parse for WidgetParser {
             syn::Error::new(span, "Missing required option: bundle_id_suffix")
         })?;
 
+        let module_name = module_name.ok_or_else(|| {
+            syn::Error::new(span, "Missing required option: module_name (must match main app's Swift plugin module name)")
+        })?;
+
         Ok(WidgetParser {
             relative_path,
             display_name,
             bundle_id_suffix,
             deployment_target,
+            module_name,
         })
     }
 }
@@ -131,12 +140,14 @@ impl WidgetParser {
         let display_name = &self.display_name;
         let bundle_id_suffix = &self.bundle_id_suffix;
         let deployment_target = &self.deployment_target;
+        let module_name = &self.module_name;
 
         // Generate a unique hash for the link section
         let mut hasher = DefaultHasher::new();
         relative_path.hash(&mut hasher);
         display_name.hash(&mut hasher);
         bundle_id_suffix.hash(&mut hasher);
+        module_name.hash(&mut hasher);
         let hash = format!("{:016x}", hasher.finish());
 
         // Use the SymbolData system with generate_link_section_inner
@@ -160,6 +171,7 @@ impl WidgetParser {
                             #display_name,
                             #bundle_id_suffix,
                             #deployment_target,
+                            #module_name,
                         )
                     );
 

@@ -621,6 +621,29 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
     Ok(results)
 }
 
+/// Recursively collect all Swift source files from a directory
+fn collect_swift_files(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut swift_files = Vec::new();
+
+    if !dir.exists() {
+        return Ok(swift_files);
+    }
+
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Recursively collect from subdirectories
+            swift_files.extend(collect_swift_files(&path)?);
+        } else if path.extension().map_or(false, |ext| ext == "swift") {
+            swift_files.push(path);
+        }
+    }
+
+    Ok(swift_files)
+}
+
 /// Information about an Apple Widget Extension to compile
 pub struct AppleWidgetSource {
     /// Path to the Swift package source directory
@@ -631,12 +654,25 @@ pub struct AppleWidgetSource {
     pub bundle_id_suffix: String,
     /// Minimum deployment target (e.g., "16.0")
     pub deployment_target: String,
+    /// Swift module name for the widget.
+    /// This MUST match the module name used by the main app's Swift plugin
+    /// for ActivityKit type matching to work (e.g., both must define
+    /// `ModuleName.LocationPermissionAttributes` as the same type).
+    pub module_name: String,
 }
 
 /// Compile an Apple Widget Extension from a Swift package source.
 ///
 /// Widget Extensions are compiled as executables (not libraries) and bundled
 /// as .appex bundles which are installed in the app's PlugIns folder.
+///
+/// **Important**: Widget extensions are XPC services that require special initialization.
+/// We use `-e _NSExtensionMain` as the entry point instead of the default `_main` that
+/// Swift generates with `@main`. The `_NSExtensionMain` entry point (provided by Foundation):
+/// 1. Sets up the XPC listener
+/// 2. Initializes ExtensionFoundation's `_EXRunningExtension` singleton
+/// 3. Registers with PlugInKit
+/// 4. Then calls your Widget code
 ///
 /// # Arguments
 /// * `widget` - Widget extension source configuration
@@ -689,43 +725,87 @@ pub async fn compile_apple_widget(
     std::fs::create_dir_all(&widget_build_dir)?;
 
     // Copy the Swift package to build directory
-    let widget_name = widget
-        .source_path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "Widget".to_string());
-    let dest_path = widget_build_dir.join(&widget_name);
-    if dest_path.exists() {
-        std::fs::remove_dir_all(&dest_path)?;
+    // Use the bundle_id_suffix as a unique name since the folder name might just be "widget"
+    let widget_name = widget.bundle_id_suffix.replace("-", "_");
+    let source_dir = widget_build_dir.join(format!("{}_src", widget_name));
+    if source_dir.exists() {
+        std::fs::remove_dir_all(&source_dir)?;
     }
-    copy_dir_recursive(&widget.source_path, &dest_path)?;
+    copy_dir_recursive(&widget.source_path, &source_dir)?;
 
     // Get Swift target triple and SDK
     let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
-    let sdk_path = lookup_sdk_path(&sdk_name).await?;
 
-    // Build configuration
-    let configuration = if release { "release" } else { "debug" };
+    // Collect all Swift source files from the Sources directory
+    let swift_sources_dir = source_dir.join("Sources");
+    let swift_files = collect_swift_files(&swift_sources_dir)?;
 
-    // Compile the widget extension
-    // Widget extensions should be compiled as executables, but we need the Package.swift
-    // to define the product correctly
-    let build_path = dest_path.join(".build");
+    if swift_files.is_empty() {
+        anyhow::bail!(
+            "No Swift source files found in widget extension Sources directory: {}",
+            swift_sources_dir.display()
+        );
+    }
 
+    tracing::debug!(
+        "Found {} Swift files for widget: {:?}",
+        swift_files.len(),
+        swift_files
+    );
+
+    // Build output path
+    let exec_path = widget_build_dir.join(&widget_name);
+
+    // Compile the widget extension using swiftc directly
+    // Widget extensions are XPC services that require _NSExtensionMain as the entry point
     let mut cmd = Command::new("xcrun");
-    cmd.args(["swift", "build"])
-        .arg("--package-path")
-        .arg(&dest_path)
-        .arg("--configuration")
-        .arg(configuration)
-        .arg("--triple")
-        .arg(&swift_triple)
-        .arg("--sdk")
-        .arg(&sdk_path)
-        .arg("--build-path")
-        .arg(&build_path);
+    cmd.arg("--sdk").arg(&sdk_name).arg("swiftc");
 
-    tracing::debug!("Running: xcrun swift build for widget {}", widget_name);
+    // Add all Swift source files
+    for swift_file in &swift_files {
+        cmd.arg(swift_file);
+    }
+
+    // Output executable
+    cmd.arg("-o").arg(&exec_path);
+
+    // Target triple with proper iOS version
+    // Format: arm64-apple-ios17.0 or arm64-apple-ios17.0-simulator
+    let is_simulator = swift_triple.contains("simulator");
+    let base_triple = swift_triple.replace("-simulator", "");
+    let swift_target = if is_simulator {
+        format!("{}{}-simulator", base_triple, widget.deployment_target)
+    } else {
+        format!("{}{}", base_triple, widget.deployment_target)
+    };
+    cmd.arg("-target").arg(&swift_target);
+
+    // Module name - use a consistent name that matches the main app's plugin module
+    // This is critical for ActivityKit type matching between app and widget
+    cmd.arg("-module-name").arg(&widget.module_name);
+
+    // Optimization flags
+    if release {
+        cmd.arg("-O").arg("-whole-module-optimization");
+    }
+
+    // Extension-specific flags
+    cmd.arg("-application-extension");
+
+    // Critical: Use _NSExtensionMain as the entry point for widget extensions
+    // Without this, the widget crashes because ExtensionFoundation's singleton isn't initialized
+    cmd.arg("-Xlinker").arg("-e").arg("-Xlinker").arg("_NSExtensionMain");
+
+    // Link Objective-C runtime (required for Swift/ObjC interop)
+    cmd.arg("-lobjc");
+
+    // Link required frameworks
+    cmd.arg("-framework").arg("Foundation");
+    cmd.arg("-framework").arg("SwiftUI");
+    cmd.arg("-framework").arg("WidgetKit");
+    cmd.arg("-framework").arg("ActivityKit");
+
+    tracing::debug!("Running swiftc for widget: {:?}", cmd);
 
     let output = cmd.output().await?;
 
@@ -733,40 +813,14 @@ pub async fn compile_apple_widget(
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         anyhow::bail!(
-            "Swift build failed for widget extension '{}':\n{}\n{}",
+            "Swift compilation failed for widget extension '{}':\n{}\n{}",
             widget_name,
             stdout,
             stderr
         );
     }
 
-    // Find the compiled executable
-    // Swift puts executables in .build/<triple>/<configuration>/<ProductName>
-    let exec_search_paths = [
-        build_path.join(&swift_triple).join(configuration),
-        build_path.join(configuration),
-        build_path.clone(),
-    ];
-
-    let mut exec_path = None;
-    for search_path in &exec_search_paths {
-        // Look for an executable with the widget name
-        let candidate = search_path.join(&widget_name);
-        if candidate.exists() && candidate.is_file() {
-            exec_path = Some(candidate);
-            break;
-        }
-    }
-
-    let exec_path = exec_path.ok_or_else(|| {
-        anyhow::anyhow!(
-            "Could not find compiled widget executable for '{}' in {:?}",
-            widget_name,
-            exec_search_paths
-        )
-    })?;
-
-    tracing::debug!("Found widget executable: {}", exec_path.display());
+    tracing::debug!("Compiled widget executable: {}", exec_path.display());
 
     // Create the .appex bundle
     let appex_name = format!("{}.appex", widget_name);

@@ -1089,6 +1089,10 @@ pub struct AppleWidgetExtensionMetadata {
     pub bundle_id_suffix: ConstStr,
     /// Minimum iOS deployment target (e.g., "17.0")
     pub deployment_target: ConstStr,
+    /// Swift module name for ActivityKit type matching.
+    /// This MUST match the module name used by the main app's Swift plugin
+    /// for Live Activity types to be recognized (e.g., "GeolocationPlugin").
+    pub module_name: ConstStr,
 }
 
 impl AppleWidgetExtensionMetadata {
@@ -1097,12 +1101,14 @@ impl AppleWidgetExtensionMetadata {
         display_name: &'static str,
         bundle_id_suffix: &'static str,
         deployment_target: &'static str,
+        module_name: &'static str,
     ) -> Self {
         Self {
             package_path: ConstStr::new(package_path),
             display_name: ConstStr::new(display_name),
             bundle_id_suffix: ConstStr::new(bundle_id_suffix),
             deployment_target: ConstStr::new(deployment_target),
+            module_name: ConstStr::new(module_name),
         }
     }
 }

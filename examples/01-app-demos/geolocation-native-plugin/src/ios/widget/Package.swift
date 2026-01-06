@@ -10,7 +10,7 @@ import PackageDescription
 let package = Package(
     name: "GeolocationPlugin",
     platforms: [
-        .iOS(.v16),  // Match the main plugin's deployment target
+        .iOS(.v17),  // iOS 17+ for latest ActivityKit APIs
     ],
     products: [
         // Executable name must be "widget" for the build system to find it

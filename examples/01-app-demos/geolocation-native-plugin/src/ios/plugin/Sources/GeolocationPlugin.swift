@@ -213,7 +213,7 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
   // Live Activity methods
   //
 
-  /// Start a Live Activity showing permission status
+  /// Start a Live Activity showing current location
   /// Returns JSON with activity ID or error
   @objc public func startLiveActivityJson() -> String {
     if #available(iOS 16.2, *) {
@@ -222,12 +222,18 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
         return "{\"error\":\"Live Activities are not enabled\"}"
       }
 
-      // Get current permission status
-      let status = self.getCurrentPermissionStatus()
+      // Get current location
+      guard let location = self.locationManager.location else {
+        return "{\"error\":\"No location available. Request location first.\"}"
+      }
 
       let attributes = LocationPermissionAttributes(appName: "Geolocation Demo")
       let contentState = LocationPermissionAttributes.ContentState(
-        permissionStatus: status,
+        latitude: location.coordinate.latitude,
+        longitude: location.coordinate.longitude,
+        accuracy: location.horizontalAccuracy,
+        speed: location.speed >= 0 ? location.speed : nil,
+        heading: location.course >= 0 ? location.course : nil,
         lastUpdated: Date()
       )
 
@@ -238,12 +244,11 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
           pushType: nil
         )
 
-        // Store reference (note: this won't persist across method calls in current setup)
-        // In a real app, you'd store the activity ID and look it up
-
         let result: [String: Any] = [
           "activityId": activity.id,
-          "permissionStatus": status
+          "latitude": location.coordinate.latitude,
+          "longitude": location.coordinate.longitude,
+          "accuracy": location.horizontalAccuracy
         ]
 
         if let jsonData = try? JSONSerialization.data(withJSONObject: result),
@@ -259,15 +264,20 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
     }
   }
 
-  /// Update the Live Activity with new permission status
-  /// Takes JSON with activityId
+  /// Update the Live Activity with current location
   @objc public func updateLiveActivityJson(_ statusJson: String) -> String {
     if #available(iOS 16.2, *) {
-      // Get current permission status
-      let status = self.getCurrentPermissionStatus()
+      // Get current location
+      guard let location = self.locationManager.location else {
+        return "{\"error\":\"No location available\"}"
+      }
 
       let contentState = LocationPermissionAttributes.ContentState(
-        permissionStatus: status,
+        latitude: location.coordinate.latitude,
+        longitude: location.coordinate.longitude,
+        accuracy: location.horizontalAccuracy,
+        speed: location.speed >= 0 ? location.speed : nil,
+        heading: location.course >= 0 ? location.course : nil,
         lastUpdated: Date()
       )
 
@@ -280,7 +290,11 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
         }
       }
 
-      let result: [String: String] = ["permissionStatus": status]
+      let result: [String: Any] = [
+        "latitude": location.coordinate.latitude,
+        "longitude": location.coordinate.longitude,
+        "accuracy": location.horizontalAccuracy
+      ]
       if let jsonData = try? JSONSerialization.data(withJSONObject: result),
          let jsonString = String(data: jsonData, encoding: .utf8) {
         return jsonString
@@ -302,24 +316,6 @@ public class GeolocationPlugin: NSObject, CLLocationManagerDelegate {
       return "{\"success\":true}"
     } else {
       return "{\"error\":\"Live Activities require iOS 16.2+\"}"
-    }
-  }
-
-  /// Helper to get current permission status string
-  private func getCurrentPermissionStatus() -> String {
-    if CLLocationManager.locationServicesEnabled() {
-      switch CLLocationManager.authorizationStatus() {
-      case .notDetermined:
-        return "prompt"
-      case .restricted, .denied:
-        return "denied"
-      case .authorizedAlways, .authorizedWhenInUse:
-        return "granted"
-      @unknown default:
-        return "unknown"
-      }
-    } else {
-      return "disabled"
     }
   }
 
