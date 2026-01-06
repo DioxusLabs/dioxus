@@ -27,6 +27,9 @@ pub enum SymbolData {
 
     /// Swift package metadata (SPM location + product)
     SwiftPackage(SwiftPackageMetadata),
+
+    /// Apple Widget Extension (.appex) to bundle with the app
+    AppleWidgetExtension(AppleWidgetExtensionMetadata),
 }
 
 /// A permission declaration that can be embedded in the binary
@@ -1068,6 +1071,38 @@ impl SwiftPackageMetadata {
             plugin_name: ConstStr::new(plugin_name),
             package_path: ConstStr::new(package_path),
             product: ConstStr::new(product),
+        }
+    }
+}
+
+/// Metadata for an Apple Widget Extension (.appex) that should be bundled with the app.
+///
+/// Widget extensions provide lock screen and Dynamic Island UI for Live Activities
+/// on iOS 16.2+ and watchOS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+pub struct AppleWidgetExtensionMetadata {
+    /// Path to the Swift package containing the widget extension
+    pub package_path: ConstStr,
+    /// Display name shown in the widget gallery
+    pub display_name: ConstStr,
+    /// Suffix for the bundle identifier (e.g., "location-widget" -> com.app.id.location-widget)
+    pub bundle_id_suffix: ConstStr,
+    /// Minimum iOS deployment target (e.g., "17.0")
+    pub deployment_target: ConstStr,
+}
+
+impl AppleWidgetExtensionMetadata {
+    pub const fn new(
+        package_path: &'static str,
+        display_name: &'static str,
+        bundle_id_suffix: &'static str,
+        deployment_target: &'static str,
+    ) -> Self {
+        Self {
+            package_path: ConstStr::new(package_path),
+            display_name: ConstStr::new(display_name),
+            bundle_id_suffix: ConstStr::new(bundle_id_suffix),
+            deployment_target: ConstStr::new(deployment_target),
         }
     }
 }

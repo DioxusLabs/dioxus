@@ -620,3 +620,240 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
 
     Ok(results)
 }
+
+/// Information about an Apple Widget Extension to compile
+pub struct AppleWidgetSource {
+    /// Path to the Swift package source directory
+    pub source_path: PathBuf,
+    /// Display name for the widget (shown in system UI)
+    pub display_name: String,
+    /// Bundle ID suffix (appended to app bundle ID)
+    pub bundle_id_suffix: String,
+    /// Minimum deployment target (e.g., "16.0")
+    pub deployment_target: String,
+}
+
+/// Compile an Apple Widget Extension from a Swift package source.
+///
+/// Widget Extensions are compiled as executables (not libraries) and bundled
+/// as .appex bundles which are installed in the app's PlugIns folder.
+///
+/// # Arguments
+/// * `widget` - Widget extension source configuration
+/// * `target_triple` - The target platform (e.g., aarch64-apple-ios)
+/// * `build_dir` - Directory for intermediate build files
+/// * `app_bundle_id` - The main app's bundle identifier (widget ID is derived from this)
+/// * `release` - Whether to build in release mode
+///
+/// # Returns
+/// Path to the compiled .appex bundle, ready to be installed to PlugIns/
+pub async fn compile_apple_widget(
+    widget: &AppleWidgetSource,
+    target_triple: &Triple,
+    build_dir: &Path,
+    app_bundle_id: &str,
+    release: bool,
+) -> Result<PathBuf> {
+    use target_lexicon::OperatingSystem;
+
+    // Validate we're on an Apple platform
+    let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
+    let is_macos = matches!(
+        target_triple.operating_system,
+        OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
+    );
+
+    if !is_ios && !is_macos {
+        anyhow::bail!(
+            "Apple Widget Extensions are only supported on iOS and macOS, not {:?}",
+            target_triple.operating_system
+        );
+    }
+
+    // Validate source path exists
+    if !widget.source_path.exists() {
+        anyhow::bail!(
+            "Widget Extension source path does not exist: {}",
+            widget.source_path.display()
+        );
+    }
+
+    tracing::info!(
+        "Compiling Apple Widget Extension '{}' for {}",
+        widget.display_name,
+        target_triple
+    );
+
+    // Create the widget build directory
+    let widget_build_dir = build_dir.join("widget-extensions");
+    std::fs::create_dir_all(&widget_build_dir)?;
+
+    // Copy the Swift package to build directory
+    let widget_name = widget
+        .source_path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Widget".to_string());
+    let dest_path = widget_build_dir.join(&widget_name);
+    if dest_path.exists() {
+        std::fs::remove_dir_all(&dest_path)?;
+    }
+    copy_dir_recursive(&widget.source_path, &dest_path)?;
+
+    // Get Swift target triple and SDK
+    let (swift_triple, sdk_name) = swift_target_and_sdk(target_triple)?;
+    let sdk_path = lookup_sdk_path(&sdk_name).await?;
+
+    // Build configuration
+    let configuration = if release { "release" } else { "debug" };
+
+    // Compile the widget extension
+    // Widget extensions should be compiled as executables, but we need the Package.swift
+    // to define the product correctly
+    let build_path = dest_path.join(".build");
+
+    let mut cmd = Command::new("xcrun");
+    cmd.args(["swift", "build"])
+        .arg("--package-path")
+        .arg(&dest_path)
+        .arg("--configuration")
+        .arg(configuration)
+        .arg("--triple")
+        .arg(&swift_triple)
+        .arg("--sdk")
+        .arg(&sdk_path)
+        .arg("--build-path")
+        .arg(&build_path);
+
+    tracing::debug!("Running: xcrun swift build for widget {}", widget_name);
+
+    let output = cmd.output().await?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        anyhow::bail!(
+            "Swift build failed for widget extension '{}':\n{}\n{}",
+            widget_name,
+            stdout,
+            stderr
+        );
+    }
+
+    // Find the compiled executable
+    // Swift puts executables in .build/<triple>/<configuration>/<ProductName>
+    let exec_search_paths = [
+        build_path.join(&swift_triple).join(configuration),
+        build_path.join(configuration),
+        build_path.clone(),
+    ];
+
+    let mut exec_path = None;
+    for search_path in &exec_search_paths {
+        // Look for an executable with the widget name
+        let candidate = search_path.join(&widget_name);
+        if candidate.exists() && candidate.is_file() {
+            exec_path = Some(candidate);
+            break;
+        }
+    }
+
+    let exec_path = exec_path.ok_or_else(|| {
+        anyhow::anyhow!(
+            "Could not find compiled widget executable for '{}' in {:?}",
+            widget_name,
+            exec_search_paths
+        )
+    })?;
+
+    tracing::debug!("Found widget executable: {}", exec_path.display());
+
+    // Create the .appex bundle
+    let appex_name = format!("{}.appex", widget_name);
+    let appex_dir = widget_build_dir.join(&appex_name);
+
+    // Remove existing appex if present
+    if appex_dir.exists() {
+        std::fs::remove_dir_all(&appex_dir)?;
+    }
+    std::fs::create_dir_all(&appex_dir)?;
+
+    // Copy the executable into the appex bundle
+    let bundle_exec = appex_dir.join(&widget_name);
+    std::fs::copy(&exec_path, &bundle_exec)?;
+
+    // Create Info.plist for the widget extension
+    let widget_bundle_id = format!("{}.{}", app_bundle_id, widget.bundle_id_suffix);
+    let min_os_version = &widget.deployment_target;
+
+    let platform_info = if is_ios {
+        format!(
+            r#"    <key>MinimumOSVersion</key>
+    <string>{min_os_version}</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+    <key>UIDeviceFamily</key>
+    <array>
+        <integer>1</integer>
+        <integer>2</integer>
+    </array>"#
+        )
+    } else {
+        format!(
+            r#"    <key>LSMinimumSystemVersion</key>
+    <string>{min_os_version}</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>MacOSX</string>
+    </array>"#
+        )
+    };
+
+    let info_plist = format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>{display_name}</string>
+    <key>CFBundleExecutable</key>
+    <string>{widget_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>{widget_bundle_id}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>{widget_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+{platform_info}
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.widgetkit-extension</string>
+    </dict>
+</dict>
+</plist>"#,
+        display_name = widget.display_name,
+        widget_name = widget_name,
+        widget_bundle_id = widget_bundle_id,
+        platform_info = platform_info,
+    );
+
+    std::fs::write(appex_dir.join("Info.plist"), info_plist)?;
+
+    tracing::info!(
+        "Created Widget Extension bundle: {}",
+        appex_dir.display()
+    );
+
+    Ok(appex_dir)
+}

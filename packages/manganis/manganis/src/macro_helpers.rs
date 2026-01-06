@@ -5,8 +5,8 @@ pub use const_serialize_07;
 
 use const_serialize_07::ConstVec as ConstVec07;
 use manganis_core::{
-    AndroidArtifactMetadata, AssetOptions, BundledAsset, Permission, SwiftPackageMetadata,
-    SymbolData,
+    AndroidArtifactMetadata, AppleWidgetExtensionMetadata, AssetOptions, BundledAsset, Permission,
+    SwiftPackageMetadata, SymbolData,
 };
 
 /// Copy a slice into a constant sized buffer at compile time
@@ -23,23 +23,32 @@ pub const fn copy_bytes<const N: usize>(bytes: &[u8]) -> [u8; N] {
     out
 }
 
-const fn serialize_symbol_data(symbol_data: SymbolData) -> ConstVec<u8, 4096> {
-    dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(&symbol_data)
+/// Serialize a SymbolData value into a const buffer
+///
+/// This is used by the widget!() macro and other symbol-based macros to embed
+/// metadata into the binary using the 4096-byte buffer format.
+pub const fn serialize_symbol_data(symbol_data: &SymbolData) -> ConstVec<u8, 4096> {
+    dx_macro_helpers::serialize_to_const_with_max_padded::<4096>(symbol_data)
 }
 
 /// Serialize a permission into a const buffer (wrapped in `SymbolData::Permission`).
 pub const fn serialize_permission(permission: &Permission) -> ConstVec<u8, 4096> {
-    serialize_symbol_data(SymbolData::Permission(*permission))
+    serialize_symbol_data(&SymbolData::Permission(*permission))
 }
 
 /// Serialize Android artifact metadata (wrapped in `SymbolData::AndroidArtifact`).
 pub const fn serialize_android_artifact(meta: &AndroidArtifactMetadata) -> ConstVec<u8, 4096> {
-    serialize_symbol_data(SymbolData::AndroidArtifact(*meta))
+    serialize_symbol_data(&SymbolData::AndroidArtifact(*meta))
 }
 
 /// Serialize Swift package metadata (wrapped in `SymbolData::SwiftPackage`).
 pub const fn serialize_swift_package(meta: &SwiftPackageMetadata) -> ConstVec<u8, 4096> {
-    serialize_symbol_data(SymbolData::SwiftPackage(*meta))
+    serialize_symbol_data(&SymbolData::SwiftPackage(*meta))
+}
+
+/// Serialize Apple Widget Extension metadata (wrapped in `SymbolData::AppleWidgetExtension`).
+pub const fn serialize_apple_widget(meta: &AppleWidgetExtensionMetadata) -> ConstVec<u8, 4096> {
+    serialize_symbol_data(&SymbolData::AppleWidgetExtension(*meta))
 }
 
 /// Create a bundled asset from the input path, the content hash, and the asset options

@@ -81,8 +81,22 @@ pub(crate) fn hash_file_with_options(
         | ResolvedAssetType::Css(_)
         | ResolvedAssetType::Image(_)
         | ResolvedAssetType::Json
-        | ResolvedAssetType::File => {
+        | ResolvedAssetType::File
+        | ResolvedAssetType::PrebuiltBinary(_) => {
             hash_file_contents(source, hasher)?;
+        }
+
+        // Sidecar assets that are folders (Swift packages, Rust crates) - hash recursively
+        ResolvedAssetType::AppleWidget(_)
+        | ResolvedAssetType::WasmWorker(_)
+        | ResolvedAssetType::RustBinary(_) => {
+            // These are typically directories (Swift package or Rust crate)
+            // Hash all source files recursively
+            if source.is_dir() {
+                hash_folder_recursive(source, hasher)?;
+            } else {
+                hash_file_contents(source, hasher)?;
+            }
         }
 
         // Or the folder contents recursively
@@ -123,6 +137,23 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
             break;
         }
         hasher.write(&buffer[..read]);
+    }
+    Ok(())
+}
+
+/// Hash all files in a directory recursively
+fn hash_folder_recursive(source: &Path, hasher: &mut impl Hasher) -> anyhow::Result<()> {
+    for entry in std::fs::read_dir(source)?.flatten() {
+        let path = entry.path();
+        // Hash the relative path to include directory structure in the hash
+        if let Some(file_name) = path.file_name() {
+            hasher.write(file_name.to_string_lossy().as_bytes());
+        }
+        if path.is_dir() {
+            hash_folder_recursive(&path, hasher)?;
+        } else if path.is_file() {
+            hash_file_contents(&path, hasher)?;
+        }
     }
     Ok(())
 }

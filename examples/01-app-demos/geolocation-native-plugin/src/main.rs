@@ -2,6 +2,9 @@
 //!
 //! This example shows how to use the `#[manganis::ffi]` macro to automatically generate
 //! FFI bindings between Rust and native platforms (Swift/Kotlin).
+//!
+//! It also demonstrates how to use the widget!() macro to bundle a Widget Extension
+//! for Live Activities on iOS.
 
 use dioxus::prelude::*;
 
@@ -12,6 +15,21 @@ use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionO
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 const HEADER_SVG: Asset = asset!("/assets/header.svg");
+
+/// Widget Extension for displaying Live Activity on lock screen (iOS 16.2+)
+///
+/// This widget!() macro tells the CLI to:
+/// 1. Compile the Swift package at `widgets/LocationWidget`
+/// 2. Create a `.appex` bundle with proper Info.plist
+/// 3. Install it to the app's `PlugIns/` folder
+///
+/// The widget provides the lock screen UI for Live Activities started by the plugin.
+manganis::widget!(
+    "/widgets/LocationWidget",
+    display_name = "Location Widget",
+    bundle_id_suffix = "location-widget",
+    deployment_target = "17.0"
+);
 
 fn main() {
     dioxus::launch(App);

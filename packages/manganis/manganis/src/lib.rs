@@ -6,14 +6,21 @@ pub mod macro_helpers;
 pub use manganis_macro::asset;
 pub use manganis_macro::css_module;
 pub use manganis_macro::option_asset;
+pub use manganis_macro::widget;
 
 pub use manganis_core::{
-    Asset, AssetOptions, AssetVariant, BundledAsset, CssAssetOptions, CssModuleAssetOptions,
-    FolderAssetOptions, ImageAssetOptions, ImageFormat, ImageSize, JsAssetOptions,
+    // Core asset types
+    Asset, AssetOptions, AssetVariant, BundledAsset,
+    // Standard asset options
+    CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions, ImageAssetOptions, ImageFormat,
+    ImageSize, JsAssetOptions,
+    // Sidecar asset options
+    AppleWidgetOptions, PrebuiltBinaryOptions, RustBinaryOptions, WasmWorkerOptions,
 };
 
-// Re-export Swift package metadata type for FFI macros
+// Re-export metadata types for FFI and sidecar macros
 pub use manganis_core::SwiftPackageMetadata;
+pub use manganis_core::{AppleWidgetExtensionMetadata, SymbolData};
 
 // FFI utilities and plugin metadata for Dioxus mobile platform APIs
 //

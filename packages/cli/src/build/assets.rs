@@ -38,7 +38,9 @@ use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
-use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
+use manganis_core::{
+    AndroidArtifactMetadata, AppleWidgetExtensionMetadata, SwiftPackageMetadata, SymbolData,
+};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -615,6 +617,9 @@ pub(crate) struct SymbolExtractionResult {
 
     /// Swift packages discovered in the binary
     pub swift_packages: Vec<SwiftPackageMetadata>,
+
+    /// Apple Widget Extensions discovered in the binary
+    pub widget_extensions: Vec<AppleWidgetExtensionMetadata>,
 }
 
 /// Find all assets in the given file, hash them, and write them back to the file.
@@ -639,6 +644,7 @@ pub(crate) async fn extract_symbols_from_file(
     let mut assets = Vec::new();
     let mut android_artifacts = Vec::new();
     let mut swift_packages = Vec::new();
+    let mut widget_extensions = Vec::new();
     let mut write_entries = Vec::new();
 
     // Read each symbol from the data section using the offsets
@@ -700,6 +706,13 @@ pub(crate) async fn extract_symbols_from_file(
                                 meta.plugin_name.as_str()
                             );
                             swift_packages.push(meta);
+                        }
+                        SymbolData::AppleWidgetExtension(meta) => {
+                            tracing::debug!(
+                                "Found Apple Widget Extension declaration: {}",
+                                meta.display_name.as_str()
+                            );
+                            widget_extensions.push(meta);
                         }
                         _ => {}
                     }
@@ -798,6 +811,7 @@ pub(crate) async fn extract_symbols_from_file(
         assets,
         android_artifacts,
         swift_packages,
+        widget_extensions,
     })
 }
 
