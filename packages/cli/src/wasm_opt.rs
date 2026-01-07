@@ -58,6 +58,7 @@ impl WasmOpt {
             "--enable-bulk-memory",
             "--enable-mutable-globals",
             "--enable-nontrapping-float-to-int",
+            "--enable-threads",
         ];
 
         if self.cfg.memory_packing {
