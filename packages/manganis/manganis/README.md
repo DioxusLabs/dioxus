@@ -1,15 +1,44 @@
 # Manganis
 
-The Manganis allows you to submit assets to any build tool that supports collecting assets. It makes it easy to self-host assets that are distributed throughout your libraries. Manganis also handles optimizing, converting, and fetching assets.
+Manganis is a tool for submitting 3rd-party assets and source files to the program linker. It makes it easy to self-host assets and native plugins that are distributed throughout your libraries.
 
-If you defined this in a component library:
+Including assets is as simple as using the `asset!()` macro:
 
 ```rust
-use manganis::{Asset, asset};
-const AVIF_ASSET: Asset = manganis::asset!("/assets/image.png");
+const AVIF_ASSET: Asset = asset!("/assets/image.png");
 ```
 
-AVIF_ASSET will be set to a new file name that will be served by some CLI. That file can be collected by any package that depends on the component library.
+After cargo builds your app, the asset path is embedded directly in the data section. A tool like the Dioxus CLI can extract this metadata and post-process these assets.
+
+## CLI Integration
+
+Manganis also handles optimizing, converting, and fetching assets.
+
+## Assets
+
+For some asset types
+
+
+## Source Files
+
+Manganis makes it possible to include a folder of 3rd-party source files. This allows you to bind against other programming languages, system frameworks, and native APIs without needing to write a `build.rs`.
+
+Manganis supports several different types of source files:
+
+- Swift
+- Kotlin
+
+Including the
+
+```rust
+static GEOLOCATOR: SwiftPlugin = include_swift!("/plugins/plugin.swift");
+```
+
+## Manifest Metadata
+
+Manganis allows exporting arbitrary
+
+## option_asset
 
 If you have assets that may not always be bundled, you can fall back gracefully with `option_asset!`:
 

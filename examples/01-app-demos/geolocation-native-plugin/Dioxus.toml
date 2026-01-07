@@ -1,0 +1,20 @@
+#:schema ../../../packages/cli/schema2.json
+
+[bundle]
+identifier = "com.dioxuslabs.geolocation"
+publisher = "Dioxus Labs"
+
+[ios]
+deployment_target = "16.2"
+background_modes = ["location"]
+
+[ios.plist]
+NSSupportsLiveActivities = true
+
+[android]
+min_sdk = 24
+target_sdk = 34
+features = ["android.hardware.location.gps"]
+
+[permissions]
+location = { precision = "fine", description = "Access your precise location to provide location-based services" }
