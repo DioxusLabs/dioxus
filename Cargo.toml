@@ -270,7 +270,7 @@ cargo_toml = { version = "0.22.1" }
 tauri-utils = { version = "=2.5.0" }
 tauri-macos-sign = { version = "=2.2.0" }
 tauri-bundler = { version = "=2.5.0" }
-lru = "0.16.0"
+lru = "0.16.3"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
 axum-server = { version = "0.7.3", default-features = false }
