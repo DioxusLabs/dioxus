@@ -112,6 +112,10 @@ pub use dioxus_desktop as desktop;
 #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
 pub use dioxus_desktop as mobile;
 
+#[cfg(feature = "native")]
+#[cfg_attr(docsrs, doc(cfg(feature = "native")))]
+pub use dioxus_native as native;
+
 #[cfg(feature = "liveview")]
 #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
 pub use dioxus_liveview as liveview;
