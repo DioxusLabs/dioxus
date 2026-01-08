@@ -37,11 +37,14 @@ fn main() {
             name = event_name,
             data = data_type
         ));
+        output.push_str("        #[allow(deprecated)]\n");
         output.push_str(&format!(
             "        let attr = dioxus_html::events::{name}(handler);\n",
             name = event_name
         ));
-        output.push_str("        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)\n");
+        output.push_str(
+            "        self.push_attribute(attr.name, attr.namespace, attr.value, attr.volatile)\n",
+        );
         output.push_str("    }\n\n");
     }
     output.push_str("}\n");

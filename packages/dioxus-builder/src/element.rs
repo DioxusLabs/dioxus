@@ -43,7 +43,7 @@ pub struct StaticElement {
 }
 
 /// A static attribute embedded in the template.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StaticAttribute {
     pub name: &'static str,
     pub value: &'static str,
@@ -56,58 +56,65 @@ pub struct StaticAttribute {
 
 const TEMPLATE_CACHE_CAP: usize = 1024;
 
+/// A hashable key for static attributes.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct StaticAttributeKey {
+    name: &'static str,
+    value: &'static str,
+    namespace: Option<&'static str>,
+}
+
+impl From<&StaticAttribute> for StaticAttributeKey {
+    fn from(attr: &StaticAttribute) -> Self {
+        Self {
+            name: attr.name,
+            value: attr.value,
+            namespace: attr.namespace,
+        }
+    }
+}
+
+/// A hashable key representing a static element for cache lookup.
+/// This is recursive to handle nested static elements.
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct StaticElementKey {
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    attrs: Vec<StaticAttributeKey>,
+    children: Vec<ChildPattern>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum ChildPattern {
+    StaticText(&'static str),
+    StaticElement(StaticElementKey),
+    Dynamic,
+}
+
+fn static_element_to_key(elem: &StaticElement) -> StaticElementKey {
+    StaticElementKey {
+        tag: elem.tag,
+        namespace: elem.namespace,
+        attrs: elem.attrs.iter().map(StaticAttributeKey::from).collect(),
+        children: elem.children.iter().map(child_to_pattern).collect(),
+    }
+}
+
+fn child_to_pattern(child: &ChildNode) -> ChildPattern {
+    match child {
+        ChildNode::StaticText(s) => ChildPattern::StaticText(s),
+        ChildNode::StaticElement(e) => ChildPattern::StaticElement(static_element_to_key(e)),
+        ChildNode::Dynamic(_) => ChildPattern::Dynamic,
+    }
+}
+
 /// Key for caching templates with mixed static/dynamic children.
-/// The Vec<bool> indicates which children are static (true) or dynamic (false).
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct HybridTemplateKey {
     tag: &'static str,
     namespace: Option<&'static str>,
     child_pattern: Vec<ChildPattern>,
     has_attributes: bool,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-enum ChildPattern {
-    StaticText(&'static str),
-    StaticElement(&'static str), // Just the tag for now
-    Dynamic,
-}
-
-// Legacy key for backwards compatibility
-type TemplateKey = (&'static str, Option<&'static str>, usize, bool);
-
-struct TemplateCache {
-    map: HashMap<TemplateKey, Template>,
-    order: VecDeque<TemplateKey>,
-}
-
-impl TemplateCache {
-    fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-            order: VecDeque::new(),
-        }
-    }
-
-    fn get(&self, key: &TemplateKey) -> Option<Template> {
-        self.map.get(key).copied()
-    }
-
-    fn insert(&mut self, key: TemplateKey, template: Template) {
-        if let std::collections::hash_map::Entry::Occupied(mut e) = self.map.entry(key) {
-            e.insert(template);
-            return;
-        }
-
-        self.map.insert(key, template);
-        self.order.push_back(key);
-
-        if self.order.len() > TEMPLATE_CACHE_CAP {
-            if let Some(oldest) = self.order.pop_front() {
-                self.map.remove(&oldest);
-            }
-        }
-    }
 }
 
 /// Cache for hybrid templates (with mixed static/dynamic children)
@@ -144,7 +151,6 @@ impl HybridTemplateCache {
     }
 }
 
-static TEMPLATES: RwLock<Option<TemplateCache>> = RwLock::new(None);
 static HYBRID_TEMPLATES: RwLock<Option<HybridTemplateCache>> = RwLock::new(None);
 
 const DYNAMIC_ROOT_PATH: [u8; 1] = [0];
@@ -156,73 +162,6 @@ const DYNAMIC_ROOT_TEMPLATE: Template = Template {
     attr_paths: &[],
 };
 
-fn get_template(
-    tag: &'static str,
-    namespace: Option<&'static str>,
-    num_children: usize,
-    has_attributes: bool,
-) -> Template {
-    let key = (tag, namespace, num_children, has_attributes);
-    if let Some(template) = TEMPLATES.read().as_ref().and_then(|cache| cache.get(&key)) {
-        return template;
-    }
-
-    let mut write = TEMPLATES.write();
-    let cache = write.get_or_insert_with(TemplateCache::new);
-    if let Some(template) = cache.get(&key) {
-        return template;
-    }
-
-    let template = create_template(tag, namespace, num_children, has_attributes);
-    cache.insert(key, template);
-    template
-}
-
-fn create_template(
-    tag: &'static str,
-    namespace: Option<&'static str>,
-    num_children: usize,
-    has_attributes: bool,
-) -> Template {
-    let mut children_list = Vec::with_capacity(num_children);
-    let mut node_paths = Vec::with_capacity(num_children);
-
-    // Root element is at path [0]. Children are at [0, i].
-    for i in 0..num_children {
-        children_list.push(TemplateNode::Dynamic { id: i });
-        let path: &'static [u8] = Box::leak(Box::new([0u8, i as u8]));
-        node_paths.push(path);
-    }
-
-    let children: &'static [TemplateNode] = Box::leak(children_list.into_boxed_slice());
-    let node_paths: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
-
-    let mut attrs_list = Vec::with_capacity(1);
-    if has_attributes {
-        attrs_list.push(TemplateAttribute::Dynamic { id: 0 });
-    }
-    let attrs: &'static [TemplateAttribute] = Box::leak(attrs_list.into_boxed_slice());
-
-    let roots: &'static [TemplateNode] = Box::leak(Box::new([TemplateNode::Element {
-        tag,
-        namespace,
-        attrs,
-        children,
-    }]));
-
-    let attr_paths: &'static [&'static [u8]] = if has_attributes {
-        Box::leak(Box::new([Box::leak(Box::new([0u8])) as &'static [u8]]))
-    } else {
-        &[]
-    };
-
-    Template {
-        roots,
-        node_paths,
-        attr_paths,
-    }
-}
-
 /// Get or create a hybrid template with mixed static/dynamic children.
 fn get_hybrid_template(
     tag: &'static str,
@@ -230,14 +169,7 @@ fn get_hybrid_template(
     children: &[ChildNode],
     has_attributes: bool,
 ) -> Template {
-    let child_pattern: Vec<ChildPattern> = children
-        .iter()
-        .map(|c| match c {
-            ChildNode::StaticText(s) => ChildPattern::StaticText(s),
-            ChildNode::StaticElement(e) => ChildPattern::StaticElement(e.tag),
-            ChildNode::Dynamic(_) => ChildPattern::Dynamic,
-        })
-        .collect();
+    let child_pattern: Vec<ChildPattern> = children.iter().map(child_to_pattern).collect();
 
     let key = HybridTemplateKey {
         tag,
@@ -387,7 +319,6 @@ pub struct ElementBuilder {
     attributes: Vec<Attribute>,
     children: Vec<ChildNode>,
     key: Option<String>,
-    has_static_children: bool,
 }
 
 impl ElementBuilder {
@@ -399,7 +330,6 @@ impl ElementBuilder {
             attributes: Vec::new(),
             children: Vec::new(),
             key: None,
-            has_static_children: false,
         }
     }
 
@@ -411,7 +341,6 @@ impl ElementBuilder {
             attributes: Vec::new(),
             children: Vec::new(),
             key: None,
-            has_static_children: false,
         }
     }
 
@@ -426,7 +355,8 @@ impl ElementBuilder {
     /// Dynamic children are evaluated at runtime and participate in diffing.
     /// For static text that never changes, use `.static_text()` instead.
     pub fn child(mut self, child: impl IntoDynNode) -> Self {
-        self.children.push(ChildNode::Dynamic(child.into_dyn_node()));
+        self.children
+            .push(ChildNode::Dynamic(child.into_dyn_node()));
         self
     }
 
@@ -463,10 +393,8 @@ impl ElementBuilder {
     /// ```
     pub fn static_text(mut self, text: &'static str) -> Self {
         self.children.push(ChildNode::StaticText(text));
-        self.has_static_children = true;
         self
     }
-
 
     /// Add a static element child that never changes.
     ///
@@ -487,7 +415,6 @@ impl ElementBuilder {
     /// ```
     pub fn static_element(mut self, element: StaticElement) -> Self {
         self.children.push(ChildNode::StaticElement(element));
-        self.has_static_children = true;
         self
     }
 
@@ -517,7 +444,8 @@ impl ElementBuilder {
     /// Add multiple dynamic children from an iterator.
     pub fn children(mut self, children: impl IntoIterator<Item = impl IntoDynNode>) -> Self {
         for child in children {
-            self.children.push(ChildNode::Dynamic(child.into_dyn_node()));
+            self.children
+                .push(ChildNode::Dynamic(child.into_dyn_node()));
         }
         self
     }
@@ -570,43 +498,13 @@ impl ElementBuilder {
     /// Build the element into a VNode (Element).
     pub fn build(self) -> dioxus_core::Element {
         let has_attributes = !self.attributes.is_empty();
-
-        // Use hybrid template if we have any static children
-        if self.has_static_children {
-            return self.build_hybrid(has_attributes);
-        }
-
-        // Legacy path: all dynamic children
-        let num_children = self.children.len();
-        let template = get_template(self.tag, self.namespace, num_children, has_attributes);
-
-        // Extract dynamic nodes from children
-        let dynamic_nodes: Vec<DynamicNode> = self
-            .children
-            .into_iter()
-            .map(|c| match c {
-                ChildNode::Dynamic(d) => d,
-                _ => unreachable!("No static children in legacy path"),
-            })
-            .collect();
-        let dynamic_nodes = dynamic_nodes.into_boxed_slice();
-
-        // Pack all attributes into a single dynamic attribute group
-        let mut dynamic_attrs = Vec::new();
-        if has_attributes {
-            let mut attributes = self.attributes;
-            merge_class_attributes(&mut attributes);
-            attributes.sort_by(|a, b| a.name.cmp(b.name));
-            dynamic_attrs.push(attributes.into_boxed_slice());
-        }
-        let dynamic_attrs = dynamic_attrs.into_boxed_slice();
-
-        Ok(VNode::new(self.key, template, dynamic_nodes, dynamic_attrs))
+        self.build_hybrid(has_attributes)
     }
 
     /// Build with hybrid template (mixed static/dynamic children).
     fn build_hybrid(self, has_attributes: bool) -> dioxus_core::Element {
-        let template = get_hybrid_template(self.tag, self.namespace, &self.children, has_attributes);
+        let template =
+            get_hybrid_template(self.tag, self.namespace, &self.children, has_attributes);
 
         // Only extract dynamic nodes
         let dynamic_nodes: Vec<DynamicNode> = self
