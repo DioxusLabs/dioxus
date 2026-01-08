@@ -471,3 +471,40 @@ fn test_static_with_attributes() {
     assert!(html.contains("class=\"container\""));
     assert!(html.contains("Static content"));
 }
+
+#[test]
+fn test_static_str_macro() {
+    use dioxus_builder::{static_str, BuilderExt};
+
+    fn builder_app() -> Element {
+        div()
+            .pipe(static_str!("Hello, "))
+            .child("World")
+            .pipe(static_str!("!"))
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("Hello, "));
+    assert!(html.contains("World"));
+    assert!(html.contains("!"));
+}
+
+#[test]
+fn test_static_str_macro_two_arg() {
+    use dioxus_builder::static_str;
+
+    fn builder_app() -> Element {
+        let builder = div();
+        static_str!(builder, "Const verified text").build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("Const verified text"));
+}

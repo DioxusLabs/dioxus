@@ -437,7 +437,23 @@ impl ElementBuilder {
     ///
     /// **Important**: The text must be a `&'static str` (compile-time string literal).
     ///
-    /// # Example
+    /// For **guaranteed** const evaluation, use the [`static_str!`] macro:
+    /// ```rust,ignore
+    /// use dioxus_builder::{div, static_str, BuilderExt};
+    ///
+    /// div()
+    ///     .pipe(static_str!("Hello, "))  // Guaranteed const, embedded in template
+    ///     .child(user_name)               // Dynamic, will be diffed
+    ///     .pipe(static_str!("!"))         // Guaranteed const, embedded in template
+    ///     .build()
+    ///
+    /// // Or using the two-argument form:
+    /// let builder = div();
+    /// static_str!(builder, "Hello!")
+    ///     .build()
+    /// ```
+    ///
+    /// Or use the method directly with string literals:
     /// ```rust,ignore
     /// div()
     ///     .static_text("Hello, ")     // Embedded in template
@@ -450,6 +466,7 @@ impl ElementBuilder {
         self.has_static_children = true;
         self
     }
+
 
     /// Add a static element child that never changes.
     ///
@@ -1513,4 +1530,61 @@ pub fn slot() -> ElementBuilder {
 }
 pub fn template() -> ElementBuilder {
     ElementBuilder::new("template")
+}
+
+// =============================================================================
+// Macros for Const Static Text
+// =============================================================================
+
+/// Add static text to an element builder with compile-time const verification.
+///
+/// This macro ensures the string literal is evaluated in a const context,
+/// guaranteeing it will be embedded in the template and skip diffing.
+///
+/// # Example
+/// ```rust,ignore
+/// use dioxus_builder::{div, static_str};
+///
+/// div()
+///     .pipe(static_str!("Hello, "))    // Guaranteed const
+///     .child(user_name)                 // Dynamic
+///     .pipe(static_str!("!"))           // Guaranteed const
+///     .build()
+/// ```
+///
+/// Or use the extension trait method:
+/// ```rust,ignore
+/// use dioxus_builder::*;
+///
+/// let builder = div();
+/// static_str!(builder, "Hello, World!")
+///     .build()
+/// ```
+#[macro_export]
+macro_rules! static_str {
+    ($builder:expr, $text:literal) => {{
+        const TEXT: &'static str = $text;
+        $builder.static_text(TEXT)
+    }};
+    ($text:literal) => {{
+        const TEXT: &'static str = $text;
+        |builder: $crate::ElementBuilder| builder.static_text(TEXT)
+    }};
+}
+
+/// Pipe helper trait for using closures with builders.
+pub trait BuilderExt: Sized {
+    /// Apply a function to this builder.
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R;
+}
+
+impl BuilderExt for ElementBuilder {
+    fn pipe<F, R>(self, f: F) -> R
+    where
+        F: FnOnce(Self) -> R,
+    {
+        f(self)
+    }
 }

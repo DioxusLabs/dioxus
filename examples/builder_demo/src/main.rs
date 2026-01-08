@@ -553,71 +553,70 @@ fn static_content_section(count: Signal<i32>) -> Element {
                             p().class("text-sm font-medium text-blue-800 mb-1")
                                 .static_text("Performance Tip"),
                         )
-                        .child(
-                            p().class("text-sm text-blue-700")
-                                .static_text(
-                                    "Static content uses .static_text() and .static_element() - \
+                        .child(p().class("text-sm text-blue-700").static_text(
+                            "Static content uses .static_text() and .static_element() - \
                                      these are embedded directly in the template and skip diffing!",
-                                ),
-                        ),
+                        )),
                 )
                 // Example 4: Nested static elements
-                .child(
-                    div()
-                        .class("p-3 bg-gray-50 rounded-lg")
-                        .child(
-                            p().class("text-sm font-medium text-gray-700 mb-2")
-                                .static_text("Example 3: Nested static structure"),
-                        )
-                        .child(
-                            div()
-                                .class("flex items-center gap-3")
-                                .static_element(StaticElement {
-                                    tag: "div",
-                                    namespace: None,
-                                    attrs: &[StaticAttribute {
-                                        name: "class",
-                                        value: "flex items-center gap-1 px-2 py-1 bg-green-100 rounded text-green-800 text-sm",
-                                        namespace: None,
-                                    }],
-                                    children: vec![
-                                        ChildNode::StaticElement(StaticElement {
-                                            tag: "span",
-                                            namespace: None,
-                                            attrs: &[],
-                                            children: vec![ChildNode::StaticText("✓")],
-                                        }),
-                                        ChildNode::StaticText("Verified"),
-                                    ],
-                                })
-                                .static_element(StaticElement {
-                                    tag: "div",
-                                    namespace: None,
-                                    attrs: &[StaticAttribute {
-                                        name: "class",
-                                        value: "flex items-center gap-1 px-2 py-1 bg-yellow-100 rounded text-yellow-800 text-sm",
-                                        namespace: None,
-                                    }],
-                                    children: vec![
-                                        ChildNode::StaticElement(StaticElement {
-                                            tag: "span",
-                                            namespace: None,
-                                            attrs: &[],
-                                            children: vec![ChildNode::StaticText("⚡")],
-                                        }),
-                                        ChildNode::StaticText("Fast"),
-                                    ],
-                                })
-                                .child(
-                                    span()
-                                        .class("px-2 py-1 bg-purple-100 rounded text-purple-800 text-sm")
-                                        .static_text("Count: ")
-                                        .child(count.to_string()),
-                                ),
-                        ),
-                ),
+                .child(fun_name(count)),
         )
         .build()
+}
+
+fn fun_name(count: Signal<i32>) -> ElementBuilder {
+    div()
+        .class("p-3 bg-gray-50 rounded-lg")
+        .child(
+            p().class("text-sm font-medium text-gray-700 mb-2")
+                .static_text("Example 3: Nested static structure"),
+        )
+        .child(
+            div()
+                .class("flex items-center gap-3")
+                .static_element(StaticElement {
+                    tag: "div",
+                    namespace: None,
+                    attrs: &[StaticAttribute {
+                        name: "class",
+                        value: "flex items-center gap-1 px-2 py-1 bg-green-100 rounded text-green-800 text-sm",
+                        namespace: None,
+                    }],
+                    children: vec![
+                        ChildNode::StaticElement(StaticElement {
+                            tag: "span",
+                            namespace: None,
+                            attrs: &[],
+                            children: vec![ChildNode::StaticText("✓")],
+                        }),
+                        ChildNode::StaticText("Verified"),
+                    ],
+                })
+                .static_element(StaticElement {
+                    tag: "div",
+                    namespace: None,
+                    attrs: &[StaticAttribute {
+                        name: "class",
+                        value: "flex items-center gap-1 px-2 py-1 bg-yellow-100 rounded text-yellow-800 text-sm",
+                        namespace: None,
+                    }],
+                    children: vec![
+                        ChildNode::StaticElement(StaticElement {
+                            tag: "span",
+                            namespace: None,
+                            attrs: &[],
+                            children: vec![ChildNode::StaticText("⚡")],
+                        }),
+                        ChildNode::StaticText("Fast"),
+                    ],
+                })
+                .child(
+                    span()
+                        .class("px-2 py-1 bg-purple-100 rounded text-purple-800 text-sm")
+                        .static_text("Count: ")
+                        .child(count.to_string()),
+                ),
+        )
 }
 
 fn list_section(count: Signal<i32>) -> Element {
@@ -630,20 +629,19 @@ fn list_section(count: Signal<i32>) -> Element {
         )
         .child(
             // Using the new children_keyed method for efficient list reconciliation
-            ul().class("divide-y divide-gray-200")
-                .children_keyed(
-                    0..count(),
-                    |i| i.to_string(),
-                    |i| {
-                        li().class("p-4 hover:bg-gray-50 flex justify-between")
-                            .child(span().text(format!("Item record #{}", i + 1)))
-                            .child(
-                                span()
-                                    .class("text-xs text-gray-400 capitalize")
-                                    .text(if i % 2 == 0 { "Even" } else { "Odd" }),
-                            )
-                    },
-                ),
+            ul().class("divide-y divide-gray-200").children_keyed(
+                0..count(),
+                |i| i.to_string(),
+                |i| {
+                    li().class("p-4 hover:bg-gray-50 flex justify-between")
+                        .child(span().text(format!("Item record #{}", i + 1)))
+                        .child(
+                            span()
+                                .class("text-xs text-gray-400 capitalize")
+                                .text(if i % 2 == 0 { "Even" } else { "Odd" }),
+                        )
+                },
+            ),
         )
         .build()
 }

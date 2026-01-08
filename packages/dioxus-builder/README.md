@@ -212,6 +212,28 @@ div()
     .build()
 ```
 
+### Guaranteed Const with `static_str!` Macro
+
+For **guaranteed** compile-time const evaluation, use the `static_str!` macro:
+
+```rust
+use dioxus_builder::{div, static_str, BuilderExt};
+
+// Using pipe with closure form
+div()
+    .pipe(static_str!("Hello, "))  // Guaranteed const
+    .child(user_name)               // Dynamic
+    .pipe(static_str!("!"))         // Guaranteed const
+    .build()
+
+// Or using the two-argument form
+let builder = div();
+static_str!(builder, "Hello, World!")
+    .build()
+```
+
+The macro ensures the string is evaluated in a `const` context, guaranteeing it will be embedded in the template.
+
 ### Static Elements
 
 For more complex static structures:
@@ -236,12 +258,15 @@ div()
 
 ### Performance Comparison
 
-| Method | Diffing | Best For |
-|--------|---------|----------|
-| `.child("text")` | Yes | Dynamic content that may change |
-| `.text(value)` | Yes | Dynamic text from variables |
-| `.static_text("text")` | No | Static labels, decorative text |
-| `.static_element(...)` | No | Static icons, badges, decorations |
+| Method | Diffing | Const Guaranteed | Best For |
+|--------|---------|------------------|----------|
+| `.child("text")` | Yes | N/A | Dynamic content that may change |
+| `.text(value)` | Yes | N/A | Dynamic text from variables |
+| `.static_text("text")` | No | No* | Static labels, decorative text |
+| `static_str!(builder, "text")` | No | Yes | Static text with const verification |
+| `.static_element(...)` | No | No* | Static icons, badges, decorations |
+
+*`static_text` accepts `&'static str` which must be a string literal, but the macro provides additional compile-time verification.
 
 ## Document Helpers
 
