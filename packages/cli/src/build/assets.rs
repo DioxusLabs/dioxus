@@ -424,6 +424,13 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
 
+    tracing::debug!(
+        "WASM data section: file_start=0x{:x}, file_end=0x{:x}, size={}",
+        section_start,
+        section_range_end,
+        section_size
+    );
+
     // Parse data segments with wasmparser to get file offsets.
     // Walrus doesn't expose file offset information, so we need wasmparser for this.
     // With bulk memory operations, there may be multiple data segments.
@@ -445,6 +452,16 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         ));
     }
 
+    tracing::debug!(
+        "Found {} data segments: {:?}",
+        segment_file_info.len(),
+        segment_file_info
+            .iter()
+            .enumerate()
+            .map(|(i, (off, sz))| format!("seg{}[file=0x{:x}, size={}]", i, off, sz))
+            .collect::<Vec<_>>()
+    );
+
     if segment_file_info.is_empty() {
         return Ok(Vec::new());
     }
@@ -452,6 +469,23 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     // Parse the wasm file with walrus to find globals and exports
     let module = walrus::Module::from_buffer(file_contents)
         .context("Failed to parse WASM module with walrus")?;
+
+    // Log walrus segment info for comparison
+    for (i, data) in module.data.iter().enumerate() {
+        let kind_str = match &data.kind {
+            walrus::DataKind::Active { offset, .. } => {
+                let off = eval_walrus_global_expr(&module, offset);
+                format!("Active(offset={:?})", off)
+            }
+            walrus::DataKind::Passive => "Passive".to_string(),
+        };
+        tracing::debug!(
+            "Walrus segment {}: kind={}, data_len={}",
+            i,
+            kind_str,
+            data.value.len()
+        );
+    }
 
     // Determine the memory base address for symbol lookup
     let main_memory_walrus = module
@@ -463,32 +497,69 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     let main_memory_offset = match &main_memory_walrus.kind {
         walrus::DataKind::Active { offset, .. } => {
             // Active segments have an explicit offset expression
-            eval_walrus_global_expr(&module, offset).unwrap_or_default()
+            let off = eval_walrus_global_expr(&module, offset).unwrap_or_default();
+            tracing::debug!("Active segment mode: base address = 0x{:x}", off);
+            off
         }
         walrus::DataKind::Passive => {
             // For passive segments (bulk memory operations), there's no static offset.
             // The memory.init instruction determines placement at runtime.
             //
-            // Rust/LLVM places static data at 0x100000 (1MB) in linear memory.
+            // Try to find the actual memory base from linker exports:
+            // - __memory_base: Set by the linker for bulk-memory builds
+            // - Falls back to 0x100000 (Rust/LLVM default for static data)
             //
             // With TLS support, the linker calculates symbol addresses as if TLS data
-            // is at 0x100000 followed by main data. But at runtime, TLS is stored
-            // separately per-thread via __wasm_init_tls. The main data segment starts
-            // at 0x100000 in the file, but symbol addresses include the TLS offset.
+            // is at the base address followed by main data. But at runtime, TLS is stored
+            // separately per-thread via __wasm_init_tls. We detect TLS by looking for
+            // __tls_size and adjust accordingly.
             //
-            // We detect TLS by looking for __tls_size and remove the TLS segment from
-            // our file info, then add the TLS size to the base address.
-            let tls_size = find_global_export_value(&module, "__tls_size");
+            // IMPORTANT: The linker aligns main data to a 4-byte boundary after TLS.
+            // This alignment padding exists in MEMORY but NOT in the FILE. We must
+            // use the aligned TLS size for base calculation, but the file segments
+            // are stored without this padding.
+            let memory_base = find_global_export_value(&module, "__memory_base");
+            let tls_size = find_global_export_value(&module, "__tls_size").unwrap_or(0);
+            let tls_base = find_global_export_value(&module, "__tls_base");
+            let data_end = find_global_export_value(&module, "__data_end");
+            let heap_base = find_global_export_value(&module, "__heap_base");
+
+            tracing::debug!(
+                "Passive segment mode: __memory_base={:?}, __tls_size={}, __tls_base={:?}, __data_end={:?}, __heap_base={:?}",
+                memory_base,
+                tls_size,
+                tls_base,
+                data_end,
+                heap_base
+            );
 
             // If TLS is present and segment 0 matches TLS size, remove TLS segment
-            if let Some(tls) = tls_size {
-                if !segment_file_info.is_empty() && segment_file_info[0].1 == tls {
-                    segment_file_info.remove(0);
-                }
+            // from our file info since it's not where data symbols point
+            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size
+            {
+                tracing::debug!("Removing TLS segment (segment 0, size={})", tls_size);
+                segment_file_info.remove(0);
             }
 
-            // Base = 0x100000 + TLS size (to account for TLS offset in symbol addresses)
-            0x100000u64 + tls_size.unwrap_or(0)
+            // Align TLS size up to 4 bytes to match linker's memory layout.
+            // The linker aligns main data to a 4-byte boundary after TLS, so symbol
+            // addresses are calculated from (memory_base + aligned_tls_size).
+            // However, file segments are stored without this alignment padding.
+            let tls_aligned = (tls_size + 3) & !3;
+
+            // Use __memory_base if available (set by linker in release builds),
+            // otherwise fall back to 0x100000 (debug builds default)
+            let base = memory_base.unwrap_or(0x100000u64) + tls_aligned;
+
+            tracing::debug!(
+                "Passive segment base: 0x{:x} (memory_base={:?} + tls_aligned={} [tls_size={}])",
+                base,
+                memory_base,
+                tls_aligned,
+                tls_size
+            );
+
+            base
         }
     };
 
@@ -536,10 +607,18 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         let mut cumulative_offset = 0u64;
         let mut file_offset = None;
 
-        for (seg_file_offset, seg_size) in segment_file_info.iter() {
+        for (i, (seg_file_offset, seg_size)) in segment_file_info.iter().enumerate() {
             if data_relative_offset < cumulative_offset + seg_size {
                 let offset_in_segment = data_relative_offset - cumulative_offset;
                 file_offset = Some(seg_file_offset + offset_in_segment);
+                tracing::debug!(
+                    "Symbol {:?}: vaddr=0x{:x}, data_rel=0x{:x}, in seg{} at file_offset=0x{:x}",
+                    export.name,
+                    virtual_address,
+                    data_relative_offset,
+                    i,
+                    seg_file_offset + offset_in_segment
+                );
                 break;
             }
             cumulative_offset += seg_size;
@@ -547,8 +626,10 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
         let Some(file_offset) = file_offset else {
             tracing::error!(
-                "Virtual address 0x{:x} is beyond all data segments",
-                virtual_address
+                "Virtual address 0x{:x} (data_rel=0x{:x}) is beyond all data segments (total=0x{:x})",
+                virtual_address,
+                data_relative_offset,
+                cumulative_offset
             );
             continue;
         };
