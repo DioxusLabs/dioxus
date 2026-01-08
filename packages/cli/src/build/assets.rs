@@ -487,8 +487,7 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
             // If TLS is present and segment 0 matches TLS size, remove TLS segment
             // from our file info since it's not where data symbols point
-            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size
-            {
+            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size {
                 segment_file_info.remove(0);
             }
 
