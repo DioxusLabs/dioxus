@@ -100,14 +100,6 @@ impl MutationWriter<'_> {
 impl WriteMutations for MutationWriter<'_> {
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
         trace!("assign_node_id path:{:?} id:{}", path, id.0);
-
-        // If there is an existing node already mapped to that ID and it has no parent, then drop it
-        // TODO: more automated GC/ref-counted semantics for node lifetimes
-        if let Some(node_id) = self.state.try_element_to_node_id(id) {
-            self.docm.remove_node_if_unparented(node_id);
-        }
-
-        // Map the node at specified path
         self.set_id_mapping(self.load_child(path), id);
     }
 
@@ -144,7 +136,11 @@ impl WriteMutations for MutationWriter<'_> {
     fn replace_node_with(&mut self, id: ElementId, m: usize) {
         trace!("replace_node_with id:{} m:{}", id.0, m);
         let (anchor_node_id, new_node_ids) = self.state.anchor_and_nodes(id, m);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
+        if let Some(mapping) = self.state.node_id_mapping.get_mut(id.0) {
+            *mapping = None;
+        }
+        self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
+        self.docm.remove_and_drop_node(anchor_node_id);
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
@@ -154,13 +150,17 @@ impl WriteMutations for MutationWriter<'_> {
         // the stack and then "load_child" reads from the top of the stack.
         let new_node_ids = self.state.m_stack_nodes(m);
         let anchor_node_id = self.load_child(path);
-        self.docm.replace_node_with(anchor_node_id, &new_node_ids);
+        self.docm.insert_nodes_before(anchor_node_id, &new_node_ids);
+        self.docm.remove_and_drop_node(anchor_node_id);
     }
 
     fn remove_node(&mut self, id: ElementId) {
         trace!("remove_node id:{}", id.0);
         let node_id = self.state.element_to_node_id(id);
-        self.docm.remove_node(node_id);
+        if let Some(mapping) = self.state.node_id_mapping.get_mut(id.0) {
+            *mapping = None;
+        }
+        self.docm.remove_and_drop_node(node_id);
     }
 
     fn push_root(&mut self, id: ElementId) {
