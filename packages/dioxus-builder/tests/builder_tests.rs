@@ -91,6 +91,30 @@ fn test_builder_hydration_matches_rsx() {
 }
 
 #[test]
+fn test_builder_fragment_matches_rsx() {
+    fn rsx_app() -> Element {
+        rsx! {
+            "Hello"
+            div { "World" }
+        }
+    }
+
+    fn builder_app() -> Element {
+        fragment().child("Hello").child(div().child("World")).build()
+    }
+
+    let mut rsx_dom = VirtualDom::new(rsx_app);
+    rsx_dom.rebuild(&mut NoOpMutations);
+    let rsx_html = dioxus_ssr::pre_render(&rsx_dom);
+
+    let mut builder_dom = VirtualDom::new(builder_app);
+    builder_dom.rebuild(&mut NoOpMutations);
+    let builder_html = dioxus_ssr::pre_render(&builder_dom);
+
+    assert_eq!(rsx_html, builder_html);
+}
+
+#[test]
 fn test_builder_merges_class_attributes() {
     fn builder_app() -> Element {
         div().class("one").class("two").build()

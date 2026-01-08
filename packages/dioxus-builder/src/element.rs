@@ -2,10 +2,11 @@
 
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, HasAttributes, IntoAttributeValue, IntoDynNode,
-    Template, TemplateAttribute, TemplateNode, VNode,
+    Template, TemplateAttribute, TemplateNode, VNode, VText,
 };
 use parking_lot::RwLock;
 use std::collections::{HashMap, VecDeque};
+use std::fmt::Arguments;
 
 pub use dioxus_html::GlobalAttributesExtension;
 pub use dioxus_html::SvgAttributesExtension;
@@ -51,6 +52,15 @@ impl TemplateCache {
 }
 
 static TEMPLATES: RwLock<Option<TemplateCache>> = RwLock::new(None);
+
+const DYNAMIC_ROOT_PATH: [u8; 1] = [0];
+const DYNAMIC_ROOT_PATHS: [&[u8]; 1] = [&DYNAMIC_ROOT_PATH];
+const DYNAMIC_ROOTS: [TemplateNode; 1] = [TemplateNode::Dynamic { id: 0 }];
+const DYNAMIC_ROOT_TEMPLATE: Template = Template {
+    roots: &DYNAMIC_ROOTS,
+    node_paths: &DYNAMIC_ROOT_PATHS,
+    attr_paths: &[],
+};
 
 fn get_template(
     tag: &'static str,
@@ -217,6 +227,174 @@ impl ElementBuilder {
         let dynamic_attrs = dynamic_attrs.into_boxed_slice();
 
         Ok(VNode::new(None, template, dynamic_nodes, dynamic_attrs))
+    }
+}
+
+// =============================================================================
+// Fragment Builder
+// =============================================================================
+
+fn text_vnode(value: impl ToString) -> VNode {
+    VNode::new(
+        None,
+        DYNAMIC_ROOT_TEMPLATE,
+        Box::new([DynamicNode::Text(VText::new(value))]),
+        Box::new([]),
+    )
+}
+
+/// Create an element containing a single text node.
+pub fn text_node(value: impl ToString) -> dioxus_core::Element {
+    Ok(text_vnode(value))
+}
+
+/// A builder for constructing fragments with multiple root nodes.
+#[derive(Default)]
+pub struct FragmentBuilder {
+    children: Vec<VNode>,
+}
+
+impl FragmentBuilder {
+    /// Create a new FragmentBuilder.
+    pub fn new() -> Self {
+        Self {
+            children: Vec::new(),
+        }
+    }
+
+    /// Add a child node.
+    pub fn child(mut self, child: impl IntoFragmentChild) -> Self {
+        self.children.push(child.into_fragment_child());
+        self
+    }
+
+    /// Add a child node only if the condition is true.
+    pub fn child_if(self, condition: bool, child: impl IntoFragmentChild) -> Self {
+        if condition {
+            self.child(child)
+        } else {
+            self
+        }
+    }
+
+    /// Add a child node from one of two branches.
+    pub fn child_if_else(
+        self,
+        condition: bool,
+        then_child: impl IntoFragmentChild,
+        else_child: impl IntoFragmentChild,
+    ) -> Self {
+        if condition {
+            self.child(then_child)
+        } else {
+            self.child(else_child)
+        }
+    }
+
+    /// Add multiple children from an iterator.
+    pub fn children<I, C>(mut self, children: I) -> Self
+    where
+        I: IntoIterator<Item = C>,
+        C: IntoFragmentChild,
+    {
+        for child in children {
+            self.children.push(child.into_fragment_child());
+        }
+        self
+    }
+
+    /// Build the fragment into a VNode (Element).
+    pub fn build(self) -> dioxus_core::Element {
+        if self.children.is_empty() {
+            VNode::empty()
+        } else {
+            Ok(VNode::new(
+                None,
+                DYNAMIC_ROOT_TEMPLATE,
+                Box::new([DynamicNode::Fragment(self.children)]),
+                Box::new([]),
+            ))
+        }
+    }
+}
+
+/// Create a new fragment builder.
+pub fn fragment() -> FragmentBuilder {
+    FragmentBuilder::new()
+}
+
+/// Convert values into fragment children.
+pub trait IntoFragmentChild {
+    /// Consume this item and produce a VNode suitable for fragment children.
+    fn into_fragment_child(self) -> VNode;
+}
+
+impl IntoFragmentChild for VNode {
+    fn into_fragment_child(self) -> VNode {
+        self
+    }
+}
+
+impl IntoFragmentChild for &VNode {
+    fn into_fragment_child(self) -> VNode {
+        self.clone()
+    }
+}
+
+impl IntoFragmentChild for dioxus_core::Element {
+    fn into_fragment_child(self) -> VNode {
+        match self {
+            Ok(vnode) => vnode,
+            Err(_) => VNode::default(),
+        }
+    }
+}
+
+impl IntoFragmentChild for &dioxus_core::Element {
+    fn into_fragment_child(self) -> VNode {
+        match self.as_ref() {
+            Ok(vnode) => vnode.clone(),
+            Err(_) => VNode::default(),
+        }
+    }
+}
+
+impl IntoFragmentChild for Option<VNode> {
+    fn into_fragment_child(self) -> VNode {
+        self.unwrap_or_default()
+    }
+}
+
+impl IntoFragmentChild for Option<dioxus_core::Element> {
+    fn into_fragment_child(self) -> VNode {
+        match self {
+            Some(Ok(vnode)) => vnode,
+            _ => VNode::default(),
+        }
+    }
+}
+
+impl IntoFragmentChild for ElementBuilder {
+    fn into_fragment_child(self) -> VNode {
+        self.build().unwrap_or_default()
+    }
+}
+
+impl IntoFragmentChild for &str {
+    fn into_fragment_child(self) -> VNode {
+        text_vnode(self)
+    }
+}
+
+impl IntoFragmentChild for String {
+    fn into_fragment_child(self) -> VNode {
+        text_vnode(self)
+    }
+}
+
+impl IntoFragmentChild for Arguments<'_> {
+    fn into_fragment_child(self) -> VNode {
+        text_vnode(self)
     }
 }
 

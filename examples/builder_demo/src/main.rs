@@ -9,27 +9,23 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut count = use_signal(|| 0);
+    let count = use_signal(|| 0);
 
-    use_hook(|| {
-        let doc = document::document();
-        doc.set_title("Dioxus Builder Demo".to_string());
-        doc.create_link(
+    fragment()
+        .child(document::Title(
+            document::TitleProps::builder()
+                .children(text_node("Dioxus Builder Demo"))
+                .build(),
+        ))
+        .child(document::Stylesheet(
             document::LinkProps::builder()
-                .rel(Some("stylesheet".to_string()))
                 .href(Some(TAILWIND_CSS.to_string()))
                 .build(),
-        );
-    });
-
-    // head().title("Dioxus Builder Demo")
-
-    rsx! {
-        body_section { count }
-    }
+        ))
+        .child(body_section(count))
+        .build()
 }
 
-#[component]
 fn body_section(count: Signal<i32>) -> Element {
     div()
         .class_list([
