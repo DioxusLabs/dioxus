@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_builder::*;
+use dioxus_builder::document::{doc_stylesheet, doc_title};
+use dioxus_builder::{ChildNode, StaticAttribute, StaticElement, *};
 use dioxus_core::{Attribute, IntoAttributeValue};
 
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
@@ -11,17 +12,10 @@ fn main() {
 fn app() -> Element {
     let count = use_signal(|| 0);
 
+    // Using the new doc_title and doc_stylesheet helpers
     fragment()
-        .child(document::Title(
-            document::TitleProps::builder()
-                .children(text_node("Dioxus Builder Demo"))
-                .build(),
-        ))
-        .child(document::Stylesheet(
-            document::LinkProps::builder()
-                .href(Some(TAILWIND_CSS.to_string()))
-                .build(),
-        ))
+        .child(doc_title("Dioxus Builder Demo"))
+        .child(doc_stylesheet(TAILWIND_CSS))
         .child(body_section(count))
         .build()
 }
@@ -429,6 +423,7 @@ fn body_section(count: Signal<i32>) -> Element {
         ])
         .child(header_section())
         .child(counter_section(count))
+        .child(static_content_section(count))
         .child(list_section(count))
         .child(attribute_helpers_section(count))
         .child(toggle_section(
@@ -445,11 +440,11 @@ fn header_section() -> Element {
         .class_list(["container", "mx-auto", "p-4", "text-center", "space-y-2"])
         .child(
             h1().class("text-4xl font-bold text-blue-600")
-                .child("Dioxus Builder Demo"),
+                .text("Dioxus Builder Demo"),
         )
         .child(
             p().class("text-lg text-gray-700")
-                .child("This UI is built using the typed builder API and Tailwind CSS."),
+                .text("This UI is built using the typed builder API and Tailwind CSS."),
         )
         .build()
 }
@@ -461,18 +456,166 @@ fn counter_section(mut count: Signal<i32>) -> Element {
             button()
                 .class("px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition")
                 .onclick(move |_| count -= 1)
-                .child("-"),
+                .text("-"),
         )
         .child(
             span()
                 .class("text-2xl font-mono w-12 text-center")
-                .child(count.to_string()),
+                .text(count.to_string()),
         )
         .child(
             button()
                 .class("px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition")
                 .onclick(move |_| count += 1)
-                .child("+"),
+                .text("+"),
+        )
+        .build()
+}
+
+// =============================================================================
+// Static Content Section - Demonstrates hybrid static/dynamic templates
+// =============================================================================
+
+/// Demonstrates `static_text` and `static_element` for optimal performance.
+///
+/// Static content is embedded directly in the template and does NOT participate
+/// in diffing, making it more performant than dynamic content.
+fn static_content_section(count: Signal<i32>) -> Element {
+    div()
+        .class_list([
+            "mt-4",
+            "w-full",
+            "max-w-md",
+            "bg-white",
+            "shadow-xl",
+            "rounded-lg",
+            "overflow-hidden",
+        ])
+        .child(
+            div()
+                .class("p-4 border-b bg-gradient-to-r from-purple-50 to-blue-50")
+                .child(
+                    h2().class("font-semibold text-purple-800")
+                        .text("Static vs Dynamic Content"),
+                ),
+        )
+        .child(
+            div()
+                .class("p-4 space-y-4")
+                // Example 1: Mixed static and dynamic text
+                .child(
+                    div()
+                        .class("p-3 bg-gray-50 rounded-lg")
+                        .child(
+                            p().class("text-sm font-medium text-gray-700 mb-2")
+                                .static_text("Example 1: Mixed text"),
+                        )
+                        .child(
+                            p().class("text-gray-600")
+                                .static_text("The counter is at: ")
+                                .child(
+                                    strong()
+                                        .class("text-blue-600 font-mono")
+                                        .text(count.to_string()),
+                                )
+                                .static_text(" clicks!"),
+                        ),
+                )
+                // Example 2: Static element with attributes
+                .child(
+                    div()
+                        .class("p-3 bg-gray-50 rounded-lg")
+                        .child(
+                            p().class("text-sm font-medium text-gray-700 mb-2")
+                                .static_text("Example 2: Static icon element"),
+                        )
+                        .child(
+                            div()
+                                .class("flex items-center gap-2")
+                                .static_element(StaticElement {
+                                    tag: "span",
+                                    namespace: None,
+                                    attrs: &[StaticAttribute {
+                                        name: "class",
+                                        value: "text-2xl",
+                                        namespace: None,
+                                    }],
+                                    children: vec![ChildNode::StaticText("★")],
+                                })
+                                .static_text(" This star icon is static (embedded in template)"),
+                        ),
+                )
+                // Example 3: Performance comparison info
+                .child(
+                    div()
+                        .class("p-3 bg-blue-50 rounded-lg border border-blue-200")
+                        .child(
+                            p().class("text-sm font-medium text-blue-800 mb-1")
+                                .static_text("Performance Tip"),
+                        )
+                        .child(
+                            p().class("text-sm text-blue-700")
+                                .static_text(
+                                    "Static content uses .static_text() and .static_element() - \
+                                     these are embedded directly in the template and skip diffing!",
+                                ),
+                        ),
+                )
+                // Example 4: Nested static elements
+                .child(
+                    div()
+                        .class("p-3 bg-gray-50 rounded-lg")
+                        .child(
+                            p().class("text-sm font-medium text-gray-700 mb-2")
+                                .static_text("Example 3: Nested static structure"),
+                        )
+                        .child(
+                            div()
+                                .class("flex items-center gap-3")
+                                .static_element(StaticElement {
+                                    tag: "div",
+                                    namespace: None,
+                                    attrs: &[StaticAttribute {
+                                        name: "class",
+                                        value: "flex items-center gap-1 px-2 py-1 bg-green-100 rounded text-green-800 text-sm",
+                                        namespace: None,
+                                    }],
+                                    children: vec![
+                                        ChildNode::StaticElement(StaticElement {
+                                            tag: "span",
+                                            namespace: None,
+                                            attrs: &[],
+                                            children: vec![ChildNode::StaticText("✓")],
+                                        }),
+                                        ChildNode::StaticText("Verified"),
+                                    ],
+                                })
+                                .static_element(StaticElement {
+                                    tag: "div",
+                                    namespace: None,
+                                    attrs: &[StaticAttribute {
+                                        name: "class",
+                                        value: "flex items-center gap-1 px-2 py-1 bg-yellow-100 rounded text-yellow-800 text-sm",
+                                        namespace: None,
+                                    }],
+                                    children: vec![
+                                        ChildNode::StaticElement(StaticElement {
+                                            tag: "span",
+                                            namespace: None,
+                                            attrs: &[],
+                                            children: vec![ChildNode::StaticText("⚡")],
+                                        }),
+                                        ChildNode::StaticText("Fast"),
+                                    ],
+                                })
+                                .child(
+                                    span()
+                                        .class("px-2 py-1 bg-purple-100 rounded text-purple-800 text-sm")
+                                        .static_text("Count: ")
+                                        .child(count.to_string()),
+                                ),
+                        ),
+                ),
         )
         .build()
 }
@@ -483,19 +626,24 @@ fn list_section(count: Signal<i32>) -> Element {
         .child(
             div()
                 .class("p-4 border-b bg-gray-50")
-                .child(h2().class("font-semibold").child("Item List")),
+                .child(h2().class("font-semibold").text("Item List")),
         )
         .child(
+            // Using the new children_keyed method for efficient list reconciliation
             ul().class("divide-y divide-gray-200")
-                .children((0..count()).map(|i| {
-                    li().class("p-4 hover:bg-gray-50 flex justify-between")
-                        .child(span().child(format!("Item record #{}", i + 1)))
-                        .child(
-                            span()
-                                .class("text-xs text-gray-400 capitalize")
-                                .child(if i % 2 == 0 { "Even" } else { "Odd" }),
-                        )
-                })),
+                .children_keyed(
+                    0..count(),
+                    |i| i.to_string(),
+                    |i| {
+                        li().class("p-4 hover:bg-gray-50 flex justify-between")
+                            .child(span().text(format!("Item record #{}", i + 1)))
+                            .child(
+                                span()
+                                    .class("text-xs text-gray-400 capitalize")
+                                    .text(if i % 2 == 0 { "Even" } else { "Odd" }),
+                            )
+                    },
+                ),
         )
         .build()
 }
@@ -546,7 +694,7 @@ fn attribute_helpers_section(count: Signal<i32>) -> Element {
 fn footer_section() -> Element {
     footer()
         .class("mt-8 text-gray-400 text-sm")
-        .child("Built with dioxus-builder")
+        .text("Built with dioxus-builder")
         .build()
 }
 

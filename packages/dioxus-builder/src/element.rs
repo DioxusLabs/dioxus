@@ -14,7 +14,66 @@ pub use dioxus_html::SvgAttributesExtension;
 impl GlobalAttributesExtension for ElementBuilder {}
 impl SvgAttributesExtension for ElementBuilder {}
 
+// =============================================================================
+// Child Node Types (Static vs Dynamic)
+// =============================================================================
+
+/// Represents a child node that can be either static (embedded in template)
+/// or dynamic (evaluated at runtime).
+///
+/// Static children are more performant because they are embedded directly
+/// in the template and don't participate in the diffing algorithm.
+#[derive(Clone)]
+pub enum ChildNode {
+    /// A static text node that never changes. Embedded directly in the template.
+    StaticText(&'static str),
+    /// A static element with static children. Embedded directly in the template.
+    StaticElement(StaticElement),
+    /// A dynamic node that may change. Requires runtime diffing.
+    Dynamic(DynamicNode),
+}
+
+/// A static element that can be embedded in the template.
+#[derive(Clone)]
+pub struct StaticElement {
+    pub tag: &'static str,
+    pub namespace: Option<&'static str>,
+    pub attrs: &'static [StaticAttribute],
+    pub children: Vec<ChildNode>,
+}
+
+/// A static attribute embedded in the template.
+#[derive(Clone, Copy)]
+pub struct StaticAttribute {
+    pub name: &'static str,
+    pub value: &'static str,
+    pub namespace: Option<&'static str>,
+}
+
+// =============================================================================
+// Template Cache
+// =============================================================================
+
 const TEMPLATE_CACHE_CAP: usize = 1024;
+
+/// Key for caching templates with mixed static/dynamic children.
+/// The Vec<bool> indicates which children are static (true) or dynamic (false).
+#[derive(Clone, PartialEq, Eq, Hash)]
+struct HybridTemplateKey {
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    child_pattern: Vec<ChildPattern>,
+    has_attributes: bool,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum ChildPattern {
+    StaticText(&'static str),
+    StaticElement(&'static str), // Just the tag for now
+    Dynamic,
+}
+
+// Legacy key for backwards compatibility
 type TemplateKey = (&'static str, Option<&'static str>, usize, bool);
 
 struct TemplateCache {
@@ -51,7 +110,42 @@ impl TemplateCache {
     }
 }
 
+/// Cache for hybrid templates (with mixed static/dynamic children)
+struct HybridTemplateCache {
+    map: HashMap<HybridTemplateKey, Template>,
+    order: VecDeque<HybridTemplateKey>,
+}
+
+impl HybridTemplateCache {
+    fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            order: VecDeque::new(),
+        }
+    }
+
+    fn get(&self, key: &HybridTemplateKey) -> Option<Template> {
+        self.map.get(key).copied()
+    }
+
+    fn insert(&mut self, key: HybridTemplateKey, template: Template) {
+        if self.map.contains_key(&key) {
+            return;
+        }
+
+        self.map.insert(key.clone(), template);
+        self.order.push_back(key);
+
+        if self.order.len() > TEMPLATE_CACHE_CAP {
+            if let Some(oldest) = self.order.pop_front() {
+                self.map.remove(&oldest);
+            }
+        }
+    }
+}
+
 static TEMPLATES: RwLock<Option<TemplateCache>> = RwLock::new(None);
+static HYBRID_TEMPLATES: RwLock<Option<HybridTemplateCache>> = RwLock::new(None);
 
 const DYNAMIC_ROOT_PATH: [u8; 1] = [0];
 const DYNAMIC_ROOT_PATHS: [&[u8]; 1] = [&DYNAMIC_ROOT_PATH];
@@ -129,7 +223,151 @@ fn create_template(
     }
 }
 
+/// Get or create a hybrid template with mixed static/dynamic children.
+fn get_hybrid_template(
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    children: &[ChildNode],
+    has_attributes: bool,
+) -> Template {
+    let child_pattern: Vec<ChildPattern> = children
+        .iter()
+        .map(|c| match c {
+            ChildNode::StaticText(s) => ChildPattern::StaticText(s),
+            ChildNode::StaticElement(e) => ChildPattern::StaticElement(e.tag),
+            ChildNode::Dynamic(_) => ChildPattern::Dynamic,
+        })
+        .collect();
+
+    let key = HybridTemplateKey {
+        tag,
+        namespace,
+        child_pattern,
+        has_attributes,
+    };
+
+    if let Some(template) = HYBRID_TEMPLATES
+        .read()
+        .as_ref()
+        .and_then(|cache| cache.get(&key))
+    {
+        return template;
+    }
+
+    let mut write = HYBRID_TEMPLATES.write();
+    let cache = write.get_or_insert_with(HybridTemplateCache::new);
+    if let Some(template) = cache.get(&key) {
+        return template;
+    }
+
+    let template = create_hybrid_template(tag, namespace, children, has_attributes);
+    cache.insert(key, template);
+    template
+}
+
+/// Create a hybrid template with mixed static/dynamic children.
+fn create_hybrid_template(
+    tag: &'static str,
+    namespace: Option<&'static str>,
+    children: &[ChildNode],
+    has_attributes: bool,
+) -> Template {
+    let mut template_children = Vec::with_capacity(children.len());
+    let mut node_paths = Vec::new();
+    let mut dynamic_id = 0usize;
+
+    for (i, child) in children.iter().enumerate() {
+        match child {
+            ChildNode::StaticText(text) => {
+                // Static text is embedded directly in the template
+                template_children.push(TemplateNode::Text { text });
+            }
+            ChildNode::StaticElement(elem) => {
+                // Static element is embedded in the template
+                template_children.push(child_node_to_template_node(elem));
+            }
+            ChildNode::Dynamic(_) => {
+                // Dynamic node gets a placeholder in the template
+                template_children.push(TemplateNode::Dynamic { id: dynamic_id });
+                let path: &'static [u8] = Box::leak(Box::new([0u8, i as u8]));
+                node_paths.push(path);
+                dynamic_id += 1;
+            }
+        }
+    }
+
+    let template_children: &'static [TemplateNode] =
+        Box::leak(template_children.into_boxed_slice());
+    let node_paths: &'static [&'static [u8]] = Box::leak(node_paths.into_boxed_slice());
+
+    let mut attrs_list = Vec::with_capacity(1);
+    if has_attributes {
+        attrs_list.push(TemplateAttribute::Dynamic { id: 0 });
+    }
+    let attrs: &'static [TemplateAttribute] = Box::leak(attrs_list.into_boxed_slice());
+
+    let roots: &'static [TemplateNode] = Box::leak(Box::new([TemplateNode::Element {
+        tag,
+        namespace,
+        attrs,
+        children: template_children,
+    }]));
+
+    let attr_paths: &'static [&'static [u8]] = if has_attributes {
+        Box::leak(Box::new([Box::leak(Box::new([0u8])) as &'static [u8]]))
+    } else {
+        &[]
+    };
+
+    Template {
+        roots,
+        node_paths,
+        attr_paths,
+    }
+}
+
+/// Convert a StaticElement to a TemplateNode (recursive).
+fn child_node_to_template_node(elem: &StaticElement) -> TemplateNode {
+    let children: Vec<TemplateNode> = elem
+        .children
+        .iter()
+        .map(|child| match child {
+            ChildNode::StaticText(text) => TemplateNode::Text { text },
+            ChildNode::StaticElement(e) => child_node_to_template_node(e),
+            ChildNode::Dynamic(_) => {
+                // This shouldn't happen in a fully static element
+                // but we handle it gracefully
+                panic!("StaticElement cannot contain dynamic children")
+            }
+        })
+        .collect();
+
+    let children: &'static [TemplateNode] = Box::leak(children.into_boxed_slice());
+
+    let attrs: Vec<TemplateAttribute> = elem
+        .attrs
+        .iter()
+        .map(|a| TemplateAttribute::Static {
+            name: a.name,
+            value: a.value,
+            namespace: a.namespace,
+        })
+        .collect();
+    let attrs: &'static [TemplateAttribute] = Box::leak(attrs.into_boxed_slice());
+
+    TemplateNode::Element {
+        tag: elem.tag,
+        namespace: elem.namespace,
+        attrs,
+        children,
+    }
+}
+
 /// A builder for constructing HTML elements with a fluent API.
+///
+/// Supports both static and dynamic children for optimal performance.
+/// Use `.static_text()` for text that never changes (embedded in template),
+/// and `.child()` for dynamic content that may change at runtime.
 ///
 /// # Example
 ///
@@ -137,8 +375,9 @@ fn create_template(
 /// div()
 ///     .class("my-class")
 ///     .id("my-id")
+///     .static_text("Label: ")        // Static - embedded in template
+///     .child(dynamic_value)           // Dynamic - diffed at runtime
 ///     .onclick(|_| {})
-///     .child("Hello!")
 ///     .build()
 /// ```
 #[derive(Default)]
@@ -146,7 +385,9 @@ pub struct ElementBuilder {
     tag: &'static str,
     namespace: Option<&'static str>,
     attributes: Vec<Attribute>,
-    children: Vec<DynamicNode>,
+    children: Vec<ChildNode>,
+    key: Option<String>,
+    has_static_children: bool,
 }
 
 impl ElementBuilder {
@@ -157,6 +398,8 @@ impl ElementBuilder {
             namespace: None,
             attributes: Vec::new(),
             children: Vec::new(),
+            key: None,
+            has_static_children: false,
         }
     }
 
@@ -167,12 +410,67 @@ impl ElementBuilder {
             namespace: Some(namespace),
             attributes: Vec::new(),
             children: Vec::new(),
+            key: None,
+            has_static_children: false,
         }
     }
 
-    /// Add a child element or text node.
+    /// Set the key for this element (used for list reconciliation).
+    pub fn key(mut self, key: impl ToString) -> Self {
+        self.key = Some(key.to_string());
+        self
+    }
+
+    /// Add a dynamic child element or text node.
+    ///
+    /// Dynamic children are evaluated at runtime and participate in diffing.
+    /// For static text that never changes, use `.static_text()` instead.
     pub fn child(mut self, child: impl IntoDynNode) -> Self {
-        self.children.push(child.into_dyn_node());
+        self.children.push(ChildNode::Dynamic(child.into_dyn_node()));
+        self
+    }
+
+    /// Add a static text child that never changes.
+    ///
+    /// Static text is embedded directly in the template and does NOT participate
+    /// in diffing, making it more performant than dynamic text.
+    ///
+    /// **Important**: The text must be a `&'static str` (compile-time string literal).
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// div()
+    ///     .static_text("Hello, ")     // Embedded in template
+    ///     .child(user_name)            // Dynamic, will be diffed
+    ///     .static_text("!")            // Embedded in template
+    ///     .build()
+    /// ```
+    pub fn static_text(mut self, text: &'static str) -> Self {
+        self.children.push(ChildNode::StaticText(text));
+        self.has_static_children = true;
+        self
+    }
+
+    /// Add a static element child that never changes.
+    ///
+    /// Static elements are embedded directly in the template and do NOT
+    /// participate in diffing, making them more performant.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// div()
+    ///     .static_element(StaticElement {
+    ///         tag: "span",
+    ///         namespace: None,
+    ///         attrs: &[StaticAttribute { name: "class", value: "icon", namespace: None }],
+    ///         children: vec![ChildNode::StaticText("★")],
+    ///     })
+    ///     .child(dynamic_content)
+    ///     .build()
+    /// ```
+    pub fn static_element(mut self, element: StaticElement) -> Self {
+        self.children.push(ChildNode::StaticElement(element));
+        self.has_static_children = true;
         self
     }
 
@@ -199,22 +497,82 @@ impl ElementBuilder {
         }
     }
 
-    /// Add multiple children from an iterator.
+    /// Add multiple dynamic children from an iterator.
     pub fn children(mut self, children: impl IntoIterator<Item = impl IntoDynNode>) -> Self {
         for child in children {
-            self.children.push(child.into_dyn_node());
+            self.children.push(ChildNode::Dynamic(child.into_dyn_node()));
         }
         self
     }
 
+    /// Add multiple keyed children from an iterator.
+    ///
+    /// This is a convenience method for adding children with keys for efficient
+    /// list reconciliation. Each item is passed to both a key function and a
+    /// child builder function.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// ul().children_keyed(
+    ///     items,
+    ///     |item| item.id.to_string(),
+    ///     |item| li().child(item.name)
+    /// ).build()
+    /// ```
+    pub fn children_keyed<I, T, K, F>(mut self, items: I, key_fn: K, child_fn: F) -> Self
+    where
+        I: IntoIterator<Item = T>,
+        K: Fn(&T) -> String,
+        F: Fn(T) -> ElementBuilder,
+    {
+        for item in items {
+            let key = key_fn(&item);
+            self.children
+                .push(ChildNode::Dynamic(child_fn(item).key(key).into_dyn_node()));
+        }
+        self
+    }
+
+    /// Convenience method for adding dynamic text content.
+    ///
+    /// This is equivalent to `.child(value.to_string())`.
+    /// For static text, use `.static_text()` instead.
+    pub fn text(self, value: impl ToString) -> Self {
+        self.child(value.to_string())
+    }
+
+    /// Add a child only if the Option is Some.
+    pub fn child_option(self, child: Option<impl IntoDynNode>) -> Self {
+        if let Some(c) = child {
+            self.child(c)
+        } else {
+            self
+        }
+    }
+
     /// Build the element into a VNode (Element).
     pub fn build(self) -> dioxus_core::Element {
-        let num_children = self.children.len();
         let has_attributes = !self.attributes.is_empty();
+
+        // Use hybrid template if we have any static children
+        if self.has_static_children {
+            return self.build_hybrid(has_attributes);
+        }
+
+        // Legacy path: all dynamic children
+        let num_children = self.children.len();
         let template = get_template(self.tag, self.namespace, num_children, has_attributes);
 
-        // Pack each child into a dynamic node
-        let dynamic_nodes = self.children.into_boxed_slice();
+        // Extract dynamic nodes from children
+        let dynamic_nodes: Vec<DynamicNode> = self
+            .children
+            .into_iter()
+            .map(|c| match c {
+                ChildNode::Dynamic(d) => d,
+                _ => unreachable!("No static children in legacy path"),
+            })
+            .collect();
+        let dynamic_nodes = dynamic_nodes.into_boxed_slice();
 
         // Pack all attributes into a single dynamic attribute group
         let mut dynamic_attrs = Vec::new();
@@ -226,7 +584,35 @@ impl ElementBuilder {
         }
         let dynamic_attrs = dynamic_attrs.into_boxed_slice();
 
-        Ok(VNode::new(None, template, dynamic_nodes, dynamic_attrs))
+        Ok(VNode::new(self.key, template, dynamic_nodes, dynamic_attrs))
+    }
+
+    /// Build with hybrid template (mixed static/dynamic children).
+    fn build_hybrid(self, has_attributes: bool) -> dioxus_core::Element {
+        let template = get_hybrid_template(self.tag, self.namespace, &self.children, has_attributes);
+
+        // Only extract dynamic nodes
+        let dynamic_nodes: Vec<DynamicNode> = self
+            .children
+            .into_iter()
+            .filter_map(|c| match c {
+                ChildNode::Dynamic(d) => Some(d),
+                _ => None, // Static children are embedded in template
+            })
+            .collect();
+        let dynamic_nodes = dynamic_nodes.into_boxed_slice();
+
+        // Pack all attributes into a single dynamic attribute group
+        let mut dynamic_attrs = Vec::new();
+        if has_attributes {
+            let mut attributes = self.attributes;
+            merge_class_attributes(&mut attributes);
+            attributes.sort_by(|a, b| a.name.cmp(b.name));
+            dynamic_attrs.push(attributes.into_boxed_slice());
+        }
+        let dynamic_attrs = dynamic_attrs.into_boxed_slice();
+
+        Ok(VNode::new(self.key, template, dynamic_nodes, dynamic_attrs))
     }
 }
 
@@ -252,6 +638,7 @@ pub fn text_node(value: impl ToString) -> dioxus_core::Element {
 #[derive(Default)]
 pub struct FragmentBuilder {
     children: Vec<VNode>,
+    key: Option<String>,
 }
 
 impl FragmentBuilder {
@@ -259,7 +646,14 @@ impl FragmentBuilder {
     pub fn new() -> Self {
         Self {
             children: Vec::new(),
+            key: None,
         }
+    }
+
+    /// Set the key for this fragment (used for list reconciliation).
+    pub fn key(mut self, key: impl ToString) -> Self {
+        self.key = Some(key.to_string());
+        self
     }
 
     /// Add a child node.
@@ -309,7 +703,7 @@ impl FragmentBuilder {
             VNode::empty()
         } else {
             Ok(VNode::new(
-                None,
+                self.key,
                 DYNAMIC_ROOT_TEMPLATE,
                 Box::new([DynamicNode::Fragment(self.children)]),
                 Box::new([]),

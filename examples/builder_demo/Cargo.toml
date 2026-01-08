@@ -5,7 +5,7 @@ version.workspace = true
 
 [dependencies]
 dioxus = {  workspace = true, features = ["fullstack"]}
-dioxus-builder = { workspace = true }
+dioxus-builder = { workspace = true, features = ["document"] }
 
 [features]
 default = []
