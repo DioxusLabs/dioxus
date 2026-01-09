@@ -5754,7 +5754,6 @@ dependencies = [
 name = "dioxus-core-macro"
 version = "0.7.2"
 dependencies = [
- "bon",
  "convert_case 0.8.0",
  "dioxus",
  "dioxus-html",

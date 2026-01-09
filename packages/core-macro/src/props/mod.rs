@@ -5,35 +5,6 @@
 //! For Dioxus, we make a few changes:
 //! - [x] Automatically implement [`Into<Option>`] on the setters (IE the strip setter option)
 //! - [x] Automatically implement a default of none for optional fields (those explicitly wrapped with [`Option<T>`])
-//!
-//! ## Using with bon
-//!
-//! You can use the `bon` crate for builder generation by adding `#[props(bon)]` to your struct.
-//! This tells the Props derive to only generate the `Properties` trait implementation,
-//! delegating all builder generation to bon.
-//!
-//! ```rust,ignore
-//! use bon::Builder;
-//! use dioxus::prelude::*;
-//!
-//! #[derive(Builder, Props, Clone, PartialEq)]
-//! #[props(bon)]
-//! struct MyComponentProps {
-//!     #[builder(into)]
-//!     title: String,
-//!     count: u32,
-//! }
-//!
-//! fn MyComponent(props: MyComponentProps) -> Element {
-//!     rsx! { "{props.title}: {props.count}" }
-//! }
-//!
-//! // With the FunctionComponent trait, you can use:
-//! // MyComponent.new().title("Hello").count(42).build()
-//! ```
-//!
-//! Note: `#[props(extends = ...)]` is not supported when using bon. If you need
-//! attribute spreading, use the standard Props derive without bon.
 
 use proc_macro2::TokenStream;
 
@@ -44,62 +15,10 @@ use syn::{parse::Error, PathArguments};
 use quote::quote;
 use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
 
-/// Check if the struct has `#[derive(bon::Builder)]` or `#[derive(Builder)]` among its attributes.
-///
-/// This also matches just `Builder` (when user has `use bon::Builder;`).
-///
-/// Note: When a derive macro runs, the `#[derive(...)]` attribute is NOT included in the
-/// ast.attrs - Rust strips it. So we can't detect other derives this way. Instead, we need
-/// users to use a separate attribute like `#[props(bon)]` to indicate bon integration.
-fn has_bon_builder(ast: &syn::DeriveInput) -> bool {
-    // Check for #[props(bon)] attribute
-    for attr in &ast.attrs {
-        if attr.path().is_ident("props") {
-            if let syn::Meta::List(meta_list) = &attr.meta {
-                let tokens_str = meta_list.tokens.to_string();
-                if tokens_str.contains("bon") {
-                    return true;
-                }
-            }
-        }
-    }
-
-    // Also check #[derive(...)] in case it's somehow present
-    for attr in &ast.attrs {
-        if attr.path().is_ident("derive") {
-            if let syn::Meta::List(meta_list) = &attr.meta {
-                let parser = Punctuated::<syn::Path, syn::Token![,]>::parse_terminated;
-                if let Ok(paths) = meta_list.parse_args_with(parser) {
-                    for path in paths {
-                        // Check for bon::Builder (fully qualified)
-                        if path.segments.len() == 2 {
-                            let first = &path.segments[0].ident;
-                            let second = &path.segments[1].ident;
-                            if first == "bon" && second == "Builder" {
-                                return true;
-                            }
-                        }
-                        // Check for just Builder (user has `use bon::Builder;`)
-                        if path.segments.len() == 1 && path.segments[0].ident == "Builder" {
-                            return true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    false
-}
-
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
         syn::Data::Struct(data) => match &data.fields {
             syn::Fields::Named(fields) => {
-                // Check if bon::Builder is also being derived
-                if has_bon_builder(ast) {
-                    return impl_props_with_bon(ast, fields);
-                }
-
                 let struct_info = struct_info::StructInfo::new(ast, fields.named.iter())?;
                 let builder_creation = struct_info.builder_creation_impl()?;
                 let conversion_helper = struct_info.conversion_helper_impl()?;
@@ -151,88 +70,6 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
         }
     };
     Ok(data)
-}
-
-/// Generate simplified Props implementation when bon::Builder is handling builder generation.
-///
-/// This only generates:
-/// - `Properties` trait impl with `type Builder`, `builder()`, and `memoize()`
-///
-/// It does NOT generate:
-/// - Builder struct (bon handles this)
-/// - Field setters (bon handles this)
-/// - Build method (bon handles this)
-/// - Required field validation (bon handles this)
-fn impl_props_with_bon(
-    ast: &syn::DeriveInput,
-    fields: &syn::FieldsNamed,
-) -> Result<TokenStream, Error> {
-    let name = &ast.ident;
-    let generics = &ast.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    // Check for extends attribute - not supported with bon
-    for field in fields.named.iter() {
-        for attr in &field.attrs {
-            if attr.path().is_ident("props") {
-                if let syn::Meta::List(list) = &attr.meta {
-                    let tokens_str = list.tokens.to_string();
-                    if tokens_str.contains("extends") {
-                        return Err(Error::new_spanned(
-                            attr,
-                            "#[props(extends = ...)] is not supported when using bon::Builder. \
-                             Use the standard Props derive without bon for components that need attribute spreading.",
-                        ));
-                    }
-                }
-            }
-        }
-    }
-
-    // Generate the builder type name (bon uses {StructName}Builder)
-    let builder_name = Ident::new(&format!("{}Builder", name), name.span());
-
-    // Generate memoize implementation
-    let memoize_impl = generate_bon_memoize_impl(fields)?;
-
-    Ok(quote! {
-        impl #impl_generics dioxus_core::Properties for #name #ty_generics
-        #where_clause
-        {
-            type Builder = #builder_name #ty_generics;
-
-            fn builder() -> Self::Builder {
-                #name::builder()
-            }
-
-            fn memoize(&mut self, new: &Self) -> bool {
-                #memoize_impl
-            }
-        }
-    })
-}
-
-/// Generate the memoize implementation for bon-based props.
-/// This is a simplified version that uses PartialEq for comparison.
-fn generate_bon_memoize_impl(fields: &syn::FieldsNamed) -> Result<TokenStream, Error> {
-    // Check if any fields are signal or callback types that need special handling
-    let has_signal_fields = fields.named.iter().any(|f| looks_like_signal_type(&f.ty));
-    let has_callback_fields = fields.named.iter().any(|f| looks_like_callback_type(&f.ty));
-
-    if has_signal_fields || has_callback_fields {
-        // For props with signals/callbacks, we need the more complex memoization logic
-        // For now, just use simple equality check - users with signals should use standard Props derive
-        // TODO: Add signal-aware memoization for bon mode
-        Ok(quote! {
-            // Simple equality check - for signal-aware memoization, use standard Props derive
-            *self == *new
-        })
-    } else {
-        // Simple case: just use PartialEq
-        Ok(quote! {
-            *self == *new
-        })
-    }
 }
 
 mod util {

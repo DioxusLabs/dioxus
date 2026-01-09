@@ -53,8 +53,10 @@
 //! ```
 
 mod element;
+mod component;
 
 #[cfg(feature = "document")]
 pub mod document;
 
 pub use element::*;
+pub use component::*;
