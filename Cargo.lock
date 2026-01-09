@@ -5816,6 +5816,7 @@ dependencies = [
  "tray-icon",
  "tungstenite 0.27.0",
  "wasm-bindgen",
+ "web-sys",
  "webbrowser",
  "wry",
 ]
@@ -6552,6 +6553,7 @@ dependencies = [
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-web",
+ "dioxus-web-sys-events",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -6570,6 +6572,22 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-streams",
+ "web-sys",
+]
+
+[[package]]
+name = "dioxus-web-sys-events"
+version = "0.7.2"
+dependencies = [
+ "dioxus-core",
+ "dioxus-html",
+ "futures-channel",
+ "futures-util",
+ "js-sys",
+ "send_wrapper",
+ "tracing",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
 ]
 

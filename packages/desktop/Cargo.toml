@@ -54,6 +54,7 @@ subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
 wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "wasm-bindgen" }
+wry-web-sys = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "web-sys" }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"
