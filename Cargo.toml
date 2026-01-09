@@ -514,11 +514,13 @@ uuid = { workspace = true, features = ["v4", "serde", "js"] }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.48", features = ["full"] }
 
+# Outside of wasm, we need to use our wry/desktop compatible patch for the wasm-bindgen family of libraries
+# [target.'cfg(not(target_arch = "wasm32"))'.patch.crates-io]
 [patch.crates-io]
-wasm-bindgen = { path = "../../wry-wbg-dioxus/wry-bindgen" }
-wasm-bindgen-futures = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/futures" }
-js-sys = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/js-sys" }
-web-sys = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/web-sys" }
+wasm-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
+wasm-bindgen-futures = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
+js-sys = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
+web-sys = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time

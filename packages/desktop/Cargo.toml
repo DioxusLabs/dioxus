@@ -53,7 +53,7 @@ rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
-wry-bindgen = { path = "../../../../wry-wbg-dioxus/wry-bindgen", package = "wasm-bindgen" }
+wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "wasm-bindgen" }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"

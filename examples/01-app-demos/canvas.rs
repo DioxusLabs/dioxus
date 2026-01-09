@@ -1,8 +1,7 @@
+use dioxus::prelude::*;
 use std::f64;
 use std::{cell::Cell, rc::Rc};
-use wasm_bindgen::*;
-
-use dioxus::prelude::*;
+use wasm_bindgen::prelude::*;
 
 fn main() {
     dioxus::launch(app);
