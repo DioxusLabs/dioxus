@@ -4,7 +4,7 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent, SerializedFileData, extractSerializedFormValues, SerializedFormObject } from "./serialize";
+import { SerializedEvent, serializeEvent, SerializedFormObject } from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -123,22 +123,9 @@ export class NativeInterpreter extends JSChannel_ {
               // Set the files on the input
               target.files = dataTransfer.files;
 
-              let body = {
-                data: contents,
-                element: target_id,
-                bubbles: event.bubbles,
-              };
-
-              // And then dispatch the actual event against the dom
-              contents.values = formObjects;
-              this.sendSerializedEvent({
-                ...body,
-                name: "input",
-              });
-              this.sendSerializedEvent({
-                ...body,
-                name: "change",
-              });
+              // Dispatch actual DOM events so they go through the normal event handling path
+              target.dispatchEvent(new Event("input", { bubbles: true }));
+              target.dispatchEvent(new Event("change", { bubbles: true }));
             });
 
             return;
@@ -351,43 +338,40 @@ export class NativeInterpreter extends JSChannel_ {
   handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const element = getTargetId(target)!;
-    const contents = serializeEvent(event, target);
-
-    // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
-    // Some listeners
-    let body = {
-      name,
-      data: contents,
-      element,
-      bubbles,
-    };
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
-    if (
-      this.liveview &&
-      target instanceof HTMLInputElement &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      if (target.getAttribute("type") === "file") {
-        this.readFiles(target, contents, bubbles, element, name);
-        return;
-      }
-    }
+    if (this.liveview) {
+      const contents = serializeEvent(event, target);
 
-    const response = this.sendSerializedEvent(body);
-    // capture/prevent default of the event if the virtualdom wants to
-    if (response) {
-      if (response.preventDefault) {
-        event.preventDefault();
-      } else {
-        // Attempt to intercept if the event is a click and the default action was not prevented
-        if (target instanceof Element && event.type === "click") {
-          this.handleClickNavigate(event, target);
+      if (
+        target instanceof HTMLInputElement &&
+        (event.type === "change" || event.type === "input")
+      ) {
+        if (target.getAttribute("type") === "file") {
+          this.readFiles(target, contents, bubbles, element, name);
+          return;
         }
       }
 
-      if (response.stopPropagation) {
-        event.stopPropagation();
+      this.sendSerializedEvent({
+        name,
+        data: contents,
+        element,
+        bubbles,
+      });
+      return;
+    }
+
+    // Desktop passes the raw event directly to Rust via wry-bindgen
+    // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
+    const preventDefault = window.rustEventHandler(event, name, element, bubbles);
+
+    if (preventDefault) {
+      event.preventDefault();
+    } else {
+      // Attempt to intercept if the event is a click and the default action was not prevented
+      if (target instanceof Element && event.type === "click") {
+        this.handleClickNavigate(event, target);
       }
     }
   }
@@ -397,16 +381,9 @@ export class NativeInterpreter extends JSChannel_ {
     element: number;
     data: any;
     bubbles: boolean;
-  }): EventSyncResult | void {
-    if (this.liveview) {
-      // Liveview uses async IPC
-      this.sendIpcMessage("user_event", body);
-    } else {
-      // Desktop calls the wasm-bindgen closure directly for lower latency
-      // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
-      const response = window.rustEventHandler(JSON.stringify(body));
-      return JSON.parse(response);
-    }
+  }): void {
+    // Liveview uses async IPC with serialized events
+    this.sendIpcMessage("user_event", body);
   }
 
   handleClickNavigate(event: Event, target: Element) {
@@ -553,11 +530,6 @@ export class NativeInterpreter extends JSChannel_ {
     this.ipc.postMessage(message);
   }
 }
-
-type EventSyncResult = {
-  preventDefault: boolean;
-  stopPropagation: boolean;
-};
 
 function getTargetId(target: EventTarget): NodeId | null {
   // Ensure that the target is a node, sometimes it's nota

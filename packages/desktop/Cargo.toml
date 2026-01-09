@@ -20,6 +20,7 @@ dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
+dioxus-web-sys-events = { workspace = true }
 
 serde = "1.0.219"
 serde_json = "1.0.140"
@@ -54,7 +55,13 @@ subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
 wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "wasm-bindgen" }
-wry-web-sys = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "web-sys" }
+web-sys = { workspace = true, features = [
+    "Document",
+    "Element",
+    "Event",
+    "EventTarget",
+    "Window",
+] }
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3.18"

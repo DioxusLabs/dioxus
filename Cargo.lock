@@ -1782,7 +1782,7 @@ dependencies = [
  "log",
  "thiserror 2.0.17",
  "variadics_please",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -1821,7 +1821,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tracing",
  "uuid",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -2391,7 +2391,7 @@ dependencies = [
  "portable-atomic-util",
  "serde",
  "spin 0.10.0",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-time",
 ]
@@ -2518,7 +2518,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tracing",
  "variadics_please",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "wgpu 26.0.1",
 ]
@@ -2857,7 +2857,7 @@ dependencies = [
  "cfg-if",
  "js-sys",
  "tracing",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "wgpu-types 26.0.0",
  "winit",
@@ -3841,7 +3841,7 @@ dependencies = [
  "js-sys",
  "num-traits",
  "serde",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "windows-link 0.2.1",
 ]
 
@@ -4219,7 +4219,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
 dependencies = [
  "cfg-if",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -4598,7 +4598,7 @@ dependencies = [
  "ndk 0.8.0",
  "ndk-context",
  "oboe",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
  "windows 0.54.0",
@@ -5615,7 +5615,7 @@ dependencies = [
 name = "dioxus-cli-config"
 version = "0.7.2"
 dependencies = [
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -5780,6 +5780,7 @@ dependencies = [
  "dioxus-interpreter-js",
  "dioxus-signals",
  "dioxus-ssr",
+ "dioxus-web-sys-events",
  "dunce",
  "exitcode",
  "futures-channel",
@@ -5815,7 +5816,7 @@ dependencies = [
  "tracing",
  "tray-icon",
  "tungstenite 0.27.0",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "webbrowser",
  "wry",
@@ -5909,7 +5910,7 @@ dependencies = [
  "tokio",
  "tower-http",
  "uuid",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-splitter",
  "wasm-streams",
  "web-sys",
@@ -5925,7 +5926,7 @@ dependencies = [
  "dioxus-rsx-rosetta",
  "html_parser",
  "syn 2.0.114",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -5988,7 +5989,7 @@ dependencies = [
  "tracing",
  "tungstenite 0.27.0",
  "url",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
@@ -6121,7 +6122,7 @@ dependencies = [
  "serde",
  "sledgehammer_bindgen",
  "sledgehammer_utils",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -6314,7 +6315,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-wasm",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -6568,7 +6569,7 @@ dependencies = [
  "serde_json",
  "tracing",
  "tracing-wasm",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-streams",
@@ -6586,7 +6587,7 @@ dependencies = [
  "js-sys",
  "send_wrapper",
  "tracing",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -7975,7 +7976,7 @@ dependencies = [
  "js-sys",
  "libc",
  "wasi 0.11.1+wasi-snapshot-preview1",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -7989,7 +7990,7 @@ dependencies = [
  "libc",
  "r-efi",
  "wasip2",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -8053,7 +8054,7 @@ dependencies = [
  "nix 0.30.1",
  "uuid",
  "vec_map",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "windows 0.62.2",
 ]
@@ -8531,7 +8532,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf4748e10122b01435750ff530095b1217cf6546173459448b83913ebe7815df"
 dependencies = [
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -8551,7 +8552,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -8565,7 +8566,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "js-sys",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -8577,7 +8578,7 @@ dependencies = [
  "js-sys",
  "serde",
  "serde_json",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -8589,7 +8590,7 @@ checksum = "bd348e04c43b32574f2de31c8bb397d96c9fcfa1371bd4ca6d8bdc464ab121b1"
 dependencies = [
  "js-sys",
  "slotmap",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -8601,7 +8602,7 @@ checksum = "c5e5ea60d70410161c8bf5da3fdfeaa1c72ed2c15f8bbb9d19fe3a4fad085f08"
 dependencies = [
  "js-sys",
  "slotmap",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -9624,7 +9625,7 @@ dependencies = [
  "iana-time-zone-haiku",
  "js-sys",
  "log",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "windows-core 0.62.2",
 ]
 
@@ -10343,11 +10344,11 @@ checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 
 [[package]]
 name = "js-sys"
-version = "0.3.83"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+version = "0.3.82"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
 dependencies = [
  "once_cell",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -13385,7 +13386,7 @@ dependencies = [
  "num-traits",
  "plotters-backend",
  "plotters-svg",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
@@ -14176,7 +14177,7 @@ dependencies = [
  "system-deps",
  "thiserror 1.0.69",
  "v_frame",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -14439,7 +14440,7 @@ dependencies = [
  "tokio-rustls 0.24.1",
  "tower-service",
  "url",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
  "webpki-roots 0.25.4",
@@ -14490,7 +14491,7 @@ dependencies = [
  "tower-http",
  "tower-service",
  "url",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
@@ -14525,7 +14526,7 @@ dependencies = [
  "pollster 0.4.0",
  "raw-window-handle 0.6.2",
  "urlencoding",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys 0.59.0",
@@ -15435,7 +15436,7 @@ checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
 dependencies = [
  "js-sys",
  "serde",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -15836,7 +15837,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49e83e178d176459c92bc129cfd0958afac3ced925471b889b3a75546cfc4133"
 dependencies = [
  "sledgehammer_bindgen_macro",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -16611,7 +16612,7 @@ dependencies = [
  "serde",
  "subsecond-types",
  "thiserror 2.0.17",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -18224,7 +18225,7 @@ checksum = "4575c663a174420fa2d78f4108ff68f65bf2fbb7dd89f33749b6e826b3626e07"
 dependencies = [
  "tracing",
  "tracing-subscriber",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -18770,7 +18771,7 @@ dependencies = [
  "js-sys",
  "serde_core",
  "sha1_smol",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -18781,7 +18782,7 @@ checksum = "666b7727c8875d6ab5db9533418d7c764233ac9c0cff1d469aec8fa127597be2"
 dependencies = [
  "aligned-vec",
  "num-traits",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -19018,22 +19019,23 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.106"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+version = "0.2.105"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
 dependencies = [
- "async-channel 2.5.0",
- "base64 0.22.1",
- "bytemuck",
- "futures-channel",
- "futures-core",
- "futures-util",
- "http 1.4.0",
- "inventory",
- "lazy-js-bundle 0.7.2 (git+https://github.com/DioxusLabs/dioxus)",
+ "wasm-bindgen 0.2.106",
+ "wry-bindgen",
+]
+
+[[package]]
+name = "wasm-bindgen"
+version = "0.2.106"
+source = "git+https://github.com/wasm-bindgen/wasm-bindgen#55bc5339346fba36f7bf5abf66685fc33083a3f3"
+dependencies = [
+ "cfg-if",
  "once_cell",
- "pollster 0.4.0",
- "spin 0.10.0",
- "wry-bindgen-macro",
+ "rustversion",
+ "wasm-bindgen-macro",
+ "wasm-bindgen-shared",
 ]
 
 [[package]]
@@ -19049,42 +19051,64 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures"
-version = "0.4.56"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+version = "0.4.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "551f88106c6d5e7ccc7cd9a16f312dd3b5d36ea8b4954304657d5dfba115d4a0"
 dependencies = [
  "cfg-if",
  "js-sys",
  "once_cell",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
 ]
 
 [[package]]
-name = "wasm-bindgen-test"
-version = "0.3.56"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25e90e66d265d3a1efc0e72a54809ab90b9c0c515915c67cdf658689d2c22c6c"
+name = "wasm-bindgen-macro"
+version = "0.2.106"
+source = "git+https://github.com/wasm-bindgen/wasm-bindgen#55bc5339346fba36f7bf5abf66685fc33083a3f3"
 dependencies = [
- "async-trait",
- "cast",
+ "quote",
+ "wasm-bindgen-macro-support",
+]
+
+[[package]]
+name = "wasm-bindgen-macro-support"
+version = "0.2.106"
+source = "git+https://github.com/wasm-bindgen/wasm-bindgen#55bc5339346fba36f7bf5abf66685fc33083a3f3"
+dependencies = [
+ "bumpalo",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.114",
+ "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-shared"
+version = "0.2.106"
+source = "git+https://github.com/wasm-bindgen/wasm-bindgen#55bc5339346fba36f7bf5abf66685fc33083a3f3"
+dependencies = [
+ "unicode-ident",
+]
+
+[[package]]
+name = "wasm-bindgen-test"
+version = "0.3.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfc379bfb624eb59050b509c13e77b4eb53150c350db69628141abce842f2373"
+dependencies = [
  "js-sys",
- "libm",
  "minicov",
- "nu-ansi-term",
- "num-traits",
- "oorandom",
- "serde",
- "serde_json",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "wasm-bindgen-test-macro",
 ]
 
 [[package]]
 name = "wasm-bindgen-test-macro"
-version = "0.3.56"
+version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7150335716dce6028bead2b848e72f47b45e7b9422f64cccdc23bedca89affc1"
+checksum = "085b2df989e1e6f9620c1311df6c996e83fe16f57792b272ce1e024ac16a90f1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -19151,7 +19175,7 @@ dependencies = [
  "getrandom 0.3.4",
  "js-sys",
  "reqwest 0.12.28",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -19184,7 +19208,7 @@ checksum = "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
 dependencies = [
  "futures-util",
  "js-sys",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
 ]
@@ -19345,11 +19369,11 @@ dependencies = [
 
 [[package]]
 name = "web-sys"
-version = "0.3.83"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+version = "0.3.82"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
 dependencies = [
  "js-sys",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -19359,7 +19383,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
 ]
 
 [[package]]
@@ -19517,7 +19541,7 @@ dependencies = [
  "raw-window-handle 0.6.2",
  "smallvec",
  "static_assertions",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core 0.19.4",
@@ -19546,7 +19570,7 @@ dependencies = [
  "raw-window-handle 0.6.2",
  "smallvec",
  "static_assertions",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core 26.0.1",
@@ -19687,7 +19711,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "smallvec",
  "thiserror 1.0.69",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "wgpu-types 0.19.2",
  "winapi",
@@ -19734,7 +19758,7 @@ dependencies = [
  "renderdoc-sys",
  "smallvec",
  "thiserror 2.0.17",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "wgpu-types 26.0.0",
  "windows 0.58.0",
@@ -20554,7 +20578,7 @@ dependencies = [
  "smol_str",
  "tracing",
  "unicode-segmentation",
- "wasm-bindgen",
+ "wasm-bindgen 0.2.105",
  "wasm-bindgen-futures",
  "wayland-backend",
  "wayland-client",
@@ -20658,9 +20682,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "wry-bindgen"
+version = "0.2.106"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
+dependencies = [
+ "async-channel 2.5.0",
+ "base64 0.22.1",
+ "bytemuck",
+ "futures-channel",
+ "futures-core",
+ "futures-util",
+ "http 1.4.0",
+ "inventory",
+ "lazy-js-bundle 0.7.2 (git+https://github.com/DioxusLabs/dioxus)",
+ "once_cell",
+ "pollster 0.4.0",
+ "spin 0.10.0",
+ "wry-bindgen-macro",
+]
+
+[[package]]
 name = "wry-bindgen-macro"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
 dependencies = [
  "quote",
  "wry-bindgen-macro-support",
@@ -20669,7 +20713,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen-macro-support"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#24334e5bbaa68fba7996f8fdabc2bc1f813a56d6"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -21407,3 +21451,8 @@ dependencies = [
  "syn 2.0.114",
  "winnow 0.7.14",
 ]
+
+[[patch.unused]]
+name = "wasm-bindgen-futures"
+version = "0.4.56"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#aa7959d053f309a934dfde38aa7c13124c1024fb"

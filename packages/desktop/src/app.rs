@@ -125,8 +125,8 @@ impl App {
             }),
         };
 
-        // Set the event converter
-        dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
+        // Set the event converter to use web-sys events directly
+        dioxus_html::set_event_converter(Box::new(dioxus_web_sys_events::WebEventConverter));
 
         // Wire up the global hotkey handler
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
