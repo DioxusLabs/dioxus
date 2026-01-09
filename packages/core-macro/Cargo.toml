@@ -25,6 +25,7 @@ dioxus-html = { workspace = true, features = ["serialize"]}
 rustversion = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 trybuild = { workspace = true }
+bon = "3"
 
 [features]
 default = []
