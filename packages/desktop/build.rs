@@ -36,17 +36,8 @@ fn check_gnu() {
     }
 }
 
-fn compile_ts() {
-    // If any TS files change, re-run the build script
-    lazy_js_bundle::LazyTypeScriptBindings::new()
-        .with_watching("./src/ts")
-        .with_binding("./src/ts/native_eval.ts", "./src/js/native_eval.js")
-        .run();
-}
-
 fn main() {
     check_gnu();
-    compile_ts();
 }
 
 const EXAMPLES_TOML: &str = r#"

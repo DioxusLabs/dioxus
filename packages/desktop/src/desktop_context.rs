@@ -3,7 +3,6 @@ use crate::{
     assets::AssetHandlerRegistry,
     file_upload::NativeFileHover,
     ipc::UserWindowEvent,
-    query::QueryEngine,
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
@@ -64,8 +63,6 @@ pub struct DesktopService {
 
     pub(crate) shared: Rc<SharedContext>,
 
-    /// The receiver for queries about the current window
-    pub(super) query: QueryEngine,
     pub(crate) asset_handlers: AssetHandlerRegistry,
     pub(crate) file_hover: NativeFileHover,
     pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
@@ -99,7 +96,6 @@ impl DesktopService {
             asset_handlers,
             file_hover,
             close_behaviour: Rc::new(Cell::new(close_behaviour)),
-            query: Default::default(),
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }

@@ -85,7 +85,6 @@ pub struct IpcMessage {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
     UserEvent,
-    Query,
     BrowserOpen,
     Initialize,
     Other(&'a str),
@@ -95,7 +94,6 @@ impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
             "user_event" => IpcMethod::UserEvent,
-            "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,
             "initialize" => IpcMethod::Initialize,
             _ => IpcMethod::Other(&self.method),

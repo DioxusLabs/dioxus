@@ -84,7 +84,6 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
                     IpcMethod::UserEvent => {}
-                    IpcMethod::Query => app.handle_query_msg(msg, id),
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
                     IpcMethod::Other(_) => {}
                 },

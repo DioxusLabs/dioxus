@@ -14,6 +14,7 @@ rust-version = "1.76.0"
 dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
+dioxus-web-eval = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
 dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
 dioxus-cli-config = { workspace = true }
@@ -97,9 +98,6 @@ tungstenite = { workspace = true, features = ["native-tls"] }
 cocoa = "0.26.1"
 core-foundation = "0.10.1"
 objc = "0.2.7"
-
-[build-dependencies]
-lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["tokio_runtime", "transparent", "devtools"]

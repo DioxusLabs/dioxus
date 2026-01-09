@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
+use crate::file_upload::FileDialogRequest;
 use crate::{assets::*, webview::WebviewEdits};
-use crate::{document::NATIVE_EVAL_JS, file_upload::FileDialogRequest};
 use base64::prelude::BASE64_STANDARD;
 use dioxus_core::AnyhowContext;
 use dioxus_html::{SerializedFileData, SerializedFormObject};
@@ -172,10 +172,6 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
         // Signal to wry-bindgen that the webview is ready
         fetch("{BASE_URI}ready");
     }}
-</script>
-<script type="module">
-    // Include the code for eval
-    {NATIVE_EVAL_JS}
 </script>
 "#
     )

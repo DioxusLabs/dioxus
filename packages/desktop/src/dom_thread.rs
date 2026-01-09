@@ -4,7 +4,9 @@
 //! responsiveness. The main thread continues to run the tao event loop and manage
 //! windows, while VirtualDom polling and rendering happens on separate threads.
 
+use crate::document::DesktopDocument;
 use dioxus_core::{provide_context, ScopeId, VirtualDom};
+use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
@@ -29,9 +31,6 @@ pub enum VirtualDomEvent {
 pub enum MainThreadCommand {
     /// Serialized mutations ready to be sent to the webview.
     Mutations(Vec<u8>),
-
-    /// Request to evaluate a script in the webview (e.g., update websocket location).
-    EvaluateScript(String),
 }
 
 /// Handle to communicate with a VirtualDom running on a dedicated thread.
@@ -70,8 +69,10 @@ pub async fn run_virtual_dom<F>(
     let dom = make_dom();
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
+    let document_provider: Rc<dyn Document> = Rc::new(DesktopDocument::default());
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
+        provide_context(document_provider);
     });
     run_virtual_dom_loop(dom, event_rx, command_tx).await;
 }

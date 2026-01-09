@@ -18,6 +18,7 @@ members = [
     "packages/html-internal-macro",
     "packages/hooks",
     "packages/web",
+    "packages/web-eval",
     "packages/web-sys-events",
     "packages/ssr",
     "packages/desktop",
@@ -161,6 +162,7 @@ dioxus-html = { path = "packages/html", version = "0.7.2", default-features = fa
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.2" }
 dioxus-hooks = { path = "packages/hooks", version = "0.7.2" }
 dioxus-web = { path = "packages/web", version = "0.7.2", default-features = false }
+dioxus-web-eval = { path = "packages/web-eval", version = "0.7.2" }
 dioxus-web-sys-events = { path = "packages/web-sys-events", version = "0.7.2", default-features = false }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.2", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.2", default-features = false }

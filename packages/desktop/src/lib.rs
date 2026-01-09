@@ -19,7 +19,6 @@ mod ipc;
 mod menubar;
 mod mobile;
 mod protocol;
-mod query;
 mod shortcut;
 mod waker;
 mod webview;

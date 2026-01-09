@@ -4,7 +4,6 @@ use crate::{
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
-    query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
@@ -339,18 +338,6 @@ impl App {
                 .window
                 .set_visible(self.is_visible_before_start);
         }
-    }
-
-    pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let Ok(result) = serde_json::from_value::<QueryResult>(msg.params()) else {
-            return;
-        };
-
-        let Some(view) = self.webviews.get(&id) else {
-            return;
-        };
-
-        view.desktop_context.query.send(result);
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]

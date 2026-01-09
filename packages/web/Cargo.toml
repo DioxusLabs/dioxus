@@ -16,6 +16,7 @@ dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
+dioxus-web-eval = { workspace = true }
 dioxus-devtools = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-interpreter-js = { workspace = true, features = [
@@ -35,7 +36,6 @@ futures-util = { workspace = true, features = ["std", "async-await", "async-awai
 futures-channel = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
-serde-wasm-bindgen = { version = "0.6.5", optional = true }
 
 ciborium = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
@@ -90,9 +90,6 @@ features = [
     "FormData"
 ]
 
-[build-dependencies]
-lazy-js-bundle = { workspace = true }
-
 [features]
 default = ["mounted", "devtools", "document"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
@@ -114,7 +111,7 @@ devtools = [
   "dioxus-core/serialize",
   "dep:gloo-timers"
 ]
-document = ["dep:serde-wasm-bindgen", "dep:serde_json", "dep:serde"]
+document = ["dep:serde_json", "dep:serde"]
 
 [dev-dependencies]
 dioxus = { workspace = true, default-features = true }

@@ -456,9 +456,6 @@ impl WebviewInstance {
                 MainThreadCommand::Mutations(edits) => {
                     self.send_edits_raw(edits);
                 }
-                MainThreadCommand::EvaluateScript(script) => {
-                    let _ = self.desktop_context.webview.evaluate_script(&script);
-                }
             }
         }
     }
