@@ -70,6 +70,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/component-manifest",
+    "packages/dioxus-builder",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -139,7 +140,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes",
-    "packages/playwright-tests/windows-headless",
+    "packages/playwright-tests/windows-headless", "examples/builder_demo",
 ]
 
 [workspace.package]
@@ -185,6 +186,7 @@ dioxus-native-dom = { path = "packages/native-dom", version = "0.7.2" }
 dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.2" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.2" }
 dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.2" }
+dioxus-builder = { path = "packages/dioxus-builder", version = "0.1.0" }
 
 generational-box = { path = "packages/generational-box", version = "0.7.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.2" }
@@ -477,6 +479,7 @@ wasm-streams = "0.4.2"
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }
+dioxus-builder = { workspace = true }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-stores = { workspace = true }
 dioxus-ssr = { workspace = true }
@@ -991,6 +994,11 @@ doc-scrape-examples = true
 [[example]]
 name = "rsx_usage"
 path = "examples/09-reference/rsx_usage.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "builder_demo"
+path = "examples/builder_demo.rs"
 doc-scrape-examples = true
 
 [[example]]
