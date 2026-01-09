@@ -6,23 +6,13 @@
 
 use dioxus_core::{provide_context, ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
-use dioxus_html::HtmlEvent;
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
-use std::{
-    rc::Rc,
-    sync::{Arc, OnceLock},
-};
+use std::rc::Rc;
 use tokio::sync::mpsc as tokio_mpsc;
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
-    /// An HTML event from the webview that needs to be handled.
-    HtmlEvent {
-        event: HtmlEvent,
-        prevent_default: Arc<OnceLock<bool>>,
-    },
-
     /// Initialize the VirtualDom (perform initial rebuild).
     Initialize,
 
@@ -69,6 +59,7 @@ impl VirtualDomHandle {
 /// Run the VirtualDom in the current async context (called from wry-bindgen app thread).
 ///
 /// This creates the VirtualDom and runs its event loop until completion.
+/// Also sets up the wasm-bindgen event handler for direct JS->Rust event calls.
 pub async fn run_virtual_dom<F>(
     make_dom: F,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
@@ -77,6 +68,7 @@ pub async fn run_virtual_dom<F>(
     F: FnOnce() -> VirtualDom + Send + 'static,
 {
     let dom = make_dom();
+    crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
@@ -101,28 +93,27 @@ async fn run_virtual_dom_loop(
         // If we're waiting for edits to be acknowledged, only process events
         // that don't require rendering
         if waiting_for_edits_ack {
-            if let Some(event) = event_rx.recv().await {
-                match event {
-                    VirtualDomEvent::EditsAcknowledged => {
-                        waiting_for_edits_ack = false;
-                    }
-                    VirtualDomEvent::HtmlEvent {
-                        event,
-                        prevent_default,
-                    } => {
-                        handle_html_event(&dom, event, &prevent_default);
-                    }
-                    #[cfg(all(feature = "devtools", debug_assertions))]
-                    VirtualDomEvent::HotReload(msg) => {
-                        dioxus_devtools::apply_changes(&dom, &msg);
-                    }
-                    VirtualDomEvent::Initialize => {
-                        // Already initialized, ignore
+            tokio::select! {
+                biased;
+
+                // Handle events from main thread channel
+                event = event_rx.recv() => {
+                    let Some(event) = event else {
+                        return; // Channel closed
+                    };
+                    match event {
+                        VirtualDomEvent::EditsAcknowledged => {
+                            waiting_for_edits_ack = false;
+                        }
+                        #[cfg(all(feature = "devtools", debug_assertions))]
+                        VirtualDomEvent::HotReload(msg) => {
+                            dioxus_devtools::apply_changes(&dom, &msg);
+                        }
+                        VirtualDomEvent::Initialize => {
+                            // Already initialized, ignore
+                        }
                     }
                 }
-            } else {
-                // Channel closed
-                return;
             }
             continue;
         }
@@ -131,7 +122,7 @@ async fn run_virtual_dom_loop(
         tokio::select! {
             biased;
 
-            // Check for incoming events first
+            // Check for incoming events from main thread first
             event = event_rx.recv() => {
                 let Some(event) = event else {
                     // Channel closed
@@ -152,9 +143,6 @@ async fn run_virtual_dom_loop(
                     VirtualDomEvent::EditsAcknowledged => {
                         // No-op when not waiting
                     }
-                    VirtualDomEvent::HtmlEvent { event, prevent_default } => {
-                        handle_html_event(&dom, event, &prevent_default);
-                    }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
                         dioxus_devtools::apply_changes(&dom, &msg);
@@ -173,27 +161,6 @@ async fn run_virtual_dom_loop(
             }
         }
     }
-}
-
-/// Handle an HTML event from the webview.
-///
-/// This function converts serialized event data to desktop-specific types
-/// that provide full functionality (like file handling for form events).
-fn handle_html_event(dom: &VirtualDom, event: HtmlEvent, prevent_default: &OnceLock<bool>) {
-    let HtmlEvent {
-        element,
-        name,
-        bubbles,
-        data,
-    } = event;
-
-    // Convert to desktop-specific event types where needed
-    let as_any = data.into_any();
-
-    let event = dioxus_core::Event::new(as_any, bubbles);
-    dom.runtime().handle_event(&name, event.clone(), element);
-
-    _ = prevent_default.set(event.default_action_enabled());
 }
 
 /// Export mutations from the MutationState if there are any.

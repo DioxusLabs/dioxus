@@ -58,11 +58,6 @@ pub(super) fn desktop_handler(
     // If the request is asking for edits (ie binary protocol streaming), do that
     let trimmed_uri = request.uri().path().trim_matches('/');
 
-    // If the request is asking for an event response, do that
-    if trimmed_uri == "__events" {
-        return edit_state.handle_event(request, responder);
-    }
-
     // If the request is asking for a file dialog, handle that, returning the list of files selected
     if trimmed_uri == "__file_dialog" {
         if let Err(err) = file_dialog_responder_sync(request, responder) {

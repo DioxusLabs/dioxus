@@ -22,7 +22,6 @@ export class NativeInterpreter extends JSChannel_ {
   ipc: any;
   edits: WebSocket;
   baseUri: string;
-  eventsPath: string;
   headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
@@ -34,7 +33,6 @@ export class NativeInterpreter extends JSChannel_ {
   constructor(baseUri: string, headless: boolean) {
     super();
     this.baseUri = baseUri;
-    this.eventsPath = `${baseUri}/__events`;
     this.kickStylesheets = false;
     this.headless = headless;
   }
@@ -401,10 +399,13 @@ export class NativeInterpreter extends JSChannel_ {
     bubbles: boolean;
   }): EventSyncResult | void {
     if (this.liveview) {
+      // Liveview uses async IPC
       this.sendIpcMessage("user_event", body);
     } else {
-      // Run the event handler on the virtualdom
-      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
+      // Desktop calls the wasm-bindgen closure directly for lower latency
+      // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
+      const response = window.rustEventHandler(JSON.stringify(body));
+      return JSON.parse(response);
     }
   }
 
@@ -557,38 +558,6 @@ type EventSyncResult = {
   preventDefault: boolean;
   stopPropagation: boolean;
 };
-
-// This function sends the event to the virtualdom and then waits for the virtualdom to process it
-//
-// However, it's not really suitable for liveview, because it's synchronous and will block the main thread
-// We should definitely consider using a websocket if we want to block... or just not block on liveview
-// Liveview is a little bit of a tricky beast
-function handleVirtualdomEventSync(
-  endpoint: string,
-  contents: string
-): EventSyncResult {
-  // Handle the event on the virtualdom and then process whatever its output was
-  const xhr = new XMLHttpRequest();
-
-  // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.open("POST", endpoint, false);
-  xhr.setRequestHeader("Content-Type", "application/json");
-
-  // hack for android since we CANT SEND BODIES (because wry is using shouldInterceptRequest)
-  //
-  // https://issuetracker.google.com/issues/119844519
-  // https://stackoverflow.com/questions/43273640/android-webviewclient-how-to-get-post-request-body
-  // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
-  //
-  // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
-  const contents_bytes = new TextEncoder().encode(contents);
-  const contents_base64 = btoa(String.fromCharCode.apply(null, contents_bytes));
-  xhr.setRequestHeader("dioxus-data", contents_base64);
-  xhr.send();
-
-  // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
-  return JSON.parse(xhr.responseText);
-}
 
 function getTargetId(target: EventTarget): NodeId | null {
   // Ensure that the target is a node, sometimes it's nota

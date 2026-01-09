@@ -1,139 +1,31 @@
 use crate::dom_thread::{VirtualDomEvent, VirtualDomHandle};
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
-use crate::WeakDesktopContext;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopContext,
     DesktopService,
 };
-use base64::prelude::BASE64_STANDARD;
 use dioxus_hooks::to_owned;
-use dioxus_html::HtmlEvent;
 use std::rc::Rc;
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::task::Waker;
-use std::{cell::OnceCell, time::Duration};
-use tokio::sync::mpsc as tokio_mpsc;
+use std::time::Duration;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
 use wry_bindgen::wry::{ImplWryBindgenResponder, WryBindgenResponder};
 
-/// This struct handles events from the webview and forwards them to the VirtualDom thread.
+/// This struct manages the webview's communication with the VirtualDom thread.
 ///
-/// Events are sent through a channel to the VirtualDom thread, which processes them
-/// and dispatches to event handlers. This allows the VirtualDom to run on a dedicated
-/// thread while the main thread handles webview/window management.
+/// Events are now handled via wasm-bindgen closure (see wry_bindgen_bridge.rs),
+/// not through this struct. This struct primarily manages the WryQueue for mutations.
 #[derive(Clone)]
 pub(crate) struct WebviewEdits {
-    /// Channel to send events to the VirtualDom thread.
-    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
     pub wry_queue: WryQueue,
-    desktop_context: Rc<OnceCell<WeakDesktopContext>>,
 }
 
 impl WebviewEdits {
-    fn new(event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>, wry_queue: WryQueue) -> Self {
-        Self {
-            event_tx,
-            wry_queue,
-            desktop_context: Default::default(),
-        }
-    }
-
-    fn set_desktop_context(&self, context: WeakDesktopContext) {
-        _ = self.desktop_context.set(context);
-    }
-
-    pub fn handle_event(
-        &self,
-        request: wry::http::Request<Vec<u8>>,
-        responder: wry::RequestAsyncResponder,
-    ) {
-        let body = self
-            .try_handle_event(request)
-            .expect("Writing bodies to succeed");
-        responder.respond(wry::http::Response::new(body))
-    }
-
-    pub fn try_handle_event(
-        &self,
-        request: wry::http::Request<Vec<u8>>,
-    ) -> Result<Vec<u8>, serde_json::Error> {
-        use serde::de::Error;
-
-        // todo(jon):
-        //
-        // I'm a small bit worried about the size of the header being too big on some platforms.
-        // It's unlikely we'll hit the 256k limit (from 2010 browsers...) but it's important to think about
-        // https://stackoverflow.com/questions/3326210/can-http-headers-be-too-big-for-browsers
-        //
-        // Also important to remember here that we don't pass a body from the JavaScript side of things
-        let data = request
-            .headers()
-            .get("dioxus-data")
-            .ok_or_else(|| Error::custom("dioxus-data header not set"))?;
-
-        let as_utf = std::str::from_utf8(data.as_bytes())
-            .map_err(|_| Error::custom("dioxus-data header is not a valid (utf-8) string"))?;
-
-        let data_from_header = base64::Engine::decode(&BASE64_STANDARD, as_utf)
-            .map_err(|_| Error::custom("dioxus-data header is not a base64 string"))?;
-
-        let response = match serde_json::from_slice(&data_from_header) {
-            Ok(event) => {
-                // we need to wait for the mutex lock to let us munge the main thread..
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-                self.handle_html_event(event)
-            }
-            Err(err) => {
-                tracing::error!(
-                    "Error parsing user_event: {:?}. \n Contents: {:?}, \nraw: {:#?}",
-                    err,
-                    String::from_utf8(request.body().to_vec()),
-                    request
-                );
-                SynchronousEventResponse::new(false)
-            }
-        };
-
-        serde_json::to_vec(&response).inspect_err(|err| {
-            tracing::error!("failed to serialize SynchronousEventResponse: {err:?}");
-        })
-    }
-
-    pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = event;
-        let Some(desktop_context) = self.desktop_context.get() else {
-            tracing::error!(
-                "Tried to handle event before setting the desktop context on the event handler"
-            );
-            return Default::default();
-        };
-
-        let _desktop_context = desktop_context.upgrade().unwrap();
-
-        // TODO: Restore event conversion once we set up the main thread proxy
-        // Send the event to the VirtualDom thread for processing
-        let prevent_default = Arc::new(OnceLock::new());
-        self.event_tx
-            .send(VirtualDomEvent::HtmlEvent {
-                event: HtmlEvent {
-                    element,
-                    name,
-                    bubbles,
-                    data,
-                },
-                prevent_default: prevent_default.clone(),
-            })
-            .unwrap();
-
-        // Get the response from the event
-        SynchronousEventResponse::new(*prevent_default.wait())
+    fn new(wry_queue: WryQueue) -> Self {
+        Self { wry_queue }
     }
 }
 
@@ -222,7 +114,7 @@ impl WebviewInstance {
         // The VirtualDom is already running in the wry-bindgen thread
         let event_tx = shared.dom_event_tx.clone();
 
-        let edits = WebviewEdits::new(event_tx.clone(), edit_queue.clone());
+        let edits = WebviewEdits::new(edit_queue.clone());
 
         // Create wry-bindgen protocol handler wrapped in Rc for sharing
         let wry_bg_handler = shared.wry_bindgen.create_protocol_handler("dioxus", {
@@ -489,9 +381,6 @@ impl WebviewInstance {
             cfg.window_close_behavior,
         ));
 
-        // Provide the desktop context to the edit handler for event handling
-        edits.set_desktop_context(Rc::downgrade(&desktop_context));
-
         // Create a handle to communicate with the shared VirtualDom
         // The VirtualDom is already running in the wry-bindgen thread (started in App::new)
         // Commands are received via App::process_dom_commands from the shared channel
@@ -607,21 +496,6 @@ impl WebviewInstance {
                 }}
                 "#,
         ));
-    }
-}
-
-/// A synchronous response to a browser event which may prevent the default browser's action
-#[derive(serde::Serialize, Default)]
-pub struct SynchronousEventResponse {
-    #[serde(rename = "preventDefault")]
-    prevent_default: bool,
-}
-
-impl SynchronousEventResponse {
-    /// Create a new SynchronousEventResponse
-    #[allow(unused)]
-    pub fn new(prevent_default: bool) -> Self {
-        Self { prevent_default }
     }
 }
 
