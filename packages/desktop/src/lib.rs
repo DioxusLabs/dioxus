@@ -52,6 +52,7 @@ pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
 };
+pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

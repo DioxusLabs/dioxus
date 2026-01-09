@@ -13,9 +13,13 @@ use wry_bindgen::prelude::*;
 export function setEventHandler(handler) {
     window.rustEventHandler = handler;
 }
+export function setMountedHandler(handler) {
+    window.rustMountedHandler = handler;
+}
 "#)]
 extern "C" {
     fn setEventHandler(handler: Closure<dyn FnMut(web_sys::Event, String, u64, bool) -> bool>);
+    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys::Element, u64, bool)>);
 }
 
 /// Initialize the event handler closure with the given event sender.
@@ -29,14 +33,21 @@ extern "C" {
 ///
 /// Returns true if preventDefault should be called.
 pub fn setup_event_handler(runtime: Rc<Runtime>) {
-    let closure = Closure::new(
+    let runtime_clone = runtime.clone();
+    let event_closure = Closure::new(
         move |event: web_sys::Event, name: String, element_id: u64, bubbles: bool| {
-            println!("Got event: {name}");
-            handle_event_from_js(&runtime, event, name, element_id, bubbles)
+            handle_event_from_js(&runtime_clone, event, name, element_id, bubbles)
         },
     );
 
-    setEventHandler(closure);
+    let mounted_closure = Closure::new(
+        move |element: web_sys::Element, element_id: u64, bubbles: bool| {
+            handle_mounted_from_js(&runtime, element, element_id, bubbles)
+        },
+    );
+
+    setEventHandler(event_closure);
+    setMountedHandler(mounted_closure);
 }
 
 /// Handle an event from JavaScript, returning whether to prevent default.
@@ -68,4 +79,21 @@ fn handle_event_from_js(
 
     // Return true if we should prevent the default action
     !event.default_action_enabled()
+}
+
+/// Handle a mounted event from JavaScript.
+fn handle_mounted_from_js(
+    runtime: &Rc<Runtime>,
+    element: web_sys::Element,
+    element_id: u64,
+    bubbles: bool,
+) {
+    use dioxus_html::PlatformEventData;
+
+    // For mounted events, we pass the element directly as the event data
+    let platform_event = PlatformEventData::new(Box::new(element));
+
+    let element = ElementId(element_id as usize);
+    let event = dioxus_core::Event::new(Rc::new(platform_event) as Rc<dyn Any>, bubbles);
+    runtime.handle_event("mounted", event, element);
 }

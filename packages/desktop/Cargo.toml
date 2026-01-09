@@ -20,7 +20,7 @@ dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
-dioxus-web-sys-events = { workspace = true }
+dioxus-web-sys-events = { workspace = true, features = ["mounted"] }
 
 serde = "1.0.219"
 serde_json = "1.0.140"
