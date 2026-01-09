@@ -240,7 +240,7 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  setFocus(id: NodeId, focus: boolean) {
+  setFocus(id: NodeId, focus: boolean): boolean {
     const node = this.nodes[id];
 
     if (node instanceof HTMLElement) {
@@ -249,7 +249,27 @@ export class NativeInterpreter extends JSChannel_ {
       } else {
         node.blur();
       }
+      return true;
     }
+    return false;
+  }
+
+  setPointerCapture(id: NodeId, pointerId: number): boolean {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      node.setPointerCapture(pointerId);
+      return true;
+    }
+    return false;
+  }
+
+  releasePointerCapture(id: NodeId, pointerId: number): boolean {
+    const node = this.nodes[id];
+    if (node instanceof HTMLElement) {
+      node.releasePointerCapture(pointerId);
+      return true;
+    }
+    return false;
   }
 
   // Windows drag-n-drop fix code. Called by wry drag-n-drop handler over the event loop.
