@@ -1,15 +1,16 @@
 use bon::Builder;
 use dioxus::prelude::*;
 use dioxus_builder::FunctionComponent;
+use dioxus_builder::*;
 use dioxus_core::Properties;
 
-// Minimal, fully type-safe component + props builder example.
-// This mirrors the "Props + FunctionComponent" pattern using Dioxus types.
+// Minimal, type-safe builder pattern with a small counter app.
 
 #[derive(Builder, Clone, PartialEq)]
 struct MyComponentProps {
+    #[builder(into)]
     title: String,
-    count: u32,
+    count: Signal<i32>,
 }
 
 impl Properties for MyComponentProps {
@@ -24,20 +25,76 @@ impl Properties for MyComponentProps {
     }
 }
 
-#[allow(non_snake_case)]
-fn MyCoolComponent(props: MyComponentProps) -> Element {
-    println!("Title: {}, Count: {}", props.title, props.count);
-    VNode::empty()
+impl<S> dioxus_core::IntoDynNode for MyComponentPropsBuilder<S>
+where
+    S: my_component_props_builder::IsComplete,
+{
+    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+        dioxus_core::IntoDynNode::into_dyn_node(MyCoolComponent(self.build()))
+    }
 }
 
-fn it_works() {
-    let _props = MyCoolComponent
-        .new()
-        .title("Hello World".to_string())
-        .count(42)
-        .build();
+#[allow(non_snake_case)]
+fn MyCoolComponent(props: MyComponentProps) -> Element {
+    div()
+        .class("p-4 rounded-lg border border-gray-200 bg-white shadow-sm")
+        .child(
+            h2().class("text-lg font-semibold text-gray-800")
+                .text(props.title),
+        )
+        .child(
+            p().class("text-sm text-gray-600")
+                .text(format!("Count is {}", props.count)),
+        )
+        .build()
+}
+
+fn app() -> Element {
+    let mut count = use_signal(|| 0);
+
+    div()
+        .class_list([
+            "min-h-screen",
+            "bg-gray-100",
+            "flex",
+            "items-center",
+            "justify-center",
+            "p-8",
+        ])
+        .child(
+            div()
+                .class("space-y-4")
+                .child(
+                    MyCoolComponent
+                        .new()
+                        .title("Builder + bon props")
+                        .count(count),
+                )
+                .child(
+                    div()
+                        .class("flex items-center gap-3")
+                        .child(
+                            button()
+                                .class("px-3 py-2 rounded bg-red-500 text-white")
+                                .onclick(move |_| count -= 1)
+                                .text("-"),
+                        )
+                        .child(
+                            span()
+                                .class("text-lg font-mono text-gray-800")
+                                .text(count.to_string()),
+                        )
+                        .child(
+                            button()
+                                .class("px-3 py-2 rounded bg-green-500 text-white")
+                                .onclick(move |_| count += 1)
+                                .text("+"),
+                        ),
+                ),
+        )
+        .build()
 }
 
 fn main() {
-    it_works();
+    dioxus::launch(app);
 }

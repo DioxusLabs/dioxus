@@ -11,7 +11,7 @@ pub trait Props: Properties {
     type Builder;
 
     /// Create a builder for this component's props.
-    fn builder() -> Self::Builder;
+    fn builder() -> <Self as Props>::Builder;
 }
 
 impl<T> Props for T
@@ -20,7 +20,7 @@ where
 {
     type Builder = <T as Properties>::Builder;
 
-    fn builder() -> Self::Builder {
+    fn builder() -> <Self as Props>::Builder {
         <T as Properties>::builder()
     }
 }
@@ -40,6 +40,6 @@ where
     P: Props,
 {
     fn new(&self) -> <P as Props>::Builder {
-        P::builder()
+        <P as Props>::builder()
     }
 }
