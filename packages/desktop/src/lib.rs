@@ -10,6 +10,7 @@ mod assets;
 mod config;
 mod desktop_context;
 mod document;
+mod dom_thread;
 mod edits;
 mod element;
 mod event_handlers;

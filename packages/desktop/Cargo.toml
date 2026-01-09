@@ -42,6 +42,7 @@ slab = { workspace = true }
 rustc-hash = { workspace = true }
 dioxus-hooks = { workspace = true }
 futures-util = { workspace = true }
+tokio-util = { version = "0.7", features = ["rt"] }
 percent-encoding = { workspace = true }
 async-trait = { workspace = true }
 tao = { workspace = true, features = ["rwh_05"] }

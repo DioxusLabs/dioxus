@@ -1,5 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
+    dom_thread::{MainThreadCommand, VirtualDomEvent},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
@@ -7,7 +8,13 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::VirtualDom;
+use dioxus_core::{Element, VirtualDom};
+use tokio_util::task::LocalPoolHandle;
+
+/// A factory for creating VirtualDom instances on dedicated threads.
+/// This type is Send because it only holds the component function and contexts,
+/// not the VirtualDom itself.
+pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -23,9 +30,10 @@ use tao::{
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
-    // move the props into a cell so we can pop it out later to create the first window
-    // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
+    // Factory for creating the VirtualDom on a dedicated thread.
+    // We use a RefCell because Cell doesn't work with non-Copy types.
+    // iOS panics if we create a window before the event loop is started, so we toss them into a cell.
+    pub(crate) make_dom: RefCell<Option<MakeVirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -51,10 +59,12 @@ pub(crate) struct SharedContext {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
+    /// Thread pool for running VirtualDom instances on dedicated threads.
+    pub(crate) dom_pool: LocalPoolHandle,
 }
 
 impl App {
-    pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+    pub fn new(mut cfg: Config, make_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = cfg
             .event_loop
             .take()
@@ -66,7 +76,7 @@ impl App {
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            unmounted_dom: Cell::new(Some(virtual_dom)),
+            make_dom: RefCell::new(Some(make_dom)),
             float_all: false,
             show_devtools: false,
             cfg: Cell::new(Some(cfg)),
@@ -77,6 +87,11 @@ impl App {
                 proxy: event_loop.create_proxy(),
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
+                dom_pool: LocalPoolHandle::new(
+                    std::thread::available_parallelism()
+                        .map(usize::from)
+                        .unwrap_or(1),
+                ),
             }),
         };
 
@@ -184,7 +199,6 @@ impl App {
             let window = pending_webview.create_window(&self.shared);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
-            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
 
@@ -241,10 +255,11 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let virtual_dom = self
-            .unmounted_dom
+        let make_dom = self
+            .make_dom
+            .borrow_mut()
             .take()
-            .expect("Virtualdom should be set before initialization");
+            .expect("VirtualDom factory should be set before initialization");
         #[allow(unused_mut)]
         let mut cfg = self
             .cfg
@@ -259,7 +274,7 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
+        let webview = WebviewInstance::new(cfg, make_dom, self.shared.clone());
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -282,15 +297,14 @@ impl App {
 
     /// The webview is finally loaded
     ///
-    /// Let's rebuild it and then start polling it
+    /// Send the Initialize event to the VirtualDom thread to trigger initial rebuild
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let view = self.webviews.get_mut(&id).unwrap();
+        let Some(view) = self.webviews.get(&id) else {
+            return;
+        };
 
-        view.edits
-            .wry_queue
-            .with_mutation_state_mut(|f| view.dom.rebuild(f));
-
-        view.edits.wry_queue.send_edits();
+        // Send Initialize event to VirtualDom thread
+        view.dom_handle.send_event(VirtualDomEvent::Initialize);
 
         #[cfg(not(target_os = "linux"))]
         {
@@ -298,8 +312,6 @@ impl App {
                 .window
                 .set_visible(self.is_visible_before_start);
         }
-
-        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -316,8 +328,6 @@ impl App {
 
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
-        use std::time::Duration;
-
         use dioxus_devtools::DevserverMsg;
 
         // Amount of time that toats should be displayed.
@@ -326,20 +336,15 @@ impl App {
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
-                for webview in self.webviews.values_mut() {
-                    {
-                        // This is a place where wry says it's threadsafe but it's actually not.
-                        // If we're patching the app, we want to make sure it's not going to progress in the interim.
-                        let lock = crate::android_sync_lock::android_runtime_lock();
-                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
-                        drop(lock);
-                    }
-
-                    webview.poll_vdom();
+                // Forward hot reload message to all VirtualDom threads
+                for webview in self.webviews.values() {
+                    webview
+                        .dom_handle
+                        .send_event(VirtualDomEvent::HotReload(hr_msg.clone()));
                 }
 
                 if !hr_msg.assets.is_empty() {
-                    for webview in self.webviews.values_mut() {
+                    for webview in self.webviews.values() {
                         webview.kick_stylsheets();
                     }
                 }
@@ -407,17 +412,42 @@ impl App {
         }
     }
 
-    /// Poll the virtualdom until it's pending
+    /// Process commands from all VirtualDom threads.
     ///
-    /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
-    ///
-    /// All IO is done on the tokio runtime we started earlier
-    pub fn poll_vdom(&mut self, id: WindowId) {
-        let Some(view) = self.webviews.get_mut(&id) else {
-            return;
-        };
+    /// This is called on each tick of the event loop to process any pending
+    /// commands from the VirtualDom threads (like mutations to send to webviews).
+    pub fn process_dom_commands(&mut self) {
+        for webview in self.webviews.values_mut() {
+            Self::poll_webview(webview);
+        }
+    }
 
-        view.poll_vdom();
+    /// Poll a specific window by its ID.
+    /// Called when the waker sends a Poll event.
+    pub fn poll_window(&mut self, id: tao::window::WindowId) {
+        if let Some(webview) = self.webviews.get_mut(&id) {
+            Self::poll_webview(webview);
+        }
+    }
+
+    /// Poll a single webview for pending work.
+    fn poll_webview(webview: &mut WebviewInstance) {
+        // First, check if any pending edits have been acknowledged by the webview
+        // This will send EditsAcknowledged to the VirtualDom if ready
+        webview.poll_edits_flushed();
+
+        // Then process any new commands from the VirtualDom
+        while let Some(cmd) = webview.dom_handle.try_recv_command() {
+            match cmd {
+                MainThreadCommand::Mutations(edits) => {
+                    // Forward mutations to the websocket
+                    webview.send_edits_raw(edits);
+                }
+                MainThreadCommand::EvaluateScript(script) => {
+                    let _ = webview.desktop_context.webview.evaluate_script(&script);
+                }
+            }
+        }
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

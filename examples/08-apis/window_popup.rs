@@ -1,37 +1,30 @@
 //! This example shows how to create a popup window and send data back to the parent window.
 //! Currently Dioxus doesn't support nested renderers, hence the need to create popups as separate windows.
+//!
+//! Note: With the threaded VirtualDom model, we use global signals to communicate between windows.
 
 use dioxus::prelude::*;
-use std::rc::Rc;
 
 fn main() {
     dioxus::LaunchBuilder::desktop().launch(app);
 }
 
-fn app() -> Element {
-    let mut emails_sent = use_signal(|| Vec::new() as Vec<String>);
+/// Global signal for cross-window communication
+static EMAIL_CHANNEL: GlobalSignal<Vec<String>> = Signal::global(Vec::new);
 
-    // Wait for responses to the compose channel, and then push them to the emails_sent signal.
-    let handle = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
-        use futures_util::StreamExt;
-        while let Some(message) = rx.next().await {
-            emails_sent.push(message);
-        }
-    });
+fn app() -> Element {
+    // Read emails from the global channel
+    let emails_sent = EMAIL_CHANNEL();
 
     let open_compose_window = move |_evt: MouseEvent| {
-        let tx = handle.tx();
-        dioxus::desktop::window().new_window(
-            VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
-            Default::default(),
-        );
+        dioxus::desktop::window().new_window(popup, Default::default());
     };
 
     rsx! {
         h1 { "This is your email" }
         button { onclick: open_compose_window, "Click to compose a new email" }
         ul {
-            for message in emails_sent.read().iter() {
+            for message in emails_sent.iter() {
                 li {
                     h3 { "email" }
                     span { "{message}" }
@@ -41,7 +34,7 @@ fn app() -> Element {
     }
 }
 
-fn popup(send: Rc<dyn Fn(String)>) -> Element {
+fn popup() -> Element {
     let mut user_input = use_signal(String::new);
     let window = dioxus::desktop::use_window();
 
@@ -59,7 +52,9 @@ fn popup(send: Rc<dyn Fn(String)>) -> Element {
             }
             button {
                 onclick: move |_| {
-                    send(user_input.cloned());
+                    // Send the message via global signal
+                    let mut emails = EMAIL_CHANNEL.write();
+                    emails.push(user_input.cloned());
                     dioxus::desktop::window().close();
                 },
                 "Send"

@@ -8,7 +8,7 @@ use crate::{
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{Callback, VirtualDom};
+use dioxus_core::{Callback, Element, VirtualDom};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -105,7 +105,7 @@ impl DesktopService {
         }
     }
 
-    /// Start the creation of a new window using the props and window builder
+    /// Start the creation of a new window using a component function and window builder.
     ///
     /// Returns a future that resolves to the webview handle for the new window. You can use this
     /// to control other windows from the current window once the new window is created.
@@ -124,9 +124,7 @@ impl DesktopService {
     ///
     /// # async fn app() {
     /// // Create a new window with a component that will be rendered in the new window.
-    /// let dom = VirtualDom::new(popup);
-    /// // Create and wait for the window
-    /// let window = dioxus::desktop::window().new_window(dom, Default::default()).await;
+    /// let window = dioxus::desktop::window().new_window(popup, Default::default()).await;
     /// // Fullscreen the new window
     /// window.set_fullscreen(true);
     /// # }
@@ -138,8 +136,9 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> PendingDesktopContext {
-        let (window, context) = PendingWebview::new(dom, cfg);
+    pub fn new_window(&self, component: fn() -> Element, cfg: Config) -> PendingDesktopContext {
+        let make_dom: crate::app::MakeVirtualDom = Box::new(move || VirtualDom::new(component));
+        let (window, context) = PendingWebview::new(make_dom, cfg);
 
         self.shared
             .proxy

@@ -5776,6 +5776,7 @@ dependencies = [
  "tao",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-util",
  "tracing",
  "tray-icon",
  "tungstenite 0.27.0",
