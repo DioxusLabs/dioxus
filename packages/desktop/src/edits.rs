@@ -60,6 +60,17 @@ impl WryQueue {
         myself.edits_in_progress = Some(receiver);
     }
 
+    /// Send pre-serialized mutations to the webview.
+    ///
+    /// This is used when mutations are generated on a separate thread and sent
+    /// via channel to the main thread for transmission to the webview.
+    pub(crate) fn send_edits_raw(&self, edits: Vec<u8>) {
+        let mut myself = self.inner.borrow_mut();
+        let webview_id = myself.location.webview_id;
+        let receiver = myself.websocket.send_edits(webview_id, edits);
+        myself.edits_in_progress = Some(receiver);
+    }
+
     /// Wait until all pending edits have been rendered in the webview
     pub(crate) fn poll_edits_flushed(
         &self,

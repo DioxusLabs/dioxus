@@ -23,6 +23,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "webonly",
 ] }
 dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true }
+dioxus-web-sys-events = { workspace = true }
 generational-box = { workspace = true }
 
 js-sys = { workspace = true }
@@ -96,7 +97,7 @@ lazy-js-bundle = { workspace = true }
 default = ["mounted", "devtools", "document"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
-    "web-sys/Element",
+    "dioxus-web-sys-events/mounted",
     "web-sys/Element",
     "web-sys/DomRect",
     "web-sys/ScrollIntoViewOptions",

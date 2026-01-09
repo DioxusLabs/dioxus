@@ -182,14 +182,16 @@ mod js {
 
     // if this is a mounted listener, we send the event immediately
     if (event_name === "mounted") {
-        window.ipc.postMessage(
+        if (this.liveview) {
             this.sendSerializedEvent({
                 name: event_name,
                 element: id,
                 data: null,
                 bubbles,
-            })
-        );
+            });
+        } else {
+            window.rustMountedHandler(this_node, id, bubbles);
+        }
     } else {
         this.createListener(event_name, this_node, bubbles, (event) => {
             this.handler(event, event_name, bubbles);

@@ -10,10 +10,9 @@ mod assets;
 mod config;
 mod desktop_context;
 mod document;
+mod dom_thread;
 mod edits;
-mod element;
 mod event_handlers;
-mod events;
 mod file_upload;
 mod hooks;
 mod ipc;
@@ -24,6 +23,7 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+mod wry_bindgen_bridge;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -52,6 +52,7 @@ pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
 };
+pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

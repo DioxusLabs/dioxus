@@ -43,7 +43,8 @@ impl<T: 'static> Synthetic<T> {
     }
 }
 
-pub(crate) struct WebEventConverter;
+/// Event converter for web-sys events
+pub struct WebEventConverter;
 
 #[inline(always)]
 fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent {
@@ -246,7 +247,8 @@ struct GenericWebSysEvent {
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-pub(crate) fn virtual_event_from_websys_event(
+/// Create a platform event data from a web-sys event
+pub fn virtual_event_from_websys_event(
     event: web_sys::Event,
     target: Element,
 ) -> PlatformEventData {
@@ -256,7 +258,8 @@ pub(crate) fn virtual_event_from_websys_event(
     }))
 }
 
-pub(crate) fn load_document() -> Document {
+/// Load the document from the window
+pub fn load_document() -> Document {
     web_sys::window()
         .expect("should have access to the Window")
         .document()
