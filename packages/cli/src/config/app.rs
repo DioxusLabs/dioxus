@@ -38,6 +38,12 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) macos_entitlements: Option<PathBuf>,
 
+    /// A directory containing an Android project which `dx` will use when deploying to Android
+    /// If this directory is set, then the `android_manifest` and `android_main_activity` settings
+    /// will be ignored
+    #[serde(default)]
+    pub(crate) android_project_dir: Option<PathBuf>,
+
     /// Use this file for the AndroidManifest.xml associated with the Android app.
     /// `dx` will merge any required settings into this file required to build the app
     #[serde(default)]
