@@ -2,7 +2,7 @@ use bon::Builder;
 use dioxus::dioxus_core::FunctionComponent;
 use dioxus::prelude::*;
 use dioxus_builder::document::{doc_stylesheet, doc_title};
-use dioxus_builder::{ChildNode, StaticAttribute, StaticElement, *};
+use dioxus_builder::*;
 use dioxus_core::{Attribute, IntoAttributeValue};
 
 const TAILWIND_CSS: Asset = asset!("/assets/tailwind.css");
@@ -16,7 +16,7 @@ fn app() -> Element {
 
     // Using the new doc_title and doc_stylesheet helpers
     fragment()
-        .child(doc_title("Dioxus Builder Demo"))
+        .child(doc_title("Dioxus Builder"))
         .child(doc_stylesheet(TAILWIND_CSS))
         .child(body_section(count))
         .build()
@@ -66,20 +66,6 @@ pub struct ToggleProps {
     #[props(default)]
     pub on_pressed_change: Callback<bool>,
 
-    // https://github.com/DioxusLabs/dioxus/issues/2467
-    /// Callback fired when the toggle is mounted.
-    #[props(default)]
-    pub onmounted: Callback<Event<MountedData>>,
-    /// Callback fired when the toggle receives focus.
-    #[props(default)]
-    pub onfocus: Callback<Event<FocusData>>,
-    /// Callback fired when a key is pressed on the toggle.
-    #[props(default)]
-    pub onkeydown: Callback<Event<KeyboardData>>,
-    /// Callback fired when the toggle is clicked.
-    #[props(default)]
-    pub onclick: Callback<MouseEvent>,
-
     /// Additional attributes to apply to the toggle element.
     #[props(extends = GlobalAttributes)]
     pub attributes: Vec<Attribute>,
@@ -91,16 +77,13 @@ pub struct ToggleProps {
 /// # Toggle
 ///
 /// The `Toggle` component is a button that can be on or off.
+#[allow(non_snake_case)]
 pub fn Toggle(props: ToggleProps) -> Element {
     let ToggleProps {
         pressed,
         default_pressed,
         disabled,
         on_pressed_change,
-        onmounted,
-        onfocus,
-        onkeydown,
-        onclick,
         attributes,
         children,
     } = props;
@@ -110,8 +93,6 @@ pub fn Toggle(props: ToggleProps) -> Element {
     let pressed_for_click = pressed.clone();
     let set_pressed = set_pressed.clone();
     let disabled_for_click = disabled;
-    let onclick = onclick.clone();
-
     button()
         .class_list([
             "inline-flex",
@@ -130,14 +111,10 @@ pub fn Toggle(props: ToggleProps) -> Element {
         .attr("aria-pressed", pressed())
         .attr("data-state", if pressed() { "on" } else { "off" })
         .attr("data-disabled", disabled())
-        .onmounted(move |event| onmounted.call(event))
-        .onfocus(move |event| onfocus.call(event))
-        .onkeydown(move |event| onkeydown.call(event))
-        .onclick(move |event| {
+        .onclick(move |_| {
             if disabled_for_click() {
                 return;
             }
-            onclick.call(event);
             let new_pressed = !pressed_for_click();
             set_pressed.call(new_pressed);
         })
@@ -150,7 +127,6 @@ pub fn Toggle(props: ToggleProps) -> Element {
 pub enum ToggleVariant {
     Solid,
     Outline,
-    Ghost,
 }
 
 #[derive(Clone, Copy)]
@@ -165,10 +141,6 @@ pub struct ToggleBuilder {
     default_pressed: bool,
     disabled: ReadSignal<bool>,
     on_pressed_change: Callback<bool>,
-    onmounted: Callback<Event<MountedData>>,
-    onfocus: Callback<Event<FocusData>>,
-    onkeydown: Callback<Event<KeyboardData>>,
-    onclick: Callback<MouseEvent>,
     attributes: Vec<Attribute>,
     children: Element,
     variant: ToggleVariant,
@@ -182,10 +154,6 @@ impl ToggleBuilder {
             default_pressed: false,
             disabled: ReadSignal::default(),
             on_pressed_change: Callback::default(),
-            onmounted: Callback::default(),
-            onfocus: Callback::default(),
-            onkeydown: Callback::default(),
-            onclick: Callback::default(),
             attributes: Vec::new(),
             children: VNode::empty(),
             variant: ToggleVariant::Solid,
@@ -218,38 +186,13 @@ impl ToggleBuilder {
         self
     }
 
-    pub fn onmounted(mut self, f: impl FnMut(Event<MountedData>) + 'static) -> Self {
-        self.onmounted = Callback::new(f);
-        self
-    }
-
-    pub fn onfocus(mut self, f: impl FnMut(Event<FocusData>) + 'static) -> Self {
-        self.onfocus = Callback::new(f);
-        self
-    }
-
-    pub fn onkeydown(mut self, f: impl FnMut(Event<KeyboardData>) + 'static) -> Self {
-        self.onkeydown = Callback::new(f);
-        self
-    }
-
-    pub fn on_click(mut self, f: impl FnMut(MouseEvent) + 'static) -> Self {
-        self.onclick = Callback::new(f);
-        self
-    }
-
-    pub fn on_click_cb(mut self, cb: Callback<MouseEvent>) -> Self {
-        self.onclick = cb;
-        self
-    }
-
     pub fn label(mut self, text: impl ToString) -> Self {
         self.children = text_node(text);
         self
     }
 
-    pub fn child(mut self, child: impl IntoToggleChild) -> Self {
-        self.children = child.into_element();
+    pub fn child(mut self, child: Element) -> Self {
+        self.children = child;
         self
     }
 
@@ -260,10 +203,6 @@ impl ToggleBuilder {
 
     pub fn outline(self) -> Self {
         self.variant(ToggleVariant::Outline)
-    }
-
-    pub fn ghost(self) -> Self {
-        self.variant(ToggleVariant::Ghost)
     }
 
     pub fn size(mut self, size: ToggleSize) -> Self {
@@ -291,28 +230,9 @@ impl ToggleBuilder {
         self
     }
 
-    pub fn class_if(mut self, condition: bool, value: impl IntoAttributeValue) -> Self {
-        if condition {
-            self.attributes
-                .push(Attribute::new("class", value, None, false));
-        }
-        self
-    }
-
-    pub fn class_list<I, S>(mut self, classes: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        let joined = classes
-            .into_iter()
-            .map(|c| c.as_ref().to_string())
-            .filter(|c| !c.is_empty())
-            .collect::<Vec<_>>()
-            .join(" ");
-        if !joined.is_empty() {
-            self.attributes
-                .push(Attribute::new("class", joined, None, false));
+    fn classes(mut self, classes: &[&'static str]) -> Self {
+        for class in classes {
+            self = self.class(*class);
         }
         self
     }
@@ -323,7 +243,7 @@ impl ToggleBuilder {
     }
 
     pub fn build(mut self) -> Element {
-        self = self.class_list([
+        self = self.classes(&[
             "inline-flex",
             "items-center",
             "justify-center",
@@ -332,7 +252,7 @@ impl ToggleBuilder {
         ]);
         match self.variant {
             ToggleVariant::Solid => {
-                self = self.class_list([
+                self = self.classes(&[
                     "bg-blue-600",
                     "text-white",
                     "hover:bg-blue-700",
@@ -341,31 +261,24 @@ impl ToggleBuilder {
                 ]);
             }
             ToggleVariant::Outline => {
-                self = self.class_list([
+                self = self.classes(&[
                     "border",
                     "border-gray-300",
                     "text-gray-900",
                     "hover:bg-gray-50",
                 ]);
             }
-            ToggleVariant::Ghost => {
-                self = self.class_list(["text-gray-900", "hover:bg-gray-100"]);
-            }
         }
         match self.size {
-            ToggleSize::Sm => self = self.class_list(["h-8", "w-8", "text-sm"]),
-            ToggleSize::Md => self = self.class_list(["h-10", "w-10", "text-base"]),
-            ToggleSize::Lg => self = self.class_list(["h-12", "w-12", "text-lg"]),
+            ToggleSize::Sm => self = self.classes(&["h-8", "w-8", "text-sm"]),
+            ToggleSize::Md => self = self.classes(&["h-10", "w-10", "text-base"]),
+            ToggleSize::Lg => self = self.classes(&["h-12", "w-12", "text-lg"]),
         }
         Toggle(ToggleProps {
             pressed: self.pressed,
             default_pressed: self.default_pressed,
             disabled: self.disabled,
             on_pressed_change: self.on_pressed_change,
-            onmounted: self.onmounted,
-            onfocus: self.onfocus,
-            onkeydown: self.onkeydown,
-            onclick: self.onclick,
             attributes: self.attributes,
             children: self.children,
         })
@@ -417,8 +330,6 @@ pub enum CardVariant {
     #[default]
     Default,
     Primary,
-    Success,
-    Warning,
 }
 
 /// A simple Card component using bon-generated props builder.
@@ -433,6 +344,7 @@ pub enum CardVariant {
 ///     .children(rsx! { "Content" })
 ///     .build()
 /// ```
+#[allow(non_snake_case)]
 pub fn Card(props: CardProps) -> Element {
     let CardProps {
         title,
@@ -445,15 +357,11 @@ pub fn Card(props: CardProps) -> Element {
     let bg_class = match variant {
         CardVariant::Default => "bg-white",
         CardVariant::Primary => "bg-blue-50",
-        CardVariant::Success => "bg-green-50",
-        CardVariant::Warning => "bg-yellow-50",
     };
 
     let border_class = match variant {
         CardVariant::Default => "border-gray-200",
         CardVariant::Primary => "border-blue-200",
-        CardVariant::Success => "border-green-200",
-        CardVariant::Warning => "border-yellow-200",
     };
 
     div()
@@ -473,36 +381,8 @@ pub fn Card(props: CardProps) -> Element {
         .build()
 }
 
-pub trait IntoToggleChild {
-    fn into_element(self) -> Element;
-}
-
-impl IntoToggleChild for Element {
-    fn into_element(self) -> Element {
-        self
-    }
-}
-
-impl IntoToggleChild for ElementBuilder {
-    fn into_element(self) -> Element {
-        self.build()
-    }
-}
-
-impl IntoToggleChild for &str {
-    fn into_element(self) -> Element {
-        text_node(self)
-    }
-}
-
-impl IntoToggleChild for String {
-    fn into_element(self) -> Element {
-        text_node(self)
-    }
-}
-
 fn body_section(count: Signal<i32>) -> Element {
-    let mut toggle_pressed = use_signal(|| Some(false));
+    let toggle_pressed = use_signal(|| Some(false));
     let toggle_disabled = use_memo(move || count() % 2 == 0);
     let on_toggle_change = {
         let mut toggle_pressed = toggle_pressed.clone();
@@ -522,15 +402,13 @@ fn body_section(count: Signal<i32>) -> Element {
         ])
         .child(header_section())
         .child(counter_section(count))
-        .child(static_content_section(count))
         .child(list_section(count))
-        .child(attribute_helpers_section(count))
         .child(toggle_section(
             toggle_pressed.into(),
             toggle_disabled.into(),
             on_toggle_change,
         ))
-        .child(bon_builder_section(count))
+        .child(bon_builder_section())
         .child(footer_section())
         .build()
 }
@@ -540,11 +418,11 @@ fn header_section() -> Element {
         .class_list(["container", "mx-auto", "p-4", "text-center", "space-y-2"])
         .child(
             h1().class("text-4xl font-bold text-blue-600")
-                .text("Dioxus Builder Demo"),
+                .text("Dioxus Builder"),
         )
         .child(
             p().class("text-lg text-gray-700")
-                .text("This UI is built using the typed builder API and Tailwind CSS."),
+                .text("A type-safe, fluent API for building UI without rsx!."),
         )
         .build()
 }
@@ -572,165 +450,20 @@ fn counter_section(mut count: Signal<i32>) -> Element {
         .build()
 }
 
-// =============================================================================
-// Static Content Section - Demonstrates hybrid static/dynamic templates
-// =============================================================================
-
-/// Demonstrates `static_text` and `static_element` for optimal performance.
-///
-/// Static content is embedded directly in the template and does NOT participate
-/// in diffing, making it more performant than dynamic content.
-fn static_content_section(count: Signal<i32>) -> Element {
-    div()
-        .class_list([
-            "mt-4",
-            "w-full",
-            "max-w-md",
-            "bg-white",
-            "shadow-xl",
-            "rounded-lg",
-            "overflow-hidden",
-        ])
-        .child(
-            div()
-                .class("p-4 border-b bg-gradient-to-r from-purple-50 to-blue-50")
-                .child(
-                    h2().class("font-semibold text-purple-800")
-                        .text("Static vs Dynamic Content"),
-                ),
-        )
-        .child(
-            div()
-                .class("p-4 space-y-4")
-                // Example 1: Mixed static and dynamic text
-                .child(
-                    div()
-                        .class("p-3 bg-gray-50 rounded-lg")
-                        .child(
-                            p().class("text-sm font-medium text-gray-700 mb-2")
-                                .static_text("Example 1: Mixed text"),
-                        )
-                        .child(
-                            p().class("text-gray-600")
-                                .static_text("The counter is at: ")
-                                .child(
-                                    strong()
-                                        .class("text-blue-600 font-mono")
-                                        .text(count.to_string()),
-                                )
-                                .static_text(" clicks!"),
-                        ),
-                )
-                // Example 2: Static element with attributes
-                .child(
-                    div()
-                        .class("p-3 bg-gray-50 rounded-lg")
-                        .child(
-                            p().class("text-sm font-medium text-gray-700 mb-2")
-                                .static_text("Example 2: Static icon element"),
-                        )
-                        .child(
-                            div()
-                                .class("flex items-center gap-2")
-                                .static_element(StaticElement {
-                                    tag: "span",
-                                    namespace: None,
-                                    attrs: &[StaticAttribute {
-                                        name: "class",
-                                        value: "text-2xl",
-                                        namespace: None,
-                                    }],
-                                    children: vec![ChildNode::StaticText("★")],
-                                })
-                                .static_text(" This star icon is static (embedded in template)"),
-                        ),
-                )
-                // Example 3: Performance comparison info
-                .child(
-                    div()
-                        .class("p-3 bg-blue-50 rounded-lg border border-blue-200")
-                        .child(
-                            p().class("text-sm font-medium text-blue-800 mb-1")
-                                .static_text("Performance Tip"),
-                        )
-                        .child(p().class("text-sm text-blue-700").static_text(
-                            "Static content uses .static_text() and .static_element() - \
-                                     these are embedded directly in the template and skip diffing!",
-                        )),
-                )
-                // Example 4: Nested static elements
-                .child(fun_name(count)),
-        )
-        .build()
-}
-
-fn fun_name(count: Signal<i32>) -> ElementBuilder {
-    div()
-        .class("p-3 bg-gray-50 rounded-lg")
-        .child(
-            p().class("text-sm font-medium text-gray-700 mb-2")
-                .static_text("Example 3: Nested static structure"),
-        )
-        .child(
-            div()
-                .class("flex items-center gap-3")
-                .static_element(StaticElement {
-                    tag: "div",
-                    namespace: None,
-                    attrs: &[StaticAttribute {
-                        name: "class",
-                        value: "flex items-center gap-1 px-2 py-1 bg-green-100 rounded text-green-800 text-sm",
-                        namespace: None,
-                    }],
-                    children: vec![
-                        ChildNode::StaticElement(StaticElement {
-                            tag: "span",
-                            namespace: None,
-                            attrs: &[],
-                            children: vec![ChildNode::StaticText("✓")],
-                        }),
-                        ChildNode::StaticText("Verified"),
-                    ],
-                })
-                .static_element(StaticElement {
-                    tag: "div",
-                    namespace: None,
-                    attrs: &[StaticAttribute {
-                        name: "class",
-                        value: "flex items-center gap-1 px-2 py-1 bg-yellow-100 rounded text-yellow-800 text-sm",
-                        namespace: None,
-                    }],
-                    children: vec![
-                        ChildNode::StaticElement(StaticElement {
-                            tag: "span",
-                            namespace: None,
-                            attrs: &[],
-                            children: vec![ChildNode::StaticText("⚡")],
-                        }),
-                        ChildNode::StaticText("Fast"),
-                    ],
-                })
-                .child(
-                    span()
-                        .class("px-2 py-1 bg-purple-100 rounded text-purple-800 text-sm")
-                        .static_text("Count: ")
-                        .child(count.to_string()),
-                ),
-        )
-}
-
 fn list_section(count: Signal<i32>) -> Element {
+    let total = count().max(0) as usize;
+
     div()
         .class("mt-4 w-full max-w-md bg-white shadow-xl rounded-lg overflow-hidden")
         .child(
             div()
                 .class("p-4 border-b bg-gray-50")
-                .child(h2().class("font-semibold").text("Item List")),
+                .child(h2().class("font-semibold").text("Keyed List")),
         )
         .child(
             // Using the new children_keyed method for efficient list reconciliation
             ul().class("divide-y divide-gray-200").children_keyed(
-                0..count(),
+                0..total,
                 |i| i.to_string(),
                 |i| {
                     li().class("p-4 hover:bg-gray-50 flex justify-between")
@@ -742,49 +475,6 @@ fn list_section(count: Signal<i32>) -> Element {
                         )
                 },
             ),
-        )
-        .build()
-}
-
-fn attribute_helpers_section(count: Signal<i32>) -> Element {
-    let is_even = count() % 2 == 0;
-    let extra_attrs = [
-        Attribute::new("data-role", "builder-demo", None, false),
-        Attribute::new("data-count", count().to_string(), None, false),
-    ];
-
-    div()
-        .class_list([
-            "mt-4",
-            "w-full",
-            "max-w-md",
-            "bg-white",
-            "shadow",
-            "rounded-lg",
-            "p-4",
-            "space-y-3",
-            "border",
-        ])
-        .class_if(is_even, "border-green-300")
-        .class_if(!is_even, "border-amber-300")
-        .attr_if(is_even, "data-state", "even")
-        .attrs(extra_attrs)
-        .child(h2().class("font-semibold").child("Attribute Helpers"))
-        .child(
-            p().class("text-sm text-gray-600")
-                .child("Uses class_list, class_if, attr_if, and attrs()."),
-        )
-        .child_if(
-            is_even,
-            p().class("text-sm text-green-600")
-                .child("child_if: count is even"),
-        )
-        .child_if_else(
-            is_even,
-            p().class("text-xs text-gray-400")
-                .child("child_if_else: even branch"),
-            p().class("text-xs text-gray-400")
-                .child("child_if_else: odd branch"),
         )
         .build()
 }
@@ -806,7 +496,7 @@ fn footer_section() -> Element {
 /// 1. `#[derive(bon::Builder, Props)]` with `#[props(bon)]` for automatic builder
 /// 2. `FunctionComponent` trait for `Component.new()` syntax
 /// 3. bon attributes like `#[builder(into)]`, `#[builder(default)]`
-fn bon_builder_section(count: Signal<i32>) -> Element {
+fn bon_builder_section() -> Element {
     div()
         .class_list([
             "mt-4",
@@ -820,11 +510,11 @@ fn bon_builder_section(count: Signal<i32>) -> Element {
         ])
         .child(
             h2().class("font-semibold text-lg text-purple-800")
-                .text("bon::Builder Integration"),
+                .text("bon::Builder Components"),
         )
         .child(
             p().class("text-sm text-gray-600")
-                .text("Components using #[derive(bon::Builder, Props)] with #[props(bon)]"),
+                .text("Use #[derive(bon::Builder, Props)] with #[props(bon)] for a typed builder."),
         )
         // Example 1: Using CardProps::builder() directly
         .child(
@@ -839,7 +529,7 @@ fn bon_builder_section(count: Signal<i32>) -> Element {
                         .title("Default Card")
                         .children(
                             p().class("text-gray-600")
-                                .text(format!("Count is: {}", count()))
+                                .text("Built from props::builder()")
                                 .build(),
                         )
                         .build(),
@@ -865,59 +555,6 @@ fn bon_builder_section(count: Signal<i32>) -> Element {
                                 .build(),
                         )
                         .build(),
-                )),
-        )
-        // Example 3: Different variants
-        .child(
-            div()
-                .class("space-y-2")
-                .child(
-                    p().class("text-xs font-medium text-gray-500")
-                        .text("Method 3: Different card variants"),
-                )
-                .child(
-                    div()
-                        .class("space-y-2")
-                        .child(Card(
-                            Card.new()
-                                .title("Success Card")
-                                .variant(CardVariant::Success)
-                                .bordered(true)
-                                .children(span().text("✓ Operation successful").build())
-                                .build(),
-                        ))
-                        .child(Card(
-                            Card.new()
-                                .title("Warning Card")
-                                .variant(CardVariant::Warning)
-                                .bordered(true)
-                                .children(span().text("⚠ Please review").build())
-                                .build(),
-                        )),
-                ),
-        )
-        // Code example
-        .child(
-            div()
-                .class("p-3 bg-gray-800 rounded text-xs font-mono text-gray-300 overflow-x-auto")
-                .child(pre().text(
-                    r#"// Define props with bon::Builder
-#[derive(Builder, Props, Clone, PartialEq)]
-#[props(bon)]
-struct CardProps {
-    #[builder(into)]
-    title: String,
-    #[builder(default)]
-    bordered: bool,
-    children: Element,
-}
-
-// Use FunctionComponent trait
-Card.new()
-    .title("My Card")
-    .bordered(true)
-    .children(...)
-    .build()"#,
                 )),
         )
         .build()
