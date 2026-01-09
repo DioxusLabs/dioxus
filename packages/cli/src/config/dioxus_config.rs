@@ -28,6 +28,7 @@ impl Default for DioxusConfig {
                 tailwind_output: None,
                 ios_info_plist: None,
                 android_manifest: None,
+                android_project_dir: None,
                 android_main_activity: None,
                 android_min_sdk_version: None,
                 macos_info_plist: None,

@@ -3259,6 +3259,21 @@ impl BuildRequest {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
+        // If the user has specified a custom android project directory in their Dioxus.toml
+        // then simply copy that directory as the project directory.
+        if let Some(custom_project_dir) = self.config.application.android_project_dir.as_deref() {
+            let custom_project_dir = self.package_manifest_dir().join(custom_project_dir);
+            if !custom_project_dir.exists() {
+                return Err(anyhow::anyhow!(
+                    "Specified android_project_dir \"{}\" does not exist",
+                    custom_project_dir.display()
+                ));
+            }
+            std::fs::remove_dir_all(&root).unwrap();
+            dircpy::copy_dir(custom_project_dir, &root).unwrap();
+            return Ok(());
+        }
+
         // gradle
         let wrapper = root.join("gradle").join("wrapper");
         create_dir_all(&wrapper)?;
