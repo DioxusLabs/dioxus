@@ -68,8 +68,9 @@ muda = { workspace = true }
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc = "0.2.7"
-objc_id = "0.1.1"
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true, features = ["NSThread"] }
+objc2-ui-kit = { workspace = true, features = ["UIView", "UIViewController"] }
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
@@ -84,9 +85,8 @@ ndk-context = { version = "0.1.1" }
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26.1"
-core-foundation = "0.10.1"
-objc = "0.2.7"
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true, features = ["NSView"] }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
