@@ -5,18 +5,15 @@
 //! windows, while VirtualDom polling and rendering happens on separate threads.
 
 use dioxus_core::{provide_context, ScopeId, VirtualDom};
-use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_html::HtmlEvent;
 use dioxus_interpreter_js::MutationState;
+use futures_channel::mpsc as futures_mpsc;
 use std::{
     rc::Rc,
-    sync::{mpsc as std_mpsc, Arc, OnceLock},
+    sync::{Arc, OnceLock},
 };
 use tokio::sync::mpsc as tokio_mpsc;
-use tokio_util::task::LocalPoolHandle;
-
-use crate::document::DesktopDocument;
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
@@ -48,71 +45,50 @@ pub enum MainThreadCommand {
 }
 
 /// Handle to communicate with a VirtualDom running on a dedicated thread.
+///
+/// This handle only contains the sender for sending events to the VirtualDom.
+/// Commands from the VirtualDom are received via the shared `dom_command_rx` in `SharedContext`.
+#[derive(Clone)]
 pub struct VirtualDomHandle {
     /// Send events to the VirtualDom thread.
     pub event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
-
-    /// Receive commands from the VirtualDom thread.
-    /// Uses std::sync::mpsc for non-async receiving on main thread.
-    pub command_rx: std_mpsc::Receiver<MainThreadCommand>,
 }
 
 impl VirtualDomHandle {
+    /// Create a new handle with the given event sender.
+    pub fn new(event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>) -> Self {
+        Self { event_tx }
+    }
+
     /// Send an event to the VirtualDom thread.
     pub fn send_event(&self, event: VirtualDomEvent) {
         let _ = self.event_tx.send(event);
     }
-
-    /// Try to receive a command from the VirtualDom thread without blocking.
-    pub fn try_recv_command(&self) -> Option<MainThreadCommand> {
-        self.command_rx.try_recv().ok()
-    }
 }
 
-/// Spawn a VirtualDom on a dedicated thread using pre-created channels.
+/// Run the VirtualDom in the current async context (called from wry-bindgen app thread).
 ///
-/// This variant allows the caller to create channels before spawning, which is useful
-/// when the event sender needs to be shared with other components (like WebviewEdits)
-/// before the VirtualDom thread is spawned.
-///
-/// Takes both ends of the channels:
-/// - event_tx/event_rx: For sending events TO the VirtualDom thread
-/// - command_tx/command_rx: For sending commands FROM the VirtualDom thread
-pub fn spawn_virtual_dom_with_channels<F>(
-    pool: &LocalPoolHandle,
+/// This creates the VirtualDom and runs its event loop until completion.
+pub async fn run_virtual_dom<F>(
     make_dom: F,
-    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    command_tx: std_mpsc::Sender<MainThreadCommand>,
-    command_rx: std_mpsc::Receiver<MainThreadCommand>,
-) -> VirtualDomHandle
-where
+    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+) where
     F: FnOnce() -> VirtualDom + Send + 'static,
 {
-    let _ = pool.spawn_pinned(move || {
-        let dom = make_dom();
-        // TODO: Restore once we set up the main thread proxy
-        // let provider: Rc<dyn Document> = Rc::new(DesktopDocument::new(desktop_context.clone()));
-        let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-        dom.in_scope(ScopeId::ROOT, || {
-            // provide_context(desktop_context.clone());
-            // provide_context(provider);
-            provide_context(history_provider);
-        });
-        run_virtual_dom_loop(dom, event_rx, command_tx)
+    let dom = make_dom();
+    let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
+    dom.in_scope(ScopeId::ROOT, || {
+        provide_context(history_provider);
     });
-
-    VirtualDomHandle {
-        event_tx,
-        command_rx,
-    }
+    run_virtual_dom_loop(dom, event_rx, command_tx).await;
 }
 
 /// The main event loop for the VirtualDom running on its dedicated thread.
 async fn run_virtual_dom_loop(
     mut dom: VirtualDom,
     mut event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
-    command_tx: std_mpsc::Sender<MainThreadCommand>,
+    command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
 ) {
     let mut mutations = MutationState::default();
     let mut waiting_for_edits_ack = false;
@@ -168,7 +144,7 @@ async fn run_virtual_dom_loop(
                             // Perform initial rebuild
                             dom.rebuild(&mut mutations);
                             if let Some(edits) = take_edits(&mut mutations) {
-                                let _ = command_tx.send(MainThreadCommand::Mutations(edits));
+                                let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                                 waiting_for_edits_ack = true;
                             }
                         }
@@ -191,7 +167,7 @@ async fn run_virtual_dom_loop(
                 // Render and send mutations
                 dom.render_immediate(&mut mutations);
                 if let Some(edits) = take_edits(&mut mutations) {
-                    let _ = command_tx.send(MainThreadCommand::Mutations(edits));
+                    let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                     waiting_for_edits_ack = true;
                 }
             }
@@ -210,7 +186,6 @@ fn handle_html_event(dom: &VirtualDom, event: HtmlEvent, prevent_default: &OnceL
         bubbles,
         data,
     } = event;
-    println!("Handling HTML event: {}", name);
 
     // Convert to desktop-specific event types where needed
     let as_any = data.into_any();

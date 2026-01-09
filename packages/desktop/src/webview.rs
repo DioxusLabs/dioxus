@@ -14,9 +14,9 @@ use std::rc::Rc;
 use std::sync::{Arc, OnceLock};
 use std::task::Waker;
 use std::{cell::OnceCell, time::Duration};
-use tao::event_loop::EventLoopProxy;
 use tokio::sync::mpsc as tokio_mpsc;
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
+use wry_bindgen::wry::{ImplWryBindgenResponder, WryBindgenResponder};
 
 /// This struct handles events from the webview and forwards them to the VirtualDom thread.
 ///
@@ -159,11 +159,11 @@ pub(crate) struct WebviewInstance {
 }
 
 impl WebviewInstance {
-    pub(crate) fn new(
-        mut cfg: Config,
-        make_dom: crate::app::MakeVirtualDom,
-        shared: Rc<SharedContext>,
-    ) -> WebviewInstance {
+    /// Create a new WebviewInstance.
+    ///
+    /// The VirtualDom is already running in the wry-bindgen thread (started in App::new).
+    /// This webview connects to it via the shared channels in SharedContext.
+    pub(crate) fn new(mut cfg: Config, shared: Rc<SharedContext>) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -218,11 +218,21 @@ impl WebviewInstance {
         let file_hover = NativeFileHover::default();
         let headless = !cfg.window.window.visible;
 
-        // Create channels for VirtualDom thread communication
-        let (event_tx, event_rx) = tokio_mpsc::unbounded_channel();
-        let (command_tx, command_rx) = std::sync::mpsc::channel();
+        // Use shared channels for VirtualDom communication
+        // The VirtualDom is already running in the wry-bindgen thread
+        let event_tx = shared.dom_event_tx.clone();
 
         let edits = WebviewEdits::new(event_tx.clone(), edit_queue.clone());
+
+        // Create wry-bindgen protocol handler wrapped in Rc for sharing
+        let wry_bg_handler = shared.wry_bindgen.create_protocol_handler("dioxus", {
+            let proxy = shared.proxy.clone();
+            move |event| {
+                let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
+                    crate::ipc::WryBindgenEventWrapper::new(event),
+                ));
+            }
+        });
 
         let request_handler = {
             to_owned![
@@ -236,10 +246,35 @@ impl WebviewInstance {
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
 
-            move |_id: WebViewId, request, responder: RequestAsyncResponder| {
+            move |_id: WebViewId,
+                  request: wry::http::Request<Vec<u8>>,
+                  responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
 
+                struct ResponderWrapper {
+                    responder: RequestAsyncResponder,
+                }
+
+                impl Into<WryBindgenResponder> for ResponderWrapper {
+                    fn into(self) -> WryBindgenResponder {
+                        WryBindgenResponder::new(self)
+                    }
+                }
+
+                impl ImplWryBindgenResponder for ResponderWrapper {
+                    fn respond(self: Box<Self>, response: wry::http::Response<Vec<u8>>) {
+                        self.responder.respond(response);
+                    }
+                }
+
+                let responder = ResponderWrapper { responder };
+                let Some(responder) = wry_bg_handler(&request, responder) else {
+                    return;
+                };
+                let responder = responder.responder;
+
+                // Fall through to existing dioxus protocol handler
                 protocol::desktop_handler(
                     request,
                     asset_handlers.clone(),
@@ -457,19 +492,10 @@ impl WebviewInstance {
         // Provide the desktop context to the edit handler for event handling
         edits.set_desktop_context(Rc::downgrade(&desktop_context));
 
-        // Spawn VirtualDom on a dedicated thread
-        // Note: Context providers (DesktopContext, Document, History) are set up on the
-        // VirtualDom thread inside make_dom. Components that need to interact with the
-        // window/webview should use signals or other mechanisms to communicate back to
-        // the main thread.
-        let dom_handle = crate::dom_thread::spawn_virtual_dom_with_channels(
-            &shared.dom_pool,
-            make_dom,
-            event_tx,
-            event_rx,
-            command_tx,
-            command_rx,
-        );
+        // Create a handle to communicate with the shared VirtualDom
+        // The VirtualDom is already running in the wry-bindgen thread (started in App::new)
+        // Commands are received via App::process_dom_commands from the shared channel
+        let dom_handle = VirtualDomHandle::new(event_tx);
 
         // Request an initial redraw
         desktop_context.window.request_redraw();
@@ -504,6 +530,47 @@ impl WebviewInstance {
             true
         } else {
             false
+        }
+    }
+
+    /// Poll for and process commands from the VirtualDom thread.
+    ///
+    /// Uses the webview's waker to register for wake-up when commands arrive.
+    /// This ensures the event loop is woken even if called before commands are ready.
+    pub fn poll_dom_commands(&mut self, shared: &SharedContext) {
+        use crate::dom_thread::MainThreadCommand;
+        use futures_util::StreamExt;
+        use std::task::Poll;
+
+        // Collect commands first to avoid borrow conflicts
+        let commands: Vec<MainThreadCommand> = {
+            let mut cx = std::task::Context::from_waker(&self.waker);
+            let mut rx = shared.dom_command_rx.borrow_mut();
+            let mut commands = Vec::new();
+
+            loop {
+                match rx.poll_next_unpin(&mut cx) {
+                    Poll::Ready(Some(cmd)) => {
+                        commands.push(cmd);
+                    }
+                    Poll::Ready(None) | Poll::Pending => {
+                        break;
+                    }
+                }
+            }
+            commands
+        };
+
+        // Process collected commands
+        for cmd in commands {
+            match cmd {
+                MainThreadCommand::Mutations(edits) => {
+                    self.send_edits_raw(edits);
+                }
+                MainThreadCommand::EvaluateScript(script) => {
+                    let _ = self.desktop_context.webview.evaluate_script(&script);
+                }
+            }
         }
     }
 
@@ -560,29 +627,23 @@ impl SynchronousEventResponse {
 
 /// A webview that is queued to be created. We can't spawn webviews outside of the main event loop because it may
 /// block on windows so we queue them into the shared context and then create them when the main event loop is ready.
+///
+/// Note: With wry-bindgen integration, all webviews share the same VirtualDom running in the wry-bindgen thread.
 pub(crate) struct PendingWebview {
-    make_dom: crate::app::MakeVirtualDom,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
 impl PendingWebview {
-    pub(crate) fn new(
-        make_dom: crate::app::MakeVirtualDom,
-        cfg: Config,
-    ) -> (Self, PendingDesktopContext) {
+    pub(crate) fn new(cfg: Config) -> (Self, PendingDesktopContext) {
         let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self {
-            make_dom,
-            cfg,
-            sender,
-        };
+        let webview = Self { cfg, sender };
         let pending = PendingDesktopContext { receiver };
         (webview, pending)
     }
 
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, self.make_dom, shared.clone());
+        let window = WebviewInstance::new(self.cfg, shared.clone());
 
         // Return the desktop context to the pending future
         _ = self.sender.send(window.desktop_context.clone());

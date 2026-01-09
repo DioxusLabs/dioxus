@@ -8,8 +8,7 @@ use crate::{
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{Element, VirtualDom};
-use tokio_util::task::LocalPoolHandle;
+use dioxus_core::VirtualDom;
 
 /// A factory for creating VirtualDom instances on dedicated threads.
 /// This type is Send because it only holds the component function and contexts,
@@ -30,10 +29,7 @@ use tao::{
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
-    // Factory for creating the VirtualDom on a dedicated thread.
-    // We use a RefCell because Cell doesn't work with non-Copy types.
-    // iOS panics if we create a window before the event loop is started, so we toss them into a cell.
-    pub(crate) make_dom: RefCell<Option<MakeVirtualDom>>,
+    // iOS panics if we create a window before the event loop is started, so we toss the config into a cell.
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -59,8 +55,13 @@ pub(crate) struct SharedContext {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
-    /// Thread pool for running VirtualDom instances on dedicated threads.
-    pub(crate) dom_pool: LocalPoolHandle,
+    /// wry-bindgen state shared across all windows.
+    pub(crate) wry_bindgen: wry_bindgen::wry::WryBindgen,
+    /// Channel to send events to the VirtualDom (running in wry-bindgen thread).
+    pub(crate) dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
+    /// Channel to receive commands from the VirtualDom.
+    /// Uses futures channel for proper async polling with wakers.
+    pub(crate) dom_command_rx: RefCell<futures_channel::mpsc::UnboundedReceiver<MainThreadCommand>>,
 }
 
 impl App {
@@ -70,13 +71,44 @@ impl App {
             .take()
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
+        let proxy = event_loop.create_proxy();
+
+        // Create channels for VirtualDom communication
+        // The VirtualDom runs in the wry-bindgen thread, communicating via these channels
+        let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
+        // Use futures channel for proper async polling with wakers on the main thread
+        let (dom_command_tx, dom_command_rx) = futures_channel::mpsc::unbounded();
+
+        // Initialize wry-bindgen runtime
+        // The app future runs the VirtualDom loop
+        let wry_bindgen = wry_bindgen::start_app(
+            {
+                let proxy = proxy.clone();
+                move |event| {
+                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
+                        crate::ipc::WryBindgenEventWrapper::new(event),
+                    ));
+                }
+            },
+            // App closure - VirtualDom runs here
+            move || crate::dom_thread::run_virtual_dom(make_dom, dom_event_rx, dom_command_tx),
+            // Async runtime starter
+            |future| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(future);
+            },
+        )
+        .expect("Failed to initialize wry-bindgen");
+
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
             disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
-            make_dom: RefCell::new(Some(make_dom)),
             float_all: false,
             show_devtools: false,
             cfg: Cell::new(Some(cfg)),
@@ -84,14 +116,12 @@ impl App {
                 event_handlers: WindowEventHandlers::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
-                proxy: event_loop.create_proxy(),
+                proxy,
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
-                dom_pool: LocalPoolHandle::new(
-                    std::thread::available_parallelism()
-                        .map(usize::from)
-                        .unwrap_or(1),
-                ),
+                wry_bindgen,
+                dom_event_tx,
+                dom_command_rx: RefCell::new(dom_command_rx),
             }),
         };
 
@@ -255,11 +285,8 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        let make_dom = self
-            .make_dom
-            .borrow_mut()
-            .take()
-            .expect("VirtualDom factory should be set before initialization");
+        // VirtualDom is already running in the wry-bindgen thread (started in App::new)
+        // We just need to create the webview to display it
         #[allow(unused_mut)]
         let mut cfg = self
             .cfg
@@ -274,7 +301,7 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, make_dom, self.shared.clone());
+        let webview = WebviewInstance::new(cfg, self.shared.clone());
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -412,13 +439,14 @@ impl App {
         }
     }
 
-    /// Process commands from all VirtualDom threads.
+    /// Poll all webviews for pending work.
     ///
-    /// This is called on each tick of the event loop to process any pending
-    /// commands from the VirtualDom threads (like mutations to send to webviews).
-    pub fn process_dom_commands(&mut self) {
+    /// This polls each webview for edits acknowledgment and VirtualDom commands.
+    /// Each webview uses its own waker to ensure proper wake-up registration.
+    pub fn poll_all_webviews(&mut self) {
         for webview in self.webviews.values_mut() {
-            Self::poll_webview(webview);
+            webview.poll_edits_flushed();
+            webview.poll_dom_commands(&self.shared);
         }
     }
 
@@ -426,27 +454,30 @@ impl App {
     /// Called when the waker sends a Poll event.
     pub fn poll_window(&mut self, id: tao::window::WindowId) {
         if let Some(webview) = self.webviews.get_mut(&id) {
-            Self::poll_webview(webview);
+            webview.poll_edits_flushed();
+            webview.poll_dom_commands(&self.shared);
         }
     }
 
-    /// Poll a single webview for pending work.
-    fn poll_webview(webview: &mut WebviewInstance) {
-        // First, check if any pending edits have been acknowledged by the webview
-        // This will send EditsAcknowledged to the VirtualDom if ready
-        webview.poll_edits_flushed();
-
-        // Then process any new commands from the VirtualDom
-        while let Some(cmd) = webview.dom_handle.try_recv_command() {
-            match cmd {
-                MainThreadCommand::Mutations(edits) => {
-                    // Forward mutations to the websocket
-                    webview.send_edits_raw(edits);
-                }
-                MainThreadCommand::EvaluateScript(script) => {
-                    let _ = webview.desktop_context.webview.evaluate_script(&script);
+    /// Handle wry-bindgen IPC events.
+    ///
+    /// This forwards the event to wry-bindgen for processing, which may execute
+    /// JavaScript in the webview or handle callbacks from JavaScript.
+    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::runtime::AppEvent) {
+        // Forward to wry-bindgen for processing
+        // This handles IPC messages, script evaluation, etc.
+        // We need to collect webviews to avoid borrowing issues
+        let webview_refs: Vec<_> = self.webviews.values().collect();
+        if let Some(webview) = webview_refs.first() {
+            if let Some(status) = self.shared.wry_bindgen.handle_user_event(event, |script| {
+                let _ = webview.desktop_context.webview.evaluate_script(script);
+            }) {
+                if status != 0 {
+                    self.control_flow = ControlFlow::Exit;
                 }
             }
+        } else {
+            println!("failed to get window");
         }
     }
 

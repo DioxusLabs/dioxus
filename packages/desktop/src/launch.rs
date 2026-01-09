@@ -93,10 +93,17 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
                 UserWindowEvent::Poll(id) => {
                     app.poll_window(id);
                 }
+
+                // wry-bindgen IPC event
+                UserWindowEvent::WryBindgenEvent(wrapper) => {
+                    if let Some(wry_event) = wrapper.take() {
+                        app.handle_wry_bindgen_event(wry_event);
+                    }
+                }
             },
             // Process VirtualDom thread commands on each event loop iteration
             Event::MainEventsCleared => {
-                app.process_dom_commands();
+                app.poll_all_webviews();
             }
             _ => {}
         }

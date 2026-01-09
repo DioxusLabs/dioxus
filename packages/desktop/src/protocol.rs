@@ -152,6 +152,9 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
 
     format!(
         r#"
+<!-- wry-bindgen initialization (loads function registry for Rust<->JS bindings) -->
+<script type="module" src="{BASE_URI}/__wbg__/init.js"></script>
+
 <script type="module">
     // Bring the sledgehammer code
     {SLEDGEHAMMER_JS}
@@ -170,6 +173,9 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
             window.interpreter.sendIpcMessage("initialize");
         }}
         window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
+
+        // Signal to wry-bindgen that the webview is ready
+        fetch("{BASE_URI}ready");
     }}
 </script>
 <script type="module">

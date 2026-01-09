@@ -497,6 +497,9 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
 pollster = "0.4.0"
 
+web-sys = { version = "*", features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
+wasm-bindgen = { version = "*" }
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
 tokio = { version = "1.48", default-features = false, features = [
@@ -510,6 +513,12 @@ uuid = { workspace = true, features = ["v4", "serde", "js"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 tokio = { version = "1.48", features = ["full"] }
+
+[patch.crates-io]
+wasm-bindgen = { path = "../../wry-wbg-dioxus/wry-bindgen" }
+wasm-bindgen-futures = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/futures" }
+js-sys = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/js-sys" }
+web-sys = { path = "../../wry-wbg-dioxus/wasm-bindgen/crates/web-sys" }
 
 # To make most examples faster to compile, we split out assets and http-related stuff
 # This trims off like 270 dependencies, leading to a significant speedup in compilation time
@@ -581,6 +590,11 @@ doc-scrape-examples = true
 [[example]]
 name = "repo_readme"
 path = "examples/01-app-demos/repo_readme.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "canvas"
+path = "examples/01-app-demos/canvas.rs"
 doc-scrape-examples = true
 
 [[example]]

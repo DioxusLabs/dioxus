@@ -8,7 +8,7 @@ use crate::{
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{Callback, Element, VirtualDom};
+use dioxus_core::{Callback, Element};
 use std::{
     cell::Cell,
     future::{Future, IntoFuture},
@@ -136,9 +136,11 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, component: fn() -> Element, cfg: Config) -> PendingDesktopContext {
-        let make_dom: crate::app::MakeVirtualDom = Box::new(move || VirtualDom::new(component));
-        let (window, context) = PendingWebview::new(make_dom, cfg);
+    pub fn new_window(&self, _component: fn() -> Element, cfg: Config) -> PendingDesktopContext {
+        // Note: With wry-bindgen integration, all windows share the same VirtualDom.
+        // The `component` parameter is currently unused - multi-window with separate
+        // VirtualDoms will require additional architecture changes.
+        let (window, context) = PendingWebview::new(cfg);
 
         self.shared
             .proxy

@@ -1,5 +1,29 @@
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 use tao::window::WindowId;
+
+/// Wrapper for wry-bindgen AppEvent that allows Clone (required by tao event loop)
+/// The inner Option allows taking the event exactly once.
+#[derive(Clone)]
+pub struct WryBindgenEventWrapper(pub Arc<Mutex<Option<wry_bindgen::runtime::AppEvent>>>);
+
+impl std::fmt::Debug for WryBindgenEventWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("WryBindgenEventWrapper")
+            .field(&"...")
+            .finish()
+    }
+}
+
+impl WryBindgenEventWrapper {
+    pub fn new(event: wry_bindgen::runtime::AppEvent) -> Self {
+        Self(Arc::new(Mutex::new(Some(event))))
+    }
+
+    pub fn take(&self) -> Option<wry_bindgen::runtime::AppEvent> {
+        self.0.lock().ok()?.take()
+    }
+}
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -43,6 +67,9 @@ pub enum UserWindowEvent {
 
     /// Gracefully shutdown the entire app
     Shutdown,
+
+    /// wry-bindgen IPC event (wrapped for Clone compatibility)
+    WryBindgenEvent(WryBindgenEventWrapper),
 }
 
 /// A message struct that manages the communication between the webview and the eventloop code

@@ -25,6 +25,7 @@ mod query;
 mod shortcut;
 mod waker;
 mod webview;
+mod wry_bindgen_bridge;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
