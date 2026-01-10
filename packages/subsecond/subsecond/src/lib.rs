@@ -230,6 +230,7 @@
 //! apps with Dioxus Deploy (currently under construction).
 
 pub mod wasm_multithreading;
+pub mod web_safe_mutex;
 
 pub use subsecond_types::JumpTable;
 
