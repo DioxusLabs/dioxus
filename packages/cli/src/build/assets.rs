@@ -467,8 +467,6 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             eval_walrus_global_expr(&module, offset).unwrap_or_default()
         }
         walrus::DataKind::Passive => {
-            // TODO need to change as it has error "Found an asset at offset 8624526 that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions. "
-
             let passive_data_segment_offsets = find_passive_data_segment_offsets(&module).context("finding passive data segment offsets")?;
 
             let rodata = module.data.iter()
