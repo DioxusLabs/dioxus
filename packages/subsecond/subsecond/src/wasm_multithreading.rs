@@ -210,9 +210,7 @@ impl WasmMultiThreadedHotPatchApplier {
         _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
             .unwrap()
             .unchecked_into::<js_sys::Function>()
-            .call0(&JsValue::undefined());
-
-        // TODO check whether __wasm_init_memory is called
+            .call0(&JsValue::undefined())
     }
 }
 

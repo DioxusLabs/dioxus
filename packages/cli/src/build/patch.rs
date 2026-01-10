@@ -25,7 +25,7 @@ use subsecond_types::{AddressMap, JumpTable};
 use target_lexicon::{Architecture, OperatingSystem, PointerWidth, Triple};
 use thiserror::Error;
 use walrus::ir::{BinaryOp, Binop, Instr, Value};
-use walrus::{ConstExpr, DataId, DataKind, ElementItems, ElementKind, FunctionBuilder, FunctionId, FunctionKind, GlobalId, ImportKind, LocalId, MemoryId, Module, ModuleConfig, RawCustomSection, TableId};
+use walrus::{ConstExpr, DataId, DataKind, ElementItems, ElementKind, ExportItem, FunctionBuilder, FunctionId, FunctionKind, GlobalId, ImportKind, LocalId, MemoryId, Module, ModuleConfig, RawCustomSection, TableId};
 use wasm_encoder::{CustomSection, DataSymbolDefinition, Encode};
 use wasmparser::{BinaryReader, BinaryReaderError, DefinedDataSymbol, KnownCustom, Linking, LinkingSectionReader, Payload, SymbolInfo};
 
@@ -981,8 +981,13 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         }
     }
 
-    // Clear the start function from the patch - we don't want any code automatically running!
-    new.start = None;
+    // in wasm multithreading, the start section is __wasm_init_memory (in my testing)
+    // it should be called
+    // previously in single-threaded case it's cleared, keep it same as before
+    // lld's code of creating start function https://github.com/llvm/llvm-project/blob/9a02a3c7f4cc0a5fa807556abc862f1c4121663d/lld/wasm/Writer.cpp#L1433 (in my testing there is no applyGlobalRelocs)
+    if cache.wasm_mt_tls_symbols.is_none() {
+        new.start = None;
+    }
 
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
