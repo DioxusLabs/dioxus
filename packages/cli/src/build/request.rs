@@ -3259,6 +3259,40 @@ impl BuildRequest {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
+        // Top-level gradle config
+        write(
+            root.join("build.gradle.kts"),
+            include_bytes!("../../assets/android/gen/build.gradle.kts"),
+        )?;
+        write(
+            root.join("gradle.properties"),
+            include_bytes!("../../assets/android/gen/gradle.properties"),
+        )?;
+        write(
+            root.join("gradlew"),
+            include_bytes!("../../assets/android/gen/gradlew"),
+        )?;
+        write(
+            root.join("gradlew.bat"),
+            include_bytes!("../../assets/android/gen/gradlew.bat"),
+        )?;
+        write(
+            root.join("settings.gradle"),
+            include_bytes!("../../assets/android/gen/settings.gradle"),
+        )?;
+
+        // Then the wrapper and its properties
+        let wrapper = root.join("gradle").join("wrapper");
+        create_dir_all(&wrapper)?;
+        write(
+            wrapper.join("gradle-wrapper.properties"),
+            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
+        )?;
+        write(
+            wrapper.join("gradle-wrapper.jar"),
+            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
+        )?;
+
         // If the user has specified a custom android project directory in their Dioxus.toml
         // then simply copy that directory as the project directory.
         if let Some(custom_project_dir) = self.config.application.android_project_dir.as_deref() {
@@ -3269,14 +3303,10 @@ impl BuildRequest {
                     custom_project_dir.display()
                 ));
             }
-            std::fs::remove_dir_all(&root).unwrap();
-            dircpy::copy_dir(custom_project_dir, &root).unwrap();
+            std::fs::remove_dir_all(&root.join("app")).unwrap();
+            dircpy::copy_dir(custom_project_dir, &root.join("app")).unwrap();
             return Ok(());
         }
-
-        // gradle
-        let wrapper = root.join("gradle").join("wrapper");
-        create_dir_all(&wrapper)?;
 
         // app
         let app = root.join("app");
@@ -3317,38 +3347,6 @@ impl BuildRequest {
             android_bundle: self.config.bundle.android.clone(),
         };
         let hbs = handlebars::Handlebars::new();
-
-        // Top-level gradle config
-        write(
-            root.join("build.gradle.kts"),
-            include_bytes!("../../assets/android/gen/build.gradle.kts"),
-        )?;
-        write(
-            root.join("gradle.properties"),
-            include_bytes!("../../assets/android/gen/gradle.properties"),
-        )?;
-        write(
-            root.join("gradlew"),
-            include_bytes!("../../assets/android/gen/gradlew"),
-        )?;
-        write(
-            root.join("gradlew.bat"),
-            include_bytes!("../../assets/android/gen/gradlew.bat"),
-        )?;
-        write(
-            root.join("settings.gradle"),
-            include_bytes!("../../assets/android/gen/settings.gradle"),
-        )?;
-
-        // Then the wrapper and its properties
-        write(
-            wrapper.join("gradle-wrapper.properties"),
-            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
-        )?;
-        write(
-            wrapper.join("gradle-wrapper.jar"),
-            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
-        )?;
 
         // Now the app directory
         write(
@@ -4449,12 +4447,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     fn gradle_exe(&self) -> Result<PathBuf> {
+        let gradle_dir = if let Some(gradle_wrapper_dir) =
+            self.config.application.gradle_wrapper_dir.as_deref()
+        {
+            let gradle_wrapper_dir = self.package_manifest_dir().join(gradle_wrapper_dir);
+            if !gradle_wrapper_dir.exists() {
+                return Err(anyhow::anyhow!(
+                    "Specified gradle_wrapper_dir \"{}\" does not exist",
+                    gradle_wrapper_dir.display()
+                ));
+            }
+            gradle_wrapper_dir
+        } else {
+            self.root_dir()
+        };
+
         // make sure we can execute the gradlew script
         #[cfg(unix)]
         {
             use std::os::unix::prelude::PermissionsExt;
             std::fs::set_permissions(
-                self.root_dir().join("gradlew"),
+                gradle_dir.join("gradlew"),
                 std::fs::Permissions::from_mode(0o755),
             )
             .context("Failed to make gradlew executable")?;
@@ -4465,7 +4478,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             false => "gradlew",
         };
 
-        Ok(self.root_dir().join(gradle_exec_name))
+        Ok(gradle_dir.join(gradle_exec_name))
     }
 
     pub(crate) fn debug_apk_path(&self) -> PathBuf {
