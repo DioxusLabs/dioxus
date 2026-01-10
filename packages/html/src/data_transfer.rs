@@ -2,6 +2,13 @@ pub struct DataTransfer {
     inner: Box<dyn NativeDataTransfer>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct DataTransferItem {
+    pub kind: String,
+    pub type_: String,
+    pub data: String,
+}
+
 impl DataTransfer {
     pub fn new(inner: impl NativeDataTransfer + 'static) -> Self {
         Self {
@@ -57,12 +64,17 @@ impl DataTransfer {
         self.inner.set_drop_effect(effect)
     }
 
+    pub fn items(&self) -> Vec<DataTransferItem> {
+        self.inner.items()
+    }
+
     pub fn files(&self) -> Vec<crate::file_data::FileData> {
         self.inner.files()
     }
 }
 
 pub trait NativeDataTransfer: Send + Sync {
+    fn items(&self) -> Vec<DataTransferItem>;
     fn get_data(&self, format: &str) -> Option<String>;
     fn set_data(&self, format: &str, data: &str) -> Result<(), String>;
     fn clear_data(&self, format: Option<&str>) -> Result<(), String>;
@@ -106,6 +118,17 @@ mod ser {
     }
 
     impl NativeDataTransfer for SerializedDataTransfer {
+        fn items(&self) -> Vec<DataTransferItem> {
+            self.items
+                .iter()
+                .map(|item| DataTransferItem{
+                    kind: item.kind.clone(),
+                    type_: item.type_.clone(),
+                    data: item.data.clone(),
+                })
+                .collect::<Vec<_>>()
+        }
+
         fn get_data(&self, format: &str) -> Option<String> {
             self.items
                 .iter()
