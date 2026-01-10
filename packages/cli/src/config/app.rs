@@ -44,6 +44,10 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) android_project_dir: Option<PathBuf>,
 
+    /// The directory containing gradle
+    #[serde(default)]
+    pub(crate) gradle_wrapper_dir: Option<PathBuf>,
+
     /// Use this file for the AndroidManifest.xml associated with the Android app.
     /// `dx` will merge any required settings into this file required to build the app
     #[serde(default)]
