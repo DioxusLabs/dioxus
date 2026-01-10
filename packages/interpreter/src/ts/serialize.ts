@@ -95,8 +95,7 @@ export function serializeEvent(
           size: file.size,
           last_modified: file.lastModified,
           content_type: file.type,
-          //url: URL.createObjectURL(file),
-          url: 'SEE ME!',
+          url: URL.createObjectURL(file),
         }
         files.push({ key: file.name, file: data });
       }
