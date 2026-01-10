@@ -13,8 +13,10 @@ serde = { workspace = true, features = ["derive"] }
 subsecond-types = { workspace = true }
 thiserror = { workspace = true }
 
+leb128 = { version = "0.2.5", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { workspace = true, features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console"] }
+web-sys = { workspace = true, features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console", "WorkerGlobalScope"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true}
@@ -26,3 +28,8 @@ memmap2 = { workspace = true}
 
 [target.'cfg(target_os = "android")'.dependencies]
 memfd = { workspace = true}
+
+[features]
+experimental_wasm_multithread_support = [
+    "leb128"
+]

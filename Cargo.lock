@@ -16535,6 +16535,7 @@ name = "subsecond"
 version = "0.7.2"
 dependencies = [
  "js-sys",
+ "leb128",
  "libc",
  "libloading 0.8.9",
  "memfd",

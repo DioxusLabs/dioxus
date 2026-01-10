@@ -229,6 +229,8 @@
 //! [sponsoring us on GitHub](https://github.com/sponsors/DioxusLabs) or eventually deploying your
 //! apps with Dioxus Deploy (currently under construction).
 
+mod wasm_multithreaded;
+
 pub use subsecond_types::JumpTable;
 
 use std::{
@@ -696,6 +698,9 @@ pub enum PatchError {
     /// The patch failed to apply on Android, most likely due to a permissions issue.
     #[error("Failed to load library on Android: {0}")]
     AndroidMemfd(String),
+
+    #[error("Failed to load Wasm module: {0}")]
+    WasmRelated(String),
 }
 
 /// This function returns the address of the main function in the current executable. This is used as
