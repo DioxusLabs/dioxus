@@ -1,4 +1,4 @@
-#![cfg(feature = "experimental_wasm_multithread_support")]
+#![cfg(feature = "experimental_wasm_multithreading_support")]
 #![cfg(target_arch = "wasm32")]
 
 use crate::{commit_patch, PatchError};
@@ -29,7 +29,7 @@ pub struct WasmMultiThreadedHotPatchApplier {
 ///
 /// One-shot hotpatch in Wasm multithreading is possible after shared-everything-threads proposal,
 /// which is still in early stage. https://github.com/WebAssembly/shared-everything-threads
-pub async unsafe fn wasm_multi_threaded_hotpatch_apply_begin(
+pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
     mut jump_table: JumpTable,
     pending_web_worker_count: u32,
 ) -> Result<(WasmMultiThreadedHotPatchApplier, Module), PatchError> {

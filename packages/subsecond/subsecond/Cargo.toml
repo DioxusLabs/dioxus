@@ -30,6 +30,6 @@ memmap2 = { workspace = true}
 memfd = { workspace = true}
 
 [features]
-experimental_wasm_multithread_support = [
+experimental_wasm_multithreading_support = [
     "leb128"
 ]
