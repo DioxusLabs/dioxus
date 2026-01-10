@@ -229,7 +229,7 @@
 //! [sponsoring us on GitHub](https://github.com/sponsors/DioxusLabs) or eventually deploying your
 //! apps with Dioxus Deploy (currently under construction).
 
-mod wasm_multithreading;
+pub mod wasm_multithreading;
 
 pub use subsecond_types::JumpTable;
 
