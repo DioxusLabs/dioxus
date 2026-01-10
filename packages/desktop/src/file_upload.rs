@@ -395,6 +395,10 @@ impl PointerInteraction for DesktopFileDragEvent {
 pub struct DesktopFileData(pub(crate) PathBuf);
 
 impl NativeFileData for DesktopFileData {
+    fn url(&self) -> Option<String> {
+        None
+    }
+    
     fn name(&self) -> String {
         self.0.file_name().unwrap().to_string_lossy().into_owned()
     }

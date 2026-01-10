@@ -239,6 +239,7 @@ fn respond_to_file_dialog(
                 key: file_dialog.target_name.clone(),
                 text: None,
                 file: Some(SerializedFileData {
+                    url: None,
                     size: file.len(),
                     last_modified: file
                         .modified()

@@ -25,6 +25,10 @@ impl WebFileData {
 }
 
 impl NativeFileData for WebFileData {
+    fn url(&self) -> Option<String> {
+        None
+    }
+    
     fn name(&self) -> String {
         self.file.name()
     }

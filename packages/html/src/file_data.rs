@@ -14,6 +14,10 @@ impl FileData {
         }
     }
 
+    pub fn url(&self) -> Option<String> {
+        self.inner.url()
+    }
+
     pub fn content_type(&self) -> Option<String> {
         self.inner.content_type()
     }
@@ -64,6 +68,7 @@ impl PartialEq for FileData {
 }
 
 pub trait NativeFileData: Send + Sync {
+    fn url(&self) -> Option<String>;
     fn name(&self) -> String;
     fn size(&self) -> u64;
     fn last_modified(&self) -> u64;
@@ -91,6 +96,7 @@ impl std::fmt::Debug for FileData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FileData")
             .field("name", &self.inner.name())
+            .field("url", &self.inner.url())
             .field("size", &self.inner.size())
             .field("last_modified", &self.inner.last_modified())
             .finish()
@@ -116,6 +122,7 @@ mod serialize {
         pub last_modified: u64,
         pub content_type: Option<String>,
         pub contents: Option<bytes::Bytes>,
+        pub url: Option<String>,
     }
 
     impl SerializedFileData {
@@ -127,11 +134,16 @@ mod serialize {
                 last_modified: 0,
                 content_type: None,
                 contents: None,
+                url: None,
             }
         }
     }
 
     impl NativeFileData for SerializedFileData {
+        fn url(&self) -> Option<String> {
+            self.url.clone()
+        }
+
         fn name(&self) -> String {
             self.path()
                 .file_name()

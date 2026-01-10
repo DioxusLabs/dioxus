@@ -95,6 +95,8 @@ export function serializeEvent(
           size: file.size,
           last_modified: file.lastModified,
           content_type: file.type,
+          //url: URL.createObjectURL(file),
+          url: 'SEE ME!',
         }
         files.push({ key: file.name, file: data });
       }
@@ -354,6 +356,7 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       last_modified: file.lastModified,
       content_type: file.type,
       contents: undefined, // we don't serialize contents here
+      url: URL.createObjectURL(file),
     });
   }
 
@@ -427,6 +430,7 @@ export type SerializedFileData = {
   last_modified?: number;
   content_type?: string;
   contents?: string; // base64 encoded, if present. not required to br present
+  url?: String;
 };
 
 export function extractSerializedFormValues(event: Event, target: HTMLElement): SerializedFormData {
@@ -466,6 +470,7 @@ function retrieveFormValues(form: HTMLFormElement): SerializedFormData {
         size: value.size,
         last_modified: value.lastModified,
         content_type: value.type,
+        url: URL.createObjectURL(value),
       };
       contents.push({ key, file: fileData });
     } else {
