@@ -161,7 +161,7 @@ mod ser {
         fn files(&self) -> Vec<crate::file_data::FileData> {
             self.files
                 .iter()
-                .map(|f| crate::file_data::FileData::new(f.clone()))
+                .map(|f| crate::file_data::FileData::new(f.normalized()))
                 .collect()
         }
     }

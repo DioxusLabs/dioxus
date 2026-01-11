@@ -154,7 +154,7 @@ mod ser {
             self.data_transfer
                 .files
                 .iter()
-                .map(|f| FileData::new(f.clone()))
+                .map(|f| FileData::new(f.normalized()))
                 .collect()
         }
     }
