@@ -42,10 +42,9 @@ fn app() -> Element {
                     background_color: "#f0f0f0",
                     ondragover: |e| e.prevent_default(),
                     ondrop: move |e| {
-                        if let Some(item_id) = e.data_transfer().get_data("text/plain").and_then(|data| data.parse::<usize>().ok()) {
-                            if let Some(pos) = items.iter().position(|item| item.id == item_id) {
-                                items.write()[pos].category = category.to_string();
-                            }
+                        if let Some(item_id) = e.data_transfer().get_data("text/plain").and_then(|data| data.parse::<usize>().ok())
+                            && let Some(pos) = items.iter().position(|item| item.id == item_id) {
+                            items.write()[pos].category = category.to_string();
                         }
                     },
                     h2 { "Category: {category}" }
