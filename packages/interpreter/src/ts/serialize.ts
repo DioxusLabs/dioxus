@@ -12,20 +12,31 @@ export type SerializedEvent = {
   [key: string]: any;
 };
 
-async function blobToDataURL(blob: Blob): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = _e => resolve(reader.result as string);
-    reader.onerror = _e => reject(reader.error);
-    reader.onabort = _e => reject(new Error("Read aborted"));
-    reader.readAsDataURL(blob);
-  });
+
+
+function blobToDataURL(blob: Blob): string {
+  // first, genetrate a blob URL for the blob
+  let blob_url = URL.createObjectURL(blob);
+
+  // Which we get purely so we can fetch it.
+  // Yes yes, XMLHttpRequest sucks. But we absolutely need this method to be synchronous.
+  let xhr = new XMLHttpRequest();
+  xhr.open("GET", blob_url, false); // FALSE to the async param, eugh
+  xhr.responseType = "arraybuffer"; // But hooray for not *everything* being stuck in the past. Native data baby!
+  xhr.send(); // The sync bit, sigh
+
+  URL.revokeObjectURL(blob_url); // Farewell, your work here is done.
+
+  const returnBuffer = xhr.response as ArrayBuffer; // Older
+  const bytes = new Uint8Array(returnBuffer); // Newer. Should have a `.toBase64()` method, but alas no.
+  const base64 = btoa(bytes.reduce((data, byte) => data + String.fromCharCode(byte), "")); //More ugliness
+  return "data:" + blob.type + ";base64," + base64; // And FINALLY... generate a data URL. Synchronously
 }
 
-export async function serializeEvent(
+export function serializeEvent(
   event: Event,
   target: EventTarget
-): Promise<SerializedEvent> {
+): SerializedEvent {
   let contents = {};
 
   // merge the object into the contents
@@ -61,7 +72,7 @@ export async function serializeEvent(
     extend({ data: event.data });
   }
   if (event instanceof DragEvent) {
-    extend(await serializeDragEvent(event));
+    extend(serializeDragEvent(event));
   }
   if (event instanceof FocusEvent) {
     extend({});
@@ -105,7 +116,7 @@ export async function serializeEvent(
           size: file.size,
           last_modified: file.lastModified,
           content_type: file.type,
-          url: await blobToDataURL(file),
+          url: blobToDataURL(file),
         }
         files.push({ key: file.name, file: data });
       }
@@ -331,7 +342,7 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
   };
 }
 
-async function serializeDragEvent(event: DragEvent): Promise<SerializedEvent> {
+function serializeDragEvent(event: DragEvent): SerializedEvent {
   let data_transfer = event.dataTransfer || new DataTransfer();
   let items = [];
   let files = [];
@@ -365,7 +376,7 @@ async function serializeDragEvent(event: DragEvent): Promise<SerializedEvent> {
       last_modified: file.lastModified,
       content_type: file.type,
       contents: undefined, // we don't serialize contents here
-      url: await blobToDataURL(file),
+      url: blobToDataURL(file),
     });
   }
 

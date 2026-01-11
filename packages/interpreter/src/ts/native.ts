@@ -72,7 +72,7 @@ export class NativeInterpreter extends JSChannel_ {
     );
 
     // attach a listener to the route that listens for clicks and prevents the default file dialog
-    window.addEventListener("click", async (event) => {
+    window.addEventListener("click", (event) => {
       const target = event.target;
       if (
         target instanceof HTMLInputElement &&
@@ -90,7 +90,7 @@ export class NativeInterpreter extends JSChannel_ {
             // Send a message to the host to open the file dialog if the target is a file input and has a dioxus id attached to it
             event.preventDefault();
 
-            const contents = await serializeEvent(event, target);
+            const contents = serializeEvent(event, target);
 
             const target_name = target.getAttribute("name") || "";
 
@@ -155,8 +155,8 @@ export class NativeInterpreter extends JSChannel_ {
     this.ipc = window.ipc;
 
     // make sure we pass the handler to the base interpreter
-    const handler: EventListener = async (event) =>
-      await this.handleEvent(event, event.type, true);
+    const handler: EventListener = (event) =>
+      this.handleEvent(event, event.type, true);
 
     super.initialize(root, handler);
   }
@@ -350,10 +350,10 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
-  async handleEvent(event: Event, name: string, bubbles: boolean) {
+  handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const element = getTargetId(target)!;
-    const contents = await serializeEvent(event, target);
+    const contents = serializeEvent(event, target);
 
     // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
     // Some listeners
