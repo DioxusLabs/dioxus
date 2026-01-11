@@ -1,6 +1,9 @@
 #![cfg(feature = "experimental_wasm_multithreading_support")]
 #![cfg(target_arch = "wasm32")]
 
+use crate::wasm_multithreading::CurrHotpatchingState::{
+    Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking,
+};
 use crate::PatchError::WasmRelated;
 use crate::{commit_patch, PatchError};
 use futures::lock::Mutex;
@@ -16,21 +19,24 @@ use std::sync::{LazyLock, OnceLock};
 use subsecond_types::JumpTable;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{console, Window, WorkerGlobalScope};
-use crate::wasm_multithreading::CurrHotpatchingState::{Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking};
+use web_sys::{console, BroadcastChannel, Window, WorkerGlobalScope};
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Debug)]
 struct MyThreadId(usize);
 
 thread_local! {
     static IS_MAIN_THREAD: bool = web_sys::window().is_some();
 
     /// This thread id is for internally tracking what web worker haven't dynamically linked the patch
-    static THREAD_ID: MyThreadId = MyThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed));
+    static MY_THREAD_ID: MyThreadId = MyThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed));
 
     static CURR_WEB_WORKER_HOTPATCH_INITIALIZED: Cell<bool> = Cell::new(false);
+}
+
+fn get_my_thread_id() -> MyThreadId {
+    MY_THREAD_ID.with(|s| *s)
 }
 
 struct HotpatchEntry {
@@ -42,7 +48,7 @@ struct HotpatchEntry {
 enum CurrHotpatchingState {
     Idle,
     MainThreadDynamicLinking,
-    WebWorkersDynamicLinking(WebWorkersDynamicLinkingState)
+    WebWorkersDynamicLinking(WebWorkersDynamicLinkingState),
 }
 
 struct WebWorkersDynamicLinkingState {
@@ -92,10 +98,14 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
             }
             _ => {
                 console::log_1(
-                    &"Received new hotpatch when previous hotpatch hasn't finished. Queue it.".into(),
+                    &"Received new hotpatch when previous hotpatch hasn't finished. Queue it."
+                        .into(),
                 );
                 hotpatch_state.pending_hotpatches.push(jump_table);
                 return Ok(());
+                // About why not use async lock: futures crate's async lock has no order guarantee:
+                // https://docs.rs/futures/0.3.31/futures/lock/struct.Mutex.html#fairness
+                // Use manual queueing to ensure new patch won't be overwritten by old patch
             }
         }
     }
@@ -139,7 +149,10 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
     {
         let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
 
-        assert!(matches!(hotpatch_state.curr_state, MainThreadDynamicLinking), "curr_state is not MainThreadDynamicLinking");
+        assert!(
+            matches!(hotpatch_state.curr_state, MainThreadDynamicLinking),
+            "curr_state is not MainThreadDynamicLinking"
+        );
 
         hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
             hotpatch_entry: entry,
@@ -150,6 +163,29 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
     }
 
     Ok(())
+}
+
+/// sent from main thread to workers, to tell them to dynamic link
+static CHANNEL_NOTIFY_WORKER_TO_DYNAMIC_LINK: &str = "__subsecond_notify_worker_to_dynamic_link";
+
+/// sent from worker to main thread, to tell main thread that a worker has dynamically linked
+static CHANNEL_NOTIFY_WORKER_DYNAMIC_LINKED: &str = "__subsecond_worker_dynamic_linked";
+
+pub fn init_hotpatch_for_current_web_worker() {
+    if CURR_WEB_WORKER_HOTPATCH_INITIALIZED.get() {
+        console::log_1(
+            &format!(
+                "Current web worker {:?} has already initialized hotpatch",
+                get_my_thread_id()
+            )
+            .into(),
+        );
+        return;
+    }
+
+    CURR_WEB_WORKER_HOTPATCH_INITIALIZED.set(true);
+
+    BroadcastChannel::new(CHANNEL_NOTIFY_WORKER_DYNAMIC_LINKED).expect("Creating BroadcastChannel")
 }
 
 fn notify_web_workers_to_dynamic_link() {

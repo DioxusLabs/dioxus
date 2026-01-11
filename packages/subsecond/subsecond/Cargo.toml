@@ -18,7 +18,7 @@ futures = { version = "0.3.31", default-features = false, features = ["std"], op
 spin = {version = "0.10.0", optional = true}
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { workspace = true, features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console", "WorkerGlobalScope"] }
+web-sys = { workspace = true, features = ["FetchEvent", "Request", "Window", "Response", "ResponseType", "console", "WorkerGlobalScope", "BroadcastChannel"] }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true}
