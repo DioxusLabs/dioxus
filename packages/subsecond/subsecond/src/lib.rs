@@ -229,6 +229,8 @@
 //! [sponsoring us on GitHub](https://github.com/sponsors/DioxusLabs) or eventually deploying your
 //! apps with Dioxus Deploy (currently under construction).
 
+pub mod wasm_multithreading;
+
 pub use subsecond_types::JumpTable;
 
 use std::{
@@ -305,7 +307,8 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 
     Some(unsafe { &*ptr })
 }
-unsafe fn commit_patch(table: JumpTable) {
+// TODO change it to not pub after finishing experimenting
+pub unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
         std::sync::atomic::Ordering::Relaxed,
@@ -695,6 +698,9 @@ pub enum PatchError {
     /// The patch failed to apply on Android, most likely due to a permissions issue.
     #[error("Failed to load library on Android: {0}")]
     AndroidMemfd(String),
+
+    #[error("Failed to load Wasm module: {0}")]
+    WasmRelated(String),
 }
 
 /// This function returns the address of the main function in the current executable. This is used as
