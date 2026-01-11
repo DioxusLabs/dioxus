@@ -11,15 +11,17 @@ use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
 use leb128::read::Error;
 use spin::MutexGuard;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::io::Read;
 use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-use std::sync::{LazyLock, OnceLock};
+use std::sync::{Arc, LazyLock, OnceLock};
+use futures::SinkExt;
 use subsecond_types::JumpTable;
 use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::closure::{Closure, WasmClosureFnOnce};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{console, BroadcastChannel, Window, WorkerGlobalScope};
+use web_sys::{console, BroadcastChannel, Event, MessageEvent, Window, WorkerGlobalScope};
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -32,11 +34,15 @@ thread_local! {
     /// This thread id is for internally tracking what web worker haven't dynamically linked the patch
     static MY_THREAD_ID: MyThreadId = MyThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed));
 
-    static CURR_WEB_WORKER_HOTPATCH_INITIALIZED: Cell<bool> = Cell::new(false);
+    static CURR_THREAD_HOTPATCH_INITIALIZED: Cell<bool> = Cell::new(false);
 }
 
 fn get_my_thread_id() -> MyThreadId {
     MY_THREAD_ID.with(|s| *s)
+}
+
+fn is_main_thread() -> bool {
+    IS_MAIN_THREAD.with(|s| *s)
 }
 
 struct HotpatchEntry {
@@ -52,14 +58,14 @@ enum CurrHotpatchingState {
 }
 
 struct WebWorkersDynamicLinkingState {
-    hotpatch_entry: HotpatchEntry,
+    hotpatch_entry: Arc<HotpatchEntry>,
     pending_thread_ids: HashSet<MyThreadId>,
 }
 
 struct GlobalHotpatchState {
     /// The hotpatches that have already been done.
     /// They will be re-dynamic-linked for each new web worker
-    hotpatched: Vec<HotpatchEntry>,
+    hotpatched: Vec<Arc<HotpatchEntry>>,
     /// The hotpatch that's being done (waiting for web workers to dynamically link)
     curr_state: CurrHotpatchingState,
     /// When a new hotpatch comes before current hotpatch finishes, it's queued
@@ -155,7 +161,7 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
         );
 
         hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
-            hotpatch_entry: entry,
+            hotpatch_entry: Arc::new(entry),
             pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
         });
 
@@ -166,13 +172,27 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
 }
 
 /// sent from main thread to workers, to tell them to dynamic link
-static CHANNEL_NOTIFY_WORKER_TO_DYNAMIC_LINK: &str = "__subsecond_notify_worker_to_dynamic_link";
+static CHANNEL_WORKER_SHOULD_DYNAMIC_LINK: &str = "__subsecond_worker_should_dynamic_link";
 
 /// sent from worker to main thread, to tell main thread that a worker has dynamically linked
-static CHANNEL_NOTIFY_WORKER_DYNAMIC_LINKED: &str = "__subsecond_worker_dynamic_linked";
+static CHANNEL_WORKER_DYNAMIC_LINKED: &str = "__subsecond_worker_dynamic_linked";
 
-pub fn init_hotpatch_for_current_web_worker() {
-    if CURR_WEB_WORKER_HOTPATCH_INITIALIZED.get() {
+struct ChannelThreadLocalState {
+    worker_should_dynamic_link_channel: BroadcastChannel,
+    worker_should_dynamic_link_callback: Option<JsValue>,
+    worker_dynamic_linked_channel: BroadcastChannel,
+    worker_dynamic_linked_callback: Option<JsValue>,
+}
+
+thread_local! {
+    static CHANNEL_LOCAL_STATE: RefCell<Option<ChannelThreadLocalState>> = RefCell::new(None);
+}
+
+/// It will set up `BroadcastChannel`s for hotpatching communication.
+/// Note: dynamic linking happens in worker's event loop. The worker cannot process one message for too long time.
+/// (If worker keeps running a scheduler loop, it cannot run `BroadcastChannel` callback)
+pub fn init_hotpatch_for_current_thread() {
+    if CURR_THREAD_HOTPATCH_INITIALIZED.get() {
         console::log_1(
             &format!(
                 "Current web worker {:?} has already initialized hotpatch",
@@ -183,12 +203,50 @@ pub fn init_hotpatch_for_current_web_worker() {
         return;
     }
 
-    CURR_WEB_WORKER_HOTPATCH_INITIALIZED.set(true);
+    CURR_THREAD_HOTPATCH_INITIALIZED.set(true);
 
-    BroadcastChannel::new(CHANNEL_NOTIFY_WORKER_DYNAMIC_LINKED).expect("Creating BroadcastChannel")
+    let worker_should_dynamic_link_channel: BroadcastChannel =
+        BroadcastChannel::new(CHANNEL_WORKER_SHOULD_DYNAMIC_LINK)
+            .expect("creating channel 1");
+
+    let worker_dynamic_linked_channel: BroadcastChannel =
+        BroadcastChannel::new(CHANNEL_WORKER_DYNAMIC_LINKED)
+            .expect("creating channel 2");
+
+    let mut worker_should_dynamic_link_callback: Option<JsValue> = None;
+    let mut worker_dynamic_linked_callback: Option<JsValue> = None;
+
+    if is_main_thread() {
+        let closure = Closure::new(on_main_thread_receive_worker_dynamic_linked).into_js_value();
+        worker_dynamic_linked_callback = Some(closure.clone());
+        worker_dynamic_linked_channel.set_onmessage(Some(&closure.into()));
+    } else {
+        let closure = Closure::new(on_worker_should_dynamic_link).into_js_value();
+        worker_should_dynamic_link_callback = Some(closure.clone());
+        worker_should_dynamic_link_channel.set_onmessage(Some(&closure.into()));
+    }
+
+    CHANNEL_LOCAL_STATE.with(|r| {
+        *r.borrow_mut() = Some(ChannelThreadLocalState {
+            worker_dynamic_linked_channel,
+            worker_dynamic_linked_callback,
+            worker_should_dynamic_link_channel,
+            worker_should_dynamic_link_callback,
+        });
+    });
+
+    // TODO handle existing hotpatches
 }
 
 fn notify_web_workers_to_dynamic_link() {
+    todo!()
+}
+
+fn on_main_thread_receive_worker_dynamic_linked(event: &MessageEvent) {
+    todo!()
+}
+
+fn on_worker_should_dynamic_link(event: &MessageEvent) {
     todo!()
 }
 
