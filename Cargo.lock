@@ -6032,6 +6032,7 @@ version = "0.7.2"
 dependencies = [
  "async-trait",
  "bytes",
+ "data-url 0.3.2",
  "dioxus",
  "dioxus-core",
  "dioxus-core-macro",

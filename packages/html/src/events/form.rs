@@ -112,6 +112,7 @@ impl FormData {
                         last_modified: file_data.last_modified(),
                         content_type: file_data.content_type(),
                         contents: None,
+                        url: file_data.url(),
                     };
                     entry
                         .as_array_mut()
@@ -275,6 +276,7 @@ mod serialize {
                                 last_modified: f.last_modified(),
                                 content_type: f.content_type(),
                                 contents: None,
+                                url: f.url(),
                             })
                         } else {
                             Some(SerializedFileData::empty())

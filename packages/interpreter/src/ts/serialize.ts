@@ -12,10 +12,20 @@ export type SerializedEvent = {
   [key: string]: any;
 };
 
-export function serializeEvent(
+async function blobToDataURL(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = _e => resolve(reader.result as string);
+    reader.onerror = _e => reject(reader.error);
+    reader.onabort = _e => reject(new Error("Read aborted"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function serializeEvent(
   event: Event,
   target: EventTarget
-): SerializedEvent {
+): Promise<SerializedEvent> {
   let contents = {};
 
   // merge the object into the contents
@@ -51,7 +61,7 @@ export function serializeEvent(
     extend({ data: event.data });
   }
   if (event instanceof DragEvent) {
-    extend(serializeDragEvent(event));
+    extend(await serializeDragEvent(event));
   }
   if (event instanceof FocusEvent) {
     extend({});
@@ -95,6 +105,7 @@ export function serializeEvent(
           size: file.size,
           last_modified: file.lastModified,
           content_type: file.type,
+          url: await blobToDataURL(file),
         }
         files.push({ key: file.name, file: data });
       }
@@ -320,7 +331,7 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
   };
 }
 
-function serializeDragEvent(event: DragEvent): SerializedEvent {
+async function serializeDragEvent(event: DragEvent): Promise<SerializedEvent> {
   let data_transfer = event.dataTransfer || new DataTransfer();
   let items = [];
   let files = [];
@@ -354,6 +365,7 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       last_modified: file.lastModified,
       content_type: file.type,
       contents: undefined, // we don't serialize contents here
+      url: await blobToDataURL(file),
     });
   }
 
@@ -427,6 +439,7 @@ export type SerializedFileData = {
   last_modified?: number;
   content_type?: string;
   contents?: string; // base64 encoded, if present. not required to br present
+  url?: String;
 };
 
 export function extractSerializedFormValues(event: Event, target: HTMLElement): SerializedFormData {

@@ -1,5 +1,19 @@
+#[cfg(feature = "serialize")]
+pub use ser::*;
+#[cfg(feature = "serialize")]
+use serde::{Serialize, Deserialize};
+
 pub struct DataTransfer {
     inner: Box<dyn NativeDataTransfer>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg(feature = "serialize")]
+#[derive(Serialize, Deserialize)]
+pub struct DataTransferItem {
+    pub kind: String,
+    pub type_: String,
+    pub data: String,
 }
 
 impl DataTransfer {
@@ -57,12 +71,20 @@ impl DataTransfer {
         self.inner.set_drop_effect(effect)
     }
 
+    pub fn items(&self) -> Vec<DataTransferItem> {
+        self.inner.items()
+    }
+
     pub fn files(&self) -> Vec<crate::file_data::FileData> {
         self.inner.files()
     }
 }
 
 pub trait NativeDataTransfer: Send + Sync {
+    fn items(&self) -> Vec<DataTransferItem> {
+        //TODO: Good for back compatibility, but this can probably be lost for 0.8
+        Vec::new()
+    }
     fn get_data(&self, format: &str) -> Option<String>;
     fn set_data(&self, format: &str, data: &str) -> Result<(), String>;
     fn clear_data(&self, format: Option<&str>) -> Result<(), String>;
@@ -78,16 +100,14 @@ pub trait HasDataTransferData {
 }
 
 #[cfg(feature = "serialize")]
-pub use ser::*;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
-
-#[cfg(feature = "serialize")]
 mod ser {
     use crate::DragData;
 
     use super::*;
     use serde::{Deserialize, Serialize};
+
+    type SerializedDataTransferItem = DataTransferItem;
+
 
     /// A serialized version of DataTransfer
     #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -98,14 +118,11 @@ mod ser {
         pub drop_effect: String,
     }
 
-    #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-    pub struct SerializedDataTransferItem {
-        pub kind: String,
-        pub type_: String,
-        pub data: String,
-    }
-
     impl NativeDataTransfer for SerializedDataTransfer {
+        fn items(&self) -> Vec<DataTransferItem> {
+            self.items.clone()
+        }
+
         fn get_data(&self, format: &str) -> Option<String> {
             self.items
                 .iter()
@@ -144,7 +161,7 @@ mod ser {
         fn files(&self) -> Vec<crate::file_data::FileData> {
             self.files
                 .iter()
-                .map(|f| crate::file_data::FileData::new(f.clone()))
+                .map(|f| crate::file_data::FileData::new(f.normalized()))
                 .collect()
         }
     }

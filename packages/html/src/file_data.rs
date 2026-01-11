@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use futures_util::Stream;
 use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
+use data_url::DataUrl;
 
 #[derive(Clone)]
 pub struct FileData {
@@ -9,9 +10,14 @@ pub struct FileData {
 
 impl FileData {
     pub fn new(inner: impl NativeFileData + 'static) -> Self {
-        Self {
+        // let inner = inner.normalised();
+        Self {            
             inner: std::sync::Arc::new(inner),
         }
+    }
+
+    pub fn url(&self) -> Option<String> {
+        self.inner.url()
     }
 
     pub fn content_type(&self) -> Option<String> {
@@ -64,6 +70,7 @@ impl PartialEq for FileData {
 }
 
 pub trait NativeFileData: Send + Sync {
+    fn url(&self) -> Option<String>;
     fn name(&self) -> String;
     fn size(&self) -> u64;
     fn last_modified(&self) -> u64;
@@ -85,12 +92,14 @@ pub trait NativeFileData: Send + Sync {
         &self,
     ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>>;
     fn inner(&self) -> &dyn std::any::Any;
+
 }
 
 impl std::fmt::Debug for FileData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FileData")
             .field("name", &self.inner.name())
+            .field("content_type", &self.inner.content_type())
             .field("size", &self.inner.size())
             .field("last_modified", &self.inner.last_modified())
             .finish()
@@ -116,6 +125,7 @@ mod serialize {
         pub last_modified: u64,
         pub content_type: Option<String>,
         pub contents: Option<bytes::Bytes>,
+        pub url: Option<String>,
     }
 
     impl SerializedFileData {
@@ -127,11 +137,38 @@ mod serialize {
                 last_modified: 0,
                 content_type: None,
                 contents: None,
+                url: None,
             }
         }
+
+        pub fn normalized(&self) -> Self {
+            match &self.url {
+                Some(urlstr) if urlstr.starts_with("data:")  && self.contents.is_none()  => {
+                    if let Ok(url) = DataUrl::process(&urlstr) {
+                        if let Ok((body, _)) = url.decode_to_vec() {
+                            return Self {
+                                path: self.path.clone(),
+                                size: self.size,
+                                last_modified: self.last_modified,
+                                content_type: Some(url.mime_type().to_string()),
+                                contents: Some(Bytes::from(body)),
+                                url: self.url.clone(),
+                            }
+                        } 
+                    }
+                },
+                _ => ()
+            }
+            self.clone()
+        }
+        
     }
 
     impl NativeFileData for SerializedFileData {
+        fn url(&self) -> Option<String> {
+            self.url.clone()
+        }
+
         fn name(&self) -> String {
             self.path()
                 .file_name()
@@ -241,7 +278,7 @@ mod serialize {
             D: serde::Deserializer<'de>,
         {
             let sfd = SerializedFileData::deserialize(deserializer)?;
-            Ok(FileData::new(sfd))
+            Ok(FileData::new(sfd.normalized()))
         }
     }
 }
