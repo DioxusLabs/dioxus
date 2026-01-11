@@ -3116,7 +3116,7 @@ dependencies = [
  "blitz-traits",
  "futures-util",
  "keyboard-types",
- "rfd",
+ "rfd 0.15.4",
  "tracing",
  "winit",
 ]
@@ -5765,7 +5765,7 @@ dependencies = [
  "percent-encoding",
  "rand 0.9.2",
  "reqwest 0.12.28",
- "rfd",
+ "rfd 0.17.1",
  "rustc-hash 2.1.1",
  "separator",
  "serde",
@@ -14461,6 +14461,30 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rfd"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "069d6129dede311430d0dcf1ded88a7affc7a342c2d8e6336043d43ed14dac17"
+dependencies = [
+ "block2 0.6.2",
+ "dispatch2",
+ "js-sys",
+ "libc",
+ "log",
+ "objc2 0.6.3",
+ "objc2-app-kit 0.3.2",
+ "objc2-core-foundation",
+ "objc2-foundation 0.3.2",
+ "percent-encoding",
+ "pollster 0.4.0",
+ "raw-window-handle 0.6.2",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
