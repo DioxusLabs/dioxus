@@ -1,25 +1,77 @@
 #![cfg(feature = "experimental_wasm_multithreading_support")]
 #![cfg(target_arch = "wasm32")]
 
+use crate::PatchError::WasmRelated;
 use crate::{commit_patch, PatchError};
-
+use futures::lock::Mutex;
 use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
 use leb128::read::Error;
+use spin::MutexGuard;
+use std::cell::Cell;
+use std::collections::HashSet;
 use std::io::Read;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
+use std::sync::{LazyLock, OnceLock};
 use subsecond_types::JumpTable;
 use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{console, Window, WorkerGlobalScope};
-use crate::PatchError::WasmRelated;
+use crate::wasm_multithreading::CurrHotpatchingState::{Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking};
 
-pub struct WasmMultiThreadedHotPatchApplier {
+static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
+
+#[derive(Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq)]
+struct MyThreadId(usize);
+
+thread_local! {
+    static IS_MAIN_THREAD: bool = web_sys::window().is_some();
+
+    /// This thread id is for internally tracking what web worker haven't dynamically linked the patch
+    static THREAD_ID: MyThreadId = MyThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed));
+
+    static CURR_WEB_WORKER_HOTPATCH_INITIALIZED: Cell<bool> = Cell::new(false);
+}
+
+struct HotpatchEntry {
     jump_table: JumpTable,
     table_base: u64,
     memory_base: u64,
-    pending_web_worker_count: AtomicI32,
 }
+
+enum CurrHotpatchingState {
+    Idle,
+    MainThreadDynamicLinking,
+    WebWorkersDynamicLinking(WebWorkersDynamicLinkingState)
+}
+
+struct WebWorkersDynamicLinkingState {
+    hotpatch_entry: HotpatchEntry,
+    pending_thread_ids: HashSet<MyThreadId>,
+}
+
+struct GlobalHotpatchState {
+    /// The hotpatches that have already been done.
+    /// They will be re-dynamic-linked for each new web worker
+    hotpatched: Vec<HotpatchEntry>,
+    /// The hotpatch that's being done (waiting for web workers to dynamically link)
+    curr_state: CurrHotpatchingState,
+    /// When a new hotpatch comes before current hotpatch finishes, it's queued
+    pending_hotpatches: Vec<JumpTable>,
+    /// Collect all web worker thread ids
+    worker_thread_ids: HashSet<MyThreadId>,
+}
+
+/// In Wasm the main thread cannot block, so use spinlock instead of mutex.
+/// It will only lock briefly each time.
+static GLOBAL_HOTPATCH_STATE: LazyLock<spin::Mutex<GlobalHotpatchState>> = LazyLock::new(|| {
+    spin::Mutex::new(GlobalHotpatchState {
+        hotpatched: Vec::new(),
+        curr_state: Idle,
+        pending_hotpatches: Vec::new(),
+        worker_thread_ids: HashSet::new(),
+    })
+});
 
 /// In WebAssembly multi-threading, applying patch cannot be done in one-shot function call.
 /// Because currently the Wasm function table cannot be shared across threads.
@@ -31,8 +83,23 @@ pub struct WasmMultiThreadedHotPatchApplier {
 /// which is still in early stage. https://github.com/WebAssembly/shared-everything-threads
 pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
     mut jump_table: JumpTable,
-    pending_web_worker_count: u32,
-) -> Result<(WasmMultiThreadedHotPatchApplier, Module), PatchError> {
+) -> Result<(), PatchError> {
+    {
+        let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
+        match hotpatch_state.curr_state {
+            Idle => {
+                hotpatch_state.curr_state = MainThreadDynamicLinking;
+            }
+            _ => {
+                console::log_1(
+                    &"Received new hotpatch when previous hotpatch hasn't finished. Queue it.".into(),
+                );
+                hotpatch_state.pending_hotpatches.push(jump_table);
+                return Ok(());
+            }
+        }
+    }
+
     let funcs: Table = wasm_bindgen::function_table().unchecked_into();
     let table_base = funcs.length();
 
@@ -61,57 +128,37 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
     let memory: Memory = wasm_bindgen::memory().unchecked_into();
     memory.grow(page_count);
 
-    let applier = WasmMultiThreadedHotPatchApplier {
+    let entry = HotpatchEntry {
         jump_table,
         table_base: table_base as u64,
         memory_base: memory_base as u64,
-        pending_web_worker_count: AtomicI32::new(pending_web_worker_count as i32),
     };
 
-    applier.internal_per_thread_dynamic_link(&module).await;
+    entry.internal_per_thread_dynamic_link(&module).await;
 
-    Ok((applier, module))
+    {
+        let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
+
+        assert!(matches!(hotpatch_state.curr_state, MainThreadDynamicLinking), "curr_state is not MainThreadDynamicLinking");
+
+        hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
+            hotpatch_entry: entry,
+            pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
+        });
+
+        notify_web_workers_to_dynamic_link();
+    }
+
+    Ok(())
 }
 
-impl WasmMultiThreadedHotPatchApplier {
-    pub async unsafe fn dynamic_link_in_existing_web_worker(
-        &self,
-    ) -> Result<(Module, bool), PatchError> {
-        // each web worker will repeatedly fetch and compile Wasm module
-        // V8 has a caching mechanism so it will probably not waste performance
-        // https://v8.dev/blog/wasm-code-caching
-        let module = load_wasm_module(&self.jump_table).await;
+fn notify_web_workers_to_dynamic_link() {
+    todo!()
+}
 
-        self.internal_per_thread_dynamic_link(&module).await;
-
-        let prev_pending_web_worker_num =
-            self.pending_web_worker_count.fetch_sub(1, Ordering::SeqCst);
-
-        if prev_pending_web_worker_num < 1 {
-            panic!("`dynamic_link_in_existing_web_worker` called too many times.")
-        }
-
-        let done = if prev_pending_web_worker_num == 1 {
-            self.apply_change_to_jump_table();
-
-            true
-        } else {
-            false
-        };
-
-        Ok((module, done))
-    }
-
+impl HotpatchEntry {
     unsafe fn apply_change_to_jump_table(&self) {
         unsafe { commit_patch(self.jump_table.clone()) };
-    }
-
-    pub async unsafe fn on_new_web_worker_initialize(&self) -> Result<Module, PatchError> {
-        let module = load_wasm_module(&self.jump_table).await;
-
-        self.internal_per_thread_dynamic_link(&module).await;
-
-        Ok(module)
     }
 
     async unsafe fn internal_per_thread_dynamic_link(&self, wasm_module: &Module) {
@@ -280,7 +327,9 @@ fn read_leb_128_unsigned(buf: &mut &[u8]) -> Result<u64, PatchError> {
 fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError> {
     let dylink_section_arr = WebAssembly::Module::custom_sections(&module, "dylink.0");
     if dylink_section_arr.length() == 0 {
-        return Err(WasmRelated("The hotpatch WASM binary doesn't have dylink.0 custom section".to_string()))
+        return Err(WasmRelated(
+            "The hotpatch WASM binary doesn't have dylink.0 custom section".to_string(),
+        ));
     }
     let dylink_section: ArrayBuffer = dylink_section_arr.get(0).into();
     let dylink_section = Uint8Array::new(&dylink_section);
@@ -318,7 +367,7 @@ fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError
             None => {
                 return Err(WasmRelated("No memory info in dylink.0".to_string()));
             }
-            Some(v) => {v}
+            Some(v) => v,
         },
     })
 }
