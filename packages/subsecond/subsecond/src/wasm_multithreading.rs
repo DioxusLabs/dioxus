@@ -551,7 +551,7 @@ impl HotpatchEntry {
 async fn load_wasm_module(jump_table: &JumpTable) -> Module {
     let path = jump_table.lib.to_str().unwrap();
 
-    web_sys::console::info_1(&format!("Going to load wasm binary: {:?}", path).into());
+    web_sys::console::debug_1(&format!("Going to load wasm binary: {:?}", path).into());
 
     if !path.ends_with(".wasm") {
         panic!("The binary path in hotpatch message doesn't end with .wasm");
