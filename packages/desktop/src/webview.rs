@@ -1,4 +1,5 @@
-use crate::dom_thread::{VirtualDomEvent, VirtualDomHandle};
+use crate::app::MakeVirtualDom;
+use crate::dom_thread::{MainThreadCommand, VirtualDomEvent, VirtualDomHandle};
 use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
 use crate::{
@@ -35,6 +36,14 @@ pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
 
+    /// wry-bindgen state shared across all windows.
+    pub(crate) wry_bindgen: wry_bindgen::wry::WryBindgen,
+    /// Channel to send events to the VirtualDom (running in wry-bindgen thread).
+    pub(crate) dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
+    /// Channel to receive commands from the VirtualDom.
+    /// Uses futures channel for proper async polling with wakers.
+    pub(crate) dom_command_rx: futures_channel::mpsc::UnboundedReceiver<MainThreadCommand>,
+
     /// Waker that sends Poll events to the event loop when async work completes.
     waker: Waker,
 
@@ -55,7 +64,11 @@ impl WebviewInstance {
     ///
     /// The VirtualDom is already running in the wry-bindgen thread (started in App::new).
     /// This webview connects to it via the shared channels in SharedContext.
-    pub(crate) fn new(mut cfg: Config, shared: Rc<SharedContext>) -> WebviewInstance {
+    pub(crate) fn new(
+        mut cfg: Config,
+        shared: Rc<SharedContext>,
+        make_dom: MakeVirtualDom,
+    ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
         // tao makes small windows for some reason, make them bigger on desktop
@@ -82,6 +95,50 @@ impl WebviewInstance {
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
+
+        let proxy = shared.proxy.clone();
+
+        // Create channels for VirtualDom communication
+        // The VirtualDom runs in the wry-bindgen thread, communicating via these channels
+        let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
+        // Use futures channel for proper async polling with wakers on the main thread
+        let (dom_command_tx, dom_command_rx) = futures_channel::mpsc::unbounded();
+
+        // Initialize wry-bindgen runtime
+        // The app future runs the VirtualDom loop
+        let wry_bindgen = wry_bindgen::start_app(
+            {
+                let proxy = proxy.clone();
+                move |event| {
+                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
+                        crate::ipc::WryBindgenEventWrapper::new(event),
+                    ));
+                }
+            },
+            // App closure - VirtualDom runs here
+            {
+                let proxy = proxy.clone();
+                let window_id = window.id();
+                move || {
+                    crate::dom_thread::run_virtual_dom(
+                        make_dom,
+                        dom_event_rx,
+                        dom_command_tx,
+                        proxy,
+                        window_id,
+                    )
+                }
+            },
+            // Async runtime starter
+            |future| {
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(future);
+            },
+        )
+        .expect("Failed to initialize wry-bindgen");
 
         // TODO: restore on dom thread or remove dom access
         // if let Some(on_build) = cfg.on_window.as_mut() {
@@ -112,12 +169,12 @@ impl WebviewInstance {
 
         // Use shared channels for VirtualDom communication
         // The VirtualDom is already running in the wry-bindgen thread
-        let event_tx = shared.dom_event_tx.clone();
+        let event_tx = dom_event_tx.clone();
 
         let edits = WebviewEdits::new(edit_queue.clone());
 
         // Create wry-bindgen protocol handler wrapped in Rc for sharing
-        let wry_bg_handler = shared.wry_bindgen.create_protocol_handler("dioxus", {
+        let wry_bg_handler = wry_bindgen.create_protocol_handler("dioxus", {
             let proxy = shared.proxy.clone();
             move |event| {
                 let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
@@ -396,6 +453,9 @@ impl WebviewInstance {
             dom_handle,
             edits,
             desktop_context,
+            wry_bindgen,
+            dom_event_tx,
+            dom_command_rx,
             waker,
             _menu: menu,
             _web_context: web_context,
@@ -426,7 +486,7 @@ impl WebviewInstance {
     ///
     /// Uses the webview's waker to register for wake-up when commands arrive.
     /// This ensures the event loop is woken even if called before commands are ready.
-    pub fn poll_dom_commands(&mut self, shared: &SharedContext) {
+    pub fn poll_dom_commands(&mut self) {
         use crate::dom_thread::MainThreadCommand;
         use futures_util::StreamExt;
         use std::task::Poll;
@@ -434,7 +494,7 @@ impl WebviewInstance {
         // Collect commands first to avoid borrow conflicts
         let commands: Vec<MainThreadCommand> = {
             let mut cx = std::task::Context::from_waker(&self.waker);
-            let mut rx = shared.dom_command_rx.borrow_mut();
+            let rx = &mut self.dom_command_rx;
             let mut commands = Vec::new();
 
             loop {
@@ -501,20 +561,21 @@ impl WebviewInstance {
 ///
 /// Note: With wry-bindgen integration, all webviews share the same VirtualDom running in the wry-bindgen thread.
 pub(crate) struct PendingWebview {
+    dom: MakeVirtualDom,
     cfg: Config,
     sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
 impl PendingWebview {
-    pub(crate) fn new(cfg: Config) -> (Self, PendingDesktopContext) {
+    pub(crate) fn new(cfg: Config, dom: MakeVirtualDom) -> (Self, PendingDesktopContext) {
         let (sender, receiver) = futures_channel::oneshot::channel();
-        let webview = Self { cfg, sender };
+        let webview = Self { cfg, sender, dom };
         let pending = PendingDesktopContext { receiver };
         (webview, pending)
     }
 
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, shared.clone());
+        let window = WebviewInstance::new(self.cfg, shared.clone(), self.dom);
 
         // Return the desktop context to the pending future
         _ = self.sender.send(window.desktop_context.clone());

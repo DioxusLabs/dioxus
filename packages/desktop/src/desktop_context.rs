@@ -1,14 +1,15 @@
 use crate::{
-    app::SharedContext,
+    app::{MakeVirtualDom, SharedContext},
     assets::AssetHandlerRegistry,
     file_upload::NativeFileHover,
-    ipc::UserWindowEvent,
+    ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{Callback, Element};
+use dioxus_core::{Callback, Element, VirtualDom};
 use std::{
+    any::Any,
     cell::Cell,
     future::{Future, IntoFuture},
     pin::Pin,
@@ -17,7 +18,7 @@ use std::{
 };
 use tao::{
     event::Event,
-    event_loop::EventLoopWindowTarget,
+    event_loop::{EventLoopProxy, EventLoopWindowTarget},
     window::{Fullscreen as WryFullscreen, Window, WindowId},
 };
 use wry::{RequestAsyncResponder, WebView};
@@ -41,6 +42,102 @@ pub type DesktopContext = Rc<DesktopService>;
 /// The problem without this is that the tao window is never dropped and therefore cannot be closed.
 /// This was due to the Rc that had still references because of multiple copies when creating a webview.
 pub type WeakDesktopContext = Weak<DesktopService>;
+
+/// A proxy to a [`DesktopService`] that can be used from any thread.
+///
+/// This type is `Send + Sync` and can be used to run closures on the main thread
+/// with access to the [`DesktopService`]. This is useful for scenarios where you need
+/// to interact with the desktop window from a background thread.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let proxy = window().proxy();
+///
+/// // Can be sent to another thread
+/// std::thread::spawn(move || {
+///     let result = proxy.run_with_desktop_service(|desktop| {
+///         desktop.window.title().to_string()
+///     });
+///     println!("Window title: {}", result);
+/// });
+/// ```
+#[derive(Clone)]
+pub struct DesktopServiceProxy {
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
+}
+
+impl DesktopServiceProxy {
+    /// Create a new [`DesktopServiceProxy`] from an event loop proxy.
+    ///
+    /// This creates a proxy without a specific window ID. To run closures with
+    /// a specific window's [`DesktopService`], use [`with_window`](Self::with_window)
+    /// to set the window ID first.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let proxy = DesktopServiceProxy::new(event_loop_proxy);
+    /// let proxy_with_window = proxy.with_window(window_id);
+    /// ```
+    pub fn new(proxy: EventLoopProxy<UserWindowEvent>, window_id: WindowId) -> Self {
+        Self { proxy, window_id }
+    }
+
+    /// Run a closure on the main thread with access to the [`DesktopService`].
+    ///
+    /// This method sends the closure to the main event loop thread, waits for it to execute,
+    /// and returns the result. The closure runs synchronously from the caller's perspective.
+    ///
+    /// # Type Parameters
+    ///
+    /// * `T` - The return type of the closure. Must be `Send + 'static`.
+    /// * `F` - The closure type.
+    ///
+    /// # Panics
+    ///
+    /// Panics if:
+    /// - No window ID has been set (use [`with_window`](Self::with_window) first)
+    /// - The event loop has been dropped
+    /// - The result type doesn't match (internal error)
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let proxy = window().proxy();
+    ///
+    /// let title = proxy.run_with_desktop_service(|desktop| {
+    ///     desktop.window.title().to_string()
+    /// });
+    /// ```
+    pub fn run_with_desktop_service<T, F>(&self, f: F) -> T
+    where
+        T: Send + 'static,
+        F: FnOnce(&DesktopService) -> T + Send + 'static,
+    {
+        let window_id = self.window_id;
+
+        let (sender, receiver) = std::sync::mpsc::sync_channel(1);
+
+        let callback: Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send> =
+            Box::new(move |desktop| Box::new(f(desktop)) as Box<dyn Any + Send>);
+
+        let wrapper = DesktopServiceCallbackWrapper::new(callback, sender);
+
+        self.proxy
+            .send_event(UserWindowEvent::RunWithDesktopService {
+                id: window_id,
+                callback: wrapper,
+            })
+            .expect("Event loop has been dropped");
+
+        let result = receiver.recv().expect("Failed to receive result");
+        *result
+            .downcast::<T>()
+            .expect("Result type mismatch - this should never happen")
+    }
+}
 
 /// An imperative interface to the current window.
 ///
@@ -132,11 +229,12 @@ impl DesktopService {
     // Related issues:
     // - https://github.com/tauri-apps/wry/issues/583
     // - https://github.com/DioxusLabs/dioxus/issues/3080
-    pub fn new_window(&self, _component: fn() -> Element, cfg: Config) -> PendingDesktopContext {
-        // Note: With wry-bindgen integration, all windows share the same VirtualDom.
-        // The `component` parameter is currently unused - multi-window with separate
-        // VirtualDoms will require additional architecture changes.
-        let (window, context) = PendingWebview::new(cfg);
+    pub fn new_window(
+        &self,
+        dom: impl FnOnce() -> VirtualDom + Send + 'static,
+        cfg: Config,
+    ) -> PendingDesktopContext {
+        let (window, context) = PendingWebview::new(cfg, Box::new(dom));
 
         self.shared
             .proxy
@@ -283,6 +381,32 @@ impl DesktopService {
     /// Returns `None` if the handler did not exist.
     pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
         self.asset_handlers.remove_handler(name).map(|_| ())
+    }
+
+    /// Get a proxy to this [`DesktopService`] that can be used from any thread.
+    ///
+    /// The proxy allows running closures on the main thread with access to the
+    /// [`DesktopService`]. This is useful for scenarios where you need to interact
+    /// with the desktop window from a background thread.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let proxy = window().proxy();
+    ///
+    /// // Can be sent to another thread
+    /// std::thread::spawn(move || {
+    ///     let result = proxy.run_with_desktop_service(|desktop| {
+    ///         desktop.window.title().to_string()
+    ///     });
+    ///     println!("Window title: {}", result);
+    /// });
+    /// ```
+    pub fn proxy(&self) -> DesktopServiceProxy {
+        DesktopServiceProxy {
+            proxy: self.shared.proxy.clone(),
+            window_id: self.window.id(),
+        }
     }
 
     /// Push an objc view to the window

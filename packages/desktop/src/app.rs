@@ -28,7 +28,9 @@ use tao::{
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
-    // iOS panics if we create a window before the event loop is started, so we toss the config into a cell.
+    // move the props into a cell so we can pop it out later to create the first window
+    // iOS panics if we create a window before the event loop is started, so we toss them into a cell
+    pub(crate) unmounted_dom: Cell<Option<MakeVirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -54,53 +56,16 @@ pub(crate) struct SharedContext {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
-    /// wry-bindgen state shared across all windows.
-    pub(crate) wry_bindgen: wry_bindgen::wry::WryBindgen,
-    /// Channel to send events to the VirtualDom (running in wry-bindgen thread).
-    pub(crate) dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
-    /// Channel to receive commands from the VirtualDom.
-    /// Uses futures channel for proper async polling with wakers.
-    pub(crate) dom_command_rx: RefCell<futures_channel::mpsc::UnboundedReceiver<MainThreadCommand>>,
 }
 
 impl App {
-    pub fn new(mut cfg: Config, make_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+    pub fn new(mut cfg: Config, dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = cfg
             .event_loop
             .take()
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let proxy = event_loop.create_proxy();
-
-        // Create channels for VirtualDom communication
-        // The VirtualDom runs in the wry-bindgen thread, communicating via these channels
-        let (dom_event_tx, dom_event_rx) = tokio::sync::mpsc::unbounded_channel();
-        // Use futures channel for proper async polling with wakers on the main thread
-        let (dom_command_tx, dom_command_rx) = futures_channel::mpsc::unbounded();
-
-        // Initialize wry-bindgen runtime
-        // The app future runs the VirtualDom loop
-        let wry_bindgen = wry_bindgen::start_app(
-            {
-                let proxy = proxy.clone();
-                move |event| {
-                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
-                        crate::ipc::WryBindgenEventWrapper::new(event),
-                    ));
-                }
-            },
-            // App closure - VirtualDom runs here
-            move || crate::dom_thread::run_virtual_dom(make_dom, dom_event_rx, dom_command_tx),
-            // Async runtime starter
-            |future| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(future);
-            },
-        )
-        .expect("Failed to initialize wry-bindgen");
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -110,6 +75,7 @@ impl App {
             control_flow: ControlFlow::Wait,
             float_all: false,
             show_devtools: false,
+            unmounted_dom: Cell::new(Some(dom)),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -118,9 +84,6 @@ impl App {
                 proxy,
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
-                wry_bindgen,
-                dom_event_tx,
-                dom_command_rx: RefCell::new(dom_command_rx),
             }),
         };
 
@@ -284,8 +247,10 @@ impl App {
     }
 
     pub fn handle_start_cause_init(&mut self) {
-        // VirtualDom is already running in the wry-bindgen thread (started in App::new)
-        // We just need to create the webview to display it
+        let virtual_dom = self
+            .unmounted_dom
+            .take()
+            .expect("Virtualdom should be set before initialization");
         #[allow(unused_mut)]
         let mut cfg = self
             .cfg
@@ -300,7 +265,7 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, self.shared.clone());
+        let webview = WebviewInstance::new(cfg, self.shared.clone(), virtual_dom);
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -433,7 +398,7 @@ impl App {
     pub fn poll_all_webviews(&mut self) {
         for webview in self.webviews.values_mut() {
             webview.poll_edits_flushed();
-            webview.poll_dom_commands(&self.shared);
+            webview.poll_dom_commands();
         }
     }
 
@@ -442,7 +407,7 @@ impl App {
     pub fn poll_window(&mut self, id: tao::window::WindowId) {
         if let Some(webview) = self.webviews.get_mut(&id) {
             webview.poll_edits_flushed();
-            webview.poll_dom_commands(&self.shared);
+            webview.poll_dom_commands();
         }
     }
 
@@ -456,7 +421,7 @@ impl App {
         // We need to collect webviews to avoid borrowing issues
         let webview_refs: Vec<_> = self.webviews.values().collect();
         if let Some(webview) = webview_refs.first() {
-            if let Some(status) = self.shared.wry_bindgen.handle_user_event(event, |script| {
+            if let Some(status) = webview.wry_bindgen.handle_user_event(event, |script| {
                 let _ = webview.desktop_context.webview.evaluate_script(script);
             }) {
                 if status != 0 {

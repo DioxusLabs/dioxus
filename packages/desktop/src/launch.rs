@@ -95,8 +95,17 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
 
                 // wry-bindgen IPC event
                 UserWindowEvent::WryBindgenEvent(wrapper) => {
-                    if let Some(wry_event) = wrapper.take() {
-                        app.handle_wry_bindgen_event(wry_event);
+                    let wry_event = wrapper.take();
+                    app.handle_wry_bindgen_event(wry_event);
+                }
+
+                // Run a closure with DesktopService access on the main thread
+                UserWindowEvent::RunWithDesktopService { id, callback } => {
+                    if let Some(inner) = callback.take() {
+                        if let Some(webview) = app.webviews.get(&id) {
+                            let result = (inner.callback)(&webview.desktop_context);
+                            let _ = inner.sender.send(result);
+                        }
                     }
                 }
             },

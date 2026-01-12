@@ -4,13 +4,14 @@
 //! responsiveness. The main thread continues to run the tao event loop and manage
 //! windows, while VirtualDom polling and rendering happens on separate threads.
 
-use crate::document::DesktopDocument;
+use crate::desktop_context::DesktopServiceProxy;
+use crate::ipc::UserWindowEvent;
 use dioxus_core::{provide_context, ScopeId, VirtualDom};
-use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
 use std::rc::Rc;
+use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc as tokio_mpsc;
 
 /// Events sent from the main thread to the VirtualDom thread.
@@ -63,16 +64,19 @@ pub async fn run_virtual_dom<F>(
     make_dom: F,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    proxy: EventLoopProxy<UserWindowEvent>,
+    window_id: WindowId,
 ) where
     F: FnOnce() -> VirtualDom + Send + 'static,
 {
     let dom = make_dom();
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    // let document_provider: Rc<dyn Document> = Rc::new(DesktopDocument::default());
+    let desktop_service_proxy = DesktopServiceProxy::new(proxy, window_id);
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
-        // provide_context(document_provider);
+        println!("Providing DesktopServiceProxy in VirtualDom context");
+        provide_context(desktop_service_proxy);
     });
     run_virtual_dom_loop(dom, event_rx, command_tx).await;
 }

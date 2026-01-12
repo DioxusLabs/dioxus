@@ -49,7 +49,8 @@ pub mod trayicon;
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use desktop_context::{
-    window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
+    window, DesktopContext, DesktopService, DesktopServiceProxy, PendingDesktopContext,
+    WeakDesktopContext,
 };
 pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
