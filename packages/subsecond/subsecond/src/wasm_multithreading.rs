@@ -32,23 +32,20 @@ use crate::wasm_multithreading::CurrHotpatchingState::{
 };
 use crate::PatchError::WasmRelated;
 use crate::{commit_patch, wasm_is_multi_threaded, PatchError};
-use futures::lock::Mutex;
 use futures::SinkExt;
 use js_sys::WebAssembly::{Memory, Module, Table};
-use js_sys::{ArrayBuffer, Object, Promise, Reflect, SharedArrayBuffer, Uint8Array, WebAssembly};
-use leb128::read::Error;
-use spin::MutexGuard;
+use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::io::Read;
-use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-use std::sync::{Arc, LazyLock, OnceLock};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, LazyLock};
 use subsecond_types::JumpTable;
-use wasm_bindgen::closure::{Closure, WasmClosureFnOnce};
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::closure::Closure;
 use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
-use web_sys::{console, BroadcastChannel, Event, MessageEvent, Window, WorkerGlobalScope};
+use web_sys::{console, BroadcastChannel, MessageEvent, Window, WorkerGlobalScope};
 
 /// It will set up `BroadcastChannel`s for hotpatching communication.
 ///
@@ -72,7 +69,7 @@ async fn inner_init_hotpatch_for_current_thread() {
                 "Current web worker {:?} has already initialized hotpatch",
                 get_my_thread_id()
             )
-                .into(),
+            .into(),
         );
     }
 
@@ -124,7 +121,9 @@ async fn inner_init_hotpatch_for_current_thread() {
     let already_hotpatched: Vec<Arc<HotpatchEntry>> = global_hotpatch_state.hotpatched.clone();
 
     if !is_main_thread() {
-        global_hotpatch_state.worker_thread_ids.insert(get_my_thread_id());
+        global_hotpatch_state
+            .worker_thread_ids
+            .insert(get_my_thread_id());
     }
 
     // unlock
@@ -136,7 +135,6 @@ async fn inner_init_hotpatch_for_current_thread() {
 
         entry.internal_per_thread_dynamic_link(&module).await;
     }
-
 }
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
@@ -209,9 +207,7 @@ static GLOBAL_HOTPATCH_STATE: LazyLock<spin::Mutex<GlobalHotpatchState>> = LazyL
 ///
 /// One-shot hotpatch in Wasm multithreading is possible after shared-everything-threads proposal,
 /// which is still in early stage. https://github.com/WebAssembly/shared-everything-threads
-pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
-    jump_table: JumpTable,
-) {
+pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpTable) {
     {
         let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
         match hotpatch_state.curr_state {
@@ -425,7 +421,9 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                     );
                 }
 
-                console::debug_1(&format!("Web worker {:?} finished dynamic linking", my_thread_id).into());
+                console::debug_1(
+                    &format!("Web worker {:?} finished dynamic linking", my_thread_id).into(),
+                );
 
                 web_workers_dynamic_linking_state
                     .pending_thread_ids
