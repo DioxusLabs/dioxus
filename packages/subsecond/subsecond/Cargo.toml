@@ -37,4 +37,5 @@ experimental_wasm_multithreading_support = [
     "web-sys/MessageEvent",
     "web-sys/WorkerGlobalScope",
     "web-sys/BroadcastChannel",
+    "web-sys/MessageEvent",
 ]

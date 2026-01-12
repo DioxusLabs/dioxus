@@ -264,13 +264,17 @@ pub async fn init_hotpatch_for_current_thread() {
     let mut hotpatch_finish_callback: Option<JsValue> = None;
 
     if is_main_thread() {
-        let closure = Closure::new(on_main_thread_receive_hotpatch_finish).into_js_value();
-        hotpatch_finish_callback = Some(closure.clone());
-        hotpatch_finish_channel.set_onmessage(Some(&closure.into()));
+        let closure: Closure<dyn Fn(&MessageEvent)> =
+            Closure::new(move |e: &MessageEvent| on_main_thread_receive_hotpatch_finish(e));
+        let closure_js = closure.into_js_value();
+        hotpatch_finish_callback = Some(closure_js.clone());
+        hotpatch_finish_channel.set_onmessage(Some(&closure_js.into()));
     } else {
-        let closure = Closure::new(on_worker_should_dynamic_link).into_js_value();
-        to_hotpatch_callback = Some(closure.clone());
-        to_hotpatch_channel.set_onmessage(Some(&closure.into()));
+        let closure: Closure<dyn Fn(&MessageEvent)> =
+            Closure::new(move |e: &MessageEvent| on_worker_should_dynamic_link(e));
+        let closure_js = closure.into_js_value();
+        to_hotpatch_callback = Some(closure_js.clone());
+        to_hotpatch_channel.set_onmessage(Some(&closure_js.into()));
     }
 
     CHANNEL_LOCAL_STATE.with(|r| {
@@ -425,8 +429,6 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
             notify_main_thread_hotpatch_finish();
         }
     });
-
-    todo!()
 }
 
 impl HotpatchEntry {
