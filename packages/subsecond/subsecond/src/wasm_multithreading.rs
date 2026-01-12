@@ -58,6 +58,14 @@ use web_sys::{console, BroadcastChannel, Event, MessageEvent, Window, WorkerGlob
 /// (If worker keeps running a scheduler loop, it cannot run `BroadcastChannel` callback)
 #[wasm_bindgen]
 pub async fn init_hotpatch_for_current_thread() {
+    if !cfg!(debug_assertions) {
+        return;
+    }
+
+    inner_init_hotpatch_for_current_thread().await;
+}
+
+async fn inner_init_hotpatch_for_current_thread() {
     if CURR_THREAD_HOTPATCH_INITIALIZED.get() {
         console::log_1(
             &format!(
@@ -66,7 +74,6 @@ pub async fn init_hotpatch_for_current_thread() {
             )
                 .into(),
         );
-        return;
     }
 
     CURR_THREAD_HOTPATCH_INITIALIZED.set(true);
@@ -76,9 +83,12 @@ pub async fn init_hotpatch_for_current_thread() {
         "init_hotpatch_for_current_thread can only be used in multi-threading"
     );
 
-    // Lock it.
+    console::log_1(&format!("Thread {:?} initializing", get_my_thread_id()).into());
+
     let mut global_hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
 
+    // The BroadcastChannel starts receiving message upon creation,
+    // so it needs to be created under lock
     let to_hotpatch_channel: BroadcastChannel =
         BroadcastChannel::new(CHANNEL_WORKER_SHOULD_DYNAMIC_LINK).expect("creating channel 1");
 
@@ -113,15 +123,18 @@ pub async fn init_hotpatch_for_current_thread() {
 
     let already_hotpatched: Vec<Arc<HotpatchEntry>> = global_hotpatch_state.hotpatched.clone();
 
+    global_hotpatch_state.worker_thread_ids.insert(get_my_thread_id());
+
     // unlock
     drop(global_hotpatch_state);
 
-    // the new web worker need to dynamic-link the hotpatches before its launch
+    // the new web worker needs to dynamic-link the hotpatches before its launch
     for entry in already_hotpatched {
         let module = load_wasm_module(&entry.jump_table).await;
 
         entry.internal_per_thread_dynamic_link(&module).await;
     }
+
 }
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
