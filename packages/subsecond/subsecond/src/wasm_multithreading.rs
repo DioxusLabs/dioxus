@@ -1,14 +1,41 @@
 #![cfg(feature = "experimental_wasm_multithreading_support")]
 #![cfg(target_arch = "wasm32")]
 
+//! Currently, Wasm multithreading in browser has one important limitations: Wasm function table cannot be shared.
+//!
+//! Background: Wasm has no native function pointer, only function references. Function reference cannot be directly put into linear memory. Table is array-like thing that can hold function references. The function pointers are actually an index corresponding to a function reference in table.
+//!
+//! (Note that the function index here means index in table, different to function index in Wasm binary)
+//!
+//! Currently, only the Wasm linear memory (backed by SharedArrayBuffer) can be shared across threads. Any other thing, including `WebAssembly.Instance` and tables, cannot be shared.
+//!
+//! Each web worker separately initialize their own `WebAssembly.Instance` and tables.
+//!
+//! Hotpatching requires dynamic linking. Dynamic linking requires loading new Wasm binary, creating new instance, and putting new functions into table. In Wasm multi-threading, doing dynamic linking requires all web workers to cooporatively dynamic link into their own tables. This is harder than in single-threaded Wasm.
+//!
+//! Also, the tables in all threads must be kept in-sync. Because the function pointers(indices) are shared across threads. All threads must dynamic link same Wasm binaries in the same order.
+//!
+//! The global jump table only updates after all web workers have dynamically linked the new code. (If not, the web worker cannot execute function pointers of new function).
+//!
+//! The multi-threaded dynamic linking is an async process now. If new hotpatch comes before current hotpatch finishes, it needs to be queued.
+//!
+//! The design:
+//!
+//! - Use `BroadcastChannel` to pass message of hotpatching. It just requires each web worker to run a function on init to set up. (It's less intrusive than directly sending message or passing a `MessageChannel` on web worker init.)
+//! - The hotpatch can only be triggered in main thread. When it triggers, send a message to workers via `BroadcastChannel`
+//! - Add thread id for tracking what threads hasn't dynamic linked. Once all threads dynamic linked, update global jump table then use another `BroadcastChannel` to notify main thread. (Use two broadcast channels to avoid the finishing message to be processed by unrelated web workers.) The main thread will do remaining queued hotpatches.
+//!
+//!
+
 use crate::wasm_multithreading::CurrHotpatchingState::{
     Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking,
 };
 use crate::PatchError::WasmRelated;
 use crate::{commit_patch, PatchError};
 use futures::lock::Mutex;
+use futures::SinkExt;
 use js_sys::WebAssembly::{Memory, Module, Table};
-use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
+use js_sys::{ArrayBuffer, Object, Promise, Reflect, SharedArrayBuffer, Uint8Array, WebAssembly};
 use leb128::read::Error;
 use spin::MutexGuard;
 use std::cell::{Cell, RefCell};
@@ -16,10 +43,9 @@ use std::collections::HashSet;
 use std::io::Read;
 use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
-use futures::SinkExt;
 use subsecond_types::JumpTable;
-use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen::closure::{Closure, WasmClosureFnOnce};
+use wasm_bindgen::{JsCast, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{console, BroadcastChannel, Event, MessageEvent, Window, WorkerGlobalScope};
 
@@ -93,8 +119,8 @@ static GLOBAL_HOTPATCH_STATE: LazyLock<spin::Mutex<GlobalHotpatchState>> = LazyL
 ///
 /// One-shot hotpatch in Wasm multithreading is possible after shared-everything-threads proposal,
 /// which is still in early stage. https://github.com/WebAssembly/shared-everything-threads
-pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
-    mut jump_table: JumpTable,
+pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
+    jump_table: JumpTable,
 ) -> Result<(), PatchError> {
     {
         let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
@@ -115,6 +141,34 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
             }
         }
     }
+
+    let entry = main_thread_prepare_and_hotpatch(jump_table).await;
+
+    {
+        let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
+
+        assert!(
+            matches!(hotpatch_state.curr_state, MainThreadDynamicLinking),
+            "curr_state is not MainThreadDynamicLinking"
+        );
+
+        hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
+            hotpatch_entry: Arc::new(entry),
+            pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
+        });
+
+        notify_web_workers_to_dynamic_link();
+    }
+
+    Ok(())
+}
+
+async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> HotpatchEntry {
+    assert!(is_main_thread());
+    assert!(
+        CURR_THREAD_HOTPATCH_INITIALIZED.get(),
+        "main thread hasn't called init_hotpatch_for_current_thread"
+    );
 
     let funcs: Table = wasm_bindgen::function_table().unchecked_into();
     let table_base = funcs.length();
@@ -152,23 +206,7 @@ pub async unsafe fn wasm_multithreaded_hotpatch_apply_begin(
 
     entry.internal_per_thread_dynamic_link(&module).await;
 
-    {
-        let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
-
-        assert!(
-            matches!(hotpatch_state.curr_state, MainThreadDynamicLinking),
-            "curr_state is not MainThreadDynamicLinking"
-        );
-
-        hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
-            hotpatch_entry: Arc::new(entry),
-            pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
-        });
-
-        notify_web_workers_to_dynamic_link();
-    }
-
-    Ok(())
+    entry
 }
 
 /// sent from main thread to workers, to tell them to dynamic link
@@ -178,10 +216,13 @@ static CHANNEL_WORKER_SHOULD_DYNAMIC_LINK: &str = "__subsecond_worker_should_dyn
 static CHANNEL_WORKER_DYNAMIC_LINKED: &str = "__subsecond_worker_dynamic_linked";
 
 struct ChannelThreadLocalState {
-    worker_should_dynamic_link_channel: BroadcastChannel,
-    worker_should_dynamic_link_callback: Option<JsValue>,
-    worker_dynamic_linked_channel: BroadcastChannel,
-    worker_dynamic_linked_callback: Option<JsValue>,
+    /// When main thread starts a new hotpatch, send a message to this channel
+    to_hotpatch_channel: BroadcastChannel,
+    to_hotpatch_callback: Option<JsValue>,
+    /// When the last pending worker finishes dynaic link, send a message to this channel
+    hotpatch_finish_channel: BroadcastChannel,
+    hotpatch_finish_callback: Option<JsValue>,
+    // Why two `BroadcastChannel`s instead of one: the finishing message should be processed by only main thread. using one `BroadcastChannel`` will make all workers process that message needlessly.
 }
 
 thread_local! {
@@ -191,7 +232,7 @@ thread_local! {
 /// It will set up `BroadcastChannel`s for hotpatching communication.
 /// Note: dynamic linking happens in worker's event loop. The worker cannot process one message for too long time.
 /// (If worker keeps running a scheduler loop, it cannot run `BroadcastChannel` callback)
-pub fn init_hotpatch_for_current_thread() {
+pub async fn init_hotpatch_for_current_thread() {
     if CURR_THREAD_HOTPATCH_INITIALIZED.get() {
         console::log_1(
             &format!(
@@ -205,48 +246,186 @@ pub fn init_hotpatch_for_current_thread() {
 
     CURR_THREAD_HOTPATCH_INITIALIZED.set(true);
 
-    let worker_should_dynamic_link_channel: BroadcastChannel =
-        BroadcastChannel::new(CHANNEL_WORKER_SHOULD_DYNAMIC_LINK)
-            .expect("creating channel 1");
+    assert!(
+        is_multithreaded(),
+        "init_hotpatch_for_current_thread can only be used in multi-threading"
+    );
 
-    let worker_dynamic_linked_channel: BroadcastChannel =
-        BroadcastChannel::new(CHANNEL_WORKER_DYNAMIC_LINKED)
-            .expect("creating channel 2");
+    // Lock it.
+    let mut global_hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
 
-    let mut worker_should_dynamic_link_callback: Option<JsValue> = None;
-    let mut worker_dynamic_linked_callback: Option<JsValue> = None;
+    let to_hotpatch_channel: BroadcastChannel =
+        BroadcastChannel::new(CHANNEL_WORKER_SHOULD_DYNAMIC_LINK).expect("creating channel 1");
+
+    let hotpatch_finish_channel: BroadcastChannel =
+        BroadcastChannel::new(CHANNEL_WORKER_DYNAMIC_LINKED).expect("creating channel 2");
+
+    let mut to_hotpatch_callback: Option<JsValue> = None;
+    let mut hotpatch_finish_callback: Option<JsValue> = None;
 
     if is_main_thread() {
-        let closure = Closure::new(on_main_thread_receive_worker_dynamic_linked).into_js_value();
-        worker_dynamic_linked_callback = Some(closure.clone());
-        worker_dynamic_linked_channel.set_onmessage(Some(&closure.into()));
+        let closure = Closure::new(on_main_thread_receive_hotpatch_finish).into_js_value();
+        hotpatch_finish_callback = Some(closure.clone());
+        hotpatch_finish_channel.set_onmessage(Some(&closure.into()));
     } else {
         let closure = Closure::new(on_worker_should_dynamic_link).into_js_value();
-        worker_should_dynamic_link_callback = Some(closure.clone());
-        worker_should_dynamic_link_channel.set_onmessage(Some(&closure.into()));
+        to_hotpatch_callback = Some(closure.clone());
+        to_hotpatch_channel.set_onmessage(Some(&closure.into()));
     }
 
     CHANNEL_LOCAL_STATE.with(|r| {
         *r.borrow_mut() = Some(ChannelThreadLocalState {
-            worker_dynamic_linked_channel,
-            worker_dynamic_linked_callback,
-            worker_should_dynamic_link_channel,
-            worker_should_dynamic_link_callback,
+            hotpatch_finish_channel: hotpatch_finish_channel.clone(),
+            hotpatch_finish_callback: hotpatch_finish_callback.clone(),
+            to_hotpatch_channel: to_hotpatch_channel.clone(),
+            to_hotpatch_callback: to_hotpatch_callback.clone(),
         });
     });
 
-    // TODO handle existing hotpatches
+    let already_hotpatched: Vec<Arc<HotpatchEntry>> = global_hotpatch_state.hotpatched.clone();
+
+    // unlock
+    drop(global_hotpatch_state);
+
+    // the new web worker need to dynamic-link the hotpatches before its launch
+    for entry in already_hotpatched {
+        let module = load_wasm_module(&entry.jump_table).await;
+
+        entry.internal_per_thread_dynamic_link(&module).await;
+    }
+}
+
+fn is_multithreaded() -> bool {
+    wasm_bindgen::memory()
+        .unchecked_into::<Memory>()
+        .buffer()
+        .dyn_into::<SharedArrayBuffer>()
+        .is_ok()
 }
 
 fn notify_web_workers_to_dynamic_link() {
-    todo!()
+    assert!(is_main_thread());
+
+    CHANNEL_LOCAL_STATE.with(|s| {
+        let borrow = s.borrow();
+        let s = borrow
+            .as_ref()
+            .expect("channel local state not initialized");
+
+        // message content doesn't matter
+        s.to_hotpatch_channel
+            .post_message(&"worker should dynamic link".into())
+            .expect("send failed");
+    })
 }
 
-fn on_main_thread_receive_worker_dynamic_linked(event: &MessageEvent) {
-    todo!()
+fn on_main_thread_receive_hotpatch_finish(event: &MessageEvent) {
+    assert!(is_main_thread());
+
+    let mut state = GLOBAL_HOTPATCH_STATE.lock();
+
+    let web_worker_dynamic_linking_state = match state.curr_state {
+        WebWorkersDynamicLinking(ref web_workers_dynamic_linking_state) => {
+            web_workers_dynamic_linking_state
+        }
+        _ => {
+            panic!("on_main_thread_receive_hotpatch_finish in wrong state")
+        }
+    };
+
+    assert!(web_worker_dynamic_linking_state
+        .pending_thread_ids
+        .is_empty());
+
+    unsafe {
+        web_worker_dynamic_linking_state
+            .hotpatch_entry
+            .apply_change_to_jump_table();
+    }
+
+    state.curr_state = Idle;
+
+    if !state.pending_hotpatches.is_empty() {
+        // transfer state to next hotpatch when holding lock
+        let next_to_patch = state.pending_hotpatches.remove(0);
+
+        state.curr_state = MainThreadDynamicLinking;
+
+        wasm_bindgen_futures::spawn_local(async move {
+            main_thread_prepare_and_hotpatch(next_to_patch);
+        });
+    }
+}
+
+fn notify_main_thread_hotpatch_finish() {
+    CHANNEL_LOCAL_STATE.with(|s| {
+        let borrowed = s.borrow();
+
+        borrowed
+            .as_ref()
+            .expect("channel not initialized")
+            .hotpatch_finish_channel
+            .post_message(&"hotpatch finished in web workers".into())
+            .expect("send failed");
+    })
 }
 
 fn on_worker_should_dynamic_link(event: &MessageEvent) {
+    assert!(!is_main_thread());
+
+    let state = GLOBAL_HOTPATCH_STATE.lock();
+
+    let entry = match &state.curr_state {
+        WebWorkersDynamicLinking(web_workers_dynamic_linking_state) => {
+            web_workers_dynamic_linking_state.hotpatch_entry.clone()
+        }
+        _ => {
+            panic!("Wrong state in on_worker_should_dynamic_link")
+        }
+    };
+
+    // unlock
+    drop(state);
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let wasm_module = load_wasm_module(&entry.jump_table).await;
+
+        entry.internal_per_thread_dynamic_link(&wasm_module).await;
+
+        let mut state = GLOBAL_HOTPATCH_STATE.lock();
+
+        let finished = match &mut state.curr_state {
+            WebWorkersDynamicLinking(ref mut web_workers_dynamic_linking_state) => {
+                let my_thread_id = get_my_thread_id();
+                let removed = web_workers_dynamic_linking_state
+                    .pending_thread_ids
+                    .remove(&my_thread_id);
+
+                if !removed {
+                    console::warn_1(
+                        &format!(
+                            "Current web worker not in pending_thread_ids {:?}",
+                            my_thread_id
+                        )
+                        .into(),
+                    );
+                }
+
+                web_workers_dynamic_linking_state
+                    .pending_thread_ids
+                    .is_empty()
+            }
+            _ => {
+                panic!("Wrong state in on_worker_should_dynamic_link after dynamic link")
+            }
+        };
+
+        if finished {
+            console::log_1(&"All web workers finished hotpatching".into());
+            notify_main_thread_hotpatch_finish();
+        }
+    });
+
     todo!()
 }
 
@@ -255,7 +434,7 @@ impl HotpatchEntry {
         unsafe { commit_patch(self.jump_table.clone()) };
     }
 
-    async unsafe fn internal_per_thread_dynamic_link(&self, wasm_module: &Module) {
+    async fn internal_per_thread_dynamic_link(&self, wasm_module: &Module) {
         let funcs: Table = wasm_bindgen::function_table().into();
         let exports: Object = wasm_bindgen::exports().into();
 
