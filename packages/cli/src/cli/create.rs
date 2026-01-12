@@ -2,7 +2,15 @@ use super::*;
 use crate::TraceSrc;
 use anyhow::{bail, Context};
 use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
-use std::{fs, path::Path};
+use git2::ConfigLevel;
+use std::{
+    fs,
+    path::Path,
+    sync::{LazyLock, Mutex},
+};
+use tempfile::NamedTempFile;
+
+static LIBGIT2_CONFIG_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 pub(crate) static DEFAULT_TEMPLATE: &str = "gh:dioxuslabs/dioxus-template";
 
@@ -102,7 +110,7 @@ impl Create {
         };
 
         tracing::debug!(dx_src = ?TraceSrc::Dev, "Creating new project with args: {args:#?}");
-        let path = cargo_generate::generate(args)?;
+        let path = cargo_generate_with_gitconfig_fallback(args)?;
 
         _ = post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
 
@@ -232,6 +240,94 @@ fn remove_triple_newlines(string: &str) -> String {
         new_string.push(char);
     }
     new_string
+}
+
+/// Run cargo-generate, retrying with a sanitized gitconfig when the user's `url.*.insteadOf`
+/// config rewrites a valid template URL into something libgit2/git2 can't fetch (eg `git@host:...`).
+pub(crate) fn cargo_generate_with_gitconfig_fallback(args: GenerateArgs) -> Result<PathBuf> {
+    match cargo_generate::generate(args.clone()) {
+        Ok(path) => Ok(path),
+        Err(err) => {
+            if !should_retry_with_sanitized_gitconfig(&err) || args.gitconfig.is_some() {
+                return Err(err);
+            }
+
+            tracing::debug!(
+                dx_src = ?TraceSrc::Dev,
+                "cargo-generate failed; retrying with a sanitized gitconfig to avoid url.insteadOf rewrites"
+            );
+
+            // Avoid racy, process-global libgit2 config mutation by serializing the fallback path.
+            let _lock = LIBGIT2_CONFIG_LOCK
+                .lock()
+                .expect("LIBGIT2_CONFIG_LOCK mutex poisoned");
+
+            let gitconfig = NamedTempFile::new()
+                .context("failed to create temporary gitconfig for template generation")?;
+            let mut retry_args = args;
+            retry_args.gitconfig = Some(gitconfig.path().to_path_buf());
+
+            // Keep the temp file alive for the duration of this call.
+            let _libgit2_config_override = Libgit2ConfigOverride::new()?;
+
+            cargo_generate::generate(retry_args).map_err(|retry_err| {
+                retry_err.context(
+                    "Template generation failed. Note: dx retried with a sanitized gitconfig to avoid url.insteadOf rewrites.",
+                )
+            })
+        }
+    }
+}
+
+struct Libgit2ConfigOverride {
+    _tmp: tempfile::TempDir,
+}
+
+impl Libgit2ConfigOverride {
+    fn new() -> Result<Self> {
+        let tmp = tempfile::tempdir().context("failed to create temporary directory")?;
+        fs::write(tmp.path().join(".gitconfig"), "")
+            .context("failed to write sanitized .gitconfig")?;
+
+        // These are process-global settings; see `LIBGIT2_CONFIG_LOCK`.
+        unsafe {
+            git2::opts::set_search_path(ConfigLevel::Global, tmp.path().to_string_lossy().as_ref())
+                .context("failed to set libgit2 global config search path")?;
+
+            if let Err(err) =
+                git2::opts::set_search_path(ConfigLevel::XDG, tmp.path().to_string_lossy().as_ref())
+            {
+                let _ = git2::opts::reset_search_path(ConfigLevel::Global);
+                return Err(err).context("failed to set libgit2 xdg config search path");
+            }
+        }
+
+        Ok(Self { _tmp: tmp })
+    }
+}
+
+impl Drop for Libgit2ConfigOverride {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = git2::opts::reset_search_path(ConfigLevel::Global);
+            let _ = git2::opts::reset_search_path(ConfigLevel::XDG);
+        }
+    }
+}
+
+fn should_retry_with_sanitized_gitconfig(err: &anyhow::Error) -> bool {
+    // `cargo-generate` wraps git clone errors with this context; use it to avoid retrying unrelated failures.
+    let msg = format!("{err:#}");
+    if !msg.contains("Please check if the Git user / repository exists.") {
+        return false;
+    }
+
+    // Common libgit2/git2 failures triggered by url.insteadOf rewriting into an unsupported URL.
+    msg.contains("unsupported URL protocol")
+        || msg.contains("invalid argument: 'port'")
+        || msg.contains("class=Net (12)")
+        || msg.contains("class=Ssh")
+        || msg.contains("hostkey")
 }
 
 /// Check if the requested project can be created in the filesystem
