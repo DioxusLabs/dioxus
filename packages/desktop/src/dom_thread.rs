@@ -69,10 +69,10 @@ pub async fn run_virtual_dom<F>(
     let dom = make_dom();
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    let document_provider: Rc<dyn Document> = Rc::new(DesktopDocument::default());
+    // let document_provider: Rc<dyn Document> = Rc::new(DesktopDocument::default());
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
-        provide_context(document_provider);
+        // provide_context(document_provider);
     });
     run_virtual_dom_loop(dom, event_rx, command_tx).await;
 }
@@ -87,38 +87,7 @@ async fn run_virtual_dom_loop(
     let mut waiting_for_edits_ack = false;
     let mut initialized = false;
 
-    // Hot reload messages come via VirtualDomEvent::HotReload from the main thread
-    // which has already connected to devtools
-
     loop {
-        // If we're waiting for edits to be acknowledged, only process events
-        // that don't require rendering
-        if waiting_for_edits_ack {
-            tokio::select! {
-                biased;
-
-                // Handle events from main thread channel
-                event = event_rx.recv() => {
-                    let Some(event) = event else {
-                        return; // Channel closed
-                    };
-                    match event {
-                        VirtualDomEvent::EditsAcknowledged => {
-                            waiting_for_edits_ack = false;
-                        }
-                        #[cfg(all(feature = "devtools", debug_assertions))]
-                        VirtualDomEvent::HotReload(msg) => {
-                            dioxus_devtools::apply_changes(&dom, &msg);
-                        }
-                        VirtualDomEvent::Initialize => {
-                            // Already initialized, ignore
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-
         // Normal operation: wait for work or events
         tokio::select! {
             biased;
@@ -142,7 +111,7 @@ async fn run_virtual_dom_loop(
                         }
                     }
                     VirtualDomEvent::EditsAcknowledged => {
-                        // No-op when not waiting
+                        waiting_for_edits_ack = false;
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
@@ -152,7 +121,7 @@ async fn run_virtual_dom_loop(
             }
 
             // Wait for the VirtualDom to have work ready
-            _ = dom.wait_for_work(), if initialized => {
+            _ = dom.wait_for_work(), if initialized && !waiting_for_edits_ack => {
                 // Render and send mutations
                 dom.render_immediate(&mut mutations);
                 if let Some(edits) = take_edits(&mut mutations) {
