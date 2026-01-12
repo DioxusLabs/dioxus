@@ -67,7 +67,7 @@ pub async fn init_hotpatch_for_current_thread() {
 
 async fn inner_init_hotpatch_for_current_thread() {
     if CURR_THREAD_HOTPATCH_INITIALIZED.get() {
-        console::log_1(
+        console::debug_1(
             &format!(
                 "Current web worker {:?} has already initialized hotpatch",
                 get_my_thread_id()
@@ -83,7 +83,7 @@ async fn inner_init_hotpatch_for_current_thread() {
         "init_hotpatch_for_current_thread can only be used in multi-threading"
     );
 
-    console::log_1(&format!("Thread {:?} initializing", get_my_thread_id()).into());
+    console::debug_1(&format!("Thread {:?} initializing", get_my_thread_id()).into());
 
     let mut global_hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
 
@@ -123,7 +123,9 @@ async fn inner_init_hotpatch_for_current_thread() {
 
     let already_hotpatched: Vec<Arc<HotpatchEntry>> = global_hotpatch_state.hotpatched.clone();
 
-    global_hotpatch_state.worker_thread_ids.insert(get_my_thread_id());
+    if !is_main_thread() {
+        global_hotpatch_state.worker_thread_ids.insert(get_my_thread_id());
+    }
 
     // unlock
     drop(global_hotpatch_state);
@@ -184,7 +186,7 @@ struct GlobalHotpatchState {
     curr_state: CurrHotpatchingState,
     /// When a new hotpatch comes before current hotpatch finishes, it's queued
     pending_hotpatches: Vec<JumpTable>,
-    /// Collect all web worker thread ids
+    /// Collect all web worker thread ids. Doesn't contain main threads'.
     worker_thread_ids: HashSet<MyThreadId>,
 }
 
@@ -217,7 +219,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
                 hotpatch_state.curr_state = MainThreadDynamicLinking;
             }
             _ => {
-                console::log_1(
+                console::debug_1(
                     &"Received new hotpatch when previous hotpatch hasn't finished. Queue it."
                         .into(),
                 );
@@ -269,7 +271,7 @@ async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> Hotpatch
 
     let dylink_section_info = parse_dylink_section(&module).expect("Cannot parse dylink.0 section");
 
-    console::log_1(
+    console::debug_1(
         &format!(
             "Patch binary data size {}",
             dylink_section_info.mem_info.memory_size
@@ -423,6 +425,8 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                     );
                 }
 
+                console::debug_1(&format!("Web worker {:?} finished dynamic linking", my_thread_id).into());
+
                 web_workers_dynamic_linking_state
                     .pending_thread_ids
                     .is_empty()
@@ -433,7 +437,7 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
         };
 
         if finished {
-            console::log_1(&"All web workers finished hotpatching".into());
+            console::debug_1(&"All web workers finished hotpatching".into());
             notify_main_thread_hotpatch_finish();
         }
     });
@@ -520,7 +524,7 @@ impl HotpatchEntry {
             .await
             .expect("instantiating module");
 
-        console::log_2(&"result instance".into(), &instance);
+        console::debug_2(&"result instance".into(), &instance);
 
         let exports: Object = Reflect::get(&instance, &"exports".into())
             .expect("getting exports")
@@ -642,7 +646,7 @@ fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError
             _ => {}
         }
 
-        console::log_1(&"Read one subsection in dylink.0".into())
+        console::debug_1(&"Read one subsection in dylink.0".into())
     }
 
     Ok(DylinkSectionInfo {
