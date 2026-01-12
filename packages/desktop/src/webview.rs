@@ -156,7 +156,6 @@ impl WebviewEdits {
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
                 let full_file_paths = hovered_file.current_paths();
-                eprintln!("===== Handling drag/drop event in desktop webview: {:?} with known paths {:?}", drag, full_file_paths);
 
                 let xfer_data = drag.data_transfer.clone();
                 let new_file_data = xfer_data.files.iter().map(|f| {
