@@ -31,7 +31,7 @@ use crate::wasm_multithreading::CurrHotpatchingState::{
     Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking,
 };
 use crate::PatchError::WasmRelated;
-use crate::{commit_patch, PatchError};
+use crate::{commit_patch, wasm_is_multi_threaded, PatchError};
 use futures::lock::Mutex;
 use futures::SinkExt;
 use js_sys::WebAssembly::{Memory, Module, Table};
@@ -121,7 +121,7 @@ static GLOBAL_HOTPATCH_STATE: LazyLock<spin::Mutex<GlobalHotpatchState>> = LazyL
 /// which is still in early stage. https://github.com/WebAssembly/shared-everything-threads
 pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
     jump_table: JumpTable,
-) -> Result<(), PatchError> {
+) {
     {
         let mut hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
         match hotpatch_state.curr_state {
@@ -134,7 +134,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
                         .into(),
                 );
                 hotpatch_state.pending_hotpatches.push(jump_table);
-                return Ok(());
+                return;
                 // About why not use async lock: futures crate's async lock has no order guarantee:
                 // https://docs.rs/futures/0.3.31/futures/lock/struct.Mutex.html#fairness
                 // Use manual queueing to ensure new patch won't be overwritten by old patch
@@ -159,8 +159,6 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(
 
         notify_web_workers_to_dynamic_link();
     }
-
-    Ok(())
 }
 
 async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> HotpatchEntry {
@@ -247,7 +245,7 @@ pub async fn init_hotpatch_for_current_thread() {
     CURR_THREAD_HOTPATCH_INITIALIZED.set(true);
 
     assert!(
-        is_multithreaded(),
+        wasm_is_multi_threaded(),
         "init_hotpatch_for_current_thread can only be used in multi-threading"
     );
 
@@ -297,14 +295,6 @@ pub async fn init_hotpatch_for_current_thread() {
 
         entry.internal_per_thread_dynamic_link(&module).await;
     }
-}
-
-fn is_multithreaded() -> bool {
-    wasm_bindgen::memory()
-        .unchecked_into::<Memory>()
-        .buffer()
-        .dyn_into::<SharedArrayBuffer>()
-        .is_ok()
 }
 
 fn notify_web_workers_to_dynamic_link() {
