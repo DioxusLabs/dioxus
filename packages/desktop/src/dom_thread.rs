@@ -12,7 +12,7 @@ use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
 use std::{future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
-use tokio::sync::mpsc::{self as tokio_mpsc, Receiver, Sender, UnboundedSender};
+use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
@@ -110,12 +110,10 @@ async fn run_virtual_dom_loop(
                             if let Some(edits) = take_edits(&mut mutations) {
                                 let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                                 waiting_for_edits_ack = true;
-                                println!("waiting for ack");
                             }
                         }
                     }
                     VirtualDomEvent::EditsAcknowledged => {
-                        println!("got ack");
                         waiting_for_edits_ack = false;
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -132,7 +130,6 @@ async fn run_virtual_dom_loop(
                 if let Some(edits) = take_edits(&mut mutations) {
                     let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                     waiting_for_edits_ack = true;
-                    println!("waiting for ack");
                 }
             }
         }

@@ -5815,10 +5815,10 @@ dependencies = [
  "tracing",
  "tray-icon",
  "tungstenite 0.27.0",
+ "wasm-bindgen 0.2.105",
  "web-sys",
  "webbrowser",
  "wry",
- "wry-bindgen",
 ]
 
 [[package]]
@@ -10349,6 +10349,7 @@ checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 [[package]]
 name = "js-sys"
 version = "0.3.82"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "once_cell",
  "wasm-bindgen 0.2.105",
@@ -19015,6 +19016,7 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 [[package]]
 name = "wasm-bindgen"
 version = "0.2.105"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "wasm-bindgen 0.2.106",
  "wry-bindgen",
@@ -19046,6 +19048,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-futures"
 version = "0.4.55"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "cfg-if",
  "js-sys",
@@ -19362,6 +19365,7 @@ dependencies = [
 [[package]]
 name = "web-sys"
 version = "0.3.82"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "js-sys",
  "wasm-bindgen 0.2.105",
@@ -20675,6 +20679,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen"
 version = "0.2.106"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "async-channel 2.5.0",
  "base64 0.22.1",
@@ -20694,6 +20699,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen-macro"
 version = "0.1.0"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "quote",
  "wry-bindgen-macro-support",
@@ -20702,6 +20708,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen-macro-support"
 version = "0.1.0"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#8c92617873fa921068ddfd8d655c1fa066667c8f"
 dependencies = [
  "proc-macro2",
  "quote",
