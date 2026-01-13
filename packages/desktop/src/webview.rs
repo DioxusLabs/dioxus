@@ -400,16 +400,19 @@ impl WebviewInstance {
             asset_handlers,
             file_hover,
             cfg.window_close_behavior,
+            event_tx.clone(),
         ));
 
         // Finally spawn the app in the virtual dom task thread
         let window_id = desktop_context.window.id();
         let run_app = {
             let proxy = proxy.clone();
+            let event_tx = event_tx.clone();
             move || {
                 crate::dom_thread::run_virtual_dom(
                     make_dom,
                     dom_event_rx,
+                    event_tx,
                     dom_command_tx,
                     proxy,
                     window_id,

@@ -6,14 +6,18 @@
 
 use crate::desktop_context::DesktopServiceProxy;
 use crate::ipc::UserWindowEvent;
+use crate::shortcut::HotKeyState;
+use crate::AssetRequest;
 use dioxus_core::{provide_context, ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
-use std::{collections::HashMap, future::Future, pin::Pin, rc::Rc};
+use slab::Slab;
+use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
 use tokio::task::AbortHandle;
+use wry::RequestAsyncResponder;
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
@@ -27,6 +31,108 @@ pub enum VirtualDomEvent {
     /// Hot reload message from devtools.
     #[cfg(all(feature = "devtools", debug_assertions))]
     HotReload(dioxus_devtools::HotReloadMsg),
+
+    /// Run a callback on the DOM thread.
+    ///
+    /// This is used for the inverted callback pattern where closures stay on the
+    /// DOM thread and the main thread invokes them via message passing.
+    RunCallback(DomCallbackRequest),
+}
+
+/// A request to run a callback on the DOM thread.
+///
+/// This is used by the inverted callback pattern to invoke non-Send closures
+/// that are stored on the DOM thread.
+pub struct DomCallbackRequest {
+    /// The callback to run. This closure has access to the `DomCallbackRegistry`
+    /// and can look up and invoke stored handlers.
+    pub callback: Box<dyn FnOnce(&mut DomCallbackRegistry) + Send>,
+    /// Optional channel to send the result back to the caller.
+    pub result_tx: Option<std::sync::mpsc::SyncSender<Box<dyn Any + Send>>>,
+}
+
+/// Unique identifier for a shortcut callback stored on the DOM thread.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DomShortcutId(pub usize);
+
+/// Registry for callbacks that live on the DOM thread.
+///
+/// This registry stores non-Send closures that are invoked via the inverted
+/// callback pattern. The main thread sends requests to invoke these callbacks,
+/// and the DOM thread looks them up and executes them.
+pub struct DomCallbackRegistry {
+    /// Asset handlers keyed by name.
+    asset_handlers: HashMap<String, Box<dyn Fn(AssetRequest, RequestAsyncResponder)>>,
+    /// Shortcut callbacks stored in a slab for efficient allocation.
+    shortcut_callbacks: Slab<Box<dyn FnMut(HotKeyState)>>,
+}
+
+impl Default for DomCallbackRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DomCallbackRegistry {
+    /// Create a new empty callback registry.
+    pub fn new() -> Self {
+        Self {
+            asset_handlers: HashMap::new(),
+            shortcut_callbacks: Slab::new(),
+        }
+    }
+
+    /// Register an asset handler.
+    pub fn register_asset_handler(
+        &mut self,
+        name: String,
+        handler: Box<dyn Fn(AssetRequest, RequestAsyncResponder)>,
+    ) {
+        self.asset_handlers.insert(name, handler);
+    }
+
+    /// Remove an asset handler.
+    pub fn remove_asset_handler(&mut self, name: &str) -> Option<()> {
+        self.asset_handlers.remove(name).map(|_| ())
+    }
+
+    /// Invoke an asset handler if it exists.
+    pub fn invoke_asset_handler(&self, name: &str, request: AssetRequest, responder: RequestAsyncResponder) -> bool {
+        if let Some(handler) = self.asset_handlers.get(name) {
+            handler(request, responder);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Register a shortcut callback and return its ID.
+    pub fn register_shortcut_callback(
+        &mut self,
+        callback: Box<dyn FnMut(HotKeyState)>,
+    ) -> DomShortcutId {
+        DomShortcutId(self.shortcut_callbacks.insert(callback))
+    }
+
+    /// Remove a shortcut callback.
+    pub fn remove_shortcut_callback(&mut self, id: DomShortcutId) -> Option<()> {
+        if self.shortcut_callbacks.contains(id.0) {
+            let _ = self.shortcut_callbacks.remove(id.0);
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    /// Invoke a shortcut callback if it exists.
+    pub fn invoke_shortcut_callback(&mut self, id: DomShortcutId, state: HotKeyState) -> bool {
+        if let Some(callback) = self.shortcut_callbacks.get_mut(id.0) {
+            callback(state);
+            true
+        } else {
+            false
+        }
+    }
 }
 
 /// Commands sent from the VirtualDom thread to the main thread.
@@ -64,6 +170,7 @@ impl VirtualDomHandle {
 pub async fn run_virtual_dom<F>(
     make_dom: F,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
+    event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
     command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
@@ -73,12 +180,17 @@ pub async fn run_virtual_dom<F>(
     let dom = make_dom();
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    let desktop_service_proxy = DesktopServiceProxy::new(proxy, window_id);
+    let desktop_service_proxy = DesktopServiceProxy::new(proxy, window_id, event_tx);
+
+    // Create the callback registry for the inverted callback pattern
+    let callback_registry = Rc::new(RefCell::new(DomCallbackRegistry::new()));
+
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
         provide_context(desktop_service_proxy);
+        provide_context(callback_registry.clone());
     });
-    run_virtual_dom_loop(dom, event_rx, command_tx).await;
+    run_virtual_dom_loop(dom, event_rx, command_tx, callback_registry).await;
 }
 
 /// The main event loop for the VirtualDom running on its dedicated thread.
@@ -86,6 +198,7 @@ async fn run_virtual_dom_loop(
     mut dom: VirtualDom,
     mut event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
+    callback_registry: Rc<RefCell<DomCallbackRegistry>>,
 ) {
     let mut mutations = MutationState::default();
     let mut waiting_for_edits_ack = false;
@@ -120,6 +233,17 @@ async fn run_virtual_dom_loop(
                     #[cfg(all(feature = "devtools", debug_assertions))]
                     VirtualDomEvent::HotReload(msg) => {
                         dioxus_devtools::apply_changes(&dom, &msg);
+                    }
+                    VirtualDomEvent::RunCallback(request) => {
+                        // Run the callback with access to the registry
+                        let mut registry = callback_registry.borrow_mut();
+                        (request.callback)(&mut registry);
+                        // Send result back if requested
+                        if let Some(result_tx) = request.result_tx {
+                            // The callback should have already set up any result it needs
+                            // For now, just send an empty acknowledgment
+                            let _ = result_tx.send(Box::new(()));
+                        }
                     }
                 }
             }

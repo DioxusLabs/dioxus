@@ -1,6 +1,7 @@
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
+    dom_thread::{DomCallbackRegistry, DomCallbackRequest, DomShortcutId, VirtualDomEvent},
     file_upload::NativeFileHover,
     ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
@@ -8,6 +9,7 @@ use crate::{
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
 use dioxus_core::{Callback, VirtualDom};
+use std::cell::RefCell;
 use std::{
     any::Any,
     cell::Cell,
@@ -27,6 +29,7 @@ use tao::{
         UserAttentionType, Window, WindowId, WindowSizeConstraints, RGBA,
     },
 };
+use tokio::sync::mpsc::UnboundedSender;
 use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
@@ -102,23 +105,34 @@ pub type WeakDesktopContext = Weak<DesktopService>;
 pub struct DesktopServiceProxy {
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
+    /// Channel to send events to the DOM thread for the inverted callback pattern.
+    dom_tx: UnboundedSender<VirtualDomEvent>,
 }
 
 impl DesktopServiceProxy {
     /// Create a new [`DesktopServiceProxy`] from an event loop proxy.
     ///
-    /// This creates a proxy without a specific window ID. To run closures with
-    /// a specific window's [`DesktopService`], use [`with_window`](Self::with_window)
-    /// to set the window ID first.
+    /// # Arguments
+    ///
+    /// * `proxy` - The event loop proxy for sending events to the main thread
+    /// * `window_id` - The window ID this proxy is associated with
+    /// * `dom_tx` - Channel to send events to the DOM thread
     ///
     /// # Example
     ///
     /// ```rust, ignore
-    /// let proxy = DesktopServiceProxy::new(event_loop_proxy);
-    /// let proxy_with_window = proxy.with_window(window_id);
+    /// let proxy = DesktopServiceProxy::new(event_loop_proxy, window_id, dom_tx);
     /// ```
-    pub fn new(proxy: EventLoopProxy<UserWindowEvent>, window_id: WindowId) -> Self {
-        Self { proxy, window_id }
+    pub fn new(
+        proxy: EventLoopProxy<UserWindowEvent>,
+        window_id: WindowId,
+        dom_tx: UnboundedSender<VirtualDomEvent>,
+    ) -> Self {
+        Self {
+            proxy,
+            window_id,
+            dom_tx,
+        }
     }
 
     /// Run a closure on the main thread with access to the [`DesktopService`].
@@ -421,6 +435,134 @@ impl DesktopServiceProxy {
     pub fn available_monitors(&self) -> Vec<MonitorHandle> {
         self.run_with_desktop_service(|desktop| desktop.window.available_monitors().collect())
     }
+
+    /// Create a wry event handler that listens for wry events.
+    ///
+    /// This is the thread-safe version that accepts `Send` closures, allowing
+    /// event handlers to be created from any thread.
+    ///
+    /// See [`DesktopService::create_wry_event_handler`] for more details.
+    pub fn create_wry_event_handler(
+        &self,
+        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+            + Send
+            + 'static,
+    ) -> WryEventHandler {
+        self.run_with_desktop_service(move |desktop| desktop.create_wry_event_handler(handler))
+    }
+
+    /// Register an asset handler using the inverted callback pattern.
+    ///
+    /// The handler stays on the DOM thread (no `Send` requirement). When an asset
+    /// request arrives, it's forwarded to the DOM thread where the handler runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - The DOM callback registry (obtained from Dioxus context)
+    /// * `name` - Identifier for this handler
+    /// * `handler` - The handler function (does not need to be `Send`)
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let registry = consume_context::<Rc<RefCell<DomCallbackRegistry>>>();
+    /// let proxy = consume_context::<DesktopServiceProxy>();
+    /// proxy.register_asset_handler(&registry, "my-protocol", |req, resp| {
+    ///     // Handle asset request
+    /// });
+    /// ```
+    pub fn register_asset_handler(
+        &self,
+        registry: &RefCell<DomCallbackRegistry>,
+        name: impl Into<String>,
+        handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
+    ) {
+        let name = name.into();
+
+        // Store the handler in the DOM registry
+        registry
+            .borrow_mut()
+            .register_asset_handler(name.clone(), Box::new(handler));
+
+        // Set up forwarding on the main thread
+        let dom_tx = self.dom_tx.clone();
+        let handler_name = name.clone();
+        self.run_with_desktop_service(move |desktop| {
+            // Register a forwarder that sends requests to the DOM thread
+            desktop.asset_handlers.register_handler(
+                name,
+                Callback::new(move |(req, resp): (AssetRequest, RequestAsyncResponder)| {
+                    let handler_name = handler_name.clone();
+                    let _ = dom_tx.send(VirtualDomEvent::RunCallback(DomCallbackRequest {
+                        callback: Box::new(move |registry| {
+                            registry.invoke_asset_handler(&handler_name, req, resp);
+                        }),
+                        result_tx: None,
+                    }));
+                }),
+            );
+        });
+    }
+
+    /// Create a global shortcut using the inverted callback pattern.
+    ///
+    /// The callback stays on the DOM thread (no `Send` requirement). When the
+    /// shortcut is triggered, the event is forwarded to the DOM thread.
+    ///
+    /// # Arguments
+    ///
+    /// * `registry` - The DOM callback registry (obtained from Dioxus context)
+    /// * `hotkey` - The key combination for the shortcut
+    /// * `callback` - The callback function (does not need to be `Send`)
+    ///
+    /// # Returns
+    ///
+    /// A tuple of `(ShortcutHandle, DomShortcutId)` on success. The `ShortcutHandle`
+    /// can be used with `remove_shortcut` on the main thread, and `DomShortcutId`
+    /// can be used to remove the callback from the DOM registry.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let registry = consume_context::<Rc<RefCell<DomCallbackRegistry>>>();
+    /// let proxy = consume_context::<DesktopServiceProxy>();
+    /// let (handle, dom_id) = proxy.create_shortcut(&registry, hotkey, |state| {
+    ///     // Handle shortcut
+    /// })?;
+    /// ```
+    pub fn create_shortcut(
+        &self,
+        registry: &RefCell<DomCallbackRegistry>,
+        hotkey: HotKey,
+        callback: impl FnMut(HotKeyState) + 'static,
+    ) -> Result<(ShortcutHandle, DomShortcutId), ShortcutRegistryError> {
+        // Store the callback in the DOM registry
+        let dom_id = registry
+            .borrow_mut()
+            .register_shortcut_callback(Box::new(callback));
+
+        // Set up forwarding on the main thread
+        let dom_tx = self.dom_tx.clone();
+        let result = self.run_with_desktop_service(move |desktop| {
+            desktop.create_shortcut(hotkey, move |state| {
+                let _ = dom_tx.send(VirtualDomEvent::RunCallback(DomCallbackRequest {
+                    callback: Box::new(move |registry| {
+                        registry.invoke_shortcut_callback(dom_id, state);
+                    }),
+                    result_tx: None,
+                }));
+            })
+        });
+
+        match result {
+            Ok(handle) => Ok((handle, dom_id)),
+            Err(e) => {
+                // Remove the callback from the DOM registry since main thread registration failed
+                registry.borrow_mut().remove_shortcut_callback(dom_id);
+                Err(e)
+            }
+        }
+    }
 }
 
 /// An imperative interface to the current window.
@@ -448,6 +590,9 @@ pub struct DesktopService {
     pub(crate) file_hover: NativeFileHover,
     pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
 
+    /// Channel to send events to the DOM thread for the inverted callback pattern.
+    pub(crate) dom_tx: UnboundedSender<VirtualDomEvent>,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -469,6 +614,7 @@ impl DesktopService {
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
         close_behaviour: WindowCloseBehaviour,
+        dom_tx: UnboundedSender<VirtualDomEvent>,
     ) -> Self {
         Self {
             window,
@@ -477,6 +623,7 @@ impl DesktopService {
             asset_handlers,
             file_hover,
             close_behaviour: Rc::new(Cell::new(close_behaviour)),
+            dom_tx,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -690,6 +837,7 @@ impl DesktopService {
         DesktopServiceProxy {
             proxy: self.shared.proxy.clone(),
             window_id: self.window.id(),
+            dom_tx: self.dom_tx.clone(),
         }
     }
 
