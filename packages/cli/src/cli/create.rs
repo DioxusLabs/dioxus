@@ -330,6 +330,186 @@ fn should_retry_with_sanitized_gitconfig(err: &anyhow::Error) -> bool {
         || msg.contains("hostkey")
 }
 
+#[cfg(test)]
+mod gitconfig_tests {
+    use super::*;
+    use std::{
+        env,
+        ffi::OsString,
+        process::{Command, Output},
+    };
+
+    static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
+    struct EnvVarGuard {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match &self.previous {
+                Some(prev) => env::set_var(self.key, prev),
+                None => env::remove_var(self.key),
+            }
+        }
+    }
+
+    fn set_env_var(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> EnvVarGuard {
+        let previous = env::var_os(key);
+        env::set_var(key, value);
+        EnvVarGuard { key, previous }
+    }
+
+    fn git_available() -> bool {
+        Command::new("git")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok()
+    }
+
+    fn run_git(current_dir: &Path, args: &[&str]) -> Output {
+        Command::new("git")
+            .args(args)
+            .current_dir(current_dir)
+            .output()
+            .expect("git command failed to run")
+    }
+
+    fn assert_git_success(args: &[&str], output: &Output) {
+        assert!(
+            output.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    fn file_url(path: &Path) -> String {
+        format!("file:///{}", path.display().to_string().replace('\\', "/"))
+    }
+
+    fn write_template_repo(root: &Path) -> PathBuf {
+        let template_dir = root.join("template");
+        fs::create_dir_all(template_dir.join("src")).expect("create template src");
+
+        fs::write(
+            template_dir.join("Cargo.toml"),
+            r#"[package]
+name = "{{project-name}}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"#,
+        )
+        .expect("write template Cargo.toml");
+
+        fs::write(
+            template_dir.join("src/main.rs"),
+            r#"fn main() {
+    println!("hello");
+}
+"#,
+        )
+        .expect("write template src/main.rs");
+
+        let init_args = ["init", "-b", "main"];
+        let output = run_git(&template_dir, &init_args);
+        assert_git_success(&init_args, &output);
+
+        let add_args = ["add", "."];
+        let output = run_git(&template_dir, &add_args);
+        assert_git_success(&add_args, &output);
+
+        let commit_args = [
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=test",
+            "commit",
+            "-m",
+            "init template",
+        ];
+        let output = run_git(&template_dir, &commit_args);
+        assert_git_success(&commit_args, &output);
+
+        template_dir
+    }
+
+    #[test]
+    fn cargo_generate_retries_with_sanitized_gitconfig() {
+        let _env_lock = ENV_LOCK.lock().expect("ENV_LOCK mutex poisoned");
+        if !git_available() {
+            return;
+        }
+
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let template_dir = write_template_repo(temp.path());
+        let template_url = file_url(&template_dir);
+
+        let home_dir = temp.path().join("home");
+        fs::create_dir_all(&home_dir).expect("create fake HOME dir");
+        fs::write(
+            home_dir.join(".gitconfig"),
+            r#"[url "invalid://invalid-host/"]
+    insteadOf = file:///
+"#,
+        )
+        .expect("write .gitconfig");
+
+        let _home = set_env_var("HOME", &home_dir);
+        let _userprofile = set_env_var("USERPROFILE", &home_dir);
+
+        let fail_dest = temp.path().join("out_fail").join("myapp");
+        fs::create_dir_all(&fail_dest).expect("create fail destination");
+
+        let args_fail = GenerateArgs {
+            destination: Some(fail_dest),
+            init: true,
+            name: Some("myapp".to_string()),
+            silent: true,
+            vcs: Some(Vcs::None),
+            template_path: TemplatePath {
+                git: Some(template_url.clone()),
+                branch: Some("main".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let err = cargo_generate::generate(args_fail).expect_err("expected cargo-generate to fail");
+        assert!(
+            super::should_retry_with_sanitized_gitconfig(&err),
+            "expected retryable error, got:\n{err:#}"
+        );
+
+        let ok_dest = temp.path().join("out_ok").join("myapp");
+        fs::create_dir_all(&ok_dest).expect("create ok destination");
+
+        let args_ok = GenerateArgs {
+            destination: Some(ok_dest.clone()),
+            init: true,
+            name: Some("myapp".to_string()),
+            silent: true,
+            vcs: Some(Vcs::None),
+            template_path: TemplatePath {
+                git: Some(template_url),
+                branch: Some("main".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let out = cargo_generate_with_gitconfig_fallback(args_ok).expect("expected fallback to work");
+        assert!(out.join("Cargo.toml").exists());
+        assert!(out.join("src/main.rs").exists());
+    }
+}
+
 /// Check if the requested project can be created in the filesystem
 pub(crate) async fn check_path(path: &std::path::PathBuf) -> Result<()> {
     match fs::metadata(path) {
