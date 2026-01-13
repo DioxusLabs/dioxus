@@ -13,7 +13,9 @@ use dioxus_core::{provide_context, ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
+use futures_util::FutureExt;
 use slab::Slab;
+use std::panic::AssertUnwindSafe;
 use std::{any::Any, cell::RefCell, collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
@@ -294,7 +296,7 @@ pub(crate) struct DomThreadHandle {
 }
 
 /// Spawn a thread that runs async tasks and supports aborting them by window ID.
-pub fn spawn_dom_thread() -> DomThreadHandle {
+pub fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThreadHandle {
     let (task_tx, mut task_rx): (TaskSender, _) = tokio::sync::mpsc::unbounded_channel();
     let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
         tokio::sync::mpsc::unbounded_channel();
@@ -330,7 +332,12 @@ pub fn spawn_dom_thread() -> DomThreadHandle {
                                         break;
                                     };
                                     let fut = spawn_task();
-                                    let join_handle = tokio::task::spawn_local(fut);
+                                    let proxy = proxy.clone();
+                                    let join_handle = tokio::task::spawn_local(async move {
+                                        _ = AssertUnwindSafe(fut).catch_unwind().await;
+                                        // Close the window when the task completes (aborted or finished)
+                                        proxy.send_event(UserWindowEvent::CloseWindow(window_id)).unwrap();
+                                    });
                                     abort_handles.insert(window_id, join_handle.abort_handle());
                                 }
                             }

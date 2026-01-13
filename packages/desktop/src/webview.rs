@@ -4,8 +4,8 @@ use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopService,
-    DesktopContext,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopContext,
+    DesktopService,
 };
 use dioxus_hooks::to_owned;
 use std::rc::Rc;
@@ -509,6 +509,31 @@ impl WebviewInstance {
                     self.send_edits_raw(edits);
                 }
             }
+        }
+    }
+
+    /// Poll for and process commands from the VirtualDom thread.
+    ///
+    /// Uses the webview's waker to register for wake-up when commands arrive.
+    /// This ensures the event loop is woken even if called before commands are ready.
+    pub fn poll_new_edits_location(&mut self) {
+        let mut cx = std::task::Context::from_waker(&self.waker);
+        // Check if there is a new edit channel we need to send. On IOS,
+        // the websocket will be killed when the device is put into sleep. If we
+        // find the socket has been closed, we create a new socket and send it to
+        // the webview to continue on
+        // https://github.com/DioxusLabs/dioxus/issues/4374
+        if self
+            .edits
+            .wry_queue
+            .poll_new_edits_location(&mut cx)
+            .is_ready()
+        {
+            _ = self.desktop_context.webview.evaluate_script(&format!(
+                "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
+                edits_path = self.edits.wry_queue.edits_path(),
+                expected_key = self.edits.wry_queue.required_server_key()
+            ));
         }
     }
 

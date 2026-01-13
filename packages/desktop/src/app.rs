@@ -73,7 +73,7 @@ impl App {
             let proxy = proxy.clone();
             move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
         });
-        let desktop_thread_handle = spawn_dom_thread();
+        let desktop_thread_handle = spawn_dom_thread(proxy.clone());
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -417,6 +417,7 @@ impl App {
         if let Some(webview) = self.webviews.get_mut(&id) {
             webview.poll_edits_flushed();
             webview.poll_dom_commands();
+            webview.poll_new_edits_location();
         }
     }
 
