@@ -302,7 +302,9 @@ enum CargoGenerateFailure {
     Panic(String),
 }
 
-fn cargo_generate_generate(args: GenerateArgs) -> std::result::Result<PathBuf, CargoGenerateFailure> {
+fn cargo_generate_generate(
+    args: GenerateArgs,
+) -> std::result::Result<PathBuf, CargoGenerateFailure> {
     std::panic::catch_unwind(AssertUnwindSafe(|| cargo_generate::generate(args)))
         .map_err(|payload| CargoGenerateFailure::Panic(panic_payload_to_string(payload)))?
         .map_err(CargoGenerateFailure::Error)
@@ -358,6 +360,52 @@ fn should_retry_with_sanitized_gitconfig(err: &anyhow::Error) -> bool {
     // `cargo-generate` wraps git clone errors with this context. The exact underlying libgit2
     // error varies (eg `class=Net`, `class=Ssh`, `class=Os` timeouts), so don't string-match on it.
     format!("{err:#}").contains("Please check if the Git user / repository exists.")
+}
+
+/// Check if the requested project can be created in the filesystem
+pub(crate) async fn check_path(path: &std::path::PathBuf) -> Result<()> {
+    match fs::metadata(path) {
+        Ok(_metadata) => {
+            bail!(
+                "A file or directory with the given project name \"{}\" already exists.",
+                path.to_string_lossy()
+            )
+        }
+        Err(_err) => Ok(()),
+    }
+}
+
+/// Perform a health check against github itself before we attempt to download any templates hosted
+/// on github.
+pub(crate) async fn check_connectivity() -> Result<()> {
+    if crate::verbosity_or_default().offline {
+        return Ok(());
+    }
+
+    use crate::styles::{GLOW_STYLE, LINK_STYLE};
+    let client = reqwest::Client::new();
+    for x in 0..=5 {
+        tokio::select! {
+            res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
+                if res.is_ok() {
+                    return Ok(());
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
+            },
+            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
+        }
+        if x == 0 {
+            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
+        } else {
+            eprintln!(
+                "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
+            );
+        }
+    }
+
+    bail!(
+        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project."
+    )
 }
 
 #[cfg(test)]
@@ -614,52 +662,6 @@ edition = "2021"
         assert!(out.join("Cargo.toml").exists());
         assert!(out.join("src/main.rs").exists());
     }
-}
-
-/// Check if the requested project can be created in the filesystem
-pub(crate) async fn check_path(path: &std::path::PathBuf) -> Result<()> {
-    match fs::metadata(path) {
-        Ok(_metadata) => {
-            bail!(
-                "A file or directory with the given project name \"{}\" already exists.",
-                path.to_string_lossy()
-            )
-        }
-        Err(_err) => Ok(()),
-    }
-}
-
-/// Perform a health check against github itself before we attempt to download any templates hosted
-/// on github.
-pub(crate) async fn check_connectivity() -> Result<()> {
-    if crate::verbosity_or_default().offline {
-        return Ok(());
-    }
-
-    use crate::styles::{GLOW_STYLE, LINK_STYLE};
-    let client = reqwest::Client::new();
-    for x in 0..=5 {
-        tokio::select! {
-            res = client.head("https://github.com/DioxusLabs/").header("User-Agent", "dioxus-cli").send() => {
-                if res.is_ok() {
-                    return Ok(());
-                }
-                tokio::time::sleep(std::time::Duration::from_millis(2000)).await;
-            },
-            _ = tokio::time::sleep(std::time::Duration::from_millis(if x == 1 { 500 } else { 2000 })) => {}
-        }
-        if x == 0 {
-            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for {LINK_STYLE}https://github.com/dioxuslabs{LINK_STYLE:#}...")
-        } else {
-            eprintln!(
-                "{GLOW_STYLE}warning{GLOW_STYLE:#}: ({x}/5) Taking a while, maybe your internet is down?"
-            );
-        }
-    }
-
-    bail!(
-        "Error connecting to template repository. Try cloning the template manually or add `dioxus` to a `cargo new` project."
-    )
 }
 
 // todo: re-enable these tests with better parallelization
