@@ -30,7 +30,7 @@ use tao::{
     },
 };
 use tokio::sync::mpsc::UnboundedSender;
-use wry::{RequestAsyncResponder, WebView};
+use wry::{Rect, RequestAsyncResponder, WebView, RGBA as WebViewRGBA};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
@@ -65,6 +65,21 @@ macro_rules! proxy_window_method {
     };
 }
 
+/// Macro to generate proxy methods that forward to WebView methods (via desktop.webview).
+macro_rules! proxy_webview_method {
+    ($(
+        $(#[$meta:meta])*
+        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)?;
+    )*) => {
+        $(
+            $(#[$meta])*
+            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
+                self.run_with_desktop_service(move |desktop| desktop.webview.$name($($arg),*))
+            }
+        )*
+    };
+}
+
 /// Get an imperative handle to the current window without using a hook
 ///
 /// ## Panics
@@ -75,12 +90,7 @@ pub fn window() -> DesktopContext {
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
-pub type DesktopContext = Rc<DesktopServiceProxy>;
-
-/// A weak handle to the [`DesktopService`] to ensure safe passing.
-/// The problem without this is that the tao window is never dropped and therefore cannot be closed.
-/// This was due to the Rc that had still references because of multiple copies when creating a webview.
-pub type WeakDesktopContext = Weak<DesktopServiceProxy>;
+pub type DesktopContext = DesktopServiceProxy;
 
 /// A proxy to a [`DesktopService`] that can be used from any thread.
 ///
@@ -230,7 +240,6 @@ impl DesktopServiceProxy {
         /// Remove all global shortcuts.
         fn remove_all_shortcuts(&self);
     }
-
 
     /// Start the creation of a new window using a component function and window builder.
     ///
@@ -427,6 +436,94 @@ impl DesktopServiceProxy {
     /// Returns the list of all the monitors available on the system.
     pub fn available_monitors(&self) -> Vec<MonitorHandle> {
         self.run_with_desktop_service(|desktop| desktop.window.available_monitors().collect())
+    }
+
+    proxy_webview_method! {
+        /// Get the current URL of the webview.
+        fn url(&self) -> wry::Result<String>;
+
+        /// Reload the current page.
+        fn reload(&self) -> wry::Result<()>;
+
+        /// Set the zoom level of the webview.
+        fn zoom(&self, scale_factor: f64) -> wry::Result<()>;
+
+        /// Move focus from the webview back to the parent window.
+        fn focus_parent(&self) -> wry::Result<()>;
+
+        /// Clear all browsing data.
+        fn clear_all_browsing_data(&self) -> wry::Result<()>;
+
+        /// Open the developer tools window.
+        fn open_devtools(&self);
+
+        /// Close the developer tools window.
+        fn close_devtools(&self);
+
+        /// Check if the developer tools window is open.
+        fn is_devtools_open(&self) -> bool;
+    }
+
+    /// Set the background color of the webview.
+    pub fn set_webview_background_color(&self, background_color: WebViewRGBA) -> wry::Result<()> {
+        self.run_with_desktop_service(move |desktop| {
+            desktop.webview.set_background_color(background_color)
+        })
+    }
+
+    /// Get the bounds of the webview.
+    pub fn webview_bounds(&self) -> wry::Result<Rect> {
+        self.run_with_desktop_service(|desktop| desktop.webview.bounds())
+    }
+
+    /// Set the bounds of the webview.
+    pub fn set_webview_bounds(&self, bounds: Rect) -> wry::Result<()> {
+        self.run_with_desktop_service(move |desktop| desktop.webview.set_bounds(bounds))
+    }
+
+    /// Set the visibility of the webview.
+    pub fn set_webview_visible(&self, visible: bool) -> wry::Result<()> {
+        self.run_with_desktop_service(move |desktop| desktop.webview.set_visible(visible))
+    }
+
+    /// Focus the webview.
+    pub fn webview_focus(&self) -> wry::Result<()> {
+        self.run_with_desktop_service(|desktop| desktop.webview.focus())
+    }
+
+    /// Launch the print modal for the webview content.
+    pub fn webview_print(&self) -> wry::Result<()> {
+        self.run_with_desktop_service(|desktop| desktop.webview.print())
+    }
+
+    /// Load a URL in the webview.
+    pub fn load_url(&self, url: &str) -> wry::Result<()> {
+        let url = url.to_string();
+        self.run_with_desktop_service(move |desktop| desktop.webview.load_url(&url))
+    }
+
+    /// Load a URL with custom headers in the webview.
+    pub fn load_url_with_headers(
+        &self,
+        url: &str,
+        headers: wry::http::HeaderMap,
+    ) -> wry::Result<()> {
+        let url = url.to_string();
+        self.run_with_desktop_service(move |desktop| {
+            desktop.webview.load_url_with_headers(&url, headers)
+        })
+    }
+
+    /// Load HTML content directly into the webview.
+    pub fn load_html(&self, html: &str) -> wry::Result<()> {
+        let html = html.to_string();
+        self.run_with_desktop_service(move |desktop| desktop.webview.load_html(&html))
+    }
+
+    /// Evaluate JavaScript in the webview.
+    pub fn evaluate_script(&self, js: &str) -> wry::Result<()> {
+        let js = js.to_string();
+        self.run_with_desktop_service(move |desktop| desktop.webview.evaluate_script(&js))
     }
 
     /// Create a wry event handler that listens for wry events.

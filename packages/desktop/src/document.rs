@@ -1,4 +1,4 @@
-use crate::{DesktopContext, WeakDesktopContext};
+use crate::DesktopContext;
 use dioxus_core::queue_effect;
 use dioxus_document::{
     create_element_in_head, Document, Eval, LinkProps, MetaProps, ScriptProps, StyleProps,
@@ -8,12 +8,11 @@ use dioxus_web_eval::WebEvaluator;
 /// Represents the desktop-target's provider of evaluators.
 #[derive(Clone)]
 pub struct DesktopDocument {
-    pub(crate) desktop_ctx: WeakDesktopContext,
+    pub(crate) desktop_ctx: DesktopContext,
 }
 
 impl DesktopDocument {
     pub fn new(desktop_ctx: DesktopContext) -> Self {
-        let desktop_ctx = std::rc::Rc::downgrade(&desktop_ctx);
         Self { desktop_ctx }
     }
 }
@@ -24,9 +23,7 @@ impl Document for DesktopDocument {
     }
 
     fn set_title(&self, title: String) {
-        if let Some(ctx) = self.desktop_ctx.upgrade() {
-            ctx.set_title(&title);
-        }
+        self.desktop_ctx.set_title(&title);
     }
 
     /// Create a new meta tag in the head
