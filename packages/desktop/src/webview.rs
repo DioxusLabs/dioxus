@@ -4,8 +4,8 @@ use crate::menubar::DioxusMenu;
 use crate::PendingDesktopContext;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopContext,
-    DesktopService, DesktopServiceProxy,
+    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopService,
+    DesktopServiceProxy,
 };
 use dioxus_hooks::to_owned;
 use std::rc::Rc;
@@ -34,7 +34,7 @@ pub(crate) struct WebviewInstance {
     /// Handle to communicate with the VirtualDom running on a dedicated thread.
     pub dom_handle: VirtualDomHandle,
     pub edits: WebviewEdits,
-    pub desktop_context: DesktopContext,
+    pub desktop_context: Rc<DesktopService>,
 
     /// Channel to receive commands from the VirtualDom.
     /// Uses futures channel for proper async polling with wakers.

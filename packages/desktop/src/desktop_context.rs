@@ -75,12 +75,12 @@ pub fn window() -> DesktopContext {
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
-pub type DesktopContext = Rc<DesktopService>;
+pub type DesktopContext = Rc<DesktopServiceProxy>;
 
 /// A weak handle to the [`DesktopService`] to ensure safe passing.
 /// The problem without this is that the tao window is never dropped and therefore cannot be closed.
 /// This was due to the Rc that had still references because of multiple copies when creating a webview.
-pub type WeakDesktopContext = Weak<DesktopService>;
+pub type WeakDesktopContext = Weak<DesktopServiceProxy>;
 
 /// A proxy to a [`DesktopService`] that can be used from any thread.
 ///
@@ -231,13 +231,6 @@ impl DesktopServiceProxy {
         fn remove_all_shortcuts(&self);
     }
 
-    /// Removes an asset handler by its identifier.
-    ///
-    /// Returns `None` if the handler did not exist.
-    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
-        let name = name.to_string();
-        self.run_with_desktop_service(move |desktop| desktop.remove_asset_handler(&name))
-    }
 
     /// Start the creation of a new window using a component function and window builder.
     ///
@@ -456,27 +449,29 @@ impl DesktopServiceProxy {
     /// The handler stays on the DOM thread (no `Send` requirement). When an asset
     /// request arrives, it's forwarded to the DOM thread where the handler runs.
     ///
+    /// # Panics
+    ///
+    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
+    ///
     /// # Arguments
     ///
-    /// * `registry` - The DOM callback registry (obtained from Dioxus context)
     /// * `name` - Identifier for this handler
     /// * `handler` - The handler function (does not need to be `Send`)
     ///
     /// # Example
     ///
     /// ```rust, ignore
-    /// let registry = consume_context::<Rc<RefCell<DomCallbackRegistry>>>();
     /// let proxy = consume_context::<DesktopServiceProxy>();
-    /// proxy.register_asset_handler(&registry, "my-protocol", |req, resp| {
+    /// proxy.register_asset_handler("my-protocol", |req, resp| {
     ///     // Handle asset request
     /// });
     /// ```
     pub fn register_asset_handler(
         &self,
-        registry: &RefCell<DomCallbackRegistry>,
         name: impl Into<String>,
         handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
+        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
         let name = name.into();
 
         // Store the handler in the DOM registry
@@ -509,9 +504,12 @@ impl DesktopServiceProxy {
     /// The callback stays on the DOM thread (no `Send` requirement). When the
     /// shortcut is triggered, the event is forwarded to the DOM thread.
     ///
+    /// # Panics
+    ///
+    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
+    ///
     /// # Arguments
     ///
-    /// * `registry` - The DOM callback registry (obtained from Dioxus context)
     /// * `hotkey` - The key combination for the shortcut
     /// * `callback` - The callback function (does not need to be `Send`)
     ///
@@ -524,18 +522,18 @@ impl DesktopServiceProxy {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let registry = consume_context::<Rc<RefCell<DomCallbackRegistry>>>();
     /// let proxy = consume_context::<DesktopServiceProxy>();
-    /// let (handle, dom_id) = proxy.create_shortcut(&registry, hotkey, |state| {
+    /// let (handle, dom_id) = proxy.create_shortcut(hotkey, |state| {
     ///     // Handle shortcut
     /// })?;
     /// ```
     pub fn create_shortcut(
         &self,
-        registry: &RefCell<DomCallbackRegistry>,
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<(ShortcutHandle, DomShortcutId), ShortcutRegistryError> {
+        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+
         // Store the callback in the DOM registry
         let dom_id = registry
             .borrow_mut()
@@ -562,6 +560,36 @@ impl DesktopServiceProxy {
                 Err(e)
             }
         }
+    }
+
+    /// Remove an asset handler by name.
+    ///
+    /// This removes the handler from both the DOM registry and the main thread.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
+    pub fn remove_asset_handler(&self, name: &str) {
+        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        registry.borrow_mut().remove_asset_handler(name);
+
+        let name = name.to_string();
+        self.run_with_desktop_service(move |desktop| {
+            desktop.asset_handlers.remove_handler(&name);
+        });
+    }
+
+    /// Remove a shortcut that was created with the inverted callback pattern (`create_shortcut`).
+    ///
+    /// This removes both the main thread shortcut and the DOM callback.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
+    pub fn remove_dom_shortcut(&self, handle: ShortcutHandle, dom_id: DomShortcutId) {
+        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        registry.borrow_mut().remove_shortcut_callback(dom_id);
+        handle.remove();
     }
 }
 
