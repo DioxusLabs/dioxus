@@ -10350,7 +10350,7 @@ checksum = "00810f1d8b74be64b13dbf3db89ac67740615d6c891f0e7b6179326533011a07"
 [[package]]
 name = "js-sys"
 version = "0.3.83"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "once_cell",
  "wasm-bindgen 0.2.106 (git+https://github.com/DioxusLabs/wasm-bindgen-wry)",
@@ -19016,7 +19016,7 @@ checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
 [[package]]
 name = "wasm-bindgen"
 version = "0.2.106"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "wasm-bindgen 0.2.106 (git+https://github.com/wasm-bindgen/wasm-bindgen)",
  "wasm-bindgen-macro 0.2.106 (git+https://github.com/DioxusLabs/wasm-bindgen-wry)",
@@ -19049,10 +19049,9 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-futures"
 version = "0.4.56"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "cfg-if",
- "futures-util",
  "js-sys",
  "once_cell",
  "wasm-bindgen 0.2.106 (git+https://github.com/DioxusLabs/wasm-bindgen-wry)",
@@ -19062,7 +19061,7 @@ dependencies = [
 [[package]]
 name = "wasm-bindgen-macro"
 version = "0.2.106"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -19386,7 +19385,7 @@ dependencies = [
 [[package]]
 name = "web-sys"
 version = "0.3.83"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "js-sys",
  "wasm-bindgen 0.2.106 (git+https://github.com/DioxusLabs/wasm-bindgen-wry)",
@@ -20700,7 +20699,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen"
 version = "0.2.106"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "async-channel 2.5.0",
  "base64 0.22.1",
@@ -20720,7 +20719,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen-macro"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "quote",
  "wry-bindgen-macro-support",
@@ -20729,7 +20728,7 @@ dependencies = [
 [[package]]
 name = "wry-bindgen-macro-support"
 version = "0.1.0"
-source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#a0e6ae062d2dc6b56d635762775372c3a252af9a"
+source = "git+https://github.com/DioxusLabs/wasm-bindgen-wry#19d5e635022fa6c68f009f2fcac897d6f02a142e"
 dependencies = [
  "proc-macro2",
  "quote",
