@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    dom_thread::{spawn_dom_thread, TaskSender, VirtualDomEvent},
+    dom_thread::{spawn_dom_thread, DomThreadHandle, VirtualDomEvent},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
@@ -58,7 +58,7 @@ pub(crate) struct SharedContext {
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
     pub(crate) wry_bindgen: WryBindgen,
-    pub(crate) desktop_thread_tasks: TaskSender,
+    pub(crate) desktop_thread_handle: DomThreadHandle,
 }
 
 impl App {
@@ -73,7 +73,7 @@ impl App {
             let proxy = proxy.clone();
             move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
         });
-        let desktop_thread_tasks = spawn_dom_thread();
+        let desktop_thread_handle = spawn_dom_thread();
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -93,7 +93,7 @@ impl App {
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
                 wry_bindgen,
-                desktop_thread_tasks,
+                desktop_thread_handle,
             }),
         };
 
@@ -222,16 +222,15 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.webviews.remove(&id);
-
-                if self.exit_on_last_window_close && self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
-                }
+                self.window_destroyed(id);
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
+        // Abort the task for this window if it still exists
+        let _ = self.shared.desktop_thread_handle.abort_tx.send(id);
+
         self.webviews.remove(&id);
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {

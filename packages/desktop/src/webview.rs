@@ -403,9 +403,9 @@ impl WebviewInstance {
         ));
 
         // Finally spawn the app in the virtual dom task thread
+        let window_id = desktop_context.window.id();
         let run_app = {
             let proxy = proxy.clone();
-            let window_id = desktop_context.window.id();
             move || {
                 crate::dom_thread::run_virtual_dom(
                     make_dom,
@@ -425,8 +425,9 @@ impl WebviewInstance {
         };
         let future = app_builder.build(run_app, evaluate_script);
         _ = shared
-            .desktop_thread_tasks
-            .send(Box::new(|| future.into_future()));
+            .desktop_thread_handle
+            .task_tx
+            .send((window_id, Box::new(|| future.into_future())));
 
         // Create a handle to communicate with the shared VirtualDom
         // The VirtualDom is already running in the wry-bindgen thread (started in App::new)

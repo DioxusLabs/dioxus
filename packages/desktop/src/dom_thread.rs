@@ -10,9 +10,10 @@ use dioxus_core::{provide_context, ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
-use std::{future::Future, pin::Pin, rc::Rc};
+use std::{collections::HashMap, future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
 use tokio::sync::mpsc::{self as tokio_mpsc, UnboundedSender};
+use tokio::task::AbortHandle;
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
@@ -146,12 +147,26 @@ fn take_edits(mutations: &mut MutationState) -> Option<Vec<u8>> {
     }
 }
 
-type SpawnTask = Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()>>> + Send>;
-pub(crate) type TaskSender = UnboundedSender<SpawnTask>;
+type SpawnTask = (
+    WindowId,
+    Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()>>> + Send>,
+);
+type TaskSender = UnboundedSender<SpawnTask>;
 
-/// Spawn a thread that joins all async tasks
-pub fn spawn_dom_thread() -> TaskSender {
+/// Handle to spawn tasks on the dom thread and abort them by window ID.
+pub(crate) struct DomThreadHandle {
+    /// Channel to send tasks to spawn (with associated window ID).
+    pub task_tx: TaskSender,
+    /// Channel to request task abortion by window ID.
+    pub abort_tx: UnboundedSender<WindowId>,
+}
+
+/// Spawn a thread that runs async tasks and supports aborting them by window ID.
+pub fn spawn_dom_thread() -> DomThreadHandle {
     let (task_tx, mut task_rx): (TaskSender, _) = tokio::sync::mpsc::unbounded_channel();
+    let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
+        tokio::sync::mpsc::unbounded_channel();
+
     std::thread::Builder::new()
         .name("dioxus-desktop-dom".into())
         .spawn(move || {
@@ -163,9 +178,30 @@ pub fn spawn_dom_thread() -> TaskSender {
             runtime.block_on(async move {
                 tokio::task::LocalSet::new()
                     .run_until(async {
-                        while let Some(spawn_task) = task_rx.recv().await {
-                            let fut = spawn_task();
-                            tokio::task::spawn_local(fut);
+                        let mut abort_handles: HashMap<WindowId, AbortHandle> = HashMap::new();
+
+                        loop {
+                            tokio::select! {
+                                biased;
+
+                                // Handle abort requests with priority
+                                Some(window_id) = abort_rx.recv() => {
+                                    if let Some(handle) = abort_handles.remove(&window_id) {
+                                        handle.abort();
+                                    }
+                                }
+
+                                // Handle new task spawns
+                                spawn_result = task_rx.recv() => {
+                                    let Some((window_id, spawn_task)) = spawn_result else {
+                                        // Channel closed, exit the loop
+                                        break;
+                                    };
+                                    let fut = spawn_task();
+                                    let join_handle = tokio::task::spawn_local(fut);
+                                    abort_handles.insert(window_id, join_handle.abort_handle());
+                                }
+                            }
                         }
                     })
                     .await;
@@ -173,5 +209,5 @@ pub fn spawn_dom_thread() -> TaskSender {
         })
         .expect("Failed to spawn VirtualDom thread");
 
-    task_tx
+    DomThreadHandle { task_tx, abort_tx }
 }
