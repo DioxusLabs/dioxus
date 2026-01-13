@@ -3,34 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::any::Any;
 use std::sync::{mpsc::SyncSender, Arc, Mutex};
 use tao::window::WindowId;
-
-/// Wrapper for wry-bindgen AppEvent that allows Clone (required by tao event loop)
-/// The inner Option allows taking the event exactly once.
-pub struct WryBindgenEventWrapper(wry_bindgen::runtime::AppEvent);
-
-impl Clone for WryBindgenEventWrapper {
-    fn clone(&self) -> Self {
-        panic!("Wry requires the clone bound, but never uses it")
-    }
-}
-
-impl std::fmt::Debug for WryBindgenEventWrapper {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("WryBindgenEventWrapper")
-            .field(&"...")
-            .finish()
-    }
-}
-
-impl WryBindgenEventWrapper {
-    pub fn new(event: wry_bindgen::runtime::AppEvent) -> Self {
-        Self(event)
-    }
-
-    pub fn take(self) -> wry_bindgen::runtime::AppEvent {
-        self.0
-    }
-}
+use wry_bindgen::runtime::WryBindgenEvent;
 
 /// Inner type that holds the callback and response channel for DesktopService operations.
 pub(crate) struct DesktopServiceCallbackInner {
@@ -113,7 +86,7 @@ pub enum UserWindowEvent {
     Shutdown,
 
     /// wry-bindgen IPC event (wrapped for Clone compatibility)
-    WryBindgenEvent(WryBindgenEventWrapper),
+    WryBindgenEvent(WryBindgenEvent),
 
     /// Run a closure with access to a specific window's DesktopService on the main thread
     RunWithDesktopService {

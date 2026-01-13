@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
-    dom_thread::{MainThreadCommand, VirtualDomEvent},
+    dom_thread::{spawn_dom_thread, TaskSender, VirtualDomEvent},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
@@ -8,6 +8,7 @@ use crate::{
     webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::VirtualDom;
+use wry_bindgen::wry::WryBindgen;
 
 /// A factory for creating VirtualDom instances on dedicated threads.
 /// This type is Send because it only holds the component function and contexts,
@@ -56,6 +57,8 @@ pub(crate) struct SharedContext {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
+    pub(crate) wry_bindgen: WryBindgen,
+    pub(crate) desktop_thread_tasks: TaskSender,
 }
 
 impl App {
@@ -66,6 +69,11 @@ impl App {
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
 
         let proxy = event_loop.create_proxy();
+        let wry_bindgen = WryBindgen::new({
+            let proxy = proxy.clone();
+            move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
+        });
+        let desktop_thread_tasks = spawn_dom_thread();
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -84,6 +92,8 @@ impl App {
                 proxy,
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
+                wry_bindgen,
+                desktop_thread_tasks,
             }),
         };
 
@@ -415,22 +425,8 @@ impl App {
     ///
     /// This forwards the event to wry-bindgen for processing, which may execute
     /// JavaScript in the webview or handle callbacks from JavaScript.
-    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::runtime::AppEvent) {
-        // Forward to wry-bindgen for processing
-        // This handles IPC messages, script evaluation, etc.
-        // We need to collect webviews to avoid borrowing issues
-        let webview_refs: Vec<_> = self.webviews.values().collect();
-        if let Some(webview) = webview_refs.first() {
-            if let Some(status) = webview.wry_bindgen.handle_user_event(event, |script| {
-                let _ = webview.desktop_context.webview.evaluate_script(script);
-            }) {
-                if status != 0 {
-                    self.control_flow = ControlFlow::Exit;
-                }
-            }
-        } else {
-            println!("failed to get window");
-        }
+    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::runtime::WryBindgenEvent) {
+        self.shared.wry_bindgen.handle_user_event(event);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

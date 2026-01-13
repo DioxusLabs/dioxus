@@ -36,8 +36,6 @@ pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
 
-    /// wry-bindgen state shared across all windows.
-    pub(crate) wry_bindgen: wry_bindgen::wry::WryBindgen,
     /// Channel to send events to the VirtualDom (running in wry-bindgen thread).
     pub(crate) dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
     /// Channel to receive commands from the VirtualDom.
@@ -104,41 +102,10 @@ impl WebviewInstance {
         // Use futures channel for proper async polling with wakers on the main thread
         let (dom_command_tx, dom_command_rx) = futures_channel::mpsc::unbounded();
 
-        // Initialize wry-bindgen runtime
-        // The app future runs the VirtualDom loop
-        let wry_bindgen = wry_bindgen::start_app(
-            {
-                let proxy = proxy.clone();
-                move |event| {
-                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
-                        crate::ipc::WryBindgenEventWrapper::new(event),
-                    ));
-                }
-            },
-            // App closure - VirtualDom runs here
-            {
-                let proxy = proxy.clone();
-                let window_id = window.id();
-                move || {
-                    crate::dom_thread::run_virtual_dom(
-                        make_dom,
-                        dom_event_rx,
-                        dom_command_tx,
-                        proxy,
-                        window_id,
-                    )
-                }
-            },
-            // Async runtime starter
-            |future| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(future);
-            },
-        )
-        .expect("Failed to initialize wry-bindgen");
+        // Start building the wry bindgen future
+        let app_builder = shared.wry_bindgen.app_builder();
+        // Get the wry bindgen protocol handler
+        let protocol = app_builder.protocol_handler();
 
         // TODO: restore on dom thread or remove dom access
         // if let Some(on_build) = cfg.on_window.as_mut() {
@@ -173,23 +140,14 @@ impl WebviewInstance {
 
         let edits = WebviewEdits::new(edit_queue.clone());
 
-        // Create wry-bindgen protocol handler wrapped in Rc for sharing
-        let wry_bg_handler = wry_bindgen.create_protocol_handler("dioxus", {
-            let proxy = shared.proxy.clone();
-            move |event| {
-                let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(
-                    crate::ipc::WryBindgenEventWrapper::new(event),
-                ));
-            }
-        });
-
         let request_handler = {
             to_owned![
                 cfg.custom_head,
                 cfg.custom_index,
                 cfg.root_name,
                 asset_handlers,
-                edits
+                edits,
+                shared
             ];
 
             #[cfg(feature = "tokio_runtime")]
@@ -218,7 +176,15 @@ impl WebviewInstance {
                 }
 
                 let responder = ResponderWrapper { responder };
-                let Some(responder) = wry_bg_handler(&request, responder) else {
+                // Create wry-bindgen protocol handler wrapped in Rc for sharing
+                let protocol_name = "dioxus";
+                let proxy = shared.proxy.clone();
+                let send_app_event = move |event| {
+                    let _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(event));
+                };
+                let response =
+                    protocol.handle_request(protocol_name, send_app_event, &request, responder);
+                let Some(responder) = response else {
                     return;
                 };
                 let responder = responder.responder;
@@ -438,6 +404,32 @@ impl WebviewInstance {
             cfg.window_close_behavior,
         ));
 
+        // Finally spawn the app in the virtual dom task thread
+        let run_app = {
+            let proxy = proxy.clone();
+            let window_id = desktop_context.window.id();
+            move || {
+                crate::dom_thread::run_virtual_dom(
+                    make_dom,
+                    dom_event_rx,
+                    dom_command_tx,
+                    proxy,
+                    window_id,
+                )
+            }
+        };
+        let evaluate_script = {
+            let desktop_context = desktop_context.clone();
+            move |script: &str| {
+                // Evaluate script in the webview
+                let _ = desktop_context.webview.evaluate_script(script);
+            }
+        };
+        let future = app_builder.build(run_app, evaluate_script);
+        _ = shared
+            .desktop_thread_tasks
+            .send(Box::new(|| future.into_future()));
+
         // Create a handle to communicate with the shared VirtualDom
         // The VirtualDom is already running in the wry-bindgen thread (started in App::new)
         // Commands are received via App::process_dom_commands from the shared channel
@@ -453,7 +445,6 @@ impl WebviewInstance {
             dom_handle,
             edits,
             desktop_context,
-            wry_bindgen,
             dom_event_tx,
             dom_command_rx,
             waker,

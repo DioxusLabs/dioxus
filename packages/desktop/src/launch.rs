@@ -94,8 +94,7 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
                 }
 
                 // wry-bindgen IPC event
-                UserWindowEvent::WryBindgenEvent(wrapper) => {
-                    let wry_event = wrapper.take();
+                UserWindowEvent::WryBindgenEvent(wry_event) => {
                     app.handle_wry_bindgen_event(wry_event);
                 }
 

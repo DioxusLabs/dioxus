@@ -10,9 +10,9 @@ use dioxus_core::{provide_context, ScopeId, VirtualDom};
 use dioxus_history::{History, MemoryHistory};
 use dioxus_interpreter_js::MutationState;
 use futures_channel::mpsc as futures_mpsc;
-use std::rc::Rc;
+use std::{future::Future, pin::Pin, rc::Rc};
 use tao::{event_loop::EventLoopProxy, window::WindowId};
-use tokio::sync::mpsc as tokio_mpsc;
+use tokio::sync::mpsc::{self as tokio_mpsc, Receiver, Sender, UnboundedSender};
 
 /// Events sent from the main thread to the VirtualDom thread.
 pub enum VirtualDomEvent {
@@ -144,4 +144,34 @@ fn take_edits(mutations: &mut MutationState) -> Option<Vec<u8>> {
     } else {
         Some(bytes)
     }
+}
+
+type SpawnTask = Box<dyn FnOnce() -> Pin<Box<dyn Future<Output = ()>>> + Send>;
+pub(crate) type TaskSender = UnboundedSender<SpawnTask>;
+
+/// Spawn a thread that joins all async tasks
+pub fn spawn_dom_thread() -> TaskSender {
+    let (task_tx, mut task_rx): (TaskSender, _) = tokio::sync::mpsc::unbounded_channel();
+    std::thread::Builder::new()
+        .name("dioxus-desktop-dom".into())
+        .spawn(move || {
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("Failed to create Tokio runtime for VirtualDom thread");
+
+            runtime.block_on(async move {
+                tokio::task::LocalSet::new()
+                    .run_until(async {
+                        while let Some(spawn_task) = task_rx.recv().await {
+                            let fut = spawn_task();
+                            tokio::task::spawn_local(fut);
+                        }
+                    })
+                    .await;
+            });
+        })
+        .expect("Failed to spawn VirtualDom thread");
+
+    task_tx
 }
