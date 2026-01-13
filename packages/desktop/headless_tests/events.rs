@@ -1,6 +1,7 @@
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use wry_bindgen::wasm_bindgen;
 
 #[path = "./utils.rs"]
 mod utils;
@@ -60,6 +61,16 @@ fn test_mounted() -> Element {
             width: "100px",
             height: "100px",
             onmounted: move |evt| async move {
+                #[wasm_bindgen(crate = wry_bindgen, inline_js = "export function wait_for_frame() {
+                    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+                }")]
+                extern "C" {
+                    #[wasm_bindgen]
+                    async fn wait_for_frame();
+                }
+                // Wait for layout to be computed using requestAnimationFrame
+                wait_for_frame().await;
+
                 let rect = evt.get_client_rect().await.unwrap();
                 println!("rect: {rect:?}");
                 assert_eq!(rect.width(), 100.0);

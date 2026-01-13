@@ -127,6 +127,7 @@ reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
+wasm-bindgen-futures = { workspace = true }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

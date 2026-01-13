@@ -15,7 +15,7 @@ use std::{
     cell::Cell,
     future::{Future, IntoFuture},
     pin::Pin,
-    rc::{Rc, Weak},
+    rc::Rc,
     sync::Arc,
 };
 use tao::{
