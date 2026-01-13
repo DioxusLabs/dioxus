@@ -539,6 +539,81 @@ edition = "2021"
         assert!(out.join("Cargo.toml").exists());
         assert!(out.join("src/main.rs").exists());
     }
+
+    #[test]
+    fn cargo_generate_retries_with_sanitized_gitconfig_on_class_os_error() {
+        let _env_lock = ENV_LOCK.lock().expect("ENV_LOCK mutex poisoned");
+        if !git_available() {
+            return;
+        }
+
+        let temp = tempfile::tempdir().expect("create temp dir");
+        let template_dir = write_template_repo(temp.path());
+        let template_url = file_url(&template_dir);
+
+        let home_dir = temp.path().join("home");
+        fs::create_dir_all(&home_dir).expect("create fake HOME dir");
+        fs::write(
+            home_dir.join(".gitconfig"),
+            r#"[url "file:///this/path/does/not/exist/"]
+    insteadOf = file:///
+"#,
+        )
+        .expect("write .gitconfig");
+
+        let _home = set_env_var("HOME", &home_dir);
+        let _userprofile = set_env_var("USERPROFILE", &home_dir);
+        let _xdg_config_home = set_env_var("XDG_CONFIG_HOME", &home_dir);
+
+        let fail_dest = temp.path().join("out_fail").join("myapp");
+        fs::create_dir_all(&fail_dest).expect("create fail destination");
+
+        let args_fail = GenerateArgs {
+            destination: Some(fail_dest),
+            init: true,
+            name: Some("myapp".to_string()),
+            silent: true,
+            vcs: Some(Vcs::None),
+            template_path: TemplatePath {
+                git: Some(template_url.clone()),
+                branch: Some("main".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let err = cargo_generate::generate(args_fail).expect_err("expected cargo-generate to fail");
+        assert!(
+            format!("{err:#}").contains("class=Os"),
+            "expected a libgit2 OS error, got:\n{err:#}"
+        );
+        assert!(
+            super::should_retry_with_sanitized_gitconfig(&err),
+            "expected retryable error, got:\n{err:#}"
+        );
+
+        let ok_dest = temp.path().join("out_ok").join("myapp");
+        fs::create_dir_all(&ok_dest).expect("create ok destination");
+
+        let args_ok = GenerateArgs {
+            destination: Some(ok_dest.clone()),
+            init: true,
+            name: Some("myapp".to_string()),
+            silent: true,
+            vcs: Some(Vcs::None),
+            template_path: TemplatePath {
+                git: Some(template_url),
+                branch: Some("main".to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let out =
+            cargo_generate_with_gitconfig_fallback(args_ok).expect("expected fallback to work");
+        assert!(out.join("Cargo.toml").exists());
+        assert!(out.join("src/main.rs").exists());
+    }
 }
 
 /// Check if the requested project can be created in the filesystem
