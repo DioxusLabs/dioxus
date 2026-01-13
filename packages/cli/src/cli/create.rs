@@ -5,6 +5,7 @@ use cargo_generate::{GenerateArgs, TemplatePath, Vcs};
 use git2::ConfigLevel;
 use std::{
     fs,
+    panic::AssertUnwindSafe,
     path::Path,
     sync::{LazyLock, Mutex},
 };
@@ -245,10 +246,20 @@ fn remove_triple_newlines(string: &str) -> String {
 /// Run cargo-generate, retrying with a sanitized gitconfig when the user's `url.*.insteadOf`
 /// config rewrites a valid template URL into something libgit2/git2 can't fetch (eg `git@host:...`).
 pub(crate) fn cargo_generate_with_gitconfig_fallback(args: GenerateArgs) -> Result<PathBuf> {
-    match cargo_generate::generate(args.clone()) {
+    match cargo_generate_generate(args.clone()) {
         Ok(path) => Ok(path),
         Err(err) => {
-            if !should_retry_with_sanitized_gitconfig(&err) || args.gitconfig.is_some() {
+            let (should_retry, err) = match err {
+                CargoGenerateFailure::Error(err) => {
+                    (should_retry_with_sanitized_gitconfig(&err), err)
+                }
+                CargoGenerateFailure::Panic(payload) => {
+                    let err = anyhow::anyhow!("cargo-generate panicked: {payload}");
+                    (true, err)
+                }
+            };
+
+            if !should_retry || args.gitconfig.is_some() {
                 return Err(err);
             }
 
@@ -270,12 +281,40 @@ pub(crate) fn cargo_generate_with_gitconfig_fallback(args: GenerateArgs) -> Resu
             // Keep the temp file alive for the duration of this call.
             let _libgit2_config_override = Libgit2ConfigOverride::new()?;
 
-            cargo_generate::generate(retry_args).map_err(|retry_err| {
+            cargo_generate_generate(retry_args).map_err(|retry_err| {
+                let retry_err = match retry_err {
+                    CargoGenerateFailure::Error(err) => err,
+                    CargoGenerateFailure::Panic(payload) => {
+                        anyhow::anyhow!("cargo-generate panicked: {payload}")
+                    }
+                };
+
                 retry_err.context(
                     "Template generation failed. Note: dx retried with a sanitized gitconfig to avoid url.insteadOf rewrites.",
                 )
             })
         }
+    }
+}
+
+enum CargoGenerateFailure {
+    Error(anyhow::Error),
+    Panic(String),
+}
+
+fn cargo_generate_generate(args: GenerateArgs) -> std::result::Result<PathBuf, CargoGenerateFailure> {
+    std::panic::catch_unwind(AssertUnwindSafe(|| cargo_generate::generate(args)))
+        .map_err(|payload| CargoGenerateFailure::Panic(panic_payload_to_string(payload)))?
+        .map_err(CargoGenerateFailure::Error)
+}
+
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else {
+        "<non-string panic payload>".to_string()
     }
 }
 
@@ -316,18 +355,9 @@ impl Drop for Libgit2ConfigOverride {
 }
 
 fn should_retry_with_sanitized_gitconfig(err: &anyhow::Error) -> bool {
-    // `cargo-generate` wraps git clone errors with this context; use it to avoid retrying unrelated failures.
-    let msg = format!("{err:#}");
-    if !msg.contains("Please check if the Git user / repository exists.") {
-        return false;
-    }
-
-    // Common libgit2/git2 failures triggered by url.insteadOf rewriting into an unsupported URL.
-    msg.contains("unsupported URL protocol")
-        || msg.contains("invalid argument: 'port'")
-        || msg.contains("class=Net (12)")
-        || msg.contains("class=Ssh")
-        || msg.contains("hostkey")
+    // `cargo-generate` wraps git clone errors with this context. The exact underlying libgit2
+    // error varies (eg `class=Net`, `class=Ssh`, `class=Os` timeouts), so don't string-match on it.
+    format!("{err:#}").contains("Please check if the Git user / repository exists.")
 }
 
 #[cfg(test)]
@@ -504,7 +534,8 @@ edition = "2021"
             ..Default::default()
         };
 
-        let out = cargo_generate_with_gitconfig_fallback(args_ok).expect("expected fallback to work");
+        let out =
+            cargo_generate_with_gitconfig_fallback(args_ok).expect("expected fallback to work");
         assert!(out.join("Cargo.toml").exists());
         assert!(out.join("src/main.rs").exists());
     }
