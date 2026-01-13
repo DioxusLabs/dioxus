@@ -1,7 +1,7 @@
 use dioxus_html::{
     DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
 };
-use form::WebFormData;
+pub use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
 use web_sys::{Document, Element, Event};
@@ -31,9 +31,17 @@ mod visible;
 mod wheel;
 
 /// A wrapper for the websys event that allows us to give it the impls from dioxus-html
-pub(crate) struct Synthetic<T: 'static> {
+pub struct Synthetic<T: 'static> {
     /// The inner web sys event that the synthetic event wraps
     pub event: T,
+}
+
+impl<T: Clone + 'static> Clone for Synthetic<T> {
+    fn clone(&self) -> Self {
+        Self {
+            event: self.event.clone(),
+        }
+    }
 }
 
 impl<T: 'static> Synthetic<T> {
@@ -240,9 +248,13 @@ pub trait WebEventExt {
     }
 }
 
-struct GenericWebSysEvent {
-    raw: Event,
-    element: Element,
+/// A generic web-sys event that stores the raw event and target element.
+/// This is used as the platform event data for web-sys events.
+pub struct GenericWebSysEvent {
+    /// The raw web_sys::Event
+    pub raw: Event,
+    /// The target element
+    pub element: Element,
 }
 
 // todo: some of these events are being casted to the wrong event type.

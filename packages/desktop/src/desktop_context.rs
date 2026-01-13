@@ -2,7 +2,6 @@ use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
     dom_thread::{DomCallbackRegistry, DomCallbackRequest, DomShortcutId, VirtualDomEvent},
-    file_upload::NativeFileHover,
     ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
@@ -691,7 +690,6 @@ pub struct DesktopService {
     pub(crate) shared: Rc<SharedContext>,
 
     pub(crate) asset_handlers: AssetHandlerRegistry,
-    pub(crate) file_hover: NativeFileHover,
     pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
 
     /// Channel to send events to the DOM thread for the inverted callback pattern.
@@ -716,7 +714,6 @@ impl DesktopService {
         window: Arc<Window>,
         shared: Rc<SharedContext>,
         asset_handlers: AssetHandlerRegistry,
-        file_hover: NativeFileHover,
         close_behaviour: WindowCloseBehaviour,
         dom_tx: UnboundedSender<VirtualDomEvent>,
     ) -> Self {
@@ -725,7 +722,6 @@ impl DesktopService {
             webview,
             shared,
             asset_handlers,
-            file_hover,
             close_behaviour: Rc::new(Cell::new(close_behaviour)),
             dom_tx,
             #[cfg(target_os = "ios")]

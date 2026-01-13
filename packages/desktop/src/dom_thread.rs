@@ -6,6 +6,7 @@
 
 use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
+use crate::file_upload::NativeFileHover;
 use crate::ipc::UserWindowEvent;
 use crate::shortcut::HotKeyState;
 use crate::AssetRequest;
@@ -182,11 +183,12 @@ pub async fn run_virtual_dom<F>(
     command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
+    file_hover: NativeFileHover,
 ) where
     F: FnOnce() -> VirtualDom + Send + 'static,
 {
     let dom = make_dom();
-    crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
+    crate::wry_bindgen_bridge::setup_event_handler(dom.runtime(), file_hover);
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
     let desktop_service_proxy = DesktopContext::new(proxy, window_id, event_tx);
 

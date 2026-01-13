@@ -3,8 +3,10 @@
 //! This module provides the bridge between dioxus desktop and wry-bindgen,
 //! enabling typed Rust<->JS communication through wry-bindgen's binary protocol.
 
+use crate::file_upload::{DesktopFileDragEvent, NativeFileHover};
 use dioxus_core::{ElementId, Runtime};
-use dioxus_web_sys_events::virtual_event_from_websys_event;
+use dioxus_html::PlatformEventData;
+use dioxus_web_sys_events::{virtual_event_from_websys_event, Synthetic};
 use std::any::Any;
 use std::rc::Rc;
 use wry_bindgen::prelude::*;
@@ -32,11 +34,18 @@ extern "C" {
 /// - bubbles: Whether the event bubbles
 ///
 /// Returns true if preventDefault should be called.
-pub fn setup_event_handler(runtime: Rc<Runtime>) {
+pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     let runtime_clone = runtime.clone();
     let event_closure = Closure::new(
         move |event: web_sys::Event, name: String, element_id: u64, bubbles: bool| {
-            handle_event_from_js(&runtime_clone, event, name, element_id, bubbles)
+            handle_event_from_js(
+                &runtime_clone,
+                &file_hover,
+                event,
+                name,
+                element_id,
+                bubbles,
+            )
         },
     );
 
@@ -50,9 +59,18 @@ pub fn setup_event_handler(runtime: Rc<Runtime>) {
     setMountedHandler(mounted_closure);
 }
 
+/// Check if the event name is a drag event.
+fn is_drag_event(name: &str) -> bool {
+    matches!(
+        name,
+        "dragenter" | "dragover" | "dragleave" | "drop" | "dragend" | "drag" | "dragstart"
+    )
+}
+
 /// Handle an event from JavaScript, returning whether to prevent default.
 fn handle_event_from_js(
     runtime: &Rc<Runtime>,
+    file_hover: &NativeFileHover,
     event: web_sys::Event,
     name: String,
     element_id: u64,
@@ -70,8 +88,28 @@ fn handle_event_from_js(
                 .expect("document should have a root element")
         });
 
-    // Convert to platform event data using the shared web-sys-events crate
-    let platform_event = virtual_event_from_websys_event(event, target);
+    // For drag events, we need to inject native file paths from the file_hover context
+    let platform_event: PlatformEventData = if is_drag_event(&name) {
+        // Get native file paths from the file_hover
+        let native_files = file_hover
+            .current()
+            .map(|evt| match evt {
+                wry::DragDropEvent::Drop { paths, .. } => paths,
+                wry::DragDropEvent::Enter { paths, .. } => paths,
+                _ => vec![],
+            })
+            .unwrap_or_default();
+        println!("Native files for drag event '{}': {:?}", name, native_files);
+
+        // Create a DesktopFileDragEvent with native file paths
+        let drag_event: web_sys::DragEvent =
+            event.dyn_into().expect("drag event should be DragEvent");
+        let desktop_drag = DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
+        PlatformEventData::new(Box::new(desktop_drag))
+    } else {
+        // Convert to platform event data using the shared web-sys-events crate
+        virtual_event_from_websys_event(event, target)
+    };
 
     let element = ElementId(element_id as usize);
     let event = dioxus_core::Event::new(Rc::new(platform_event) as Rc<dyn Any>, bubbles);

@@ -12,6 +12,7 @@ mod desktop_context;
 mod document;
 mod dom_thread;
 mod edits;
+mod event_converter;
 mod event_handlers;
 mod file_upload;
 mod hooks;

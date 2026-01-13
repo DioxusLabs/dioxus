@@ -398,7 +398,6 @@ impl WebviewInstance {
             window,
             shared.clone(),
             asset_handlers,
-            file_hover,
             cfg.window_close_behavior,
             event_tx.clone(),
         ));
@@ -416,6 +415,7 @@ impl WebviewInstance {
                     dom_command_tx,
                     proxy,
                     window_id,
+                    file_hover,
                 )
             }
         };

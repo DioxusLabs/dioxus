@@ -6,9 +6,13 @@ use std::any::Any;
 use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
 use web_sys::{Element, Event, FileReader};
 
-pub(crate) struct WebFormData {
-    element: Element,
-    event: Event,
+/// Web-sys form data implementation.
+/// Wraps a web_sys Element and Event to provide form data extraction.
+pub struct WebFormData {
+    /// The target element of the form event
+    pub element: Element,
+    /// The raw form event
+    pub event: Event,
 }
 
 impl WebEventExt for dioxus_html::FormData {
