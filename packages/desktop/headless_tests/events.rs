@@ -61,14 +61,14 @@ fn test_mounted() -> Element {
             width: "100px",
             height: "100px",
             onmounted: move |evt| async move {
-                #[wasm_bindgen(crate = wry_bindgen, inline_js = "export function wait_for_frame() {
-                    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+                #[wasm_bindgen(crate = wry_bindgen, inline_js = "export async function wait_for_frame() {
+                    return new Promise((resolve) => setTimeout(() => resolve()));
                 }")]
                 extern "C" {
                     #[wasm_bindgen]
                     async fn wait_for_frame();
                 }
-                // Wait for layout to be computed using requestAnimationFrame
+                // Wait for layout to be computed using setTimeout
                 wait_for_frame().await;
 
                 let rect = evt.get_client_rect().await.unwrap();
