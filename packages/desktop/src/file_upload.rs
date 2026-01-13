@@ -12,8 +12,8 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
     FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    Modifiers, NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
-    SerializedMouseData, SerializedPointInteraction,
+    Modifiers, NativeFileData, SerializedFormObject, SerializedMouseData,
+    SerializedPointInteraction,
 };
 use dioxus_web_sys_events::Synthetic;
 

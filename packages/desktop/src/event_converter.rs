@@ -4,7 +4,7 @@
 //! desktop-specific event types like DesktopFileDragEvent which include
 //! native file paths.
 
-use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
+use crate::file_upload::{DesktopFileData, DesktopFileDragEvent, DesktopFormData};
 use dioxus_html::{DragData, FileData, FormData, FormValue, HtmlEventConverter, PlatformEventData};
 use dioxus_web_sys_events::{GenericWebSysEvent, WebEventConverter};
 use std::path::PathBuf;
@@ -66,13 +66,10 @@ impl HtmlEventConverter for DesktopEventConverter {
     }
 
     fn convert_form_data(&self, event: &PlatformEventData) -> dioxus_html::FormData {
-        // Get the underlying web-sys event
+        // Next, check for web-sys events (from wry-bindgen bridge)
         if let Some(web_event) = event.downcast::<GenericWebSysEvent>() {
             // Check if this is a file input
-            if let Some(input) = web_event
-                .element
-                .dyn_ref::<web_sys::HtmlInputElement>()
-            {
+            if let Some(input) = web_event.element.dyn_ref::<web_sys::HtmlInputElement>() {
                 if input.type_() == "file" {
                     // Get files from the input - the filenames contain the native paths
                     if let Some(file_list) = input.files() {
@@ -85,13 +82,16 @@ impl HtmlEventConverter for DesktopEventConverter {
                                 let path = PathBuf::from(file.name());
                                 if path.exists() {
                                     let file_data = FileData::new(DesktopFileData(path));
-                                    values.push((input_name.clone(), FormValue::File(Some(file_data))));
+                                    values.push((
+                                        input_name.clone(),
+                                        FormValue::File(Some(file_data)),
+                                    ));
                                 }
                             }
                         }
 
                         if !values.is_empty() {
-                            return FormData::new(crate::file_upload::DesktopFormData::new(values));
+                            return FormData::new(DesktopFormData::new(values));
                         }
                     }
                 }
