@@ -110,10 +110,12 @@ async fn run_virtual_dom_loop(
                             if let Some(edits) = take_edits(&mut mutations) {
                                 let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                                 waiting_for_edits_ack = true;
+                                println!("waiting for ack");
                             }
                         }
                     }
                     VirtualDomEvent::EditsAcknowledged => {
+                        println!("got ack");
                         waiting_for_edits_ack = false;
                     }
                     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -130,6 +132,7 @@ async fn run_virtual_dom_loop(
                 if let Some(edits) = take_edits(&mut mutations) {
                     let _ = command_tx.unbounded_send(MainThreadCommand::Mutations(edits));
                     waiting_for_edits_ack = true;
+                    println!("waiting for ack");
                 }
             }
         }

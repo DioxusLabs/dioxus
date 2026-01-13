@@ -36,8 +36,6 @@ pub(crate) struct WebviewInstance {
     pub edits: WebviewEdits,
     pub desktop_context: DesktopContext,
 
-    /// Channel to send events to the VirtualDom (running in wry-bindgen thread).
-    pub(crate) dom_event_tx: tokio::sync::mpsc::UnboundedSender<VirtualDomEvent>,
     /// Channel to receive commands from the VirtualDom.
     /// Uses futures channel for proper async polling with wakers.
     pub(crate) dom_command_rx: futures_channel::mpsc::UnboundedReceiver<MainThreadCommand>,
@@ -136,7 +134,7 @@ impl WebviewInstance {
 
         // Use shared channels for VirtualDom communication
         // The VirtualDom is already running in the wry-bindgen thread
-        let event_tx = dom_event_tx.clone();
+        let event_tx = dom_event_tx;
 
         let edits = WebviewEdits::new(edit_queue.clone());
 
@@ -445,7 +443,6 @@ impl WebviewInstance {
             dom_handle,
             edits,
             desktop_context,
-            dom_event_tx,
             dom_command_rx,
             waker,
             _menu: menu,

@@ -16,11 +16,13 @@ fn main() {
 fn app() -> Element {
     let proxy = use_context::<DesktopServiceProxy>();
     let onclick = move |_| {
+        println!("clicked");
         proxy.new_window(|| VirtualDom::new(popup), Default::default);
     };
 
     rsx! {
         button { onclick, "New Window" }
+        Canvas {}
     }
 }
 
@@ -50,6 +52,9 @@ fn Canvas() -> Element {
 }
 
 fn draw_canvas() {
+    let proxy: DesktopServiceProxy = consume_context();
+    proxy.devtool();
+    println!("Running effect");
     let document = web_sys::window().unwrap().document().unwrap();
     let canvas = document.get_element_by_id("canvas").unwrap();
     let canvas: web_sys::HtmlCanvasElement = canvas
