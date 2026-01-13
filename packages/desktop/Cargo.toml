@@ -55,7 +55,7 @@ rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
-wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry", package = "wasm-bindgen" }
+wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
 web-sys = { workspace = true, features = [
     "Document",
     "Element",

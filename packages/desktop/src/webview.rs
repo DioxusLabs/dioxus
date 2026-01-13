@@ -156,6 +156,7 @@ impl WebviewInstance {
                   responder: RequestAsyncResponder| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let _lock = crate::android_sync_lock::android_runtime_lock();
 
                 struct ResponderWrapper {
                     responder: RequestAsyncResponder,
@@ -205,6 +206,7 @@ impl WebviewInstance {
             let window_id = window.id();
             to_owned![shared.proxy];
             move |payload: wry::http::Request<String>| {
+                let _guard = crate::android_sync_lock::android_runtime_lock();
                 // defer the event to the main thread
                 let body = payload.into_body();
                 if let Ok(msg) = serde_json::from_str(&body) {
@@ -217,6 +219,7 @@ impl WebviewInstance {
             to_owned![file_hover];
             let (proxy, window_id) = (shared.proxy.to_owned(), window.id());
             move |evt: DragDropEvent| {
+                let _guard = crate::android_sync_lock::android_runtime_lock();
                 if cfg!(not(windows)) {
                     // Update the most recent file drop event - when the event comes in from the webview we can use the
                     // most recent event to build a new event with the files in it.
@@ -263,6 +266,7 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(move |var| {
+                let _guard = crate::android_sync_lock::android_runtime_lock();
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
                 if var.starts_with("dioxus://")
@@ -314,6 +318,7 @@ impl WebviewInstance {
             webview = webview.with_custom_protocol(name, move |a, b| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 handler(a, b)
             });
         }
@@ -325,6 +330,7 @@ impl WebviewInstance {
             webview = webview.with_asynchronous_custom_protocol(name, move |a, b, c| {
                 #[cfg(feature = "tokio_runtime")]
                 let _guard = tokio_rt.enter();
+                let _lock = crate::android_sync_lock::android_runtime_lock();
                 handler(a, b, c)
             });
         }
