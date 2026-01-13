@@ -9,20 +9,14 @@
 //! calls "launch" on the currently-configured renderer you have. So if the `web` feature is enabled, it will launch a web
 //! app, and if the `desktop` feature is enabled, it will launch a desktop app.
 
-use dioxus::{desktop::DesktopContext, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus::launch(app);
 }
 
 fn app() -> Element {
-    // From a component, get the proxy from context and set the window ID
-    let proxy = use_context::<DesktopContext>();
-
-    // Run a closure synchronously on the main thread
-    let title = proxy.title();
-
     rsx! {
-        div { "The title is {title}" }
+        div { "Hello, world!" }
     }
 }
