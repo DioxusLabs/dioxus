@@ -66,6 +66,7 @@ async fn main() -> ExitCode {
             Commands::Bundle(opts) => opts.bundle().await,
             Commands::Run(opts) => opts.run().await,
             Commands::SelfUpdate(opts) => opts.self_update().await,
+            Commands::PatchWasmBindgen(opts) => opts.patch_wasm_bindgen().await,
             Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
             Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,

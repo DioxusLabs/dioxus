@@ -10,6 +10,7 @@ pub(crate) mod doctor;
 pub(crate) mod hotpatch;
 pub(crate) mod init;
 pub(crate) mod link;
+pub(crate) mod patch_wasm_bindgen;
 pub(crate) mod platform_override;
 pub(crate) mod print;
 pub(crate) mod run;
@@ -106,6 +107,10 @@ pub(crate) enum Commands {
     #[clap(subcommand)]
     #[clap(name = "config")]
     Config(config::Config),
+
+    /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
+    #[clap(name = "patch-wasm-bindgen")]
+    PatchWasmBindgen(patch_wasm_bindgen::PatchWasmBindgen),
 
     /// Update the Dioxus CLI to the latest version.
     #[clap(name = "self-update")]
