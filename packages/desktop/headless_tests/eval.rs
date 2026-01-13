@@ -34,7 +34,7 @@ fn app() -> Element {
     use_future(|| async {
         let eval = document::eval(r#"return;"#);
 
-        eval.await.unwrap();
+        _ = eval.await;
         EVALS_RETURNED.with_mut(|x| *x += 1);
     });
 

@@ -46,11 +46,10 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
                 let event = {value};
                 let element = document.getElementById('{id}');
                 {extra}
-                element.dispatchEvent(event);
-                "#
+                element.dispatchEvent(event);"#
             );
 
-            document::eval(&js).await.unwrap();
+            _ = document::eval(&js).await;
         });
     })
 }

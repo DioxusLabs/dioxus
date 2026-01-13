@@ -473,6 +473,7 @@ fn test_form_input() -> Element {
 
         // And then the value the form gives us should also match
         values.with_mut(|x| {
+            println!("{x:?}");
             assert_eq!(x.iter().find(|f| f.0 == "username").unwrap().1, "hello");
             assert_eq!(x.iter().find(|f| f.0 == "full-name").unwrap().1, "lorem");
             assert_eq!(x.iter().find(|f| f.0 == "password").unwrap().1, "ipsum");
@@ -575,9 +576,9 @@ fn test_select_multiple_options() -> Element {
             name: "country",
             multiple: true,
             oninput: move |ev| {
-                let values = ev.value();
-                let values = values.split(',').collect::<Vec<_>>();
-                assert_eq!(values, vec!["usa", "canada"]);
+                let values = ev.values();
+                let stringy_values = values.iter().map(|(_, v)| v).collect::<Vec<_>>();
+                assert_eq!(stringy_values, vec!["usa", "canada"]);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             },
             option { id: "usa", value: "usa", "USA" }

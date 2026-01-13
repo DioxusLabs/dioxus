@@ -5816,6 +5816,7 @@ dependencies = [
  "tray-icon",
  "tungstenite 0.27.0",
  "wasm-bindgen 0.2.105",
+ "wasm-bindgen-futures",
  "web-sys",
  "webbrowser",
  "wry",
