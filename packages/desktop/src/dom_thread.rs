@@ -4,7 +4,8 @@
 //! responsiveness. The main thread continues to run the tao event loop and manage
 //! windows, while VirtualDom polling and rendering happens on separate threads.
 
-use crate::desktop_context::DesktopServiceProxy;
+use crate::desktop_context::DesktopContext;
+use crate::document::DesktopDocument;
 use crate::ipc::UserWindowEvent;
 use crate::shortcut::HotKeyState;
 use crate::AssetRequest;
@@ -97,7 +98,12 @@ impl DomCallbackRegistry {
     }
 
     /// Invoke an asset handler if it exists.
-    pub fn invoke_asset_handler(&self, name: &str, request: AssetRequest, responder: RequestAsyncResponder) -> bool {
+    pub fn invoke_asset_handler(
+        &self,
+        name: &str,
+        request: AssetRequest,
+        responder: RequestAsyncResponder,
+    ) -> bool {
         if let Some(handler) = self.asset_handlers.get(name) {
             handler(request, responder);
             true
@@ -180,13 +186,15 @@ pub async fn run_virtual_dom<F>(
     let dom = make_dom();
     crate::wry_bindgen_bridge::setup_event_handler(dom.runtime());
     let history_provider: Rc<dyn History> = Rc::new(MemoryHistory::default());
-    let desktop_service_proxy = DesktopServiceProxy::new(proxy, window_id, event_tx);
+    let desktop_service_proxy = DesktopContext::new(proxy, window_id, event_tx);
 
     // Create the callback registry for the inverted callback pattern
     let callback_registry = Rc::new(RefCell::new(DomCallbackRegistry::new()));
 
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
+        provide_context(Rc::new(DesktopDocument::new(desktop_service_proxy.clone()))
+            as Rc<dyn dioxus_document::Document>);
         provide_context(desktop_service_proxy);
         provide_context(callback_registry.clone());
     });

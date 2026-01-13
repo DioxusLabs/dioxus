@@ -5,7 +5,7 @@ use crate::PendingDesktopContext;
 use crate::{
     app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
     file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, Config, DesktopService,
-    DesktopServiceProxy,
+    DesktopContext,
 };
 use dioxus_hooks::to_owned;
 use std::rc::Rc;
@@ -555,7 +555,7 @@ impl WebviewInstance {
 pub(crate) struct PendingWebview {
     dom: MakeVirtualDom,
     cfg: Config,
-    sender: futures_channel::oneshot::Sender<DesktopServiceProxy>,
+    sender: futures_channel::oneshot::Sender<DesktopContext>,
 }
 
 impl PendingWebview {

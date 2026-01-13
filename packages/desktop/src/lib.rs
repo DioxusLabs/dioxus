@@ -48,9 +48,7 @@ pub mod trayicon;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
-pub use desktop_context::{
-    window, DesktopContext, DesktopService, DesktopServiceProxy, PendingDesktopContext,
-};
+pub use desktop_context::{window, DesktopContext, DesktopService, PendingDesktopContext};
 pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;

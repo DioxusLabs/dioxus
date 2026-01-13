@@ -4,7 +4,7 @@
 //! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
 //! own context, root elements, etc.
 
-use dioxus::{desktop::DesktopServiceProxy, prelude::*};
+use dioxus::{desktop::DesktopContext, prelude::*};
 use std::f64;
 use std::{cell::Cell, rc::Rc};
 use wasm_bindgen::prelude::*;
@@ -14,7 +14,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let proxy = use_context::<DesktopServiceProxy>();
+    let proxy = use_context::<DesktopContext>();
     let onclick = move |_| {
         println!("clicked");
         proxy.new_window(|| VirtualDom::new(popup), Default::default);
@@ -52,7 +52,7 @@ fn Canvas() -> Element {
 }
 
 fn draw_canvas() {
-    let proxy: DesktopServiceProxy = consume_context();
+    let proxy: DesktopContext = consume_context();
     proxy.devtool();
     println!("Running effect");
     let document = web_sys::window().unwrap().document().unwrap();

@@ -90,36 +90,15 @@ pub fn window() -> DesktopContext {
 }
 
 /// A handle to the [`DesktopService`] that can be passed around.
-pub type DesktopContext = DesktopServiceProxy;
-
-/// A proxy to a [`DesktopService`] that can be used from any thread.
-///
-/// This type is `Send + Sync` and can be used to run closures on the main thread
-/// with access to the [`DesktopService`]. This is useful for scenarios where you need
-/// to interact with the desktop window from a background thread.
-///
-/// # Example
-///
-/// ```rust, ignore
-/// let proxy = window().proxy();
-///
-/// // Can be sent to another thread
-/// std::thread::spawn(move || {
-///     let result = proxy.run_with_desktop_service(|desktop| {
-///         desktop.window.title().to_string()
-///     });
-///     println!("Window title: {}", result);
-/// });
-/// ```
 #[derive(Clone)]
-pub struct DesktopServiceProxy {
+pub struct DesktopContext {
     proxy: EventLoopProxy<UserWindowEvent>,
     window_id: WindowId,
     /// Channel to send events to the DOM thread for the inverted callback pattern.
     dom_tx: UnboundedSender<VirtualDomEvent>,
 }
 
-impl DesktopServiceProxy {
+impl DesktopContext {
     /// Create a new [`DesktopServiceProxy`] from an event loop proxy.
     ///
     /// # Arguments
@@ -133,7 +112,7 @@ impl DesktopServiceProxy {
     /// ```rust, ignore
     /// let proxy = DesktopServiceProxy::new(event_loop_proxy, window_id, dom_tx);
     /// ```
-    pub fn new(
+    pub(crate) fn new(
         proxy: EventLoopProxy<UserWindowEvent>,
         window_id: WindowId,
         dom_tx: UnboundedSender<VirtualDomEvent>,
@@ -958,8 +937,8 @@ impl DesktopService {
     ///     println!("Window title: {}", result);
     /// });
     /// ```
-    pub fn proxy(&self) -> DesktopServiceProxy {
-        DesktopServiceProxy {
+    pub fn proxy(&self) -> DesktopContext {
+        DesktopContext {
             proxy: self.shared.proxy.clone(),
             window_id: self.window.id(),
             dom_tx: self.dom_tx.clone(),
@@ -1033,27 +1012,25 @@ fn is_main_thread() -> bool {
 /// # }
 /// ```
 pub struct PendingDesktopContext {
-    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopServiceProxy>,
+    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
 }
 
 impl PendingDesktopContext {
     /// Resolve the pending context into a [`DesktopServiceProxy`].
-    pub async fn resolve(self) -> DesktopServiceProxy {
+    pub async fn resolve(self) -> DesktopContext {
         self.try_resolve()
             .await
             .expect("Failed to resolve pending desktop context")
     }
 
     /// Try to resolve the pending context into a [`DesktopServiceProxy`].
-    pub async fn try_resolve(
-        self,
-    ) -> Result<DesktopServiceProxy, futures_channel::oneshot::Canceled> {
+    pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
         self.receiver.await
     }
 }
 
 impl IntoFuture for PendingDesktopContext {
-    type Output = DesktopServiceProxy;
+    type Output = DesktopContext;
 
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 
