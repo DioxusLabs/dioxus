@@ -4,15 +4,16 @@
 //! This works by spawning a new window when the user clicks a button. We have to build a new virtualdom which has its
 //! own context, root elements, etc.
 
-use dioxus::prelude::*;
+use dioxus::{desktop::DesktopServiceProxy, prelude::*};
 
 fn main() {
     dioxus::launch(app);
 }
 
 fn app() -> Element {
+    let proxy = use_context::<DesktopServiceProxy>();
     let onclick = move |_| {
-        dioxus::desktop::window().new_window(|| VirtualDom::new(popup), Default::default());
+        proxy.new_window(|| VirtualDom::new(popup), Default::default);
     };
 
     rsx! {

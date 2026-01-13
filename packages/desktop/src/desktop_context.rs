@@ -1,5 +1,5 @@
 use crate::{
-    app::{MakeVirtualDom, SharedContext},
+    app::SharedContext,
     assets::AssetHandlerRegistry,
     file_upload::NativeFileHover,
     ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
@@ -7,7 +7,7 @@ use crate::{
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{Callback, Element, VirtualDom};
+use dioxus_core::{Callback, VirtualDom};
 use std::{
     any::Any,
     cell::Cell,
@@ -17,14 +17,50 @@ use std::{
     sync::Arc,
 };
 use tao::{
+    dpi::{PhysicalPosition, PhysicalSize, Position, Size},
+    error::{ExternalError, NotSupportedError},
     event::Event,
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
-    window::{Fullscreen as WryFullscreen, Window, WindowId},
+    monitor::MonitorHandle,
+    window::{
+        CursorIcon, Fullscreen as WryFullscreen, Icon, ProgressBarState, ResizeDirection, Theme,
+        UserAttentionType, Window, WindowId, WindowSizeConstraints, RGBA,
+    },
 };
 use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
+
+/// Macro to generate proxy methods that forward to DesktopService methods.
+macro_rules! proxy_desktop_service_method {
+    ($(
+        $(#[$meta:meta])*
+        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)?;
+    )*) => {
+        $(
+            $(#[$meta])*
+            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
+                self.run_with_desktop_service(move |desktop| desktop.$name($($arg),*))
+            }
+        )*
+    };
+}
+
+/// Macro to generate proxy methods that forward to Window methods (via desktop.window).
+macro_rules! proxy_window_method {
+    ($(
+        $(#[$meta:meta])*
+        fn $name:ident(&self $(, $arg:ident : $arg_ty:ty)* ) $(-> $ret:ty)?;
+    )*) => {
+        $(
+            $(#[$meta])*
+            pub fn $name(&self $(, $arg: $arg_ty)*) $(-> $ret)? {
+                self.run_with_desktop_service(move |desktop| desktop.window.$name($($arg),*))
+            }
+        )*
+    };
+}
 
 /// Get an imperative handle to the current window without using a hook
 ///
@@ -136,6 +172,254 @@ impl DesktopServiceProxy {
         *result
             .downcast::<T>()
             .expect("Result type mismatch - this should never happen")
+    }
+
+    proxy_desktop_service_method! {
+        /// Trigger the drag-window event.
+        ///
+        /// Moves the window with the left mouse button until the button is released.
+        fn drag(&self);
+
+        /// Toggle whether the window is maximized or not.
+        fn toggle_maximized(&self);
+
+        /// Set the close behavior of this window.
+        ///
+        /// By default, windows close when the user clicks the close button.
+        /// If this is set to `WindowCloseBehaviour::WindowHides`, the window will hide instead of closing.
+        fn set_close_behavior(&self, behaviour: WindowCloseBehaviour);
+
+        /// Close this window.
+        fn close(&self);
+
+        /// Close a particular window, given its ID.
+        fn close_window(&self, id: WindowId);
+
+        /// Change window to fullscreen.
+        fn set_fullscreen(&self, fullscreen: bool);
+
+        /// Launch print modal.
+        fn print(&self);
+
+        /// Set the zoom level of the webview.
+        fn set_zoom_level(&self, level: f64);
+
+        /// Opens DevTool window.
+        fn devtool(&self);
+
+        /// Remove a wry event handler created with [`DesktopService::create_wry_event_handler`].
+        fn remove_wry_event_handler(&self, id: WryEventHandler);
+
+        /// Remove a global shortcut.
+        fn remove_shortcut(&self, id: ShortcutHandle);
+
+        /// Remove all global shortcuts.
+        fn remove_all_shortcuts(&self);
+    }
+
+    /// Removes an asset handler by its identifier.
+    ///
+    /// Returns `None` if the handler did not exist.
+    pub fn remove_asset_handler(&self, name: &str) -> Option<()> {
+        let name = name.to_string();
+        self.run_with_desktop_service(move |desktop| desktop.remove_asset_handler(&name))
+    }
+
+    /// Start the creation of a new window using a component function and window builder.
+    ///
+    /// Returns a future that resolves to the [`DesktopServiceProxy`] for the new window.
+    ///
+    /// Note: `Config` is not `Send`, so this method takes a closure that creates the config
+    /// on the main thread instead of accepting it directly.
+    pub fn new_window(
+        &self,
+        dom: impl FnOnce() -> VirtualDom + Send + 'static,
+        make_cfg: impl FnOnce() -> Config + Send + 'static,
+    ) -> PendingDesktopContext {
+        self.run_with_desktop_service(move |desktop| desktop.new_window(dom, make_cfg()))
+    }
+
+    /// Returns the unique identifier of the window.
+    pub fn window_id(&self) -> WindowId {
+        self.run_with_desktop_service(|desktop| desktop.window.id())
+    }
+
+    proxy_window_method! {
+        /// Returns the scale factor of the window.
+        fn scale_factor(&self) -> f64;
+
+        /// Emits a [`Event::RedrawRequested`] event.
+        fn request_redraw(&self);
+
+        /// Returns the position of the top-left hand corner of the window's client area.
+        fn inner_position(&self) -> Result<PhysicalPosition<i32>, NotSupportedError>;
+
+        /// Returns the position of the top-left hand corner of the window.
+        fn outer_position(&self) -> Result<PhysicalPosition<i32>, NotSupportedError>;
+
+        /// Modifies the position of the window.
+        fn set_outer_position(&self, position: Position);
+
+        /// Returns the size of the window's client area.
+        fn inner_size(&self) -> PhysicalSize<u32>;
+
+        /// Modifies the inner size of the window.
+        fn set_inner_size(&self, size: Size);
+
+        /// Returns the size of the entire window.
+        fn outer_size(&self) -> PhysicalSize<u32>;
+
+        /// Sets a minimum dimension size for the window.
+        fn set_min_inner_size(&self, min_size: Option<Size>);
+
+        /// Sets a maximum dimension size for the window.
+        fn set_max_inner_size(&self, max_size: Option<Size>);
+
+        /// Sets inner size constraints for the window.
+        fn set_inner_size_constraints(&self, constraints: WindowSizeConstraints);
+
+        /// Gets the current title of the window.
+        fn title(&self) -> String;
+
+        /// Modifies the window's visibility.
+        fn set_visible(&self, visible: bool);
+
+        /// Gets the window's current visibility state.
+        fn is_visible(&self) -> bool;
+
+        /// Brings the window to the front and sets input focus.
+        fn set_focus(&self);
+
+        /// Sets whether the window is focusable.
+        fn set_focusable(&self, focusable: bool);
+
+        /// Returns whether the window is focused.
+        fn is_focused(&self) -> bool;
+
+        /// Sets whether the window is resizable.
+        fn set_resizable(&self, resizable: bool);
+
+        /// Returns whether the window is resizable.
+        fn is_resizable(&self) -> bool;
+
+        /// Sets whether the window is minimizable.
+        fn set_minimizable(&self, minimizable: bool);
+
+        /// Returns whether the window is minimizable.
+        fn is_minimizable(&self) -> bool;
+
+        /// Sets whether the window is maximizable.
+        fn set_maximizable(&self, maximizable: bool);
+
+        /// Returns whether the window is maximizable.
+        fn is_maximizable(&self) -> bool;
+
+        /// Sets whether the window is closable.
+        fn set_closable(&self, closable: bool);
+
+        /// Returns whether the window is closable.
+        fn is_closable(&self) -> bool;
+
+        /// Sets the window to minimized or back.
+        fn set_minimized(&self, minimized: bool);
+
+        /// Returns whether the window is minimized.
+        fn is_minimized(&self) -> bool;
+
+        /// Sets the window to maximized or back.
+        fn set_maximized(&self, maximized: bool);
+
+        /// Returns whether the window is maximized.
+        fn is_maximized(&self) -> bool;
+
+        /// Turn window decorations on or off.
+        fn set_decorations(&self, decorations: bool);
+
+        /// Returns whether the window is decorated.
+        fn is_decorated(&self) -> bool;
+
+        /// Change whether the window is always on bottom.
+        fn set_always_on_bottom(&self, always_on_bottom: bool);
+
+        /// Change whether the window is always on top.
+        fn set_always_on_top(&self, always_on_top: bool);
+
+        /// Returns whether the window is always on top.
+        fn is_always_on_top(&self) -> bool;
+
+        /// Sets the window icon.
+        fn set_window_icon(&self, window_icon: Option<Icon>);
+
+        /// Sets the location of the IME candidate box.
+        fn set_ime_position(&self, position: Position);
+
+        /// Sets the taskbar progress state.
+        fn set_progress_bar(&self, progress: ProgressBarState);
+
+        /// Requests user attention to the window.
+        fn request_user_attention(&self, request_type: Option<UserAttentionType>);
+
+        /// Returns the current window theme.
+        fn theme(&self) -> Theme;
+
+        /// Sets the window theme.
+        fn set_theme(&self, theme: Option<Theme>);
+
+        /// Prevents the window contents from being captured by other apps.
+        fn set_content_protection(&self, enabled: bool);
+
+        /// Sets whether the window should be visible on all workspaces.
+        fn set_visible_on_all_workspaces(&self, visible: bool);
+
+        /// Sets the window background color.
+        fn set_background_color(&self, color: Option<RGBA>);
+
+        /// Gets the window's current fullscreen state.
+        fn fullscreen(&self) -> Option<WryFullscreen>;
+
+        /// Modifies the cursor icon of the window.
+        fn set_cursor_icon(&self, cursor: CursorIcon);
+
+        /// Changes the position of the cursor in window coordinates.
+        fn set_cursor_position(&self, position: Position) -> Result<(), ExternalError>;
+
+        /// Grabs the cursor, preventing it from leaving the window.
+        fn set_cursor_grab(&self, grab: bool) -> Result<(), ExternalError>;
+
+        /// Modifies the cursor's visibility.
+        fn set_cursor_visible(&self, visible: bool);
+
+        /// Moves the window with the left mouse button until the button is released.
+        fn drag_window(&self) -> Result<(), ExternalError>;
+
+        /// Resizes the window with the left mouse button until the button is released.
+        fn drag_resize_window(&self, direction: ResizeDirection) -> Result<(), ExternalError>;
+
+        /// Modifies whether the window catches cursor events.
+        fn set_ignore_cursor_events(&self, ignore: bool) -> Result<(), ExternalError>;
+
+        /// Returns the cursor position in window coordinates.
+        fn cursor_position(&self) -> Result<PhysicalPosition<f64>, ExternalError>;
+
+        /// Returns the monitor on which the window currently resides.
+        fn current_monitor(&self) -> Option<MonitorHandle>;
+
+        /// Returns the primary monitor of the system.
+        fn primary_monitor(&self) -> Option<MonitorHandle>;
+
+        /// Returns the monitor that contains the given point.
+        fn monitor_from_point(&self, x: f64, y: f64) -> Option<MonitorHandle>;
+    }
+
+    /// Modifies the title of the window.
+    pub fn set_title(&self, title: &str) {
+        let title = title.to_string();
+        self.run_with_desktop_service(move |desktop| desktop.window.set_title(&title))
+    }
+
+    /// Returns the list of all the monitors available on the system.
+    pub fn available_monitors(&self) -> Vec<MonitorHandle> {
+        self.run_with_desktop_service(|desktop| desktop.window.available_monitors().collect())
     }
 }
 
@@ -476,25 +760,27 @@ fn is_main_thread() -> bool {
 /// # }
 /// ```
 pub struct PendingDesktopContext {
-    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
+    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopServiceProxy>,
 }
 
 impl PendingDesktopContext {
-    /// Resolve the pending context into a [`DesktopContext`].
-    pub async fn resolve(self) -> DesktopContext {
+    /// Resolve the pending context into a [`DesktopServiceProxy`].
+    pub async fn resolve(self) -> DesktopServiceProxy {
         self.try_resolve()
             .await
             .expect("Failed to resolve pending desktop context")
     }
 
-    /// Try to resolve the pending context into a [`DesktopContext`].
-    pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
+    /// Try to resolve the pending context into a [`DesktopServiceProxy`].
+    pub async fn try_resolve(
+        self,
+    ) -> Result<DesktopServiceProxy, futures_channel::oneshot::Canceled> {
         self.receiver.await
     }
 }
 
 impl IntoFuture for PendingDesktopContext {
-    type Output = DesktopContext;
+    type Output = DesktopServiceProxy;
 
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output>>>;
 

@@ -20,7 +20,7 @@ fn app() -> Element {
     let proxy = use_context::<DesktopServiceProxy>();
 
     // Run a closure synchronously on the main thread
-    let title = proxy.run_with_desktop_service(|desktop| desktop.window.title().to_string());
+    let title = proxy.title();
 
     rsx! {
         div { "The title is {title}" }

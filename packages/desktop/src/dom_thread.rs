@@ -75,7 +75,6 @@ pub async fn run_virtual_dom<F>(
     let desktop_service_proxy = DesktopServiceProxy::new(proxy, window_id);
     dom.in_scope(ScopeId::ROOT, || {
         provide_context(history_provider);
-        println!("Providing DesktopServiceProxy in VirtualDom context");
         provide_context(desktop_service_proxy);
     });
     run_virtual_dom_loop(dom, event_rx, command_tx).await;
