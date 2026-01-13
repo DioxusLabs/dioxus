@@ -945,6 +945,12 @@ impl TraceController {
                 ComponentCommand::Clean => ("components clean".to_string(), json!({})),
                 ComponentCommand::Schema => ("components schema".to_string(), json!({})),
             },
+            Commands::PatchWasmBindgen(cmd) => (
+                "patch-wasm-bindgen".to_string(),
+                json!({
+                    "force": cmd.force,
+                }),
+            ),
         }
     }
 

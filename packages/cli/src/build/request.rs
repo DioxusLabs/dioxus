@@ -812,6 +812,13 @@ impl BuildRequest {
             features.sort();
         }
 
+        // Check if we should prompt the user to apply the wasm-bindgen patch for desktop targets
+        if matches!(platform, Platform::MacOS | Platform::Windows | Platform::Linux) {
+            crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(
+                workspace.krates.workspace_root().as_std_path(),
+            )?;
+        }
+
         // The triple will be the triple passed or the host if using dioxus.
         let triple = if using_dioxus_explicitly {
             triple.context("Could not automatically detect target triple")?
