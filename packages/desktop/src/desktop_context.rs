@@ -752,7 +752,9 @@ impl DesktopService {
     ///
     /// # async fn app() {
     /// // Create a new window with a component that will be rendered in the new window.
-    /// let window = dioxus::desktop::window().new_window(popup, Default::default()).await;
+    /// let dom = || VirtualDom::new(popup);
+    /// // Create and wait for the window
+    /// let window = dioxus::desktop::window().new_window(dom, Default::default).await;
     /// // Fullscreen the new window
     /// window.set_fullscreen(true);
     /// # }
@@ -999,10 +1001,10 @@ fn is_main_thread() -> bool {
 /// # use dioxus::prelude::*;
 /// # async fn app() {
 /// // Create a new window with a component that will be rendered in the new window.
-/// let dom = VirtualDom::new(|| rsx!{ "popup!" });
+/// let dom = || VirtualDom::new(|| rsx!{ "popup!" });
 ///
 /// // Create a new window asynchronously
-/// let pending_context = dioxus::desktop::window().new_window(dom, Default::default());
+/// let pending_context = dioxus::desktop::window().new_window(dom, Default::default);
 ///
 /// // Wait for the context to be created
 /// let window = pending_context.await;
