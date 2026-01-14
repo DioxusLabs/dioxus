@@ -8,7 +8,6 @@ use crate::{
     webview::{PendingWebview, WebviewInstance},
 };
 use dioxus_core::VirtualDom;
-use wry_bindgen::wry::WryBindgen;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -21,7 +20,7 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
-
+use wry_bindgen::wry::WryBindgen;
 
 /// A factory for creating VirtualDom instances on dedicated threads.
 /// This type is Send because it only holds the component function and contexts,
@@ -406,13 +405,12 @@ impl App {
         }
     }
 
-
     /// Poll a specific window by its ID.
     /// Called when the waker sends a Poll event.
     pub fn poll_window(&mut self, id: tao::window::WindowId) {
         if let Some(webview) = self.webviews.get_mut(&id) {
-            webview.poll_edits_flushed();
             webview.poll_dom_commands();
+            webview.poll_edits_flushed();
             webview.poll_new_edits_location();
         }
     }
