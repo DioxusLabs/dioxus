@@ -5910,10 +5910,10 @@ dependencies = [
  "tokio",
  "tower-http",
  "uuid",
- "wasm-bindgen",
+ "wasm-bindgen-x",
  "wasm-splitter",
  "wasm-streams",
- "web-sys",
+ "web-sys-x",
  "web-time",
  "wgpu 26.0.1",
 ]
