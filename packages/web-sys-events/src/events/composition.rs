@@ -1,5 +1,5 @@
 use dioxus_html::HasCompositionData;
-use web_sys::CompositionEvent;
+use web_sys_x::CompositionEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -14,10 +14,10 @@ impl HasCompositionData for Synthetic<CompositionEvent> {
 }
 
 impl WebEventExt for dioxus_html::CompositionData {
-    type WebEvent = web_sys::CompositionEvent;
+    type WebEvent = web_sys_x::CompositionEvent;
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::CompositionEvent>().cloned()
+        self.downcast::<web_sys_x::CompositionEvent>().cloned()
     }
 }

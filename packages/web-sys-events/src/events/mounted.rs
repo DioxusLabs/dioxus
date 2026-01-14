@@ -2,11 +2,11 @@ use dioxus_html::{
     geometry::euclid::{Point2D, Size2D},
     MountedData,
 };
-use wasm_bindgen::JsCast;
+use wasm_bindgen_x::JsCast;
 
 use super::{Synthetic, WebEventExt};
 
-impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
+impl dioxus_html::RenderedElementBacking for Synthetic<web_sys_x::Element> {
     fn get_scroll_offset(
         &self,
     ) -> std::pin::Pin<
@@ -68,22 +68,26 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         &self,
         input_options: dioxus_html::ScrollToOptions,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
-        let options = web_sys::ScrollIntoViewOptions::new();
+        let options = web_sys_x::ScrollIntoViewOptions::new();
         options.set_behavior(match input_options.behavior {
-            dioxus_html::ScrollBehavior::Instant => web_sys::ScrollBehavior::Instant,
-            dioxus_html::ScrollBehavior::Smooth => web_sys::ScrollBehavior::Smooth,
+            dioxus_html::ScrollBehavior::Instant => web_sys_x::ScrollBehavior::Instant,
+            dioxus_html::ScrollBehavior::Smooth => web_sys_x::ScrollBehavior::Smooth,
         });
         options.set_block(match input_options.vertical {
-            dioxus_html::ScrollLogicalPosition::Start => web_sys::ScrollLogicalPosition::Start,
-            dioxus_html::ScrollLogicalPosition::Center => web_sys::ScrollLogicalPosition::Center,
-            dioxus_html::ScrollLogicalPosition::End => web_sys::ScrollLogicalPosition::End,
-            dioxus_html::ScrollLogicalPosition::Nearest => web_sys::ScrollLogicalPosition::Nearest,
+            dioxus_html::ScrollLogicalPosition::Start => web_sys_x::ScrollLogicalPosition::Start,
+            dioxus_html::ScrollLogicalPosition::Center => web_sys_x::ScrollLogicalPosition::Center,
+            dioxus_html::ScrollLogicalPosition::End => web_sys_x::ScrollLogicalPosition::End,
+            dioxus_html::ScrollLogicalPosition::Nearest => {
+                web_sys_x::ScrollLogicalPosition::Nearest
+            }
         });
         options.set_inline(match input_options.horizontal {
-            dioxus_html::ScrollLogicalPosition::Start => web_sys::ScrollLogicalPosition::Start,
-            dioxus_html::ScrollLogicalPosition::Center => web_sys::ScrollLogicalPosition::Center,
-            dioxus_html::ScrollLogicalPosition::End => web_sys::ScrollLogicalPosition::End,
-            dioxus_html::ScrollLogicalPosition::Nearest => web_sys::ScrollLogicalPosition::Nearest,
+            dioxus_html::ScrollLogicalPosition::Start => web_sys_x::ScrollLogicalPosition::Start,
+            dioxus_html::ScrollLogicalPosition::Center => web_sys_x::ScrollLogicalPosition::Center,
+            dioxus_html::ScrollLogicalPosition::End => web_sys_x::ScrollLogicalPosition::End,
+            dioxus_html::ScrollLogicalPosition::Nearest => {
+                web_sys_x::ScrollLogicalPosition::Nearest
+            }
         });
         self.event
             .scroll_into_view_with_scroll_into_view_options(&options);
@@ -96,15 +100,15 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         coordinates: dioxus_html::geometry::PixelsVector2D,
         behavior: dioxus_html::ScrollBehavior,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
-        let options = web_sys::ScrollToOptions::new();
+        let options = web_sys_x::ScrollToOptions::new();
         options.set_top(coordinates.y);
         options.set_left(coordinates.x);
         match behavior {
             dioxus_html::ScrollBehavior::Instant => {
-                options.set_behavior(web_sys::ScrollBehavior::Instant);
+                options.set_behavior(web_sys_x::ScrollBehavior::Instant);
             }
             dioxus_html::ScrollBehavior::Smooth => {
-                options.set_behavior(web_sys::ScrollBehavior::Smooth);
+                options.set_behavior(web_sys_x::ScrollBehavior::Smooth);
             }
         }
         self.event.scroll_with_scroll_to_options(&options);
@@ -117,7 +121,7 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
         focus: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
         #[derive(Debug)]
-        struct FocusError(wasm_bindgen::JsValue);
+        struct FocusError(wasm_bindgen_x::JsValue);
 
         impl std::fmt::Display for FocusError {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -129,7 +133,7 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
 
         let result = self
             .event
-            .dyn_ref::<web_sys::HtmlElement>()
+            .dyn_ref::<web_sys_x::HtmlElement>()
             .ok_or_else(|| {
                 dioxus_html::MountedError::OperationFailed(Box::new(FocusError(
                     self.event.clone().into(),
@@ -145,10 +149,10 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
 }
 
 impl WebEventExt for MountedData {
-    type WebEvent = web_sys::Element;
+    type WebEvent = web_sys_x::Element;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys::Element> {
-        self.downcast::<web_sys::Element>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys_x::Element> {
+        self.downcast::<web_sys_x::Element>().cloned()
     }
 }

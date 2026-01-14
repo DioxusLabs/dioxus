@@ -1,6 +1,7 @@
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use web_sys_x::js_sys::Promise;
 use wry_bindgen::wasm_bindgen;
 
 #[path = "./utils.rs"]
@@ -66,10 +67,10 @@ fn test_mounted() -> Element {
                 }")]
                 extern "C" {
                     #[wasm_bindgen]
-                    async fn wait_for_frame();
+                    fn wait_for_frame() -> Promise;
                 }
                 // Wait for layout to be computed using setTimeout
-                wait_for_frame().await;
+                wasm_bindgen_futures_x::JsFuture::from(wait_for_frame()).await.unwrap();
 
                 let rect = evt.get_client_rect().await.unwrap();
                 println!("rect: {rect:?}");

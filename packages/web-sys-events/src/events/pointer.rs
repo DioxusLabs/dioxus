@@ -4,7 +4,7 @@ use dioxus_html::{
     HasPointerData, InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
 };
-use web_sys::PointerEvent;
+use web_sys_x::PointerEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -106,10 +106,10 @@ impl PointerInteraction for Synthetic<PointerEvent> {
 }
 
 impl WebEventExt for dioxus_html::PointerData {
-    type WebEvent = web_sys::PointerEvent;
+    type WebEvent = web_sys_x::PointerEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys::PointerEvent> {
-        self.downcast::<web_sys::PointerEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys_x::PointerEvent> {
+        self.downcast::<web_sys_x::PointerEvent>().cloned()
     }
 }

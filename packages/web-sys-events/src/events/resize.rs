@@ -1,6 +1,6 @@
 use dioxus_html::{geometry::PixelsSize, HasResizeData, ResizeResult};
-use wasm_bindgen::JsCast;
-use web_sys::{CustomEvent, Event, ResizeObserverEntry};
+use wasm_bindgen_x::JsCast;
+use web_sys_x::{CustomEvent, Event, ResizeObserverEntry};
 
 use super::{Synthetic, WebEventExt};
 
@@ -35,17 +35,17 @@ impl HasResizeData for Synthetic<ResizeObserverEntry> {
 }
 
 impl WebEventExt for dioxus_html::ResizeData {
-    type WebEvent = web_sys::ResizeObserverEntry;
+    type WebEvent = web_sys_x::ResizeObserverEntry;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys::ResizeObserverEntry> {
-        self.downcast::<web_sys::ResizeObserverEntry>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys_x::ResizeObserverEntry> {
+        self.downcast::<web_sys_x::ResizeObserverEntry>().cloned()
     }
 }
 
-fn extract_first_size(resize_observer_output: js_sys::Array) -> ResizeResult<PixelsSize> {
+fn extract_first_size(resize_observer_output: js_sys_x::Array) -> ResizeResult<PixelsSize> {
     let first = resize_observer_output.get(0);
-    let size = first.unchecked_into::<web_sys::ResizeObserverSize>();
+    let size = first.unchecked_into::<web_sys_x::ResizeObserverSize>();
 
     // inline_size matches the width of the element if its writing-mode is horizontal, the height otherwise
     let inline_size = size.inline_size();

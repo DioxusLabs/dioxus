@@ -266,6 +266,11 @@ wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.50"
 js-sys = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
+wry-bindgen = "0.2.106-alpha.0"
+wasm-bindgen-x = "0.2.106-alpha.0"
+wasm-bindgen-futures-x = "0.4.56-alpha.0"
+js-sys-x = { version = "0.3.83-alpha.0" }
+web-sys-x = { version = "0.3.83-alpha.0", default-features = false }
 html_parser = "0.7.0"
 thiserror = "2.0.12"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }

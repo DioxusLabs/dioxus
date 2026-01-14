@@ -3,8 +3,8 @@ use dioxus_html::{
 };
 pub use form::WebFormData;
 use load::WebImageEvent;
-use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, Event};
+use wasm_bindgen_x::JsCast;
+use web_sys_x::{Document, Element, Event};
 
 mod animation;
 mod cancel;
@@ -67,7 +67,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::AnimationData {
-        Synthetic::<web_sys::AnimationEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::AnimationEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -91,20 +91,20 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::CompositionData {
-        Synthetic::<web_sys::CompositionEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::CompositionEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
     fn convert_drag_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::DragData {
         let event = downcast_event(event);
         DragData::new(Synthetic::new(
-            event.raw.clone().unchecked_into::<web_sys::DragEvent>(),
+            event.raw.clone().unchecked_into::<web_sys_x::DragEvent>(),
         ))
     }
 
     #[inline(always)]
     fn convert_focus_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::FocusData {
-        Synthetic::<web_sys::FocusEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::FocusEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -125,7 +125,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::KeyboardData {
-        Synthetic::<web_sys::KeyboardEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::KeyboardEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -140,8 +140,8 @@ impl HtmlEventConverter for WebEventConverter {
         {
             Synthetic::new(
                 event
-                    .downcast::<web_sys::Element>()
-                    .expect("event should be a web_sys::Element")
+                    .downcast::<web_sys_x::Element>()
+                    .expect("event should be a web_sys_x::Element")
                     .clone(),
             )
             .into()
@@ -154,7 +154,7 @@ impl HtmlEventConverter for WebEventConverter {
 
     #[inline(always)]
     fn convert_mouse_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::MouseData {
-        Synthetic::<web_sys::MouseEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::MouseEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -162,7 +162,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::PointerData {
-        Synthetic::<web_sys::PointerEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::PointerEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -170,7 +170,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::ResizeData {
-        Synthetic::<web_sys::ResizeObserverEntry>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::ResizeObserverEntry>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -199,7 +199,7 @@ impl HtmlEventConverter for WebEventConverter {
 
     #[inline(always)]
     fn convert_touch_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::TouchData {
-        Synthetic::<web_sys::TouchEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::TouchEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -207,7 +207,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::TransitionData {
-        Synthetic::<web_sys::TransitionEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::TransitionEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]
@@ -215,13 +215,13 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::VisibleData {
-        Synthetic::<web_sys::IntersectionObserverEntry>::from(downcast_event(event).raw.clone())
+        Synthetic::<web_sys_x::IntersectionObserverEntry>::from(downcast_event(event).raw.clone())
             .into()
     }
 
     #[inline(always)]
     fn convert_wheel_data(&self, event: &dioxus_html::PlatformEventData) -> dioxus_html::WheelData {
-        Synthetic::<web_sys::WheelEvent>::from(downcast_event(event).raw.clone()).into()
+        Synthetic::<web_sys_x::WheelEvent>::from(downcast_event(event).raw.clone()).into()
     }
 }
 
@@ -251,7 +251,7 @@ pub trait WebEventExt {
 /// A generic web-sys event that stores the raw event and target element.
 /// This is used as the platform event data for web-sys events.
 pub struct GenericWebSysEvent {
-    /// The raw web_sys::Event
+    /// The raw web_sys_x::Event
     pub raw: Event,
     /// The target element
     pub element: Element,
@@ -261,7 +261,7 @@ pub struct GenericWebSysEvent {
 // We need tests that simulate clicks/etc and make sure every event type works.
 /// Create a platform event data from a web-sys event
 pub fn virtual_event_from_websys_event(
-    event: web_sys::Event,
+    event: web_sys_x::Event,
     target: Element,
 ) -> PlatformEventData {
     PlatformEventData::new(Box::new(GenericWebSysEvent {
@@ -272,7 +272,7 @@ pub fn virtual_event_from_websys_event(
 
 /// Load the document from the window
 pub fn load_document() -> Document {
-    web_sys::window()
+    web_sys_x::window()
         .expect("should have access to the Window")
         .document()
         .expect("should have access to the Document")
@@ -302,13 +302,13 @@ macro_rules! uncheck_convert {
 }
 
 uncheck_convert![
-    web_sys::CompositionEvent,
-    web_sys::KeyboardEvent,
-    web_sys::TouchEvent,
-    web_sys::PointerEvent,
-    web_sys::WheelEvent,
-    web_sys::AnimationEvent,
-    web_sys::TransitionEvent,
-    web_sys::MouseEvent,
-    web_sys::FocusEvent,
+    web_sys_x::CompositionEvent,
+    web_sys_x::KeyboardEvent,
+    web_sys_x::TouchEvent,
+    web_sys_x::PointerEvent,
+    web_sys_x::WheelEvent,
+    web_sys_x::AnimationEvent,
+    web_sys_x::TransitionEvent,
+    web_sys_x::MouseEvent,
+    web_sys_x::FocusEvent,
 ];

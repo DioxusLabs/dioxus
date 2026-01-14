@@ -1,6 +1,6 @@
 use dioxus_html::HasScrollData;
-use wasm_bindgen::JsCast;
-use web_sys::{Document, Element, Event};
+use wasm_bindgen_x::JsCast;
+use web_sys_x::{Document, Element, Event};
 
 use super::{Synthetic, WebEventExt};
 
@@ -95,10 +95,10 @@ impl HasScrollData for Synthetic<Event> {
 }
 
 impl WebEventExt for dioxus_html::ScrollData {
-    type WebEvent = web_sys::Event;
+    type WebEvent = web_sys_x::Event;
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::Event>().cloned()
+        self.downcast::<web_sys_x::Event>().cloned()
     }
 }

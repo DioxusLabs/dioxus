@@ -1,5 +1,5 @@
 use dioxus_html::HasClipboardData;
-use web_sys::Event;
+use web_sys_x::Event;
 
 use super::{Synthetic, WebEventExt};
 
@@ -16,10 +16,10 @@ impl HasClipboardData for Synthetic<Event> {
 }
 
 impl WebEventExt for dioxus_html::ClipboardData {
-    type WebEvent = web_sys::Event;
+    type WebEvent = web_sys_x::Event;
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::Event>().cloned()
+        self.downcast::<web_sys_x::Event>().cloned()
     }
 }

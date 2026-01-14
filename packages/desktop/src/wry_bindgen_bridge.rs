@@ -20,8 +20,8 @@ export function setMountedHandler(handler) {
 }
 "#)]
 extern "C" {
-    fn setEventHandler(handler: Closure<dyn FnMut(web_sys::Event, String, u64, bool) -> bool>);
-    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys::Element, u64, bool)>);
+    fn setEventHandler(handler: Closure<dyn FnMut(web_sys_x::Event, String, u64, bool) -> bool>);
+    fn setMountedHandler(handler: Closure<dyn FnMut(web_sys_x::Element, u64, bool)>);
 }
 
 /// Initialize the event handler closure with the given event sender.
@@ -37,7 +37,7 @@ extern "C" {
 pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     let runtime_clone = runtime.clone();
     let event_closure = Closure::new(
-        move |event: web_sys::Event, name: String, element_id: u64, bubbles: bool| {
+        move |event: web_sys_x::Event, name: String, element_id: u64, bubbles: bool| {
             handle_event_from_js(
                 &runtime_clone,
                 &file_hover,
@@ -50,7 +50,7 @@ pub fn setup_event_handler(runtime: Rc<Runtime>, file_hover: NativeFileHover) {
     );
 
     let mounted_closure = Closure::new(
-        move |element: web_sys::Element, element_id: u64, bubbles: bool| {
+        move |element: web_sys_x::Element, element_id: u64, bubbles: bool| {
             handle_mounted_from_js(&runtime, element, element_id, bubbles)
         },
     );
@@ -71,7 +71,7 @@ fn is_drag_event(name: &str) -> bool {
 fn handle_event_from_js(
     runtime: &Rc<Runtime>,
     file_hover: &NativeFileHover,
-    event: web_sys::Event,
+    event: web_sys_x::Event,
     name: String,
     element_id: u64,
     bubbles: bool,
@@ -81,7 +81,7 @@ fn handle_event_from_js(
     // Get the target element for the event
     let target = event
         .target()
-        .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+        .and_then(|t| t.dyn_into::<web_sys_x::Element>().ok())
         .unwrap_or_else(|| {
             dioxus_web_sys_events::load_document()
                 .document_element()
@@ -102,7 +102,7 @@ fn handle_event_from_js(
         println!("Native files for drag event '{}': {:?}", name, native_files);
 
         // Create a DesktopFileDragEvent with native file paths
-        let drag_event: web_sys::DragEvent =
+        let drag_event: web_sys_x::DragEvent =
             event.dyn_into().expect("drag event should be DragEvent");
         let desktop_drag = DesktopFileDragEvent::new(Synthetic::new(drag_event), native_files);
         PlatformEventData::new(Box::new(desktop_drag))
@@ -122,7 +122,7 @@ fn handle_event_from_js(
 /// Handle a mounted event from JavaScript.
 fn handle_mounted_from_js(
     runtime: &Rc<Runtime>,
-    element: web_sys::Element,
+    element: web_sys_x::Element,
     element_id: u64,
     bubbles: bool,
 ) {

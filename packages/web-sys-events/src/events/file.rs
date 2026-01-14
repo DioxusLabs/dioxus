@@ -1,25 +1,25 @@
 use dioxus_html::{FileData, HasFileData};
-use web_sys::FileReader;
+use web_sys_x::FileReader;
 
 use crate::{WebFileData, WebFileEngine};
 
 use super::Synthetic;
 
-impl HasFileData for Synthetic<web_sys::Event> {
+impl HasFileData for Synthetic<web_sys_x::Event> {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen::JsCast;
+        use wasm_bindgen_x::JsCast;
         let target = self.event.target();
 
         if let Some(target) = target
             .clone()
-            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .and_then(|t| t.dyn_into::<web_sys_x::HtmlInputElement>().ok())
         {
             if let Some(file_list) = target.files() {
                 return WebFileEngine::new(file_list).to_files();
             }
         }
 
-        if let Some(target) = target.and_then(|t| t.dyn_into::<web_sys::DragEvent>().ok()) {
+        if let Some(target) = target.and_then(|t| t.dyn_into::<web_sys_x::DragEvent>().ok()) {
             if let Some(data_transfer) = target.data_transfer() {
                 if let Some(file_list) = data_transfer.files() {
                     return WebFileEngine::new(file_list).to_files();

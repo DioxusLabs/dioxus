@@ -1,15 +1,15 @@
 use crate::files::WebFileData;
 use dioxus_html::{FileData, NativeDataTransfer};
 
-/// A wrapper around the web_sys::DataTransfer to implement NativeDataTransfer
+/// A wrapper around the web_sys_x::DataTransfer to implement NativeDataTransfer
 #[derive(Clone)]
 pub struct WebDataTransfer {
-    pub(crate) data: web_sys::DataTransfer,
+    pub(crate) data: web_sys_x::DataTransfer,
 }
 
 impl WebDataTransfer {
-    /// Create a new WebDataTransfer from a web_sys::DataTransfer
-    pub fn new(data: web_sys::DataTransfer) -> Self {
+    /// Create a new WebDataTransfer from a web_sys_x::DataTransfer
+    pub fn new(data: web_sys_x::DataTransfer) -> Self {
         Self { data }
     }
 }
@@ -56,7 +56,7 @@ impl NativeDataTransfer for WebDataTransfer {
                 if let Some(file) = file_list.item(i) {
                     result.push(FileData::new(WebFileData::new(
                         file,
-                        web_sys::FileReader::new().unwrap(),
+                        web_sys_x::FileReader::new().unwrap(),
                     )));
                 }
             }

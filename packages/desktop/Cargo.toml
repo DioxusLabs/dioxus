@@ -55,8 +55,8 @@ rand = { workspace = true, features = ["std_rng"] }
 subtle = { version = "2.6", features = ["const-generics"] }
 bytes = { workspace = true }
 webbrowser = { workspace = true }
-wry-bindgen = { git = "https://github.com/DioxusLabs/wasm-bindgen-wry" }
-web-sys = { workspace = true, features = [
+wry-bindgen = { workspace = true }
+web-sys-x = { workspace = true, features = [
     "Document",
     "Element",
     "Event",
@@ -127,7 +127,7 @@ reqwest = { workspace = true, features = ["json"] }
 http-range = { version = "0.1.5" }
 dioxus-ssr = { workspace = true, default-features = false }
 separator = "0.4.1"
-wasm-bindgen-futures = { workspace = true }
+wasm-bindgen-futures-x = { workspace = true }
 
 # These tests need to be run on the main thread, so they cannot use rust's test harness.
 [[test]]

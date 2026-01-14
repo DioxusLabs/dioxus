@@ -1,13 +1,13 @@
 use super::WebEventExt;
 use crate::WebFileData;
 use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
-use js_sys::Array;
+use js_sys_x::Array;
 use std::any::Any;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
-use web_sys::{Element, Event, FileReader};
+use wasm_bindgen_x::{prelude::wasm_bindgen, JsCast};
+use web_sys_x::{Element, Event, FileReader};
 
 /// Web-sys form data implementation.
-/// Wraps a web_sys Element and Event to provide form data extraction.
+/// Wraps a web_sys_x Element and Event to provide form data extraction.
 pub struct WebFormData {
     /// The target element of the form event
     pub element: Element,
@@ -35,7 +35,7 @@ impl HasFormData for WebFormData {
         let target = &self.element;
         target
             .dyn_ref()
-            .map(|input: &web_sys::HtmlInputElement| {
+            .map(|input: &web_sys_x::HtmlInputElement| {
                 // todo: special case more input types
                 match input.type_().as_str() {
                     "checkbox" => {
@@ -52,17 +52,17 @@ impl HasFormData for WebFormData {
             .or_else(|| {
                 target
                     .dyn_ref()
-                    .map(|input: &web_sys::HtmlTextAreaElement| input.value())
+                    .map(|input: &web_sys_x::HtmlTextAreaElement| input.value())
             })
             // select elements are NOT input events - because - why woudn't they be??
             .or_else(|| {
                 target
                     .dyn_ref()
-                    .map(|input: &web_sys::HtmlSelectElement| input.value())
+                    .map(|input: &web_sys_x::HtmlSelectElement| input.value())
             })
             .or_else(|| {
                 target
-                    .dyn_ref::<web_sys::HtmlElement>()
+                    .dyn_ref::<web_sys_x::HtmlElement>()
                     .unwrap()
                     .text_content()
             })
@@ -76,25 +76,25 @@ impl HasFormData for WebFormData {
         // or we need to find the closest ancestor form
         let form_element = self
             .element
-            .dyn_ref::<web_sys::HtmlFormElement>()
+            .dyn_ref::<web_sys_x::HtmlFormElement>()
             .cloned()
             .or_else(|| {
                 self.element
                     .closest("form")
                     .ok()
                     .flatten()
-                    .and_then(|el| el.dyn_into::<web_sys::HtmlFormElement>().ok())
+                    .and_then(|el| el.dyn_into::<web_sys_x::HtmlFormElement>().ok())
             });
 
         // try to fill in form values
         if let Some(form) = form_element {
-            let form_data = web_sys::FormData::new_with_form(&form).unwrap();
+            let form_data = web_sys_x::FormData::new_with_form(&form).unwrap();
 
             for entry in form_data.entries().into_iter().flatten() {
                 if let Ok(array) = entry.dyn_into::<Array>() {
                     if let Some(name) = array.get(0).as_string() {
                         let value = array.get(1);
-                        if let Some(file) = value.dyn_ref::<web_sys::File>() {
+                        if let Some(file) = value.dyn_ref::<web_sys_x::File>() {
                             if file.name().is_empty() {
                                 values.push((name, FormValue::File(None)));
                             } else {
@@ -110,7 +110,7 @@ impl HasFormData for WebFormData {
                     }
                 }
             }
-        } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
+        } else if let Some(select) = self.element.dyn_ref::<web_sys_x::HtmlSelectElement>() {
             // try to fill in select element values
             let options = get_select_data(select);
             for option in &options {
@@ -128,7 +128,7 @@ impl HasFormData for WebFormData {
     fn valid(&self) -> bool {
         self.event
             .target()
-            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .and_then(|t| t.dyn_into::<web_sys_x::HtmlInputElement>().ok())
             .map(|input| input.check_validity())
             .unwrap_or(true)
     }
@@ -136,10 +136,10 @@ impl HasFormData for WebFormData {
 
 impl HasFileData for WebFormData {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen::JsCast;
+        use wasm_bindgen_x::JsCast;
         self.event
             .target()
-            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+            .and_then(|t| t.dyn_into::<web_sys_x::HtmlInputElement>().ok())
             .and_then(|input| input.files())
             .map(crate::files::WebFileEngine::new)
             .map(|engine| engine.to_files())
@@ -148,7 +148,7 @@ impl HasFileData for WebFormData {
 }
 
 // web-sys does not expose the keys api for select data, so we need to manually bind to it
-#[wasm_bindgen(inline_js = r#"
+#[wasm_bindgen(crate = wasm_bindgen_x, inline_js = r#"
 export function get_select_data(select) {
     let values = [];
     for (let i = 0; i < select.options.length; i++) {
@@ -162,5 +162,5 @@ export function get_select_data(select) {
 }
 "#)]
 extern "C" {
-    fn get_select_data(select: &web_sys::HtmlSelectElement) -> Vec<String>;
+    fn get_select_data(select: &web_sys_x::HtmlSelectElement) -> Vec<String>;
 }

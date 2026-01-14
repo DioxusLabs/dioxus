@@ -4,7 +4,7 @@ use dioxus_html::{
     HasMouseData, InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
 };
-use web_sys::MouseEvent;
+use web_sys_x::MouseEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -66,10 +66,10 @@ impl HasMouseData for Synthetic<MouseEvent> {
 }
 
 impl WebEventExt for dioxus_html::MouseData {
-    type WebEvent = web_sys::MouseEvent;
+    type WebEvent = web_sys_x::MouseEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys::MouseEvent> {
-        self.downcast::<web_sys::MouseEvent>().cloned()
+    fn try_as_web_event(&self) -> Option<web_sys_x::MouseEvent> {
+        self.downcast::<web_sys_x::MouseEvent>().cloned()
     }
 }

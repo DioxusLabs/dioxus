@@ -1,5 +1,5 @@
 use dioxus_html::HasTransitionData;
-use web_sys::TransitionEvent;
+use web_sys_x::TransitionEvent;
 
 use super::Synthetic;
 

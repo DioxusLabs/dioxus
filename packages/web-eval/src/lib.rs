@@ -7,12 +7,12 @@ use dioxus_document::{EvalError, Evaluator};
 use futures_util::FutureExt;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
 use js_sys::Function;
+use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
 use std::result;
-use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -129,19 +129,7 @@ impl WebEvaluator {
                     let result = js_future.await.map_err(|e| {
                         EvalError::Communication(format!("Failed to await result - {:?}", e))
                     })?;
-                    let stringified = js_sys::JSON::stringify(&result).map_err(|e| {
-                        EvalError::Communication(format!("Failed to stringify result - {:?}", e))
-                    })?;
-                    if !stringified.is_undefined() && stringified.is_valid_utf16() {
-                        let string: String = stringified.into();
-                        Value::from_str(&string).map_err(|e| {
-                            EvalError::Communication(format!("Failed to parse result - {}", e))
-                        })
-                    } else {
-                        Err(EvalError::Communication(
-                            "Failed to stringify result - undefined or not valid utf16".to_string(),
-                        ))
-                    }
+                    value_from_js_value(&result)
                 })
                     as Pin<Box<dyn Future<Output = result::Result<Value, EvalError>>>>
             }
@@ -169,13 +157,7 @@ impl Evaluator for WebEvaluator {
 
     /// Sends a message to the evaluated JavaScript.
     fn send(&self, data: serde_json::Value) -> Result<(), EvalError> {
-        let serializer = serde_wasm_bindgen::Serializer::json_compatible();
-
-        let data = match data.serialize(&serializer) {
-            Ok(d) => d,
-            Err(e) => return Err(EvalError::Communication(e.to_string())),
-        };
-
+        let data = value_to_js_value(&data)?;
         self.channels.rust_send(data);
         Ok(())
     }
@@ -190,8 +172,7 @@ impl Evaluator for WebEvaluator {
             let pinned = Box::pin(async move {
                 let fut = channels.rust_recv();
                 let data = fut.await;
-                serde_wasm_bindgen::from_value::<serde_json::Value>(data)
-                    .map_err(|err| EvalError::Communication(err.to_string()))
+                value_from_js_value(&data)
             });
             self.next_future = Some(pinned);
         }
@@ -203,4 +184,27 @@ impl Evaluator for WebEvaluator {
         }
         result
     }
+}
+
+/// We don't use serde-wasm-bindgen here because we need to make sure this works on desktop as well which
+/// requires using wasm-bindgen-x instead of wasm-bindgen directly.
+fn value_from_js_value<T: DeserializeOwned>(value: &JsValue) -> Result<T, EvalError> {
+    let stringified = js_sys::JSON::stringify(value)
+        .map_err(|e| EvalError::Communication(format!("Failed to stringify result - {:?}", e)))?;
+    if !stringified.is_undefined() && stringified.is_valid_utf16() {
+        let string: String = stringified.into();
+        serde_json::de::from_str(&string)
+            .map_err(|e| EvalError::Communication(format!("Failed to parse result - {}", e)))
+    } else {
+        Err(EvalError::Communication(
+            "Failed to stringify result - undefined or not valid utf16".to_string(),
+        ))
+    }
+}
+
+fn value_to_js_value<T: Serialize>(value: &T) -> Result<JsValue, EvalError> {
+    let json_string = serde_json::to_string(value)
+        .map_err(|e| EvalError::Communication(format!("Failed to serialize value - {}", e)))?;
+    js_sys::JSON::parse(&json_string)
+        .map_err(|e| EvalError::Communication(format!("Failed to parse JSON string - {:?}", e)))
 }

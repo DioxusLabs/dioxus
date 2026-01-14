@@ -8,7 +8,7 @@ use dioxus_html::{
     InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
 };
-use web_sys::{DragEvent, FileReader};
+use web_sys_x::{DragEvent, FileReader};
 
 impl InteractionLocation for Synthetic<DragEvent> {
     fn client_coordinates(&self) -> ClientPoint {
@@ -75,9 +75,9 @@ impl HasDragData for Synthetic<DragEvent> {
 
 impl HasDataTransferData for Synthetic<DragEvent> {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
-        use wasm_bindgen::JsCast;
+        use wasm_bindgen_x::JsCast;
 
-        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
+        if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
             if let Some(data) = target.data_transfer() {
                 let web_data_transfer = WebDataTransfer::new(data);
                 return dioxus_html::DataTransfer::new(web_data_transfer);
@@ -85,16 +85,16 @@ impl HasDataTransferData for Synthetic<DragEvent> {
         }
 
         // Return an empty DataTransfer if we couldn't get one from the event
-        let web_data_transfer = WebDataTransfer::new(web_sys::DataTransfer::new().unwrap());
+        let web_data_transfer = WebDataTransfer::new(web_sys_x::DataTransfer::new().unwrap());
         dioxus_html::DataTransfer::new(web_data_transfer)
     }
 }
 
 impl HasFileData for Synthetic<DragEvent> {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen::JsCast;
+        use wasm_bindgen_x::JsCast;
 
-        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
+        if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
             if let Some(data_transfer) = target.data_transfer() {
                 if let Some(file_list) = data_transfer.files() {
                     return WebFileEngine::new(file_list).to_files();
@@ -124,10 +124,10 @@ impl HasFileData for Synthetic<DragEvent> {
 }
 
 impl WebEventExt for dioxus_html::DragData {
-    type WebEvent = web_sys::DragEvent;
+    type WebEvent = web_sys_x::DragEvent;
 
     #[inline(always)]
-    fn try_as_web_event(&self) -> Option<web_sys::DragEvent> {
+    fn try_as_web_event(&self) -> Option<web_sys_x::DragEvent> {
         self.downcast::<DragEvent>().cloned()
     }
 }

@@ -4,7 +4,7 @@ use dioxus_html::{
     HasMouseData, HasWheelData, InteractionElementOffset, InteractionLocation, Modifiers,
     ModifiersInteraction, PointerInteraction,
 };
-use web_sys::WheelEvent;
+use web_sys_x::WheelEvent;
 
 use super::{Synthetic, WebEventExt};
 
@@ -81,10 +81,10 @@ impl PointerInteraction for Synthetic<WheelEvent> {
 }
 
 impl WebEventExt for dioxus_html::WheelData {
-    type WebEvent = web_sys::WheelEvent;
+    type WebEvent = web_sys_x::WheelEvent;
 
     #[inline(always)]
     fn try_as_web_event(&self) -> Option<Self::WebEvent> {
-        self.downcast::<web_sys::WheelEvent>().cloned()
+        self.downcast::<web_sys_x::WheelEvent>().cloned()
     }
 }
