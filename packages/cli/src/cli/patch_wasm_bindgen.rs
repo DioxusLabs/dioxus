@@ -1,5 +1,5 @@
 use super::*;
-use crate::{TraceSrc, Workspace};
+use crate::Workspace;
 use krates::semver::{Version, VersionReq};
 use std::path::Path;
 
@@ -14,7 +14,13 @@ pub(crate) struct PatchWasmBindgen {
 const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
 const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
 
-const PATCH_CRATES: &[&str] = &["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"];
+const PATCH_CRATES: &[&str] = &[
+    "wasm-bindgen",
+    "wasm-bindgen-futures",
+    "js-sys",
+    "web-sys",
+    "wry-bindgen",
+];
 
 /// Fetch available tags from the GitHub repository
 async fn fetch_available_tags() -> Result<Vec<String>> {
@@ -192,11 +198,11 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Res
         .as_table_mut()
         .ok_or_else(|| anyhow::anyhow!("[patch.crates-io] is not a table"))?;
 
-    for crate_name in PATCH_CRATES {
+    for &crate_name in PATCH_CRATES {
         if !crates_io_table.contains_key(crate_name) {
             let mut inline = toml_edit::InlineTable::new();
-            inline.insert("git", toml_edit::Value::from(PATCH_GIT_URL));
-            inline.insert("tag", toml_edit::Value::from(tag));
+            inline.insert("git", PATCH_GIT_URL.into());
+            inline.insert("tag", tag.into());
             crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
         }
     }
@@ -224,11 +230,10 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     }
 
     // Show prompt
-    tracing::info!("Your project may use wasm-bindgen crates (web-sys, etc).");
-    tracing::info!("For desktop builds, these need a compatibility patch.");
-    tracing::info!("");
-
     let term = console::Term::stdout();
+    term.write_str("Your project may use wasm-bindgen crates (web-sys, etc).\n")?;
+    term.write_str("For desktop builds, these need a compatibility patch.\n")?;
+    term.write_str("\n")?;
     term.write_str("Apply wasm-bindgen patch to Cargo.toml? [Y/n] ")?;
     term.flush()?;
 
@@ -251,89 +256,6 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 
 impl PatchWasmBindgen {
     pub(crate) async fn patch_wasm_bindgen(self) -> Result<StructuredOutput> {
-        let workspace = Workspace::current().await?;
-        let cargo_toml_path = workspace
-            .krates
-            .workspace_root()
-            .as_std_path()
-            .join("Cargo.toml");
-
-        if !cargo_toml_path.exists() {
-            return Err(anyhow::anyhow!(
-                "No Cargo.toml found at {}",
-                cargo_toml_path.display()
-            ));
-        }
-
-        // Get the best matching tag for the workspace's wasm-bindgen version
-        let tag = get_matching_patch_tag(&workspace).await?;
-        tracing::info!(
-            dx_src = ?TraceSrc::Dev,
-            "Using wasm-bindgen-wry tag: {} (matching wasm-bindgen {})",
-            tag,
-            workspace.wasm_bindgen_version().unwrap_or_else(|| "unknown".to_string())
-        );
-
-        // Read the existing Cargo.toml
-        let content = std::fs::read_to_string(&cargo_toml_path)?;
-        let mut doc: toml_edit::DocumentMut = content
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
-
-        // Get or create the [patch.crates-io] section
-        let patch = doc
-            .entry("patch")
-            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
-        let patch_table = patch
-            .as_table_mut()
-            .ok_or_else(|| anyhow::anyhow!("[patch] is not a table"))?;
-
-        let crates_io = patch_table
-            .entry("crates-io")
-            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
-        let crates_io_table = crates_io
-            .as_table_mut()
-            .ok_or_else(|| anyhow::anyhow!("[patch.crates-io] is not a table"))?;
-
-        let mut added = Vec::new();
-        let mut skipped = Vec::new();
-
-        for crate_name in PATCH_CRATES {
-            if crates_io_table.contains_key(crate_name) && !self.force {
-                skipped.push(*crate_name);
-                continue;
-            }
-
-            // Create the inline table: { git = "...", tag = "..." }
-            let mut inline = toml_edit::InlineTable::new();
-            inline.insert("git", toml_edit::Value::from(PATCH_GIT_URL));
-            inline.insert("tag", toml_edit::Value::from(tag.as_str()));
-            crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
-            added.push(*crate_name);
-        }
-
-        // Write the modified Cargo.toml back
-        std::fs::write(&cargo_toml_path, doc.to_string())?;
-
-        // Log results
-        if !added.is_empty() {
-            tracing::info!(
-                dx_src = ?TraceSrc::Dev,
-                "Added wasm-bindgen patches: {}",
-                added.join(", ")
-            );
-        }
-        if !skipped.is_empty() {
-            tracing::warn!(
-                "Skipped existing patches (use --force to overwrite): {}",
-                skipped.join(", ")
-            );
-        }
-
-        if added.is_empty() && skipped.is_empty() {
-            tracing::info!(dx_src = ?TraceSrc::Dev, "No patches needed.");
-        }
-
-        Ok(StructuredOutput::Success)
+        todo!()
     }
 }
