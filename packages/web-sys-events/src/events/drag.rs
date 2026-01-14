@@ -98,8 +98,7 @@ impl HasFileData for Synthetic<DragEvent> {
                     if let Some(item) = items.get(i) {
                         if item.kind() == "file" {
                             if let Ok(Some(file)) = item.get_as_file() {
-                                let web_data =
-                                    WebFileData::new(file, FileReader::new().unwrap());
+                                let web_data = WebFileData::new(file, FileReader::new().unwrap());
                                 files.push(FileData::new(web_data));
                             }
                         }

@@ -817,7 +817,11 @@ impl BuildRequest {
             platform,
             Platform::MacOS | Platform::Windows | Platform::Linux
         ) {
-            crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(&workspace).await?;
+            if let Err(err) =
+                crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(&workspace).await
+            {
+                eprintln!("Warning: Failed to check for wasm-bindgen patch: {}", err);
+            }
         }
 
         // The triple will be the triple passed or the host if using dioxus.

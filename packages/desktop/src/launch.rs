@@ -12,7 +12,10 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_virtual_dom_blocking(virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static, mut desktop_config: Config) -> ! {
+pub fn launch_virtual_dom_blocking(
+    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static,
+    mut desktop_config: Config,
+) -> ! {
     let mut custom_event_handler = desktop_config.custom_event_handler.take();
     let virtual_dom = Box::new(virtual_dom);
     let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
@@ -120,7 +123,8 @@ pub fn launch_virtual_dom_blocking(virtual_dom: impl FnOnce() -> VirtualDom + Se
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch_virtual_dom(
-    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static, desktop_config: Config
+    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static,
+    desktop_config: Config,
 ) -> ! {
     #[cfg(feature = "tokio_runtime")]
     {

@@ -5,11 +5,7 @@ use std::path::Path;
 
 /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
 #[derive(Clone, Debug, Parser)]
-pub(crate) struct PatchWasmBindgen {
-    /// Overwrite existing wasm-bindgen patches if they exist
-    #[clap(long)]
-    pub(crate) force: bool,
-}
+pub(crate) struct PatchWasmBindgen {}
 
 const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
 const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
@@ -91,11 +87,7 @@ fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Op
 }
 
 /// Get the best matching tag for the workspace's wasm-bindgen version
-pub(crate) async fn get_matching_patch_tag(workspace: &Workspace) -> Result<String> {
-    let wasm_bindgen_version = workspace
-        .wasm_bindgen_version()
-        .unwrap_or_else(|| "0.2.99".to_string());
-
+pub(crate) async fn get_matching_patch_tag(wasm_bindgen_version: &str) -> Result<String> {
     let available_tags = fetch_available_tags().await?;
 
     find_best_matching_tag(&wasm_bindgen_version, &available_tags).ok_or_else(|| {
@@ -216,6 +208,11 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Res
 pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Result<()> {
     let workspace_root = workspace.krates.workspace_root().as_std_path();
 
+    // Only try to patch if we have a wasm-bindgen version
+    let Some(wasm_bindgen_version) = workspace.wasm_bindgen_version() else {
+        return Ok(());
+    };
+
     // Skip if already prompted for this workspace
     if was_prompted(workspace_root) {
         return Ok(());
@@ -244,7 +241,7 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
     mark_prompted(workspace_root)?;
 
     if should_patch {
-        let tag = get_matching_patch_tag(workspace).await?;
+        let tag = get_matching_patch_tag(&wasm_bindgen_version).await?;
         apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
         term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
     } else {
@@ -256,6 +253,17 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 
 impl PatchWasmBindgen {
     pub(crate) async fn patch_wasm_bindgen(self) -> Result<StructuredOutput> {
-        todo!()
+        let workspace = Workspace::current().await?;
+        let workspace_root = workspace.krates.workspace_root().as_std_path();
+        let cargo_toml = workspace_root.join("Cargo.toml");
+        let Some(wasm_bindgen_version) = workspace.wasm_bindgen_version() else {
+            tracing::info!("No wasm-bindgen version found in workspace; skipping patch.");
+            return Ok(StructuredOutput::Success);
+        };
+
+        let tag = get_matching_patch_tag(&wasm_bindgen_version).await?;
+        apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+        tracing::info!("Patch applied to Cargo.toml (tag: {})", tag);
+        return Ok(StructuredOutput::Success);
     }
 }

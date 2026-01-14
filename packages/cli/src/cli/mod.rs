@@ -108,10 +108,6 @@ pub(crate) enum Commands {
     #[clap(name = "config")]
     Config(config::Config),
 
-    /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
-    #[clap(name = "patch-wasm-bindgen")]
-    PatchWasmBindgen(patch_wasm_bindgen::PatchWasmBindgen),
-
     /// Update the Dioxus CLI to the latest version.
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
@@ -137,6 +133,10 @@ pub enum BuildTools {
     /// Hotpatch the "tip" of a given "fat" binary. The output here must be from the `dx build` command with "fat" enabled
     #[clap(name = "hotpatch")]
     HotpatchTip(hotpatch::HotpatchTip),
+
+    /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
+    #[clap(name = "patch-wasm-bindgen")]
+    PatchWasmBindgen(patch_wasm_bindgen::PatchWasmBindgen),
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {

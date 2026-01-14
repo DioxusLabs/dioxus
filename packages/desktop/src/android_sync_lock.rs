@@ -5,9 +5,9 @@ pub fn android_runtime_lock() -> impl std::any::Any + 'static {
     #[cfg(target_os = "android")]
     {
         use std::sync::{Mutex, OnceLock};
-    
+
         static RUNTIME_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    
+
         RUNTIME_LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
     }
 }
