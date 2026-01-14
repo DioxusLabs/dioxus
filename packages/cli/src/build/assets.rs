@@ -469,26 +469,37 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             // For passive segments (bulk memory operations), there's no static offset.
             // The memory.init instruction determines placement at runtime.
             //
-            // Rust/LLVM places static data at 0x100000 (1MB) in linear memory.
+            // Try to find the actual memory base from linker exports:
+            // - __memory_base: Set by the linker for bulk-memory builds
+            // - Falls back to 0x100000 (Rust/LLVM default for static data)
             //
             // With TLS support, the linker calculates symbol addresses as if TLS data
-            // is at 0x100000 followed by main data. But at runtime, TLS is stored
-            // separately per-thread via __wasm_init_tls. The main data segment starts
-            // at 0x100000 in the file, but symbol addresses include the TLS offset.
+            // is at the base address followed by main data. But at runtime, TLS is stored
+            // separately per-thread via __wasm_init_tls. We detect TLS by looking for
+            // __tls_size and adjust accordingly.
             //
-            // We detect TLS by looking for __tls_size and remove the TLS segment from
-            // our file info, then add the TLS size to the base address.
-            let tls_size = find_global_export_value(&module, "__tls_size");
+            // IMPORTANT: The linker aligns main data to a 4-byte boundary after TLS.
+            // This alignment padding exists in MEMORY but NOT in the FILE. We must
+            // use the aligned TLS size for base calculation, but the file segments
+            // are stored without this padding.
+            let memory_base = find_global_export_value(&module, "__memory_base");
+            let tls_size = find_global_export_value(&module, "__tls_size").unwrap_or(0);
 
             // If TLS is present and segment 0 matches TLS size, remove TLS segment
-            if let Some(tls) = tls_size {
-                if !segment_file_info.is_empty() && segment_file_info[0].1 == tls {
-                    segment_file_info.remove(0);
-                }
+            // from our file info since it's not where data symbols point
+            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size {
+                segment_file_info.remove(0);
             }
 
-            // Base = 0x100000 + TLS size (to account for TLS offset in symbol addresses)
-            0x100000u64 + tls_size.unwrap_or(0)
+            // Align TLS size up to 4 bytes to match linker's memory layout.
+            // The linker aligns main data to a 4-byte boundary after TLS, so symbol
+            // addresses are calculated from (memory_base + aligned_tls_size).
+            // However, file segments are stored without this alignment padding.
+            let tls_aligned = (tls_size + 3) & !3;
+
+            // Use __memory_base if available (set by linker in release builds),
+            // otherwise fall back to 0x100000 (debug builds default)
+            memory_base.unwrap_or(0x100000u64) + tls_aligned
         }
     };
 
