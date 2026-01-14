@@ -13,9 +13,9 @@ keywords = ["dom", "ui", "gui", "web", "wasm"]
 dioxus-document = { workspace = true }
 generational-box = { workspace = true }
 
-wasm-bindgen = { version = "0.2.106-alpha.0", package = "wasm-bindgen-x" }
-wasm-bindgen-futures = { version = "0.4.56-alpha.0", package = "wasm-bindgen-futures-x" }
-js-sys = { version = "0.3.83-alpha.0", package = "js-sys-x" }
+wasm-bindgen = { version = "0.2.106-alpha.1", package = "wasm-bindgen-x" }
+wasm-bindgen-futures = { version = "0.4.56-alpha.1", package = "wasm-bindgen-futures-x" }
+js-sys = { version = "0.3.83-alpha.1", package = "js-sys-x" }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

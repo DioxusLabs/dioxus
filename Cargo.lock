@@ -1317,9 +1317,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-rs"
-version = "1.15.2"
+version = "1.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a88aab2464f1f25453baa7a07c84c5b7684e274054ba06817f382357f77a288"
+checksum = "e84ce723ab67259cfeb9877c6a639ee9eb7a27b28123abd71db7f0d5d0cc9d86"
 dependencies = [
  "aws-lc-sys",
  "zeroize",
@@ -1327,9 +1327,9 @@ dependencies = [
 
 [[package]]
 name = "aws-lc-sys"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b45afffdee1e7c9126814751f88dddc747f41d91da16c9551a0f1e8a11e788a1"
+checksum = "43a442ece363113bd4bd4c8b18977a7798dd4d3c3383f34fb61936960e8f4ad8"
 dependencies = [
  "cc",
  "cmake",
@@ -10356,9 +10356,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys-x"
-version = "0.3.83-alpha.0"
+version = "0.3.83-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0110e1d910d9abda79ca90fed8fc2f584ef8967bc0c19a4f75c46411fbdda260"
+checksum = "cc4596fecc49165ed5d6554c9265cb4db607451a2235b1198fee92d068e5dca1"
 dependencies = [
  "once_cell",
  "wasm-bindgen-x",
@@ -19051,9 +19051,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-futures-x"
-version = "0.4.56-alpha.0"
+version = "0.4.56-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "299cd594d2359950fa0f62005809b6fc358339c955bc3022cd25fd2af85e8275"
+checksum = "244455489d63ea92a1d6269953ecaf83a4f399e93f5d7d4ebc05b03251460a33"
 dependencies = [
  "cfg-if",
  "js-sys-x",
@@ -19087,9 +19087,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-x"
-version = "0.2.106-alpha.0"
+version = "0.2.106-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ccc11b5daaf5aaccc1ec5b572df928e09afec13db887eb5a78e0014e7c2de7b"
+checksum = "0e447f2ddaf7de33e5a01a5f16d3d4a94f6b978ec84cd9801d92c6b8de273a81"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -19153,9 +19153,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-x"
-version = "0.2.106-alpha.0"
+version = "0.2.106-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42d5eedc96870d9719d0d89ac07d5536d8d5f5707bfe4067173da17d42ed11c0"
+checksum = "ad338d82321ba007c90007a201d5a632ce24908d28bd3e2767e496fd99b3259a"
 dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-macro-x",
@@ -19413,9 +19413,9 @@ dependencies = [
 
 [[package]]
 name = "web-sys-x"
-version = "0.3.83-alpha.0"
+version = "0.3.83-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ce4450cf37ea3719dfdc53a8e4c19f895fc5903020512346d85e5996396c637"
+checksum = "8ee0ace88a6dbec8e3f9cfae4d79906f4e6dff4a27569cf26961e920c2d31f9b"
 dependencies = [
  "js-sys-x",
  "wasm-bindgen-x",
@@ -20728,9 +20728,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen"
-version = "0.2.106-alpha.0"
+version = "0.2.106-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c5ae756d8db7e1145c45faa506c0883efd511fe967adad55264c35ef7fb36b6"
+checksum = "9ca56539675e7054a348aa5c27fd899b8e7adac317cff6f3f95216f766660571"
 dependencies = [
  "async-channel 2.5.0",
  "base64 0.22.1",
@@ -20749,9 +20749,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen-macro"
-version = "0.2.106-alpha.0"
+version = "0.2.106-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7fd668618e6b50f2c5feb992314e70a452fcfa62e678d3b546b54033b33a068"
+checksum = "38f160aec4b9a70ee28069bb35c2ee02b17372bd0fc7844779b94d70f19f5e62"
 dependencies = [
  "quote",
  "wry-bindgen-macro-support",
@@ -20759,9 +20759,9 @@ dependencies = [
 
 [[package]]
 name = "wry-bindgen-macro-support"
-version = "0.2.106-alpha.0"
+version = "0.2.106-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa095eaa13ef56f5aa8e384b0d050447ad77fe5ca07d2a72e1fb3c9418a01396"
+checksum = "dcf92590cc41a4498ac7b8aafa97bdd2348e8a86b2e211c5ef454b8ac63a02d4"
 dependencies = [
  "proc-macro2",
  "quote",
