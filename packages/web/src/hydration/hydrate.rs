@@ -215,7 +215,7 @@ impl WebsysDom {
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
         let closure =
             move |path: Vec<u32>,
-                  data: js_sys::Uint8Array,
+                  data: js_sys_x::Uint8Array,
                   #[allow(unused)] debug_types: Option<Vec<String>>,
                   #[allow(unused)] debug_locations: Option<Vec<String>>| {
                 let data = data.to_vec();

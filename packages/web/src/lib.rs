@@ -107,7 +107,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             "#)]
             extern "C" {
-                fn get_initial_hydration_data() -> js_sys::Uint8Array;
+                fn get_initial_hydration_data() -> js_sys_x::Uint8Array;
                 fn get_initial_hydration_debug_types() -> Option<Vec<String>>;
                 fn get_initial_hydration_debug_locations() -> Option<Vec<String>>;
             }
