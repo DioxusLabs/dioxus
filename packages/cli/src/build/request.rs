@@ -813,7 +813,10 @@ impl BuildRequest {
         }
 
         // Check if we should prompt the user to apply the wasm-bindgen patch for desktop targets
-        if matches!(platform, Platform::MacOS | Platform::Windows | Platform::Linux) {
+        if matches!(
+            platform,
+            Platform::MacOS | Platform::Windows | Platform::Linux
+        ) {
             crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(
                 workspace.krates.workspace_root().as_std_path(),
             )?;

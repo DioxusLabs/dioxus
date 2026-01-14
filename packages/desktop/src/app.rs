@@ -98,7 +98,9 @@ impl App {
         };
 
         // Set the event converter to use desktop-specific converter with native file handling
-        dioxus_html::set_event_converter(Box::new(crate::event_converter::DesktopEventConverter::new()));
+        dioxus_html::set_event_converter(Box::new(
+            crate::event_converter::DesktopEventConverter::new(),
+        ));
 
         // Wire up the global hotkey handler
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

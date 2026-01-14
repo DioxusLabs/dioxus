@@ -178,9 +178,9 @@ impl PatchWasmBindgen {
             .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
 
         // Get or create the [patch.crates-io] section
-        let patch = doc.entry("patch").or_insert_with(|| {
-            toml_edit::Item::Table(toml_edit::Table::new())
-        });
+        let patch = doc
+            .entry("patch")
+            .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()));
         let patch_table = patch
             .as_table_mut()
             .ok_or_else(|| anyhow::anyhow!("[patch] is not a table"))?;
