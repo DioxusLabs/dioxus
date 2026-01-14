@@ -23,7 +23,7 @@ fn app() -> Element {
         let tx = handle.tx();
         dioxus::desktop::window().new_window(
             || VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
-            || Default::default(),
+            Default::default,
         );
     };
 

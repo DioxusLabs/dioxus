@@ -121,7 +121,6 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
@@ -162,9 +161,9 @@ impl WebviewInstance {
                     responder: RequestAsyncResponder,
                 }
 
-                impl Into<WryBindgenResponder> for ResponderWrapper {
-                    fn into(self) -> WryBindgenResponder {
-                        WryBindgenResponder::new(self)
+                impl From<ResponderWrapper> for WryBindgenResponder {
+                    fn from(val: ResponderWrapper) -> Self {
+                        WryBindgenResponder::new(val)
                     }
                 }
 
@@ -495,15 +494,8 @@ impl WebviewInstance {
             let rx = &mut self.dom_command_rx;
             let mut commands = Vec::new();
 
-            loop {
-                match rx.poll_next_unpin(&mut cx) {
-                    Poll::Ready(Some(cmd)) => {
-                        commands.push(cmd);
-                    }
-                    Poll::Ready(None) | Poll::Pending => {
-                        break;
-                    }
-                }
+            while let Poll::Ready(Some(cmd)) = rx.poll_next_unpin(&mut cx) {
+                commands.push(cmd);
             }
             commands
         };

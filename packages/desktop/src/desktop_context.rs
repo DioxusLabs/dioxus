@@ -2,7 +2,7 @@ use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
     dom_thread::{DomCallbackRequest, DomShortcutId, SharedCallbackRegistry, VirtualDomEvent},
-    ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
+    ipc::{DesktopServiceCallback, DesktopServiceCallbackWrapper, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
@@ -156,7 +156,7 @@ impl DesktopContext {
 
         let (sender, receiver) = std::sync::mpsc::sync_channel(1);
 
-        let callback: Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send> =
+        let callback: DesktopServiceCallback =
             Box::new(move |desktop| Box::new(f(desktop)) as Box<dyn Any + Send>);
 
         let wrapper = DesktopServiceCallbackWrapper::new(callback, sender);

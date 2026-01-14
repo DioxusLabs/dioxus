@@ -90,7 +90,7 @@ fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Op
 pub(crate) async fn get_matching_patch_tag(wasm_bindgen_version: &str) -> Result<String> {
     let available_tags = fetch_available_tags().await?;
 
-    find_best_matching_tag(&wasm_bindgen_version, &available_tags).ok_or_else(|| {
+    find_best_matching_tag(wasm_bindgen_version, &available_tags).ok_or_else(|| {
         anyhow::anyhow!(
             "No compatible wasm-bindgen-wry tag found for version {}",
             wasm_bindgen_version
@@ -264,6 +264,6 @@ impl PatchWasmBindgen {
         let tag = get_matching_patch_tag(&wasm_bindgen_version).await?;
         apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
         tracing::info!("Patch applied to Cargo.toml (tag: {})", tag);
-        return Ok(StructuredOutput::Success);
+        Ok(StructuredOutput::Success)
     }
 }

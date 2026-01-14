@@ -5,9 +5,13 @@ use std::sync::{mpsc::SyncSender, Arc, Mutex};
 use tao::window::WindowId;
 use wry_bindgen::runtime::WryBindgenEvent;
 
+/// Type alias for the desktop service callback function.
+pub(crate) type DesktopServiceCallback =
+    Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send>;
+
 /// Inner type that holds the callback and response channel for DesktopService operations.
 pub(crate) struct DesktopServiceCallbackInner {
-    pub callback: Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send>,
+    pub callback: DesktopServiceCallback,
     pub sender: SyncSender<Box<dyn Any + Send>>,
 }
 
@@ -28,7 +32,7 @@ impl std::fmt::Debug for DesktopServiceCallbackWrapper {
 
 impl DesktopServiceCallbackWrapper {
     pub(crate) fn new(
-        callback: Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send>,
+        callback: DesktopServiceCallback,
         sender: SyncSender<Box<dyn Any + Send>>,
     ) -> Self {
         Self(Arc::new(Mutex::new(Some(DesktopServiceCallbackInner {

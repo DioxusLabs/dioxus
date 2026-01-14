@@ -3,6 +3,9 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// The objc crate's msg_send! macro uses cfg(feature = "cargo-clippy") which triggers
+// unexpected_cfgs warnings. This is a known issue with the objc crate.
+#![allow(unexpected_cfgs)]
 
 mod android_sync_lock;
 mod app;

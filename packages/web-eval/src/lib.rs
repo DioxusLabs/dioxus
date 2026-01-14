@@ -2,6 +2,7 @@
 //!
 //! This crate provides the `WebEvaluator` which can be used by both
 //! the web renderer (via wasm-bindgen) and the desktop renderer (via wry-bindgen).
+#![allow(clippy::redundant_closure)]
 
 use dioxus_document::{EvalError, Evaluator};
 use futures_util::FutureExt;

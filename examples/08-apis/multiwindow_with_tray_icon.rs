@@ -31,7 +31,7 @@ fn app() -> Element {
     rsx! {
         button {
             onclick: move |_| {
-                window().new_window(|| VirtualDom::new(popup), || Default::default());
+                window().new_window(|| VirtualDom::new(popup), Default::default);
             },
             "New Window"
         }
