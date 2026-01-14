@@ -1,5 +1,5 @@
 use dioxus_html::HasScrollData;
-use wasm_bindgen_x::JsCast;
+use wasm_bindgen::JsCast;
 use web_sys_x::{Document, Element, Event};
 
 use super::{Synthetic, WebEventExt};

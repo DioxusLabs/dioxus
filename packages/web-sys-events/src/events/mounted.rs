@@ -2,7 +2,7 @@ use dioxus_html::{
     geometry::euclid::{Point2D, Size2D},
     MountedData,
 };
-use wasm_bindgen_x::JsCast;
+use wasm_bindgen::JsCast;
 
 use super::{Synthetic, WebEventExt};
 
@@ -121,7 +121,7 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys_x::Element> {
         focus: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = dioxus_html::MountedResult<()>>>> {
         #[derive(Debug)]
-        struct FocusError(wasm_bindgen_x::JsValue);
+        struct FocusError(wasm_bindgen::JsValue);
 
         impl std::fmt::Display for FocusError {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

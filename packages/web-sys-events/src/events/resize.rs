@@ -1,5 +1,5 @@
 use dioxus_html::{geometry::PixelsSize, HasResizeData, ResizeResult};
-use wasm_bindgen_x::JsCast;
+use wasm_bindgen::JsCast;
 use web_sys_x::{CustomEvent, Event, ResizeObserverEntry};
 
 use super::{Synthetic, WebEventExt};

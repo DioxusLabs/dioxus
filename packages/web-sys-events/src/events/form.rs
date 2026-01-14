@@ -3,7 +3,7 @@ use crate::WebFileData;
 use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys_x::Array;
 use std::any::Any;
-use wasm_bindgen_x::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
 use web_sys_x::{Element, Event, FileReader};
 
 /// Web-sys form data implementation.
@@ -136,7 +136,7 @@ impl HasFormData for WebFormData {
 
 impl HasFileData for WebFormData {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen_x::JsCast;
+        use wasm_bindgen::JsCast;
         self.event
             .target()
             .and_then(|t| t.dyn_into::<web_sys_x::HtmlInputElement>().ok())

@@ -7,7 +7,7 @@ use super::Synthetic;
 
 impl HasFileData for Synthetic<web_sys_x::Event> {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen_x::JsCast;
+        use wasm_bindgen::JsCast;
         let target = self.event.target();
 
         if let Some(target) = target

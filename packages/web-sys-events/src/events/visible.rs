@@ -7,7 +7,7 @@ use dioxus_html::{
     },
     HasVisibleData, VisibleData, VisibleError, VisibleResult,
 };
-use wasm_bindgen_x::JsCast;
+use wasm_bindgen::JsCast;
 use web_sys_x::{CustomEvent, DomRectReadOnly, Event, IntersectionObserverEntry};
 
 use super::{Synthetic, WebEventExt};

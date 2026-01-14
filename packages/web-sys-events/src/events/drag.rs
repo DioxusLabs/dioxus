@@ -75,7 +75,7 @@ impl HasDragData for Synthetic<DragEvent> {
 
 impl HasDataTransferData for Synthetic<DragEvent> {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
-        use wasm_bindgen_x::JsCast;
+        use wasm_bindgen::JsCast;
 
         if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
             if let Some(data) = target.data_transfer() {
@@ -92,7 +92,7 @@ impl HasDataTransferData for Synthetic<DragEvent> {
 
 impl HasFileData for Synthetic<DragEvent> {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen_x::JsCast;
+        use wasm_bindgen::JsCast;
 
         if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
             if let Some(data_transfer) = target.data_transfer() {

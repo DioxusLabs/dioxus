@@ -4,7 +4,7 @@ use futures_channel::oneshot;
 use js_sys_x::Uint8Array;
 use send_wrapper::SendWrapper;
 use std::{pin::Pin, prelude::rust_2024::Future};
-use wasm_bindgen_x::{prelude::Closure, JsCast};
+use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys_x::{File, FileList, FileReader};
 
 /// A file representation for the web platform
@@ -135,7 +135,7 @@ impl NativeFileData for WebFileData {
     }
 
     fn path(&self) -> std::path::PathBuf {
-        let key = wasm_bindgen_x::JsValue::from_str("webkitRelativePath");
+        let key = wasm_bindgen::JsValue::from_str("webkitRelativePath");
 
         if let Ok(value) = js_sys_x::Reflect::get(&self.file, &key) {
             if let Some(path_str) = value.as_string() {

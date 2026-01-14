@@ -3,7 +3,7 @@ use dioxus_html::{
 };
 pub use form::WebFormData;
 use load::WebImageEvent;
-use wasm_bindgen_x::JsCast;
+use wasm_bindgen::JsCast;
 use web_sys_x::{Document, Element, Event};
 
 mod animation;
