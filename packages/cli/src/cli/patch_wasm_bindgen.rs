@@ -1,5 +1,6 @@
 use super::*;
 use crate::{TraceSrc, Workspace};
+use krates::semver::Version;
 use std::path::Path;
 
 /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
@@ -14,63 +15,6 @@ const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
 const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
 
 const PATCH_CRATES: &[&str] = &["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"];
-
-/// Represents a parsed version for comparison
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ParsedVersion {
-    major: u32,
-    minor: u32,
-    patch: u32,
-    prerelease: Option<String>,
-}
-
-impl ParsedVersion {
-    /// Parse a version string like "0.2.99" or "0.2.106-alpha.0"
-    fn parse(version: &str) -> Option<Self> {
-        let version = version.trim_start_matches('v');
-        let (version_part, prerelease) = if let Some(idx) = version.find('-') {
-            (&version[..idx], Some(version[idx + 1..].to_string()))
-        } else {
-            (version, None)
-        };
-
-        let parts: Vec<&str> = version_part.split('.').collect();
-        if parts.len() < 3 {
-            return None;
-        }
-
-        Some(Self {
-            major: parts[0].parse().ok()?,
-            minor: parts[1].parse().ok()?,
-            patch: parts[2].parse().ok()?,
-            prerelease,
-        })
-    }
-
-    /// Compare versions, returning ordering (-1, 0, 1)
-    fn cmp_version(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering;
-        match self.major.cmp(&other.major) {
-            Ordering::Equal => {}
-            ord => return ord,
-        }
-        match self.minor.cmp(&other.minor) {
-            Ordering::Equal => {}
-            ord => return ord,
-        }
-        match self.patch.cmp(&other.patch) {
-            Ordering::Equal => {}
-            ord => return ord,
-        }
-        // Versions with prerelease are considered less than those without
-        match (&self.prerelease, &other.prerelease) {
-            (None, None) => Ordering::Equal,
-            (None, Some(_)) => Ordering::Greater,
-            (Some(_), None) => Ordering::Less,
-            (Some(a), Some(b)) => a.cmp(b),
-        }
-    }
-}
 
 /// Fetch available tags from the GitHub repository
 async fn fetch_available_tags() -> Result<Vec<String>> {
@@ -102,21 +46,26 @@ async fn fetch_available_tags() -> Result<Vec<String>> {
     Ok(tags.into_iter().map(|t| t.name).collect())
 }
 
+/// Parse a version string, stripping the leading 'v' if present
+fn parse_version(version: &str) -> Option<Version> {
+    Version::parse(version.trim_start_matches('v')).ok()
+}
+
 /// Find the best matching tag for the given wasm-bindgen version
 fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Option<String> {
-    let target = ParsedVersion::parse(target_version)?;
+    let target = parse_version(target_version)?;
 
     // Parse all available tags and filter to valid versions
-    let mut parsed_tags: Vec<(String, ParsedVersion)> = available_tags
+    let mut parsed_tags: Vec<(String, Version)> = available_tags
         .iter()
         .filter_map(|tag| {
-            let parsed = ParsedVersion::parse(tag)?;
+            let parsed = parse_version(tag)?;
             Some((tag.clone(), parsed))
         })
         .collect();
 
     // Sort by version (descending) so we prefer newer versions
-    parsed_tags.sort_by(|a, b| b.1.cmp_version(&a.1));
+    parsed_tags.sort_by(|a, b| b.1.cmp(&a.1));
 
     // First, try to find an exact match
     for (tag, parsed) in &parsed_tags {
@@ -132,7 +81,7 @@ fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Op
     for (tag, parsed) in &parsed_tags {
         if parsed.major == target.major
             && parsed.minor == target.minor
-            && parsed.cmp_version(&target) != std::cmp::Ordering::Less
+            && parsed >= &target
         {
             return Some(tag.clone());
         }
