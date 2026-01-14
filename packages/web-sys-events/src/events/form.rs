@@ -148,7 +148,7 @@ impl HasFileData for WebFormData {
 }
 
 // web-sys does not expose the keys api for select data, so we need to manually bind to it
-#[wasm_bindgen(crate = wasm_bindgen_x, inline_js = r#"
+#[wasm_bindgen(inline_js = r#"
 export function get_select_data(select) {
     let values = [];
     for (let i = 0; i < select.options.length; i++) {
