@@ -14,9 +14,6 @@ impl WebDataTransfer {
     }
 }
 
-unsafe impl Send for WebDataTransfer {}
-unsafe impl Sync for WebDataTransfer {}
-
 impl NativeDataTransfer for WebDataTransfer {
     fn get_data(&self, format: &str) -> Option<String> {
         self.data.get_data(format).ok()
