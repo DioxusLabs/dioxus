@@ -5,14 +5,16 @@
 
 use dioxus_document::{EvalError, Evaluator};
 use futures_util::FutureExt;
-use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};
+use generational_box::{AnyStorage, GenerationalBox, Owner, UnsyncStorage};
 use js_sys::Function;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
 use std::future::Future;
 use std::pin::Pin;
+use std::rc::{Rc, Weak};
 use std::result;
+use std::task::Poll;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -94,6 +96,7 @@ type NextPoll = Pin<Box<dyn Future<Output = Result<serde_json::Value, EvalError>
 /// This evaluator works in both pure web (wasm32) contexts and in desktop
 /// contexts using wry-bindgen (which patches wasm-bindgen for native webviews).
 pub struct WebEvaluator {
+    weak_owner: Weak<Owner>,
     channels: WeakDioxusChannel,
     next_future: Option<NextPoll>,
     result: Pin<Box<dyn Future<Output = result::Result<Value, EvalError>>>>,
@@ -109,7 +112,9 @@ impl WebEvaluator {
     ///
     /// The return value of the JavaScript code will be available via `poll_join`.
     pub fn create(js: String) -> GenerationalBox<Box<dyn Evaluator>> {
-        let owner = UnsyncStorage::owner();
+        let owner = Rc::new(UnsyncStorage::owner());
+
+        let weak_owner = Rc::downgrade(&owner);
 
         // Add the drop handler to DioxusChannel so that it gets dropped when the channel is dropped in JS
         let channels = WebDioxusChannel::new(JSOwner::new(owner.clone()));
@@ -125,7 +130,10 @@ impl WebEvaluator {
             Ok(result) => {
                 let future = js_sys::Promise::resolve(&result);
                 let js_future = JsFuture::from(future);
+                let owner = owner.clone();
                 Box::pin(async move {
+                    // Prevent dropping the channel until the result has been received even after the `dioxus` object has been dropped in js
+                    let _owner = owner;
                     let result = js_future.await.map_err(|e| {
                         EvalError::Communication(format!("Failed to await result - {:?}", e))
                     })?;
@@ -139,6 +147,7 @@ impl WebEvaluator {
         };
 
         owner.insert(Box::new(Self {
+            weak_owner,
             channels: weak_channels,
             result,
             next_future: None,
@@ -169,7 +178,10 @@ impl Evaluator for WebEvaluator {
     ) -> std::task::Poll<Result<serde_json::Value, EvalError>> {
         if self.next_future.is_none() {
             let channels: WebDioxusChannel = self.channels.clone().into();
+            let owner = self.weak_owner.upgrade();
             let pinned = Box::pin(async move {
+                // Prevent dropping the channel until the result has been received even after the `dioxus` object has been dropped in js
+                let _owner = owner;
                 let fut = channels.rust_recv();
                 let data = fut.await;
                 value_from_js_value(&data)
@@ -179,8 +191,10 @@ impl Evaluator for WebEvaluator {
         let fut = self.next_future.as_mut().unwrap();
         let mut pinned = std::pin::pin!(fut);
         let result = pinned.as_mut().poll(context);
-        if result.is_ready() {
-            self.next_future = None;
+        if let Poll::Ready(result) = &result {
+            if !matches!(result, Err(EvalError::Finished)) {
+                self.next_future = None;
+            }
         }
         result
     }
