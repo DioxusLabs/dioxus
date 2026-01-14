@@ -1,6 +1,6 @@
 use super::*;
 use crate::{TraceSrc, Workspace};
-use krates::semver::Version;
+use krates::semver::{Version, VersionReq};
 use std::path::Path;
 
 /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
@@ -51,9 +51,12 @@ fn parse_version(version: &str) -> Option<Version> {
     Version::parse(version.trim_start_matches('v')).ok()
 }
 
-/// Find the best matching tag for the given wasm-bindgen version
+/// Find the best matching tag for the given wasm-bindgen version using semver compatibility
 fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Option<String> {
     let target = parse_version(target_version)?;
+
+    // Create a semver requirement for compatible versions (^x.y.z)
+    let version_req = VersionReq::parse(&format!("^{}", target)).ok()?;
 
     // Parse all available tags and filter to valid versions
     let mut parsed_tags: Vec<(String, Version)> = available_tags
@@ -68,33 +71,16 @@ fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Op
     parsed_tags.sort_by(|a, b| b.1.cmp(&a.1));
 
     // First, try to find an exact match
-    for (tag, parsed) in &parsed_tags {
-        if parsed.major == target.major
-            && parsed.minor == target.minor
-            && parsed.patch == target.patch
-        {
-            return Some(tag.clone());
-        }
+    if let Some((tag, _)) = parsed_tags.iter().find(|(_, v)| v == &target) {
+        return Some(tag.clone());
     }
 
-    // Second, find the closest version that is >= target (prefer newer compatible versions)
-    for (tag, parsed) in &parsed_tags {
-        if parsed.major == target.major
-            && parsed.minor == target.minor
-            && parsed >= &target
-        {
-            return Some(tag.clone());
-        }
+    // Second, find the newest semver-compatible version
+    if let Some((tag, _)) = parsed_tags.iter().find(|(_, v)| version_req.matches(v)) {
+        return Some(tag.clone());
     }
 
-    // Third, find the closest version with same major.minor (even if older)
-    for (tag, parsed) in &parsed_tags {
-        if parsed.major == target.major && parsed.minor == target.minor {
-            return Some(tag.clone());
-        }
-    }
-
-    // Finally, just return the newest available tag
+    // Finally, just return the newest available tag as a fallback
     parsed_tags.first().map(|(tag, _)| tag.clone())
 }
 
