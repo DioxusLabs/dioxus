@@ -1,7 +1,7 @@
 //! wry-bindgen integration for dioxus desktop.
 //!
 //! This module provides the bridge between dioxus desktop and wry-bindgen,
-//! enabling typed Rust<->JS communication through wry-bindgen's binary protocol.
+//! enabling typed Rust<->JS communication through wry-bindgen's FFI mechanism.
 
 use crate::file_upload::{DesktopFileDragEvent, NativeFileHover};
 use dioxus_core::{ElementId, Runtime};
@@ -24,11 +24,11 @@ extern "C" {
     fn setMountedHandler(handler: Closure<dyn FnMut(web_sys_x::Element, u64, bool)>);
 }
 
-/// Initialize the event handler closure with the given event sender.
+/// Initialize the event handler closures for the wry-bindgen bridge.
 ///
 /// This should be called once during VirtualDom initialization on the wry-bindgen thread.
 /// The handler receives:
-/// - event: The raw web_sys::Event
+/// - event: The raw web_sys_x::Event (wry-bindgen's web-sys)
 /// - name: The event name (e.g., "click", "input")
 /// - element_id: The dioxus element ID
 /// - bubbles: Whether the event bubbles
@@ -99,7 +99,6 @@ fn handle_event_from_js(
                 _ => vec![],
             })
             .unwrap_or_default();
-        println!("Native files for drag event '{}': {:?}", name, native_files);
 
         // Create a DesktopFileDragEvent with native file paths
         let drag_event: web_sys_x::DragEvent =
@@ -126,8 +125,6 @@ fn handle_mounted_from_js(
     element_id: u64,
     bubbles: bool,
 ) {
-    use dioxus_html::PlatformEventData;
-
     // For mounted events, we pass the element directly as the event data
     let platform_event = PlatformEventData::new(Box::new(element));
 

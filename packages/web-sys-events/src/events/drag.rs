@@ -75,13 +75,9 @@ impl HasDragData for Synthetic<DragEvent> {
 
 impl HasDataTransferData for Synthetic<DragEvent> {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
-        use wasm_bindgen::JsCast;
-
-        if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
-            if let Some(data) = target.data_transfer() {
-                let web_data_transfer = WebDataTransfer::new(data);
-                return dioxus_html::DataTransfer::new(web_data_transfer);
-            }
+        if let Some(data) = self.event.data_transfer() {
+            let web_data_transfer = WebDataTransfer::new(data);
+            return dioxus_html::DataTransfer::new(web_data_transfer);
         }
 
         // Return an empty DataTransfer if we couldn't get one from the event
@@ -92,31 +88,25 @@ impl HasDataTransferData for Synthetic<DragEvent> {
 
 impl HasFileData for Synthetic<DragEvent> {
     fn files(&self) -> Vec<FileData> {
-        use wasm_bindgen::JsCast;
-
-        if let Some(target) = self.event.dyn_ref::<web_sys_x::DragEvent>() {
-            if let Some(data_transfer) = target.data_transfer() {
-                if let Some(file_list) = data_transfer.files() {
-                    return WebFileEngine::new(file_list).to_files();
-                } else {
-                    let items = data_transfer.items();
-                    let mut files = vec![];
-                    for i in 0..items.length() {
-                        if let Some(item) = items.get(i) {
-                            if item.kind() == "file" {
-                                if let Ok(Some(file)) = item.get_as_file() {
-                                    let web_data =
-                                        WebFileData::new(file, FileReader::new().unwrap());
-                                    files.push(FileData::new(web_data));
-                                }
+        if let Some(data_transfer) = self.event.data_transfer() {
+            if let Some(file_list) = data_transfer.files() {
+                return WebFileEngine::new(file_list).to_files();
+            } else {
+                let items = data_transfer.items();
+                let mut files = vec![];
+                for i in 0..items.length() {
+                    if let Some(item) = items.get(i) {
+                        if item.kind() == "file" {
+                            if let Ok(Some(file)) = item.get_as_file() {
+                                let web_data =
+                                    WebFileData::new(file, FileReader::new().unwrap());
+                                files.push(FileData::new(web_data));
                             }
                         }
                     }
-                    return files;
                 }
+                return files;
             }
-        } else {
-            tracing::warn!("DragEvent target was not a DragEvent");
         }
 
         vec![]

@@ -97,7 +97,7 @@ pub struct DesktopContext {
 }
 
 impl DesktopContext {
-    /// Create a new [`DesktopServiceProxy`] from an event loop proxy.
+    /// Create a new [`DesktopContext`] from an event loop proxy.
     ///
     /// # Arguments
     ///
@@ -108,7 +108,7 @@ impl DesktopContext {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let proxy = DesktopServiceProxy::new(event_loop_proxy, window_id, dom_tx);
+    /// let ctx = DesktopContext::new(event_loop_proxy, window_id, dom_tx);
     /// ```
     pub(crate) fn new(
         proxy: EventLoopProxy<UserWindowEvent>,
@@ -219,7 +219,7 @@ impl DesktopContext {
 
     /// Start the creation of a new window using a component function and window builder.
     ///
-    /// Returns a future that resolves to the [`DesktopServiceProxy`] for the new window.
+    /// Returns a future that resolves to the [`DesktopContext`] for the new window.
     ///
     /// Note: `Config` is not `Send`, so this method takes a closure that creates the config
     /// on the main thread instead of accepting it directly.
@@ -233,7 +233,7 @@ impl DesktopContext {
 
     /// Returns the unique identifier of the window.
     pub fn window_id(&self) -> WindowId {
-        self.run_with_desktop_service(|desktop| desktop.window.id())
+        self.window_id
     }
 
     proxy_window_method! {
@@ -527,8 +527,8 @@ impl DesktopContext {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let proxy = consume_context::<DesktopServiceProxy>();
-    /// proxy.register_asset_handler("my-protocol", |req, resp| {
+    /// let ctx = consume_context::<DesktopContext>();
+    /// ctx.register_asset_handler("my-protocol", |req, resp| {
     ///     // Handle asset request
     /// });
     /// ```
@@ -584,8 +584,8 @@ impl DesktopContext {
     /// # Example
     ///
     /// ```rust, ignore
-    /// let proxy = consume_context::<DesktopServiceProxy>();
-    /// let (handle, dom_id) = proxy.create_shortcut(hotkey, |state| {
+    /// let ctx = consume_context::<DesktopContext>();
+    /// let (handle, dom_id) = ctx.create_shortcut(hotkey, |state| {
     ///     // Handle shortcut
     /// })?;
     /// ```
@@ -993,14 +993,14 @@ pub struct PendingDesktopContext {
 }
 
 impl PendingDesktopContext {
-    /// Resolve the pending context into a [`DesktopServiceProxy`].
+    /// Resolve the pending context into a [`DesktopContext`].
     pub async fn resolve(self) -> DesktopContext {
         self.try_resolve()
             .await
             .expect("Failed to resolve pending desktop context")
     }
 
-    /// Try to resolve the pending context into a [`DesktopServiceProxy`].
+    /// Try to resolve the pending context into a [`DesktopContext`].
     pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
         self.receiver.await
     }

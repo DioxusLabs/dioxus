@@ -4,7 +4,11 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent, SerializedFormObject } from "./serialize";
+import {
+  SerializedEvent,
+  serializeEvent,
+  SerializedFormObject,
+} from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -103,38 +107,41 @@ export class NativeInterpreter extends JSChannel_ {
               values: contents.values,
             };
 
-            this.fetchAgainstHost("__file_dialog", requestData).then(response => response.json()).then(resp => {
-              const formObjects: SerializedFormObject[] = resp.values;
+            this.fetchAgainstHost("__file_dialog", requestData)
+              .then((response) => response.json())
+              .then((resp) => {
+                const formObjects: SerializedFormObject[] = resp.values;
 
-              // Create a new DataTransfer to hold the files
-              const dataTransfer = new DataTransfer();
+                // Create a new DataTransfer to hold the files
+                const dataTransfer = new DataTransfer();
 
-              // We name the file the path, so we can just use the path as the name later on.
-              for (let formObject of formObjects) {
-                if (formObject.key == target_name && formObject.file != null) {
-                  const file = new File([], formObject.file.path, {
-                    type: formObject.file.content_type,
-                    lastModified: formObject.file.last_modified,
-                  });
-                  dataTransfer.items.add(file);
+                // We name the file the path, so we can just use the path as the name later on.
+                for (let formObject of formObjects) {
+                  if (
+                    formObject.key == target_name &&
+                    formObject.file != null
+                  ) {
+                    const file = new File([], formObject.file.path, {
+                      type: formObject.file.content_type,
+                      lastModified: formObject.file.last_modified,
+                    });
+                    dataTransfer.items.add(file);
+                  }
                 }
-              }
 
-              // Set the files on the input
-              target.files = dataTransfer.files;
+                // Set the files on the input
+                target.files = dataTransfer.files;
 
-              // Dispatch actual DOM events so they go through the normal event handling path
-              target.dispatchEvent(new Event("input", { bubbles: true }));
-              target.dispatchEvent(new Event("change", { bubbles: true }));
-            });
+                // Dispatch actual DOM events so they go through the normal event handling path
+                target.dispatchEvent(new Event("input", { bubbles: true }));
+                target.dispatchEvent(new Event("change", { bubbles: true }));
+              });
 
             return;
           }
-
         }
       }
     });
-
 
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
@@ -146,7 +153,10 @@ export class NativeInterpreter extends JSChannel_ {
     super.initialize(root, handler);
   }
 
-  fetchAgainstHost(path: string, data: { [key: string]: any }): Promise<Response> {
+  fetchAgainstHost(
+    path: string,
+    data: { [key: string]: any }
+  ): Promise<Response> {
     let encoded_data = new TextEncoder().encode(JSON.stringify(data));
     const base64data = btoa(
       String.fromCharCode.apply(null, Array.from(encoded_data))
@@ -155,8 +165,8 @@ export class NativeInterpreter extends JSChannel_ {
     return fetch(`${this.baseUri}/${path}`, {
       method: "GET",
       headers: {
-        "x-dioxus-data": base64data
-      }
+        "x-dioxus-data": base64data,
+      },
     });
   }
 
@@ -364,7 +374,12 @@ export class NativeInterpreter extends JSChannel_ {
 
     // Desktop passes the raw event directly to Rust via wry-bindgen
     // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
-    const preventDefault = window.rustEventHandler(event, name, element, bubbles);
+    const preventDefault = window.rustEventHandler(
+      event,
+      name,
+      element,
+      bubbles
+    );
 
     if (preventDefault) {
       event.preventDefault();
@@ -399,7 +414,7 @@ export class NativeInterpreter extends JSChannel_ {
 
       const href = a_element.getAttribute("href");
       if (href !== "" && href !== null && href !== undefined) {
-        this.sendIpcMessage("browser_open", { href })
+        this.sendIpcMessage("browser_open", { href });
       }
     }
   }
@@ -520,14 +535,12 @@ export class NativeInterpreter extends JSChannel_ {
 
     contents.files = { files: file_contents };
 
-    const message = this.sendSerializedEvent({
+    this.sendSerializedEvent({
       name: name,
       element: realId,
       data: contents,
       bubbles,
     });
-
-    this.ipc.postMessage(message);
   }
 }
 

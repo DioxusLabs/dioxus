@@ -100,7 +100,7 @@ pub(crate) async fn get_matching_patch_tag(workspace: &Workspace) -> Result<Stri
     })
 }
 
-/// Check if the wasm-bindgen patch is needed (i.e., not already applied)
+/// Check if the wasm-bindgen patch is needed (i.e., not all patches are applied)
 pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
     if !cargo_toml_path.exists() {
         return Ok(false);
@@ -111,21 +111,21 @@ pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
         .parse()
         .map_err(|e| anyhow::anyhow!("Failed to parse Cargo.toml: {}", e))?;
 
-    // Check if [patch.crates-io] has any of our crates
+    // Check if [patch.crates-io] has all of our crates
     if let Some(patch) = doc.get("patch") {
         if let Some(crates_io) = patch.get("crates-io") {
             if let Some(table) = crates_io.as_table() {
-                for crate_name in PATCH_CRATES {
-                    if table.contains_key(crate_name) {
-                        // Patch already exists
-                        return Ok(false);
-                    }
+                let all_patched = PATCH_CRATES
+                    .iter()
+                    .all(|crate_name| table.contains_key(crate_name));
+                if all_patched {
+                    return Ok(false);
                 }
             }
         }
     }
 
-    // No patch found, it's needed
+    // Some patches are missing, it's needed
     Ok(true)
 }
 
@@ -252,7 +252,11 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
 impl PatchWasmBindgen {
     pub(crate) async fn patch_wasm_bindgen(self) -> Result<StructuredOutput> {
         let workspace = Workspace::current().await?;
-        let cargo_toml_path = workspace.krates.workspace_root().as_std_path().join("Cargo.toml");
+        let cargo_toml_path = workspace
+            .krates
+            .workspace_root()
+            .as_std_path()
+            .join("Cargo.toml");
 
         if !cargo_toml_path.exists() {
             return Err(anyhow::anyhow!(

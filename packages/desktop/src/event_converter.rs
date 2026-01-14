@@ -40,7 +40,7 @@ impl HtmlEventConverter for DesktopEventConverter {
             return DragData::new(desktop_drag);
         }
 
-        // Fall back to web-sys conversion for non-drag events
+        // Fall back to web-sys conversion for standard drag events without desktop-specific data
         self.inner.convert_drag_data(event)
     }
 
@@ -66,7 +66,7 @@ impl HtmlEventConverter for DesktopEventConverter {
     }
 
     fn convert_form_data(&self, event: &PlatformEventData) -> dioxus_html::FormData {
-        // Next, check for web-sys events (from wry-bindgen bridge)
+        // Check for web-sys events (from wry-bindgen bridge)
         if let Some(web_event) = event.downcast::<GenericWebSysEvent>() {
             // Check if this is a file input
             if let Some(input) = web_event.element.dyn_ref::<web_sys_x::HtmlInputElement>() {

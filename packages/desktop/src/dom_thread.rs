@@ -2,7 +2,8 @@
 //!
 //! This module handles running the VirtualDom on a dedicated thread to improve
 //! responsiveness. The main thread continues to run the tao event loop and manage
-//! windows, while VirtualDom polling and rendering happens on separate threads.
+//! windows, while VirtualDom polling and rendering happens as separate tasks on
+//! a dedicated DOM thread.
 
 use crate::desktop_context::DesktopContext;
 use crate::document::DesktopDocument;
@@ -340,7 +341,7 @@ pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThr
                                     let join_handle = tokio::task::spawn_local(async move {
                                         _ = AssertUnwindSafe(fut).catch_unwind().await;
                                         // Close the window when the task completes (aborted or finished)
-                                        proxy.send_event(UserWindowEvent::CloseWindow(window_id)).unwrap();
+                                        _ = proxy.send_event(UserWindowEvent::CloseWindow(window_id));
                                     });
                                     abort_handles.insert(window_id, join_handle.abort_handle());
                                 }
