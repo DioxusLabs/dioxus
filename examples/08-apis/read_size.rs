@@ -20,10 +20,10 @@ fn app() -> Element {
         let read = div_element.read();
         let client_rect = read.as_ref().map(|el| el.get_client_rect());
 
-        if let Some(client_rect) = client_rect
-            && let Ok(rect) = client_rect.await
-        {
-            dimensions.set(rect);
+        if let Some(client_rect) = client_rect {
+            if let Ok(rect) = client_rect.await {
+                dimensions.set(rect);
+            }
         }
     };
 
