@@ -8,8 +8,7 @@ pub struct DataTransfer {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-#[cfg(feature = "serialize")]
-#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub struct DataTransferItem {
     pub kind: String,
     pub type_: String,
