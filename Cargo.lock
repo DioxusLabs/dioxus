@@ -6116,15 +6116,15 @@ dependencies = [
  "dioxus-core",
  "dioxus-core-types",
  "dioxus-html",
- "js-sys",
+ "js-sys-x",
  "lazy-js-bundle 0.7.2",
  "rustc-hash 2.1.1",
  "serde",
  "sledgehammer_bindgen",
  "sledgehammer_utils",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
+ "wasm-bindgen-futures-x",
+ "wasm-bindgen-x",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -6540,7 +6540,6 @@ dependencies = [
 name = "dioxus-web"
 version = "0.7.2"
 dependencies = [
- "ciborium",
  "dioxus",
  "dioxus-cli-config",
  "dioxus-core",
@@ -6561,18 +6560,16 @@ dependencies = [
  "generational-box",
  "gloo-dialogs",
  "gloo-timers",
- "js-sys",
+ "js-sys-x",
  "rustc-hash 2.1.1",
- "send_wrapper",
  "serde",
  "serde_json",
  "tracing",
  "tracing-wasm",
- "wasm-bindgen",
- "wasm-bindgen-futures",
+ "wasm-bindgen-futures-x",
  "wasm-bindgen-test",
- "wasm-streams",
- "web-sys",
+ "wasm-bindgen-x",
+ "web-sys-x",
 ]
 
 [[package]]
@@ -15838,9 +15835,9 @@ dependencies = [
 
 [[package]]
 name = "sledgehammer_bindgen_macro"
-version = "0.6.1"
+version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f62f06db0370222f7f498ef478fce9f8df5828848d1d3517e3331936d7074f55"
+checksum = "bb251b407f50028476a600541542b605bb864d35d9ee1de4f6cab45d88475e6d"
 dependencies = [
  "quote",
  "syn 2.0.114",

@@ -25,7 +25,7 @@ impl LaunchConfig for Config {}
 
 pub(crate) enum ConfigRoot {
     RootName(String),
-    RootNode(web_sys::Node),
+    RootNode(web_sys_x::Node),
 }
 
 impl Config {
@@ -61,7 +61,7 @@ impl Config {
     /// Set the element that Dioxus will use as root.
     ///
     /// This is akin to calling React.render() on the given element.
-    pub fn rootelement(mut self, elem: web_sys::Element) -> Self {
+    pub fn rootelement(mut self, elem: web_sys_x::Element) -> Self {
         self.root = ConfigRoot::RootNode(elem.unchecked_into());
         self
     }
@@ -69,7 +69,7 @@ impl Config {
     /// Set the node that Dioxus will use as root.
     ///
     /// This is akin to calling React.render() on the given element.
-    pub fn rootnode(mut self, node: web_sys::Node) -> Self {
+    pub fn rootnode(mut self, node: web_sys_x::Node) -> Self {
         self.root = ConfigRoot::RootNode(node);
         self
     }

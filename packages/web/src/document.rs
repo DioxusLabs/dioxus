@@ -111,7 +111,7 @@ fn append_element_to_head(
     attributes: &Vec<(&'static str, String)>,
     text_content: Option<&str>,
 ) -> Result<(), JsValue> {
-    let window = web_sys::window().expect("no global `window` exists");
+    let window = web_sys_x::window().expect("no global `window` exists");
     let document = window.document().expect("should have a document on window");
     let head = document.head().expect("document should have a head");
 

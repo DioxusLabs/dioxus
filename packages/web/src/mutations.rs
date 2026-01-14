@@ -8,7 +8,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
 
 impl WebsysDom {
-    pub(crate) fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
+    pub(crate) fn create_template_node(&self, v: &TemplateNode) -> web_sys_x::Node {
         use TemplateNode::*;
         match v {
             Element {
@@ -62,7 +62,7 @@ impl WebsysDom {
     pub(crate) fn flush_queued_mounted_events(&mut self) {
         for id in self.queued_mounted_events.drain(..) {
             let node = self.interpreter.base().get_node(id.0 as u32);
-            if let Some(element) = node.dyn_ref::<web_sys::Element>() {
+            if let Some(element) = node.dyn_ref::<web_sys_x::Element>() {
                 let event = dioxus_core::Event::new(
                     std::rc::Rc::new(dioxus_html::PlatformEventData::new(Box::new(
                         element.clone(),

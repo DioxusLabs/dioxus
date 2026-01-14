@@ -118,7 +118,7 @@ impl WebsysDom {
             debug_locations,
         } = message;
 
-        let document = web_sys::window().unwrap().document().unwrap();
+        let document = web_sys_x::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
         let resolved_suspense_id = path_to_resolved_suspense_id(&suspense_path);
         let resolved_suspense_element = document
@@ -190,7 +190,7 @@ impl WebsysDom {
         &mut self,
         scope: &ScopeState,
         dom: &VirtualDom,
-        under: Vec<web_sys::Node>,
+        under: Vec<web_sys_x::Node>,
     ) -> Result<(), RehydrationError> {
         let mut ids = Vec::new();
         let mut to_mount = Vec::new();
