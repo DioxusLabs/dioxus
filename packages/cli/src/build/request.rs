@@ -820,7 +820,7 @@ impl BuildRequest {
             if let Err(err) =
                 crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(&workspace).await
             {
-                eprintln!("Warning: Failed to check for wasm-bindgen patch: {}", err);
+                tracing::warn!("Warning: Failed to check for wasm-bindgen patch: {}", err);
             }
         }
 
