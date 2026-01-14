@@ -24,7 +24,7 @@ use tokio::task::AbortHandle;
 use wry::RequestAsyncResponder;
 
 /// Events sent from the main thread to the VirtualDom thread.
-pub enum VirtualDomEvent {
+pub(crate) enum VirtualDomEvent {
     /// Initialize the VirtualDom (perform initial rebuild).
     Initialize,
 
@@ -47,7 +47,7 @@ pub enum VirtualDomEvent {
 ///
 /// This is used by the inverted callback pattern to invoke non-Send closures
 /// that are stored on the DOM thread.
-pub struct DomCallbackRequest {
+pub(crate) struct DomCallbackRequest {
     /// The callback to run. This closure has access to the `DomCallbackRegistry`
     /// and can look up and invoke stored handlers.
     pub callback: Box<dyn FnOnce(&mut DomCallbackRegistry) + Send>,
@@ -59,12 +59,14 @@ pub struct DomCallbackRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DomShortcutId(pub usize);
 
+pub(crate) type SharedCallbackRegistry = Rc<RefCell<DomCallbackRegistry>>;
+
 /// Registry for callbacks that live on the DOM thread.
 ///
 /// This registry stores non-Send closures that are invoked via the inverted
 /// callback pattern. The main thread sends requests to invoke these callbacks,
 /// and the DOM thread looks them up and executes them.
-pub struct DomCallbackRegistry {
+pub(crate) struct DomCallbackRegistry {
     /// Asset handlers keyed by name.
     asset_handlers: HashMap<String, Box<dyn Fn(AssetRequest, RequestAsyncResponder)>>,
     /// Shortcut callbacks stored in a slab for efficient allocation.
@@ -145,7 +147,7 @@ impl DomCallbackRegistry {
 }
 
 /// Commands sent from the VirtualDom thread to the main thread.
-pub enum MainThreadCommand {
+pub(crate) enum MainThreadCommand {
     /// Serialized mutations ready to be sent to the webview.
     Mutations(Vec<u8>),
 }
@@ -155,7 +157,7 @@ pub enum MainThreadCommand {
 /// This handle only contains the sender for sending events to the VirtualDom.
 /// Commands from the VirtualDom are received via the shared `dom_command_rx` in `SharedContext`.
 #[derive(Clone)]
-pub struct VirtualDomHandle {
+pub(crate) struct VirtualDomHandle {
     /// Send events to the VirtualDom thread.
     pub event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
 }
@@ -176,7 +178,7 @@ impl VirtualDomHandle {
 ///
 /// This creates the VirtualDom and runs its event loop until completion.
 /// Also sets up the wasm-bindgen event handler for direct JS->Rust event calls.
-pub async fn run_virtual_dom<F>(
+pub(crate) async fn run_virtual_dom<F>(
     make_dom: F,
     event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     event_tx: tokio_mpsc::UnboundedSender<VirtualDomEvent>,
@@ -210,7 +212,7 @@ async fn run_virtual_dom_loop(
     mut dom: VirtualDom,
     mut event_rx: tokio_mpsc::UnboundedReceiver<VirtualDomEvent>,
     command_tx: futures_mpsc::UnboundedSender<MainThreadCommand>,
-    callback_registry: Rc<RefCell<DomCallbackRegistry>>,
+    callback_registry: SharedCallbackRegistry,
 ) {
     let mut mutations = MutationState::default();
     let mut waiting_for_edits_ack = false;
@@ -298,7 +300,7 @@ pub(crate) struct DomThreadHandle {
 }
 
 /// Spawn a thread that runs async tasks and supports aborting them by window ID.
-pub fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThreadHandle {
+pub(crate) fn spawn_dom_thread(proxy: EventLoopProxy<UserWindowEvent>) -> DomThreadHandle {
     let (task_tx, mut task_rx): (TaskSender, _) = tokio::sync::mpsc::unbounded_channel();
     let (abort_tx, mut abort_rx): (UnboundedSender<WindowId>, _) =
         tokio::sync::mpsc::unbounded_channel();

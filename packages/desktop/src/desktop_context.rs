@@ -1,14 +1,13 @@
 use crate::{
     app::SharedContext,
     assets::AssetHandlerRegistry,
-    dom_thread::{DomCallbackRegistry, DomCallbackRequest, DomShortcutId, VirtualDomEvent},
+    dom_thread::{DomCallbackRequest, DomShortcutId, SharedCallbackRegistry, VirtualDomEvent},
     ipc::{DesktopServiceCallbackWrapper, UserWindowEvent},
     shortcut::{HotKey, HotKeyState, ShortcutHandle, ShortcutRegistryError},
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
 use dioxus_core::{Callback, VirtualDom};
-use std::cell::RefCell;
 use std::{
     any::Any,
     cell::Cell,
@@ -520,10 +519,6 @@ impl DesktopContext {
 
     /// Register an asset handler using the inverted callback pattern.
     ///
-    /// # Panics
-    ///
-    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
-    ///
     /// # Arguments
     ///
     /// * `name` - Identifier for this handler
@@ -542,7 +537,7 @@ impl DesktopContext {
         name: impl Into<String>,
         handler: impl Fn(AssetRequest, RequestAsyncResponder) + 'static,
     ) {
-        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        let registry: SharedCallbackRegistry = dioxus_core::consume_context();
         let name = name.into();
 
         // Store the handler in the DOM registry
@@ -575,10 +570,6 @@ impl DesktopContext {
     /// The callback stays on the DOM thread (no `Send` requirement). When the
     /// shortcut is triggered, the event is forwarded to the DOM thread.
     ///
-    /// # Panics
-    ///
-    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
-    ///
     /// # Arguments
     ///
     /// * `hotkey` - The key combination for the shortcut
@@ -603,7 +594,7 @@ impl DesktopContext {
         hotkey: HotKey,
         callback: impl FnMut(HotKeyState) + 'static,
     ) -> Result<(ShortcutHandle, DomShortcutId), ShortcutRegistryError> {
-        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        let registry: SharedCallbackRegistry = dioxus_core::consume_context();
 
         // Store the callback in the DOM registry
         let dom_id = registry
@@ -636,12 +627,8 @@ impl DesktopContext {
     /// Remove an asset handler by name.
     ///
     /// This removes the handler from both the DOM registry and the main thread.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
     pub fn remove_asset_handler(&self, name: &str) {
-        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        let registry: SharedCallbackRegistry = dioxus_core::consume_context();
         registry.borrow_mut().remove_asset_handler(name);
 
         let name = name.to_string();
@@ -653,12 +640,8 @@ impl DesktopContext {
     /// Remove a shortcut that was created with the inverted callback pattern (`create_shortcut`).
     ///
     /// This removes both the main thread shortcut and the DOM callback.
-    ///
-    /// # Panics
-    ///
-    /// Panics if called outside of a Dioxus component context (must be called from the DOM thread).
     pub fn remove_dom_shortcut(&self, handle: ShortcutHandle, dom_id: DomShortcutId) {
-        let registry: Rc<RefCell<DomCallbackRegistry>> = dioxus_core::consume_context();
+        let registry: SharedCallbackRegistry = dioxus_core::consume_context();
         registry.borrow_mut().remove_shortcut_callback(dom_id);
         handle.remove();
     }
