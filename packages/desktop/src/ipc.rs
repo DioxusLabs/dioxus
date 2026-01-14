@@ -14,7 +14,7 @@ pub(crate) struct DesktopServiceCallbackInner {
 /// Wrapper for a callback that runs with DesktopService access on the main thread.
 /// The inner Option allows taking the callback exactly once.
 #[derive(Clone)]
-pub struct DesktopServiceCallbackWrapper(
+pub(crate) struct DesktopServiceCallbackWrapper(
     pub(crate) Arc<Mutex<Option<DesktopServiceCallbackInner>>>,
 );
 
