@@ -7,6 +7,9 @@ pub struct WebDataTransfer {
     pub(crate) data: web_sys_x::DataTransfer,
 }
 
+unsafe impl Send for WebDataTransfer {}
+unsafe impl Sync for WebDataTransfer {}
+
 impl WebDataTransfer {
     /// Create a new WebDataTransfer from a web_sys_x::DataTransfer
     pub fn new(data: web_sys_x::DataTransfer) -> Self {
