@@ -9018,6 +9018,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "harness-web-with-default-features"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
+name = "harness-web-with-no-default-features"
+version = "0.0.1"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "hash32"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
