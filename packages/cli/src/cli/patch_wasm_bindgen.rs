@@ -1,6 +1,7 @@
 use super::*;
-use crate::Workspace;
+use crate::{CliSettings, Workspace};
 use krates::semver::{Version, VersionReq};
+use std::io::IsTerminal;
 use std::path::Path;
 
 /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
@@ -206,6 +207,11 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Res
 /// Check if we should prompt the user to apply the wasm-bindgen patch.
 /// Called during desktop builds to offer patching.
 pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Result<()> {
+    // Only prompt in interactive TUI mode (not in CI or piped)
+    if CliSettings::is_ci() || !std::io::stdout().is_terminal() {
+        return Ok(());
+    }
+
     let workspace_root = workspace.krates.workspace_root().as_std_path();
 
     // Only try to patch if we have a wasm-bindgen version
