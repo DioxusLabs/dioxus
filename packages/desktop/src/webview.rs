@@ -62,8 +62,8 @@ impl WebviewInstance {
     /// This webview connects to it via the shared channels in SharedContext.
     pub(crate) fn new(
         mut cfg: Config,
-        shared: Rc<SharedContext>,
         make_dom: MakeVirtualDom,
+        shared: Rc<SharedContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
 
@@ -598,7 +598,7 @@ impl PendingWebview {
     }
 
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
-        let window = WebviewInstance::new(self.cfg, shared.clone(), self.dom);
+        let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
 
         // Return the desktop service proxy to the pending future
         _ = self.sender.send(window.desktop_context.proxy());

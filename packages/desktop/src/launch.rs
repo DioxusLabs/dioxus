@@ -110,10 +110,6 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
                     }
                 }
             },
-            // Process VirtualDom thread commands on each event loop iteration
-            Event::MainEventsCleared => {
-                app.poll_all_webviews();
-            }
             _ => {}
         }
 
