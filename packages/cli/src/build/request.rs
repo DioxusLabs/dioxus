@@ -817,9 +817,7 @@ impl BuildRequest {
             platform,
             Platform::MacOS | Platform::Windows | Platform::Linux
         ) {
-            crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(
-                workspace.krates.workspace_root().as_std_path(),
-            )?;
+            crate::cli::patch_wasm_bindgen::check_wasm_bindgen_patch_prompt(&workspace).await?;
         }
 
         // The triple will be the triple passed or the host if using dioxus.

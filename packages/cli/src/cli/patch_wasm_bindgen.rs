@@ -11,8 +11,159 @@ pub(crate) struct PatchWasmBindgen {
 }
 
 const PATCH_GIT_URL: &str = "https://github.com/DioxusLabs/wasm-bindgen-wry";
+const PATCH_GITHUB_REPO: &str = "DioxusLabs/wasm-bindgen-wry";
 
 const PATCH_CRATES: &[&str] = &["wasm-bindgen", "wasm-bindgen-futures", "js-sys", "web-sys"];
+
+/// Represents a parsed version for comparison
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedVersion {
+    major: u32,
+    minor: u32,
+    patch: u32,
+    prerelease: Option<String>,
+}
+
+impl ParsedVersion {
+    /// Parse a version string like "0.2.99" or "0.2.106-alpha.0"
+    fn parse(version: &str) -> Option<Self> {
+        let version = version.trim_start_matches('v');
+        let (version_part, prerelease) = if let Some(idx) = version.find('-') {
+            (&version[..idx], Some(version[idx + 1..].to_string()))
+        } else {
+            (version, None)
+        };
+
+        let parts: Vec<&str> = version_part.split('.').collect();
+        if parts.len() < 3 {
+            return None;
+        }
+
+        Some(Self {
+            major: parts[0].parse().ok()?,
+            minor: parts[1].parse().ok()?,
+            patch: parts[2].parse().ok()?,
+            prerelease,
+        })
+    }
+
+    /// Compare versions, returning ordering (-1, 0, 1)
+    fn cmp_version(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match self.major.cmp(&other.major) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.minor.cmp(&other.minor) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+        match self.patch.cmp(&other.patch) {
+            Ordering::Equal => {}
+            ord => return ord,
+        }
+        // Versions with prerelease are considered less than those without
+        match (&self.prerelease, &other.prerelease) {
+            (None, None) => Ordering::Equal,
+            (None, Some(_)) => Ordering::Greater,
+            (Some(_), None) => Ordering::Less,
+            (Some(a), Some(b)) => a.cmp(b),
+        }
+    }
+}
+
+/// Fetch available tags from the GitHub repository
+async fn fetch_available_tags() -> Result<Vec<String>> {
+    let url = format!(
+        "https://api.github.com/repos/{}/tags?per_page=100",
+        PATCH_GITHUB_REPO
+    );
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .header("User-Agent", "dioxus-cli")
+        .send()
+        .await?;
+
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!(
+            "Failed to fetch tags from GitHub: {}",
+            response.status()
+        ));
+    }
+
+    #[derive(serde::Deserialize)]
+    struct Tag {
+        name: String,
+    }
+
+    let tags: Vec<Tag> = response.json().await?;
+    Ok(tags.into_iter().map(|t| t.name).collect())
+}
+
+/// Find the best matching tag for the given wasm-bindgen version
+fn find_best_matching_tag(target_version: &str, available_tags: &[String]) -> Option<String> {
+    let target = ParsedVersion::parse(target_version)?;
+
+    // Parse all available tags and filter to valid versions
+    let mut parsed_tags: Vec<(String, ParsedVersion)> = available_tags
+        .iter()
+        .filter_map(|tag| {
+            let parsed = ParsedVersion::parse(tag)?;
+            Some((tag.clone(), parsed))
+        })
+        .collect();
+
+    // Sort by version (descending) so we prefer newer versions
+    parsed_tags.sort_by(|a, b| b.1.cmp_version(&a.1));
+
+    // First, try to find an exact match
+    for (tag, parsed) in &parsed_tags {
+        if parsed.major == target.major
+            && parsed.minor == target.minor
+            && parsed.patch == target.patch
+        {
+            return Some(tag.clone());
+        }
+    }
+
+    // Second, find the closest version that is >= target (prefer newer compatible versions)
+    for (tag, parsed) in &parsed_tags {
+        if parsed.major == target.major
+            && parsed.minor == target.minor
+            && parsed.cmp_version(&target) != std::cmp::Ordering::Less
+        {
+            return Some(tag.clone());
+        }
+    }
+
+    // Third, find the closest version with same major.minor (even if older)
+    for (tag, parsed) in &parsed_tags {
+        if parsed.major == target.major && parsed.minor == target.minor {
+            return Some(tag.clone());
+        }
+    }
+
+    // Finally, just return the newest available tag
+    parsed_tags.first().map(|(tag, _)| tag.clone())
+}
+
+/// Get the best matching tag for the workspace's wasm-bindgen version
+pub(crate) async fn get_matching_patch_tag(workspace: &Workspace) -> Result<String> {
+    let wasm_bindgen_version = workspace
+        .wasm_bindgen_version()
+        .unwrap_or_else(|| "0.2.99".to_string());
+
+    let available_tags = fetch_available_tags().await?;
+
+    find_best_matching_tag(&wasm_bindgen_version, &available_tags).ok_or_else(|| {
+        anyhow::anyhow!(
+            "No compatible wasm-bindgen-wry tag found for version {}",
+            wasm_bindgen_version
+        )
+    })
+}
 
 /// Check if the wasm-bindgen patch is needed (i.e., not already applied)
 pub(crate) fn needs_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<bool> {
@@ -84,8 +235,8 @@ pub(crate) fn mark_prompted(workspace_root: &Path) -> Result<()> {
     save_hints(workspace_root, &hints)
 }
 
-/// Apply the wasm-bindgen patch to a Cargo.toml file (synchronous version)
-pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<()> {
+/// Apply the wasm-bindgen patch to a Cargo.toml file
+pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path, tag: &str) -> Result<()> {
     let content = std::fs::read_to_string(cargo_toml_path)?;
     let mut doc: toml_edit::DocumentMut = content
         .parse()
@@ -110,6 +261,7 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<()> {
         if !crates_io_table.contains_key(crate_name) {
             let mut inline = toml_edit::InlineTable::new();
             inline.insert("git", toml_edit::Value::from(PATCH_GIT_URL));
+            inline.insert("tag", toml_edit::Value::from(tag));
             crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
         }
     }
@@ -120,7 +272,9 @@ pub(crate) fn apply_wasm_bindgen_patch(cargo_toml_path: &Path) -> Result<()> {
 
 /// Check if we should prompt the user to apply the wasm-bindgen patch.
 /// Called during desktop builds to offer patching.
-pub(crate) fn check_wasm_bindgen_patch_prompt(workspace_root: &Path) -> Result<()> {
+pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Result<()> {
+    let workspace_root = workspace.krates.workspace_root().as_std_path();
+
     // Skip if already prompted for this workspace
     if was_prompted(workspace_root) {
         return Ok(());
@@ -150,8 +304,9 @@ pub(crate) fn check_wasm_bindgen_patch_prompt(workspace_root: &Path) -> Result<(
     mark_prompted(workspace_root)?;
 
     if should_patch {
-        apply_wasm_bindgen_patch(&cargo_toml)?;
-        term.write_line("✓ Patch applied to Cargo.toml")?;
+        let tag = get_matching_patch_tag(workspace).await?;
+        apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
+        term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
     } else {
         term.write_line("Skipped. Run `dx patch-wasm-bindgen` later if needed.")?;
     }
@@ -161,8 +316,8 @@ pub(crate) fn check_wasm_bindgen_patch_prompt(workspace_root: &Path) -> Result<(
 
 impl PatchWasmBindgen {
     pub(crate) async fn patch_wasm_bindgen(self) -> Result<StructuredOutput> {
-        let crate_root = Workspace::crate_root_from_path()?;
-        let cargo_toml_path = crate_root.join("Cargo.toml");
+        let workspace = Workspace::current().await?;
+        let cargo_toml_path = workspace.krates.workspace_root().as_std_path().join("Cargo.toml");
 
         if !cargo_toml_path.exists() {
             return Err(anyhow::anyhow!(
@@ -170,6 +325,15 @@ impl PatchWasmBindgen {
                 cargo_toml_path.display()
             ));
         }
+
+        // Get the best matching tag for the workspace's wasm-bindgen version
+        let tag = get_matching_patch_tag(&workspace).await?;
+        tracing::info!(
+            dx_src = ?TraceSrc::Dev,
+            "Using wasm-bindgen-wry tag: {} (matching wasm-bindgen {})",
+            tag,
+            workspace.wasm_bindgen_version().unwrap_or_else(|| "unknown".to_string())
+        );
 
         // Read the existing Cargo.toml
         let content = std::fs::read_to_string(&cargo_toml_path)?;
@@ -201,9 +365,10 @@ impl PatchWasmBindgen {
                 continue;
             }
 
-            // Create the inline table: { git = "..." }
+            // Create the inline table: { git = "...", tag = "..." }
             let mut inline = toml_edit::InlineTable::new();
             inline.insert("git", toml_edit::Value::from(PATCH_GIT_URL));
+            inline.insert("tag", toml_edit::Value::from(tag.as_str()));
             crates_io_table.insert(crate_name, toml_edit::Item::Value(inline.into()));
             added.push(*crate_name);
         }
