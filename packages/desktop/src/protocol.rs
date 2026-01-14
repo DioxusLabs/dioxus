@@ -168,9 +168,6 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
             window.interpreter.sendIpcMessage("initialize");
         }}
         window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
-
-        // Signal to wry-bindgen that the webview is ready
-        fetch("{BASE_URI}ready");
     }}
 </script>
 "#
