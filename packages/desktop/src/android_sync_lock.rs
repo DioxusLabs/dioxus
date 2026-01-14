@@ -1,7 +1,7 @@
 /// This is a hack to get around the fact that wry is currently not thread safe on android
 ///
 /// We want to acquire this mutex before doing anything with the virtualdom directly
-pub fn android_runtime_lock() -> impl Drop + 'static {
+pub fn android_runtime_lock() -> impl std::any::Any + 'static {
     #[cfg(target_os = "android")]
     {
         use std::sync::{Mutex, OnceLock};

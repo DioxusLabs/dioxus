@@ -12,9 +12,10 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config: Config) -> ! {
+pub fn launch_virtual_dom_blocking(virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static, mut desktop_config: Config) -> ! {
     let mut custom_event_handler = desktop_config.custom_event_handler.take();
-    let (event_loop, mut app) = App::new(desktop_config, make_dom);
+    let virtual_dom = Box::new(virtual_dom);
+    let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         let _lock = crate::android_sync_lock::android_runtime_lock();
@@ -118,6 +119,38 @@ pub fn launch_virtual_dom_blocking(make_dom: MakeVirtualDom, mut desktop_config:
 }
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
+pub fn launch_virtual_dom(
+    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static, desktop_config: Config
+) -> ! {
+    #[cfg(feature = "tokio_runtime")]
+    {
+        if let std::result::Result::Ok(handle) = tokio::runtime::Handle::try_current() {
+            assert_ne!(
+                handle.runtime_flavor(),
+                tokio::runtime::RuntimeFlavor::CurrentThread,
+                "The tokio current-thread runtime does not work with dioxus event handling"
+            );
+            launch_virtual_dom_blocking(virtual_dom, desktop_config);
+        } else {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(tokio::task::unconstrained(async move {
+                    launch_virtual_dom_blocking(virtual_dom, desktop_config)
+                }));
+
+            unreachable!("The desktop launch function will never exit")
+        }
+    }
+
+    #[cfg(not(feature = "tokio_runtime"))]
+    {
+        launch_virtual_dom_blocking(virtual_dom, desktop_config);
+    }
+}
+
+/// Launches the WebView and runs the event loop, with configuration and root props.
 pub fn launch(
     root: fn() -> Element,
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
@@ -138,31 +171,5 @@ pub fn launch(
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())
         .unwrap_or_default();
-
-    #[cfg(feature = "tokio_runtime")]
-    {
-        if let std::result::Result::Ok(handle) = tokio::runtime::Handle::try_current() {
-            assert_ne!(
-                handle.runtime_flavor(),
-                tokio::runtime::RuntimeFlavor::CurrentThread,
-                "The tokio current-thread runtime does not work with dioxus event handling"
-            );
-            launch_virtual_dom_blocking(make_dom, platform_config);
-        } else {
-            tokio::runtime::Builder::new_multi_thread()
-                .enable_all()
-                .build()
-                .unwrap()
-                .block_on(tokio::task::unconstrained(async move {
-                    launch_virtual_dom_blocking(make_dom, platform_config)
-                }));
-
-            unreachable!("The desktop launch function will never exit")
-        }
-    }
-
-    #[cfg(not(feature = "tokio_runtime"))]
-    {
-        launch_virtual_dom_blocking(make_dom, platform_config);
-    }
+    launch_virtual_dom(make_dom, platform_config)
 }
