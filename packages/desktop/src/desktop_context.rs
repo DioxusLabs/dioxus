@@ -136,7 +136,6 @@ impl DesktopContext {
     /// # Panics
     ///
     /// Panics if:
-    /// - No window ID has been set (use [`with_window`](Self::with_window) first)
     /// - The event loop has been dropped
     /// - The result type doesn't match (internal error)
     ///
@@ -149,7 +148,7 @@ impl DesktopContext {
     ///     desktop.window.title().to_string()
     /// });
     /// ```
-    pub fn run_with_desktop_service<T, F>(&self, f: F) -> T
+    pub(crate) fn run_with_desktop_service<T, F>(&self, f: F) -> T
     where
         T: Send + 'static,
         F: FnOnce(&DesktopService) -> T + Send + 'static,
@@ -520,9 +519,6 @@ impl DesktopContext {
     }
 
     /// Register an asset handler using the inverted callback pattern.
-    ///
-    /// The handler stays on the DOM thread (no `Send` requirement). When an asset
-    /// request arrives, it's forwarded to the DOM thread where the handler runs.
     ///
     /// # Panics
     ///

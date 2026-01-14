@@ -9,11 +9,6 @@ use crate::{
 };
 use dioxus_core::VirtualDom;
 use wry_bindgen::wry::WryBindgen;
-
-/// A factory for creating VirtualDom instances on dedicated threads.
-/// This type is Send because it only holds the component function and contexts,
-/// not the VirtualDom itself.
-pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -26,6 +21,12 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
+
+
+/// A factory for creating VirtualDom instances on dedicated threads.
+/// This type is Send because it only holds the component function and contexts,
+/// not the VirtualDom itself.
+pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
@@ -62,7 +63,7 @@ pub(crate) struct SharedContext {
 }
 
 impl App {
-    pub fn new(mut cfg: Config, dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+    pub fn new(mut cfg: Config, virtual_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = cfg
             .event_loop
             .take()
@@ -81,9 +82,9 @@ impl App {
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
+            unmounted_dom: Cell::new(Some(virtual_dom)),
             float_all: false,
             show_devtools: false,
-            unmounted_dom: Cell::new(Some(dom)),
             cfg: Cell::new(Some(cfg)),
             shared: Rc::new(SharedContext {
                 event_handlers: WindowEventHandlers::default(),
@@ -203,6 +204,7 @@ impl App {
             let window = pending_webview.create_window(&self.shared);
             let id = window.desktop_context.window.id();
             self.webviews.insert(id, window);
+            _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
         }
     }
 
@@ -276,7 +278,7 @@ impl App {
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
-        let webview = WebviewInstance::new(cfg, self.shared.clone(), virtual_dom);
+        let webview = WebviewInstance::new(cfg, virtual_dom, self.shared.clone());
 
         // And then attempt to resume from state
         self.resume_from_state(&webview, explicit_window_size, explicit_window_position);
@@ -314,6 +316,8 @@ impl App {
                 .window
                 .set_visible(self.is_visible_before_start);
         }
+
+        _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
 
     #[cfg(all(feature = "devtools", debug_assertions))]
@@ -402,16 +406,6 @@ impl App {
         }
     }
 
-    /// Poll all webviews for pending work.
-    ///
-    /// This polls each webview for edits acknowledgment and VirtualDom commands.
-    /// Each webview uses its own waker to ensure proper wake-up registration.
-    pub fn poll_all_webviews(&mut self) {
-        for webview in self.webviews.values_mut() {
-            webview.poll_edits_flushed();
-            webview.poll_dom_commands();
-        }
-    }
 
     /// Poll a specific window by its ID.
     /// Called when the waker sends a Poll event.

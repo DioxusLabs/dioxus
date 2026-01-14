@@ -474,7 +474,6 @@ fn test_form_input() -> Element {
 
         // And then the value the form gives us should also match
         values.with_mut(|x| {
-            println!("{x:?}");
             assert_eq!(x.iter().find(|f| f.0 == "username").unwrap().1, "hello");
             assert_eq!(x.iter().find(|f| f.0 == "full-name").unwrap().1, "lorem");
             assert_eq!(x.iter().find(|f| f.0 == "password").unwrap().1, "ipsum");

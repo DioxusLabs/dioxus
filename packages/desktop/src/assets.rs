@@ -32,10 +32,11 @@ impl AssetHandlerRegistry {
         request: AssetRequest,
         responder: RequestAsyncResponder,
     ) {
-        // Avoid handler being already borrowed on android
-        #[cfg(target_os = "android")]
-        let _lock = crate::android_sync_lock::android_runtime_lock();
         if let Some(handler) = self.handlers.borrow().get(name) {
+            // Avoid handler being already borrowed on android
+            #[cfg(target_os = "android")]
+            let _lock = crate::android_sync_lock::android_runtime_lock();
+
             // And run the handler in the scope of the component that created it
             handler.f.call((request, responder));
         }
