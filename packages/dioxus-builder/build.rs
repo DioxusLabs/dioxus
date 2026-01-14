@@ -63,7 +63,7 @@ fn parse_events(source: &str) -> Vec<(String, String)> {
         }
 
         let mut block_lines = Vec::new();
-        while let Some(next) = lines.next() {
+        for next in lines.by_ref() {
             let trimmed = next.trim();
             if trimmed.starts_with("///") {
                 continue;

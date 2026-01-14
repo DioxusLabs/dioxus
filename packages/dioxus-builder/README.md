@@ -8,13 +8,18 @@ This crate provides a fluent builder interface for constructing HTML elements wi
 
 - **Full IDE Autocomplete** - Type-safe builder methods with complete IntelliSense support
 - **Fluent API** - Chain methods naturally: `div().class("foo").id("bar").child(...).build()`
+- **Component Macros** - `#[derive(BuilderProps)]` and `#[builder_component]` remove props boilerplate
 - **80+ HTML Elements** - All standard HTML elements with proper namespaces for SVG/MathML
+- **SVG Attributes** - Typed helpers like `.viewBox()`, `.stroke()`, `.d()`, and more
 - **Smart Class Merging** - Multiple `.class()` calls are automatically merged
 - **Conditional Helpers** - `.class_if()`, `.attr_if()`, `.child_if()`, `.child_if_else()`
 - **Key Support** - `.key()` for efficient list reconciliation
 - **Hybrid Templates** - Mix static and dynamic content for optimal performance
+- **Style Helpers** - `.style_prop()` and `.with()` for composable styling
+- **ARIA + data Helpers** - `.aria_*()` methods and the `data!` macro
 - **Document Helpers** - Easy document head management (requires `document` feature)
 - **Fragment Support** - Build multiple root nodes with `fragment()`
+- **Debug Support** - `Debug` impls for builders and static nodes
 
 ## Installation
 
@@ -26,6 +31,12 @@ dioxus-builder = { version = "0.7" }
 
 # For document head helpers (title, stylesheet, meta tags):
 dioxus-builder = { version = "0.7", features = ["document"] }
+```
+
+If you use the component macros (`BuilderProps` or `builder_component`), add:
+
+```toml
+bon = "3"
 ```
 
 ## Quick Start
@@ -50,6 +61,46 @@ fn app() -> Element {
         )
         .build()
 }
+```
+
+## Component Integration
+
+### Derive Props with `BuilderProps`
+
+```rust,ignore
+use dioxus::prelude::*;
+use dioxus_builder::{BuilderProps, FunctionComponent};
+
+#[derive(bon::Builder, Clone, PartialEq, BuilderProps)]
+#[component(MyCard)]
+struct MyCardProps {
+    #[builder(into)]
+    title: String,
+}
+
+#[allow(non_snake_case)]
+fn MyCard(props: MyCardProps) -> Element {
+    div().class("card").text(props.title).build()
+}
+
+// Usage:
+// MyCard.new().title("Hello").build()
+```
+
+### Component Macro: `#[builder_component]`
+
+```rust,ignore
+use dioxus::prelude::*;
+use dioxus_builder::builder_component;
+
+#[builder_component]
+fn Counter(initial: i32, #[builder(into)] label: String) -> Element {
+    let count = use_signal(|| initial);
+    div().text(format!("{}: {}", label, count)).build()
+}
+
+// Usage:
+// Counter.new().initial(0).label("Clicks").build()
 ```
 
 ## API Overview
@@ -98,6 +149,21 @@ div()
     .build()
 ```
 
+### ARIA and Data Helpers
+
+```rust
+use dioxus_builder::{data, BuilderExt};
+
+button()
+    .aria_label("Close dialog")
+    .aria_expanded(false)
+    .build();
+
+div()
+    .pipe(|builder| data!(builder, "testid", "dialog"))
+    .build();
+```
+
 ### Conditional Attributes and Children
 
 ```rust
@@ -139,6 +205,22 @@ div()
     .class_list(["rounded", "shadow"])
     .build()
 // Results in: class="px-4 py-2 bg-blue-500 ring-2 rounded shadow"
+```
+
+### Style Helpers
+
+```rust
+use dioxus_builder::ElementBuilder;
+
+fn card_styles(builder: ElementBuilder) -> ElementBuilder {
+    builder.class("p-4 rounded shadow-sm").style_prop("gap", "0.75rem")
+}
+
+div()
+    .with(card_styles)
+    .style_prop("display", "flex")
+    .child("Styled content")
+    .build()
 ```
 
 ### Event Handlers
@@ -331,12 +413,18 @@ SVG elements use the correct namespace automatically:
 
 ```rust
 svg()
-    .attr("viewBox", "0 0 100 100")
-    .attr("width", "24")
-    .attr("height", "24")
-    .child(/* SVG children */)
+    .viewBox("0 0 24 24")
+    .fill("none")
+    .stroke("currentColor")
+    .stroke_width("2")
+    .child(path().d("M12 6v6l4 2"))
     .build()
 ```
+
+## Debugging
+
+Builder types and static nodes implement `Debug`, which helps when inspecting
+builder state or template structure in tests and logs.
 
 ## Comparison with RSX Macro
 

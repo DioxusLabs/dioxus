@@ -562,3 +562,322 @@ fn test_template_cache_reuses_static_element_template() {
     let second = capture_template(div().static_element(static_elem.clone()).child("label"));
     assert_template_cache_reuse(&first, &second);
 }
+
+// =============================================================================
+// BuilderProps Derive Macro Tests
+// =============================================================================
+
+#[test]
+fn test_builder_props_derive() {
+    use bon::Builder;
+    use dioxus_builder::BuilderProps;
+
+    #[derive(Builder, Clone, PartialEq, BuilderProps)]
+    #[component(TestDeriveComponent)]
+    struct TestDeriveProps {
+        #[builder(into)]
+        label: String,
+        count: i32,
+    }
+
+    #[allow(non_snake_case)]
+    fn TestDeriveComponent(props: TestDeriveProps) -> Element {
+        div()
+            .child(format!("{}: {}", props.label, props.count))
+            .build()
+    }
+
+    fn app() -> Element {
+        // The builder's IntoDynNode impl converts it to a component
+        div()
+            .child(
+                TestDeriveComponent
+                    .new()
+                    .label("Counter")
+                    .count(42),
+            )
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("Counter: 42"));
+}
+
+#[test]
+fn test_builder_component_macro() {
+    use dioxus_builder::builder_component;
+
+    #[builder_component]
+    fn Greeting(#[builder(into)] name: String, times: i32) -> Element {
+        div()
+            .child(format!("Hello, {}! (x{})", name, times))
+            .build()
+    }
+
+    fn app() -> Element {
+        div()
+            .child(Greeting.new().name("World").times(3))
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("Hello, World! (x3)"));
+}
+
+// =============================================================================
+// ARIA Attribute Tests
+// =============================================================================
+
+#[test]
+fn test_aria_attributes() {
+    fn builder_app() -> Element {
+        div()
+            .aria_label("Close button")
+            .aria_hidden(true)
+            .aria_expanded(false)
+            .aria_describedby("description-id")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("aria-label=\"Close button\""));
+    assert!(html.contains("aria-hidden=\"true\""));
+    assert!(html.contains("aria-expanded=\"false\""));
+    assert!(html.contains("aria-describedby=\"description-id\""));
+}
+
+#[test]
+fn test_aria_live_region() {
+    fn builder_app() -> Element {
+        div()
+            .aria_live("polite")
+            .aria_atomic(true)
+            .aria_busy(false)
+            .child("Status message")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("aria-live=\"polite\""));
+    assert!(html.contains("aria-atomic=\"true\""));
+    assert!(html.contains("aria-busy=\"false\""));
+}
+
+// =============================================================================
+// Data Attribute Tests
+// =============================================================================
+
+#[test]
+fn test_data_attribute_macro() {
+    use dioxus_builder::data;
+
+    fn builder_app() -> Element {
+        let builder = div();
+        data!(builder, "testid", "my-element")
+            .pipe(|b| data!(b, "count", "5"))
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("data-testid=\"my-element\""));
+    assert!(html.contains("data-count=\"5\""));
+}
+
+// =============================================================================
+// Style Prop Tests
+// =============================================================================
+
+#[test]
+fn test_style_prop() {
+    fn builder_app() -> Element {
+        div()
+            .style_prop("display", "flex")
+            .style_prop("gap", "1rem")
+            .style_prop("align-items", "center")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("style=\""));
+    assert!(html.contains("display: flex"));
+    assert!(html.contains("gap: 1rem"));
+    assert!(html.contains("align-items: center"));
+}
+
+#[test]
+fn test_style_prop_merging() {
+    fn builder_app() -> Element {
+        div()
+            .style_prop("display", "flex")
+            .style_prop("gap", "1rem")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    // Style values should be merged with "; " separator
+    assert!(html.contains("display: flex; gap: 1rem") || html.contains("gap: 1rem; display: flex"));
+}
+
+// =============================================================================
+// Composition Tests (with() method)
+// =============================================================================
+
+#[test]
+fn test_with_method() {
+    fn add_button_styles(builder: ElementBuilder) -> ElementBuilder {
+        builder
+            .class("px-4 py-2 rounded")
+            .class("bg-blue-500 text-white")
+    }
+
+    fn builder_app() -> Element {
+        button()
+            .with(add_button_styles)
+            .onclick(|_| {})
+            .child("Click me")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("px-4"));
+    assert!(html.contains("bg-blue-500"));
+    assert!(html.contains("Click me"));
+}
+
+#[test]
+fn test_with_composition() {
+    fn card_styles(b: ElementBuilder) -> ElementBuilder {
+        b.class("p-4 rounded-lg shadow-md bg-white")
+    }
+
+    fn hover_effect(b: ElementBuilder) -> ElementBuilder {
+        b.class("hover:shadow-lg transition-shadow")
+    }
+
+    fn builder_app() -> Element {
+        div()
+            .with(card_styles)
+            .with(hover_effect)
+            .child("Card content")
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("p-4"));
+    assert!(html.contains("rounded-lg"));
+    assert!(html.contains("hover:shadow-lg"));
+}
+
+// =============================================================================
+// SVG Tests
+// =============================================================================
+
+#[test]
+fn test_svg_elements() {
+    fn builder_app() -> Element {
+        svg()
+            .attr("viewBox", "0 0 100 100")
+            .attr("width", "24")
+            .attr("height", "24")
+            .child(
+                circle()
+                    .cx("50")
+                    .cy("50")
+                    .r("40")
+                    .fill("blue")
+            )
+            .child(
+                path()
+                    .d("M10 10 L90 90")
+                    .stroke("red")
+            )
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("<svg"));
+    assert!(html.contains("<circle"));
+    assert!(html.contains("<path"));
+}
+
+#[test]
+fn test_svg_attributes() {
+    fn builder_app() -> Element {
+        svg()
+            .viewBox("0 0 100 100")
+            .fill("none")
+            .stroke("currentColor")
+            .stroke_width("2")
+            .child(
+                circle()
+                    .cx("50")
+                    .cy("50")
+                    .r("40")
+            )
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("viewBox=\"0 0 100 100\""));
+    assert!(html.contains("fill=\"none\""));
+    assert!(html.contains("stroke=\"currentColor\""));
+}
+
+#[test]
+fn test_svg_icon() {
+    fn builder_app() -> Element {
+        svg()
+            .viewBox("0 0 24 24")
+            .fill("none")
+            .stroke("currentColor")
+            .stroke_width("2")
+            .child(
+                path()
+                    .d("M5 12h14M12 5l7 7-7 7")
+                    .stroke_linecap("round")
+                    .stroke_linejoin("round")
+            )
+            .build()
+    }
+
+    let mut dom = VirtualDom::new(builder_app);
+    dom.rebuild(&mut NoOpMutations);
+    let html = dioxus_ssr::pre_render(&dom);
+
+    assert!(html.contains("<svg"));
+    assert!(html.contains("<path"));
+    assert!(html.contains("stroke-linecap=\"round\""));
+}

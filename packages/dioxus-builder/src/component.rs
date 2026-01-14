@@ -29,6 +29,7 @@ where
 ///
 /// This works with any props type that implements [`Properties`], including
 /// bon-generated builders with a manual `Properties` impl.
+#[allow(clippy::wrong_self_convention, clippy::new_ret_no_self)]
 pub trait FunctionComponent<P: Props> {
     /// Create a new builder for this component's props.
     fn new(&self) -> <P as Props>::Builder;

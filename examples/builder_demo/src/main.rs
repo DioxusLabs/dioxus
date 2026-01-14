@@ -1,52 +1,47 @@
-use bon::Builder;
 use dioxus::prelude::*;
-use dioxus_builder::FunctionComponent;
+use dioxus_builder::{data, BuilderExt, BuilderProps, FunctionComponent};
 use dioxus_builder::*;
-use dioxus_core::Properties;
-
 // Minimal, type-safe builder pattern with a small counter app.
 
-#[derive(Builder, Clone, PartialEq)]
-struct MyComponentProps {
+#[derive(bon::Builder, Clone, PartialEq, BuilderProps)]
+#[component(CounterCard)]
+struct CounterCardProps {
     #[builder(into)]
     title: String,
     count: Signal<i32>,
 }
 
-impl Properties for MyComponentProps {
-    type Builder = MyComponentPropsBuilder;
-
-    fn builder() -> Self::Builder {
-        MyComponentProps::builder()
-    }
-
-    fn memoize(&mut self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<S> dioxus_core::IntoDynNode for MyComponentPropsBuilder<S>
-where
-    S: my_component_props_builder::IsComplete,
-{
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
-        dioxus_core::IntoDynNode::into_dyn_node(MyCoolComponent(self.build()))
-    }
-}
-
 #[allow(non_snake_case)]
-fn MyCoolComponent(props: MyComponentProps) -> Element {
+fn CounterCard(props: CounterCardProps) -> Element {
     div()
         .class("p-4 rounded-lg border border-gray-200 bg-white shadow-sm")
+        .aria_label("Counter component")
+        .pipe(|builder| data!(builder, "testid", "counter-card"))
         .child(
-            h2().class("text-lg font-semibold text-gray-800")
-                .text(props.title),
+            div()
+                .class("flex items-center text-gray-800")
+                .style_prop("gap", "0.5rem")
+                .child(
+                    svg()
+                        .class("h-5 w-5 text-gray-500")
+                        .viewBox("0 0 24 24")
+                        .fill("none")
+                        .stroke("currentColor")
+                        .stroke_width("2")
+                        .aria_hidden(true)
+                        .child(path().d("M12 6v6l4 2")),
+                )
+                .child(h2().class("text-lg font-semibold").text(props.title)),
         )
         .child(
             p().class("text-sm text-gray-600")
                 .text(format!("Count is {}", props.count)),
         )
         .build()
+}
+
+fn button_base(builder: ElementBuilder) -> ElementBuilder {
+    builder.class("px-3 py-2 rounded font-medium transition-colors")
 }
 
 fn app() -> Element {
@@ -65,28 +60,35 @@ fn app() -> Element {
             div()
                 .class("space-y-4")
                 .child(
-                    MyCoolComponent
+                    CounterCard
                         .new()
-                        .title("Builder + bon props")
+                        .title("Builder + derive macro")
                         .count(count),
                 )
                 .child(
                     div()
                         .class("flex items-center gap-3")
+                        .aria_label("Counter controls")
+                        .pipe(|builder| data!(builder, "testid", "counter-controls"))
                         .child(
                             button()
-                                .class("px-3 py-2 rounded bg-red-500 text-white")
+                                .with(button_base)
+                                .class("bg-red-500 text-white hover:bg-red-600")
+                                .aria_label("Decrement")
                                 .onclick(move |_| count -= 1)
                                 .text("-"),
                         )
                         .child(
                             span()
                                 .class("text-lg font-mono text-gray-800")
+                                .aria_live("polite")
                                 .text(count.to_string()),
                         )
                         .child(
                             button()
-                                .class("px-3 py-2 rounded bg-green-500 text-white")
+                                .with(button_base)
+                                .class("bg-green-500 text-white hover:bg-green-600")
+                                .aria_label("Increment")
                                 .onclick(move |_| count += 1)
                                 .text("+"),
                         ),

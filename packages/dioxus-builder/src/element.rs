@@ -51,6 +51,37 @@ pub struct StaticAttribute {
 }
 
 // =============================================================================
+// Debug Implementations
+// =============================================================================
+
+impl std::fmt::Debug for ChildNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ChildNode::StaticText(s) => write!(f, "StaticText({:?})", s),
+            ChildNode::StaticElement(e) => write!(f, "StaticElement(<{}>)", e.tag),
+            ChildNode::Dynamic(_) => write!(f, "Dynamic(...)"),
+        }
+    }
+}
+
+impl std::fmt::Debug for StaticElement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StaticElement")
+            .field("tag", &self.tag)
+            .field("namespace", &self.namespace)
+            .field("attrs", &self.attrs)
+            .field("children_count", &self.children.len())
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for StaticAttribute {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}={:?}", self.name, self.value)
+    }
+}
+
+// =============================================================================
 // Template Cache
 // =============================================================================
 
@@ -321,6 +352,18 @@ pub struct ElementBuilder {
     key: Option<String>,
 }
 
+impl std::fmt::Debug for ElementBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ElementBuilder")
+            .field("tag", &self.tag)
+            .field("namespace", &self.namespace)
+            .field("attributes_count", &self.attributes.len())
+            .field("children_count", &self.children.len())
+            .field("key", &self.key)
+            .finish()
+    }
+}
+
 impl ElementBuilder {
     /// Create a new ElementBuilder for the given tag.
     pub fn new(tag: &'static str) -> Self {
@@ -521,7 +564,7 @@ impl ElementBuilder {
         let mut dynamic_attrs = Vec::new();
         if has_attributes {
             let mut attributes = self.attributes;
-            merge_class_attributes(&mut attributes);
+            merge_class_and_style_attributes(&mut attributes);
             attributes.sort_by(|a, b| a.name.cmp(b.name));
             dynamic_attrs.push(attributes.into_boxed_slice());
         }
@@ -554,6 +597,15 @@ pub fn text_node(value: impl ToString) -> dioxus_core::Element {
 pub struct FragmentBuilder {
     children: Vec<VNode>,
     key: Option<String>,
+}
+
+impl std::fmt::Debug for FragmentBuilder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FragmentBuilder")
+            .field("children_count", &self.children.len())
+            .field("key", &self.key)
+            .finish()
+    }
 }
 
 impl FragmentBuilder {
@@ -652,19 +704,13 @@ impl IntoFragmentChild for &VNode {
 
 impl IntoFragmentChild for dioxus_core::Element {
     fn into_fragment_child(self) -> VNode {
-        match self {
-            Ok(vnode) => vnode,
-            Err(_) => VNode::default(),
-        }
+        self.unwrap_or_default()
     }
 }
 
 impl IntoFragmentChild for &dioxus_core::Element {
     fn into_fragment_child(self) -> VNode {
-        match self.as_ref() {
-            Ok(vnode) => vnode.clone(),
-            Err(_) => VNode::default(),
-        }
+        self.as_ref().cloned().unwrap_or_default()
     }
 }
 
@@ -707,13 +753,15 @@ impl IntoFragmentChild for Arguments<'_> {
     }
 }
 
-fn merge_class_attributes(attributes: &mut Vec<Attribute>) {
+fn merge_class_and_style_attributes(attributes: &mut Vec<Attribute>) {
     if attributes.len() < 2 {
         return;
     }
 
     let mut merged_classes: Vec<String> = Vec::new();
+    let mut merged_styles: Vec<String> = Vec::new();
     let mut class_volatile = false;
+    let mut style_volatile = false;
     let mut retained: Vec<Attribute> = Vec::with_capacity(attributes.len());
 
     for attr in attributes.drain(..) {
@@ -736,6 +784,22 @@ fn merge_class_attributes(attributes: &mut Vec<Attribute>) {
                     });
                 }
             }
+        } else if attr.name == "style" && attr.namespace.is_none() {
+            style_volatile |= attr.volatile;
+            match attr.value {
+                AttributeValue::Text(value) => {
+                    if !value.is_empty() {
+                        merged_styles.push(value);
+                    }
+                }
+                AttributeValue::None => {}
+                other => {
+                    retained.push(Attribute {
+                        value: other,
+                        ..attr
+                    });
+                }
+            }
         } else {
             retained.push(attr);
         }
@@ -747,6 +811,15 @@ fn merge_class_attributes(attributes: &mut Vec<Attribute>) {
             namespace: None,
             value: AttributeValue::Text(merged_classes.join(" ")),
             volatile: class_volatile,
+        });
+    }
+
+    if !merged_styles.is_empty() {
+        retained.push(Attribute {
+            name: "style",
+            namespace: None,
+            value: AttributeValue::Text(merged_styles.join("; ")),
+            volatile: style_volatile,
         });
     }
 
@@ -847,6 +920,34 @@ impl ElementBuilder {
             self.class(joined)
         }
     }
+
+    /// Apply a function to this builder, enabling composable style helpers.
+    ///
+    /// This is an alias for `pipe` but with a clearer name for the common use case
+    /// of applying reusable style transformations.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// fn card_styles(b: ElementBuilder) -> ElementBuilder {
+    ///     b.class("p-4 rounded shadow")
+    /// }
+    ///
+    /// fn hover_effect(b: ElementBuilder) -> ElementBuilder {
+    ///     b.class("hover:shadow-lg transition-shadow")
+    /// }
+    ///
+    /// div()
+    ///     .with(card_styles)
+    ///     .with(hover_effect)
+    ///     .child("Content")
+    ///     .build()
+    /// ```
+    pub fn with<F>(self, f: F) -> Self
+    where
+        F: FnOnce(Self) -> Self,
+    {
+        f(self)
+    }
 }
 
 // =============================================================================
@@ -867,6 +968,23 @@ impl ElementBuilder {
     /// Set the style attribute.
     pub fn style(self, value: impl IntoAttributeValue) -> Self {
         self.push_attribute("style", None, value, false)
+    }
+
+    /// Add a single CSS style property.
+    ///
+    /// Multiple calls are automatically merged into a single style attribute.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// div()
+    ///     .style_prop("display", "flex")
+    ///     .style_prop("gap", "1rem")
+    ///     .build()
+    /// // Results in: style="display: flex; gap: 1rem"
+    /// ```
+    pub fn style_prop(self, property: &'static str, value: impl ToString) -> Self {
+        let style_value = format!("{}: {}", property, value.to_string());
+        self.push_attribute("style", None, style_value, false)
     }
 
     /// Set the title attribute.
@@ -1053,6 +1171,275 @@ impl ElementBuilder {
     /// Set the rowspan attribute.
     pub fn rowspan(self, value: i32) -> Self {
         self.push_attribute("rowspan", None, value, false)
+    }
+}
+
+// =============================================================================
+// ARIA Attributes
+// =============================================================================
+
+impl ElementBuilder {
+    /// Set the aria-label attribute.
+    pub fn aria_label(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-label", None, value, false)
+    }
+
+    /// Set the aria-labelledby attribute.
+    pub fn aria_labelledby(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-labelledby", None, value, false)
+    }
+
+    /// Set the aria-describedby attribute.
+    pub fn aria_describedby(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-describedby", None, value, false)
+    }
+
+    /// Set the aria-hidden attribute.
+    pub fn aria_hidden(self, value: bool) -> Self {
+        self.push_attribute("aria-hidden", None, value.to_string(), false)
+    }
+
+    /// Set the aria-expanded attribute.
+    pub fn aria_expanded(self, value: bool) -> Self {
+        self.push_attribute("aria-expanded", None, value.to_string(), false)
+    }
+
+    /// Set the aria-pressed attribute.
+    pub fn aria_pressed(self, value: bool) -> Self {
+        self.push_attribute("aria-pressed", None, value.to_string(), false)
+    }
+
+    /// Set the aria-selected attribute.
+    pub fn aria_selected(self, value: bool) -> Self {
+        self.push_attribute("aria-selected", None, value.to_string(), false)
+    }
+
+    /// Set the aria-checked attribute.
+    pub fn aria_checked(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-checked", None, value, false)
+    }
+
+    /// Set the aria-disabled attribute.
+    pub fn aria_disabled(self, value: bool) -> Self {
+        self.push_attribute("aria-disabled", None, value.to_string(), false)
+    }
+
+    /// Set the aria-invalid attribute.
+    pub fn aria_invalid(self, value: bool) -> Self {
+        self.push_attribute("aria-invalid", None, value.to_string(), false)
+    }
+
+    /// Set the aria-live attribute (off, polite, assertive).
+    pub fn aria_live(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-live", None, value, false)
+    }
+
+    /// Set the aria-atomic attribute.
+    pub fn aria_atomic(self, value: bool) -> Self {
+        self.push_attribute("aria-atomic", None, value.to_string(), false)
+    }
+
+    /// Set the aria-busy attribute.
+    pub fn aria_busy(self, value: bool) -> Self {
+        self.push_attribute("aria-busy", None, value.to_string(), false)
+    }
+
+    /// Set the aria-current attribute.
+    pub fn aria_current(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-current", None, value, false)
+    }
+
+    /// Set the aria-haspopup attribute.
+    pub fn aria_haspopup(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-haspopup", None, value, false)
+    }
+
+    /// Set the aria-controls attribute.
+    pub fn aria_controls(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-controls", None, value, false)
+    }
+
+    /// Set the aria-owns attribute.
+    pub fn aria_owns(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-owns", None, value, false)
+    }
+
+    /// Set the aria-valuemin attribute.
+    pub fn aria_valuemin(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-valuemin", None, value, false)
+    }
+
+    /// Set the aria-valuemax attribute.
+    pub fn aria_valuemax(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-valuemax", None, value, false)
+    }
+
+    /// Set the aria-valuenow attribute.
+    pub fn aria_valuenow(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-valuenow", None, value, false)
+    }
+
+    /// Set the aria-valuetext attribute.
+    pub fn aria_valuetext(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("aria-valuetext", None, value, false)
+    }
+
+    /// Set the aria-modal attribute.
+    pub fn aria_modal(self, value: bool) -> Self {
+        self.push_attribute("aria-modal", None, value.to_string(), false)
+    }
+}
+
+// =============================================================================
+// SVG Attributes
+// =============================================================================
+
+impl ElementBuilder {
+    /// Set the viewBox attribute (SVG).
+    #[allow(non_snake_case)]
+    pub fn viewBox(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("viewBox", None, value, false)
+    }
+
+    /// Set the fill attribute (SVG).
+    pub fn fill(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("fill", None, value, false)
+    }
+
+    /// Set the stroke attribute (SVG).
+    pub fn stroke(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke", None, value, false)
+    }
+
+    /// Set the stroke-width attribute (SVG).
+    pub fn stroke_width(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-width", None, value, false)
+    }
+
+    /// Set the stroke-linecap attribute (SVG).
+    pub fn stroke_linecap(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-linecap", None, value, false)
+    }
+
+    /// Set the stroke-linejoin attribute (SVG).
+    pub fn stroke_linejoin(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-linejoin", None, value, false)
+    }
+
+    /// Set the stroke-dasharray attribute (SVG).
+    pub fn stroke_dasharray(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-dasharray", None, value, false)
+    }
+
+    /// Set the stroke-dashoffset attribute (SVG).
+    pub fn stroke_dashoffset(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-dashoffset", None, value, false)
+    }
+
+    /// Set the d attribute (SVG path data).
+    pub fn d(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("d", None, value, false)
+    }
+
+    /// Set the cx attribute (SVG circle/ellipse center x).
+    pub fn cx(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("cx", None, value, false)
+    }
+
+    /// Set the cy attribute (SVG circle/ellipse center y).
+    pub fn cy(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("cy", None, value, false)
+    }
+
+    /// Set the r attribute (SVG circle radius).
+    pub fn r(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("r", None, value, false)
+    }
+
+    /// Set the rx attribute (SVG ellipse/rect x radius).
+    pub fn rx(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("rx", None, value, false)
+    }
+
+    /// Set the ry attribute (SVG ellipse/rect y radius).
+    pub fn ry(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("ry", None, value, false)
+    }
+
+    /// Set the x attribute (SVG).
+    pub fn x(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("x", None, value, false)
+    }
+
+    /// Set the y attribute (SVG).
+    pub fn y(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("y", None, value, false)
+    }
+
+    /// Set the x1 attribute (SVG line).
+    pub fn x1(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("x1", None, value, false)
+    }
+
+    /// Set the y1 attribute (SVG line).
+    pub fn y1(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("y1", None, value, false)
+    }
+
+    /// Set the x2 attribute (SVG line).
+    pub fn x2(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("x2", None, value, false)
+    }
+
+    /// Set the y2 attribute (SVG line).
+    pub fn y2(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("y2", None, value, false)
+    }
+
+    /// Set the points attribute (SVG polygon/polyline).
+    pub fn points(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("points", None, value, false)
+    }
+
+    /// Set the transform attribute (SVG).
+    pub fn transform(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("transform", None, value, false)
+    }
+
+    /// Set the opacity attribute (SVG).
+    pub fn opacity(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("opacity", None, value, false)
+    }
+
+    /// Set the fill-opacity attribute (SVG).
+    pub fn fill_opacity(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("fill-opacity", None, value, false)
+    }
+
+    /// Set the stroke-opacity attribute (SVG).
+    pub fn stroke_opacity(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("stroke-opacity", None, value, false)
+    }
+
+    /// Set the clip-path attribute (SVG).
+    pub fn clip_path(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("clip-path", None, value, false)
+    }
+
+    /// Set the preserveAspectRatio attribute (SVG).
+    #[allow(non_snake_case)]
+    pub fn preserveAspectRatio(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("preserveAspectRatio", None, value, false)
+    }
+
+    /// Set the fill-rule attribute (SVG).
+    pub fn fill_rule(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("fill-rule", None, value, false)
+    }
+
+    /// Set the clip-rule attribute (SVG).
+    pub fn clip_rule(self, value: impl IntoAttributeValue) -> Self {
+        self.push_attribute("clip-rule", None, value, false)
     }
 }
 
@@ -1309,11 +1696,137 @@ pub fn source() -> ElementBuilder {
 }
 
 // SVG and MathML (with namespace)
+const SVG_NS: &str = "http://www.w3.org/2000/svg";
+
 pub fn svg() -> ElementBuilder {
-    ElementBuilder::new_with_namespace("svg", "http://www.w3.org/2000/svg")
+    ElementBuilder::new_with_namespace("svg", SVG_NS)
 }
 pub fn math() -> ElementBuilder {
     ElementBuilder::new_with_namespace("math", "http://www.w3.org/1998/Math/MathML")
+}
+
+// SVG Shape Elements
+pub fn circle() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("circle", SVG_NS)
+}
+pub fn ellipse() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("ellipse", SVG_NS)
+}
+pub fn line() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("line", SVG_NS)
+}
+pub fn path() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("path", SVG_NS)
+}
+pub fn polygon() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("polygon", SVG_NS)
+}
+pub fn polyline() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("polyline", SVG_NS)
+}
+pub fn rect() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("rect", SVG_NS)
+}
+
+// SVG Container Elements
+pub fn g() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("g", SVG_NS)
+}
+pub fn defs() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("defs", SVG_NS)
+}
+pub fn symbol() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("symbol", SVG_NS)
+}
+pub fn r#use() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("use", SVG_NS)
+}
+
+// SVG Text Elements
+pub fn text_svg() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("text", SVG_NS)
+}
+pub fn tspan() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("tspan", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn textPath() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("textPath", SVG_NS)
+}
+
+// SVG Clipping and Masking
+#[allow(non_snake_case)]
+pub fn clipPath() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("clipPath", SVG_NS)
+}
+pub fn mask() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("mask", SVG_NS)
+}
+
+// SVG Gradients and Patterns
+#[allow(non_snake_case)]
+pub fn linearGradient() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("linearGradient", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn radialGradient() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("radialGradient", SVG_NS)
+}
+pub fn stop() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("stop", SVG_NS)
+}
+pub fn pattern() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("pattern", SVG_NS)
+}
+
+// SVG Filter Elements
+pub fn filter() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("filter", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn feGaussianBlur() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("feGaussianBlur", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn feColorMatrix() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("feColorMatrix", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn feBlend() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("feBlend", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn feOffset() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("feOffset", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn feDropShadow() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("feDropShadow", SVG_NS)
+}
+
+// SVG Animation Elements
+pub fn animate() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("animate", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn animateTransform() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("animateTransform", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn animateMotion() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("animateMotion", SVG_NS)
+}
+
+// SVG Other Elements
+pub fn image() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("image", SVG_NS)
+}
+#[allow(non_snake_case)]
+pub fn foreignObject() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("foreignObject", SVG_NS)
+}
+pub fn marker() -> ElementBuilder {
+    ElementBuilder::new_with_namespace("marker", SVG_NS)
 }
 
 // Scripting
@@ -1485,4 +1998,24 @@ impl BuilderExt for ElementBuilder {
     {
         f(self)
     }
+}
+
+/// Macro for setting data-* attributes with automatic prefix.
+///
+/// # Example
+/// ```rust,ignore
+/// use dioxus_builder::{div, data};
+///
+/// let builder = div();
+/// data!(builder, "testid", "my-element")
+///     .pipe(|b| data!(b, "count", "5"))
+///     .build()
+/// // Results in: data-testid="my-element" data-count="5"
+/// ```
+#[macro_export]
+macro_rules! data {
+    ($builder:expr, $suffix:literal, $value:expr) => {{
+        const NAME: &'static str = concat!("data-", $suffix);
+        $builder.push_attribute(NAME, None, $value, false)
+    }};
 }
