@@ -21,9 +21,16 @@ pub(crate) struct AndroidTools {
 pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
     // We check for SDK first since users might install Android Studio and then install the SDK
     // After that they might install the NDK, so the SDK drives the source of truth.
+    //
+    // Priority order:
+    // 1. ANDROID_SDK_ROOT env var (official)
+    // 2. ANDROID_SDK env var (legacy)
+    // 3. ANDROID_HOME env var (common convention)
+    // 4. Default platform-specific installation path
     let sdk = var_or_debug("ANDROID_SDK_ROOT")
         .or_else(|| var_or_debug("ANDROID_SDK"))
-        .or_else(|| var_or_debug("ANDROID_HOME"));
+        .or_else(|| var_or_debug("ANDROID_HOME"))
+        .or_else(default_android_sdk_path);
 
     // Check the ndk. We look for users's overrides first and then look into the SDK.
     // Sometimes users set only the NDK (especially if they're somewhat advanced) so we need to look for it manually
@@ -100,9 +107,23 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
                 }
             }
 
-            // todo(jon): how do we detect java home on linux?
             #[cfg(target_os = "linux")]
             {
+                // Check Android Studio bundled JDK first (common installation paths)
+                if let Some(home) = dirs::home_dir() {
+                    let studio_jbr = home.join("android-studio/jbr");
+                    if studio_jbr.exists() {
+                        return Some(studio_jbr);
+                    }
+                }
+
+                // Also check /opt which is another common install location
+                let opt_jbr = PathBuf::from("/opt/android-studio/jbr");
+                if opt_jbr.exists() {
+                    return Some(opt_jbr);
+                }
+
+                // Fallback to system OpenJDK
                 let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
                 if jbr_home.exists() {
                     return Some(jbr_home);
@@ -356,4 +377,38 @@ fn var_or_debug(name: &str) -> Option<PathBuf> {
         .inspect_err(|_| tracing::trace!("{name} not set"))
         .ok()
         .map(PathBuf::from)
+}
+
+/// Returns the default Android SDK installation path for the current platform.
+///
+/// This checks the standard installation locations for Android SDK:
+/// - macOS: `~/Library/Android/sdk`
+/// - Windows: `%LOCALAPPDATA%\Android\Sdk`
+/// - Linux: `~/Android/Sdk`
+fn default_android_sdk_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        let sdk = dirs::home_dir()?.join("Library/Android/sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let sdk = dirs::data_local_dir()?.join("Android").join("Sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let sdk = dirs::home_dir()?.join("Android/Sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    None
 }
