@@ -28,10 +28,6 @@ pub fn use_wry_event_handler(
     use_hook_with_cleanup(
         move || {
             window().create_wry_event_handler(move |event, target| {
-                // Avoid interacting with the runtime while something else is using it
-                #[cfg(target_os = "android")]
-                let _lock = crate::android_sync_lock::android_runtime_lock();
-
                 runtime.in_scope(scope_id, || handler(event, target))
             })
         },
