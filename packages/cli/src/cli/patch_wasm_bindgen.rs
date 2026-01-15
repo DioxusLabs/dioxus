@@ -251,7 +251,7 @@ pub(crate) async fn check_wasm_bindgen_patch_prompt(workspace: &Workspace) -> Re
         apply_wasm_bindgen_patch(&cargo_toml, &tag)?;
         term.write_line(&format!("✓ Patch applied to Cargo.toml (tag: {})", tag))?;
     } else {
-        term.write_line("Skipped. Run `dx patch-wasm-bindgen` later if needed.")?;
+        term.write_line("Skipped. Run `dx tools patch-wasm-bindgen` later if needed.")?;
     }
 
     Ok(())
