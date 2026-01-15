@@ -8,7 +8,7 @@ use lightningcss::{
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
-use manganis_core::{CssAssetOptions, CssModuleAssetOptions};
+use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModuleAssetOptions};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,
@@ -46,43 +46,39 @@ pub(crate) fn process_css(
 pub(crate) fn process_css_module(
     css_options: &CssModuleAssetOptions,
     source: &Path,
-    final_path: &Path,
     output_path: &Path,
 ) -> anyhow::Result<()> {
-    let mut css = std::fs::read_to_string(source)?;
+    let css = std::fs::read_to_string(source)?;
 
     // Collect the file hash name.
     let mut src_name = source
         .file_name()
         .and_then(|x| x.to_str())
-        .ok_or(anyhow!("Failed to read name of css module source file."))?
+        .ok_or_else(|| {
+            anyhow!(
+                "Failed to read name of css module file `{}`.",
+                source.display()
+            )
+        })?
         .strip_suffix(".css")
-        .unwrap()
+        .ok_or_else(|| {
+            anyhow!(
+                "Css module file `{}` should end with a `.css` suffix.",
+                source.display(),
+            )
+        })?
         .to_string();
 
     src_name.push('-');
 
-    let out_name = final_path
-        .file_name()
-        .and_then(|x| x.to_str())
-        .ok_or(anyhow!("Failed to read name of css module output file."))?
-        .strip_suffix(".css")
-        .unwrap();
-
-    let hash = out_name
-        .strip_prefix(&src_name)
-        .ok_or(anyhow!("Failed to read hash of css module."))?;
-
-    // Rewrite CSS idents with ident+hash.
-    let (classes, ids) = manganis_core::collect_css_idents(&css);
-
-    for class in classes {
-        css = css.replace(&format!(".{class}"), &format!(".{class}{hash}"));
-    }
-
-    for id in ids {
-        css = css.replace(&format!("#{id}"), &format!("#{id}{hash}"));
-    }
+    let hash = create_module_hash(source);
+    let css = transform_css(css.as_str(), hash.as_str()).map_err(|error| {
+        anyhow!(
+            "Invalid css for file `{}`\nError:\n{}",
+            source.display(),
+            error
+        )
+    })?;
 
     // Minify CSS
     let css = if css_options.minified() {

@@ -109,7 +109,7 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
         query_params: vec![],
         route_lit: args.fn_path,
         oapi_options: None,
-        server_args: Default::default(),
+        server_args: args.server_args,
         prefix: Some(prefix),
         _input_encoding: args.input,
         _output_encoding: args.output,
@@ -1505,6 +1505,9 @@ struct ServerFnArgs {
     /// The protocol to use for the server function implementation.
     protocol: Option<Type>,
     builtin_encoding: bool,
+    /// Server-only extractors (e.g., headers: HeaderMap, cookies: Cookies).
+    /// These are arguments that exist purely on the server side.
+    server_args: Punctuated<FnArg, Comma>,
 }
 
 impl Parse for ServerFnArgs {
@@ -1529,7 +1532,18 @@ impl Parse for ServerFnArgs {
         let mut use_key_and_value = false;
         let mut arg_pos = 0;
 
+        // Server-only extractors (key: Type pattern)
+        // These come after config options (key = value pattern)
+        // Example: #[server(endpoint = "/api/chat", headers: HeaderMap, cookies: Cookies)]
+        let mut server_args: Punctuated<FnArg, Comma> = Punctuated::new();
+
         while !stream.is_empty() {
+            // Check if this looks like an extractor (Ident : Type)
+            // If so, break out to parse extractors - they must come last
+            if stream.peek(Ident) && stream.peek2(Token![:]) {
+                break;
+            }
+
             arg_pos += 1;
             let lookahead = stream.lookahead1();
             if lookahead.peek(Ident) {
@@ -1698,6 +1712,20 @@ impl Parse for ServerFnArgs {
             }
         }
 
+        // Now parse any remaining extractors (key: Type pattern)
+        while !stream.is_empty() {
+            if stream.peek(Ident) && stream.peek2(Token![:]) {
+                server_args.push_value(stream.parse::<FnArg>()?);
+                if stream.peek(Comma) {
+                    server_args.push_punct(stream.parse::<Comma>()?);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
         // parse legacy encoding into input/output
         let mut builtin_encoding = false;
         if let Some(encoding) = encoding {
@@ -1740,6 +1768,7 @@ impl Parse for ServerFnArgs {
             impl_from,
             impl_deref,
             protocol,
+            server_args,
         })
     }
 }

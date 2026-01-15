@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
+    pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
@@ -604,7 +605,8 @@ impl BuildRequest {
         Fullstack usage is inferred from the presence of the fullstack feature or --fullstack.
         */
         let mut features = args.features.clone();
-        let mut no_default_features = args.no_default_features;
+        let no_default_features = args.no_default_features;
+        let all_features = args.all_features;
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
         let mut bundle_format = args.bundle;
@@ -704,7 +706,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Web));
                 bundle_format = bundle_format.or(Some(BundleFormat::Web));
                 triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
-                no_default_features = true;
             }
             Platform::MacOS => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -713,7 +714,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::MacOS));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Windows => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -722,7 +722,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Windows));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Linux => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -731,7 +730,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Linux));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Ios => {
                 if main_package.features.contains_key("mobile") && renderer.is_none() {
@@ -739,7 +737,6 @@ impl BuildRequest {
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Ios));
-                no_default_features = true;
                 match device.is_some() {
                     // If targeting device, we want to build for the device which is always aarch64
                     true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
@@ -760,7 +757,6 @@ impl BuildRequest {
 
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Android));
-                no_default_features = true;
 
                 // maybe probe adb?
                 if let Some(_device_name) = device.as_ref() {
@@ -790,7 +786,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Server));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Liveview => {
                 if main_package.features.contains_key("liveview") && renderer.is_none() {
@@ -799,12 +794,12 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Liveview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
         }
 
-        // If no default features are enabled, we need to add the rendererless features
-        if no_default_features {
+        // If default features are enabled, we need to add the default features
+        // which don't enable a renderer
+        if !no_default_features {
             features.extend(Self::rendererless_features(main_package));
             features.dedup();
             features.sort();
@@ -826,12 +821,12 @@ impl BuildRequest {
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
-            features.push(Self::feature_for_platform_and_renderer(
-                main_package,
-                &triple,
-                renderer,
-            ));
-            features.dedup();
+            if let Some(feature) =
+                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+            {
+                features.push(feature);
+                features.dedup();
+            }
         }
 
         // Set the profile of the build if it's not already set
@@ -841,15 +836,6 @@ impl BuildRequest {
             Some(profile) => profile,
             None => bundle.profile_name(args.release),
         };
-
-        // Warn if the user is trying to build with strip and using manganis
-        Self::warn_manganis_strip(
-            &workspace.krates,
-            &workspace.cargo_toml,
-            main_package,
-            &profile,
-            args.release,
-        );
 
         // Determine if we should codesign
         let should_codesign =
@@ -969,6 +955,7 @@ impl BuildRequest {
             }
         }
 
+        #[allow(deprecated)]
         let session_cache_dir = args
             .session_cache_dir
             .clone()
@@ -993,7 +980,10 @@ impl BuildRequest {
         Ok(Self {
             features,
             bundle,
-            no_default_features,
+            // We hardcode passing `--no-default-features` to Cargo because dx manually enables
+            // the default features we want.
+            no_default_features: true,
+            all_features,
             crate_package,
             crate_target,
             profile,
@@ -1082,6 +1072,7 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                self.strip_binary(&artifacts).await?;
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
@@ -2201,7 +2192,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args: Vec<_> = rustc_args.link_args.iter().skip(1).cloned().collect();
+        let mut args: Vec<_> = rustc_args.link_args.clone();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
@@ -2619,6 +2610,10 @@ impl BuildRequest {
             cargo_args.push("--no-default-features".to_string());
         }
 
+        if self.all_features {
+            cargo_args.push("--all-features".to_string());
+        }
+
         if !self.features.is_empty() {
             cargo_args.push("--features".to_string());
             cargo_args.push(self.features.join(" "));
@@ -2809,7 +2804,7 @@ impl BuildRequest {
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = self.base_path() {
+            if let Some(base_path) = self.trimmed_base_path() {
                 env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
             env_vars.push((
@@ -3578,7 +3573,7 @@ impl BuildRequest {
         package: &krates::cm::Package,
         triple: &Triple,
         renderer: Renderer,
-    ) -> String {
+    ) -> Option<String> {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = renderer.feature_name(triple);
 
@@ -3618,41 +3613,33 @@ impl BuildRequest {
             None
         });
 
-        res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{dioxus_feature}");
-            tracing::debug!(
-                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
-            );
-            fallback
+        res.or_else(|| {
+            let depends_on_dioxus = package.dependencies.iter().any(|dep| dep.name == "dioxus");
+            if depends_on_dioxus {
+                let fallback = format!("dioxus/{dioxus_feature}");
+                tracing::debug!(
+                    "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
+                );
+                Some(fallback)
+            } else {
+                None
+            }
         })
     }
 
-    /// Return the platforms that are enabled for the package
-    ///
-    /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn warn_manganis_strip(
-        krates: &krates::Krates,
-        cargo_toml: &cargo_toml::Manifest,
-        main_package: &krates::cm::Package,
-        profile: &str,
-        release: bool,
-    ) {
-        let Some(id) = krates.nid_for_kid(&main_package.id.clone().into()) else {
-            return;
-        };
-        let dependencies = krates.direct_dependencies(id);
-        if !dependencies.iter().any(|dep| dep.krate.name == "manganis") {
-            return;
-        }
-
-        let (profile_name, profile) = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => (profile, Some(custom_profile)),
-            (_, true) => ("release", cargo_toml.profile.release.as_ref()),
-            (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
+    /// Checks the strip setting for the package, resolving profiles recursively
+    pub(crate) fn get_strip_setting(&self) -> StripSetting {
+        let cargo_toml = &self.workspace.cargo_toml;
+        let profile = &self.profile;
+        let release = self.release;
+        let profile = match (cargo_toml.profile.custom.get(profile), release) {
+            (Some(custom_profile), _) => Some(custom_profile),
+            (_, true) => cargo_toml.profile.release.as_ref(),
+            (_, false) => cargo_toml.profile.dev.as_ref(),
         };
 
         let Some(profile) = profile else {
-            return;
+            return StripSetting::None;
         };
 
         // Get the strip setting from the profile or the profile it inherits from
@@ -3673,15 +3660,11 @@ impl BuildRequest {
         }
 
         let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
-            // If the profile doesn't have a strip option, we don't need to warn
-            return;
+            // If the profile doesn't have a strip option, return None
+            return StripSetting::None;
         };
 
-        if matches!(strip, cargo_toml::StripSetting::Symbols) {
-            tracing::warn!(
-                "The `strip` option is enabled in the `{profile_name}` profile. This may cause manganis assets to be stripped from the final binary.",
-            );
-        }
+        strip
     }
 
     pub(crate) fn renderer_enabled_by_dioxus_dependency(
@@ -3988,6 +3971,39 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Strip the final binary after extracting all assets with rustc-objcopy
+    async fn strip_binary(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        // Never strip the binary if we are going to bundle split it
+        if self.wasm_split {
+            return Ok(());
+        }
+        let exe = &artifacts.exe;
+        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
+        let strip_arg = match self.get_strip_setting() {
+            StripSetting::Debuginfo => Some("--strip-debug"),
+            StripSetting::Symbols => Some("--strip-all"),
+            StripSetting::None => None,
+        };
+        if let Some(strip_arg) = strip_arg {
+            let rustc_objcopy = self.workspace.rustc_objcopy();
+            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
+            let mut command = Command::new(rustc_objcopy);
+            command.env("LD_LIBRARY_PATH", &dylib_path);
+            command.arg(strip_arg).arg(exe).arg(exe);
+            let output = command.output().await?;
+            if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
+                return Err(anyhow::anyhow!("Failed to strip binary"));
+            }
+        }
+        Ok(())
+    }
+
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
@@ -4036,19 +4052,16 @@ impl BuildRequest {
 
         // Prepare our configuration
         //
-        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
-        // wasm-opt and wasm-split need them to do better optimizations.
+        // we turn on debug symbols in dev mode
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
             || !self.release
-            || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
-        let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
+        let keep_names = self.wasm_split || ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -4085,10 +4098,6 @@ impl BuildRequest {
         // not blocking this thread. Dunno if that's true
         if should_bundle_split {
             ctx.status_splitting_bundle();
-
-            if !will_wasm_opt {
-                bail!("Bundle splitting should automatically enable wasm-opt, but it was not enabled.");
-            }
 
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
@@ -4352,39 +4361,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        match self.bundle {
-            BundleFormat::Android => {
-                ctx.status_running_gradle();
+        if let BundleFormat::Android = self.bundle {
+            ctx.status_running_gradle();
 
-                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-                let build_type = if self.release && self.config.bundle.android.is_some() {
-                    "assembleRelease"
-                } else {
-                    "assembleDebug"
-                };
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
 
-                let output = Command::new(self.gradle_exe()?)
-                    .arg(build_type)
-                    .current_dir(self.root_dir())
-                    .output()
-                    .await
-                    .context("Failed to run gradle")?;
+            let output = Command::new(self.gradle_exe()?)
+                .arg(build_type)
+                .current_dir(self.root_dir())
+                .output()
+                .await
+                .context("Failed to run gradle")?;
 
-                if !output.status.success() {
-                    bail!(
-                        "Failed to assemble apk: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
+            if !output.status.success() {
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
-            BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_ios().await?;
-                }
-            }
+        }
 
-            _ => {}
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        ) && self.should_codesign
+        {
+            self.codesign_apple(ctx).await?;
         }
 
         Ok(())
@@ -4905,7 +4913,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.base_path() {
+            if let Some(base_path) = &self.trimmed_base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -5051,14 +5059,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .filter(|_| matches!(self.bundle, BundleFormat::Web | BundleFormat::Server))
     }
 
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    /// Get the normalized base path for the application with `/` trimmed from both ends.
+    pub(crate) fn trimmed_base_path(&self) -> Option<&str> {
+        self.base_path()
+            .map(|p| p.trim_matches('/'))
+            .filter(|p| !p.is_empty())
+    }
+
+    /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
-        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
+        self.trimmed_base_path().unwrap_or(".")
     }
 
     /// Get the path to the package manifest directory
@@ -5218,37 +5228,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// Note how every platform gets its own profile, and each platform has a dev and release profile.
     fn profile_args(&self) -> Vec<String> {
+        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
+        // after assets are built
+        let profile = self.profile.as_str();
+        let mut args = Vec::new();
+        args.push(format!(r#"profile.{profile}.strip=false"#));
+
         // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
-        if self
+        if !self
             .workspace
             .cargo_toml
             .profile
             .custom
             .contains_key(&self.profile)
         {
-            return vec![];
-        }
+            // Otherwise, we need to add the profile arguments to make it adhoc
+            let inherits = if self.release { "release" } else { "dev" };
 
-        // Otherwise, we need to add the profile arguments to make it adhoc
-        let mut args = Vec::new();
+            // Add the profile definition first.
+            args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
 
-        let profile = self.profile.as_str();
-        let inherits = if self.release { "release" } else { "dev" };
+            // The default dioxus experience is to lightly optimize the web build, both in debug and release
+            // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+            // that with wasm-opt tooling instead.
+            if matches!(self.bundle, BundleFormat::Web) {
+                if self.release {
+                    args.push(format!(r#"profile.{profile}.opt-level="s""#));
+                }
 
-        // Add the profile definition first.
-        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
-
-        // The default dioxus experience is to lightly optimize the web build, both in debug and release
-        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
-        // that with wasm-opt tooling instead.
-        if matches!(self.bundle, BundleFormat::Web) {
-            if self.release {
-                args.push(format!(r#"profile.{profile}.opt-level="s""#));
-            }
-
-            if self.wasm_split {
-                args.push(format!(r#"profile.{profile}.lto=true"#));
-                args.push(format!(r#"profile.{profile}.debug=true"#));
+                if self.wasm_split {
+                    args.push(format!(r#"profile.{profile}.lto=true"#));
+                    args.push(format!(r#"profile.{profile}.debug=true"#));
+                }
             }
         }
 
@@ -5258,23 +5269,24 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_ios(&self) -> Result<()> {
+    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_codesigning();
+
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name =
-                Some(Self::auto_provision_signing_name().await.context(
-                    "Failed to automatically provision signing name for iOS codesigning.",
-                )?);
+            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
+                "Failed to automatically provision signing name for Apple codesigning.",
+            )?);
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         if entitlements_file.is_none() {
             let entitlements_xml = Self::auto_provision_entitlements()
                 .await
-                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -5289,10 +5301,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         )?;
 
         tracing::debug!(
-            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            "Codesigning Apple app with entitlements: {} and dev name: {}",
             entitlements_file.display(),
             app_dev_name
         );
+
+        // determine the target exe - the server and macos bundles are different
+        let target_exe = match self.bundle {
+            BundleFormat::MacOS => self.root_dir(),
+            BundleFormat::Ios => self.root_dir(),
+            BundleFormat::Server => self.main_exe(),
+            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
+        };
 
         // codesign the app
         let output = Command::new("codesign")
@@ -5303,7 +5323,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.root_dir())
+            .arg(target_exe)
             .output()
             .await
             .context("Failed to codesign the app - is `codesign` in your path?")?;

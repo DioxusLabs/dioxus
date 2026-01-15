@@ -61,4 +61,5 @@ twoway![
     prop_rsx,
     asset,
     collapse,
+    expr_on_conditional,
 ];

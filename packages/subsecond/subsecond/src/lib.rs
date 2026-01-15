@@ -79,7 +79,7 @@
 //! Subsecond *does* support hot-reloading of globals, statics, and thread locals. However, there are several limitations:
 //!
 //! - You may add new globals at runtime, but their destructors will never be called.
-//! - Globals are tracked across patches, but will renames are considered to be *new* globals.
+//! - Globals are tracked across patches, but renames are considered to be *new* globals.
 //! - Changes to static initializers will not be observed.
 //!
 //! Subsecond purposefully handles statics this way since many libraries like Dioxus and Tokio rely
