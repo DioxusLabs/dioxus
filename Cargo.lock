@@ -5820,7 +5820,6 @@ dependencies = [
  "webbrowser",
  "wry",
  "wry-bindgen",
- "zvariant 5.8.0",
 ]
 
 [[package]]
