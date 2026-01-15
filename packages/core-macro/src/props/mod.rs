@@ -697,9 +697,13 @@ mod struct_info {
                 let name = field.name;
                 if optional {
                     quote! {
-                        // If the event handler is None, we don't need to update it
+                        // If both event handler are Some, update them in place
                         if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
                             old_handler.__point_to(new_handler);
+                        }
+                        // Otherwise just move the new handler into self
+                        else {
+                            self.#name = new.#name;
                         }
                     }
                 } else {
