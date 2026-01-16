@@ -255,7 +255,27 @@ async fn test_harnesses() {
                 let server = t.server.unwrap();
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
-            })
+            }),
+        TestHarnessBuilder::new("harness-web-with-no-default-features")
+            .deps(r#"dioxus = { workspace = true }"#)
+            .fetr(r#"default=["other"]"#)
+            .fetr(r#"other=[]"#)
+            .asrt(r#"dx build --no-default-features --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.features, vec!["dioxus/web"]);
+                assert!(t.server.is_none());
+            }),
+        TestHarnessBuilder::new("harness-web-with-default-features")
+            .deps(r#"dioxus = { workspace = true }"#)
+            .fetr(r#"default=["other"]"#)
+            .fetr(r#"other=[]"#)
+            .asrt(r#"dx build --web"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                assert_eq!(t.client.features.iter().map(|s| s.as_str()).collect::<HashSet<_>>(), ["dioxus/web", "other"].into_iter().collect::<HashSet<_>>());
+                assert!(t.server.is_none());
+            }),
     ])
     .await;
 }
