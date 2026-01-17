@@ -31,7 +31,6 @@ use crate::wasm_multithreading::CurrHotpatchingState::{
 use crate::wasm_multithreading::InternalWasmDynamicLinkingError::{
     Dylink0ParsingError, NoDyLink0CustomSection,
 };
-use crate::PatchError::WasmRelated;
 use crate::{commit_patch, wasm_is_multi_threaded};
 use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
