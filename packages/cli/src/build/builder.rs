@@ -1316,7 +1316,7 @@ impl AppBuilder {
 
             // eventually, use the user's MainActivity, not our MainActivity
             // adb shell am start -n dev.dioxus.main/dev.dioxus.main.MainActivity
-            let activity_name = format!("{application_id}/dev.dioxus.main.MainActivity");
+            let activity_name = format!("{application_id}/.MainActivity");
             let res = Command::new(&adb)
                 .arg("shell")
                 .arg("am")
