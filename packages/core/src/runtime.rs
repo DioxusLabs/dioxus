@@ -562,14 +562,6 @@ fn MyComponent() -> Element {{
     /// ```
     pub fn throw_error(&self, id: ScopeId, error: impl Into<CapturedError> + 'static) {
         let error = error.into();
-        // Redirect control-flow should always bubble to the topmost error boundary so user-defined
-        // boundaries can't accidentally swallow it.
-        let id = if error.downcast_ref::<crate::RenderRedirect>().is_some() {
-            ScopeId::ROOT_ERROR_BOUNDARY
-        } else {
-            id
-        };
-
         if let Some(cx) = self.consume_context::<crate::ErrorContext>(id) {
             cx.insert_error(error)
         } else {

@@ -5,36 +5,6 @@ use std::{
 
 use crate::innerlude::*;
 
-/// A control-flow error used to indicate rendering should abort and the host should redirect.
-///
-/// This is intentionally lightweight and host-agnostic (stores `code` as `u16`) so it can be used
-/// by integrations without pulling in HTTP types into `dioxus-core`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[doc(hidden)]
-pub struct RenderRedirect {
-    /// HTTP status code for the redirect (typically 302/303/307/308).
-    pub code: u16,
-    /// The redirect destination (Location header value).
-    pub location: String,
-}
-
-impl RenderRedirect {
-    pub fn new(code: u16, location: impl Into<String>) -> Self {
-        Self {
-            code,
-            location: location.into(),
-        }
-    }
-}
-
-impl Display for RenderRedirect {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "redirect ({}) to {}", self.code, self.location)
-    }
-}
-
-impl std::error::Error for RenderRedirect {}
-
 /// An error that can occur while rendering a component
 #[derive(Debug, Clone, PartialEq)]
 pub enum RenderError {
