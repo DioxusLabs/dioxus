@@ -372,7 +372,12 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
 
         if hotpatch_state.worker_thread_ids.is_empty() {
             console::debug_1(&"No web worker, directly finish hotpatch".into());
-            finalize_hotpatch(&mut hotpatch_state);
+
+            entry.apply_change_to_jump_table();
+
+            hotpatch_state.curr_state = Idle;
+
+            main_thread_run_pending_hotpatches(&mut hotpatch_state);
         } else {
             hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
                 hotpatch_entry: Arc::new(entry),
@@ -471,10 +476,6 @@ fn on_main_thread_receive_hotpatch_finish() {
 
     let mut state = GLOBAL_HOTPATCH_STATE.lock();
 
-    finalize_hotpatch(&mut state);
-}
-
-fn finalize_hotpatch(state: &mut MutexGuard<GlobalHotpatchState>) {
     let web_worker_dynamic_linking_state = match state.curr_state {
         WebWorkersDynamicLinking(ref web_workers_dynamic_linking_state) => {
             web_workers_dynamic_linking_state
@@ -495,6 +496,12 @@ fn finalize_hotpatch(state: &mut MutexGuard<GlobalHotpatchState>) {
     }
 
     state.curr_state = Idle;
+
+    main_thread_run_pending_hotpatches(&mut state);
+}
+
+fn main_thread_run_pending_hotpatches(state: &mut MutexGuard<GlobalHotpatchState>) {
+    assert!(is_main_thread());
 
     if !state.pending_hotpatches.is_empty() {
         // transfer state to next hotpatch when holding lock
