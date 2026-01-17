@@ -158,14 +158,20 @@ impl WebviewEdits {
                 let full_file_paths = hovered_file.current_paths();
 
                 let xfer_data = drag.data_transfer.clone();
-                let new_file_data = xfer_data.files.iter().map(|f| {
-                    let new_path =
-                        full_file_paths.iter().find(|p| p.ends_with(&f.path)).unwrap_or(&f.path);
-                    SerializedFileData {
-                        path: new_path.clone(),
-                        ..f.clone()
-                    }
-                }).collect::<Vec<_>>();
+                let new_file_data = xfer_data
+                    .files
+                    .iter()
+                    .map(|f| {
+                        let new_path = full_file_paths
+                            .iter()
+                            .find(|p| p.ends_with(&f.path))
+                            .unwrap_or(&f.path);
+                        SerializedFileData {
+                            path: new_path.clone(),
+                            ..f.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>();
                 let new_xfer_data = dioxus_html::SerializedDataTransfer {
                     files: new_file_data,
                     ..xfer_data
