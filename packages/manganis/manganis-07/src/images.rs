@@ -37,10 +37,7 @@ pub enum ImageFormat {
 )]
 #[repr(C, u8)]
 pub enum ImageSize {
-    Manual {
-        width: u32,
-        height: u32,
-    },
+    Manual { width: u32, height: u32 },
     Automatic,
 }
 
