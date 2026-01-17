@@ -3081,9 +3081,9 @@ dependencies = [
 
 [[package]]
 name = "blitz-shell"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0c3e586f0547855cd738c41cb4700bc0889c34ad5d0ad082f532c4ac0eb0c4e"
+checksum = "61ecda230035f39b13383f08e0cfc7159c92d194650ac8d57871a207ea0e52b7"
 dependencies = [
  "accesskit 0.17.1",
  "accesskit_winit 0.23.1",
@@ -3095,6 +3095,7 @@ dependencies = [
  "blitz-traits",
  "futures-util",
  "keyboard-types",
+ "rfd",
  "tracing",
  "winit",
 ]
