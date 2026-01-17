@@ -4244,10 +4244,9 @@ dependencies = [
 
 [[package]]
 name = "const-serialize"
-version = "0.8.0"
+version = "0.8.0-alpha.0"
 dependencies = [
  "const-serialize 0.7.2",
- "const-serialize 0.8.0",
  "const-serialize-macro 0.8.0-alpha.0",
  "rand 0.9.2",
  "serde",
@@ -5204,7 +5203,7 @@ dependencies = [
 
 [[package]]
 name = "depinfo"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "thiserror 2.0.17",
 ]
@@ -5377,7 +5376,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "criterion",
  "dioxus",
@@ -5419,7 +5418,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-asset-resolver"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-cli-config",
@@ -5440,7 +5439,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-autofmt"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-rsx",
  "pretty_assertions",
@@ -5454,7 +5453,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-check"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "indoc",
  "owo-colors",
@@ -5466,7 +5465,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "ansi-to-html",
  "ansi-to-tui",
@@ -5487,7 +5486,7 @@ dependencies = [
  "console 0.16.2",
  "console-subscriber",
  "const-serialize 0.7.2",
- "const-serialize 0.8.0",
+ "const-serialize 0.8.0-alpha.0",
  "convert_case 0.8.0",
  "crossterm 0.29.0",
  "ctrlc",
@@ -5531,8 +5530,8 @@ dependencies = [
  "local-ip-address",
  "log",
  "manganis",
- "manganis-core 0.7.2",
- "manganis-core 0.7.3-alpha.0",
+ "manganis-core",
+ "manganis-core-07",
  "memmap",
  "memoize",
  "notify",
@@ -5591,26 +5590,26 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli-config"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "wasm-bindgen",
 ]
 
 [[package]]
 name = "dioxus-cli-opt"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "browserslist-rs 0.19.0",
  "built 0.8.0",
  "codemap",
- "const-serialize 0.8.0",
+ "const-serialize 0.8.0-alpha.0",
  "grass",
  "image",
  "imagequant",
  "lightningcss",
  "manganis",
- "manganis-core 0.7.3-alpha.0",
+ "manganis-core",
  "mozjpeg",
  "object 0.37.3",
  "png",
@@ -5655,7 +5654,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli-telemetry"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -5667,7 +5666,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-component-manifest"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "schemars 1.2.0",
  "serde",
@@ -5676,7 +5675,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-config-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5684,11 +5683,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-config-macros"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 
 [[package]]
 name = "dioxus-core"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "const_format",
@@ -5719,7 +5718,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "convert_case 0.8.0",
  "dioxus",
@@ -5735,11 +5734,11 @@ dependencies = [
 
 [[package]]
 name = "dioxus-core-types"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 
 [[package]]
 name = "dioxus-desktop"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5798,7 +5797,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-devtools"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-cli-config",
  "dioxus-core",
@@ -5817,7 +5816,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-devtools-types"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-core",
  "serde",
@@ -5826,7 +5825,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-document"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -5844,10 +5843,10 @@ dependencies = [
 
 [[package]]
 name = "dioxus-dx-wire-format"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "cargo_metadata",
- "manganis-core 0.7.3-alpha.0",
+ "manganis-core",
  "serde",
  "serde_json",
  "subsecond-types",
@@ -5893,7 +5892,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ext"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-autofmt",
  "dioxus-rsx-rosetta",
@@ -5904,7 +5903,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -5971,7 +5970,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack-core"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "axum-core 0.5.6",
@@ -5999,7 +5998,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-fullstack-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "axum 0.8.8",
  "const_format",
@@ -6015,7 +6014,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-history"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -6024,7 +6023,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-hooks"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -6042,7 +6041,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "async-trait",
  "bytes",
@@ -6073,7 +6072,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-html-internal-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "convert_case 0.8.0",
  "proc-macro2",
@@ -6084,7 +6083,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-interpreter-js"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-core",
  "dioxus-core-types",
@@ -6102,7 +6101,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-liveview"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "axum 0.8.8",
  "dioxus",
@@ -6130,7 +6129,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-logger"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-cli-config",
@@ -6141,7 +6140,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-native"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyrender",
  "anyrender_vello",
@@ -6176,7 +6175,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-native-dom"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "blitz-dom",
  "blitz-traits",
@@ -6301,7 +6300,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "axum 0.8.8",
  "base64 0.22.1",
@@ -6329,7 +6328,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-router-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "base16",
  "digest",
@@ -6343,7 +6342,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "prettier-please",
  "prettyplease",
@@ -6356,7 +6355,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx-hotreload"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus-core",
  "dioxus-core-types",
@@ -6371,7 +6370,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-rsx-rosetta"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "convert_case 0.8.0",
  "dioxus-autofmt",
@@ -6387,7 +6386,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-server"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6449,7 +6448,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-signals"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -6469,7 +6468,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-ssr"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "askama_escape",
  "dioxus",
@@ -6480,7 +6479,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-stores"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
  "dioxus-core",
@@ -6491,7 +6490,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-stores-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "convert_case 0.8.0",
  "dioxus",
@@ -6511,7 +6510,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-web"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "ciborium",
  "dioxus",
@@ -7872,7 +7871,7 @@ dependencies = [
 
 [[package]]
 name = "generational-box"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "criterion",
  "parking_lot",
@@ -10528,7 +10527,7 @@ dependencies = [
 
 [[package]]
 name = "lazy-js-bundle"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 
 [[package]]
 name = "lazy_static"
@@ -11014,30 +11013,20 @@ dependencies = [
 
 [[package]]
 name = "manganis"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "const-serialize 0.7.2",
- "const-serialize 0.8.0",
- "manganis-core 0.7.3-alpha.0",
+ "const-serialize 0.8.0-alpha.0",
+ "manganis-core",
  "manganis-macro",
 ]
 
 [[package]]
 name = "manganis-core"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88d071660b149f985cbab8b23f2004ea6dd5cf947b63a0843f0e2f46e6af7229"
+version = "0.7.3"
 dependencies = [
  "const-serialize 0.7.2",
- "serde",
-]
-
-[[package]]
-name = "manganis-core"
-version = "0.7.3-alpha.0"
-dependencies = [
- "const-serialize 0.7.2",
- "const-serialize 0.8.0",
+ "const-serialize 0.8.0-alpha.0",
  "dioxus-cli-config",
  "dioxus-core-types",
  "manganis",
@@ -11046,13 +11035,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "manganis-core-07"
+version = "0.7.2"
+dependencies = [
+ "const-serialize 0.7.2",
+ "serde",
+]
+
+[[package]]
 name = "manganis-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dunce",
  "macro-string",
  "manganis",
- "manganis-core 0.7.3-alpha.0",
+ "manganis-core",
  "proc-macro2",
  "quote",
  "syn 2.0.114",
@@ -16225,7 +16222,7 @@ dependencies = [
 
 [[package]]
 name = "ssr-only"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
 ]
@@ -16547,7 +16544,7 @@ dependencies = [
 
 [[package]]
 name = "subsecond"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "js-sys",
  "libc",
@@ -16573,7 +16570,7 @@ dependencies = [
 
 [[package]]
 name = "subsecond-types"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "serde",
 ]
@@ -16605,7 +16602,7 @@ dependencies = [
 
 [[package]]
 name = "suspense-carousel"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "async-std",
  "dioxus",
@@ -19105,7 +19102,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-split-cli"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -19138,7 +19135,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-split-macro"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "base16",
  "digest",
@@ -19150,7 +19147,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-splitter"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "async-once-cell",
  "wasm-split-macro",
@@ -19171,7 +19168,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-used"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "id-arena",
  "tracing",
@@ -20006,7 +20003,7 @@ dependencies = [
 
 [[package]]
 name = "windows-headless"
-version = "0.7.3-alpha.0"
+version = "0.7.3"
 dependencies = [
  "dioxus",
 ]

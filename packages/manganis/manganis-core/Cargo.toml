@@ -14,8 +14,8 @@ readme = "../manganis/README.md"
 # prevent the main code from compiling!
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
-const-serialize-08 = { workspace = true, features = ["serde", "const-serialize-07"] }
-const-serialize-07 = { workspace = true }
+const-serialize-08 = { package = "const-serialize", path = "../../const-serialize", version = "0.8.0-alpha.0", features = ["serde", "const-serialize-07"] }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2" }
 dioxus-core-types = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, optional = true }
 winnow = { workspace = true }

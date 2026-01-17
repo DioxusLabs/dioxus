@@ -14,9 +14,9 @@ keywords = ["assets"]
 
 [dependencies]
 const-serialize = { workspace = true }
-const-serialize-07 = { workspace = true }
 manganis-core = { workspace = true }
 manganis-macro = { workspace = true }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2" }
 
 [features]
 default = []
