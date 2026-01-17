@@ -10,7 +10,7 @@ use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
-use crate::menubar::{default_menu_bar, DioxusMenu};
+use crate::menubar::{DioxusMenu, default_menu_bar};
 
 type CustomEventHandler = Box<
     dyn 'static
@@ -19,6 +19,8 @@ type CustomEventHandler = Box<
             &EventLoopWindowTarget<UserWindowEvent>,
         ),
 >;
+
+type NavigationHandler = Box<dyn Fn(&str) -> bool + 'static>;
 
 /// The closing behaviour of specific application window.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -69,6 +71,7 @@ pub struct Config {
     pub(crate) disable_file_drop_handler: bool,
     pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) additional_windows_args: Option<String>,
+    pub(crate) navigation_handler: Option<NavigationHandler>,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
@@ -81,10 +84,8 @@ pub(crate) type WryProtocol = (
     Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>) -> HttpResponse<Cow<'static, [u8]>> + 'static>,
 );
 
-pub(crate) type AsyncWryProtocol = (
-    String,
-    Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>,
-);
+pub(crate) type AsyncWryProtocol =
+    (String, Box<dyn Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static>);
 
 impl Config {
     /// Initializes a new `WindowBuilder` with default values.
@@ -122,6 +123,7 @@ impl Config {
             disable_dma_buf_on_wayland: true,
             on_window: None,
             additional_windows_args: None,
+            navigation_handler: None,
         }
     }
 
@@ -201,7 +203,7 @@ impl Config {
     pub fn with_custom_event_handler(
         mut self,
         f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-            + 'static,
+        + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
         self
@@ -246,8 +248,7 @@ impl Config {
     where
         F: Fn(WebViewId, HttpRequest<Vec<u8>>, RequestAsyncResponder) + 'static,
     {
-        self.asynchronous_protocols
-            .push((name.to_string(), Box::new(handler)));
+        self.asynchronous_protocols.push((name.to_string(), Box::new(handler)));
         self
     }
 
@@ -314,6 +315,13 @@ impl Config {
     /// every window creation, so it's up to you to
     pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
         self.on_window = Some(Box::new(f));
+        self
+    }
+
+    /// Set a custom navigation handler for non-dioxus URLs.
+    /// Return true to allow navigation inside the webview, false to block.
+    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
+        self.navigation_handler = Some(Box::new(f));
         self
     }
 
