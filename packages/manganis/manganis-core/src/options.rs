@@ -2,7 +2,8 @@ use const_serialize_07 as const_serialize;
 use const_serialize_08::SerializeConst;
 
 use crate::{
-    CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions, ImageAssetOptions, JsAssetOptions,
+    AppleWidgetOptions, CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions,
+    ImageAssetOptions, JsAssetOptions, PrebuiltBinaryOptions, RustBinaryOptions, WasmWorkerOptions,
 };
 
 /// Settings for a generic asset
@@ -53,6 +54,11 @@ impl AssetOptions {
             AssetVariant::Js(_) => Some("js"),
             AssetVariant::Folder(_) => None,
             AssetVariant::Unknown => None,
+            // Sidecar assets don't have simple file extensions
+            AssetVariant::AppleWidget(_) => None, // .appex bundle
+            AssetVariant::WasmWorker(_) => Some("wasm"),
+            AssetVariant::RustBinary(_) => None, // platform-dependent
+            AssetVariant::PrebuiltBinary(_) => None, // preserves original
         }
     }
 
@@ -176,4 +182,12 @@ pub enum AssetVariant {
     Js(JsAssetOptions),
     /// An unknown asset
     Unknown,
+    /// An Apple Widget Extension (iOS/macOS)
+    AppleWidget(AppleWidgetOptions),
+    /// A WASM web worker
+    WasmWorker(WasmWorkerOptions),
+    /// A Rust binary sidecar
+    RustBinary(RustBinaryOptions),
+    /// A prebuilt binary
+    PrebuiltBinary(PrebuiltBinaryOptions),
 }
