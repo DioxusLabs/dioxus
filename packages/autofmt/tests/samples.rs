@@ -62,4 +62,6 @@ twoway![
     asset,
     collapse,
     expr_on_conditional,
+    blank_lines,
+    blank_lines_preserved,
 ];

@@ -493,6 +493,7 @@ fn find_native_symbol_offsets<'a, R: ReadRef<'a>>(
     Ok(offsets)
 }
 
+/// Evaluate a walrus global expression to get its value.
 fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) -> Option<u64> {
     match expr {
         walrus::ConstExpr::Value(walrus::ir::Value::I32(value)) => Some(*value as u64),
@@ -509,7 +510,26 @@ fn eval_walrus_global_expr(module: &walrus::Module, expr: &walrus::ConstExpr) ->
     }
 }
 
+/// Find the value of a global export by name.
+fn find_global_export_value(module: &walrus::Module, name: &str) -> Option<u64> {
+    for export in module.exports.iter() {
+        if export.name == name {
+            if let walrus::ExportItem::Global(g) = export.item {
+                if let walrus::GlobalKind::Local(expr) = &module.globals.get(g).kind {
+                    return eval_walrus_global_expr(module, expr);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Find the offsets of any manganis symbols in the wasm file.
+///
+/// This handles both standard WASM builds and builds with advanced features like:
+/// - Bulk memory operations (passive data segments)
+/// - Thread Local Storage (TLS)
+/// - Atomics and shared memory
 fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     file_contents: &[u8],
     file: &File<'a, R>,
@@ -521,57 +541,96 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
         tracing::error!("Failed to find <data> section in WASM file");
         return Ok(Vec::new());
     };
+
     let Some((_, section_range_end)) = section.file_range() else {
         tracing::error!("Failed to find file range for <data> section in WASM file");
         return Ok(Vec::new());
     };
+
     let section_size = section.data()?.len() as u64;
     let section_start = section_range_end - section_size;
 
-    // Translate the section_relative_address to the file offset
-    // WASM files have a section address of 0 in object, reparse the data section with wasmparser
-    // to get the correct address and section start
-    // Note: We need to reparse just the data section with wasmparser to get the file offset because walrus does
-    // not expose the file offset information
+    // Parse data segments with wasmparser to get file offsets.
+    // Walrus doesn't expose file offset information, so we need wasmparser for this.
+    // With bulk memory operations, there may be multiple data segments.
     let reader = wasmparser::DataSectionReader::new(wasmparser::BinaryReader::new(
         &file_contents[section_start as usize..section_range_end as usize],
         0,
     ))
     .context("Failed to create WASM data section reader")?;
-    let main_memory = reader
-        .into_iter()
-        .next()
-        .context("Failed find main memory from WASM data section")?
-        .context("Failed to read main memory from WASM data section")?;
-    // main_memory.data is a slice somewhere in file_contents. Find out the offset in the file
-    let data_start_offset = (main_memory.data.as_ptr() as u64)
-        .checked_sub(file_contents.as_ptr() as u64)
-        .expect("Data section start offset should be within the file contents");
 
-    // Parse the wasm file to find the globals
-    let module = walrus::Module::from_buffer(file_contents).unwrap();
-    let mut offsets = Vec::new();
+    // Collect all data segments with their file offsets and sizes
+    let mut segment_file_info: Vec<(u64, u64)> = Vec::new();
+    for segment in reader.into_iter() {
+        let segment = segment.context("Failed to read data segment")?;
+        segment_file_info.push((
+            (segment.data.as_ptr() as u64)
+                .checked_sub(file_contents.as_ptr() as u64)
+                .expect("Data segment should be within file contents"),
+            segment.data.len() as u64,
+        ));
+    }
 
-    // Find the main memory offset
-    let main_memory = module
+    if segment_file_info.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Parse the wasm file with walrus to find globals and exports
+    let module = walrus::Module::from_buffer(file_contents)
+        .context("Failed to parse WASM module with walrus")?;
+
+    // Determine the memory base address for symbol lookup
+    let main_memory_walrus = module
         .data
         .iter()
         .next()
         .context("Failed to find main memory in WASM module")?;
 
-    let walrus::DataKind::Active {
-        offset: main_memory_offset,
-        ..
-    } = main_memory.kind
-    else {
-        tracing::error!("Failed to find main memory offset in WASM module");
-        return Ok(Vec::new());
+    let main_memory_offset = match &main_memory_walrus.kind {
+        walrus::DataKind::Active { offset, .. } => {
+            // Active segments have an explicit offset expression
+            eval_walrus_global_expr(&module, offset).unwrap_or_default()
+        }
+        walrus::DataKind::Passive => {
+            // For passive segments (bulk memory operations), there's no static offset.
+            // The memory.init instruction determines placement at runtime.
+            //
+            // Try to find the actual memory base from linker exports:
+            // - __memory_base: Set by the linker for bulk-memory builds
+            // - Falls back to 0x100000 (Rust/LLVM default for static data)
+            //
+            // With TLS support, the linker calculates symbol addresses as if TLS data
+            // is at the base address followed by main data. But at runtime, TLS is stored
+            // separately per-thread via __wasm_init_tls. We detect TLS by looking for
+            // __tls_size and adjust accordingly.
+            //
+            // IMPORTANT: The linker aligns main data to a 4-byte boundary after TLS.
+            // This alignment padding exists in MEMORY but NOT in the FILE. We must
+            // use the aligned TLS size for base calculation, but the file segments
+            // are stored without this padding.
+            let memory_base = find_global_export_value(&module, "__memory_base");
+            let tls_size = find_global_export_value(&module, "__tls_size").unwrap_or(0);
+
+            // If TLS is present and segment 0 matches TLS size, remove TLS segment
+            // from our file info since it's not where data symbols point
+            if tls_size > 0 && !segment_file_info.is_empty() && segment_file_info[0].1 == tls_size {
+                segment_file_info.remove(0);
+            }
+
+            // Align TLS size up to 4 bytes to match linker's memory layout.
+            // The linker aligns main data to a 4-byte boundary after TLS, so symbol
+            // addresses are calculated from (memory_base + aligned_tls_size).
+            // However, file segments are stored without this alignment padding.
+            let tls_aligned = (tls_size + 3) & !3;
+
+            // Use __memory_base if available (set by linker in release builds),
+            // otherwise fall back to 0x100000 (debug builds default)
+            memory_base.unwrap_or(0x100000u64) + tls_aligned
+        }
     };
 
-    // In the hot patch build, the main memory offset is a global from the main module and each global
-    // is it's own global. Use an offset of 0 instead if we can't evaluate the global
-    let main_memory_offset =
-        eval_walrus_global_expr(&module, &main_memory_offset).unwrap_or_default();
+    // Find all manganis symbols and calculate their file offsets
+    let mut offsets = Vec::new();
 
     for export in module.exports.iter() {
         let Some(version) = looks_like_manganis_symbol(&export.name) else {
@@ -582,7 +641,8 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        let walrus::GlobalKind::Local(pointer) = module.globals.get(global).kind else {
+        let global_data = module.globals.get(global);
+        let walrus::GlobalKind::Local(pointer) = global_data.kind else {
             continue;
         };
 
@@ -594,11 +654,41 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
             continue;
         };
 
-        let section_relative_address: u64 = ((virtual_address as i128)
-            - main_memory_offset as i128)
-            .try_into()
-            .expect("Virtual address should be greater than or equal to section address");
-        let file_offset = data_start_offset + section_relative_address;
+        // Calculate offset relative to the data base address
+        let data_relative_offset =
+            match (virtual_address as i128).checked_sub(main_memory_offset as i128) {
+                Some(offset) if offset >= 0 => offset as u64,
+                _ => {
+                    tracing::error!(
+                        "Virtual address 0x{:x} is below main memory offset 0x{:x}",
+                        virtual_address,
+                        main_memory_offset
+                    );
+                    continue;
+                }
+            };
+
+        // Find which segment this offset falls into.
+        // Segments are laid out contiguously in memory.
+        let mut cumulative_offset = 0u64;
+        let mut file_offset = None;
+
+        for (seg_file_offset, seg_size) in segment_file_info.iter() {
+            if data_relative_offset < cumulative_offset + seg_size {
+                let offset_in_segment = data_relative_offset - cumulative_offset;
+                file_offset = Some(seg_file_offset + offset_in_segment);
+                break;
+            }
+            cumulative_offset += seg_size;
+        }
+
+        let Some(file_offset) = file_offset else {
+            tracing::error!(
+                "Virtual address 0x{:x} is beyond all data segments",
+                virtual_address
+            );
+            continue;
+        };
 
         offsets.push(ManganisSymbolOffset::new(version, file_offset));
     }
@@ -798,7 +888,6 @@ pub(crate) async fn extract_symbols_from_file(
             .arg(path)
             .output()
             .context("Failed to run codesign - is `codesign` in your path?")?;
-
         if !output.status.success() {
             bail!(
                 "Failed to re-sign the binary with codesign after finalizing the assets: {}",

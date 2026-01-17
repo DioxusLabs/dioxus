@@ -610,7 +610,7 @@ impl BuildRequest {
         Fullstack usage is inferred from the presence of the fullstack feature or --fullstack.
         */
         let mut features = args.features.clone();
-        let mut no_default_features = args.no_default_features;
+        let no_default_features = args.no_default_features;
         let all_features = args.all_features;
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
@@ -711,7 +711,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Web));
                 bundle_format = bundle_format.or(Some(BundleFormat::Web));
                 triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
-                no_default_features = true;
             }
             Platform::MacOS => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -720,7 +719,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::MacOS));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Windows => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -729,7 +727,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Windows));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Linux => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -738,7 +735,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Linux));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Ios => {
                 if main_package.features.contains_key("mobile") && renderer.is_none() {
@@ -746,7 +742,6 @@ impl BuildRequest {
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Ios));
-                no_default_features = true;
                 match device.is_some() {
                     // If targeting device, we want to build for the device which is always aarch64
                     true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
@@ -767,7 +762,6 @@ impl BuildRequest {
 
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Android));
-                no_default_features = true;
 
                 // maybe probe adb?
                 if let Some(_device_name) = device.as_ref() {
@@ -797,7 +791,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Server));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Liveview => {
                 if main_package.features.contains_key("liveview") && renderer.is_none() {
@@ -806,12 +799,12 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Liveview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
         }
 
-        // If no default features are enabled, we need to add the rendererless features
-        if no_default_features {
+        // If default features are enabled, we need to add the default features
+        // which don't enable a renderer
+        if !no_default_features {
             features.extend(Self::rendererless_features(main_package));
             features.dedup();
             features.sort();
@@ -997,7 +990,9 @@ impl BuildRequest {
         Ok(Self {
             features,
             bundle,
-            no_default_features,
+            // We hardcode passing `--no-default-features` to Cargo because dx manually enables
+            // the default features we want.
+            no_default_features: true,
             all_features,
             crate_package,
             crate_target,
