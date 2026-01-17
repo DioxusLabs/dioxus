@@ -222,7 +222,13 @@ fn inner_close_hotpatch_for_current_thread() {
 
     CURR_THREAD_HOTPATCH_INIT_STATE.set(CurrThreadHotpatchInitState::Closed);
 
-    console::debug_1(&format!("[subsecond] Thread {:?} closed hotpatch", get_my_thread_id()).into());
+    console::debug_1(
+        &format!(
+            "[subsecond] Thread {:?} closed hotpatch",
+            get_my_thread_id()
+        )
+        .into(),
+    );
 }
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
@@ -518,7 +524,11 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                 }
 
                 console::debug_1(
-                    &format!("[subsecond] Web worker {:?} finished dynamic linking", my_thread_id).into(),
+                    &format!(
+                        "[subsecond] Web worker {:?} finished dynamic linking",
+                        my_thread_id
+                    )
+                    .into(),
                 );
 
                 web_workers_dynamic_linking_state
@@ -629,17 +639,22 @@ impl HotpatchEntry {
             .unwrap()
             .unchecked_into::<js_sys::Function>()
             .call0(&JsValue::undefined());
-        _ = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
-            .unwrap()
-            .unchecked_into::<js_sys::Function>()
-            .call0(&JsValue::undefined());
 
-        // https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md#start-section
-        // TODO check is it undefined
-        _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
-            .unwrap()
-            .unchecked_into::<js_sys::Function>()
-            .call0(&JsValue::undefined())
+        // in my testing, there is no __wasm_apply_global_relocs or __wasm_call_ctors, no need to call them
+
+        // initialize patch binary's __tls_base to be same as parent's
+        let patch_tls_base_global = Reflect::get(&exports, &"__tls_base".into())
+            .expect("getting __tls_base export in patch")
+            .dyn_into::<WebAssembly::Global>()
+            .expect("invalid __tls_base in patch export");
+
+        let parent_exports = wasm_bindgen::exports();
+        let parent_tls_base_global = Reflect::get(&parent_exports, &"__tls_base".into())
+            .expect("getting __tls_base export in parent")
+            .dyn_into::<WebAssembly::Global>()
+            .expect("invalid __tls_base in parent export");
+
+        patch_tls_base_global.set_value(&parent_tls_base_global.value());
     }
 }
 
