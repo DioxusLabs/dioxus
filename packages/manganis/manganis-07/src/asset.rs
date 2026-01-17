@@ -2,18 +2,10 @@ use crate::AssetOptions;
 use const_serialize_07::{ConstStr, SerializeConst};
 use std::{fmt::Debug, hash::Hash};
 
-/// An asset that should be copied by the bundler with some options. This type will be
-/// serialized into the binary.
-/// CLIs that support manganis, should pull out the assets from the link section, optimize,
-/// and write them to the filesystem at [`BundledAsset::bundled_path`] for the application
-/// to use.
 #[derive(Debug, Eq, Clone, Copy, SerializeConst, serde::Serialize, serde::Deserialize)]
 pub struct BundledAsset {
-    /// The absolute path of the asset
     absolute_source_path: ConstStr,
-    /// The bundled path of the asset
     bundled_path: ConstStr,
-    /// The options for the asset
     options: AssetOptions,
 }
 
@@ -52,8 +44,6 @@ impl Hash for BundledAsset {
 
 impl BundledAsset {
     #[doc(hidden)]
-    /// This should only be called from the macro
-    /// Create a new asset
     pub const fn new(
         absolute_source_path: &str,
         bundled_path: &str,
@@ -66,17 +56,14 @@ impl BundledAsset {
         }
     }
 
-    /// Get the bundled name of the asset. This identifier cannot be used to read the asset directly
     pub fn bundled_path(&self) -> &str {
         self.bundled_path.as_str()
     }
 
-    /// Get the absolute path of the asset source. This path will not be available when the asset is bundled
     pub fn absolute_source_path(&self) -> &str {
         self.absolute_source_path.as_str()
     }
 
-    /// Get the options for the asset
     pub const fn options(&self) -> &AssetOptions {
         &self.options
     }
