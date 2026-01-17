@@ -111,6 +111,7 @@ impl DioxusNativeApplication {
                 not(target_os = "android"),
                 not(target_os = "ios")
             )))]
+            #[allow(unreachable_patterns)]
             _ => {
                 let _ = event_loop;
                 let _ = event;

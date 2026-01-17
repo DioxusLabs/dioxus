@@ -58,10 +58,10 @@ impl<'a> Writer<'a> {
     fn write_trailing_body_comments(&mut self, body: &CallBody) -> Result {
         if let Some(span) = body.span {
             self.out.indent_level += 1;
-            let comments = self.accumulate_comments(span.span().end());
+            let comments = self.accumulate_full_line_comments(span.span().end());
             if !comments.is_empty() {
                 self.out.new_line()?;
-                self.apply_comments(comments)?;
+                self.apply_line_comments(comments)?;
                 self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
             }
             self.out.indent_level -= 1;
@@ -312,8 +312,10 @@ impl<'a> Writer<'a> {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let attr_len = self.is_short_attrs(attributes, spreads);
-        let is_short_attr_list = (attr_len + self.out.indent_level * 4) < 80;
+        let attr_len = self.is_short_attrs(brace, attributes, spreads);
+        let has_postbrace_comments = self.brace_has_trailing_comments(brace);
+        let is_short_attr_list =
+            ((attr_len + self.out.indent_level * 4) < 80) && !has_postbrace_comments;
         let children_len = self
             .is_short_children(children)
             .map_err(|_| std::fmt::Error)?;
@@ -331,6 +333,7 @@ impl<'a> Writer<'a> {
             && attributes.len() <= 1
             && spreads.is_empty()
             && !has_trailing_comments
+            && !has_postbrace_comments
         {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
@@ -425,9 +428,9 @@ impl<'a> Writer<'a> {
             ShortOptimization::NoOpt | ShortOptimization::PropsOnTop
         ) && self.leading_row_is_empty(brace.span.span().end())
         {
-            let comments = self.accumulate_comments(brace.span.span().end());
+            let comments = self.accumulate_full_line_comments(brace.span.span().end());
             if !comments.is_empty() {
-                self.apply_comments(comments)?;
+                self.apply_line_comments(comments)?;
                 self.out.tab()?;
             }
         }
@@ -487,7 +490,7 @@ impl<'a> Writer<'a> {
                     .comma
                     .as_ref()
                     .map(|c| c.span())
-                    .unwrap_or_else(|| self.final_span_of_attr(attr)),
+                    .unwrap_or_else(|| self.total_span_of_attr(attr)),
                 AttrType::Spread(attr) => attr.span(),
             };
 
@@ -565,7 +568,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
-        let cond = self.unparse_expr(&if_chain.condition);
+        let cond = self.unparse_expr(&if_chain.if_expr.cond);
         write!(self.out, "if {cond} {{ ")?;
         self.write_attribute_value(&if_chain.then_value)?;
         write!(self.out, " }}")?;
@@ -595,6 +598,15 @@ impl<'a> Writer<'a> {
         let attr_line = attr_span.start().line;
 
         if brace_line != attr_line {
+            // Get the raw line of the attribute
+            let line = self.src.get(attr_line - 1).unwrap_or(&"");
+
+            // Only write comments if the line is empty before the attribute start
+            let row_start = line.get(..attr_span.start().column - 1).unwrap_or("");
+            if !row_start.trim().is_empty() {
+                return Ok(());
+            }
+
             self.write_comments(attr_span.start())?;
         }
 
@@ -619,13 +631,19 @@ impl<'a> Writer<'a> {
 
         whitespace = whitespace[offset..].trim();
 
+        // don't emit whitespace if the span is messed up for some reason
+        if final_span.line == 1 && final_span.column == 0 {
+            return Ok(());
+        };
+
         if whitespace.starts_with("//") {
             write!(self.out, " {whitespace}")?;
         }
 
         Ok(())
     }
-    fn accumulate_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
+
+    fn accumulate_full_line_comments(&mut self, loc: LineColumn) -> VecDeque<usize> {
         // collect all comments upwards
         // make sure we don't collect the comments of the node that we're currently under.
         let start = loc;
@@ -633,23 +651,48 @@ impl<'a> Writer<'a> {
 
         let mut comments = VecDeque::new();
 
+        // don't emit whitespace if the span is messed up for some reason
+        if loc.line == 1 && loc.column == 0 {
+            return comments;
+        };
+
         let Some(lines) = self.src.get(..line_start) else {
             return comments;
         };
 
+        // We go backwards to collect comments and empty lines. We only want to keep one empty line,
+        // the rest should be `//` comments
+        let mut last_line_was_empty = false;
         for (id, line) in lines.iter().enumerate().rev() {
-            if line.trim().starts_with("//") || line.is_empty() && id != 0 {
-                if id != 0 {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                comments.push_front(id);
+                last_line_was_empty = false;
+            } else if trimmed.is_empty() {
+                if !last_line_was_empty {
                     comments.push_front(id);
+                    last_line_was_empty = true;
                 }
+
+                continue;
             } else {
                 break;
             }
         }
 
+        // If there is more than 1 comment, make sure the first comment is not an empty line
+        if comments.len() > 1 {
+            if let Some(&first) = comments.back() {
+                if self.src[first].trim().is_empty() {
+                    comments.pop_back();
+                }
+            }
+        }
+
         comments
     }
-    fn apply_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
+
+    fn apply_line_comments(&mut self, mut comments: VecDeque<usize>) -> Result {
         while let Some(comment_line) = comments.pop_front() {
             let Some(line) = self.src.get(comment_line) else {
                 continue;
@@ -668,16 +711,15 @@ impl<'a> Writer<'a> {
     }
 
     fn write_comments(&mut self, loc: LineColumn) -> Result {
-        let comments = self.accumulate_comments(loc);
-        self.apply_comments(comments)?;
-
+        let comments = self.accumulate_full_line_comments(loc);
+        self.apply_line_comments(comments)?;
         Ok(())
     }
 
     fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
         match value {
             AttributeValue::IfExpr(if_chain) => {
-                let condition_len = self.retrieve_formatted_expr(&if_chain.condition).len();
+                let condition_len = self.retrieve_formatted_expr(&if_chain.if_expr.cond).len();
                 let value_len = self.attr_value_len(&if_chain.then_value);
                 let if_len = 2;
                 let brace_len = 2;
@@ -714,7 +756,12 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn is_short_attrs(&mut self, attributes: &[Attribute], spreads: &[Spread]) -> usize {
+    fn is_short_attrs(
+        &mut self,
+        _brace: &Brace,
+        attributes: &[Attribute],
+        spreads: &[Spread],
+    ) -> usize {
         let mut total = 0;
 
         // No more than 3 attributes before breaking the line
@@ -735,7 +782,7 @@ impl<'a> Writer<'a> {
                 };
             }
 
-            let name_len = match &attr.name {
+            total += match &attr.name {
                 AttributeName::BuiltIn(name) => {
                     let name = name.to_string();
                     name.len()
@@ -743,7 +790,6 @@ impl<'a> Writer<'a> {
                 AttributeName::Custom(name) => name.value().len() + 2,
                 AttributeName::Spread(_) => unreachable!(),
             };
-            total += name_len;
 
             if attr.can_be_shorthand() {
                 total += 2;
@@ -1069,18 +1115,21 @@ impl<'a> Writer<'a> {
         }
     }
 
-    fn final_span_of_attr(&self, attr: &Attribute) -> Span {
+    fn total_span_of_attr(&self, attr: &Attribute) -> Span {
         match &attr.value {
             AttributeValue::Shorthand(s) => s.span(),
             AttributeValue::AttrLiteral(l) => l.span(),
-            AttributeValue::EventTokens(closure) => closure.body.span(),
+            AttributeValue::EventTokens(closure) => closure.span(),
             AttributeValue::AttrExpr(exp) => exp.span(),
-            AttributeValue::IfExpr(ex) => ex
-                .else_value
-                .as_ref()
-                .map(|v| v.span())
-                .unwrap_or_else(|| ex.then_value.span()),
+            AttributeValue::IfExpr(ex) => ex.span(),
         }
+    }
+
+    fn brace_has_trailing_comments(&self, brace: &Brace) -> bool {
+        let span = brace.span.span();
+        let line = self.src.get(span.start().line - 1).unwrap_or(&"");
+        let after_brace = line.get(span.start().column + 1..).unwrap_or("").trim();
+        after_brace.starts_with("//")
     }
 
     fn has_trailing_comments(&self, children: &[BodyNode], brace: &Brace) -> bool {
