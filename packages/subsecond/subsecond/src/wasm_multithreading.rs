@@ -28,8 +28,11 @@
 use crate::wasm_multithreading::CurrHotpatchingState::{
     Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking,
 };
+use crate::wasm_multithreading::InternalWasmDynamicLinkingError::{
+    Dylink0ParsingError, NoDyLink0CustomSection,
+};
 use crate::PatchError::WasmRelated;
-use crate::{commit_patch, wasm_is_multi_threaded, PatchError};
+use crate::{commit_patch, wasm_is_multi_threaded};
 use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
 use spin::MutexGuard;
@@ -392,8 +395,9 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
 
 async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> HotpatchEntry {
     assert!(is_main_thread());
-    assert!(
-        CURR_THREAD_HOTPATCH_INIT_STATE.get() == CurrThreadHotpatchInitState::Initialized,
+    assert_eq!(
+        CURR_THREAD_HOTPATCH_INIT_STATE.get(),
+        CurrThreadHotpatchInitState::Initialized,
         "main thread hasn't called init_hotpatch_for_current_thread"
     );
 
@@ -749,34 +753,31 @@ pub struct DylinkSectionInfo {
     mem_info: DylinkMemInfo,
 }
 
-fn read_u8(buf: &mut &[u8]) -> Result<u8, PatchError> {
+fn read_u8(buf: &mut &[u8]) -> Result<u8, InternalWasmDynamicLinkingError> {
     let mut local = [0u8];
     match buf.read_exact(&mut local) {
         Ok(_) => {}
         Err(_) => {
-            return Err(PatchError::WasmRelated(
-                "Wasm dylink.0 section malformed (in read_u8)".to_string(),
-            ));
+            return Err(Dylink0ParsingError("in read_u8".to_string()));
         }
     }
     Ok(local[0])
 }
 
-fn read_leb_128_unsigned(buf: &mut &[u8]) -> Result<u64, PatchError> {
+fn read_leb_128_unsigned(buf: &mut &[u8]) -> Result<u64, InternalWasmDynamicLinkingError> {
     match leb128::read::unsigned(buf) {
         Ok(v) => Ok(v),
-        Err(e) => Err(PatchError::WasmRelated(
-            "Wasm dylink.0 section malformed (in read_leb_128_unsigned)".to_string(),
-        )),
+        Err(e) => Err(Dylink0ParsingError("in read_leb_128_unsigned".to_string())),
     }
 }
 
-fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError> {
+// https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md#the-dylink0-section
+fn parse_dylink_section(
+    module: &Module,
+) -> Result<DylinkSectionInfo, InternalWasmDynamicLinkingError> {
     let dylink_section_arr = WebAssembly::Module::custom_sections(&module, "dylink.0");
     if dylink_section_arr.length() == 0 {
-        return Err(WasmRelated(
-            "The hotpatch WASM binary doesn't have dylink.0 custom section".to_string(),
-        ));
+        return Err(NoDyLink0CustomSection);
     }
     let dylink_section: ArrayBuffer = dylink_section_arr.get(0).into();
     let dylink_section = Uint8Array::new(&dylink_section);
@@ -812,9 +813,19 @@ fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError
     Ok(DylinkSectionInfo {
         mem_info: match memory_info {
             None => {
-                return Err(WasmRelated("No memory info in dylink.0".to_string()));
+                return Err(Dylink0ParsingError(
+                    "No memory info in dylink.0".to_string(),
+                ));
             }
             Some(v) => v,
         },
     })
+}
+
+#[derive(Debug, PartialEq, thiserror::Error)]
+pub enum InternalWasmDynamicLinkingError {
+    #[error("No dylink.0 section in Wasm binary")]
+    NoDyLink0CustomSection,
+    #[error("Cannot parse dylink.0 {0}")]
+    Dylink0ParsingError(String),
 }

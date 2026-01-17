@@ -712,8 +712,8 @@ pub enum PatchError {
     #[error("Failed to load library on Android: {0}")]
     AndroidMemfd(String),
 
-    #[error("Failed to load Wasm module: {0}")]
-    WasmRelated(String),
+    // There is no error enum for Wasm, because Wasm dynamic linking is async, but `apply_patch` is sync.
+    // Check errors in console.
 }
 
 /// This function returns the address of the main function in the current executable. This is used as
