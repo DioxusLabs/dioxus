@@ -224,7 +224,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [windows-latest, blacksmith-8vcpu-ubuntu-2404]
+        os: [blacksmith-4vcpu-windows-2025, blacksmith-8vcpu-ubuntu-2404]
         platform:
           - { toolchain: beta }
           # - { toolchain: 1.86.0 }
@@ -369,7 +369,7 @@ jobs:
   cargo-test-windows:
     if: github.event.pull_request.draft == false
     runs-on:
-      labels: "windows-latest"
+      labels: "blacksmith-4vcpu-windows-2025"
     name: "cargo test | windows"
     steps:
       - uses: actions/checkout@v5
