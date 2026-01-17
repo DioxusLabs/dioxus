@@ -1,6 +1,6 @@
 [package]
 name = "const-serialize-macro"
-version = { workspace = true }
+version = "0.8.0-alpha.0"
 authors = ["Evan Almloff"]
 edition = "2021"
 description = "A macro to derive const serialize"

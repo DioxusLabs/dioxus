@@ -144,7 +144,6 @@ if (process.platform === "win32") {
     },
     {
       cwd: path.join(process.cwd(), "cli-optimization"),
-      // Remove the cache folder for the cli-optimization build to force a full cache reset
       command:
         'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 8989',
       port: 8989,

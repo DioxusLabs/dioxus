@@ -5,7 +5,7 @@ fn test_serialize_const_layout_list() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&[1u8, 2, 3] as &[u8; 3], buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([u8; 3], buf).unwrap().1, [1, 2, 3])
 }
 
@@ -17,7 +17,7 @@ fn test_serialize_const_layout_nested_lists() {
         buf,
     );
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
 
     assert_eq!(
         deserialize_const!([[u8; 3]; 3], buf).unwrap().1,
@@ -29,6 +29,6 @@ fn test_serialize_const_layout_nested_lists() {
 fn test_serialize_list_too_little_data() {
     let mut buf = ConstVec::new();
     buf = buf.push(1);
-    let buf = buf.read();
+    let buf = buf.as_ref();
     assert_eq!(deserialize_const!([u64; 10], buf), None);
 }

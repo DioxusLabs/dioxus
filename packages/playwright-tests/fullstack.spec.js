@@ -4,6 +4,9 @@ const { test, expect } = require("@playwright/test");
 test("hydration", async ({ page }) => {
   await page.goto("http://localhost:3333");
 
+  // Then wait for the page to start loading
+  await page.goto("http://localhost:3333", { waitUntil: "networkidle" });
+
   // Expect the page to contain the pending text.
   const main = page.locator("#main");
   await expect(main).toContainText("Server said: ...");

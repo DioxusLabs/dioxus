@@ -77,7 +77,7 @@ async fn uppercase_ws(
         // send back a greeting message
         _ = socket
             .send(ServerEvent::Uppercase(format!(
-                "Fist message from server: Hello, {}! You are {} years old.",
+                "First message from server: Hello, {}! You are {} years old.",
                 name, age
             )))
             .await;

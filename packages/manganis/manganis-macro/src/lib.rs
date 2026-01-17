@@ -1,19 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::{
-    hash::Hasher,
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::path::PathBuf;
 
-use css_module::CssModuleParser;
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input,
+    parse_macro_input, ItemStruct,
 };
 
 pub(crate) mod asset;
@@ -21,6 +16,8 @@ pub(crate) mod css_module;
 pub(crate) mod linker;
 
 use linker::generate_link_section;
+
+use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 
 /// The asset macro collects assets that will be included in the final binary
 ///
@@ -84,108 +81,149 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
     asset.expand_option_tokens().into()
 }
 
-/// Generate type-safe and globally-unique CSS identifiers from a CSS module.
+/// Generate type-safe styles with scoped CSS class names.
 ///
-/// CSS modules allow you to have unique, scoped and type-safe CSS identifiers. A CSS module is a CSS file with the `.module.css` file extension.
-/// The `css_module!()` macro allows you to utilize CSS modules in your Rust projects.
+/// The `css_module` attribute macro creates scoped CSS modules that prevent class name collisions
+/// by making each class globally unique. It expands the annotated struct to provide type-safe
+/// identifiers for your CSS classes, allowing you to reference styles in your Rust code with
+/// compile-time guarantees.
 ///
 /// # Syntax
 ///
-/// The `css_module!()` macro takes a few items.
-/// - A styles struct identifier. This is the `struct` you use to access your type-safe CSS identifiers in Rust.
-/// - The asset string path. This is the absolute path (from the crate root) to your CSS module.
-/// - An optional `CssModuleAssetOptions` struct to configure the processing of your CSS module.
+/// The `css_module` attribute takes:
+/// - The asset string path - the absolute path (from the crate root) to your CSS file.
+/// - Optional `AssetOptions` to configure the processing of your CSS module.
 ///
+/// It must be applied to a unit struct:
 /// ```rust, ignore
-/// css_module!(StylesIdent = "/my.module.css", AssetOptions::css_module());
-/// ```
+/// #[css_module("/assets/my-styles.css")]
+/// struct Styles;
 ///
-/// The styles struct can be made public by appending `pub` before the identifier.
-/// Read the [Variable Visibility](#variable-visibility) section for more information.
+/// #[css_module("/assets/my-styles.css", AssetOptions::css_module().with_minify(true))]
+/// struct Styles;
+/// ```
 ///
 /// # Generation
 ///
-/// The `css_module!()` macro does two few things:
-/// - It generates an asset using the `asset!()` macro and automatically inserts it into the app meta.
-/// - It generates a struct with snake-case associated constants of your CSS idents.
+/// The `css_module` attribute macro does two things:
+/// - It generates an asset and automatically inserts it as a stylesheet link in the document.
+/// - It expands the annotated struct with snake-case associated constants for your CSS class names.
 ///
 /// ```rust, ignore
 /// // This macro usage:
-/// css_module!(Styles = "/mycss.module.css");
+/// #[css_module("/assets/mycss.css")]
+/// struct Styles;
 ///
-/// // Will generate this (simplified):
+/// // Will expand the struct to (simplified):
 /// struct Styles {}
 ///
 /// impl Styles {
-///     // This can be accessed with `Styles::your_ident`
-///     pub const your_ident: &str = "abc";
+///     // Snake-cased class names can be accessed like this:
+///     pub const your_class: &str = "your_class-a1b2c3";
 /// }
 /// ```
 ///
-/// # CSS Identifier Collection
-/// The macro will collect all identifiers used in your CSS module, convert them into snake_case, and generate a struct and fields around those identifier names.
+/// # CSS Class Name Scoping
 ///
-/// For example, `#fooBar` will become `foo_bar`.
+/// **The macro only processes CSS class selectors (`.class-name`).** Other selectors like IDs (`#id`),
+/// element selectors (`div`, `p`), attribute selectors, etc. are left unchanged and not exposed as
+/// Rust constants.
 ///
-/// Identifier used only inside of a media query, will not be collected (not yet supported). To get around this, you can use an empty block for the identifier:
+/// The macro collects all class selectors in your CSS file and transforms them to be globally unique
+/// by appending a hash. For example, `.myClass` becomes `.myClass-a1b2c3` where `a1b2c3` is a hash
+/// of the file path.
+///
+/// Class names are converted to snake_case for the Rust constants. For example:
+/// - `.fooBar` becomes `Styles::foo_bar`
+/// - `.my-class` becomes `Styles::my_class`
+///
+/// To prevent a class from being scoped, wrap it in `:global()`:
 /// ```css
-/// /* Empty ident block to ensure collection */
-/// #foo {}
+/// /* This class will be scoped */
+/// .my-class { color: blue; }
 ///
-/// @media ... {
-///     #foo { ... }
-/// }
+/// /* This class will NOT be scoped (no hash added) */
+/// :global(.global-class) { color: red; }
+///
+/// /* Element selectors and other CSS remain unchanged */
+/// div { margin: 0; }
+/// #my-id { padding: 10px; }
 /// ```
 ///
-/// # Variable Visibility
-/// If you want your asset or styles constant to be public, you can add the `pub` keyword in front of them.
-/// Restricted visibility (`pub(super)`, `pub(crate)`, etc) is also supported.
+/// # Using Multiple CSS Modules
+///
+/// Multiple `css_module` attributes can be used in the same scope by applying them to different structs:
 /// ```rust, ignore
-/// css_module!(pub Styles = "/mycss.module.css");
+/// // First CSS module
+/// #[css_module("/assets/styles1.css")]
+/// struct Styles;
+///
+/// // Second CSS module with a different struct name
+/// #[css_module("/assets/styles2.css")]
+/// struct OtherStyles;
+///
+/// // Access classes from both:
+/// rsx! {
+///     div { class: Styles::container }
+///     div { class: OtherStyles::button }
+/// }
 /// ```
 ///
 /// # Asset Options
-/// Similar to the  `asset!()` macro, you can pass an optional `CssModuleAssetOptions` to configure a few processing settings.
-/// ```rust, ignore
-/// use manganis::CssModuleAssetOptions;
 ///
-/// css_module!(Styles = "/mycss.module.css",
+/// Similar to the `asset!()` macro, you can pass optional `AssetOptions` to configure processing:
+/// ```rust, ignore
+/// #[css_module(
+///     "/assets/mycss.css",
 ///     AssetOptions::css_module()
 ///         .with_minify(true)
-///         .with_preload(false),
-/// );
+///         .with_preload(false)
+/// )]
+/// struct Styles;
 /// ```
 ///
-/// # Examples
-/// First you need a CSS module:
+/// # Example
+///
+/// First create a CSS file:
 /// ```css
-/// /* mycss.module.css */
+/// /* assets/styles.css */
 ///
-/// #header {
-///     padding: 50px;
-/// }
-///
-/// .header {
-///     margin: 20px;
+/// .container {
+///     padding: 20px;
 /// }
 ///
 /// .button {
 ///     background-color: #373737;
 /// }
-/// ```
-/// Then you can use the `css_module!()` macro in your Rust project:
-/// ```rust, ignore
-/// css_module!(Styles = "/mycss.module.css");
 ///
-/// println!("{}", Styles::header);
-/// println!("{}", Styles::header_class);
-/// println!("{}", Styles::button);
+/// :global(.global-text) {
+///     font-weight: bold;
+/// }
 /// ```
-#[proc_macro]
-#[doc(hidden)]
-pub fn css_module(input: TokenStream) -> TokenStream {
-    let style = parse_macro_input!(input as CssModuleParser);
-    quote! { #style }.into_token_stream().into()
+///
+/// Then use the `css_module` attribute:
+/// ```rust, ignore
+/// use dioxus::prelude::*;
+///
+/// fn app() -> Element {
+///     #[css_module("/assets/styles.css")]
+///     struct Styles;
+///     
+///     rsx! {
+///         div { class: Styles::container,
+///             button { class: Styles::button, "Click me" }
+///             span { class: Styles::global_text, "This uses global class" }
+///         }
+///     }
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn css_module(input: TokenStream, item: TokenStream) -> TokenStream {
+    let attribute = parse_macro_input!(input as CssModuleAttribute);
+    let item_struct = parse_macro_input!(item as ItemStruct);
+    let mut tokens = proc_macro2::TokenStream::new();
+    expand_css_module_struct(&mut tokens, &attribute, &item_struct);
+    tokens.into()
 }
 
 fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
@@ -251,46 +289,6 @@ fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
     Ok(path)
 }
 
-fn hash_file_contents(file_path: &Path) -> Result<u64, AssetParseError> {
-    // Create a hasher
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-
-    // If this is a folder, hash the folder contents
-    if file_path.is_dir() {
-        let files = std::fs::read_dir(file_path).map_err(|err| AssetParseError::IoError {
-            err,
-            path: file_path.to_path_buf(),
-        })?;
-        for file in files.flatten() {
-            let path = file.path();
-            hash_file_contents(&path)?;
-        }
-        return Ok(hash.finish());
-    }
-
-    // Otherwise, open the file to get its contents
-    let mut file = std::fs::File::open(file_path).map_err(|err| AssetParseError::IoError {
-        err,
-        path: file_path.to_path_buf(),
-    })?;
-
-    // We add a hash to the end of the file so it is invalidated when the bundled version of the file changes
-    // The hash includes the file contents, the options, and the version of manganis. From the macro, we just
-    // know the file contents, so we only include that hash
-    let mut buffer = [0; 8192];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(AssetParseError::FailedToReadAsset)?;
-        if read == 0 {
-            break;
-        }
-        hash.write(&buffer[..read]);
-    }
-
-    Ok(hash.finish())
-}
-
 /// Parse `T`, while also collecting the tokens it was parsed from.
 fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro2::TokenStream)> {
     let begin = input.cursor();
@@ -311,9 +309,7 @@ fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro
 #[derive(Debug)]
 enum AssetParseError {
     AssetDoesntExist { path: PathBuf },
-    IoError { err: std::io::Error, path: PathBuf },
     InvalidPath { path: PathBuf },
-    FailedToReadAsset(std::io::Error),
     RelativeAssetPath,
 }
 
@@ -323,9 +319,6 @@ impl std::fmt::Display for AssetParseError {
             AssetParseError::AssetDoesntExist { path } => {
                 write!(f, "Asset at {} doesn't exist", path.display())
             }
-            AssetParseError::IoError { path, err } => {
-                write!(f, "Failed to read file: {}; {}", path.display(), err)
-            }
             AssetParseError::InvalidPath { path } => {
                 write!(
                     f,
@@ -333,7 +326,6 @@ impl std::fmt::Display for AssetParseError {
                     path.display()
                 )
             }
-            AssetParseError::FailedToReadAsset(err) => write!(f, "Failed to read asset: {}", err),
             AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
         }
     }

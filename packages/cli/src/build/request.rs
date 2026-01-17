@@ -388,6 +388,7 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
+    pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
@@ -604,7 +605,8 @@ impl BuildRequest {
         Fullstack usage is inferred from the presence of the fullstack feature or --fullstack.
         */
         let mut features = args.features.clone();
-        let mut no_default_features = args.no_default_features;
+        let no_default_features = args.no_default_features;
+        let all_features = args.all_features;
         let mut triple = args.target.clone();
         let mut renderer = args.renderer;
         let mut bundle_format = args.bundle;
@@ -704,7 +706,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Web));
                 bundle_format = bundle_format.or(Some(BundleFormat::Web));
                 triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
-                no_default_features = true;
             }
             Platform::MacOS => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -713,7 +714,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::MacOS));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Windows => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -722,7 +722,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Windows));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Linux => {
                 if main_package.features.contains_key("desktop") && renderer.is_none() {
@@ -731,7 +730,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Linux));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Ios => {
                 if main_package.features.contains_key("mobile") && renderer.is_none() {
@@ -739,7 +737,6 @@ impl BuildRequest {
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Ios));
-                no_default_features = true;
                 match device.is_some() {
                     // If targeting device, we want to build for the device which is always aarch64
                     true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
@@ -760,7 +757,6 @@ impl BuildRequest {
 
                 renderer = renderer.or(Some(Renderer::Webview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Android));
-                no_default_features = true;
 
                 // maybe probe adb?
                 if let Some(_device_name) = device.as_ref() {
@@ -790,7 +786,6 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Server));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
             Platform::Liveview => {
                 if main_package.features.contains_key("liveview") && renderer.is_none() {
@@ -799,12 +794,12 @@ impl BuildRequest {
                 renderer = renderer.or(Some(Renderer::Liveview));
                 bundle_format = bundle_format.or(Some(BundleFormat::Server));
                 triple = triple.or(Some(Triple::host()));
-                no_default_features = true;
             }
         }
 
-        // If no default features are enabled, we need to add the rendererless features
-        if no_default_features {
+        // If default features are enabled, we need to add the default features
+        // which don't enable a renderer
+        if !no_default_features {
             features.extend(Self::rendererless_features(main_package));
             features.dedup();
             features.sort();
@@ -826,12 +821,12 @@ impl BuildRequest {
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
-            features.push(Self::feature_for_platform_and_renderer(
-                main_package,
-                &triple,
-                renderer,
-            ));
-            features.dedup();
+            if let Some(feature) =
+                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+            {
+                features.push(feature);
+                features.dedup();
+            }
         }
 
         // Set the profile of the build if it's not already set
@@ -985,7 +980,10 @@ impl BuildRequest {
         Ok(Self {
             features,
             bundle,
-            no_default_features,
+            // We hardcode passing `--no-default-features` to Cargo because dx manually enables
+            // the default features we want.
+            no_default_features: true,
+            all_features,
             crate_package,
             crate_target,
             profile,
@@ -2612,6 +2610,10 @@ impl BuildRequest {
             cargo_args.push("--no-default-features".to_string());
         }
 
+        if self.all_features {
+            cargo_args.push("--all-features".to_string());
+        }
+
         if !self.features.is_empty() {
             cargo_args.push("--features".to_string());
             cargo_args.push(self.features.join(" "));
@@ -3571,7 +3573,7 @@ impl BuildRequest {
         package: &krates::cm::Package,
         triple: &Triple,
         renderer: Renderer,
-    ) -> String {
+    ) -> Option<String> {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = renderer.feature_name(triple);
 
@@ -3611,12 +3613,17 @@ impl BuildRequest {
             None
         });
 
-        res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{dioxus_feature}");
-            tracing::debug!(
-                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
-            );
-            fallback
+        res.or_else(|| {
+            let depends_on_dioxus = package.dependencies.iter().any(|dep| dep.name == "dioxus");
+            if depends_on_dioxus {
+                let fallback = format!("dioxus/{dioxus_feature}");
+                tracing::debug!(
+                    "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
+                );
+                Some(fallback)
+            } else {
+                None
+            }
         })
     }
 
@@ -4354,39 +4361,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        match self.bundle {
-            BundleFormat::Android => {
-                ctx.status_running_gradle();
+        if let BundleFormat::Android = self.bundle {
+            ctx.status_running_gradle();
 
-                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-                let build_type = if self.release && self.config.bundle.android.is_some() {
-                    "assembleRelease"
-                } else {
-                    "assembleDebug"
-                };
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
 
-                let output = Command::new(self.gradle_exe()?)
-                    .arg(build_type)
-                    .current_dir(self.root_dir())
-                    .output()
-                    .await
-                    .context("Failed to run gradle")?;
+            let output = Command::new(self.gradle_exe()?)
+                .arg(build_type)
+                .current_dir(self.root_dir())
+                .output()
+                .await
+                .context("Failed to run gradle")?;
 
-                if !output.status.success() {
-                    bail!(
-                        "Failed to assemble apk: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
+            if !output.status.success() {
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
-            BundleFormat::MacOS | BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_apple().await?;
-                }
-            }
+        }
 
-            _ => {}
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        ) && self.should_codesign
+        {
+            self.codesign_apple(ctx).await?;
         }
 
         Ok(())
@@ -5263,7 +5269,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_apple(&self) -> Result<()> {
+    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_codesigning();
+
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
@@ -5298,6 +5306,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             app_dev_name
         );
 
+        // determine the target exe - the server and macos bundles are different
+        let target_exe = match self.bundle {
+            BundleFormat::MacOS => self.root_dir(),
+            BundleFormat::Ios => self.root_dir(),
+            BundleFormat::Server => self.main_exe(),
+            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
+        };
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
@@ -5307,7 +5323,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.root_dir())
+            .arg(target_exe)
             .output()
             .await
             .context("Failed to codesign the app - is `codesign` in your path?")?;
