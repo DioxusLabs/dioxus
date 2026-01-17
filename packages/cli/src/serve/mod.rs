@@ -173,30 +173,44 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                             return Err(err);
                         }
                     }
-                    BuilderUpdate::BuildReady { bundle } => match bundle.mode {
-                        BuildMode::Thin { ref cache, .. } => {
-                            if let Err(err) =
-                                builder.hotpatch(&bundle, id, cache, &mut devserver).await
-                            {
-                                tracing::error!("Failed to hot-patch app: {err}");
-
-                                if let Some(_patching) =
-                                    err.downcast_ref::<crate::build::PatchError>()
+                    BuilderUpdate::BuildReady { bundle } => {
+                        match bundle.mode {
+                            BuildMode::Thin { ref cache, .. } => {
+                                if let Err(err) =
+                                    builder.hotpatch(&bundle, id, cache, &mut devserver).await
                                 {
-                                    tracing::info!("Starting full rebuild: {err}");
-                                    builder.full_rebuild().await;
-                                    devserver.send_reload_start().await;
-                                    devserver.start_build().await;
+                                    tracing::error!("Failed to hot-patch app: {err}");
+
+                                    if let Some(_patching) =
+                                        err.downcast_ref::<crate::build::PatchError>()
+                                    {
+                                        tracing::info!("Starting full rebuild: {err}");
+                                        builder.full_rebuild().await;
+                                        devserver.send_reload_start().await;
+                                        devserver.start_build().await;
+                                    }
                                 }
                             }
+                            BuildMode::Base { .. } | BuildMode::Fat => {
+                                _ = builder
+                                    .open(&bundle, &mut devserver)
+                                    .await
+                                    .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                            }
                         }
-                        BuildMode::Base { .. } | BuildMode::Fat => {
-                            _ = builder
-                                .open(&bundle, &mut devserver)
-                                .await
-                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+
+                        // Process any file changes that were queued while the build was in progress.
+                        // This handles tools like stylance, tailwind, or sass that generate files
+                        // in response to source changes - those changes would otherwise be lost.
+                        let pending = builder.take_pending_file_changes();
+                        if !pending.is_empty() {
+                            tracing::debug!(
+                                "Processing {} pending file changes after build",
+                                pending.len()
+                            );
+                            builder.handle_file_change(&pending, &mut devserver).await;
                         }
-                    },
+                    }
                     BuilderUpdate::StdoutReceived { msg } => {
                         screen.push_stdio(bundle_format, msg, tracing::Level::INFO);
                     }

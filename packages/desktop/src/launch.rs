@@ -39,7 +39,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
             Event::UserEvent(event) => match event {
                 UserWindowEvent::Poll(id) => app.poll_vdom(id),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
-                UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
+                UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

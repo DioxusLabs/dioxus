@@ -103,12 +103,20 @@
 
             // Show a toast, removing the previous one.
             function showDXToast(headerText, message, progressLevel, durationMs) {
-                document.getElementById("__dx-toast-decor").className = `dx-toast-level-bar ${progressLevel}`;
-                document.getElementById("__dx-toast-text").innerText = headerText;
-                document.getElementById("__dx-toast-msg").innerText = message;
-                document.getElementById("__dx-toast-inner").style.right = "0";
-                document.getElementById("__dx-toast").removeAttribute("aria-hidden");
-                document.getElementById("__dx-toast").addEventListener("click", closeDXToast);
+                const decor = document.getElementById("__dx-toast-decor");
+                const text = document.getElementById("__dx-toast-text");
+                const msg = document.getElementById("__dx-toast-msg");
+                const inner = document.getElementById("__dx-toast-inner");
+                const toast = document.getElementById("__dx-toast");
+
+                if (decor) decor.className = `dx-toast-level-bar ${progressLevel}`;
+                if (text) text.innerText = headerText;
+                if (msg) msg.innerText = message;
+                if (inner) inner.style.right = "0";
+                if (toast) {
+                    toast.removeAttribute("aria-hidden");
+                    toast.addEventListener("click", closeDXToast);
+                }
 
 
                 // Wait a bit of time so animation plays correctly.

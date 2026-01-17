@@ -12,6 +12,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	// VSCode doesn't have a `fetch` implementation, but we don't really care about polyfilling it
 	await init(wasmSourceCode);
 
+	// Register format-on-save handler using waitUntil() for proper synchronization
+	// This runs alongside (not instead of) other formatters like rust-analyzer,
+	// allowing both rustfmt and Dioxus RSX formatting to work together
+	context.subscriptions.push(
+		vscode.workspace.onWillSaveTextDocument(formatOnSave)
+	);
+
 	// Todo:
 	// I want a paste-handler that translates HTML to RSX whenever HTML is pasted into an Rsx block
 	// Or, a little tooltip that pops up and asks if you want to translate the HTML to RSX
@@ -19,12 +26,59 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('extension.htmlToDioxusRsx', () => translate(false)),
 		vscode.commands.registerCommand('extension.htmlToDioxusComponent', () => translate(true)),
 		vscode.commands.registerCommand('extension.formatRsx', fmtSelection),
-		vscode.commands.registerCommand('extension.formatRsxDocument', formatRsxDocument),
-		vscode.workspace.onWillSaveTextDocument(fmtDocumentOnSave)
+		vscode.commands.registerCommand('extension.formatRsxDocument', formatRsxDocument)
 	);
 
 	context.subscriptions.push(vscode.window.registerUriHandler(new UriLaunchServer()));
+}
 
+// Format RSX on save using waitUntil() for proper synchronization with VSCode's save pipeline
+function formatOnSave(e: vscode.TextDocumentWillSaveEvent) {
+	if (e.document.languageId !== 'rust') {
+		return;
+	}
+
+	// Check if Dioxus formatting is enabled
+	const dioxusConfig = vscode.workspace.getConfiguration('dioxus', e.document).get('formatOnSave');
+	if (dioxusConfig === 'disabled') {
+		return;
+	}
+
+	// Use waitUntil() to properly synchronize with VSCode's save pipeline
+	// This returns TextEdit[] which VSCode applies before completing the save
+	e.waitUntil(formatDocument(e.document));
+}
+
+// Returns a promise of TextEdit[] for use with waitUntil()
+function formatDocument(document: vscode.TextDocument): Thenable<vscode.TextEdit[]> {
+	return new Promise((resolve) => {
+		try {
+			const contents = document.getText();
+
+			// Get editor options for this document
+			const editor = vscode.window.visibleTextEditors.find(
+				e => e.document.uri.toString() === document.uri.toString()
+			);
+
+			const tabSize = (typeof editor?.options.tabSize === 'number') ? editor.options.tabSize : 4;
+			const useTabs = editor ? !editor.options.insertSpaces : false;
+
+			const formatted = dioxus.format_file(contents, useTabs, tabSize);
+
+			if (formatted.length() > 0) {
+				const fullRange = new vscode.Range(
+					document.positionAt(0),
+					document.positionAt(contents.length)
+				);
+				resolve([vscode.TextEdit.replace(fullRange, formatted.formatted())]);
+			} else {
+				resolve([]);
+			}
+		} catch (error) {
+			vscode.window.showWarningMessage(`Dioxus formatting error: ${error}`);
+			resolve([]);
+		}
+	});
 }
 
 function translate(component: boolean) {
@@ -49,11 +103,19 @@ function translate(component: boolean) {
 }
 
 
-function formatRsxDocument() {
+async function formatRsxDocument() {
 	const editor = vscode.window.activeTextEditor;
 	if (!editor) return;
 
-	fmtDocument(editor.document);
+	// Apply RSX formatting directly using a WorkspaceEdit
+	const edits = await formatDocument(editor.document);
+	if (edits.length > 0) {
+		const workspaceEdit = new vscode.WorkspaceEdit();
+		for (const edit of edits) {
+			workspaceEdit.replace(editor.document.uri, edit.range, edit.newText);
+		}
+		await vscode.workspace.applyEdit(workspaceEdit);
+	}
 }
 
 function fmtSelection() {
@@ -130,49 +192,6 @@ function fmtSelection() {
 		vscode.window.showErrorMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed and you have selected valid rsx with your cursor! \n${error}`);
 	}
 
-}
-
-function fmtDocumentOnSave(e: vscode.TextDocumentWillSaveEvent) {
-	// check the settings to make sure format on save is configured
-	const dioxusConfig = vscode.workspace.getConfiguration('dioxus', e.document).get('formatOnSave');
-	const globalConfig = vscode.workspace.getConfiguration('editor', e.document).get('formatOnSave');
-	if (
-		(dioxusConfig === 'enabled') ||
-		(dioxusConfig !== 'disabled' && globalConfig)
-	) {
-		fmtDocument(e.document);
-	}
-}
-
-function fmtDocument(document: vscode.TextDocument) {
-	try {
-		if (document.languageId !== "rust") {
-			return;
-		}
-
-		const [editor,] = vscode.window.visibleTextEditors.filter(editor => editor.document.fileName === document.fileName);
-		if (!editor) return; // Need an editor to apply text edits.
-
-		const contents = editor.document.getText();
-		let tabSize: number;
-		if (typeof editor.options.tabSize === 'number') {
-			tabSize = editor.options.tabSize;
-		} else {
-			tabSize = 4;
-		}
-		const formatted = dioxus.format_file(contents, !editor.options.insertSpaces, tabSize);
-
-		// Replace the entire text document
-		// Yes, this is a bit heavy handed, but the dioxus side doesn't know the line/col scheme that vscode is using
-		if (formatted.length() > 0) {
-			editor.edit(editBuilder => {
-				const range = new vscode.Range(0, 0, document.lineCount, 0);
-				editBuilder.replace(range, formatted.formatted());
-			});
-		}
-	} catch (error) {
-		vscode.window.showWarningMessage(`Errors occurred while formatting. Make sure you have the most recent Dioxus-CLI installed! \n${error}`);
-	}
 }
 
 class UriLaunchServer implements vscode.UriHandler {

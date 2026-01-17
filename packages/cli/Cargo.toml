@@ -86,7 +86,7 @@ which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "0.23.3"
+cargo-generate = "=0.23.3"
 toml_edit = "0.22.27"
 
 # formatting
@@ -98,6 +98,7 @@ brotli = "8.0.1"
 ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
+const-serialize-07 = { workspace = true, features = ["serde"] }
 
 tracing-subscriber = { version = "0.3.19", features = [
     "std",
@@ -122,6 +123,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 tempfile = "3.19.1"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
+manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 wasm-encoder = "0.235.0"
 
@@ -167,6 +169,9 @@ nucleo = "0.5.0"
 
 # 0.5.12 rust-version is too high
 home = "=0.5.11"
+
+[target.'cfg(target_env = "musl")'.dependencies]
+git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
 
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }
