@@ -122,7 +122,7 @@ async fn inner_init_hotpatch_for_current_thread() {
 
     if is_main_thread() {
         let closure: Closure<dyn Fn(&MessageEvent)> =
-            Closure::new(move |e: &MessageEvent| on_main_thread_receive_hotpatch_finish(e));
+            Closure::new(move |e: &MessageEvent| on_main_thread_know_hotpatch_finish());
         let closure_js = closure.into_js_value();
         hotpatch_finish_callback = Some(closure_js.clone());
         hotpatch_finish_channel.set_onmessage(Some(&closure_js.into()));
@@ -149,16 +149,45 @@ async fn inner_init_hotpatch_for_current_thread() {
         global_hotpatch_state
             .worker_thread_ids
             .insert(get_my_thread_id());
+
+        match global_hotpatch_state.curr_state {
+            WebWorkersDynamicLinking(ref mut web_worker_dynamic_linking_state) => {
+                console::debug_1(
+                    &format!(
+                        "Web worker {:?} initializes during a pending hotpatch.",
+                        get_my_thread_id()
+                    )
+                    .into(),
+                );
+                web_worker_dynamic_linking_state
+                    .pending_thread_ids
+                    .insert(get_my_thread_id());
+            }
+            _ => {}
+        }
     }
 
     // unlock
     drop(global_hotpatch_state);
 
-    // the new web worker needs to dynamic-link the hotpatches before its launch
-    for entry in already_hotpatched {
-        let module = load_wasm_module(&entry.jump_table).await;
+    let already_patch_count = already_hotpatched.len();
 
-        entry.internal_per_thread_dynamic_link(&module).await;
+    if already_patch_count != 0 {
+        console::debug_1(
+            &format!(
+                "Web worker {:?} is going to dynamic-link {} existing hotpatches.",
+                get_my_thread_id(),
+                already_patch_count
+            )
+            .into(),
+        );
+
+        // the new web worker needs to dynamic-link the existing hotpatches before its launch
+        for entry in already_hotpatched {
+            let module = load_wasm_module(&entry.jump_table).await;
+
+            entry.internal_per_thread_dynamic_link(&module).await;
+        }
     }
 }
 
@@ -340,12 +369,17 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
             "curr_state is not MainThreadDynamicLinking"
         );
 
-        hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
-            hotpatch_entry: Arc::new(entry),
-            pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
-        });
+        if hotpatch_state.worker_thread_ids.is_empty() {
+            console::debug_1(&"No web worker, directly finish hotpatch".into());
+            on_main_thread_know_hotpatch_finish();
+        } else {
+            hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
+                hotpatch_entry: Arc::new(entry),
+                pending_thread_ids: hotpatch_state.worker_thread_ids.clone(),
+            });
 
-        notify_web_workers_to_dynamic_link();
+            notify_web_workers_to_dynamic_link();
+        }
     }
 }
 
@@ -431,7 +465,7 @@ fn notify_web_workers_to_dynamic_link() {
     })
 }
 
-fn on_main_thread_receive_hotpatch_finish(event: &MessageEvent) {
+fn on_main_thread_know_hotpatch_finish() {
     assert!(is_main_thread());
 
     let mut state = GLOBAL_HOTPATCH_STATE.lock();
