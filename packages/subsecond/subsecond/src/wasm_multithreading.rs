@@ -625,20 +625,26 @@ impl HotpatchEntry {
             .unchecked_into();
 
         // https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md#relocations
-        _ = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
+        let apply_data_relocs = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>()
+            .unchecked_into::<js_sys::Function>();
+        console::debug_2(&"__wasm_apply_data_relocs".into(), &apply_data_relocs);
+        _ = apply_data_relocs
             .call0(&JsValue::undefined());
-        _ = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
+        let apply_global_relocs = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>()
+            .unchecked_into::<js_sys::Function>();
+        console::debug_2(&"__wasm_apply_global_relocs".into(), &apply_global_relocs);
+        _ = apply_global_relocs
             .call0(&JsValue::undefined());
 
         // https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md#start-section
         // TODO check is it undefined
-        _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
+        let call_ctors = Reflect::get(&exports, &"__wasm_call_ctors".into())
             .unwrap()
-            .unchecked_into::<js_sys::Function>()
+            .unchecked_into::<js_sys::Function>();
+        console::debug_2(&"__wasm_call_ctors".into(), &call_ctors);
+        _ = call_ctors
             .call0(&JsValue::undefined())
     }
 }
