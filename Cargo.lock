@@ -5875,6 +5875,7 @@ dependencies = [
  "wasm-streams",
  "web-time",
  "wgpu 26.0.1",
+ "winit",
 ]
 
 [[package]]

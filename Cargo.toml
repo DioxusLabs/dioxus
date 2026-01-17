@@ -461,6 +461,7 @@ ciborium = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
 http-range = { version = "0.1.5" }
 wgpu = { workspace = true, optional = true }
+winit = { workspace = true, optional = true }
 ouroboros = { version = "*", optional = true }
 wasm-splitter = { workspace = true }
 
@@ -516,7 +517,7 @@ tokio = { version = "1.48", features = ["full"] }
 [features]
 default = ["desktop"]
 desktop = ["dioxus/desktop"]
-native = ["dioxus/native"]
+native = ["dioxus/native", "winit"]
 liveview = ["dioxus/liveview"]
 server = ["dioxus/server"]
 mobile = ["dioxus/mobile"]
