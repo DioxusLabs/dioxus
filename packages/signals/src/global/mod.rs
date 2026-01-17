@@ -190,16 +190,9 @@ where
                     return signal.clone();
                 }
                 evicted_stale_entry = true;
-                #[cfg(debug_assertions)]
-                tracing::warn!(
-                    ?key,
-                    stored_type = ?signal.type_id(),
-                    expected_type = std::any::type_name::<T>(),
-                    expected_type_id = ?std::any::TypeId::of::<T>(),
-                    "Global signal cache entry type mismatch; rebuilding entry"
-                );
             }
         }
+
         if evicted_stale_entry {
             context.map.borrow_mut().remove(&key);
         }
