@@ -1,7 +1,7 @@
 #[cfg(feature = "serialize")]
 pub use ser::*;
 #[cfg(feature = "serialize")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 pub struct DataTransfer {
     inner: Box<dyn NativeDataTransfer>,
