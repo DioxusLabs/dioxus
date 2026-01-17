@@ -28,7 +28,6 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use subsecond_types::JumpTable;
 use syn::spanned::Spanned;
 use tokio::process::Command;
 
@@ -53,7 +52,7 @@ pub(crate) struct AppServer {
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
 
     // Tracked state related to open builds and hot reloading
-    pub(crate) applied_hot_reload_message: HotReloadMsg,
+    pub(crate) applied_client_hot_reload_message: HotReloadMsg,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
@@ -82,6 +81,9 @@ pub(crate) struct AppServer {
 
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
+
+    // File changes that arrived while a build was in progress, to be processed after build completes
+    pub(crate) pending_file_changes: Vec<PathBuf>,
 }
 
 pub(crate) struct CachedFile {
@@ -97,11 +99,16 @@ impl AppServer {
 
         // Resolve the simpler args
         let interactive = args.is_interactive_tty();
-        let force_sequential = args.force_sequential;
+        let force_sequential = args.platform_args.shared.targets.force_sequential_build();
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let split_args = |args: &str| {
+            args.split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
@@ -180,7 +187,7 @@ impl AppServer {
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),
-            applied_hot_reload_message: Default::default(),
+            applied_client_hot_reload_message: Default::default(),
             automatic_rebuilds: true,
             watch_fs,
             use_hotpatch_engine,
@@ -205,6 +212,7 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            pending_file_changes: Vec::new(),
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -230,10 +238,16 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start(build_mode.clone());
+        self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
-            server.start(build_mode);
+            server.start(build_mode, BuildId::SECONDARY);
         }
+    }
+
+    /// Take any pending file changes that were queued while a build was in progress.
+    /// Returns the files and clears the pending list.
+    pub(crate) fn take_pending_file_changes(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.pending_file_changes)
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -269,14 +283,14 @@ impl AppServer {
             // Wait for the client to finish
             client_update = client_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::CLIENT,
+                    id: BuildId::PRIMARY,
                     update: client_update,
                 }
             }
 
             Some(server_update) = server_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::SERVER,
+                    id: BuildId::SECONDARY,
                     update: server_update,
                 }
             }
@@ -344,10 +358,14 @@ impl AppServer {
             self.client.stage,
             BuildStage::Failed | BuildStage::Aborted | BuildStage::Success
         ) {
+            // Queue file changes that arrive during a build, so we can process them after the build completes.
+            // This prevents losing changes from tools like stylance, tailwind, or sass that generate files
+            // in response to source changes.
             tracing::debug!(
-                "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
+                "Queueing file change: client is not ready to receive hotreloads. Files: {:#?}",
                 files
             );
+            self.pending_file_changes.extend(files.iter().cloned());
             return;
         }
 
@@ -373,6 +391,12 @@ impl AppServer {
                 for bundled_name in bundled_names {
                     assets.push(PathBuf::from("/assets/").join(bundled_name));
                 }
+            }
+
+            // If it's in the public dir, we sync it and trigger a full rebuild
+            if self.client.build.path_is_in_public_dir(path) {
+                needs_full_rebuild = true;
+                continue;
             }
 
             // If it's a rust file, we want to hotreload it using the filemap
@@ -487,17 +511,18 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec());
+                self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec());
+                    server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client.start_rebuild(BuildMode::Base { run: true });
+                self.client
+                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true });
+                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -556,13 +581,14 @@ impl AppServer {
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
-        match artifacts.bundle {
-            BundleFormat::Server => {
+        match artifacts.build_id {
+            BuildId::PRIMARY => self.client.artifacts = Some(artifacts.clone()),
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
                 }
             }
-            _ => self.client.artifacts = Some(artifacts.clone()),
+            _ => {}
         }
 
         let should_open = self.client.stage == BuildStage::Success
@@ -630,7 +656,7 @@ impl AppServer {
                     fullstack_address,
                     false,
                     false,
-                    BuildId::SERVER,
+                    BuildId::SECONDARY,
                     &self.server_args,
                 )
                 .await?;
@@ -645,7 +671,7 @@ impl AppServer {
                 fullstack_address,
                 open_browser,
                 self.always_on_top,
-                BuildId::CLIENT,
+                BuildId::PRIMARY,
                 &self.client_args,
             )
             .await?;
@@ -692,9 +718,10 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start_rebuild(build_mode.clone());
+        self.client
+            .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
         if let Some(s) = self.server.as_mut() {
-            s.start_rebuild(build_mode)
+            s.start_rebuild(build_mode, BuildId::SECONDARY);
         }
 
         self.clear_hot_reload_changes();
@@ -704,33 +731,77 @@ impl AppServer {
 
     pub(crate) async fn hotpatch(
         &mut self,
-        res: &BuildArtifacts,
+        bundle: &BuildArtifacts,
         id: BuildId,
         cache: &HotpatchModuleCache,
-    ) -> Result<JumpTable> {
+        devserver: &mut WebServer,
+    ) -> Result<()> {
+        let elapsed = bundle
+            .time_end
+            .duration_since(bundle.time_start)
+            .unwrap_or_default();
+
         let jump_table = match id {
-            BuildId::CLIENT => self.client.hotpatch(res, cache).await,
-            BuildId::SERVER => {
+            BuildId::PRIMARY => self.client.hotpatch(bundle, cache).await,
+            BuildId::SECONDARY => {
                 self.server
                     .as_mut()
                     .context("Server not found")?
-                    .hotpatch(res, cache)
+                    .hotpatch(bundle, cache)
                     .await
             }
             _ => bail!("Invalid build id"),
         }?;
 
-        if id == BuildId::CLIENT {
-            self.applied_hot_reload_message.jump_table = self.client.patches.last().cloned();
+        if id == BuildId::PRIMARY {
+            self.applied_client_hot_reload_message.jump_table = self.client.patches.last().cloned();
         }
 
-        Ok(jump_table)
+        // If no server, just send the patch immediately
+        let Some(server) = self.server.as_mut() else {
+            devserver
+                .send_patch(jump_table, elapsed, id, self.client.pid)
+                .await;
+            return Ok(());
+        };
+
+        // If we have a server, we need to wait until both the client and server are ready
+        // Otherwise we end up with an annoying race condition where the client can't actually load the patch
+        if self.client.stage == BuildStage::Success && server.stage == BuildStage::Success {
+            let client_jump_table = self
+                .client
+                .patches
+                .last()
+                .cloned()
+                .context("Missing client jump table")?;
+
+            let server_jump_table = server
+                .patches
+                .last()
+                .cloned()
+                .context("Missing server jump table")?;
+
+            devserver
+                .send_patch(server_jump_table, elapsed, BuildId::SECONDARY, server.pid)
+                .await;
+
+            devserver
+                .send_patch(
+                    client_jump_table,
+                    elapsed,
+                    BuildId::PRIMARY,
+                    self.client.pid,
+                )
+                .await;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
-            BuildId::CLIENT => Some(&self.client),
-            BuildId::SERVER => self.server.as_ref(),
+            BuildId::PRIMARY => Some(&self.client),
+            BuildId::SECONDARY => self.server.as_ref(),
             _ => None,
         }
     }
@@ -746,20 +817,20 @@ impl AppServer {
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self, build: BuildId) -> HotReloadMsg {
-        let mut msg = self.applied_hot_reload_message.clone();
+        let mut msg = self.applied_client_hot_reload_message.clone();
 
-        if build == BuildId::CLIENT {
+        if build == BuildId::PRIMARY {
             msg.jump_table = self.client.patches.last().cloned();
-            msg.for_build_id = Some(BuildId::CLIENT.0 as _);
+            msg.for_build_id = Some(BuildId::PRIMARY.0 as _);
             if let Some(lib) = msg.jump_table.as_mut() {
                 lib.lib = PathBuf::from("/").join(lib.lib.clone());
             }
         }
 
-        if build == BuildId::SERVER {
+        if build == BuildId::SECONDARY {
             if let Some(server) = self.server.as_mut() {
                 msg.jump_table = server.patches.last().cloned();
-                msg.for_build_id = Some(BuildId::SERVER.0 as _);
+                msg.for_build_id = Some(BuildId::SECONDARY.0 as _);
             }
         }
 
@@ -768,7 +839,7 @@ impl AppServer {
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
     pub(crate) fn clear_hot_reload_changes(&mut self) {
-        self.applied_hot_reload_message = Default::default();
+        self.applied_client_hot_reload_message = Default::default();
     }
 
     pub(crate) fn clear_patches(&mut self) {
@@ -785,7 +856,7 @@ impl AppServer {
         pid: Option<u32>,
     ) {
         match build_id {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
                 if self.client.build.bundle != BundleFormat::Web {
@@ -797,7 +868,7 @@ impl AppServer {
                     }
                 }
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.aslr_reference = aslr_reference;
                 }
@@ -831,7 +902,7 @@ impl AppServer {
 
     /// Store the hot reload changes for any future clients that connect
     fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        let applied = &mut self.applied_hot_reload_message;
+        let applied = &mut self.applied_client_hot_reload_message;
 
         // Merge the assets, unknown files, and templates
         // We keep the newer change if there is both a old and new change
@@ -977,6 +1048,15 @@ impl AppServer {
         let mut watched_crates = self.local_dependencies(crate_package);
         watched_crates.push(crate_dir);
 
+        // Watch the `public` directory if this is the client crate
+        if self.client.build.crate_package == crate_package {
+            if let Some(public_dir) = self.client.build.user_public_dir() {
+                if public_dir.exists() {
+                    watched_paths.push(public_dir);
+                }
+            }
+        }
+
         // Now, watch all the folders in the crates, but respecting their respective ignore files
         for krate_root in watched_crates {
             // Build the ignore builder for this crate, but with our default ignore list as well
@@ -1103,10 +1183,10 @@ impl AppServer {
         }
 
         match build {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 _ = self.client.open_debugger(dev).await;
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     _ = server.open_debugger(dev).await;
                 }

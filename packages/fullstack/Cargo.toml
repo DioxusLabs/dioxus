@@ -3,108 +3,116 @@ name = "dioxus-fullstack"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
 edition = "2021"
-description = "Fullstack utilities for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
+description = "Library for fetching resources from servers in Dioxus apps."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-keywords = ["web", "desktop", "mobile", "gui", "server"]
+keywords = ["web", "gui", "server"]
 resolver = "2"
 
 [dependencies]
-# server functions
-server_fn = { workspace = true, default-features = false }
-dioxus_server_macro = { workspace = true }
-
-# axum
-axum = { workspace = true, optional = true }
-tower-http = { workspace = true, optional = true, features = ["fs"] }
-
-dioxus-core = { workspace = true }
-dioxus-document = { workspace = true }
-generational-box = { workspace = true }
-
-# Dioxus + SSR
-dioxus-server = { workspace = true, optional = true}
-dioxus-isrg = { workspace = true, optional = true }
-dioxus-router = { workspace = true, features = ["streaming"], optional = true }
-dioxus-fullstack-hooks = { workspace = true }
-dioxus-fullstack-protocol = { workspace = true }
-
-# Web Integration
-dioxus-web = { workspace = true, features = ["hydrate"], default-features = false, optional = true }
-dioxus-interpreter-js = { workspace = true, optional = true }
-
-# Desktop Integration
-dioxus-desktop = { workspace = true, optional = true }
-
-tracing = { workspace = true }
-tracing-futures = { workspace = true, optional = true }
-tokio-util = { workspace = true, features = ["rt"], optional = true }
-async-trait = { workspace = true, optional = true }
-
-serde = { workspace = true }
-tokio-stream = { workspace = true, features = ["sync"], optional = true }
-futures-util = { workspace = true }
+# shared for both server + client
 futures-channel = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 ciborium = { workspace = true }
 base64 = { workspace = true }
-rustls = { workspace = true, optional = true }
-hyper-rustls = { workspace = true, optional = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+dioxus-fullstack-core = { workspace = true }
+http = { workspace = true }
+anyhow = { workspace = true }
+dioxus-core = { workspace = true }
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
+dioxus-html = { workspace = true }
+dioxus-cli-config = { workspace = true }
+futures = { workspace = true, default-features = true }
+bytes = { workspace = true, features = ["serde"] }
+dioxus-fullstack-macro = { workspace = true }
+http-body-util = "0.1.3"
+futures-util = { workspace = true }
+axum-core = { workspace = true }
+send_wrapper = { features = ["futures"], workspace = true, default-features = true }
+serde_json = { workspace = true }
+pin-project = { workspace = true }
+serde_qs = { workspace = true, default-features = true}
+mime = "0.3.17"
+reqwest = { workspace = true, features = ["json", "rustls-tls", "cookies", "stream", "multipart"] }
+url = { workspace =  true }
+serde_urlencoded = { workspace = true }
+form_urlencoded = { workspace = true }
+axum = { workspace = true, default-features = false, features = ["json", "form", "query", "multipart", "query"] }
+http-body = { workspace = true }
+headers = "0.4.1"
+dioxus-asset-resolver = { workspace = true, features = ["native"] }
 
-pin-project = { version = "1.1.10", optional = true }
-thiserror = { workspace = true, optional = true }
-bytes = "1.10.1"
+const_format = { workspace = true, default-features = true }
+const-str = { workspace = true, default-features = true }
+rustversion = { workspace = true, default-features = true }
+xxhash-rust = { features = ["const_xxh64"], workspace = true, default-features = true }
+# rmp-serde = { version = "1.3", default-features = true }
+
+derive_more = { version = "2.0.1", features = ["deref", "deref_mut", "display", "from"] }
+
+
+# server deps
+axum-extra = { workspace =  true, optional = true, features = ["typed-header"] }
+inventory = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+tokio-tungstenite = { workspace = true, optional = true }
+tokio-stream = { workspace = true, features = ["sync"], optional = true }
 tower = { workspace = true, features = ["util"], optional = true }
+tower-http = { workspace = true, features = ["fs", "limit"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
-parking_lot = { workspace = true, features = ["send_guard"], optional = true }
-web-sys = { version = "0.3.77", optional = true, features = [
-  "Window",
-  "Document",
-  "Element",
-  "HtmlDocument",
-  "Storage",
-  "console",
-] }
 
-dioxus-cli-config = { workspace = true, optional = true }
+# payloads
+postcard = { features = ["alloc", "use-std"], optional = true, workspace = true, default-features = true }
+rmp-serde = { version = "1.3", optional = true }
+async-stream = "0.3.6"
 
-dioxus-devtools = { workspace = true, optional = true }
-aws-lc-rs = { version = "1.13.1", optional = true }
-dioxus-history = { workspace = true }
-http.workspace = true
+# websocket stuff
+# [target.'cfg(target_arch = "wasm32")'.dependencies]
+web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
+gloo-net = "0.6.0"
+js-sys = { workspace = true }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+wasm-streams = "0.4.2"
+content_disposition = "0.4.0"
+
+# native websocket deps
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+async-tungstenite = { version = "0.31.0", default-features = false, features = ["futures-03-sink"], optional = true }
+tungstenite = { version = "0.27", default-features = false, features = ["handshake"], optional = true }
+tokio-util = { workspace = true, features = ["codec", "compat"] }
 
 [dev-dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
-tokio = { workspace = true, features = ["full"] }
+dioxus = { workspace = true, features = ["fullstack", "router"] }
+dioxus-server = { workspace = true }
 
 [features]
-default = ["devtools", "document", "file_engine", "mounted"]
-devtools = ["dioxus-web?/devtools", "dep:dioxus-devtools"]
-mounted = ["dioxus-web?/mounted"]
-file_engine = ["dioxus-web?/file_engine"]
-document = ["dioxus-web?/document"]
-web = ["dep:dioxus-web", "dep:web-sys", "dioxus-fullstack-hooks/web", "server_fn/browser", "dioxus_server_macro/browser"]
-desktop = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
-mobile = ["server_fn/reqwest", "dioxus_server_macro/reqwest"]
-default-tls = ["server_fn/default-tls"]
-rustls = ["server_fn/rustls", "dep:rustls", "dep:hyper-rustls"]
+default = ["ws"]
+web = [
+    "dep:web-sys"
+]
+native = []
 server = [
-    "server-core" ,
-    "default-tls",
-    "server_fn/axum",
+    "dep:inventory",
+    "dep:tokio",
+    "dep:tokio-tungstenite",
+    "dep:tokio-stream",
+    "dep:async-tungstenite",
+    "dep:tungstenite",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tower-layer",
+    "dep:axum-extra",
+    "axum/ws",
+    "axum/tokio",
 ]
-server-core = [
-    "server_fn/axum-no-default",
-    "dioxus_server_macro/axum",
-    "server_fn/reqwest",
-    "server_fn/ssr",
-    "dioxus_server_macro/reqwest",
-    "dioxus-fullstack-hooks/server",
-    "dep:dioxus-server",
-    "dioxus-interpreter-js",
-]
-aws-lc-rs = ["dep:aws-lc-rs"]
+postcard = ["dep:postcard"]
+msgpack = ["dep:rmp-serde"]
+ws = ["dep:async-tungstenite", "dep:tungstenite"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
-features = ["axum", "web", "aws-lc-rs"]

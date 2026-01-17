@@ -39,7 +39,7 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
             Event::UserEvent(event) => match event {
                 UserWindowEvent::Poll(id) => app.poll_vdom(id),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
-                UserWindowEvent::CloseWindow(id) => app.handle_close_msg(id),
+                UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
 
                 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -60,44 +60,37 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragDrop();");
-                            });
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            eval("window.interpreter.handleWindowsDragDrop();");
                         });
                     }
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                eval("window.interpreter.handleWindowsDragLeave();");
-                            });
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            eval("window.interpreter.handleWindowsDragLeave();");
                         });
                     }
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_runtime(|| {
-                            ScopeId::ROOT.in_runtime(|| {
-                                let e = eval(
-                                    r#"
+                        webview.dom.in_scope(ScopeId::ROOT, || {
+                            let e = eval(
+                                r#"
                                     const xPos = await dioxus.recv();
                                     const yPos = await dioxus.recv();
                                     window.interpreter.handleWindowsDragOver(xPos, yPos)
                                     "#,
-                                );
+                            );
 
-                                _ = e.send(x_pos);
-                                _ = e.send(y_pos);
-                            });
+                            _ = e.send(x_pos);
+                            _ = e.send(y_pos);
                         });
                     }
                 }
 
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
-                    IpcMethod::FileDialog => app.handle_file_dialog_msg(msg, id),
                     IpcMethod::UserEvent => {}
                     IpcMethod::Query => app.handle_query_msg(msg, id),
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
@@ -115,15 +108,24 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
 pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
     #[cfg(feature = "tokio_runtime")]
     {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(tokio::task::unconstrained(async move {
-                launch_virtual_dom_blocking(virtual_dom, desktop_config)
-            }));
+        if let std::result::Result::Ok(handle) = tokio::runtime::Handle::try_current() {
+            assert_ne!(
+                handle.runtime_flavor(),
+                tokio::runtime::RuntimeFlavor::CurrentThread,
+                "The tokio current-thread runtime does not work with dioxus event handling"
+            );
+            launch_virtual_dom_blocking(virtual_dom, desktop_config);
+        } else {
+            tokio::runtime::Builder::new_multi_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(tokio::task::unconstrained(async move {
+                    launch_virtual_dom_blocking(virtual_dom, desktop_config)
+                }));
 
-        unreachable!("The desktop launch function will never exit")
+            unreachable!("The desktop launch function will never exit")
+        }
     }
 
     #[cfg(not(feature = "tokio_runtime"))]

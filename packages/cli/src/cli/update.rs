@@ -159,7 +159,12 @@ impl SelfUpdate {
                 .extract_into(&install_dir)
                 .context("Failed to extract update")?;
 
-            let executable = install_dir.join("dx");
+            let exe = if cfg!(target_os = "windows") {
+                "dx.exe"
+            } else {
+                "dx"
+            };
+            let executable = install_dir.join(exe);
             if !executable.exists() {
                 bail!("Executable not found in {}", install_dir.display());
             }

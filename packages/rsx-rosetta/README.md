@@ -15,8 +15,8 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.6/) |
-[API Docs](https://docs.rs/rsx-rosetta/latest/rsx-rosetta) |
+[Guides](https://dioxuslabs.com/learn/0.7/) |
+[API Docs](https://docs.rs/rsx-rosetta/latest/rsx_rosetta) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview

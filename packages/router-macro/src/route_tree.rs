@@ -172,7 +172,7 @@ impl<'a> ParseRouteTree<'a> {
                         // If there is a dynamic segment, stop adding static segments
                         RouteSegment::Dynamic(..) => break,
                         RouteSegment::CatchAll(..) => {
-                            todo!("Catch all segments are not allowed in nests")
+                            unimplemented!("Catch all segments are not allowed in nests")
                         }
                     }
                 }

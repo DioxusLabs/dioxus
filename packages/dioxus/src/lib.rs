@@ -9,7 +9,7 @@
 //! - `html`: (default) exports `dioxus-html` as the default elements to use in rsx
 //! - `hooks`: (default) re-exports `dioxus-hooks`
 //! - `hot-reload`: (default) enables hot rsx reloading in all renderers that support it
-//! - `router`: exports the [router](https://dioxuslabs.com/learn/0.6/router) and enables any router features for the current platform
+//! - `router`: exports the [router](https://dioxuslabs.com/learn/0.7/essentials/router/) and enables any router features for the current platform
 //! - `third-party-renderer`: Just disables warnings about no active platform when no renderers are enabled
 //! - `logger`: Enable the default tracing subscriber for Dioxus apps
 //!
@@ -85,6 +85,9 @@ pub use dioxus_cli_config as cli_config;
 #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 pub use dioxus_server as server;
 
+#[cfg(feature = "server")]
+pub use dioxus_server::serve;
+
 #[cfg(feature = "devtools")]
 #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]
 pub use dioxus_devtools as devtools;
@@ -108,6 +111,10 @@ pub use dioxus_desktop as desktop;
 #[cfg(feature = "mobile")]
 #[cfg_attr(docsrs, doc(cfg(feature = "mobile")))]
 pub use dioxus_desktop as mobile;
+
+#[cfg(feature = "native")]
+#[cfg_attr(docsrs, doc(cfg(feature = "native")))]
+pub use dioxus_native as native;
 
 #[cfg(feature = "liveview")]
 #[cfg_attr(docsrs, doc(cfg(feature = "liveview")))]
@@ -138,7 +145,7 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     #[doc(inline)]
-    pub use dioxus_document as document;
+    pub use dioxus_document::{self as document, Meta, Stylesheet, Title};
 
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
@@ -158,10 +165,10 @@ pub mod prelude {
     #[cfg(feature = "signals")]
     #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
     #[doc(inline)]
-    pub use dioxus_signals::*;
+    pub use dioxus_signals::{self, *};
 
     #[cfg(feature = "signals")]
-    pub use dioxus_stores::{self, store, use_store, ReadStore, Store, WriteStore};
+    pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]
@@ -200,15 +207,15 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "fullstack")))]
     #[doc(inline)]
     pub use dioxus_fullstack::{
-        server, server_fn, use_server_cached, use_server_future, ServerFnError, ServerFnResult,
+        self as dioxus_fullstack, delete, get, patch, post, put, server, use_loader,
+        use_server_cached, use_server_future, HttpError, OrHttpError, ServerFnError,
+        ServerFnResult, StatusCode,
     };
 
     #[cfg(feature = "server")]
     #[cfg_attr(docsrs, doc(cfg(feature = "server")))]
     #[doc(inline)]
-    pub use dioxus_server::{
-        extract, DioxusRouterExt, DioxusRouterFnExt, FromContext, ServeConfig,
-    };
+    pub use dioxus_server::{self, serve, DioxusRouterExt, ServeConfig, ServerFunction};
 
     #[cfg(feature = "router")]
     #[cfg_attr(docsrs, doc(cfg(feature = "router")))]
@@ -233,9 +240,12 @@ pub mod prelude {
 
     #[doc(inline)]
     pub use dioxus_core::{
-        consume_context, provide_context, spawn, suspend, try_consume_context, use_hook, Attribute,
-        Callback, Component, Context, Element, ErrorBoundary, ErrorContext, Event, EventHandler,
-        Fragment, HasAttributes, IntoDynNode, RenderError, ScopeId, SuspenseBoundary,
-        SuspenseContext, SuspenseExtension, VNode, VirtualDom,
+        consume_context, provide_context, spawn, suspend, try_consume_context, use_drop, use_hook,
+        AnyhowContext, Attribute, Callback, Component, Element, ErrorBoundary, ErrorContext, Event,
+        EventHandler, Fragment, HasAttributes, IntoDynNode, RenderError, Result, ScopeId,
+        SuspenseBoundary, SuspenseContext, VNode, VirtualDom,
     };
+
+    #[cfg(feature = "logger")]
+    pub use dioxus_logger::tracing::{debug, error, info, trace, warn};
 }

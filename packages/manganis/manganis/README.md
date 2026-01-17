@@ -11,6 +11,14 @@ const AVIF_ASSET: Asset = manganis::asset!("/assets/image.png");
 
 AVIF_ASSET will be set to a new file name that will be served by some CLI. That file can be collected by any package that depends on the component library.
 
+If you have assets that may not always be bundled, you can fall back gracefully with `option_asset!`:
+
+```rust
+use manganis::{Asset, asset, option_asset};
+const REQUIRED: Asset = asset!("/assets/style.css");
+const OPTIONAL: Option<Asset> = option_asset!("/assets/missing.css");
+```
+
 ```rust
 use manganis::{ImageFormat, Asset, asset, ImageSize, AssetOptions};
 // You can collect arbitrary files. Absolute paths are resolved relative to the package root

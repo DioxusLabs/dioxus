@@ -14,7 +14,7 @@ use futures_util::{pin_mut, FutureExt};
 use std::ops::{Deref, DerefMut};
 use std::sync::LazyLock;
 use std::task::{Context as TaskContext, Waker};
-use std::{any::Any, collections::HashMap, rc::Rc};
+use std::{any::Any, rc::Rc};
 
 fn wrap_event_data<T: Any>(value: T) -> Rc<dyn Any> {
     Rc::new(PlatformEventData::new(Box::new(value)))
@@ -262,7 +262,7 @@ impl EventHandler for DioxusEventHandler<'_> {
 
             DomEventData::Input(data) => Some(wrap_event_data(NativeFormData {
                 value: data.value.clone(),
-                values: HashMap::new(),
+                values: vec![],
             })),
 
             // TODO: Implement IME handling
@@ -277,7 +277,7 @@ impl EventHandler for DioxusEventHandler<'_> {
             // Get dioxus vdom id for node
             let dioxus_id = mutr.doc.get_node(node_id).and_then(get_dioxus_id);
             let Some(id) = dioxus_id else {
-                return;
+                continue;
             };
 
             // Handle event in vdom

@@ -290,24 +290,7 @@ impl HotpatchModuleCache {
     }
 }
 
-/// Create a jump table for the given original and patch files.
-pub fn create_jump_table(
-    patch: &Path,
-    triple: &Triple,
-    cache: &HotpatchModuleCache,
-) -> Result<JumpTable> {
-    // Symbols are stored differently based on the platform, so we need to handle them differently.
-    // - Wasm requires the walrus crate and actually modifies the patch file
-    // - windows requires the pdb crate and pdb files
-    // - nix requires the object crate
-    match triple.operating_system {
-        OperatingSystem::Windows => create_windows_jump_table(patch, cache),
-        _ if triple.architecture == Architecture::Wasm32 => create_wasm_jump_table(patch, cache),
-        _ => create_native_jump_table(patch, triple, cache),
-    }
-}
-
-fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     use pdb::FallibleIterator;
     let old_name_to_addr = &cache.symbol_table;
 
@@ -361,7 +344,7 @@ fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resul
 ///
 /// This does not work for WASM since the `object` crate does not support emitting the WASM format,
 /// and because WASM requires more logic to handle the wasm-bindgen transformations.
-fn create_native_jump_table(
+pub fn create_native_jump_table(
     patch: &Path,
     triple: &Triple,
     cache: &HotpatchModuleCache,
@@ -416,7 +399,7 @@ fn create_native_jump_table(
 /// to manually satisfy them here, removing their need to be imported.
 ///
 /// <https://github.com/WebAssembly/tool-conventions/blob/main/DynamicLinking.md>
-fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
+pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<JumpTable> {
     let name_to_ifunc_old = &cache.symbol_ifunc_map;
     let old = &cache.old_wasm;
     let old_symbols =
@@ -485,7 +468,7 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     // `relocation-model=pic` synthesizes can reference the functions via the indirect function table
     // even if they are not normally synthesized in regular wasm code generation.
     //
-    // Normally, the dynaic linker setup would resolve GOT.func against the same GOT.func export in
+    // Normally, the dynamic linker setup would resolve GOT.func against the same GOT.func export in
     // the main module, but we don't have that. Instead, we simply re-parse the main module, aggregate
     // its ifunc table, and then resolve directly to the index in that table.
     for (import_id, ifunc_index) in got_funcs {
@@ -601,19 +584,23 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
 
         if let Some(table_idx) = name_to_ifunc_old.get(import.name.as_str()) {
             new.imports.delete(env_func_import);
-            convert_import_to_ifunc_call(
+            convert_func_to_ifunc_call(
                 &mut new,
                 ifunc_table_initializer,
                 func_id,
                 *table_idx,
                 name.clone(),
             );
+            continue;
         }
 
         if name_is_bindgen_symbol(&name) {
             new.imports.delete(env_func_import);
-            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            continue;
         }
+
+        tracing::warn!("[hotpatching]: Symbol slipped through the cracks: {}", name);
     }
 
     // Wire up the preserved intrinsic functions that we saved before running wasm-bindgen to the expected
@@ -630,7 +617,34 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
         if name_is_bindgen_symbol(&import.name) {
             let name = import.name.as_str().to_string();
             new.imports.delete(import_id);
-            convert_import_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, 0, name);
+        }
+    }
+
+    // Rewrite the wbg_cast functions to call the indirect functions from the original module.
+    // This is necessary because wasm-bindgen uses these calls to perform dynamic type casting through
+    // the JS layer. If we don't rewrite these, they end up as calls to `breaks_if_inlined` functions
+    // which are no-ops and get rewritten by the wbindgen post-processing step.
+    //
+    // Here, we find the corresponding wbg_cast function in the old module by name and then rewrite
+    // the patch module's cast function to call the indirect function from the original module.
+    //
+    // See the wbg_cast implementation in wasm-bindgen for more details:
+    // <https://github.com/wasm-bindgen/wasm-bindgen/blob/f61a588f674304964a2062b2307edb304aed4d16/src/rt/mod.rs#L30>
+    let new_func_ids = new.funcs.iter().map(|f| f.id()).collect::<Vec<_>>();
+    for func_id in new_func_ids {
+        let Some(name) = new.funcs.get(func_id).name.as_deref() else {
+            continue;
+        };
+
+        if name.contains("wasm_bindgen4__rt8wbg_cast") && !name.contains("breaks_if_inline") {
+            let name = name.to_string();
+            let old_idx = name_to_ifunc_old
+                    .get(&name)
+                    .copied()
+                    .ok_or_else(|| anyhow::anyhow!("Could not find matching wbg_cast function for [{name}] - must generate new JS bindings."))?;
+
+            convert_func_to_ifunc_call(&mut new, ifunc_table_initializer, func_id, old_idx, name);
         }
     }
 
@@ -659,8 +673,10 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     let ifunc_count = name_to_ifunc_new.len() as u64;
     let mut map = AddressMap::default();
     for (name, idx) in name_to_ifunc_new.iter() {
+        // Find the corresponding ifunc in the old module by name
         if let Some(old_idx) = name_to_ifunc_old.get(*name) {
             map.insert(*old_idx as u64, *idx as u64);
+            continue;
         }
     }
 
@@ -673,7 +689,7 @@ fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Result<J
     })
 }
 
-fn convert_import_to_ifunc_call(
+fn convert_func_to_ifunc_call(
     new: &mut Module,
     ifunc_table_initializer: TableId,
     func_id: FunctionId,
@@ -1191,6 +1207,8 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         })
         .collect::<HashMap<_, _>>();
 
+    let mut exported = HashSet::new();
+
     // Wasm-bindgen will synthesize imports to satisfy its external calls. This facilitates things
     // like inline-js, snippets, and literally the `#[wasm_bindgen]` macro. All calls to JS are
     // just `extern "wbg"` blocks!
@@ -1227,9 +1245,10 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let new_func_id = module.funcs.add_local(builder.local_func(locals));
 
-            module
-                .exports
-                .add(&format!("__saved_wbg_{}", import.name), new_func_id);
+            let saved_name = format!("__saved_wbg_{}", import.name);
+            if exported.insert(saved_name.clone()) {
+                module.exports.add(&saved_name, new_func_id);
+            }
 
             make_indirect.push(new_func_id);
         }
@@ -1254,9 +1273,10 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         //
         // https://github.com/rustwasm/wasm-bindgen/blob/c35cc9369d5e0dc418986f7811a0dd702fb33ef9/crates/cli-support/src/wit/mod.rs#L1505
         if name.starts_with("__wbindgen") {
-            module
-                .exports
-                .add(&format!("__saved_wbg_{name}"), func.id());
+            let saved_name = format!("__saved_wbg_{}", name);
+            if exported.insert(saved_name.clone()) {
+                module.exports.add(&saved_name, func.id());
+            }
         }
 
         // This is basically `--export-all` but designed to work around wasm-bindgen not properly gc-ing
@@ -1383,10 +1403,6 @@ fn parse_bytes_to_data_segment(bytes: &[u8]) -> Result<RawDataSection<'_>> {
         };
 
         data_symbol_map.insert(*name, index);
-
-        if symbol.size == 0 {
-            continue;
-        }
 
         let data_segment = segments
             .get(symbol.index as usize)

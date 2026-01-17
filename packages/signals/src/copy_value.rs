@@ -1,8 +1,8 @@
 #![allow(clippy::unnecessary_operation)]
 #![allow(clippy::no_effect)]
 
-use dioxus_core::Subscribers;
 use dioxus_core::{current_owner, current_scope_id, ScopeId};
+use dioxus_core::{Runtime, Subscribers};
 use generational_box::{
     AnyStorage, BorrowResult, GenerationalBox, GenerationalBoxId, Storage, UnsyncStorage,
 };
@@ -82,7 +82,7 @@ impl<T, S: Storage<T>> CopyValue<T, S> {
     {
         Self {
             value: GenerationalBox::leak(value, caller),
-            origin_scope: current_scope_id().expect("in a virtual dom"),
+            origin_scope: current_scope_id(),
         }
     }
 
@@ -99,7 +99,7 @@ impl<T, S: Storage<T>> CopyValue<T, S> {
 
         Self {
             value: owner.insert_rc_with_caller(value, caller),
-            origin_scope: current_scope_id().expect("in a virtual dom"),
+            origin_scope: current_scope_id(),
         }
     }
 
@@ -116,8 +116,7 @@ impl<T, S: Storage<T>> CopyValue<T, S> {
         scope: ScopeId,
         caller: &'static std::panic::Location<'static>,
     ) -> Self {
-        let owner = scope.owner();
-
+        let owner = Runtime::current().scope_owner(scope);
         Self {
             value: owner.insert_rc_with_caller(value, caller),
             origin_scope: scope,

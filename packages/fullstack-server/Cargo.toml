@@ -1,0 +1,105 @@
+[package]
+name = "dioxus-server"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+version = { workspace = true }
+edition = "2021"
+description = "Fullstack utilities for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["web", "desktop", "mobile", "gui", "server"]
+resolver = "2"
+
+[dependencies]
+
+# Dioxus + SSR
+subsecond = { workspace =  true }
+dioxus-cli-config = { workspace = true }
+dioxus-devtools = { workspace = true, features = ["serve"] }
+dioxus-history = { workspace = true }
+dioxus-signals = { workspace = true }
+dioxus-hooks = { workspace = true }
+dioxus-logger = { workspace = true }
+dioxus-router = { workspace = true, features = ["streaming"], optional = true }
+dioxus-fullstack-core = { workspace = true, features = ["server"] }
+dioxus-core = { workspace = true }
+dioxus-core-macro = { workspace = true }
+dioxus-document = { workspace = true }
+dioxus-html = { workspace = true }
+generational-box = { workspace = true }
+
+
+axum = { workspace = true, features = ["multipart", "ws", "json", "form", "tokio", "http1", "http2", "macros"]}
+anyhow = { workspace = true }
+dashmap = "6.1.0"
+inventory = { workspace = true }
+dioxus-ssr = { workspace = true }
+
+hyper-util = { workspace = true, features = ["full"] }
+hyper = { workspace = true }
+
+# Web Integration
+dioxus-interpreter-js = { workspace = true }
+
+tracing = { workspace = true }
+tracing-futures = { workspace = true }
+tokio-util = { workspace = true, features = ["rt"] }
+async-trait = { workspace = true }
+
+serde = { workspace = true }
+futures-util = { workspace = true }
+futures-channel = { workspace = true }
+ciborium = { workspace = true }
+base64 = { workspace = true }
+rustls = { workspace = true, optional = true }
+hyper-rustls = { workspace = true, optional = true }
+
+url = { workspace = true, default-features = true }
+serde_json = { workspace = true }
+
+serde_qs = { workspace = true, default-features = true }
+multer = { optional = true, workspace = true, default-features = true }
+rkyv = { optional = true,  default-features = true, version = "0.8" }
+
+futures = { workspace = true, default-features = true }
+pin-project = { workspace = true }
+thiserror = { workspace = true }
+bytes = {version = "1.10.1", features = ["serde"]}
+tower-http = { workspace = true, features = ["fs"] }
+tower = { workspace = true, features = ["util"] }
+tower-layer = { version = "0.3.3", optional = true }
+parking_lot = { workspace = true, features = ["send_guard"] }
+
+tokio-tungstenite = { workspace = true }
+http.workspace = true
+enumset = "1.1.6"
+http-body-util = "0.1.3"
+
+chrono = { workspace = true }
+rustc-hash = { workspace = true }
+lru  = { workspace = true }
+walkdir = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt", "sync", "rt-multi-thread", "macros", "net"] }
+
+[dev-dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+tokio = { workspace = true, features = ["full"] }
+
+[features]
+default = ["router", "document"]
+document = []
+router = ["dep:dioxus-router"]
+default-tls = []
+rustls = ["dep:rustls", "dep:hyper-rustls"]
+axum-no-default = []
+rkyv = ["dep:rkyv"]
+server = []
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+features = ["axum", "web", "aws-lc-rs"]

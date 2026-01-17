@@ -33,7 +33,7 @@ use super::AppServer;
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 90;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
-const VIEWPORT_HEIGHT_BIG: u16 = 13;
+const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
 /// The TUI that drives the console output.
 ///
@@ -268,12 +268,12 @@ impl Output {
             }
             KeyCode::Char('D') => {
                 return Ok(Some(ServeUpdate::OpenDebugger {
-                    id: BuildId::SERVER,
+                    id: BuildId::SECONDARY,
                 }));
             }
             KeyCode::Char('d') => {
                 return Ok(Some(ServeUpdate::OpenDebugger {
-                    id: BuildId::CLIENT,
+                    id: BuildId::PRIMARY,
                 }));
             }
             KeyCode::Char('c') => {
@@ -337,7 +337,43 @@ impl Output {
     /// This will queue the stderr message as a TraceMsg and print it on the next render
     /// We'll use the `App` TraceSrc for the msg, and whatever level is provided
     pub fn push_stdio(&mut self, bundle: BundleFormat, msg: String, level: Level) {
-        self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
+        match bundle {
+            // If tracing is disabled, we need to filter out all the noise from Android logcat
+            BundleFormat::Android if !self.trace => {
+                // By default (trace off): only show RustStdoutStderr logs with proper log levels
+                // Filter out raw output like GL bindings, WebView internals, etc.
+                let is_rust_log = msg.contains("RustStdoutStderr");
+                let is_fatal = msg.contains("AndroidRuntime") || msg.starts_with('F');
+                let mut rendered_msg = None;
+
+                // If we're not in trace mode, then we need to filter out non-log messages and clean them up
+                // Only show logs with standard tracing level prefixes (check in the message after the colon)
+                if is_rust_log {
+                    if let Some(colon_pos) = msg.find(':') {
+                        let content = &msg[colon_pos + 1..];
+                        if content.contains(" TRACE ")
+                            || content.contains(" DEBUG ")
+                            || content.contains(" INFO ")
+                            || content.contains(" WARN ")
+                            || content.contains(" ERROR ")
+                        {
+                            rendered_msg = Some(content.trim().to_string());
+                        }
+                    }
+                }
+
+                // Always show fatal errors, even if they don't come from Rust logging
+                if is_fatal {
+                    rendered_msg = Some(msg);
+                }
+
+                if let Some(msg) = rendered_msg {
+                    self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg));
+                }
+            }
+
+            _ => self.push_log(TraceMsg::text(TraceSrc::App(bundle), level, msg)),
+        }
     }
 
     /// Push a message from the websocket to the logs
@@ -709,7 +745,7 @@ impl Output {
     fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         frame.render_widget(
             Paragraph::new(Line::from({
-                let mut lines = vec!["App features: ".gray(), "[".yellow()];
+                let mut lines = vec!["Features: ".gray(), "[".yellow()];
 
                 let feature_list: Vec<String> = state.runner.client().build.all_target_features();
                 let num_features = feature_list.len();
@@ -813,11 +849,12 @@ impl Output {
             "o: open the app",
             "p: pause rebuilds",
             "v: toggle verbose logs",
-            "t: toggle tracing logs ",
+            "t: toggle tracing logs",
             "c: clear the screen",
+            "d: attach debugger",
             "/: toggle more commands",
         ];
-        let layout: [_; 8] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
+        let layout: [_; 9] = Layout::vertical(cmds.iter().map(|_| Constraint::Length(1)))
             .horizontal_margin(1)
             .areas(col2);
         for (idx, cmd) in cmds.iter().enumerate() {

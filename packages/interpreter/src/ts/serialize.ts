@@ -1,11 +1,13 @@
-// Handle serialization of the event data across the IPC boundarytype SerializedEvent = {};
-
-import { retrieveSelectValue, retrieveValues } from "./form";
+// Handle serialization of the event data across the IPC boundary
+//
+// Note that for files, we don't serialize their contents, expecting the renderer itself to handle
+// reading the file contents if needed. Reading files is an async operation, and should be done lazily
+// if the app needs it.
 
 export type AppTouchEvent = TouchEvent;
 
 export type SerializedEvent = {
-  values?: { [key: string]: FormDataEntryValue[] };
+  values?: SerializedFormObject[];
   value?: string;
   [key: string]: any;
 };
@@ -17,7 +19,7 @@ export function serializeEvent(
   let contents = {};
 
   // merge the object into the contents
-  let extend = (obj: any) => (contents = { ...contents, ...obj });
+  let extend = (obj: SerializedEvent) => (contents = { ...contents, ...obj });
 
   if (event instanceof WheelEvent) {
     extend(serializeWheelEvent(event));
@@ -84,25 +86,23 @@ export function serializeEvent(
 
   // If there's any files, we need to serialize them
   if (event instanceof DragEvent) {
-    // let files: { [key: string]: Uint8Array } = {};
-    // if (event.dataTransfer && event.dataTransfer.files) {
-    //   files["a"] = new Uint8Array(0);
-    //   // files = {
-    //   //   entries: Array.from(event.dataTransfer.files).map((file) => {
-    //   //     return {
-    //   //       name: file.name,
-    //   //       type: file.type,
-    //   //       size: file.size,
-    //   //       last_modified: file.lastModified,
-    //   //     };
-    //   //   }
-    //   // };
-    //   // files = await serializeFileList(event.dataTransfer.files);
-    // }
-    // extend({ files: files });
+    let files: SerializedFormObject[] = [];
+    if (event.dataTransfer && event.dataTransfer.files) {
+      for (let i = 0; i < event.dataTransfer.files.length; i++) {
+        let file = event.dataTransfer.files[i];
+        let data: SerializedFileData = {
+          path: file.name,
+          size: file.size,
+          last_modified: file.lastModified,
+          content_type: file.type,
+        }
+        files.push({ key: file.name, file: data });
+      }
+    }
+    extend({ files });
   }
 
-  if (event.type === "scroll") {
+  if (event.type === "scroll" || event.type === "scrollend") {
     extend(serializeScrollEvent(event));
   }
 
@@ -173,7 +173,7 @@ function serializeInputEvent(
 
   // Attempt to retrieve the values from the form
   if (target instanceof HTMLElement) {
-    let values = retrieveValues(event, target);
+    let values = extractSerializedFormValues(event, target);
     contents.values = values.values;
     contents.valid = values.valid;
   }
@@ -321,17 +321,42 @@ function serializeAnimationEvent(event: AnimationEvent): SerializedEvent {
 }
 
 function serializeDragEvent(event: DragEvent): SerializedEvent {
-  let files = undefined;
-  // On desktop if there is file data, we insert it from wry. We just add a placeholder to let the rust side of dioxus know there's files
-  if (
-    event.dataTransfer &&
-    event.dataTransfer.files &&
-    event.dataTransfer.files.length > 0
-  ) {
-    files = {
-      files: { placeholder: [] },
-    };
+  let data_transfer = event.dataTransfer || new DataTransfer();
+  let items = [];
+  let files = [];
+  let effect_allowed = data_transfer.effectAllowed;
+  let drop_effect = data_transfer.dropEffect;
+
+  for (let i = 0; i < data_transfer.items.length; i++) {
+    let item = data_transfer.items[i];
+    let data;
+    if (item.kind === "string") {
+      // we can only get the data if we do this synchronously
+      // which is a bit sad, but oh well.
+      data = data_transfer.getData(item.type);
+    } else {
+      data = item.getAsFile()?.name || "";
+    }
+
+    items.push({
+      kind: item.kind,
+      type_: item.type,
+      data
+    });
   }
+
+  for (let i = 0; i < data_transfer.files.length; i++) {
+    let file = data_transfer.files[i];
+    files.push({
+      name: file.name,
+      path: file.name,
+      size: file.size,
+      last_modified: file.lastModified,
+      content_type: file.type,
+      contents: undefined, // we don't serialize contents here
+    });
+  }
+
   return {
     mouse: {
       alt_key: event.altKey,
@@ -340,7 +365,12 @@ function serializeDragEvent(event: DragEvent): SerializedEvent {
       shift_key: event.shiftKey,
       ...serializeMouseEvent(event),
     },
-    files,
+    data_transfer: {
+      items,
+      files,
+      effect_allowed,
+      drop_effect,
+    },
   };
 }
 
@@ -377,3 +407,87 @@ function serializeScrollEvent(event: Event): SerializedEvent {
     client_height: clientHeight,
   };
 }
+
+
+export type SerializedFormData = {
+  valid?: boolean;
+  values: SerializedFormObject[];
+}
+
+export type SerializedFormObject = {
+  key: string;
+  text?: string;
+  file?: SerializedFileData;
+}
+export type SerializedFileData = {
+  // we store the real path of the file as the name.
+  // This makes it possible to simply read the file during event handling
+  path: string;
+  size?: number;
+  last_modified?: number;
+  content_type?: string;
+  contents?: string; // base64 encoded, if present. not required to br present
+};
+
+export function extractSerializedFormValues(event: Event, target: HTMLElement): SerializedFormData {
+  let contents: SerializedFormData = {
+    values: []
+  };
+
+  // If there's a form...
+  let form = target.closest("form");
+
+  // If the target is an input, and the event is input or change, we want to get the value without going through the form
+  if (form) {
+    if (
+      event.type === "input"
+      || event.type === "change"
+      || event.type === "submit"
+      || event.type === "reset"
+      || event.type === "click"
+    ) {
+      contents = retrieveFormValues(form);
+    }
+  }
+
+  return contents;
+}
+
+// todo: maybe encode spaces or something?
+// We encode select multiple as a comma separated list which breaks... when there's commas in the values
+function retrieveFormValues(form: HTMLFormElement): SerializedFormData {
+  const formData = new FormData(form);
+  const contents: SerializedFormObject[] = [];
+
+  formData.forEach((value, key) => {
+    if (value instanceof File) {
+      let fileData: SerializedFileData = {
+        path: value.name,
+        size: value.size,
+        last_modified: value.lastModified,
+        content_type: value.type,
+      };
+      contents.push({ key, file: fileData });
+    } else {
+      contents.push({ key, text: value });
+    }
+  });
+
+  return {
+    valid: form.checkValidity(),
+    values: contents
+  };
+}
+
+export function retrieveSelectValue(target: HTMLSelectElement): string[] {
+  // there might be multiple...
+  let options = target.selectedOptions;
+  let values = [];
+  for (let i = 0; i < options.length; i++) {
+    values.push(options[i].value);
+  }
+  return values;
+}
+
+export type SerializedDataTransfer = {}
+export type SerializedDataTransferItem = {}

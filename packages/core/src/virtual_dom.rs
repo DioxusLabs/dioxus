@@ -2,7 +2,6 @@
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
-use crate::innerlude::Work;
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
@@ -12,6 +11,7 @@ use crate::{
     scopes::ScopeId,
     ComponentFunction, Element, Mutations,
 };
+use crate::{innerlude::Work, scopes::LastRenderedNode};
 use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
@@ -351,6 +351,11 @@ impl VirtualDom {
         f()
     }
 
+    /// Run a closure inside a specific scope
+    pub fn in_scope<T>(&self, scope: ScopeId, f: impl FnOnce() -> T) -> T {
+        self.runtime.in_scope(scope, f)
+    }
+
     /// Build the virtualdom with a global context inserted into the base scope
     ///
     /// This is useful for what is essentially dependency injection when building the app
@@ -388,7 +393,7 @@ impl VirtualDom {
     ///
     /// Whenever the Runtime "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        let Some(scope) = self.runtime.get_state(id) else {
+        let Some(scope) = self.runtime.try_get_state(id) else {
             return;
         };
 
@@ -403,7 +408,7 @@ impl VirtualDom {
         let Some(scope) = self.runtime.task_scope(task) else {
             return;
         };
-        let Some(scope) = self.runtime.get_state(scope) else {
+        let Some(scope) = self.runtime.try_get_state(scope) else {
             return;
         };
 
@@ -578,6 +583,8 @@ impl VirtualDom {
             .clone()
             .while_rendering(|| self.run_scope(ScopeId::ROOT));
 
+        let new_nodes = LastRenderedNode::new(new_nodes);
+
         self.scopes[ScopeId::ROOT.0].last_rendered_node = Some(new_nodes.clone());
 
         // Rebuilding implies we append the created elements to the root
@@ -633,7 +640,9 @@ impl VirtualDom {
     #[instrument(skip(self), level = "trace", name = "VirtualDom::wait_for_suspense")]
     pub async fn wait_for_suspense(&mut self) {
         loop {
-            if !self.suspended_tasks_remaining() {
+            self.queue_events();
+
+            if !self.suspended_tasks_remaining() && !self.has_dirty_scopes() {
                 break;
             }
 
@@ -711,7 +720,7 @@ impl VirtualDom {
                     let scope_id: ScopeId = scope.id;
                     let run_scope = self
                         .runtime
-                        .get_state(scope.id)
+                        .try_get_state(scope.id)
                         .filter(|scope| scope.should_run_during_suspense())
                         .is_some();
                     if run_scope {
@@ -729,9 +738,11 @@ impl VirtualDom {
                     }
                 }
             }
+
             // Queue any new events
             self.queue_events();
             work_done += 1;
+
             // Once we have polled a few tasks, we manually yield to the scheduler to give it a chance to run other pending work
             if work_done > 32 {
                 yield_now().await;
@@ -740,7 +751,7 @@ impl VirtualDom {
         }
 
         self.resolved_scopes
-            .sort_by_key(|&id| self.runtime.get_state(id).unwrap().height);
+            .sort_by_key(|&id| self.runtime.get_state(id).height);
         std::mem::take(&mut self.resolved_scopes)
     }
 

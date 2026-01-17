@@ -7,7 +7,7 @@ authors = ["Jonathan Kelley"]
 description = "Wire format for the Dioxus CLI"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/"
+homepage = "https://dioxuslabs.com/learn/0.7/"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.79.0"
 
@@ -15,3 +15,5 @@ rust-version = "1.79.0"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 cargo_metadata = { workspace = true }
+manganis-core = { workspace = true }
+subsecond-types = { workspace = true }

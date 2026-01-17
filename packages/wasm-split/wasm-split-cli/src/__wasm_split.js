@@ -7,7 +7,7 @@ export function makeLoad(url, deps, fusedImports, initIt) {
     if (alreadyLoaded) return;
     try {
       const response = await fetch(url);
-      const initSync = initIt || window.__wasm_split_main_initSync;
+      const initSync = initIt || globalThis.__wasm_split_main_initSync;
       const mainExports = initSync(undefined, undefined);
 
       let imports = {

@@ -75,10 +75,10 @@ pub trait HasPointerData: PointerInteraction {
     fn pointer_id(&self) -> i32;
 
     /// Gets the width (magnitude on the X axis), in CSS pixels, of the contact geometry of the pointer.
-    fn width(&self) -> i32;
+    fn width(&self) -> f64;
 
     /// Gets the height (magnitude on the Y axis), in CSS pixels, of the contact geometry of the pointer.
-    fn height(&self) -> i32;
+    fn height(&self) -> f64;
 
     /// Gets the normalized pressure of the pointer input in the range of 0 to 1,
     fn pressure(&self) -> f32;
@@ -136,6 +136,9 @@ impl_event![
 
     /// pointerout
     onpointerout
+
+    /// auxclick
+    onauxclick
 ];
 
 impl PointerData {
@@ -145,12 +148,12 @@ impl PointerData {
     }
 
     /// Gets the width (magnitude on the X axis), in CSS pixels, of the contact geometry of the pointer.
-    pub fn width(&self) -> i32 {
+    pub fn width(&self) -> f64 {
         self.inner.width()
     }
 
     /// Gets the height (magnitude on the Y axis), in CSS pixels, of the contact geometry of the pointer.
-    pub fn height(&self) -> i32 {
+    pub fn height(&self) -> f64 {
         self.inner.height()
     }
 
@@ -238,10 +241,10 @@ pub struct SerializedPointerData {
     pointer_id: i32,
 
     /// The width (magnitude on the X axis), in CSS pixels, of the contact geometry of the pointer.
-    width: i32,
+    width: f64,
 
     /// The height (magnitude on the Y axis), in CSS pixels, of the contact geometry of the pointer.
-    height: i32,
+    height: f64,
 
     /// The normalized pressure of the pointer input in the range of 0 to 1,
     pressure: f32,
@@ -271,11 +274,11 @@ impl HasPointerData for SerializedPointerData {
         self.pointer_id
     }
 
-    fn width(&self) -> i32 {
+    fn width(&self) -> f64 {
         self.width
     }
 
-    fn height(&self) -> i32 {
+    fn height(&self) -> f64 {
         self.height
     }
 

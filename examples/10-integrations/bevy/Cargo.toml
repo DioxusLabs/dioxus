@@ -1,0 +1,16 @@
+[package]
+name = "bevy-example"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
+
+[dependencies]
+bevy = { workspace = true }
+dioxus-native = { workspace = true, features = ["prelude"] }
+wgpu = { workspace = true }
+color = "0.3"
+tracing-subscriber = { workspace = true, optional = true }

@@ -115,6 +115,8 @@ impl PlatformEventData {
 pub trait HtmlEventConverter: Send + Sync {
     /// Convert a general event to an animation data event
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData;
+    /// Convert a general event to a cancel data event
+    fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData;
     /// Convert a general event to a clipboard data event
     fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData;
     /// Convert a general event to a composition data event
@@ -158,6 +160,12 @@ pub trait HtmlEventConverter: Send + Sync {
 impl From<&PlatformEventData> for AnimationData {
     fn from(val: &PlatformEventData) -> Self {
         with_event_converter(|c| c.convert_animation_data(val))
+    }
+}
+
+impl From<&PlatformEventData> for CancelData {
+    fn from(val: &PlatformEventData) -> Self {
+        with_event_converter(|c| c.convert_cancel_data(val))
     }
 }
 
@@ -276,6 +284,7 @@ impl From<&PlatformEventData> for WheelData {
 }
 
 mod animation;
+mod cancel;
 mod clipboard;
 mod composition;
 mod drag;
@@ -297,6 +306,7 @@ mod visible;
 mod wheel;
 
 pub use animation::*;
+pub use cancel::*;
 pub use clipboard::*;
 pub use composition::*;
 pub use drag::*;

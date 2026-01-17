@@ -14,6 +14,7 @@ use std::{
     future::{Future, IntoFuture},
     pin::Pin,
     rc::{Rc, Weak},
+    sync::Arc,
 };
 use tao::{
     event::Event,
@@ -59,7 +60,7 @@ pub struct DesktopService {
     pub webview: WebView,
 
     /// The tao window itself
-    pub window: Window,
+    pub window: Arc<Window>,
 
     pub(crate) shared: Rc<SharedContext>,
 
@@ -85,7 +86,7 @@ impl std::ops::Deref for DesktopService {
 impl DesktopService {
     pub(crate) fn new(
         webview: WebView,
-        window: Window,
+        window: Arc<Window>,
         shared: Rc<SharedContext>,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,
@@ -354,7 +355,7 @@ fn is_main_thread() -> bool {
 /// # }
 /// ```
 pub struct PendingDesktopContext {
-    pub(crate) receiver: tokio::sync::oneshot::Receiver<DesktopContext>,
+    pub(crate) receiver: futures_channel::oneshot::Receiver<DesktopContext>,
 }
 
 impl PendingDesktopContext {
@@ -366,9 +367,7 @@ impl PendingDesktopContext {
     }
 
     /// Try to resolve the pending context into a [`DesktopContext`].
-    pub async fn try_resolve(
-        self,
-    ) -> Result<DesktopContext, tokio::sync::oneshot::error::RecvError> {
+    pub async fn try_resolve(self) -> Result<DesktopContext, futures_channel::oneshot::Canceled> {
         self.receiver.await
     }
 }

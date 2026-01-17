@@ -105,14 +105,14 @@ impl QueryEngine {
                     if (!window.{QUEUE_NAME}) {{
                         window.{QUEUE_NAME} = [];
                     }}
-    
+
                     let _request_id = {request_id};
-    
+
                     if (!window.{QUEUE_NAME}[{request_id}]) {{
                         window.{QUEUE_NAME}[{request_id}] = [];
                     }}
                     let _message_queue = window.{QUEUE_NAME}[{request_id}];
-    
+
                     {script}
                 }})().then((result)=>{{
                     let returned_value = {{
@@ -274,6 +274,7 @@ pub enum QueryError {
 #[derive(Clone, Debug, Deserialize)]
 pub(crate) struct QueryResult {
     id: usize,
+    #[serde(default)]
     data: Value,
     #[serde(default)]
     returned_value: bool,

@@ -21,10 +21,10 @@ rustversion = { workspace = true }
 slab = { workspace = true }
 slotmap = { workspace = true }
 tracing = { workspace = true }
-warnings = { workspace = true }
 futures-util = { workspace = true, default-features = false, features = ["alloc", "std"] }
 serde = { workspace = true, optional = true, features = ["derive"] }
 subsecond = { workspace = true }
+anyhow = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }

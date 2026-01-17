@@ -2,7 +2,7 @@ fn main() {
     // If any TS files change, re-run the build script
     lazy_js_bundle::LazyTypeScriptBindings::new()
         .with_watching("./src/ts")
-        .with_binding("./src/ts/common.ts", "./src/js/common.js")
+        .with_binding("./src/ts/set_attribute.ts", "./src/js/set_attribute.js")
         .with_binding("./src/ts/native.ts", "./src/js/native.js")
         .with_binding("./src/ts/core.ts", "./src/js/core.js")
         .with_binding("./src/ts/hydrate.ts", "./src/js/hydrate.js")

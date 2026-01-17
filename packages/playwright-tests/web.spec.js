@@ -156,6 +156,22 @@ test("document elements", async ({ page }) => {
   await expect(main).toHaveCSS("font-family", "Roboto");
 });
 
+test("link preload and stylesheet with same href are not deduplicated", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+
+  // Both links should exist (different rel = not deduplicated)
+  await expect(page.locator("link#dedup-preload[rel='preload']")).toHaveCount(1);
+  await expect(page.locator("link#dedup-stylesheet[rel='stylesheet']")).toHaveCount(1);
+});
+
+test("links with same href and rel are deduplicated", async ({ page }) => {
+  await page.goto("http://localhost:9990");
+
+  // Only first link should exist (same rel = deduplicated)
+  await expect(page.locator("link#dedup-first")).toHaveCount(1);
+  await expect(page.locator("link#dedup-second")).toHaveCount(0);
+});
+
 test("merge styles", async ({ page }) => {
   await page.goto("http://localhost:9990");
   // wait until the div is mounted

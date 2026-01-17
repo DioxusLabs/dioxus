@@ -1,7 +1,7 @@
 // This test is used by playwright configured in the root of the repo
 
 use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
-use dioxus::prelude::*;
+use dioxus::{logger::tracing::Level, prelude::*};
 
 fn app() -> Element {
     let mut num = use_signal(|| 0);
@@ -40,6 +40,8 @@ fn OnMounted() -> Element {
 
 #[tokio::main]
 async fn main() {
+    _ = dioxus::logger::init(Level::DEBUG);
+
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
 
     let view = dioxus_liveview::LiveViewPool::new();

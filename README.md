@@ -49,22 +49,22 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/tr-tr"> Türkçe </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
 <p align="center">
-  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.0">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
+  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0">✨ Dioxus 0.7 is out!!! ✨</a>
 </p>
 <br>
 
@@ -89,11 +89,11 @@ fn app() -> Element {
 - Built-in featureful, type-safe, fullstack web framework
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - Subsecond Rust hot-patching and asset hot-reloading
-- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.7/).
 
 ## Instant hot-reloading
 
-With one command, `dx serve` and your app is running. Edit your markup, styles, and even Rust code and see changes in milliseconds.
+With one command, `dx serve` and your app is running. Edit your markup, styles, and see changes in milliseconds. Use our experimental `dx serve --hotpatch` to update Rust code in real time.
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
@@ -101,35 +101,39 @@ With one command, `dx serve` and your app is running. Edit your markup, styles, 
   <!-- <video src="https://private-user-images.githubusercontent.com/10237910/386919031-6da371d5-3340-46da-84ff-628216851ba6.mov" width="500"></video> -->
 </div>
 
-## Productive, typesafe, fullstack web framework
+## Build Beautiful Apps
 
-Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
+Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support or load your favorite CSS library. Easily call into native code (objective-c, JNI, Web-Sys) for a perfect native touch.
 
-```rust
-fn app() -> Element {
-  let mut fortune = use_signal(|| "Fetch a fortune!");
-  rsx! {
-    h1 { "{fortune}" }
-    button {
-      onclick: move |_| async move {
-        fortune.set(fetch_fortune().await.unwrap());
-      }
-    }
-  }
-}
+<div align="center">
+  <img src="./notes/ebou2.avif">
+</div>
 
-#[server]
-async fn fetch_fortune() -> ServerFnResult<String> {
-  "Dioxus is super productive!".to_string()
-}
-```
+
+
+## Truly fullstack applications
+
+Dioxus deeply integrates with [axum](https://github.com/tokio-rs/axum) to provide powerful fullstack capabilities for both clients and servers. Pick from a wide array of built-in batteries like WebSockets, SSE, Streaming, File Upload/Download, Server-Side-Rendering, Forms, Middleware, and Hot-Reload, or go fully custom and integrate your existing axum backend.
+
+<div align="center">
+  <img src="./notes/fullstack-websockets.avif" width="700">
+</div>
+
+## Experimental Native Renderer
+
+Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/native-blitz-wgpu.webp">
+</div>
+
 
 ## First-party primitive components
 
 Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
 
 <div align="center">
-  <img src="./notes/primitive-components.avif">
+  <img src="./notes/primitive-components.avif" width="700">
 </div>
 
 ## First-class Android and iOS support
@@ -140,9 +144,11 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
   <img src="./notes/android_and_ios2.avif" width="500">
 </div>
 
+
+
 ## Bundle for web, desktop, and mobile
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/guides/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.7/tutorial/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
@@ -151,10 +157,20 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.7/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
+</div>
+
+
+## Modular and Customizable
+
+Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev). Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
+
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
 </div>
 
 ## Community
@@ -238,109 +254,27 @@ The examples in the top level of this repository can be run with:
 cargo run --example <example>
 ```
 
-However, we encourage you to download the dioxus-cli. If you are running the git version of dioxus, you can install the matching version of the CLI with:
+However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
+
+```sh
+cargo binstall dioxus-cli@0.7.0 --force
+```
+
+If this CLI is out-of-date, you can install it directly from git
 
 ```sh
 cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked
 ```
 
-With the CLI, you can also run examples with the web platform. You just need to disable the default desktop feature and enable the web feature with this command:
+With the CLI, you can also run examples with the web platform. You will need to disable the default desktop feature and enable the web feature with this command:
 
 ```sh
 dx serve --example <example> --platform web -- --no-default-features
 ```
 
-## Dioxus vs other frameworks
-
-We love all frameworks and enjoy watching innovation in the Rust ecosystem. In fact, many of our projects are shared with other frameworks. For example, our flex-box library [Taffy](https://github.com/DioxusLabs/taffy) is used by [Bevy](https://bevyengine.org/), [Zed](https://zed.dev/), [Lapce](https://lapce.dev/), [Iced](https://github.com/iced-rs/iced), and many more.
-
-Dioxus places an emphasis on a few key points that make it different from other frameworks:
-
-- **React-like**: we rely on concepts like components, props, and hooks to build UIs, with our state management being closer to Svelte than to SolidJS.
-- **HTML and CSS**: we lean completely into HTML and CSS, quirks and all.
-- **Renderer-agnostic**: you can swap out the renderer for any platform you want thanks to [our fast VirtualDOM](https://dioxuslabs.com/blog/templates-diffing).
-- **Collaborative**: whenever possible, we spin out crates like [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), and [blitz](http://github.com/dioxusLabs/blitz) so the ecosystem can grow together.
-
-### Dioxus vs Tauri
-
-Tauri is a framework for building desktop mobile apps where your frontend is written in a web-based framework like React, Vue, Svelte, etc. Whenever you need to do native work, you can write Rust functions and call them from your frontend.
-
-- **Natively Rust**: Tauri's architecture limits your UI to either JavaScript or WebAssembly. With Dioxus, your Rust code is running natively on the user's machine, letting you do things like spawning threads, accessing the filesystem, without any IPC bridge. This drastically simplifies your app's architecture and makes it easier to build. You can build a Tauri app with Dioxus-Web as a frontend if you'd like.
-
-- **Different scopes**: Tauri needs to support JavaScript and its complex build tooling, limiting the scope of what you can do with it. Since Dioxus is exclusively focused on Rust, we're able to provide extra utilities like Server Functions, advanced bundling, and a native renderer.
-
-- **Shared DNA**: While Tauri and Dioxus are separate projects, they do share libraries like Tao and Wry: windowing and webview libraries maintained by the Tauri team.
-
-### Dioxus vs Leptos
-
-Leptos is a library for building fullstack web-apps, similar to SolidJS and SolidStart. The two libraries share similar goals on the web, but have several key differences:
-
-- **Reactivity model**: Leptos uses signals to drive both reactivity and rendering, while Dioxus uses signals just for reactivity. For managing re-renders, Dioxus uses a highly optimized VirtualDOM to support desktop and mobile architectures. Both Dioxus and Leptos are extremely fast and comparable to the fastest web frameworks.
-
-- **Different scopes**: Dioxus provides renderers for web, desktop, mobile, LiveView, and more. We also maintain community libraries and a cross-platform SDK. Leptos has a tighter focus on the fullstack web with features that Dioxus doesn't have like islands, `<Form />` components, and other web-specific utilities.
-
-- **Different DSLs**: Dioxus uses its own custom Rust-like DSL for building UIs while Leptos uses an HTML-like syntax. We chose this to retain compatibility with IDE features like code-folding and syntax highlighting. Generally, Dioxus leans into more "magic" with its DSL including automatic formatting of strings and hot-reloading of simple Rust expressions.
-
-```rust
-// dioxus
-rsx! {
-  div {
-    class: "my-class",
-    enabled: true,
-    "Hello, {name}"
-  }
-}
-
-// leptos
-view! {
-  <div class="my-class" enabled={true}>
-    "Hello "
-    {name}
-  </div>
-}
-```
-
-### Dioxus vs Yew
-
-Yew is a framework for building reactive web apps that initially served as an inspiration for Dioxus. Yew is tightly integrated with the web but has limited utilities for server-side-rendering or alternative rendering engines. Dioxus was built as a redesign of Yew with a focus on cross-platform support, fantastic developer tooling, improved ergonomics, and a complete full-stack web story.
-
-- **Full-stack capabilities**: Yew was initially designed for SPAs and remains deeply integrated with the web platform. Dioxus, in contrast, was built from the ground up for fullstack and cross-platform development, enabling seamless app creation across web, desktop, mobile, and server applications.
-
-- **Developer Tooling**: Dioxus offers a richer set of built-in developer tools, such as autoformatting, hot-reloading, and an integrated bundler, helping streamline the development experience.
-
-- **Ongoing support**: Dioxus is very actively maintained, with new features and bug fixes being fixed on a daily or weekly basis.
-
-### Dioxus vs egui
-
-egui is a cross-platform GUI library for Rust powering tools like [Rerun.io](https://www.rerun.io).
-
-- **Immediate vs Retained**: egui is designed to be re-rendered on every frame. This is suitable for games and other interactive applications, but it does not retain style and layout state between frames. Dioxus is a retained UI framework, meaning that the UI is built once and then modified between frames. This enables Dioxus to use native web technologies like HTML and CSS with better battery life and performance.
-
-- **Customizable**: egui brings its own styling and layout solution while Dioxus expects you to use the built-in HTML and CSS. This enables dioxus apps to use any CSS library like Tailwind or Material UI.
-
-- **State management**: egui's state management is based on a single global state object. Dioxus encourages encapsulation of state by using components and props, making components more reusable.
-
-### Dioxus vs Iced
-
-Iced is a cross-platform GUI library inspired by Elm. Iced renders natively with WGPU and supports the web using DOM nodes.
-
-- **Elm state management**: Iced uses Elm's state management model, which is based on message passing and reducers. This is simply a different state management model than Dioxus and can be rather verbose at times.
-
-- **Native Feel**: Since Dioxus uses a webview as its renderer, it automatically gets native text input, paste handling, and other native features like accessibility. Iced's renderer currently doesn't implement these features, making it feel less native.
-
-- **WGPU**: Dioxus' WGPU renderer is currently quite immature and not yet ready for production use. Iced's WGPU renderer is much more mature and is being used in production. This enables certain types of apps that need GPU access to be built with Iced that can't currently be built with Dioxus.
-
-### Dioxus vs Electron
-
-Dioxus and Electron are two entirely different projects with similar goals. Electron makes it possible for developers to build cross-platform desktop apps using web technologies like HTML, CSS, and JavaScript.
-
-- **Lightweight**: Dioxus uses the system's native WebView - or optionally, a WGPU renderer - to render the UI. This makes a typical Dioxus app about 15mb on macOS in comparison to Electron's 100mb. Electron also ships an embedded chromium instance which cannot share system resources with the host OS in the same way as Dioxus.
-
-- **Maturity**: Electron is a mature project with a large community and a lot of tooling. Dioxus is still quite young in comparison to Electron. Expect to run into features like deep-linking that require extra work to implement.
-
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

@@ -1,4 +1,5 @@
-use const_serialize::SerializeConst;
+use const_serialize_07 as const_serialize;
+use const_serialize_08::SerializeConst;
 
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 
@@ -12,12 +13,15 @@ use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 pub struct JsAssetOptions {
     minify: bool,
     preload: bool,
+    static_head: bool,
 }
 
 impl Default for JsAssetOptions {
@@ -37,12 +41,18 @@ impl JsAssetOptions {
         Self {
             preload: false,
             minify: true,
+            static_head: false,
         }
     }
 
     /// Check if the asset is preloaded
     pub const fn preloaded(&self) -> bool {
         self.preload
+    }
+
+    /// Check if the asset is statically created
+    pub const fn static_head(&self) -> bool {
+        self.static_head
     }
 
     /// Check if the asset is minified
@@ -75,6 +85,20 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     #[allow(unused)]
     pub const fn with_minify(mut self, minify: bool) -> Self {
         self.variant.minify = minify;
+        self
+    }
+
+    /// Make the asset statically inserted (default: false)
+    ///
+    /// Statically insert the file at compile time.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_static_head(true));
+    /// ```
+    #[allow(unused)]
+    pub const fn with_static_head(mut self, static_head: bool) -> Self {
+        self.variant.static_head = static_head;
         self
     }
 

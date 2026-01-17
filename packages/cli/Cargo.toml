@@ -27,12 +27,15 @@ wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
 subsecond-types = { workspace = true }
 dioxus-cli-telemetry = { workspace =  true }
+dioxus-component-manifest = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
-serde = { workspace = true, features = ["derive"] }
+# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
+# but pinning serde fixes the issue in the meantime
+serde = { version = "=1.0.221", features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
@@ -76,13 +79,14 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
 tower = { workspace = true }
+git2 = "0.20.2"
 
 # path lookup
 which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "0.23.3"
+cargo-generate = "=0.23.3"
 toml_edit = "0.22.27"
 
 # formatting
@@ -94,6 +98,7 @@ brotli = "8.0.1"
 ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
+const-serialize-07 = { workspace = true, features = ["serde"] }
 
 tracing-subscriber = { version = "0.3.19", features = [
     "std",
@@ -105,7 +110,6 @@ tracing-subscriber = { version = "0.3.19", features = [
 console-subscriber = { version = "0.4.1", optional = true }
 humantime = "2.2.0"
 tracing = { workspace = true }
-wasm-opt = { version = "0.116.1", optional = true }
 ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }
 path-absolutize = { workspace = true }
@@ -120,6 +124,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 tempfile = "3.19.1"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
+manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 wasm-encoder = "0.235.0"
 
@@ -136,6 +141,7 @@ walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
 tauri-utils = { workspace = true }
+tauri-macos-sign = { workspace = true }
 tauri-bundler = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
@@ -162,6 +168,12 @@ fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
 nucleo = "0.5.0"
 
+# 0.5.12 rust-version is too high
+home = "=0.5.11"
+
+[target.'cfg(target_env = "musl")'.dependencies]
+git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
+
 [build-dependencies]
 built = { version = "0.8.0", features = ["git2"] }
 
@@ -184,5 +196,3 @@ pkg-fmt = "zip"
 
 [package.metadata.docs.rs]
 all-features = false
-rustc-args = ["--cfg", "docsrs"]
-rustdoc-args = ["--cfg", "docsrs"]

@@ -10,24 +10,35 @@
 //!  - `tracing`: Enables tracing support.
 
 mod assets;
+mod config;
 mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
+mod link_handler;
+
+#[cfg(feature = "prelude")]
+pub mod prelude;
 
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
-pub use anyrender_vello::{
-    wgpu_context::DeviceHandle, CustomPaintCtx, CustomPaintSource, TextureHandle,
-};
+pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
+pub use dioxus_renderer::{DioxusNativeWindowRenderer, Features, Limits};
 
-use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
+pub use dioxus_renderer::use_wgpu;
+
+pub use config::Config;
+pub use winit::dpi::{LogicalSize, PhysicalSize};
+pub use winit::window::WindowAttributes;
+
+use blitz_shell::{create_default_event_loop, BlitzShellEvent, WindowConfig};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
+use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-use winit::window::WindowAttributes;
+use std::sync::Arc;
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(app: fn() -> Element) {
@@ -70,22 +81,28 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let mut features = None;
     let mut limits = None;
     let mut window_attributes = None;
-    let mut _config = None;
+    let mut config = None;
     for mut cfg in configs {
         cfg = try_read_config!(cfg, features, Features);
         cfg = try_read_config!(cfg, limits, Limits);
         cfg = try_read_config!(cfg, window_attributes, WindowAttributes);
-        cfg = try_read_config!(cfg, _config, Config);
+        cfg = try_read_config!(cfg, config, Config);
         let _ = cfg;
     }
 
+    let mut config = config.unwrap_or_default();
+    if let Some(window_attributes) = window_attributes {
+        config.window_attributes = window_attributes;
+    }
     let event_loop = create_default_event_loop::<BlitzShellEvent>();
 
     // Turn on the runtime and enter it
+    #[cfg(feature = "net")]
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
+    #[cfg(feature = "net")]
     let _guard = rt.enter();
 
     // Setup hot-reloading if enabled.
@@ -113,19 +130,14 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         vdom.insert_any_root_context(context());
     }
 
-    #[cfg(feature = "net")]
-    let net_provider = {
-        let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
-        Some(net_provider)
-    };
-    #[cfg(not(feature = "net"))]
-    let net_provider = None;
+    let net_provider = Some(DioxusNativeNetProvider::shared(event_loop.create_proxy()));
 
     #[cfg(feature = "html")]
-    let html_parser_provider = Some(std::sync::Arc::new(blitz_html::HtmlProvider) as _);
+    let html_parser_provider = Some(Arc::new(blitz_html::HtmlProvider) as _);
     #[cfg(not(feature = "html"))]
     let html_parser_provider = None;
+
+    let navigation_provider = Some(Arc::new(DioxusNativeNavigationProvider) as _);
 
     // Create document + window from the baked virtualdom
     let doc = DioxusDocument::new(
@@ -133,14 +145,18 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         DocumentConfig {
             net_provider,
             html_parser_provider,
+            navigation_provider,
             ..Default::default()
         },
     );
+    #[cfg(not(all(target_os = "ios", target_abi = "sim")))]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    #[cfg(all(target_os = "ios", target_abi = "sim"))]
+    let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
         renderer.clone(),
-        window_attributes.unwrap_or_default(),
+        config.window_attributes,
     );
 
     // Create application

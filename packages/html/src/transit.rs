@@ -37,7 +37,7 @@ impl<'de> Deserialize<'de> for HtmlEvent {
         // in debug mode let's try and be helpful as to why the deserialization failed
         let data = deserialize_raw(&name, &data).map_err(|e| {
             serde::de::Error::custom(format!(
-                "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
+                "Failed to deserialize event data for event {}:  {}\n'{:#?}'",
                 name, e, data,
             ))
         })?;
@@ -65,6 +65,9 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
     }
 
     let data = match name {
+        // Cancel
+        "cancel" => Cancel(de(data)?),
+
         // Mouse
         "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => Mouse(de(data)?),
@@ -91,7 +94,7 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
         // Pointer
         "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
         | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
-        | "lostpointercapture" => Pointer(de(data)?),
+        | "lostpointercapture" | "auxclick" => Pointer(de(data)?),
 
         // Selection
         "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
@@ -103,7 +106,7 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
         "resize" => Resize(de(data)?),
 
         // Scroll
-        "scroll" => Scroll(de(data)?),
+        "scroll" | "scrollend" => Scroll(de(data)?),
 
         // Visible
         "visible" => Visible(de(data)?),
@@ -154,6 +157,7 @@ impl HtmlEvent {
 #[serde(untagged)]
 #[non_exhaustive]
 pub enum EventData {
+    Cancel(SerializedCancelData),
     Mouse(SerializedMouseData),
     Clipboard(SerializedClipboardData),
     Composition(SerializedCompositionData),
@@ -179,6 +183,9 @@ pub enum EventData {
 impl EventData {
     pub fn into_any(self) -> Rc<dyn Any> {
         match self {
+            EventData::Cancel(data) => {
+                Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
+            }
             EventData::Mouse(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
@@ -286,6 +293,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData {
         event
             .downcast::<SerializedAnimationData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
+    fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData {
+        event
+            .downcast::<SerializedCancelData>()
             .cloned()
             .unwrap()
             .into()

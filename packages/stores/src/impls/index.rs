@@ -1,13 +1,53 @@
+//! Additional utilities for indexing into stores.
+
 use std::{
+    collections::{BTreeMap, HashMap},
     hash::Hash,
     ops::{self, Index, IndexMut},
 };
 
-use crate::{store::Store, ReadStore};
+use crate::{scope::SelectorScope, store::Store, ReadStore};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
     WriteLock, WriteSignal,
 };
+
+/// The way a data structure index into its children based on a key. The selector must use this indexing
+/// method consistently to ensure that the same key always maps to the same child.
+pub trait IndexSelector<Idx> {
+    /// Given a selector and an index, scope the selector to the child at the given index.
+    fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &Idx) -> SelectorScope<Lens>;
+}
+
+impl<T> IndexSelector<usize> for Vec<T> {
+    fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &usize) -> SelectorScope<Lens> {
+        selector.child_unmapped(*index as _)
+    }
+}
+
+impl<T> IndexSelector<usize> for [T] {
+    fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &usize) -> SelectorScope<Lens> {
+        selector.child_unmapped(*index as _)
+    }
+}
+
+impl<K, V, I> IndexSelector<I> for HashMap<K, V>
+where
+    I: Hash,
+{
+    fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &I) -> SelectorScope<Lens> {
+        selector.hash_child_unmapped(&index)
+    }
+}
+
+impl<K, V, I> IndexSelector<I> for BTreeMap<K, V>
+where
+    I: Hash,
+{
+    fn scope_selector<Lens>(selector: SelectorScope<Lens>, index: &I) -> SelectorScope<Lens> {
+        selector.hash_child_unmapped(&index)
+    }
+}
 
 impl<Lens, T> Store<T, Lens> {
     /// Index into the store, returning a store that allows access to the item at the given index. The
@@ -23,12 +63,10 @@ impl<Lens, T> Store<T, Lens> {
     /// ```
     pub fn index<Idx>(self, index: Idx) -> Store<T::Output, IndexWrite<Idx, Lens>>
     where
-        T: IndexMut<Idx> + 'static,
-        Idx: Hash + 'static,
+        T: IndexMut<Idx> + 'static + IndexSelector<Idx>,
         Lens: Readable<Target = T> + 'static,
     {
-        self.into_selector()
-            .hash_child_unmapped(&index)
+        T::scope_selector(self.into_selector(), &index)
             .map_writer(move |write| IndexWrite { index, write })
             .into()
     }

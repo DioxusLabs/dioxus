@@ -3,7 +3,7 @@ name = "dioxus-liveview"
 version = { workspace = true }
 edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 authors = ["Jonathan Kelley", "Evan Almloff"]

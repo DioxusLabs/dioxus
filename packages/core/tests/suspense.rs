@@ -272,7 +272,7 @@ fn resolved_to_suspended() {
 
             assert_eq!(out, "rendered 1 times");
 
-            dom.in_runtime(|| ScopeId::APP.in_runtime(|| *SUSPENDED.write() = true));
+            dom.in_scope(ScopeId::APP, || *SUSPENDED.write() = true);
 
             dom.render_suspense_immediate().await;
             let out = dioxus_ssr::render(&dom);

@@ -1,9 +1,12 @@
-use std::{mem::MaybeUninit, ops::Index};
+use std::collections::{HashMap, HashSet};
+use std::{
+    mem::MaybeUninit,
+    ops::{Deref, Index},
+};
 
+use crate::{ext_methods, MappedSignal, ReadSignal};
 use dioxus_core::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
-
-use crate::{MappedSignal, ReadSignal};
 
 /// A reference to a value that can be read from.
 #[allow(type_alias_bounds)]
@@ -423,3 +426,99 @@ pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
 }
 
 impl<T, E, R> ReadableResultExt<T, E> for R where R: Readable<Target = Result<T, E>> {}
+
+/// An extension trait for [`Readable<String>`] that provides some convenience methods.
+pub trait ReadableStringExt: Readable<Target = String> {
+    ext_methods! {
+        /// Check the capacity of the string.
+        fn capacity(&self) -> usize = String::capacity;
+    }
+}
+
+impl<W> ReadableStringExt for W where W: Readable<Target = String> {}
+
+/// An extension trait for [`Readable<String>`] and [`Readable<str>`] that provides some convenience methods.
+pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
+    ext_methods! {
+        /// Check if the string is empty.
+        fn is_empty(&self) -> bool = |s: &Self::Target| s.deref().is_empty();
+
+        /// Get the length of the string.
+        fn len(&self) -> usize = |s: &Self::Target| s.deref().len();
+
+        /// Check if the string contains the given pattern.
+        fn contains(&self, pat: &str) -> bool = |s: &Self::Target, pat| s.deref().contains(pat);
+    }
+}
+
+impl<W> ReadableStrExt for W where W: Readable<Target: Deref<Target = str> + 'static> {}
+
+/// An extension trait for [`Readable<HashMap<K, V, H>>`] that provides some convenience methods.
+pub trait ReadableHashMapExt<K: 'static, V: 'static, H: 'static>:
+    Readable<Target = HashMap<K, V, H>>
+{
+    ext_methods! {
+        /// Check if the hashmap is empty.
+        fn is_empty(&self) -> bool = HashMap::is_empty;
+
+        /// Get the length of the hashmap.
+        fn len(&self) -> usize = HashMap::len;
+
+        /// Get the capacity of the hashmap.
+        fn capacity(&self) -> usize = HashMap::capacity;
+    }
+
+    /// Get the value for the given key.
+    #[track_caller]
+    fn get(&self, key: &K) -> Option<ReadableRef<'_, Self, V>>
+    where
+        K: std::hash::Hash + Eq,
+        H: std::hash::BuildHasher,
+    {
+        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.get(key))
+    }
+
+    /// Check if the hashmap contains the given key.
+    #[track_caller]
+    fn contains_key(&self, key: &K) -> bool
+    where
+        K: std::hash::Hash + Eq,
+        H: std::hash::BuildHasher,
+    {
+        self.with(|v| v.contains_key(key))
+    }
+}
+
+impl<K: 'static, V: 'static, H: 'static, R> ReadableHashMapExt<K, V, H> for R where
+    R: Readable<Target = HashMap<K, V, H>>
+{
+}
+
+/// An extension trait for [`Readable<HashSet<V, H>>`] that provides some convenience methods.
+pub trait ReadableHashSetExt<V: 'static, H: 'static>: Readable<Target = HashSet<V, H>> {
+    ext_methods! {
+        /// Check if the hashset is empty.
+        fn is_empty(&self) -> bool = HashSet::is_empty;
+
+        /// Get the length of the hashset.
+        fn len(&self) -> usize = HashSet::len;
+
+        /// Get the capacity of the hashset.
+        fn capacity(&self) -> usize = HashSet::capacity;
+    }
+
+    /// Check if the hashset contains the given value.
+    #[track_caller]
+    fn contains(&self, value: &V) -> bool
+    where
+        V: std::hash::Hash + Eq,
+        H: std::hash::BuildHasher,
+    {
+        self.with(|v| v.contains(value))
+    }
+}
+
+impl<V: 'static, H: 'static, R> ReadableHashSetExt<V, H> for R where
+    R: Readable<Target = HashSet<V, H>>
+{
+}

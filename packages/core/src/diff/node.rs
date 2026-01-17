@@ -188,10 +188,10 @@ impl VNode {
             Some((idx, Placeholder(_) | Text(_))) => {
                 ElementId(dom.get_mounted_dyn_node(mount_id, idx))
             }
-            // The node is a fragment, so we need to find the first element in the fragment
+            // The node is a fragment, so we need to find the last element in the fragment
             Some((_, Fragment(children))) => {
-                let child = children.first().unwrap();
-                child.find_first_element(dom)
+                let child = children.last().unwrap();
+                child.find_last_element(dom)
             }
             // The node is a component, so we need to find the first element in the component
             Some((id, Component(_))) => {
@@ -795,7 +795,7 @@ impl VNode {
     fn write_attrs(
         &self,
         mount: MountId,
-        dynamic_attrbiutes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        dynamic_attributes_iter: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
         root_idx: u8,
         dom: &mut VirtualDom,
         to: &mut impl WriteMutations,
@@ -804,7 +804,7 @@ impl VNode {
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
         while let Some((attribute_idx, attribute_path)) =
-            dynamic_attrbiutes_iter.next_if(from_root_node)
+            dynamic_attributes_iter.next_if(from_root_node)
         {
             let attribute = &self.dynamic_attrs[attribute_idx];
 
@@ -819,10 +819,14 @@ impl VNode {
                 }
             };
 
+            // Write the value for each attribute in the group
             for attr in &**attribute {
                 self.write_attribute(attribute_path, attr, id, mount, dom, to);
-                dom.set_mounted_dyn_attr(mount, attribute_idx, id);
             }
+            // Set the mounted dynamic attribute once. This must be set even if no actual
+            // attributes are present so it is present for renderers like fullstack to look
+            // up the position where attributes may be inserted in the future
+            dom.set_mounted_dyn_attr(mount, attribute_idx, id);
         }
     }
 

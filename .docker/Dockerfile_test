@@ -1,9 +1,0 @@
-FROM dioxus-pre-test
-
-RUN mkdir run_test
-COPY tmp /run_test
-WORKDIR /run_test
-RUN cargo test --workspace --tests
-RUN cargo cache -a
-
-CMD ["exit"]

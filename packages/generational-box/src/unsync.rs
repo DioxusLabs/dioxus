@@ -13,17 +13,20 @@ use std::{
 };
 
 type RefCellStorageEntryRef = Ref<'static, StorageEntry<RefCellStorageEntryData>>;
-
 type RefCellStorageEntryMut = RefMut<'static, StorageEntry<RefCellStorageEntryData>>;
+type AnyRef = Ref<'static, Box<dyn Any>>;
+type AnyRefMut = RefMut<'static, Box<dyn Any>>;
 
 thread_local! {
     static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
 }
 
+#[derive(Default)]
 pub(crate) enum RefCellStorageEntryData {
     Reference(GenerationalPointer<UnsyncStorage>),
     Rc(RcStorageEntry<Box<dyn Any>>),
     Data(Box<dyn Any>),
+    #[default]
     Empty,
 }
 
@@ -38,12 +41,6 @@ impl Debug for RefCellStorageEntryData {
     }
 }
 
-impl Default for RefCellStorageEntryData {
-    fn default() -> Self {
-        Self::Empty
-    }
-}
-
 /// A unsync storage. This is the default storage type.
 #[derive(Default)]
 pub struct UnsyncStorage {
@@ -54,13 +51,16 @@ pub struct UnsyncStorage {
 impl UnsyncStorage {
     pub(crate) fn read(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowResult<Ref<'static, Box<dyn Any>>> {
-        Self::get_split_ref(pointer).map(|(_, guard)| {
-            Ref::map(guard, |data| match &data.data {
-                RefCellStorageEntryData::Data(data) => data,
-                RefCellStorageEntryData::Rc(data) => &data.data,
-                _ => unreachable!(),
-            })
+    ) -> BorrowResult<(AnyRef, GenerationalPointer<Self>)> {
+        Self::get_split_ref(pointer).map(|(resolved, guard)| {
+            (
+                Ref::map(guard, |data| match &data.data {
+                    RefCellStorageEntryData::Data(data) => data,
+                    RefCellStorageEntryData::Rc(data) => &data.data,
+                    _ => unreachable!(),
+                }),
+                resolved,
+            )
         })
     }
 
@@ -98,13 +98,16 @@ impl UnsyncStorage {
 
     pub(crate) fn write(
         pointer: GenerationalPointer<Self>,
-    ) -> BorrowMutResult<RefMut<'static, Box<dyn Any>>> {
-        Self::get_split_mut(pointer).map(|(_, guard)| {
-            RefMut::map(guard, |data| match &mut data.data {
-                RefCellStorageEntryData::Data(data) => data,
-                RefCellStorageEntryData::Rc(data) => &mut data.data,
-                _ => unreachable!(),
-            })
+    ) -> BorrowMutResult<(AnyRefMut, GenerationalPointer<Self>)> {
+        Self::get_split_mut(pointer).map(|(resolved, guard)| {
+            (
+                RefMut::map(guard, |data| match &mut data.data {
+                    RefCellStorageEntryData::Data(data) => data,
+                    RefCellStorageEntryData::Rc(data) => &mut data.data,
+                    _ => unreachable!(),
+                }),
+                resolved,
+            )
         })
     }
 
@@ -274,7 +277,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     fn try_read(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Ref<'static, T>, error::BorrowError> {
-        let read = Self::read(pointer)?;
+        let (read, pointer) = Self::read(pointer)?;
 
         let ref_ = Ref::filter_map(read, |any| {
             // Then try to downcast
@@ -295,7 +298,7 @@ impl<T: 'static> Storage<T> for UnsyncStorage {
     fn try_write(
         pointer: GenerationalPointer<Self>,
     ) -> Result<Self::Mut<'static, T>, error::BorrowMutError> {
-        let write = Self::write(pointer)?;
+        let (write, pointer) = Self::write(pointer)?;
 
         let ref_mut = RefMut::filter_map(write, |any| {
             // Then try to downcast

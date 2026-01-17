@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 
 #[cfg(feature = "tokio_runtime")]
 use tokio::{fs::File, io::AsyncReadExt};
@@ -11,11 +11,12 @@ use dioxus_html::{
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileEngine, HasDragData, HasFileData, HasFormData, HasMouseData, SerializedMouseData,
-    SerializedPointInteraction,
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
 };
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     cell::{Cell, RefCell},
     path::PathBuf,
@@ -25,7 +26,7 @@ use std::{
 };
 use wry::DragDropEvent;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub(crate) struct FileDialogRequest {
     #[serde(default)]
     accept: Option<String>,
@@ -34,6 +35,8 @@ pub(crate) struct FileDialogRequest {
     pub event: String,
     pub target: usize,
     pub bubbles: bool,
+    pub target_name: String,
+    pub values: Vec<SerializedFormObject>,
 }
 
 #[allow(unused)]
@@ -51,6 +54,19 @@ impl FileDialogRequest {
         vec![]
     }
 
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        vec![]
+    }
+
     #[cfg(any(
         target_os = "windows",
         target_os = "macos",
@@ -60,23 +76,46 @@ impl FileDialogRequest {
         target_os = "netbsd",
         target_os = "openbsd"
     ))]
-    pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
-        fn get_file_event_for_folder(
-            request: &FileDialogRequest,
-            dialog: rfd::FileDialog,
-        ) -> Vec<PathBuf> {
-            if request.multiple {
-                dialog.pick_folders().into_iter().flatten().collect()
-            } else {
-                dialog.pick_folder().into_iter().collect()
-            }
+    pub(crate) fn get_file_event_sync(&self) -> Vec<PathBuf> {
+        let dialog = rfd::FileDialog::new();
+        if self.directory {
+            self.get_file_event_for_folder(dialog)
+        } else {
+            self.get_file_event_for_file(dialog)
         }
+    }
 
-        fn get_file_event_for_file(
-            request: &FileDialogRequest,
-            mut dialog: rfd::FileDialog,
-        ) -> Vec<PathBuf> {
-            let filters: Vec<_> = request
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        let mut dialog = rfd::AsyncFileDialog::new();
+
+        if self.directory {
+            if self.multiple {
+                dialog
+                    .pick_folders()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            } else {
+                dialog
+                    .pick_folder()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            }
+        } else {
+            let filters: Vec<_> = self
                 .accept
                 .as_deref()
                 .unwrap_or(".*")
@@ -97,21 +136,81 @@ impl FileDialogRequest {
 
             dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
 
-            let files: Vec<_> = if request.multiple {
-                dialog.pick_files().into_iter().flatten().collect()
+            let files: Vec<_> = if self.multiple {
+                dialog
+                    .pick_files()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
             } else {
-                dialog.pick_file().into_iter().collect()
+                dialog
+                    .pick_file()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
             };
 
             files
         }
+    }
 
-        let dialog = rfd::FileDialog::new();
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    fn get_file_event_for_file(&self, mut dialog: rfd::FileDialog) -> Vec<PathBuf> {
+        let filters: Vec<_> = self
+            .accept
+            .as_deref()
+            .unwrap_or(".*")
+            .split(',')
+            .filter_map(|s| Filters::from_str(s.trim()).ok())
+            .collect();
 
-        if self.directory {
-            get_file_event_for_folder(self, dialog)
+        let file_extensions: Vec<_> = filters
+            .iter()
+            .flat_map(|f| f.as_extensions().into_iter())
+            .collect();
+
+        let filter_name = file_extensions
+            .iter()
+            .map(|extension| format!("*.{extension}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
+
+        let files: Vec<_> = if self.multiple {
+            dialog.pick_files().into_iter().flatten().collect()
         } else {
-            get_file_event_for_file(self, dialog)
+            dialog.pick_file().into_iter().collect()
+        };
+
+        files
+    }
+
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    fn get_file_event_for_folder(&self, dialog: rfd::FileDialog) -> Vec<PathBuf> {
+        if self.multiple {
+            dialog.pick_folders().into_iter().flatten().collect()
+        } else {
+            dialog.pick_folder().into_iter().collect()
         }
     }
 }
@@ -154,45 +253,99 @@ impl FromStr for Filters {
 }
 
 #[derive(Clone)]
-pub(crate) struct DesktopFileUploadForm {
-    pub files: Arc<NativeFileEngine>,
+pub(crate) struct DesktopFormData {
+    pub value: String,
+    pub valid: bool,
+    pub values: Vec<(String, FormValue)>,
 }
 
-impl HasFileData for DesktopFileUploadForm {
-    fn files(&self) -> Option<Arc<dyn FileEngine>> {
-        Some(self.files.clone())
+impl DesktopFormData {
+    pub fn new(values: Vec<(String, FormValue)>) -> Self {
+        Self {
+            value: String::new(),
+            valid: true,
+            values,
+        }
     }
 }
 
-impl HasFormData for DesktopFileUploadForm {
+impl HasFileData for DesktopFormData {
+    fn files(&self) -> Vec<FileData> {
+        self.values
+            .iter()
+            .filter_map(|(_, v)| {
+                if let FormValue::File(Some(f)) = v {
+                    Some(f.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
+impl HasFormData for DesktopFormData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn value(&self) -> String {
+        self.value.clone()
+    }
+
+    fn valid(&self) -> bool {
+        self.valid
+    }
+
+    fn values(&self) -> Vec<(String, FormValue)> {
+        self.values.clone()
     }
 }
 
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
+    paths: Rc<RefCell<Vec<PathBuf>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
+        match event {
+            DragDropEvent::Enter { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            DragDropEvent::Drop { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            _ => {}
+        }
         self.event.borrow_mut().replace(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
         self.event.borrow_mut().clone()
     }
+
+    pub fn current_paths(&self) -> Vec<PathBuf> {
+        self.paths.borrow_mut().clone()
+    }
 }
 
 #[derive(Clone)]
 pub(crate) struct DesktopFileDragEvent {
     pub mouse: SerializedPointInteraction,
-    pub files: Arc<NativeFileEngine>,
+    pub data_transfer: SerializedDataTransfer,
+    pub files: Vec<PathBuf>,
 }
 
 impl HasFileData for DesktopFileDragEvent {
-    fn files(&self) -> Option<Arc<dyn FileEngine>> {
-        Some(self.files.clone())
+    fn files(&self) -> Vec<FileData> {
+        self.files
+            .iter()
+            .cloned()
+            .map(|f| FileData::new(DesktopFileData(f)))
+            .collect()
+    }
+}
+
+impl HasDataTransferData for DesktopFileDragEvent {
+    fn data_transfer(&self) -> dioxus_html::DataTransfer {
+        dioxus_html::DataTransfer::new(self.data_transfer.clone())
     }
 }
 
@@ -248,78 +401,79 @@ impl PointerInteraction for DesktopFileDragEvent {
     }
 }
 
-pub struct NativeFileEngine {
-    files: Vec<PathBuf>,
-}
+#[derive(Clone)]
+pub struct DesktopFileData(pub(crate) PathBuf);
 
-impl NativeFileEngine {
-    pub fn new(files: Vec<PathBuf>) -> Self {
-        Self { files }
+impl NativeFileData for DesktopFileData {
+    fn name(&self) -> String {
+        self.0.file_name().unwrap().to_string_lossy().into_owned()
+    }
+
+    fn size(&self) -> u64 {
+        std::fs::metadata(&self.0).map(|m| m.len()).unwrap_or(0)
+    }
+
+    fn last_modified(&self) -> u64 {
+        std::fs::metadata(&self.0)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0)
+    }
+
+    fn read_bytes(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_core::CapturedError>>
+                + 'static,
+        >,
+    > {
+        let path = self.0.clone();
+        Box::pin(async move { Ok(bytes::Bytes::from(std::fs::read(&path)?)) })
+    }
+
+    fn read_string(
+        &self,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>,
+    > {
+        let path = self.0.clone();
+        Box::pin(async move { Ok(std::fs::read_to_string(&path)?) })
+    }
+
+    fn inner(&self) -> &dyn std::any::Any {
+        &self.0
+    }
+
+    fn path(&self) -> PathBuf {
+        self.0.clone()
+    }
+
+    fn byte_stream(
+        &self,
+    ) -> std::pin::Pin<
+        Box<
+            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_core::CapturedError>>
+                + 'static
+                + Send,
+        >,
+    > {
+        let path = self.0.clone();
+        Box::pin(futures_util::stream::once(async move {
+            Ok(bytes::Bytes::from(std::fs::read(&path)?))
+        }))
+    }
+
+    fn content_type(&self) -> Option<String> {
+        Some(
+            dioxus_asset_resolver::native::get_mime_from_ext(
+                self.0.extension().and_then(|ext| ext.to_str()),
+            )
+            .to_string(),
+        )
     }
 }
 
-#[async_trait::async_trait(?Send)]
-impl FileEngine for NativeFileEngine {
-    fn files(&self) -> Vec<String> {
-        self.files
-            .iter()
-            .filter_map(|f| Some(f.to_str()?.to_string()))
-            .collect()
-    }
-
-    async fn file_size(&self, file: &str) -> Option<u64> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let file = File::open(file).await.ok()?;
-            Some(file.metadata().await.ok()?.len())
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-
-    async fn read_file(&self, file: &str) -> Option<Vec<u8>> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let mut file = File::open(file).await.ok()?;
-
-            let mut contents = Vec::new();
-            file.read_to_end(&mut contents).await.ok()?;
-
-            Some(contents)
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-
-    async fn read_file_to_string(&self, file: &str) -> Option<String> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let mut file = File::open(file).await.ok()?;
-
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).await.ok()?;
-
-            Some(contents)
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-
-    async fn get_native_file(&self, file: &str) -> Option<Box<dyn Any>> {
-        #[cfg(feature = "tokio_runtime")]
-        {
-            let file = File::open(file).await.ok()?;
-            Some(Box::new(file))
-        }
-        #[cfg(not(feature = "tokio_runtime"))]
-        {
-            None
-        }
-    }
-}
+pub struct DesktopDataTransfer {}

@@ -13,13 +13,14 @@ keywords = ["web", "desktop", "mobile", "gui", "wasm"]
 proc-macro = true
 
 [dependencies]
-proc-macro2 = { version = "1.0" }
+proc-macro2 = { workspace = true }
 quote = { workspace = true }
 
 [features]
 default = []
 fullstack = []
 desktop = []
+native = []
 mobile = []
 web = []
 ssr = []

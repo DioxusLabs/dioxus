@@ -6,8 +6,8 @@ name = "project_name"
 # `build` & `serve` output path
 out_dir = "dist"
 
-# The static resource path
-asset_dir = "public"
+# Static files copied verbatim into the built app (set to enable, e.g. "public")
+public_dir = "public"
 
 [web.app]
 

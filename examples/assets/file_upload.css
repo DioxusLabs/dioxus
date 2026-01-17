@@ -8,7 +8,7 @@ body {
     min-height: 100vh;
 }
 
-#drop-zone {
+.drop-zone {
     border: 2px dashed #ccc;
     border-radius: 3px;
     padding: 20px;

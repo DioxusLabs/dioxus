@@ -1,0 +1,35 @@
+# Copyright © SixtyFPS GmbH <info@slint.dev>
+# SPDX-License-Identifier: MIT
+
+[package]
+name = "native-headless-in-bevy"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+default = ["hot-reload"]
+tracing = ["dep:tracing-subscriber", "dioxus-native-dom/tracing"]
+hot-reload = ["dep:dioxus-devtools"]
+
+[dependencies]
+dioxus = { workspace = true, features = ["document"]}
+dioxus-native-dom = { workspace = true }
+dioxus-asset-resolver = { workspace = true, features = ["native"] }
+dioxus-devtools = { workspace = true, optional = true }
+blitz-dom = { workspace = true, default-features = true }
+blitz-paint = { workspace = true, default-features = true }
+blitz-traits = { workspace = true, default-features = true }
+data-url = { workspace = true, default-features = true }
+anyrender_vello = { workspace = true }
+wgpu = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true }
+bevy = { workspace = true }
+vello = { workspace = true }
+bytes = { workspace = true }
+async-std = "1.13"
+crossbeam-channel = "0.5"
+paste = "1.0"
+rustc-hash = "1"
+

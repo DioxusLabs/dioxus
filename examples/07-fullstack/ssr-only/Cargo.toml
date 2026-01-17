@@ -1,0 +1,12 @@
+[package]
+name = "ssr-only"
+edition = "2024"
+version.workspace = true
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack", "router"] }
+
+[features]
+default = ["server"]
+server = ["dioxus/server"]

@@ -1,6 +1,6 @@
-use crate::CopyValue;
-use crate::{read::Readable, ReadableRef, Signal};
+use crate::{read::Readable, write_impls, ReadableRef, Signal};
 use crate::{read_impls, GlobalMemo, ReadableExt, WritableExt};
+use crate::{CopyValue, Writable};
 use std::{
     cell::RefCell,
     ops::Deref,
@@ -56,8 +56,7 @@ impl<T> Memo<T> {
                 let _ = tx.unbounded_send(());
             }
         };
-        let rc =
-            ReactiveContext::new_with_callback(callback, current_scope_id().unwrap(), location);
+        let rc = ReactiveContext::new_with_callback(callback, current_scope_id(), location);
 
         // Create a new signal in that context, wiring up its dependencies and subscribers
         let mut recompute = move || rc.reset_and_run_in(&mut f);
@@ -215,6 +214,19 @@ where
     }
 }
 
+impl<T: 'static + PartialEq> Writable for Memo<T> {
+    type WriteMetadata = <Signal<T> as Writable>::WriteMetadata;
+
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.inner.try_write_unchecked()
+    }
+}
+
 impl<T> IntoAttributeValue for Memo<T>
 where
     T: Clone + IntoAttributeValue + PartialEq + 'static,
@@ -251,6 +263,7 @@ where
 }
 
 read_impls!(Memo<T> where T: PartialEq);
+write_impls!(Memo<T> where T: PartialEq);
 
 impl<T> Clone for Memo<T> {
     fn clone(&self) -> Self {

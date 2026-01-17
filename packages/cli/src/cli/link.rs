@@ -1,7 +1,7 @@
 use crate::Result;
-use anyhow::Context;
+use anyhow::{bail, Context};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, path::PathBuf};
+use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
 use target_lexicon::Triple;
 
 /// `dx` can act as a linker in a few scenarios. Note that we don't *actually* implement the linker logic,
@@ -82,45 +82,44 @@ impl LinkAction {
 
     pub(crate) fn write_env_vars(
         &self,
-        env_vars: &mut Vec<(Cow<'static, str>, String)>,
+        env_vars: &mut Vec<(Cow<'static, str>, OsString)>,
     ) -> Result<()> {
-        env_vars.push((Self::DX_LINK_ARG.into(), "1".to_string()));
+        env_vars.push((Self::DX_LINK_ARG.into(), "1".into()));
         env_vars.push((
             Self::DX_ARGS_FILE.into(),
-            dunce::canonicalize(&self.link_args_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_args_file)?.into_os_string(),
         ));
         env_vars.push((
             Self::DX_ERR_FILE.into(),
-            dunce::canonicalize(&self.link_err_file)?
-                .to_string_lossy()
-                .to_string(),
+            dunce::canonicalize(&self.link_err_file)?.into_os_string(),
         ));
-        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string()));
+        env_vars.push((Self::DX_LINK_TRIPLE.into(), self.triple.to_string().into()));
         if let Some(linker) = &self.linker {
             env_vars.push((
                 Self::DX_LINK_CUSTOM_LINKER.into(),
                 dunce::canonicalize(linker)
                     .unwrap_or(linker.clone())
-                    .to_string_lossy()
-                    .to_string(),
+                    .into_os_string(),
             ));
         }
 
         Ok(())
     }
 
-    pub(crate) fn run_link(self) {
+    pub(crate) fn run_link(self) -> ExitCode {
         let link_err_file = self.link_err_file.clone();
-        let res = self.run_link_inner();
+        if let Err(err) = self.run_link_inner() {
+            eprintln!("Linker error: {err}");
 
-        if let Err(err) = res {
             // If we failed to run the linker, we need to write the error to the file
             // so that the main process can read it.
             _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
             _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
+
+            return ExitCode::FAILURE;
         }
+
+        ExitCode::SUCCESS
     }
 
     /// Write the incoming linker args to a file
@@ -128,12 +127,12 @@ impl LinkAction {
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
     fn run_link_inner(self) -> Result<()> {
-        let mut args: Vec<_> = std::env::args().collect();
+        let args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
             return Ok(());
         }
 
-        handle_linker_command_file(&mut args);
+        let mut args = get_actual_linker_args_excluding_program_name(args);
 
         if self.triple.environment == target_lexicon::Environment::Android {
             args.retain(|arg| !arg.ends_with(".lib"));
@@ -150,16 +149,24 @@ impl LinkAction {
                 let mut cmd = std::process::Command::new(linker);
                 match cfg!(target_os = "windows") {
                     true => cmd.arg(format!("@{}", &self.link_args_file.display())),
-                    false => cmd.args(args.iter().skip(1)),
+                    false => cmd.args(args),
                 };
                 let res = cmd.output().expect("Failed to run linker");
 
+                if !res.status.success() {
+                    bail!(
+                        "{}\n{}",
+                        String::from_utf8_lossy(&res.stdout),
+                        String::from_utf8_lossy(&res.stderr)
+                    );
+                }
                 if !res.stderr.is_empty() || !res.stdout.is_empty() {
+                    // Write linker warnings to file so that the main process can read them.
                     _ = std::fs::create_dir_all(self.link_err_file.parent().unwrap());
                     _ = std::fs::write(
                         self.link_err_file,
                         format!(
-                            "Linker error: {}\n{}",
+                            "Linker warnings: {}\n{}",
                             String::from_utf8_lossy(&res.stdout),
                             String::from_utf8_lossy(&res.stderr)
                         ),
@@ -195,8 +202,8 @@ impl LinkAction {
                     target_lexicon::BinaryFormat::Macho => object::BinaryFormat::MachO,
                     target_lexicon::BinaryFormat::Wasm => object::BinaryFormat::Wasm,
                     target_lexicon::BinaryFormat::Xcoff => object::BinaryFormat::Xcoff,
-                    target_lexicon::BinaryFormat::Unknown => todo!(),
-                    _ => todo!("Binary format not supported"),
+                    target_lexicon::BinaryFormat::Unknown => unimplemented!(),
+                    _ => unimplemented!("Binary format not supported"),
                 };
 
                 let arch = match triple.architecture {
@@ -207,13 +214,13 @@ impl LinkAction {
                     target_lexicon::Architecture::Aarch64(_) => object::Architecture::Aarch64,
                     target_lexicon::Architecture::LoongArch64 => object::Architecture::LoongArch64,
                     target_lexicon::Architecture::Unknown => object::Architecture::Unknown,
-                    _ => todo!("Architecture not supported"),
+                    _ => unimplemented!("Architecture not supported"),
                 };
 
                 let endian = match triple.endianness() {
                     Ok(target_lexicon::Endianness::Little) => object::Endianness::Little,
                     Ok(target_lexicon::Endianness::Big) => object::Endianness::Big,
-                    Err(_) => todo!("Endianness not supported"),
+                    Err(_) => unimplemented!("Endianness not supported"),
                 };
 
                 let bytes = object::write::Object::new(format, arch, endian)
@@ -233,14 +240,22 @@ impl LinkAction {
     }
 }
 
-pub fn handle_linker_command_file(args: &mut Vec<String>) {
-    // Handle command files, usually a windows thing.
-    if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
-        let path = command.trim().trim_start_matches('@');
+pub fn get_actual_linker_args_excluding_program_name(args: Vec<String>) -> Vec<String> {
+    args.into_iter()
+        .skip(1) // the first arg is program name
+        .flat_map(|arg| handle_linker_arg_response_file(arg).into_iter())
+        .collect()
+}
+
+// handle Windows linker response file. It's designed to workaround Windows command length limit.
+// https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
+    if arg.starts_with('@') {
+        let path = arg.trim().trim_start_matches('@');
         let file_binary = std::fs::read(path).unwrap();
 
         // This may be a utf-16le file. Let's try utf-8 first.
-        let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+        let mut content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
             // Convert Vec<u8> to Vec<u16> to convert into a String
             let binary_u16le: Vec<u16> = file_binary
                 .chunks_exact(2)
@@ -250,8 +265,13 @@ pub fn handle_linker_command_file(args: &mut Vec<String>) {
             String::from_utf16_lossy(&binary_u16le)
         });
 
+        // Remove byte order mark in the beginning
+        if content.starts_with('\u{FEFF}') {
+            content.remove(0);
+        }
+
         // Gather linker args, and reset the args to be just the linker args
-        *args = content
+        content
             .lines()
             .map(|line| {
                 let line_parsed = line.trim().to_string();
@@ -259,6 +279,8 @@ pub fn handle_linker_command_file(args: &mut Vec<String>) {
                 let line_parsed = line_parsed.trim_start_matches('"').to_string();
                 line_parsed
             })
-            .collect();
+            .collect()
+    } else {
+        vec![arg]
     }
 }

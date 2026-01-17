@@ -35,14 +35,16 @@ mod test_default_into {
         pub str_default: String,
 
         // Test options
-        #[props(into, default = Some("abc"))]
+        #[props(into, default = Some("abc".into()))]
         pub opt_into_w_default_val: Option<String>,
 
         #[props(into, default)]
         pub opt_into_w_default: Option<String>,
 
-        #[props(default = Some("abc"))]
+        #[props(default = Some("abc".into()))]
         pub opt_default: Option<String>,
+
+        pub opt_element: Option<Element>,
 
         // Test no default
         #[props(into)]

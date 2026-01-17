@@ -1,5 +1,10 @@
-use crate::document::NATIVE_EVAL_JS;
+use std::path::PathBuf;
+
 use crate::{assets::*, webview::WebviewEdits};
+use crate::{document::NATIVE_EVAL_JS, file_upload::FileDialogRequest};
+use base64::prelude::BASE64_STANDARD;
+use dioxus_core::AnyhowContext;
+use dioxus_html::{SerializedFileData, SerializedFormObject};
 use dioxus_interpreter_js::unified_bindings::SLEDGEHAMMER_JS;
 use dioxus_interpreter_js::NATIVE_JS;
 use wry::{
@@ -8,13 +13,13 @@ use wry::{
 };
 
 #[cfg(target_os = "android")]
-const EVENTS_PATH: &str = "https://dioxus.index.html/__events";
+const BASE_URI: &str = "https://dioxus.index.html/";
 
 #[cfg(target_os = "windows")]
-const EVENTS_PATH: &str = "http://dioxus.index.html/__events";
+const BASE_URI: &str = "http://dioxus.index.html/";
 
 #[cfg(not(any(target_os = "android", target_os = "windows")))]
-const EVENTS_PATH: &str = "dioxus://index.html/__events";
+const BASE_URI: &str = "dioxus://index.html/";
 
 #[cfg(debug_assertions)]
 static DEFAULT_INDEX: &str = include_str!("./assets/dev.index.html");
@@ -56,6 +61,15 @@ pub(super) fn desktop_handler(
     // If the request is asking for an event response, do that
     if trimmed_uri == "__events" {
         return edit_state.handle_event(request, responder);
+    }
+
+    // If the request is asking for a file dialog, handle that, returning the list of files selected
+    if trimmed_uri == "__file_dialog" {
+        if let Err(err) = file_dialog_responder_sync(request, responder) {
+            tracing::error!("Failed to handle file dialog request: {err:?}");
+        }
+
+        return;
     }
 
     // todo: we want to move the custom assets onto a different protocol or something
@@ -104,7 +118,6 @@ fn index_request(
 
     // Insert a custom head if provided
     // We look just for the closing head tag. If a user provided a custom index with weird syntax, this might fail
-
     if let Some(head) = custom_head {
         index.insert_str(index.find("</head>").expect("Head element to exist"), &head);
     }
@@ -147,14 +160,14 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
     {NATIVE_JS}
 
     // The native interpreter extends the sledgehammer interpreter with a few extra methods that we use for IPC
-    window.interpreter = new NativeInterpreter("{EVENTS_PATH}", {headless});
+    window.interpreter = new NativeInterpreter("{BASE_URI}", {headless});
 
     // Wait for the page to load before sending the initialize message
     window.onload = function() {{
         let root_element = window.document.getElementById("{root_id}");
         if (root_element != null) {{
             window.interpreter.initialize(root_element);
-            window.ipc.postMessage(window.interpreter.serializeIpcMessage("initialize"));
+            window.interpreter.sendIpcMessage("initialize");
         }}
         window.interpreter.waitForRequest("{edits_path}", "{expected_key}");
     }}
@@ -165,4 +178,98 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
 </script>
 "#
     )
+}
+
+fn file_dialog_responder_sync(
+    request: wry::http::Request<Vec<u8>>,
+    responder: wry::RequestAsyncResponder,
+) -> dioxus_core::Result<()> {
+    // Handle the file dialog request
+    // We can't use the body, just the headers
+    let header = request
+        .headers()
+        .get("x-dioxus-data")
+        .context("Failed to get x-dioxus-data header")?;
+
+    let data_from_header = base64::Engine::decode(&BASE64_STANDARD, header.as_bytes())
+        .context("Failed to decode x-dioxus-data header from base64")?;
+
+    let file_dialog: FileDialogRequest = serde_json::from_slice(&data_from_header)
+        .context("Failed to parse x-dioxus-data header as JSON")?;
+
+    #[cfg(feature = "tokio_runtime")]
+    tokio::spawn(async move {
+        let file_list = file_dialog.get_file_event_async().await;
+        _ = respond_to_file_dialog(file_dialog, file_list, responder);
+    });
+
+    #[cfg(not(feature = "tokio_runtime"))]
+    {
+        let file_list = file_dialog.get_file_event_sync();
+        respond_to_file_dialog(file_dialog, file_list, responder)?;
+    }
+
+    Ok(())
+}
+
+fn respond_to_file_dialog(
+    mut file_dialog: FileDialogRequest,
+    file_list: Vec<PathBuf>,
+    responder: wry::RequestAsyncResponder,
+) -> dioxus_core::Result<()> {
+    // Get the position of the entry we're updating, so we can insert new entries in the same place
+    // If we can't find it, just append to the end. This is usually due to the input not being in a form element.
+    let position_of_entry = file_dialog
+        .values
+        .iter()
+        .position(|x| x.key == file_dialog.target_name)
+        .unwrap_or(file_dialog.values.len());
+
+    // Remove any existing entries
+    file_dialog
+        .values
+        .retain(|x| x.key != file_dialog.target_name);
+
+    // And then insert the new ones
+    for path in file_list {
+        let file = std::fs::metadata(&path).context("Failed to get file metadata")?;
+        file_dialog.values.insert(
+            position_of_entry,
+            SerializedFormObject {
+                key: file_dialog.target_name.clone(),
+                text: None,
+                file: Some(SerializedFileData {
+                    size: file.len(),
+                    last_modified: file
+                        .modified()
+                        .context("Failed to get file modified time")?
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or_default() as _,
+                    content_type: Some(
+                        dioxus_asset_resolver::native::get_mime_from_ext(
+                            path.extension().and_then(|s| s.to_str()),
+                        )
+                        .to_string(),
+                    ),
+                    contents: Default::default(),
+                    path,
+                }),
+            },
+        );
+    }
+
+    // And then respond with the updated file dialog
+    let response_data = serde_json::to_vec(&file_dialog)
+        .context("Failed to serialize FileDialogRequest to JSON")?;
+
+    responder.respond(
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(response_data)
+            .context("Failed to build response")?,
+    );
+
+    Ok(())
 }

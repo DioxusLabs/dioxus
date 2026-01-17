@@ -1,0 +1,16 @@
+[package]
+name = "dioxus-playwright-fullstack-patch-test"
+version = "0.0.1"
+edition = "2021"
+description = "Playwright test for Dioxus Web"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+dioxus = { path = "../../dioxus", features = ["fullstack"] }
+
+[features]
+web = ["dioxus/web"]
+server = ["dioxus/server"]
+
+[workspace]

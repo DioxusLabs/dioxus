@@ -17,7 +17,7 @@ pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
 ///
 /// Assets need to be handled by the renderer.
 pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), PatchError> {
-    dom.runtime().on_scope(ScopeId::ROOT, || {
+    dom.runtime().in_scope(ScopeId::ROOT, || {
         // 1. Update signals...
         let ctx = dioxus_signals::get_global_context();
         for template in &msg.templates {
@@ -44,7 +44,7 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 
                 if msg.for_pid == our_pid {
                     unsafe { subsecond::apply_patch(jump_table) }?;
-                    dioxus_core::force_all_dirty();
+                    dom.runtime().force_all_dirty();
                     ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
                 }
             }
@@ -204,7 +204,15 @@ where
 
         match res {
             futures_util::future::Either::Left(_completed) => _ = rx.next().await,
-            futures_util::future::Either::Right(_reload) => {}
+            futures_util::future::Either::Right((None, callback)) => {
+                // Receiving `None` here means that the sender is not connected, which
+                // typically means the dioxus devtools protocol has never connected.
+                // We want to run the future to completion and return instead of
+                // re-running the future constantly in the loop.
+                callback.await;
+                return;
+            }
+            futures_util::future::Either::Right((Some(_), _)) => {}
         }
 
         cur_future = hotfn.call((args.clone(),));

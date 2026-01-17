@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Evan Almloff"]
 description = "Ergonomic, automatic, cross crate asset collection and optimization"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/manganis/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/manganis/manganis-macro"
 homepage = "https://dioxuslabs.com"
 keywords = ["assets"]
 
@@ -15,7 +15,7 @@ proc-macro = true
 # be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
 # prevent the main code from compiling!
 [dependencies]
-proc-macro2 = { workspace = true }
+proc-macro2 = { workspace = true, features = ["span-locations"] }
 quote = { workspace = true }
 syn = { workspace = true, features = ["full", "extra-traits"] }
 manganis-core = { workspace = true }

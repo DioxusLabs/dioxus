@@ -28,5 +28,20 @@ fn partially_formatted_conditional_attribute() {
         input {
             type: if true { opt.to_string() } else if true { "" } else { "text with {width}" },
         }
+        input {
+            type: if true { "one" } else if true { "two" } else { "three" },
+        }
+        input {
+            type: if true { "one" } else if true { "two" } else if true { "three" } else { opt },
+        }
+        input {
+            type: if true { "one" } else if true { if false { "true" } else { "false" } } else { "three" },
+        }
+        input {
+            type: if true { "one".to_string() },
+        }
+        input {
+            type: if true { "one" },
+        }
     };
 }

@@ -6,7 +6,7 @@ edition = "2021"
 description = "Web-sys renderer for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "web", "wasm"]
 
 [dependencies]
@@ -22,8 +22,7 @@ dioxus-interpreter-js = { workspace = true, features = [
     "minimal_bindings",
     "webonly",
 ] }
-dioxus-fullstack-protocol = { workspace = true, features = ["web"], optional = true }
-dioxus-fullstack-hooks = { workspace = true, features = ["web"], optional = true }
+dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
 js-sys = { workspace = true }
@@ -38,8 +37,9 @@ serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
 
 ciborium = { workspace = true, optional = true }
-async-trait = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
+send_wrapper = { workspace = true, features = ["futures"] }
+wasm-streams = "0.4.2"
 
 [dependencies.web-sys]
 version = "0.3.77"
@@ -52,6 +52,8 @@ features = [
     "console",
     "CustomEvent",
     "DataTransfer",
+    "DataTransferItemList",
+    "DataTransferItem",
     "Document",
     "DomRectReadOnly",
     "DragEvent",
@@ -80,30 +82,27 @@ features = [
     "TransitionEvent",
     "WheelEvent",
     "Window",
+    "File",
+    "FileList",
+    "FileReader",
+    "ReadableStream",
+    "FormData"
 ]
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
 
 [features]
-default = ["mounted", "file_engine", "devtools", "document"]
-hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-protocol", "dep:dioxus-fullstack-hooks"]
+default = ["mounted", "devtools", "document"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
 mounted = [
     "web-sys/Element",
-    "dioxus-html/mounted",
     "web-sys/Element",
     "web-sys/DomRect",
     "web-sys/ScrollIntoViewOptions",
     "web-sys/ScrollLogicalPosition",
     "web-sys/ScrollBehavior",
     "web-sys/HtmlElement",
-]
-file_engine = [
-    "dioxus-html/file_engine",
-    "dep:async-trait",
-    "web-sys/File",
-    "web-sys/FileList",
-    "web-sys/FileReader"
 ]
 devtools = [
   "web-sys/MessageEvent",

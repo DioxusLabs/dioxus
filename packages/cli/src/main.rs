@@ -6,6 +6,7 @@
 
 mod build;
 mod bundle_utils;
+mod cargo_toml;
 mod cli;
 mod config;
 mod devcfg;
@@ -18,9 +19,12 @@ mod rustcwrapper;
 mod serve;
 mod settings;
 mod tailwind;
+mod test_harnesses;
 mod wasm_bindgen;
 mod wasm_opt;
 mod workspace;
+
+use std::process::ExitCode;
 
 pub(crate) use build::*;
 pub(crate) use cli::*;
@@ -37,7 +41,7 @@ pub(crate) use wasm_bindgen::*;
 pub(crate) use workspace::*;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     // The CLI uses dx as a rustcwrapper in some instances (like binary patching)
     if rustcwrapper::is_wrapping_rustc() {
         return rustcwrapper::run_rustc();
@@ -63,7 +67,10 @@ async fn main() {
             Commands::Run(opts) => opts.run().await,
             Commands::SelfUpdate(opts) => opts.self_update().await,
             Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
+            Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
             Commands::Doctor(opts) => opts.doctor().await,
+            Commands::Print(opts) => opts.print().await,
+            Commands::Components(opts) => opts.run().await,
         }
     });
 
@@ -71,10 +78,12 @@ async fn main() {
     // Make sure we do this as the last step so you can always `tail -1` it
     match result.await {
         StructuredOutput::Error { message } => {
-            tracing::error!(json = ?StructuredOutput::Error { message });
+            tracing::error!(json = %StructuredOutput::Error { message });
             std::process::exit(1);
         }
 
-        output => tracing::debug!(json = ?output),
+        output => tracing::info!(json = %output),
     }
+
+    ExitCode::SUCCESS
 }

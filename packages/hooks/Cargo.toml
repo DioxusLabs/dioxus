@@ -19,10 +19,9 @@ dioxus-signals = { workspace = true }
 futures-channel = { workspace = true }
 tracing = { workspace = true }
 slab = { workspace = true }
-futures-util = { workspace = true}
+futures-util = { workspace = true, features = ["std"] }
 generational-box = { workspace = true }
 rustversion = { workspace = true }
-warnings = { workspace = true }
 
 [dev-dependencies]
 futures-util = { workspace = true, default-features = false }

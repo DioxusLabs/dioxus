@@ -1,8 +1,0 @@
-FROM dioxus-base-test-image
-
-RUN cargo install cargo-binstall
-RUN cargo install cargo-make
-RUN cargo install wasm-pack
-RUN cargo install cargo-cache && cargo cache -a
-
-CMD ["exit"]

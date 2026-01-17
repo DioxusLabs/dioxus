@@ -10,6 +10,7 @@
 /// in their definition, which gets passed as part of the mutations.
 pub fn event_bubbles(evt: &str) -> bool {
     match evt {
+        "cancel" => false,
         "copy" => true,
         "cut" => true,
         "paste" => true,
@@ -28,6 +29,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "invalid" => true,
         "reset" => true,
         "submit" => true,
+        "auxclick" => true,
         "click" => true,
         "contextmenu" => true,
         "doubleclick" => true,
@@ -46,6 +48,7 @@ pub fn event_bubbles(evt: &str) -> bool {
         "mousemove" => true,
         "mouseout" => true,
         "scroll" => false,
+        "scrollend" => false,
         "mouseover" => true,
         "mouseup" => true,
         "pointerdown" => true,

@@ -61,14 +61,14 @@ impl Workspace {
 
         let spin_future = async move {
             tokio::time::sleep(Duration::from_millis(1000)).await;
-            println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
+            eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...");
             tokio::time::sleep(Duration::from_millis(2000)).await;
             for x in 1..=100 {
                 tokio::time::sleep(Duration::from_millis(2000)).await;
-                println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
+                eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
 
                 if x % 10 == 0 {
-                    println!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                    eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
                 }
             }
         };
@@ -96,9 +96,10 @@ impl Workspace {
 
         let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());
 
-        let cargo_toml =
-            cargo_toml::Manifest::from_path(krates.workspace_root().join("Cargo.toml"))
-                .context("Failed to load Cargo.toml")?;
+        let cargo_toml = crate::cargo_toml::load_manifest_from_path(
+            krates.workspace_root().join("Cargo.toml").as_std_path(),
+        )
+        .context("Failed to load Cargo.toml")?;
 
         let android_tools = crate::build::get_android_tools();
 
@@ -273,6 +274,22 @@ impl Workspace {
             .join("gcc-ld")
     }
 
+    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+    pub fn rustc_objcopy(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-objcopy")
+    }
+
+    // ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib
+    pub fn rustc_objcopy_dylib_path(&self) -> PathBuf {
+        self.sysroot.join("lib")
+    }
+
     /// Find the "main" package in the workspace. There might not be one!
     pub fn find_main_package(&self, package: Option<String>) -> Result<NodeId> {
         if let Some(package) = package {
@@ -300,6 +317,37 @@ impl Workspace {
 
             return Ok(self.krates.nid_for_kid(kid).unwrap());
         };
+
+        // if we have default members specified, try them first
+        if let Some(ws) = &self.cargo_toml.workspace {
+            for default in &ws.default_members {
+                let mut workspace_members = self.krates.workspace_members();
+                let default_member_path = std::fs::canonicalize(default).unwrap();
+
+                let found = workspace_members.find_map(|node| {
+                    if let krates::Node::Krate { id, krate, .. } = node {
+                        // Skip this default member if it doesn't have any binary targets
+                        if !krate
+                            .targets
+                            .iter()
+                            .any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))
+                        {
+                            return None;
+                        }
+                        let member_path =
+                            std::fs::canonicalize(krate.manifest_path.parent().unwrap()).unwrap();
+                        if member_path == default_member_path {
+                            return Some(id);
+                        }
+                    }
+                    None
+                });
+
+                if let Some(kid) = found {
+                    return Ok(self.krates.nid_for_kid(kid).unwrap());
+                }
+            }
+        }
 
         // Otherwise find the package that is the closest parent of the current directory
         let current_dir = std::env::current_dir()?;
@@ -530,7 +578,25 @@ impl Workspace {
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {
-        Self::dioxus_data_dir().join("settings.json")
+        Self::dioxus_data_dir().join("settings.toml")
+    }
+
+    /// The path where components downloaded from git are cached
+    pub(crate) fn component_cache_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("components")
+    }
+
+    /// Get the path to a specific component in the cache
+    pub(crate) fn component_cache_path(git: &str, rev: Option<&str>) -> PathBuf {
+        use std::hash::Hasher;
+
+        let mut hasher = std::hash::DefaultHasher::new();
+        std::hash::Hash::hash(git, &mut hasher);
+        if let Some(rev) = rev {
+            std::hash::Hash::hash(rev, &mut hasher);
+        }
+        let hash = hasher.finish();
+        Self::component_cache_dir().join(format!("{hash:016x}"))
     }
 }
 

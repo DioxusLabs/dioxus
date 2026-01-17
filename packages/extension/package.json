@@ -2,7 +2,7 @@
     "name": "dioxus",
     "displayName": "Dioxus",
     "description": "Useful tools for working with Dioxus",
-    "version": "0.7.0",
+    "version": "0.7.1",
     "publisher": "DioxusLabs",
     "private": true,
     "license": "MIT",

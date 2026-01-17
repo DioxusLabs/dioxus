@@ -169,33 +169,33 @@ fn spreads_memorize_in_place() {
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2331
 #[test]
-fn cloning_read_only_signal_components_work() {
+fn cloning_read_signal_components_work() {
     fn app() -> Element {
         if generation() < 5 {
             println!("Generating new props");
             needs_update();
         }
 
-        let read_only_signal_rsx = rsx! {
-            TakesReadOnlySignalNonClone { sig: NonCloneable(generation() as i32) }
-            TakesReadOnlySignalNum { sig: generation() as i32 }
+        let read_signal_rsx = rsx! {
+            TakesReadSignalNonClone { sig: NonCloneable(generation() as i32) }
+            TakesReadSignalNum { sig: generation() as i32 }
         };
 
         rsx! {
-            {read_only_signal_rsx.clone()}
-            {read_only_signal_rsx}
+            {read_signal_rsx.clone()}
+            {read_signal_rsx}
         }
     }
 
     struct NonCloneable<T>(T);
 
     #[component]
-    fn TakesReadOnlySignalNum(sig: ReadSignal<i32>) -> Element {
+    fn TakesReadSignalNum(sig: ReadSignal<i32>) -> Element {
         rsx! {}
     }
 
     #[component]
-    fn TakesReadOnlySignalNonClone(sig: ReadSignal<NonCloneable<i32>>) -> Element {
+    fn TakesReadSignalNonClone(sig: ReadSignal<NonCloneable<i32>>) -> Element {
         rsx! {}
     }
 
@@ -214,4 +214,29 @@ fn cloning_read_only_signal_components_work() {
         dom.render_immediate(&mut dioxus_core::NoOpMutations);
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
+}
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5222
+#[tokio::test]
+async fn optional_event_handler_diff() {
+    use dioxus_core::Properties;
+
+    #[derive(Props, Clone, PartialEq)]
+    struct CompProps {
+        callback: Option<Callback>,
+    }
+
+    let dom = VirtualDom::new(|| rsx! {});
+
+    dom.in_scope(ScopeId::APP, || {
+        // Diffing from None to Some should be different and copy the callback
+        let mut props = CompProps::builder().callback(None).build();
+        assert!(!props.memoize(&CompProps::builder().callback(|_| {}).build()));
+        assert!(props.inner.callback.is_some());
+
+        // Diffing from Some to None should be different and remove the callback
+        let mut props = CompProps::builder().callback(|_| {}).build();
+        assert!(!props.memoize(&CompProps::builder().callback(None).build()));
+        assert!(props.inner.callback.is_none());
+    });
 }

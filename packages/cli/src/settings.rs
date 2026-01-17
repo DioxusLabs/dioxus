@@ -62,7 +62,7 @@ impl CliSettings {
             return None;
         };
 
-        let Some(data) = serde_json5::from_str::<CliSettings>(&data).ok() else {
+        let Some(data) = toml::from_str::<CliSettings>(&data).ok() else {
             warn!("failed to parse global settings file");
             return None;
         };

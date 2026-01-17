@@ -1,10 +1,10 @@
 use crate::{resolve_path, AssetParseError};
 use macro_string::MacroString;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use syn::{
     parse::{Parse, ParseStream},
@@ -45,7 +45,7 @@ impl Parse for AssetParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src);
+        let asset = resolve_path(&src, path_expr.span());
         let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
 
@@ -66,14 +66,15 @@ impl ToTokens for AssetParser {
     //   - The macro needs to output the absolute path to the asset for the bundler to find later
     //   - It also needs to serialize the bundled asset along with the asset options for the bundler to use later
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let asset = match self.asset.as_ref() {
-            Ok(asset) => asset,
-            Err(err) => {
-                let err = err.to_string();
-                tokens.append_all(quote! { compile_error!(#err) });
-                return;
-            }
-        };
+        match self.asset.as_ref() {
+            Ok(asset) => tokens.extend(self.expand_asset_tokens(asset)),
+            Err(err) => tokens.extend(self.error_tokens(err)),
+        }
+    }
+}
+
+impl AssetParser {
+    pub(crate) fn expand_asset_tokens(&self, asset: &Path) -> proc_macro2::TokenStream {
         let asset_string = asset.to_string_lossy();
         let mut asset_str = proc_macro2::Literal::string(&asset_string);
         asset_str.set_span(self.path_expr.span());
@@ -91,9 +92,9 @@ impl ToTokens for AssetParser {
 
         // generate the asset::new method to deprecate the `./assets/blah.css` syntax
         let constructor = if asset.is_relative() {
-            quote::quote! { create_bundled_asset_relative }
+            quote! { create_bundled_asset_relative }
         } else {
-            quote::quote! { create_bundled_asset }
+            quote! { create_bundled_asset }
         };
 
         let options = if self.options.is_empty() {
@@ -102,7 +103,7 @@ impl ToTokens for AssetParser {
             self.options.clone()
         };
 
-        tokens.extend(quote! {
+        quote! {
             {
                 // The source is used by the CLI to copy the asset
                 const __ASSET_SOURCE_PATH: &'static str = #asset_str;
@@ -118,12 +119,29 @@ impl ToTokens for AssetParser {
 
                 #link_section
 
-                static __REFERENCE_TO_LINK_SECTION: &'static [u8] = &__LINK_SECTION;
-
-
-
-                manganis::Asset::new(|| unsafe { std::ptr::read_volatile(&__REFERENCE_TO_LINK_SECTION) })
+                manganis::Asset::new(
+                    || unsafe { std::ptr::read_volatile(&__LINK_SECTION) },
+                    || unsafe { std::ptr::read_volatile(&__LEGACY_LINK_SECTION) }
+                )
             }
-        })
+        }
+    }
+
+    pub(crate) fn expand_option_tokens(&self) -> proc_macro2::TokenStream {
+        match self.asset.as_ref() {
+            Ok(asset) => {
+                let asset_tokens = self.expand_asset_tokens(asset);
+                quote! { ::core::option::Option::Some(#asset_tokens) }
+            }
+            Err(AssetParseError::AssetDoesntExist { .. }) => {
+                quote! { ::core::option::Option::<manganis::Asset>::None }
+            }
+            Err(err) => self.error_tokens(err),
+        }
+    }
+
+    fn error_tokens(&self, err: &AssetParseError) -> proc_macro2::TokenStream {
+        let err = err.to_string();
+        quote! { compile_error!(#err) }
     }
 }

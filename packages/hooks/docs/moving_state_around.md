@@ -3,7 +3,7 @@
 
 You will often need to move state around between your components. Dioxus provides three different ways to pass around state:
 
-1. Just pass your values as [props](https://dioxuslabs.com/learn/0.6/reference/component_props):
+1. Just pass your values as [props](https://dioxuslabs.com/learn/0.7/essentials/ui/components#component-properties):
 
 ```rust
 # use dioxus::prelude::*;
@@ -30,7 +30,7 @@ fn IncrementButton(mut count: Signal<i32>) -> Element {
 
 This is the most common way to pass state around. It is the most explicit and local to your component. Use this when it isn't overly annoying to pass around a value.
 
-2. Use [use_context](https://dioxuslabs.com/learn/0.6/reference/context) to pass state from a parent component to all children:
+2. Use [use_context](https://dioxuslabs.com/learn/0.7/essentials/basics/context) to pass state from a parent component to all children:
 
 ```rust
 # use dioxus::prelude::*;

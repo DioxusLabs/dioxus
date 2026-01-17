@@ -33,11 +33,11 @@ Formats the current file as RSX.
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
-- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
-- [Book (0.6)](https://dioxuslabs.com/learn/0.6)
+- [Getting Started](https://dioxuslabs.com/learn/0.7/getting_started)
+- [Book (0.6)](https://dioxuslabs.com/learn/0.7/)
 
 ## Contributing
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

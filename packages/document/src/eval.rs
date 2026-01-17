@@ -57,6 +57,14 @@ impl IntoFuture for Eval {
     }
 }
 
+impl Clone for Eval {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Copy for Eval {}
+
 /// The platform's evaluator.
 pub trait Evaluator {
     /// Sends a message to the evaluated JavaScript.

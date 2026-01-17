@@ -1,0 +1,104 @@
+html, body, #main {
+    color: white;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    margin: 0;
+}
+
+#panel {
+    background-color: #C0C0C033;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 30%;
+    justify-content: start;
+}
+
+#title {
+    color: #FFFFFF;
+    text-align: center;
+    padding-top: 10px;
+    border-bottom: 1px solid #a8a8a8;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    align-items: center;
+}
+
+#buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 20px;
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.color-button {
+    width: 50px;
+    height: 50px;
+    border-radius: 3px;
+}
+
+.color-button:hover {
+    box-shadow: 0px 0px 1px #c1c1c1;
+}
+
+.color-button:active {
+    box-shadow: 0px 0px 5px #c1c1c1;
+}
+
+#button-red {
+    background-color: red;
+}
+
+#button-green {
+    background-color: green;
+}
+
+#button-blue {
+    background-color: blue;
+}
+
+.spin-box {
+    width: 50px;
+    height: 50px;
+    animation: spin 4s infinite linear;
+}
+
+@keyframes spin {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(360deg); }
+}
+
+#translation-speed-control, #rotation-speed-control {
+    display: flex;
+    flex-direction: row;
+    align-items: start;
+    padding: 20px;
+    gap: 10px;
+}
+
+input[type="number"] {
+    width: 3em;
+    height: 1.5em;
+    line-height: 1.5em;
+    background: #444;
+    border: 2px solid #666;
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: bold;
+    text-align: center;
+    padding: 0 10px;
+    outline: none;
+    margin-left: auto;
+}
+
+#footer {
+    margin-top: auto;
+    margin-left: 10px;
+}
+

@@ -3,12 +3,15 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod doctor;
+pub(crate) mod hotpatch;
 pub(crate) mod init;
 pub(crate) mod link;
 pub(crate) mod platform_override;
+pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
 pub(crate) mod target;
@@ -81,6 +84,12 @@ pub(crate) enum Commands {
     #[clap(name = "doctor")]
     Doctor(doctor::Doctor),
 
+    /// Print project information in a structured format, like cargo args, linker args, and other
+    /// flags DX sets that might be useful in third-party tools.
+    #[clap(name = "print")]
+    #[clap(subcommand)]
+    Print(print::Print),
+
     /// Translate a source file into Dioxus code.
     #[clap(name = "translate")]
     Translate(translate::Translate),
@@ -102,17 +111,27 @@ pub(crate) enum Commands {
     #[clap(name = "self-update")]
     SelfUpdate(update::SelfUpdate),
 
-    /// Run a dioxus build tool. IE `build-assets`, etc
+    /// Run a dioxus build tool. IE `build-assets`, `hotpatch`, etc
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
+
+    /// Manage components from the `dioxus-component` registry.
+    #[clap(name = "components")]
+    #[clap(subcommand)]
+    Components(component::ComponentCommand),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 pub enum BuildTools {
     /// Build the assets for a specific target.
     #[clap(name = "assets")]
     BuildAssets(build_assets::BuildAssets),
+
+    /// Hotpatch the "tip" of a given "fat" binary. The output here must be from the `dx build` command with "fat" enabled
+    #[clap(name = "hotpatch")]
+    HotpatchTip(hotpatch::HotpatchTip),
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {

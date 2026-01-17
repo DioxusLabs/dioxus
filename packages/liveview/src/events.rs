@@ -15,6 +15,14 @@ impl HtmlEventConverter for SerializedHtmlEventConverter {
             .into()
     }
 
+    fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData {
+        event
+            .downcast::<SerializedCancelData>()
+            .cloned()
+            .unwrap()
+            .into()
+    }
+
     fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData {
         event
             .downcast::<SerializedClipboardData>()

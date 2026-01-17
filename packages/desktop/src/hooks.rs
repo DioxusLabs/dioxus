@@ -22,13 +22,13 @@ pub fn use_wry_event_handler(
     use dioxus_core::current_scope_id;
 
     // Capture the current runtime and scope ID.
-    let runtime = Runtime::current().unwrap();
-    let scope_id = current_scope_id().unwrap();
+    let runtime = Runtime::current();
+    let scope_id = current_scope_id();
 
     use_hook_with_cleanup(
         move || {
             window().create_wry_event_handler(move |event, target| {
-                runtime.on_scope(scope_id, || handler(event, target))
+                runtime.in_scope(scope_id, || handler(event, target))
             })
         },
         move |handler| handler.remove(),

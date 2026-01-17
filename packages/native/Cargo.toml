@@ -6,24 +6,35 @@ edition = "2021"
 description = "Native renderer for Dioxus based on blitz"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "tracing", "net", "html", "svg", "system-fonts"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog"]
+prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
+
+# DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
+incremental = ["blitz-dom/incremental"]
+autofocus = ["blitz-dom/autofocus"]
+system-fonts = ["blitz-dom/system_fonts"]
+
+# Shell Features
+clipboard = ["blitz-shell/clipboard"]
+file_dialog = ["file-dialog"] # Backwards compat. Remove in next breaking version
+file-dialog = ["blitz-shell/file_dialog"]
+accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
+
+# Other features
 net = ["dep:tokio", "dep:blitz-net"]
 html = ["dep:blitz-html"]
-accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
-tracing = ["dep:tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
+
+# Dev / Debug
 hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
-system-fonts = ["blitz-dom/system_fonts"]
-autofocus = []
+tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
 
 [dependencies]
 # Blitz dependencies
-anyrender = { workspace = true }
-anyrender_vello = { workspace = true }
 blitz-dom = { workspace = true }
 blitz-html = { workspace = true, optional = true }
 blitz-net = { workspace = true, optional = true }
@@ -31,15 +42,28 @@ blitz-paint = { workspace = true, optional = true }
 blitz-traits = { workspace = true }
 blitz-shell = { workspace = true }
 
+# AnyRender dependencies
+anyrender = { workspace = true }
+anyrender_vello = { workspace = true }
+
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
 dioxus-html = { workspace = true }
 dioxus-native-dom = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
-dioxus-cli-config = { workspace = true, optional = true }
-dioxus-devtools = { workspace = true, optional = true }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
+
+# Dioxus hot reload
+dioxus-cli-config = { workspace = true, optional = true }
+dioxus-devtools = { workspace = true, optional = true }
+
+# Dioxus prelude
+dioxus-hooks = { workspace = true, optional = true }
+dioxus-signals = { workspace = true, optional = true }
+dioxus-stores = { workspace = true, optional = true }
+dioxus-core-macro = { workspace = true, optional = true }
+manganis = { workspace = true, features = ["dioxus"], optional = true }
 
 # Windowing & Input
 winit = { workspace = true }
@@ -47,12 +71,15 @@ keyboard-types = { workspace = true }
 
 # IO & Networking
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+webbrowser = { workspace = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 
+[target.'cfg(all(target_os = "ios", target_abi = "sim"))'.dependencies]
+anyrender_vello_cpu = { workspace = true, features = ["pixels_window_renderer"]}
+
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]

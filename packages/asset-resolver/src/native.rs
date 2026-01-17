@@ -207,7 +207,7 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
 }
 
 /// Get the mime type from a URI using its extension
-fn get_mime_from_ext(ext: Option<&str>) -> &'static str {
+pub fn get_mime_from_ext(ext: Option<&str>) -> &'static str {
     match ext {
         // The common assets are all utf-8 encoded
         Some("js") => "text/javascript; charset=utf-8",

@@ -2,21 +2,16 @@ use crate::{
     config::{Config, WindowCloseBehaviour},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
-    file_upload::{DesktopFileUploadForm, FileDialogRequest, NativeFileEngine},
     ipc::{IpcMessage, UserWindowEvent},
     query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
-use dioxus_core::{ElementId, ScopeId, VirtualDom};
-use dioxus_history::History;
-use dioxus_html::PlatformEventData;
+use dioxus_core::VirtualDom;
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     collections::HashMap,
     rc::Rc,
-    sync::Arc,
     time::Duration,
 };
 use tao::{
@@ -37,6 +32,7 @@ pub(crate) struct App {
     pub(crate) control_flow: ControlFlow,
     pub(crate) is_visible_before_start: bool,
     pub(crate) exit_on_last_window_close: bool,
+    pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) webviews: HashMap<WindowId, WebviewInstance>,
     pub(crate) float_all: bool,
     pub(crate) show_devtools: bool,
@@ -66,6 +62,7 @@ impl App {
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
+            disable_dma_buf_on_wayland: cfg.disable_dma_buf_on_wayland,
             is_visible_before_start: true,
             webviews: HashMap::new(),
             control_flow: ControlFlow::Wait,
@@ -105,6 +102,9 @@ impl App {
         #[cfg(debug_assertions)]
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         app.connect_preserve_window_state_handler();
+
+        // Make sure to disable DMA buffer rendering on Linux Wayland sessions
+        app.disable_dma_buf();
 
         (event_loop, app)
     }
@@ -245,13 +245,17 @@ impl App {
             .unmounted_dom
             .take()
             .expect("Virtualdom should be set before initialization");
+        #[allow(unused_mut)]
         let mut cfg = self
             .cfg
             .take()
             .expect("Config should be set before initialization");
 
         self.is_visible_before_start = cfg.window.window.visible;
-        cfg.window = cfg.window.with_visible(false);
+        #[cfg(not(target_os = "linux"))]
+        {
+            cfg.window = cfg.window.with_visible(false);
+        }
         let explicit_window_size = cfg.window.window.inner_size;
         let explicit_window_position = cfg.window.window.position;
 
@@ -288,21 +292,14 @@ impl App {
 
         view.edits.wry_queue.send_edits();
 
-        view.desktop_context
-            .window
-            .set_visible(self.is_visible_before_start);
+        #[cfg(not(target_os = "linux"))]
+        {
+            view.desktop_context
+                .window
+                .set_visible(self.is_visible_before_start);
+        }
 
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
-    }
-
-    /// Todo: maybe we should poll the virtualdom asking if it has any final actions to apply before closing the webview
-    ///
-    /// Technically you can handle this with the use_window_event hook
-    pub fn handle_close_msg(&mut self, id: WindowId) {
-        self.webviews.remove(&id);
-        if self.webviews.is_empty() {
-            self.control_flow = ControlFlow::Exit
-        }
     }
 
     pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
@@ -410,37 +407,6 @@ impl App {
         }
     }
 
-    pub fn handle_file_dialog_msg(&mut self, msg: IpcMessage, window: WindowId) {
-        let Ok(file_dialog) = serde_json::from_value::<FileDialogRequest>(msg.params()) else {
-            return;
-        };
-
-        let id = ElementId(file_dialog.target);
-        let event_name = &file_dialog.event;
-        let event_bubbles = file_dialog.bubbles;
-        let files = file_dialog.get_file_event();
-
-        let as_any = Box::new(DesktopFileUploadForm {
-            files: Arc::new(NativeFileEngine::new(files)),
-        });
-
-        let data = Rc::new(PlatformEventData::new(as_any));
-
-        let Some(view) = self.webviews.get_mut(&window) else {
-            return;
-        };
-
-        let event = dioxus_core::Event::new(data as Rc<dyn Any>, event_bubbles);
-
-        let runtime = view.dom.runtime();
-        if event_name == "change&input" {
-            runtime.handle_event("input", event.clone(), id);
-            runtime.handle_event("change", event, id);
-        } else {
-            runtime.handle_event(event_name, event, id);
-        }
-    }
-
     /// Poll the virtualdom until it's pending
     ///
     /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
@@ -515,9 +481,6 @@ impl App {
 
     #[cfg(debug_assertions)]
     fn persist_window_state(&self) {
-        use dioxus_core::ScopeId;
-        use dioxus_history::History;
-
         if let Some(webview) = self.webviews.values().next() {
             let window = &webview.desktop_context.window;
 
@@ -553,20 +516,12 @@ impl App {
                 return;
             };
 
-            let url = webview.dom.in_runtime(|| {
-                ScopeId::ROOT
-                    .consume_context::<Rc<dyn History>>()
-                    .unwrap()
-                    .current_route()
-            });
-
             let state = PreservedWindowState {
                 x,
                 y,
                 width: width.max(200),
                 height: height.max(200),
                 monitor: monitor_name.to_string(),
-                url: Some(url),
             };
 
             // Yes... I know... we're loading a file that might not be ours... but it's a debug feature
@@ -620,16 +575,6 @@ impl App {
                         window.set_inner_size(tao::dpi::PhysicalSize::new(size.0, size.1));
                     }
                 }
-
-                // Set the url if it exists
-                webview.dom.in_runtime(|| {
-                    if let Some(url) = state.url {
-                        ScopeId::ROOT
-                            .consume_context::<Rc<dyn History>>()
-                            .unwrap()
-                            .replace(url);
-                    }
-                })
             }
         }
     }
@@ -659,6 +604,28 @@ impl App {
             });
         }
     }
+
+    /// Disable DMA buffer rendering on Linux Wayland sessions to avoid bugs with WebKitGTK
+    fn disable_dma_buf(&self) {
+        if cfg!(target_os = "linux") && self.disable_dma_buf_on_wayland {
+            static INIT: std::sync::Once = std::sync::Once::new();
+            INIT.call_once(|| {
+                if std::path::Path::new("/dev/dri").exists()
+                    && std::env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland"
+                {
+                    // Gnome Webkit is currently buggy under Wayland and KDE, so we will run it with XWayland mode.
+                    // See: https://github.com/DioxusLabs/dioxus/issues/3667
+                    unsafe {
+                        // Disable explicit sync for NVIDIA drivers on Linux when using Way
+                        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                    }
+                }
+                unsafe {
+                    std::env::set_var("GDK_BACKEND", "x11");
+                }
+            });
+        }
+    }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -668,7 +635,6 @@ struct PreservedWindowState {
     width: u32,
     height: u32,
     monitor: String,
-    url: Option<String>,
 }
 
 /// Return the location of a tempfile with our window state in it such that we can restore it later

@@ -1,8 +1,8 @@
 use crate::{
-    serve::WebServer, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
-    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
-use anyhow::{bail, Context};
+use anyhow::{bail, Context, Error};
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -22,6 +22,7 @@ use tokio::{
     process::{Child, ChildStderr, ChildStdout, Command},
     task::JoinHandle,
 };
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 use super::{BuildContext, BuildId, BuildMode, HotpatchModuleCache};
 
@@ -77,6 +78,12 @@ pub(crate) struct AppBuilder {
     // we don't map stdin today (todo) but most apps don't need it
     pub stdout: Option<Lines<BufReader<ChildStdout>>>,
     pub stderr: Option<Lines<BufReader<ChildStderr>>>,
+
+    // Android logcat stream (treated as stderr for error/warn levels)
+    pub adb_logcat_stdout: Option<UnboundedReceiverStream<String>>,
+
+    /// Handle to the task that's monitoring the child process
+    pub spawn_handle: Option<JoinHandle<Result<()>>>,
 
     /// The executables but with some extra entropy in their name so we can run two instances of the
     /// same app without causing collisions on the filesystem.
@@ -146,6 +153,8 @@ impl AppBuilder {
             child: None,
             stderr: None,
             stdout: None,
+            adb_logcat_stdout: None,
+            spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
             patch_cache: None,
@@ -154,23 +163,24 @@ impl AppBuilder {
     }
 
     /// Create a new `AppBuilder` and immediately start a build process.
-    pub fn started(request: &BuildRequest, mode: BuildMode) -> Result<Self> {
+    pub fn started(request: &BuildRequest, mode: BuildMode, build_id: BuildId) -> Result<Self> {
         let mut builder = Self::new(request)?;
-        builder.start(mode);
+        builder.start(mode, build_id);
         Ok(builder)
     }
 
-    pub(crate) fn start(&mut self, mode: BuildMode) {
+    pub(crate) fn start(&mut self, mode: BuildMode, build_id: BuildId) {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let tx = self.tx.clone();
             async move {
                 let ctx = BuildContext {
                     mode,
+                    build_id,
                     tx: tx.clone(),
                 };
                 request.verify_tooling(&ctx).await?;
-                request.prepare_build_dir()?;
+                request.prebuild(&ctx).await?;
                 request.build(&ctx).await
             }
         });
@@ -198,6 +208,25 @@ impl AppBuilder {
             },
             Some(Ok(Some(msg))) = OptionFuture::from(self.stderr.as_mut().map(|f| f.next_line())) => {
                 StderrReceived {  msg }
+            },
+            Some(msg) = OptionFuture::from(self.spawn_handle.as_mut()) => {
+                match msg {
+                    Ok(Ok(_)) => StdoutReceived { msg: "Finished launching app".to_string() },
+                    Ok(Err(err)) => StderrReceived { msg: err.to_string() },
+                    Err(err) => StderrReceived { msg: err.to_string() }
+                }
+            },
+            Some(Some(msg)) = OptionFuture::from(self.adb_logcat_stdout.as_mut().map(|s| s.next())) => {
+                // Send as stderr for errors/warnings, stdout for info/debug
+                // Parse the priority level from a logcat line
+                //
+                // Logcat brief format: "I/TAG(12345): message"
+                // Returns the priority char (V, D, I, W, E, F)
+                if matches!(msg.chars().next().unwrap_or('I'), 'E' | 'W' | 'F') {
+                    StderrReceived { msg }
+                } else {
+                    StdoutReceived { msg }
+                }
             },
             Some(status) = OptionFuture::from(self.child.as_mut().map(|f| f.wait())) => {
                 match status {
@@ -290,10 +319,12 @@ impl AppBuilder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>) {
+    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>, build_id: BuildId) {
         // We need the rustc args from the original build to pass to the new build
         let Some(artifacts) = self.artifacts.as_ref().cloned() else {
-            tracing::warn!("Ignoring patch rebuild since there is no existing build.");
+            tracing::warn!(
+                "Ignoring patch rebuild for {build_id:?} since there is no existing build."
+            );
             return;
         };
 
@@ -327,6 +358,7 @@ impl AppBuilder {
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
+                build_id,
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
@@ -340,7 +372,7 @@ impl AppBuilder {
     }
 
     /// Restart this builder with new build arguments.
-    pub(crate) fn start_rebuild(&mut self, mode: BuildMode) {
+    pub(crate) fn start_rebuild(&mut self, mode: BuildMode, build_id: BuildId) {
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
@@ -351,6 +383,7 @@ impl AppBuilder {
             let ctx = BuildContext {
                 tx: self.tx.clone(),
                 mode,
+                build_id,
             };
             async move { request.build(&ctx).await }
         });
@@ -406,14 +439,14 @@ impl AppBuilder {
                         _ => {}
                     }
 
-                    tracing::info!(json = ?StructuredOutput::BuildUpdate { stage: stage.clone() });
+                    tracing::info!(json = %StructuredOutput::BuildUpdate { stage: stage.clone() });
                 }
                 BuilderUpdate::CompilerMessage { message } => {
-                    tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                    tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                 }
                 BuilderUpdate::BuildReady { bundle } => {
-                    tracing::debug!(json = ?StructuredOutput::BuildFinished {
-                        path: self.build.root_dir(),
+                    tracing::debug!(json = %StructuredOutput::BuildFinished {
+                        artifacts: bundle.clone().into_structured_output(),
                     });
                     return Ok(bundle);
                 }
@@ -421,7 +454,7 @@ impl AppBuilder {
                     // Flush remaining compiler messages
                     while let Ok(Some(msg)) = self.rx.try_next() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
-                            tracing::info!(json = ?StructuredOutput::RustcOutput { message: message.clone() }, %message);
+                            tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
                     }
 
@@ -484,15 +517,11 @@ impl AppBuilder {
             ));
         }
 
-        if crate::VERBOSITY
-            .get()
-            .map(|f| f.verbose)
-            .unwrap_or_default()
-        {
+        if verbosity_or_default().verbose {
             envs.push(("RUST_BACKTRACE".into(), "1".to_string()));
         }
 
-        if let Some(base_path) = krate.base_path() {
+        if let Some(base_path) = krate.trimmed_base_path() {
             envs.push((
                 dioxus_cli_config::ASSET_ROOT_ENV.into(),
                 base_path.to_string(),
@@ -517,7 +546,7 @@ impl AppBuilder {
         }
 
         // If there's any CARGO vars in the rustc_wrapper files, push those too
-        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str::<RustcArgs>(&res) {
                 for (key, value) in res.envs {
                     if key.starts_with("CARGO_") {
@@ -561,8 +590,8 @@ impl AppBuilder {
             }
 
             BundleFormat::Ios => {
-                if let Some(device) = self.build.device_name.as_deref() {
-                    self.open_ios_device(device).await?
+                if let Some(device) = self.build.device_name.to_owned() {
+                    self.open_ios_device(&device).await?
                 } else {
                     self.open_ios_sim(envs).await?
                 }
@@ -630,6 +659,11 @@ impl AppBuilder {
         if let Some(entropy_app_exe) = self.entropy_app_exe.take() {
             _ = std::fs::remove_file(entropy_app_exe);
         }
+
+        // Abort the spawn handle monitoring task if it exists
+        if let Some(spawn_handle) = self.spawn_handle.take() {
+            spawn_handle.abort();
+        }
     }
 
     pub(crate) async fn hotpatch(
@@ -639,7 +673,6 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let triple = self.build.triple.clone();
         let asset_dir = self.build.asset_dir();
 
         // Hotpatch asset!() calls
@@ -687,23 +720,13 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = crate::build::create_jump_table(&new, &triple, cache)?;
+        let mut jump_table = self.build.create_jump_table(&new, cache)?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {
             jump_table.lib = self
                 .copy_file_to_android_tmp(&new, &(PathBuf::from(new.file_name().unwrap())))
                 .await?;
-        }
-
-        // Rebase the wasm binary to be relocatable once the jump table is generated
-        if triple.architecture == target_lexicon::Architecture::Wasm32 {
-            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
-            //
-            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
-            //    but we want to ship `/wasm/lib.wasm`
-            jump_table.lib =
-                PathBuf::from("/").join(jump_table.lib.strip_prefix(self.build.root_dir()).unwrap())
         }
 
         let changed_files = match &res.mode {
@@ -914,10 +937,10 @@ impl AppBuilder {
     }
 
     /// Upload the app to the device and launch it
-    async fn open_ios_device(&self, device_query: &str) -> Result<()> {
+    async fn open_ios_device(&mut self, device_query: &str) -> Result<()> {
         let device_query = device_query.to_string();
         let root_dir = self.build.root_dir().clone();
-        tokio::task::spawn(async move {
+        self.spawn_handle = Some(tokio::task::spawn(async move {
             // 1. Find an active device
             let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
@@ -930,7 +953,7 @@ impl AppBuilder {
             Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
 
             Result::Ok(()) as Result<()>
-        });
+        }));
 
         Ok(())
     }
@@ -1197,7 +1220,7 @@ impl AppBuilder {
     /// # Resources:
     /// - <https://developer.android.com/studio/run/emulator-commandline>
     async fn open_android(
-        &self,
+        &mut self,
         root: bool,
         devserver_socket: SocketAddr,
         envs: Vec<(String, String)>,
@@ -1207,9 +1230,10 @@ impl AppBuilder {
         let session_cache = self.build.session_cache_dir();
         let application_id = self.build.bundle_identifier();
         let adb = self.build.workspace.android_tools()?.adb.clone();
+        let (stdout_tx, stdout_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
         // Start backgrounded since .open() is called while in the arm of the top-level match
-        let _handle: JoinHandle<Result<()>> = tokio::task::spawn(async move {
+        let task = tokio::task::spawn(async move {
             // call `adb root` so we can push patches to the device
             if root {
                 if let Err(e) = Command::new(&adb).arg("root").output().await {
@@ -1220,7 +1244,7 @@ impl AppBuilder {
             // Try to get the transport ID for the device in case there are multiple specified devices
             // All future commands should use this since its the most recent.
             let transport_id_args =
-                Self::get_android_device_transport_id(&adb, device_name_query).await;
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
 
             // Wait for device to be ready
             let cmd = Command::new(&adb)
@@ -1306,8 +1330,65 @@ impl AppBuilder {
                 tracing::error!("Failed to start app with `adb`: {std_err}");
             }
 
-            Ok(())
+            // Try to get the transport ID for the device
+            let transport_id_args =
+                Self::get_android_device_transport_id(&adb, device_name_query.as_deref()).await;
+
+            // Get the app's PID with retries
+            // Retry up to 10 times (10 seconds total) since app launch is asynchronous
+            let mut pid: Option<String> = None;
+            for attempt in 1..=10 {
+                match Self::get_android_app_pid(&adb, &application_id, &transport_id_args).await {
+                    Ok(p) => {
+                        pid = Some(p);
+                        break;
+                    }
+                    Err(_) if attempt < 10 => {
+                        tracing::debug!(
+                            "App PID not found yet, retrying in 1 second... (attempt {}/10)",
+                            attempt
+                        );
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    Err(e) => {
+                        return Err(e).context(
+                            "Failed to get app PID after 10 attempts - app may not have started",
+                        );
+                    }
+                }
+            }
+
+            let pid = pid.context("Failed to get app PID")?;
+
+            // Spawn logcat with filtering
+            // By default: show only RustStdoutStderr (app Rust logs) and fatal errors
+            // With tracing enabled: show all logs from the app process
+            // Note: We always capture at DEBUG level, then filter in Rust based on trace flag
+            let mut child = Command::new(&adb)
+                .args(&transport_id_args)
+                .arg("logcat")
+                .arg("-v")
+                .arg("brief")
+                .arg("--pid")
+                .arg(&pid)
+                .arg("*:D") // Capture all logs at DEBUG level (filtered in Rust)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::null())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = child.stdout.take().unwrap();
+            let mut reader = BufReader::new(stdout).lines();
+
+            while let Ok(Some(line)) = reader.next_line().await {
+                _ = stdout_tx.send(line);
+            }
+
+            Ok::<(), Error>(())
         });
+
+        self.spawn_handle = Some(task);
+        self.adb_logcat_stdout = Some(UnboundedReceiverStream::new(stdout_rx));
 
         Ok(())
     }
@@ -1580,7 +1661,7 @@ impl AppBuilder {
 
     async fn get_android_device_transport_id(
         adb: &PathBuf,
-        device_name_query: Option<String>,
+        device_name_query: Option<&str>,
     ) -> Vec<String> {
         // If there are multiple devices, we pick the one matching the query
         let mut device_specifier_args = vec![];
@@ -1630,5 +1711,28 @@ impl AppBuilder {
         }
 
         device_specifier_args
+    }
+
+    /// Get the PID of the running Android app
+    async fn get_android_app_pid(
+        adb: &Path,
+        application_id: &str,
+        transport_id_args: &[String],
+    ) -> Result<String> {
+        let output = Command::new(adb)
+            .args(transport_id_args)
+            .arg("shell")
+            .arg("pidof")
+            .arg(application_id)
+            .output()
+            .await?;
+
+        let pid = String::from_utf8(output.stdout)?.trim().to_string();
+
+        if pid.is_empty() {
+            anyhow::bail!("App process not found - may not have started yet");
+        }
+
+        Ok(pid)
     }
 }

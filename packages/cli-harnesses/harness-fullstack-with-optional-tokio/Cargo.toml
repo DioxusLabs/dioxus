@@ -1,0 +1,19 @@
+[package]
+name = "harness-fullstack-with-optional-tokio"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+serde = "1.0.219"
+tokio = { workspace = true, features = ["full"], optional = true }
+
+
+[features]
+default = []
+server = ["dioxus/server", "dep:tokio"]
+web = ["dioxus/web"]
+
+    

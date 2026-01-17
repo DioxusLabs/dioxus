@@ -109,12 +109,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 pid,
             } => {
                 devserver
-                    .send_hotreload(builder.applied_hot_reload_changes(BuildId::CLIENT))
+                    .send_hotreload(builder.applied_hot_reload_changes(BuildId::PRIMARY))
                     .await;
 
                 if builder.server.is_some() {
                     devserver
-                        .send_hotreload(builder.applied_hot_reload_changes(BuildId::SERVER))
+                        .send_hotreload(builder.applied_hot_reload_changes(BuildId::SECONDARY))
                         .await;
                 }
 
@@ -173,19 +173,12 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                             return Err(err);
                         }
                     }
-                    BuilderUpdate::BuildReady { bundle } => match bundle.mode {
-                        BuildMode::Thin { ref cache, .. } => {
-                            let elapsed =
-                                bundle.time_end.duration_since(bundle.time_start).unwrap();
-                            match builder.hotpatch(&bundle, id, cache).await {
-                                Ok(jumptable) => {
-                                    let pid = match id {
-                                        BuildId::CLIENT => builder.client.pid,
-                                        _ => builder.server.as_ref().and_then(|s| s.pid),
-                                    };
-                                    devserver.send_patch(jumptable, elapsed, id, pid).await
-                                }
-                                Err(err) => {
+                    BuilderUpdate::BuildReady { bundle } => {
+                        match bundle.mode {
+                            BuildMode::Thin { ref cache, .. } => {
+                                if let Err(err) =
+                                    builder.hotpatch(&bundle, id, cache, &mut devserver).await
+                                {
                                     tracing::error!("Failed to hot-patch app: {err}");
 
                                     if let Some(_patching) =
@@ -198,14 +191,26 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                     }
                                 }
                             }
+                            BuildMode::Base { .. } | BuildMode::Fat => {
+                                _ = builder
+                                    .open(&bundle, &mut devserver)
+                                    .await
+                                    .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+                            }
                         }
-                        BuildMode::Base { .. } | BuildMode::Fat => {
-                            _ = builder
-                                .open(&bundle, &mut devserver)
-                                .await
-                                .inspect_err(|e| tracing::error!("Failed to open app: {}", e));
+
+                        // Process any file changes that were queued while the build was in progress.
+                        // This handles tools like stylance, tailwind, or sass that generate files
+                        // in response to source changes - those changes would otherwise be lost.
+                        let pending = builder.take_pending_file_changes();
+                        if !pending.is_empty() {
+                            tracing::debug!(
+                                "Processing {} pending file changes after build",
+                                pending.len()
+                            );
+                            builder.handle_file_change(&pending, &mut devserver).await;
                         }
-                    },
+                    }
                     BuilderUpdate::StdoutReceived { msg } => {
                         screen.push_stdio(bundle_format, msg, tracing::Level::INFO);
                     }

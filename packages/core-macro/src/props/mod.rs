@@ -201,8 +201,11 @@ mod field_info {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
-                // children field is automatically defaulted to None
-                if name == "children" {
+                let strip_option_auto = builder_attr.strip_option
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
+
+                // children field is automatically defaulted to an empty VNode unless it is marked as optional (in which case it defaults to None)
+                if name == "children" && !strip_option_auto {
                     builder_attr.default =
                         Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
                 }
@@ -226,21 +229,20 @@ mod field_info {
                     builder_attr.auto_into = true;
                 }
 
-                // extended field is automatically empty
+                // If this is a child field or extends, default to Default::default() if a default isn't set
                 if !builder_attr.extends.is_empty() {
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
                 }
 
                 // auto detect optional
-                let strip_option_auto = builder_attr.strip_option
-                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    // only change the default if it isn't manually set above
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
                 }
 
                 Ok(FieldInfo {
@@ -509,7 +511,7 @@ fn type_from_inside_option(ty: &Type) -> Option<&Type> {
 
     // If the segment is a supported optional type, provide the inner type.
     // Return the inner type if the pattern is `Option<T>` or `ReadSignal<Option<T>>``
-    if seg.ident == "ReadOnlySignal" || seg.ident == "ReadSignal" {
+    if seg.ident == "ReadSignal" || seg.ident == "ReadOnlySignal" {
         // Get the inner type. E.g. the `u16` in `ReadSignal<u16>` or `Option` in `ReadSignal<Option<bool>>`
         let inner_type = extract_inner_type_from_segment(seg)?;
         let Type::Path(inner_path) = inner_type else {
@@ -695,9 +697,13 @@ mod struct_info {
                 let name = field.name;
                 if optional {
                     quote! {
-                        // If the event handler is None, we don't need to update it
+                        // If both event handler are Some, update them in place
                         if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
                             old_handler.__point_to(new_handler);
+                        }
+                        // Otherwise just move the new handler into self
+                        else {
+                            self.#name = new.#name;
                         }
                     }
                 } else {
@@ -855,17 +861,19 @@ Finally, call `.build()` to create the instance of `{name}`.
                     let ty = f.ty;
                     quote!(#name: #ty)
                 })
-                .chain(self.has_child_owned_fields().then(|| quote!(owner: Owner)));
+                .chain(
+                    self.has_child_owned_fields()
+                        .then(|| quote!(owner: dioxus_core::internal::generational_box::Owner)),
+                );
             let global_fields_value = self
                 .extend_fields()
                 .map(|f| {
                     let name = f.extends_vec_ident();
                     quote!(#name: Vec::new())
                 })
-                .chain(
-                    self.has_child_owned_fields()
-                        .then(|| quote!(owner: Owner::default())),
-                );
+                .chain(self.has_child_owned_fields().then(
+                    || quote!(owner: dioxus_core::internal::generational_box::Owner::default()),
+                ));
 
             Ok(quote! {
                 impl #impl_generics #name #ty_generics #where_clause {
@@ -1064,7 +1072,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: field_name, ..
             } = field;
             if *field_name == "key" {
-                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.6/reference/dynamic_rendering#rendering-lists for more information about keys"));
+                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys"));
             }
             let StructInfo {
                 ref builder_name, ..
@@ -1766,6 +1774,7 @@ fn looks_like_write_type(ty: &Type) -> bool {
 fn looks_like_store_type(ty: &Type) -> bool {
     last_segment_matches(ty, &parse_quote!(Store))
         || last_segment_matches(ty, &parse_quote!(ReadStore))
+        || last_segment_matches(ty, &parse_quote!(WriteStore))
 }
 
 fn looks_like_callback_type(ty: &Type) -> bool {

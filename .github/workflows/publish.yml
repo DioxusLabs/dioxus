@@ -61,6 +61,8 @@ jobs:
             os: ubuntu-24.04
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-24.04-arm
+          # os: blacksmith-4vcpu-ubuntu-2404
+          # os: blacksmith-4vcpu-ubuntu-2404
           # - target: x86_64-unknown-linux-musl
           #   os: ubuntu-24.04
           # - target: aarch64-unknown-linux-musl
@@ -90,7 +92,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.86.0"
+          toolchain: "1.88.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -153,7 +155,7 @@ jobs:
 
   #     # Build the docs here too before publishing, to ensure they're up to date
   #     - name: cargo doc
-  #       run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --no-deps --workspace --all-features
+  #       run: cargo doc --no-deps --workspace --all-features
 
   #     - name: Publish to crates.io
   #       run: |

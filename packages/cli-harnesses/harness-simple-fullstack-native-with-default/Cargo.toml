@@ -1,0 +1,17 @@
+[package]
+name = "harness-simple-fullstack-native-with-default"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+
+
+[features]
+default=["native", "server"]
+native=["dioxus/native"]
+server=["dioxus/server"]
+
+    

@@ -320,20 +320,21 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    AndroidTools, BuildContext, BundleFormat, DioxusConfig, Error, LinkAction, LinkerFlavor,
-    Renderer, Result, RustcArgs, TargetAlias, TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig,
-    Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
+    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
+use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::AssetOptions;
-use manganis_core::AssetVariant;
+use manganis::{AssetOptions, BundledAsset};
+use manganis_core::{AssetOptionsBuilder, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -348,8 +349,9 @@ use std::{
     },
     time::{SystemTime, UNIX_EPOCH},
 };
-use target_lexicon::{Architecture, Environment, OperatingSystem, Triple};
-use tempfile::{NamedTempFile, TempDir};
+use subsecond_types::JumpTable;
+use target_lexicon::{Architecture, OperatingSystem, Triple};
+use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
@@ -386,21 +388,20 @@ pub(crate) struct BuildRequest {
     pub(crate) extra_cargo_args: Vec<String>,
     pub(crate) extra_rustc_args: Vec<String>,
     pub(crate) no_default_features: bool,
+    pub(crate) all_features: bool,
     pub(crate) target_dir: PathBuf,
     pub(crate) skip_assets: bool,
     pub(crate) wasm_split: bool,
     pub(crate) debug_symbols: bool,
     pub(crate) inject_loading_scripts: bool,
     pub(crate) custom_linker: Option<PathBuf>,
-    pub(crate) session_cache_dir: Arc<TempDir>,
-    pub(crate) link_args_file: Arc<NamedTempFile>,
-    pub(crate) link_err_file: Arc<NamedTempFile>,
-    pub(crate) rustc_wrapper_args_file: Arc<NamedTempFile>,
-    pub(crate) command_file: Arc<NamedTempFile>,
     pub(crate) base_path: Option<String>,
     pub(crate) using_dioxus_explicitly: bool,
     pub(crate) apple_entitlements: Option<PathBuf>,
     pub(crate) apple_team_id: Option<String>,
+    pub(crate) session_cache_dir: PathBuf,
+    pub(crate) raw_json_diagnostics: bool,
+    pub(crate) windows_subsystem: Option<String>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -447,7 +448,7 @@ pub enum BuildMode {
 /// The patch cache is only populated on fat builds and then used for thin builds (see `BuildMode::Thin`).
 #[derive(Clone, Debug)]
 pub struct BuildArtifacts {
-    pub(crate) bundle: BundleFormat,
+    pub(crate) root_dir: PathBuf,
     pub(crate) exe: PathBuf,
     pub(crate) direct_rustc: RustcArgs,
     pub(crate) time_start: SystemTime,
@@ -456,6 +457,7 @@ pub struct BuildArtifacts {
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
+    pub(crate) build_id: BuildId,
 }
 
 impl BuildRequest {
@@ -476,11 +478,7 @@ impl BuildRequest {
     ///
     /// Note: Build requests are typically created only when the CLI is invoked or when significant
     /// changes are detected in the `Cargo.toml` (e.g., features added or removed).
-    pub(crate) async fn new(
-        args: &TargetArgs,
-        main_target: Option<String>,
-        workspace: Arc<Workspace>,
-    ) -> Result<Self> {
+    pub(crate) async fn new(args: &TargetArgs, workspace: Arc<Workspace>) -> Result<Self> {
         let crate_package = workspace.find_main_package(args.package.clone())?;
 
         let config = workspace
@@ -524,8 +522,8 @@ impl BuildRequest {
             .unwrap_or(workspace.krates[crate_package].name.clone());
 
         // Use the main_target for the client + server build if it is set, otherwise use the target name for this
-        // specific build
-        let main_target = main_target.unwrap_or(target_name.clone());
+        // specific build. This is important for @client @server syntax so we use the client's output directory for the bundle.
+        let main_target = args.client_target.clone().unwrap_or(target_name.clone());
 
         let crate_target = main_package
             .targets
@@ -556,114 +554,279 @@ impl BuildRequest {
             })?
             .clone();
 
-        // The crate might enable multiple platforms or no platforms at
-        // We collect all the platforms it enables first and then select based on the --platform arg
-        let enabled_renderers =
-            Self::enabled_cargo_toml_renderers(main_package, args.no_default_features);
-        let using_dioxus_explicitly = main_package
-            .dependencies
-            .iter()
-            .any(|dep| dep.name == "dioxus");
-
-        let mut features = args.features.clone();
-        let mut no_default_features = args.no_default_features;
-
-        // Apply the platform alias if present
-        let mut target_alias = args.target_alias;
-        let mut renderer = args.renderer;
-        let mut bundle = args.bundle;
-        if let Some(platform) = args.platform {
-            let (default_target, default_renderer, default_bundle) = platform.into_triple();
-            target_alias = target_alias.or(default_target);
-            renderer.renderer = Some(renderer.renderer.unwrap_or(default_renderer));
-            bundle = Some(bundle.unwrap_or(default_bundle));
-        }
-
-        let mut renderer: Option<Renderer> = match renderer.into() {
-            Some(renderer) => match enabled_renderers.len() {
-                0 => Some(renderer),
-
-                // The user passed --platform XYZ but already has `default = ["ABC"]` in their Cargo.toml or dioxus = { features = ["abc"] }
-                // We want to strip out the default platform and use the one they passed, setting no-default-features
-                _ => {
-                    features.extend(Self::rendererless_features(main_package));
-                    no_default_features = true;
-                    Some(renderer)
-                }
-            },
-            None if !using_dioxus_explicitly => None,
-            None => match enabled_renderers.as_slice() {
-                [] => None, // Wait until we resolve everything else first then we will resolve it from the triple
-                [(renderer, feature)] => {
-                    let targeting_mobile = match (&args.target, target_alias) {
-                        (_, TargetAlias::Android | TargetAlias::Ios) => true,
-                        (Some(target), _) => {
-                            matches!(
-                                (target.environment, target.operating_system),
-                                (Environment::Android, OperatingSystem::IOS(_))
-                            )
-                        }
-                        _ => false,
-                    };
-                    // The renderer usually maps directly to a feature flag, but the mobile crate is an exception.
-                    // If we see the `desktop` renderer in the default features, but the user is targeting mobile,
-                    // we should remove the default `desktop` feature, but still target webview. The feature selection
-                    // logic below will handle adding back in the `mobile` feature flag
-                    if targeting_mobile && feature == "desktop" {
-                        features.extend(Self::rendererless_features(main_package));
-                        no_default_features = true;
-                    }
-                    Some(*renderer)
-                }
-                _ => {
-                    bail!(
-                        "Multiple platforms enabled in Cargo.toml. Please specify a platform with `--web`, `--webview`, or `--native` or set a default platform in Cargo.toml"
-                    );
-                }
-            },
-        };
-
         // We usually use the simulator unless --device is passed *or* a device is detected by probing.
         // For now, though, since we don't have probing, it just defaults to false
         // Tools like xcrun/adb can detect devices
         let device = args.device.clone();
 
-        // Resolve the target alias and renderer into a concrete target alias.
-        // If the user didn't pass a platform, but we have a renderer, get the default platform for that renderer
-        if let (TargetAlias::Unknown, Some(renderer)) = (target_alias, renderer) {
-            target_alias = renderer.default_platform();
+        let using_dioxus_explicitly = main_package
+            .dependencies
+            .iter()
+            .any(|dep| dep.name == "dioxus");
+
+        /*
+        Determine which features, triple, profile, etc to pass to the build.
+
+        Most of the time, users should use `dx serve --<platform>` where the platform name directly
+        corresponds to the feature in their cargo.toml. So,
+        - `dx serve --web` will enable the `web` feature
+        - `dx serve --mobile` will enable the `mobile` feature
+        - `dx serve --desktop` will enable the `desktop` feature
+
+        In this case, we set default-features to false and then add back the default features that
+        aren't renderers, and then add the feature for the given renderer (ie web/desktop/mobile).
+        We call this "no-default-features-stripped."
+
+        There are a few cases where the user doesn't need to pass a platform.
+        - they selected one via `dioxus = { features = ["web"] }`
+        - they have a single platform in their default features `default = ["web"]`
+        - there is only a single non-server renderer as a feature `web = ["dioxus/web"], server = ["dioxus/server"]`
+        - they compose the super triple via triple + bundleformat + features
+
+        Note that we only use the names of the features to correspond with the platform.
+        Platforms are "super triples", meaning they contain information about
+        - bundle format
+        - target triple
+        - how to serve
+        - enabled features
+
+        By default, the --platform presets correspond to:
+        - web:          bundle(web), triple(wasm32), serve(http-serve), features("web")
+        - desktop:      alias to mac/win/linux
+        - mac:          bundle(mac), triple(host), serve(appbundle-open), features("desktop")
+        - windows:      bundle(exefolder), triple(host), serve(run-exe), features("desktop")
+        - linux:        bundle(appimage), triple(host), serve(run-exe), features("desktop")
+        - ios:          bundle(ios), triple(arm64-apple-ios), serve(ios-simulator/xcrun), features("mobile")
+        - android:      bundle(android), triple(arm64-apple-ios), serve(android-emulator/adb), features("mobile")
+        - server:       bundle(server), triple(host), serve(run-exe), features("server") (and disables the client)
+        - liveview:     bundle(liveview), triple(host), serve(run-exe), features("liveview")
+        - unknown:      <auto or default to desktop>
+
+        Fullstack usage is inferred from the presence of the fullstack feature or --fullstack.
+        */
+        let mut features = args.features.clone();
+        let no_default_features = args.no_default_features;
+        let all_features = args.all_features;
+        let mut triple = args.target.clone();
+        let mut renderer = args.renderer;
+        let mut bundle_format = args.bundle;
+        let mut platform = args.platform;
+
+        // the crate might be selecting renderers but the user also passes a renderer. this is weird
+        // ie dioxus = { features = ["web"] } but also --platform desktop
+        // anyways, we collect it here in the event we need it if platform is not specified.
+        let dioxus_direct_renderer = Self::renderer_enabled_by_dioxus_dependency(main_package);
+        let known_features_as_renderers = Self::features_that_enable_renderers(main_package);
+
+        // The crate might enable multiple platforms or no platforms at
+        // We collect all the platforms it enables first and then select based on the --platform arg
+        let enabled_renderers = if no_default_features {
+            vec![]
+        } else {
+            Self::enabled_cargo_toml_default_features_renderers(main_package)
         };
 
-        // We want a real triple to build with, so we'll autodetect it if it's not provided
-        // The triple ends up being a source of truth for us later hence all this work to figure it out
-        let triple = match (args.target.clone(), target_alias) {
-            // If there is an explicit target, use it
-            (Some(target), _) => target,
-            // If there is a platform, use it to determine the target triple
-            (None, platform) => platform.into_target(device.is_some(), &workspace).await?,
-        };
+        // Try the easy autodetects.
+        // - if the user has `dioxus = { features = ["web"] }`
+        // - if the `default =["web"]` or `default = ["dioxus/web"]`
+        // - if there's only one non-server platform ie `web = ["dioxus/web"], server = ["dioxus/server"]`
+        // Only do this if we're explicitly using dioxus
+        if matches!(platform, Platform::Unknown) && using_dioxus_explicitly {
+            let auto = dioxus_direct_renderer
+                .or_else(|| {
+                    if enabled_renderers.len() == 1 {
+                        Some(enabled_renderers[0].clone())
+                    } else {
+                        None
+                    }
+                })
+                .or_else(|| {
+                    // If multiple renderers are enabled, pick the first non-server one
+                    if enabled_renderers.len() == 2
+                        && enabled_renderers
+                            .iter()
+                            .any(|f| matches!(f.0, Renderer::Server))
+                    {
+                        return Some(
+                            enabled_renderers
+                                .iter()
+                                .find(|f| !matches!(f.0, Renderer::Server))
+                                .cloned()
+                                .unwrap(),
+                        );
+                    }
+                    None
+                })
+                .or_else(|| {
+                    // Pick the first non-server feature in the cargo.toml
+                    let non_server_features = known_features_as_renderers
+                        .iter()
+                        .filter(|f| f.1.as_str() != "server")
+                        .collect::<Vec<_>>();
+                    if non_server_features.len() == 1 {
+                        Some(non_server_features[0].clone())
+                    } else {
+                        None
+                    }
+                });
 
-        // If the user didn't pass a renderer, and we didn't find a good default renderer, but they are using dioxus explicitly,
-        // then we can try to guess the renderer based on the target triple.
-        if renderer.is_none() && using_dioxus_explicitly {
-            renderer = Some(Renderer::from_target(&triple));
+            if let Some((direct, feature)) = auto {
+                match direct {
+                    _ if feature == "mobile" || feature == "dioxus/mobile" => {
+                        bail!(
+                            "Could not autodetect mobile platform. Use --ios or --android instead."
+                        );
+                    }
+                    Renderer::Webview | Renderer::Native => {
+                        if cfg!(target_os = "macos") {
+                            platform = Platform::MacOS;
+                        } else if cfg!(target_os = "linux") {
+                            platform = Platform::Linux;
+                        } else if cfg!(target_os = "windows") {
+                            platform = Platform::Windows;
+                        }
+                    }
+                    Renderer::Server => platform = Platform::Server,
+                    Renderer::Liveview => platform = Platform::Liveview,
+                    Renderer::Web => platform = Platform::Web,
+                }
+                renderer = renderer.or(Some(direct));
+            }
         }
 
-        // Resolve the bundle format based on the combination of the target triple and renderer
-        let bundle = match bundle {
-            // If there is an explicit bundle format, use it
-            Some(bundle) => bundle,
-            // Otherwise guess a bundle format based on the target triple and renderer
-            None => BundleFormat::from_target(&triple, renderer)?,
+        // Set the super triple from the platform if it's provided.
+        // Otherwise, we attempt to guess it from the rest of their inputs.
+        match platform {
+            Platform::Unknown => {}
+
+            Platform::Web => {
+                if main_package.features.contains_key("web") && renderer.is_none() {
+                    features.push("web".into());
+                }
+                renderer = renderer.or(Some(Renderer::Web));
+                bundle_format = bundle_format.or(Some(BundleFormat::Web));
+                triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
+            }
+            Platform::MacOS => {
+                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                    features.push("desktop".into());
+                }
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::MacOS));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Windows => {
+                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                    features.push("desktop".into());
+                }
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Windows));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Linux => {
+                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                    features.push("desktop".into());
+                }
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Linux));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Ios => {
+                if main_package.features.contains_key("mobile") && renderer.is_none() {
+                    features.push("mobile".into());
+                }
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Ios));
+                match device.is_some() {
+                    // If targeting device, we want to build for the device which is always aarch64
+                    true => triple = triple.or(Some("aarch64-apple-ios".parse()?)),
+
+                    // If the host is aarch64, we assume the user wants to build for iOS simulator
+                    false if matches!(Triple::host().architecture, Architecture::Aarch64(_)) => {
+                        triple = triple.or(Some("aarch64-apple-ios-sim".parse()?))
+                    }
+
+                    // Otherwise, it's the x86_64 simulator, which is just x86_64-apple-ios
+                    _ => triple = triple.or(Some("x86_64-apple-ios".parse()?)),
+                }
+            }
+            Platform::Android => {
+                if main_package.features.contains_key("mobile") && renderer.is_none() {
+                    features.push("mobile".into());
+                }
+
+                renderer = renderer.or(Some(Renderer::Webview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Android));
+
+                // maybe probe adb?
+                if let Some(_device_name) = device.as_ref() {
+                    if triple.is_none() {
+                        triple = Some(
+                            crate::get_android_tools()
+                                .context("Failed to get android tools")?
+                                .autodetect_android_device_triple()
+                                .await,
+                        );
+                    }
+                } else {
+                    triple = triple.or(Some({
+                        match Triple::host().architecture {
+                            Architecture::X86_32(_) => "i686-linux-android".parse()?,
+                            Architecture::X86_64 => "x86_64-linux-android".parse()?,
+                            Architecture::Aarch64(_) => "aarch64-linux-android".parse()?,
+                            _ => "aarch64-linux-android".parse()?,
+                        }
+                    }));
+                }
+            }
+            Platform::Server => {
+                if main_package.features.contains_key("server") && renderer.is_none() {
+                    features.push("server".into());
+                }
+                renderer = renderer.or(Some(Renderer::Server));
+                bundle_format = bundle_format.or(Some(BundleFormat::Server));
+                triple = triple.or(Some(Triple::host()));
+            }
+            Platform::Liveview => {
+                if main_package.features.contains_key("liveview") && renderer.is_none() {
+                    features.push("liveview".into());
+                }
+                renderer = renderer.or(Some(Renderer::Liveview));
+                bundle_format = bundle_format.or(Some(BundleFormat::Server));
+                triple = triple.or(Some(Triple::host()));
+            }
+        }
+
+        // If default features are enabled, we need to add the default features
+        // which don't enable a renderer
+        if !no_default_features {
+            features.extend(Self::rendererless_features(main_package));
+            features.dedup();
+            features.sort();
+        }
+
+        // The triple will be the triple passed or the host if using dioxus.
+        let triple = if using_dioxus_explicitly {
+            triple.context("Could not automatically detect target triple")?
+        } else {
+            triple.unwrap_or(Triple::host())
+        };
+
+        // The bundle format will be the bundle format passed or the host.
+        let bundle = if using_dioxus_explicitly {
+            bundle_format.context("Could not automatically detect bundle format")?
+        } else {
+            bundle_format.unwrap_or(BundleFormat::host())
         };
 
         // Add any features required to turn on the client
         if let Some(renderer) = renderer {
-            features.push(Self::feature_for_platform_and_renderer(
-                main_package,
-                &triple,
-                renderer,
-            ));
+            if let Some(feature) =
+                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+            {
+                features.push(feature);
+                features.dedup();
+            }
         }
 
         // Set the profile of the build if it's not already set
@@ -673,15 +836,6 @@ impl BuildRequest {
             Some(profile) => profile,
             None => bundle.profile_name(args.release),
         };
-
-        // Warn if the user is trying to build with strip and using manganis
-        Self::warn_manganis_strip(
-            &workspace.krates,
-            &workspace.cargo_toml,
-            main_package,
-            &profile,
-            args.release,
-        );
 
         // Determine if we should codesign
         let should_codesign =
@@ -707,20 +861,6 @@ impl BuildRequest {
         let mut custom_linker = cargo_config.linker(triple.to_string()).ok().flatten();
         let mut rustflags = cargo_config2::Flags::default();
 
-        if matches!(bundle, BundleFormat::Android) {
-            rustflags.flags.extend([
-                "-Clink-arg=-landroid".to_string(),
-                "-Clink-arg=-llog".to_string(),
-                "-Clink-arg=-lOpenSLES".to_string(),
-                "-Clink-arg=-lc++abi".to_string(),
-                "-Clink-arg=-Wl,--export-dynamic".to_string(),
-                format!(
-                    "-Clink-arg=-Wl,--sysroot={}",
-                    workspace.android_tools()?.sysroot().display()
-                ),
-            ]);
-        }
-
         // Make sure to take into account the RUSTFLAGS env var and the CARGO_TARGET_<triple>_RUSTFLAGS
         for env in [
             "RUSTFLAGS".to_string(),
@@ -738,6 +878,50 @@ impl BuildRequest {
             if let Some(flags) = target.rustflags {
                 rustflags.flags.extend(flags.flags);
             }
+        }
+
+        // When we do android builds we need to make sure we link against the android libraries
+        // We also `--export-dynamic` to make sure we can do shenanigans like `dlsym` the `main` symbol
+        if matches!(bundle, BundleFormat::Android) {
+            rustflags.flags.extend([
+                "-Clink-arg=-landroid".to_string(),
+                "-Clink-arg=-llog".to_string(),
+                "-Clink-arg=-lOpenSLES".to_string(),
+                "-Clink-arg=-lc++abi".to_string(),
+                "-Clink-arg=-Wl,--export-dynamic".to_string(),
+                format!(
+                    "-Clink-arg=-Wl,--sysroot={}",
+                    workspace.android_tools()?.sysroot().display()
+                ),
+            ]);
+        }
+
+        // Make sure we set the sysroot for ios builds in the event the user doesn't have it set
+        if matches!(bundle, BundleFormat::Ios) {
+            let xcode_path = Workspace::get_xcode_path()
+                .await
+                .unwrap_or_else(|| "/Applications/Xcode.app".to_string().into());
+
+            let sysroot_location = match triple.environment {
+                target_lexicon::Environment::Sim => xcode_path
+                    .join("Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk"),
+                _ => xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"),
+            };
+
+            if sysroot_location.exists() && !rustflags.flags.iter().any(|f| f == "-isysroot") {
+                rustflags.flags.extend([
+                    "-Clink-arg=-isysroot".to_string(),
+                    format!("-Clink-arg={}", sysroot_location.display()),
+                ]);
+            }
+        }
+
+        // automatically set the getrandom backend for web builds if the user requested it
+        if matches!(bundle, BundleFormat::Web) && args.wasm_js_cfg {
+            rustflags.flags.extend(
+                cargo_config2::Flags::from_space_separated(r#"--cfg getrandom_backend="wasm_js""#)
+                    .flags,
+            );
         }
 
         // If no custom linker is set, then android falls back to us as the linker
@@ -771,25 +955,11 @@ impl BuildRequest {
             }
         }
 
-        // Set up some tempfiles so we can do some IPC between us and the linker/rustc wrapper (which is occasionally us!)
-        let link_args_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let link_err_file = Arc::new(
-            NamedTempFile::with_suffix(".txt")
-                .context("Failed to create temporary file for linker args")?,
-        );
-        let rustc_wrapper_args_file = Arc::new(
-            NamedTempFile::with_suffix(".json")
-                .context("Failed to create temporary file for rustc wrapper args")?,
-        );
-        let session_cache_dir = Arc::new(
-            TempDir::new().context("Failed to create temporary directory for session cache")?,
-        );
-        let command_file = Arc::new(
-            NamedTempFile::new().context("Failed to create temporary file for linker args")?,
-        );
+        #[allow(deprecated)]
+        let session_cache_dir = args
+            .session_cache_dir
+            .clone()
+            .unwrap_or_else(|| TempDir::new().unwrap().into_path());
 
         let extra_rustc_args = shell_words::split(&args.rustc_args.clone().unwrap_or_default())
             .context("Failed to parse rustc args")?;
@@ -801,28 +971,19 @@ impl BuildRequest {
             r#"Target Info:
                 • features: {features:?}
                 • triple: {triple}
-                • bundle format: {bundle:?}"#
-        );
-        tracing::debug!(
-            r#"Log Files:
-                • link_args_file: {},
-                • link_err_file: {},
-                • rustc_wrapper_args_file: {},
-                • session_cache_dir: {}
-                • linker: {:?}
-                • target_dir: {:?}"#,
-            link_args_file.path().display(),
-            link_err_file.path().display(),
-            rustc_wrapper_args_file.path().display(),
-            session_cache_dir.path().display(),
-            custom_linker,
-            target_dir,
+                • bundle format: {bundle:?}
+                • session cache dir: {session_cache_dir:?}
+                • linker: {custom_linker:?}
+                • target_dir: {target_dir:?}"#,
         );
 
         Ok(Self {
             features,
             bundle,
-            no_default_features,
+            // We hardcode passing `--no-default-features` to Cargo because dx manually enables
+            // the default features we want.
+            no_default_features: true,
+            all_features,
             crate_package,
             crate_target,
             profile,
@@ -832,11 +993,6 @@ impl BuildRequest {
             config,
             target_dir,
             custom_linker,
-            link_args_file,
-            link_err_file,
-            command_file,
-            session_cache_dir,
-            rustc_wrapper_args_file,
             extra_rustc_args,
             extra_cargo_args,
             release,
@@ -845,6 +1001,7 @@ impl BuildRequest {
             rustflags,
             using_dioxus_explicitly,
             should_codesign,
+            session_cache_dir,
             skip_assets: args.skip_assets,
             base_path: args.base_path.clone(),
             wasm_split: args.wasm_split,
@@ -852,7 +1009,42 @@ impl BuildRequest {
             inject_loading_scripts: args.inject_loading_scripts,
             apple_entitlements: args.apple_entitlements.clone(),
             apple_team_id: args.apple_team_id.clone(),
+            raw_json_diagnostics: args.raw_json_diagnostics,
+            windows_subsystem: args.windows_subsystem.clone(),
         })
+    }
+
+    pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
+        // Create the session cache directory
+        let cache_dir = self.session_cache_dir();
+        _ = std::fs::create_dir_all(&cache_dir);
+        _ = std::fs::File::create_new(self.rustc_wrapper_args_file());
+        _ = std::fs::File::create_new(self.link_err_file());
+        _ = std::fs::File::create_new(self.link_args_file());
+        _ = std::fs::File::create_new(self.windows_command_file());
+
+        if !matches!(ctx.mode, BuildMode::Thin { .. }) {
+            self.prepare_build_dir(ctx)?;
+        }
+
+        if !ctx.is_primary_build() {
+            return Ok(());
+        }
+
+        // Run the tailwind build before bundling anything else
+        _ = crate::TailwindCli::run_once(
+            self.package_manifest_dir(),
+            self.config.application.tailwind_input.clone(),
+            self.config.application.tailwind_output.clone(),
+        )
+        .await;
+
+        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
+        if self.bundle == BundleFormat::Android {
+            AndroidTools::unpack_prebuilt_openssl()?;
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
@@ -861,9 +1053,6 @@ impl BuildRequest {
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
-
-        // Run any pre-build steps like tailwind, etc
-        self.prebuild().await?;
 
         // Run the cargo build to produce our artifacts
         let mut artifacts = self.cargo_build(ctx).await?;
@@ -883,6 +1072,7 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                self.strip_binary(&artifacts).await?;
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
@@ -908,7 +1098,7 @@ impl BuildRequest {
 
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
-            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe).await?));
+            artifacts.patch_cache = Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
         }
 
         // Calculate some final metadata for logging
@@ -947,13 +1137,13 @@ impl BuildRequest {
         // "Thin" builds only build the final exe, so we only need to build one crate
         let crate_count = match ctx.mode {
             BuildMode::Thin { .. } => 1,
-            _ => self.get_unit_count_estimate(ctx).await,
+            _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
         // Update the status to show that we're starting the build and how many crates we expect to build
         ctx.status_starting_build(crate_count);
 
-        let mut cmd = self.build_command(ctx)?;
+        let mut cmd = self.build_command(&ctx.mode)?;
         tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.bundle, self.triple);
 
         let mut child = cmd
@@ -978,6 +1168,11 @@ impl BuildRequest {
                 Ok(Some(line)) = stderr.next_line() => line,
                 else => break,
             };
+
+            // If raw JSON diagnostics are requested, relay the line directly
+            if self.raw_json_diagnostics {
+                println!("{}", line);
+            }
 
             let Some(Ok(message)) = Message::parse_stream(std::io::Cursor::new(line)).next() else {
                 continue;
@@ -1040,7 +1235,11 @@ impl BuildRequest {
                 //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
                     if !finished.success {
-                        bail!("cargo build finished with errors.")
+                        bail!(
+                            "cargo build finished with errors for target: {} [{}]",
+                            self.main_target,
+                            self.triple
+                        );
                     }
                 }
                 _ => {}
@@ -1049,14 +1248,14 @@ impl BuildRequest {
 
         // Accumulate the rustc args from the wrapper, if they exist and can be parsed.
         let mut direct_rustc = RustcArgs::default();
-        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file.path()) {
+        if let Ok(res) = std::fs::read_to_string(self.rustc_wrapper_args_file()) {
             if let Ok(res) = serde_json::from_str(&res) {
                 direct_rustc = res;
             }
         }
 
         // If there's any warnings from the linker, we should print them out
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file.path()) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
             if !linker_warnings.is_empty() {
                 if output_location.is_none() {
                     tracing::error!("Linker warnings: {}", linker_warnings);
@@ -1067,7 +1266,7 @@ impl BuildRequest {
         }
 
         // Collect the linker args from the and update the rustc args
-        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file.path())
+        direct_rustc.link_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?
             .lines()
             .map(|s| s.to_string())
@@ -1077,8 +1276,9 @@ impl BuildRequest {
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
+            ctx.status_starting_link();
             let link_start = SystemTime::now();
-            self.run_fat_link(ctx, &exe, &direct_rustc).await?;
+            self.run_fat_link(&exe, &direct_rustc).await?;
             tracing::debug!(
                 "Fat linking completed in {}us",
                 SystemTime::now()
@@ -1091,7 +1291,6 @@ impl BuildRequest {
         let assets = self.collect_assets(&exe, ctx).await?;
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let bundle = self.bundle;
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
         tracing::debug!(
@@ -1102,27 +1301,55 @@ impl BuildRequest {
 
         Ok(BuildArtifacts {
             time_end,
-            bundle,
             exe,
             direct_rustc,
             time_start,
             assets,
             mode,
             depinfo,
+            root_dir: self.root_dir(),
             patch_cache: None,
+            build_id: ctx.build_id,
         })
     }
 
     /// Collect the assets from the final executable and modify the binary in place to point to the right
     /// hashed asset location.
     async fn collect_assets(&self, exe: &Path, ctx: &BuildContext) -> Result<AssetManifest> {
-        // walk every file in the incremental cache dir, reading and inserting items into the manifest.
-        let mut manifest = AssetManifest::default();
-
         // And then add from the exe directly, just in case it's LTO compiled and has no incremental cache
-        if !self.skip_assets {
-            ctx.status_extracting_assets();
-            manifest = super::assets::extract_assets_from_file(exe).await?;
+        if self.skip_assets {
+            return Ok(AssetManifest::default());
+        }
+
+        ctx.status_extracting_assets();
+
+        let mut manifest = super::assets::extract_assets_from_file(exe).await?;
+
+        // If the user has a public dir, we submit all the entries there as assets too
+        //
+        // These don't receive a hash in their filename, since they're user-provided static assets
+        // We only do this for web builds
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        AssetOptionsBuilder::new()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
+                }
+            }
         }
 
         Ok(manifest)
@@ -1196,7 +1423,6 @@ impl BuildRequest {
 
     async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
         let framework_dir = self.frameworks_folder();
-        _ = std::fs::create_dir_all(&framework_dir);
 
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
@@ -1214,6 +1440,8 @@ impl BuildRequest {
 
                 tracing::debug!("Copying framework from {from:?} to {to:?}");
 
+                _ = std::fs::create_dir_all(&framework_dir);
+
                 // in dev and on normal oses, we want to symlink the file
                 // otherwise, just copy it (since in release you want to distribute the framework)
                 if cfg!(any(windows, unix)) && !self.release {
@@ -1229,6 +1457,11 @@ impl BuildRequest {
                 } else {
                     std::fs::copy(from, to)?;
                 }
+            }
+
+            // Always create the framework dir for android
+            if self.bundle == BundleFormat::Android {
+                _ = std::fs::create_dir_all(&framework_dir);
             }
 
             // On android, the c++_shared flag means we need to copy the libc++_shared.so precompiled
@@ -1294,7 +1527,7 @@ impl BuildRequest {
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
     async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
-        if self.bundle == BundleFormat::Server {
+        if !ctx.is_primary_build() {
             return Ok(());
         }
 
@@ -1309,14 +1542,13 @@ impl BuildRequest {
             .map(|a| asset_dir.join(a.bundled_path()))
             .collect();
 
-        // The CLI creates a .version file in the asset dir to keep track of what version of the optimizer
-        // the asset was processed. If that version doesn't match the CLI version, we need to re-optimize
-        // all assets.
-        let version_file = self.asset_optimizer_version_file();
-        let clear_cache = std::fs::read_to_string(&version_file)
-            .ok()
-            .filter(|s| s == crate::VERSION.as_str())
-            .is_none();
+        // The CLI creates a .manifest.json file in the asset dir to keep track of the assets and
+        // other build metadata. If we can't parse this file (or the CLI version changed), then we
+        // want to re-copy all the assets rather than trying to do an incremental update.
+        let clear_cache = self
+            .load_manifest()
+            .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
+            .unwrap_or(true);
         if clear_cache {
             keep_bundled_output_paths.clear();
         }
@@ -1325,20 +1557,6 @@ impl BuildRequest {
             "Keeping bundled output paths: {:#?}",
             keep_bundled_output_paths
         );
-
-        // use walkdir::WalkDir;
-        // for item in WalkDir::new(&asset_dir).into_iter().flatten() {
-        //     // If this asset is in the manifest, we don't need to remove it
-        //     let canonicalized = dunce::canonicalize(item.path())?;
-        //     if !keep_bundled_output_paths.contains(canonicalized.as_path()) {
-        //         // Remove empty dirs, remove files not in the manifest
-        //         if item.file_type().is_dir() && item.path().read_dir()?.next().is_none() {
-        //             std::fs::remove_dir(item.path())?;
-        //         } else {
-        //             std::fs::remove_file(item.path())?;
-        //         }
-        //     }
-        // }
 
         // todo(jon): we also want to eventually include options for each asset's optimization and compression, which we currently aren't
         let mut assets_to_transfer = vec![];
@@ -1404,7 +1622,7 @@ impl BuildRequest {
         }
 
         // Write the version file so we know what version of the optimizer we used
-        std::fs::write(self.asset_optimizer_version_file(), crate::VERSION.as_str())?;
+        self.write_app_manifest(assets).await?;
 
         Ok(())
     }
@@ -1425,13 +1643,7 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_hotpatching();
 
-        tracing::debug!(
-            "Original builds for patch: {}",
-            self.link_args_file.path().display()
-        );
-        let raw_args = std::fs::read_to_string(self.link_args_file.path())
-            .context("Failed to read link args from file")?;
-        let args = raw_args.lines().collect::<Vec<_>>();
+        let args = artifacts.direct_rustc.link_args.clone();
 
         // Extract out the incremental object files.
         //
@@ -1551,9 +1763,17 @@ impl BuildRequest {
                 .iter()
                 .map(|s| format!("\"{}\"", s.to_string_lossy()))
                 .join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display()).into()];
+            out_args = vec![format!("@{}", self.windows_command_file().display()).into()];
+        }
+
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
         }
 
         // Run the linker directly!
@@ -1563,7 +1783,7 @@ impl BuildRequest {
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -1589,7 +1809,7 @@ impl BuildRequest {
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
         if let Some(idx) = args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(PathBuf::from(args[idx + 1]));
+            _ = std::fs::remove_file(PathBuf::from(args[idx + 1].as_str()));
         }
 
         // Now extract the assets from the fat binary
@@ -1614,7 +1834,7 @@ impl BuildRequest {
     ///
     /// This is basically just stripping away the rlibs and other libraries that will be satisfied
     /// by our stub step.
-    fn thin_link_args(&self, original_args: &[&str]) -> Result<Vec<String>> {
+    fn thin_link_args(&self, original_args: &[String]) -> Result<Vec<String>> {
         let mut out_args = vec![];
 
         match self.linker_flavor() {
@@ -1675,12 +1895,20 @@ impl BuildRequest {
                 // -lxyz
                 // There might be more, but some flags might break our setup.
                 for (idx, arg) in original_args.iter().enumerate() {
-                    if *arg == "-framework" || *arg == "-arch" || *arg == "-L" {
+                    if *arg == "-framework"
+                        || *arg == "-arch"
+                        || *arg == "-L"
+                        || *arg == "-target"
+                        || *arg == "-isysroot"
+                    {
                         out_args.push(arg.to_string());
                         out_args.push(original_args[idx + 1].to_string());
                     }
 
-                    if arg.starts_with("-l") || arg.starts_with("-m") {
+                    if arg.starts_with("-l")
+                        || arg.starts_with("-m")
+                        || arg.starts_with("-nodefaultlibs")
+                    {
                         out_args.push(arg.to_string());
                     }
                 }
@@ -1828,14 +2056,7 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn run_fat_link(
-        &self,
-        ctx: &BuildContext,
-        exe: &Path,
-        rustc_args: &RustcArgs,
-    ) -> Result<()> {
-        ctx.status_starting_link();
-
+    pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
         // Filter out the rlib files from the arguments
         let rlibs = rustc_args
             .link_args
@@ -1971,7 +2192,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args: Vec<_> = rustc_args.link_args.iter().skip(1).cloned().collect();
+        let mut args: Vec<_> = rustc_args.link_args.clone();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
@@ -2053,8 +2274,7 @@ impl BuildRequest {
         }
 
         // We want to go through wasm-ld directly, so we need to remove the -flavor flag
-        if self.is_wasm_or_wasi() {
-            let flavor_idx = args.iter().position(|arg| *arg == "-flavor").unwrap();
+        if let Some(flavor_idx) = args.iter().position(|arg| *arg == "-flavor") {
             args.remove(flavor_idx + 1);
             args.remove(flavor_idx);
         }
@@ -2078,16 +2298,24 @@ impl BuildRequest {
         let mut out_args = args.clone();
         if cfg!(windows) {
             let cmd_contents: String = out_args.iter().map(|f| format!("\"{f}\"")).join(" ");
-            std::fs::write(self.command_file.path(), cmd_contents)
+            std::fs::write(self.windows_command_file(), cmd_contents)
                 .context("Failed to write linker command file")?;
-            out_args = vec![format!("@{}", self.command_file.path().display())];
+            out_args = vec![format!("@{}", self.windows_command_file().display())];
+        }
+
+        // Add more search paths for the linker
+        let mut command_envs = rustc_args.envs.clone();
+
+        // On linux, we need to set a more complete PATH for the linker to find its libraries
+        if cfg!(target_os = "linux") {
+            command_envs.push(("PATH".to_string(), std::env::var("PATH").unwrap()));
         }
 
         // Run the linker directly!
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
-            .envs(rustc_args.envs.iter().map(|(k, v)| (k, v)))
+            .envs(command_envs)
             .output()
             .await?;
 
@@ -2124,6 +2352,48 @@ impl BuildRequest {
         );
 
         Ok(())
+    }
+
+    pub(crate) fn create_jump_table(
+        &self,
+        patch: &Path,
+        cache: &HotpatchModuleCache,
+    ) -> Result<JumpTable> {
+        use crate::build::patch::{
+            create_native_jump_table, create_wasm_jump_table, create_windows_jump_table,
+        };
+
+        let root_dir = self.root_dir();
+        let base_path = self.base_path();
+        let triple = &self.triple;
+
+        // Symbols are stored differently based on the platform, so we need to handle them differently.
+        // - Wasm requires the walrus crate and actually modifies the patch file
+        // - windows requires the pdb crate and pdb files
+        // - nix requires the object crate
+        let mut jump_table = match triple.operating_system {
+            OperatingSystem::Windows => create_windows_jump_table(patch, cache)?,
+            _ if triple.architecture == Architecture::Wasm32 => {
+                create_wasm_jump_table(patch, cache)?
+            }
+            _ => create_native_jump_table(patch, triple, cache)?,
+        };
+
+        // root_dir: &Path,
+        //     base_path: Option<&str>,
+        // Rebase the wasm binary to be relocatable once the jump table is generated
+        if triple.architecture == target_lexicon::Architecture::Wasm32 {
+            // Make sure we use the dir relative to the public dir, so the web can load it as a proper URL
+            //
+            // ie we would've shipped `/Users/foo/Projects/dioxus/target/dx/project/debug/web/public/wasm/lib.wasm`
+            //    but we want to ship `/wasm/lib.wasm`
+            jump_table.lib = PathBuf::from(
+                "/".to_string() + base_path.unwrap_or_default().trim_start_matches('/'),
+            )
+            .join(jump_table.lib.strip_prefix(root_dir).unwrap())
+        }
+
+        Ok(jump_table)
     }
 
     /// Automatically detect the linker flavor based on the target triple and any custom linkers.
@@ -2226,8 +2496,8 @@ impl BuildRequest {
     ///
     /// When processing the output of this command, you need to make sure to handle both cases which
     /// both have different formats (but with json output for both).
-    fn build_command(&self, ctx: &BuildContext) -> Result<Command> {
-        match &ctx.mode {
+    fn build_command(&self, build_mode: &BuildMode) -> Result<Command> {
+        match build_mode {
             // We're assembling rustc directly, so we need to be *very* careful. Cargo sets rustc's
             // env up very particularly, and we want to match it 1:1 but with some changes.
             //
@@ -2248,7 +2518,7 @@ impl BuildRequest {
                 cmd.env_remove("RUSTC_WRAPPER");
                 cmd.env_remove(DX_RUSTC_WRAPPER_ENV_VAR);
                 cmd.envs(
-                    self.cargo_build_env_vars(ctx)?
+                    self.cargo_build_env_vars(build_mode)?
                         .iter()
                         .map(|(k, v)| (k.as_ref(), v)),
                 );
@@ -2276,12 +2546,12 @@ impl BuildRequest {
             _ => {
                 let mut cmd = Command::new("cargo");
 
-                let env = self.cargo_build_env_vars(ctx)?;
-                let args = self.cargo_build_arguments(ctx);
+                let env = self.cargo_build_env_vars(build_mode)?;
+                let args = self.cargo_build_arguments(build_mode);
 
                 tracing::trace!("Building with cargo rustc");
                 for e in env.iter() {
-                    tracing::trace!(": {}={}", e.0, e.1);
+                    tracing::trace!(": {}={}", e.0, e.1.to_string_lossy());
                 }
 
                 for a in args.iter() {
@@ -2295,11 +2565,11 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
                     cmd.env(
                         DX_RUSTC_WRAPPER_ENV_VAR,
-                        dunce::canonicalize(self.rustc_wrapper_args_file.path())
-                            .unwrap()
+                        dunce::canonicalize(self.rustc_wrapper_args_file())
+                            .context("Failed to canonicalize rustc wrapper args file")?
                             .display()
                             .to_string(),
                     );
@@ -2319,7 +2589,7 @@ impl BuildRequest {
     /// We always use `cargo rustc` *or* `rustc` directly. This means we can pass extra flags like
     /// `-C` arguments directly to the compiler.
     #[allow(clippy::vec_init_then_push)]
-    fn cargo_build_arguments(&self, ctx: &BuildContext) -> Vec<String> {
+    pub(crate) fn cargo_build_arguments(&self, build_mode: &BuildMode) -> Vec<String> {
         let mut cargo_args = Vec::with_capacity(4);
 
         // Set the `--config profile.{profile}.{key}={value}` flags for the profile, filling in adhoc profile
@@ -2338,6 +2608,10 @@ impl BuildRequest {
 
         if self.no_default_features {
             cargo_args.push("--no-default-features".to_string());
+        }
+
+        if self.all_features {
+            cargo_args.push("--all-features".to_string());
         }
 
         if !self.features.is_empty() {
@@ -2359,7 +2633,7 @@ impl BuildRequest {
         cargo_args.push(self.executable_name().to_string());
 
         // Set offline/locked/frozen
-        let lock_opts = crate::VERBOSITY.get().cloned().unwrap_or_default();
+        let lock_opts = crate::verbosity_or_default();
         if lock_opts.frozen {
             cargo_args.push("--frozen".to_string());
         }
@@ -2375,6 +2649,25 @@ impl BuildRequest {
         cargo_args.push("--".to_string());
         cargo_args.extend(self.extra_rustc_args.clone());
 
+        // On windows, we pass /SUBSYSTEM:WINDOWS to prevent a console from appearing
+        if matches!(self.bundle, BundleFormat::Windows)
+            && !self
+                .rustflags
+                .flags
+                .iter()
+                .any(|f| f.starts_with("-Clink-arg=/SUBSYSTEM:"))
+        {
+            let subsystem = self
+                .windows_subsystem
+                .clone()
+                .unwrap_or_else(|| "WINDOWS".to_string());
+
+            cargo_args.push(format!("-Clink-arg=/SUBSYSTEM:{}", subsystem));
+            // We also need to set the entry point to mainCRTStartup to avoid windows looking
+            // for a WinMain function
+            cargo_args.push("-Clink-arg=/ENTRY:mainCRTStartup".to_string());
+        }
+
         // The bundle splitter needs relocation data to create a call-graph.
         // This will automatically be erased by wasm-opt during the optimization step.
         if self.bundle == BundleFormat::Web && self.wasm_split {
@@ -2383,7 +2676,7 @@ impl BuildRequest {
 
         // dx *always* links android and thin builds
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             cargo_args.push(format!(
                 "-Clinker={}",
@@ -2420,7 +2713,7 @@ impl BuildRequest {
         // We need save-temps and no-dead-strip in both cases though. When we run `cargo rustc` with
         // these args, they will be captured and re-ran for the fast compiles in the future, so whatever
         // we set here will be set for all future hot patches too.
-        if matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        if matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
             // rustc gives us some portable flags required:
             // - link-dead-code: prevents rust from passing -dead_strip to the linker since that's the default.
             // - save-temps=true: keeps the incremental object files around, which we need for manually linking.
@@ -2482,7 +2775,7 @@ impl BuildRequest {
                 target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
             ) || self.triple.operating_system == OperatingSystem::Wasi
             {
-                cargo_args.push("-Ctarget-cpu=mvp".into());
+                // cargo_args.push("-Ctarget-cpu=mvp".into()); // disabled due to changes in wasm-bindgne
                 cargo_args.push("-Clink-arg=--no-gc-sections".into());
                 cargo_args.push("-Clink-arg=--growable-table".into());
                 cargo_args.push("-Clink-arg=--export-table".into());
@@ -2497,7 +2790,10 @@ impl BuildRequest {
         cargo_args
     }
 
-    fn cargo_build_env_vars(&self, ctx: &BuildContext) -> Result<Vec<(Cow<'static, str>, String)>> {
+    pub(crate) fn cargo_build_env_vars(
+        &self,
+        build_mode: &BuildMode,
+    ) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         let mut env_vars = vec![];
 
         // Make sure to set all the crazy android flags. Cross-compiling is hard, man.
@@ -2508,21 +2804,25 @@ impl BuildRequest {
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
-            if let Some(base_path) = self.base_path() {
-                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string()));
+            if let Some(base_path) = self.trimmed_base_path() {
+                env_vars.push((ASSET_ROOT_ENV.into(), base_path.to_string().into()));
             }
-            env_vars.push((APP_TITLE_ENV.into(), self.config.web.app.title.clone()));
-            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name()));
+            env_vars.push((
+                APP_TITLE_ENV.into(),
+                self.config.web.app.title.clone().into(),
+            ));
+            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
-        let mut rust_flags = self.rustflags.clone();
+        let rust_flags = self.rustflags.clone();
 
-        // Disable reference types on wasm when using hotpatching
-        // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
-        if self.is_wasm_or_wasi() && matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat) {
-            rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
-        }
+        // seems like this is fixed?
+        // // Disable reference types on wasm when using hotpatching
+        // // https://blog.rust-lang.org/2024/09/24/webassembly-targets-change-in-default-target-features/#disabling-on-by-default-webassembly-proposals
+        // if self.is_wasm_or_wasi() && matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat) {
+        //     rust_flags.flags.push("-Ctarget-cpu=mvp".to_string());
+        // }
 
         // Set the rust flags for the build if they're not empty.
         if !rust_flags.flags.is_empty() {
@@ -2530,19 +2830,20 @@ impl BuildRequest {
                 "RUSTFLAGS".into(),
                 rust_flags
                     .encode_space_separated()
-                    .context("Failed to encode RUSTFLAGS")?,
+                    .context("Failed to encode RUSTFLAGS")?
+                    .into(),
             ));
         }
 
         // If we're either zero-linking or using a custom linker, make `dx` itself do the linking.
         if self.custom_linker.is_some()
-            || matches!(ctx.mode, BuildMode::Thin { .. } | BuildMode::Fat)
+            || matches!(build_mode, BuildMode::Thin { .. } | BuildMode::Fat)
         {
             LinkAction {
                 triple: self.triple.clone(),
                 linker: self.custom_linker.clone(),
-                link_err_file: dunce::canonicalize(self.link_err_file.path())?,
-                link_args_file: dunce::canonicalize(self.link_args_file.path())?,
+                link_err_file: dunce::canonicalize(self.link_err_file())?,
+                link_args_file: dunce::canonicalize(self.link_args_file())?,
             }
             .write_env_vars(&mut env_vars)?;
         }
@@ -2563,7 +2864,7 @@ impl BuildRequest {
     /// cargo-ndk is MIT licensed.
     ///
     /// <https://github.com/bbqsrc/cargo-ndk>
-    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, String)>> {
+    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
         // Derived from getenv_with_target_prefixes in `cc` crate.
         fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
             #[inline]
@@ -2611,7 +2912,7 @@ impl BuildRequest {
             }) as _
         }
 
-        let mut env_vars: Vec<(Cow<'static, str>, String)> = vec![];
+        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
 
         let min_sdk_version = self.min_sdk_version_or_default();
 
@@ -2635,7 +2936,7 @@ impl BuildRequest {
 
         if let Some(java_home) = java_home {
             tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.display().to_string()));
+            env_vars.push(("JAVA_HOME".into(), java_home.into_os_string()));
         }
 
         let triple = self.triple.to_string();
@@ -2766,7 +3067,7 @@ impl BuildRequest {
             ),
             ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
             // Set the wry env vars - this is where wry will dump its kotlin files.
-            // Their setup is really annyoing and requires us to hardcode `dx` to specific versions of tao/wry.
+            // Their setup is really annoying and requires us to hardcode `dx` to specific versions of tao/wry.
             (
                 "WRY_ANDROID_PACKAGE".to_string(),
                 "dev.dioxus.main".to_string().into(),
@@ -2786,13 +3087,7 @@ impl BuildRequest {
             // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
             ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
         ] {
-            env_vars.push((
-                env.0.into(),
-                env.1
-                    .to_str()
-                    .expect("Failed to convert env var value to string")
-                    .to_string(),
-            ));
+            env_vars.push((env.0.into(), env.1));
         }
 
         if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
@@ -2800,7 +3095,7 @@ impl BuildRequest {
                 // Convert windows paths to unix-style paths
                 // This is a workaround for the fact that the `cc` crate expects unix-style paths
                 // and will fail if it encounters windows-style paths.
-                var.1 = var.1.replace('\\', "/");
+                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
             }
         }
 
@@ -2811,9 +3106,9 @@ impl BuildRequest {
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
     /// TODO: always use <https://doc.rust-lang.org/nightly/cargo/reference/unstable.html#unit-graph> once it is stable
-    async fn get_unit_count_estimate(&self, ctx: &BuildContext) -> usize {
+    async fn get_unit_count_estimate(&self, build_mode: &BuildMode) -> usize {
         // Try to get it from nightly
-        if let Ok(count) = self.get_unit_count(ctx).await {
+        if let Ok(count) = self.get_unit_count(build_mode).await {
             return count;
         }
 
@@ -2833,7 +3128,7 @@ impl BuildRequest {
     /// available with the current version of rustc the user has installed.
     ///
     /// It also might not be super reliable - I think in practice it occasionally returns 2x the units.
-    async fn get_unit_count(&self, ctx: &BuildContext) -> crate::Result<usize> {
+    async fn get_unit_count(&self, build_mode: &BuildMode) -> crate::Result<usize> {
         #[derive(Debug, Deserialize)]
         struct UnitGraph {
             units: Vec<serde_json::Value>,
@@ -2845,9 +3140,9 @@ impl BuildRequest {
             .arg("--unit-graph")
             .arg("-Z")
             .arg("unstable-options")
-            .args(self.cargo_build_arguments(ctx))
+            .args(self.cargo_build_arguments(build_mode))
             .envs(
-                self.cargo_build_env_vars(ctx)?
+                self.cargo_build_env_vars(build_mode)?
                     .iter()
                     .map(|(k, v)| (k.as_ref(), v)),
             )
@@ -2918,8 +3213,18 @@ impl BuildRequest {
         }
     }
 
+    /// Create a workdir for the given platform
+    /// This can be used as a temporary directory for the build, but in an observable way such that
+    /// you can see the files in the directory via `target`
+    ///
+    /// target/dx/build/app/web/
+    /// target/dx/build/app/web/public/
+    /// target/dx/build/app/web/server.exe
     fn platform_dir(&self) -> PathBuf {
-        self.build_dir(self.bundle, self.release)
+        self.internal_out_dir()
+            .join(&self.main_target)
+            .join(if self.release { "release" } else { "debug" })
+            .join(self.bundle.build_folder_name())
     }
 
     fn platform_exe_name(&self) -> String {
@@ -3180,7 +3485,23 @@ impl BuildRequest {
     ///
     /// The directory is specific for this app and might be
     pub(crate) fn session_cache_dir(&self) -> PathBuf {
-        self.session_cache_dir.path().to_path_buf()
+        self.session_cache_dir.join(self.bundle.to_string())
+    }
+
+    pub(crate) fn rustc_wrapper_args_file(&self) -> PathBuf {
+        self.session_cache_dir().join("rustc_wrapper_args.txt")
+    }
+
+    fn link_err_file(&self) -> PathBuf {
+        self.session_cache_dir().join("link_err.txt")
+    }
+
+    fn link_args_file(&self) -> PathBuf {
+        self.session_cache_dir().join("link_args.json")
+    }
+
+    fn windows_command_file(&self) -> PathBuf {
+        self.session_cache_dir().join("windows_command.txt")
     }
 
     /// Get the outdir specified by the Dioxus.toml, relative to the crate directory.
@@ -3200,20 +3521,6 @@ impl BuildRequest {
         let dir = self.target_dir.join("dx");
         std::fs::create_dir_all(&dir).unwrap();
         dir
-    }
-
-    /// Create a workdir for the given platform
-    /// This can be used as a temporary directory for the build, but in an observable way such that
-    /// you can see the files in the directory via `target`
-    ///
-    /// target/dx/build/app/web/
-    /// target/dx/build/app/web/public/
-    /// target/dx/build/app/web/server.exe
-    pub(crate) fn build_dir(&self, bundle: BundleFormat, release: bool) -> PathBuf {
-        self.internal_out_dir()
-            .join(&self.main_target)
-            .join(if release { "release" } else { "debug" })
-            .join(bundle.build_folder_name())
     }
 
     /// target/dx/bundle/app/
@@ -3266,7 +3573,7 @@ impl BuildRequest {
         package: &krates::cm::Package,
         triple: &Triple,
         renderer: Renderer,
-    ) -> String {
+    ) -> Option<String> {
         // Try to find the feature that activates the dioxus feature for the given platform
         let dioxus_feature = renderer.feature_name(triple);
 
@@ -3306,60 +3613,63 @@ impl BuildRequest {
             None
         });
 
-        res.unwrap_or_else(|| {
-            let fallback = format!("dioxus/{dioxus_feature}");
-            tracing::debug!(
-                "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
-            );
-            fallback
+        res.or_else(|| {
+            let depends_on_dioxus = package.dependencies.iter().any(|dep| dep.name == "dioxus");
+            if depends_on_dioxus {
+                let fallback = format!("dioxus/{dioxus_feature}");
+                tracing::debug!(
+                    "Could not find explicit feature for renderer {renderer}, passing `fallback` instead"
+                );
+                Some(fallback)
+            } else {
+                None
+            }
         })
     }
 
-    /// Return the platforms that are enabled for the package
-    ///
-    /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn warn_manganis_strip(
-        krates: &krates::Krates,
-        cargo_toml: &cargo_toml::Manifest,
-        main_package: &krates::cm::Package,
-        profile: &str,
-        release: bool,
-    ) {
-        let Some(id) = krates.nid_for_kid(&main_package.id.clone().into()) else {
-            return;
+    /// Checks the strip setting for the package, resolving profiles recursively
+    pub(crate) fn get_strip_setting(&self) -> StripSetting {
+        let cargo_toml = &self.workspace.cargo_toml;
+        let profile = &self.profile;
+        let release = self.release;
+        let profile = match (cargo_toml.profile.custom.get(profile), release) {
+            (Some(custom_profile), _) => Some(custom_profile),
+            (_, true) => cargo_toml.profile.release.as_ref(),
+            (_, false) => cargo_toml.profile.dev.as_ref(),
         };
-        let dependencies = krates.direct_dependencies(id);
-        if !dependencies.iter().any(|dep| dep.krate.name == "manganis") {
-            return;
+
+        let Some(profile) = profile else {
+            return StripSetting::None;
+        };
+
+        // Get the strip setting from the profile or the profile it inherits from
+        fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
+            profile.strip.or_else(|| {
+                // If we can't find the strip setting, check if we inherit from another profile
+                profile.inherits.as_ref().and_then(|inherits| {
+                    let profile = match inherits.as_str() {
+                        "dev" => profiles.dev.as_ref(),
+                        "release" => profiles.release.as_ref(),
+                        "test" => profiles.test.as_ref(),
+                        "bench" => profiles.bench.as_ref(),
+                        other => profiles.custom.get(other),
+                    };
+                    profile.and_then(|p| get_strip(p, profiles))
+                })
+            })
         }
 
-        let (profile_name, profile) = match (cargo_toml.profile.custom.get(profile), release) {
-            (Some(custom_profile), _) => (profile, Some(custom_profile)),
-            (_, true) => ("release", cargo_toml.profile.release.as_ref()),
-            (_, false) => ("dev", cargo_toml.profile.dev.as_ref()),
+        let Some(strip) = get_strip(profile, &cargo_toml.profile) else {
+            // If the profile doesn't have a strip option, return None
+            return StripSetting::None;
         };
 
-        let Some(profile) = profile else { return };
-
-        let Some(strip) = profile.strip.as_ref() else {
-            // If the profile doesn't have a strip option, we don't need to warn
-            return;
-        };
-
-        if matches!(strip, cargo_toml::StripSetting::Symbols) {
-            tracing::warn!(
-                "The `strip` option is enabled in the `{profile_name}` profile. This may cause manganis assets to be stripped from the final binary.",
-            );
-        }
+        strip
     }
 
-    /// Return the platforms that are enabled for the package
-    ///
-    /// Ideally only one platform is enabled but we need to be able to
-    pub(crate) fn enabled_cargo_toml_renderers(
+    pub(crate) fn renderer_enabled_by_dioxus_dependency(
         package: &krates::cm::Package,
-        no_default_features: bool,
-    ) -> Vec<(Renderer, String)> {
+    ) -> Option<(Renderer, String)> {
         let mut renderers = vec![];
 
         // Attempt to discover the platform directly from the dioxus dependency
@@ -3368,12 +3678,39 @@ impl BuildRequest {
         // dioxus = { features = ["web"] }
         //
         if let Some(dxs) = package.dependencies.iter().find(|dep| dep.name == "dioxus") {
-            for f in dxs.features.iter() {
-                if let Some(renderer) = Renderer::autodetect_from_cargo_feature(f) {
-                    renderers.push((renderer, f.clone()));
+            for feature in dxs.features.iter() {
+                if let Some(renderer) = Renderer::autodetect_from_cargo_feature(feature) {
+                    renderers.push((renderer, format!("dioxus/{}", feature)));
                 }
             }
         }
+
+        if renderers.len() != 1 {
+            return None;
+        }
+
+        Some(renderers[0].clone())
+    }
+
+    pub(crate) fn features_that_enable_renderers(
+        package: &krates::cm::Package,
+    ) -> Vec<(Renderer, String)> {
+        package
+            .features
+            .keys()
+            .filter_map(|key| {
+                Renderer::autodetect_from_cargo_feature(key).map(|v| (v, key.to_string()))
+            })
+            .collect()
+    }
+
+    /// Return the platforms that are enabled for the package only from the default features
+    ///
+    /// Ideally only one platform is enabled but we need to be able to
+    pub(crate) fn enabled_cargo_toml_default_features_renderers(
+        package: &krates::cm::Package,
+    ) -> Vec<(Renderer, String)> {
+        let mut renderers = vec![];
 
         // Start searching through the default features
         //
@@ -3385,10 +3722,6 @@ impl BuildRequest {
         // [features]
         // default = ["web"]
         // web = ["dioxus/web"]
-        if no_default_features {
-            return renderers;
-        }
-
         let Some(default) = package.features.get("default") else {
             return renderers;
         };
@@ -3638,6 +3971,39 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Strip the final binary after extracting all assets with rustc-objcopy
+    async fn strip_binary(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        // Never strip the binary if we are going to bundle split it
+        if self.wasm_split {
+            return Ok(());
+        }
+        let exe = &artifacts.exe;
+        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
+        let strip_arg = match self.get_strip_setting() {
+            StripSetting::Debuginfo => Some("--strip-debug"),
+            StripSetting::Symbols => Some("--strip-all"),
+            StripSetting::None => None,
+        };
+        if let Some(strip_arg) = strip_arg {
+            let rustc_objcopy = self.workspace.rustc_objcopy();
+            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
+            let mut command = Command::new(rustc_objcopy);
+            command.env("LD_LIBRARY_PATH", &dylib_path);
+            command.arg(strip_arg).arg(exe).arg(exe);
+            let output = command.output().await?;
+            if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
+                return Err(anyhow::anyhow!("Failed to strip binary"));
+            }
+        }
+        Ok(())
+    }
+
     /// Check if assets should be pre_compressed. This will only be true in release mode if the user
     /// has enabled pre_compress in the web config.
     fn should_pre_compress_web_assets(&self, release: bool) -> bool {
@@ -3686,19 +4052,16 @@ impl BuildRequest {
 
         // Prepare our configuration
         //
-        // we turn off debug symbols in dev mode but leave them on in release mode (weird!) since
-        // wasm-opt and wasm-split need them to do better optimizations.
+        // we turn on debug symbols in dev mode
         //
         // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
         // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let will_wasm_opt = self.release || self.wasm_split;
         let keep_debug = self.config.web.wasm_opt.debug
             || self.debug_symbols
             || self.wasm_split
             || !self.release
-            || will_wasm_opt
             || ctx.mode == BuildMode::Fat;
-        let keep_names = will_wasm_opt || ctx.mode == BuildMode::Fat;
+        let keep_names = self.wasm_split || ctx.mode == BuildMode::Fat;
         let demangle = false;
         let wasm_opt_options = WasmOptConfig {
             memory_packing: self.wasm_split,
@@ -3736,10 +4099,6 @@ impl BuildRequest {
         if should_bundle_split {
             ctx.status_splitting_bundle();
 
-            if !will_wasm_opt {
-                bail!("Bundle splitting should automatically enable wasm-opt, but it was not enabled.");
-            }
-
             // Load the contents of these binaries since we need both of them
             // We're going to use the default makeLoad glue from wasm-split
             let original = std::fs::read(exe)?;
@@ -3760,7 +4119,8 @@ impl BuildRequest {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
                 wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/assets/{url}\", [], fusedImports);",
+                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
+                    base_path = self.base_path_or_default(),
                     url = assets
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
                 )?;
@@ -3784,9 +4144,10 @@ impl BuildRequest {
 
                 writeln!(
                     glue,
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/assets/{url}\", [{deps}], fusedImports);",
+                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/{base_path}/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
 
+                    base_path = self.base_path_or_default(),
 
                     // Again, register this wasm with the asset system
                     url = assets
@@ -3877,15 +4238,15 @@ impl BuildRequest {
         writeln!(
             buf_writer,
             r#"
-window.__wasm_split_main_initSync = initSync;
+globalThis.__wasm_split_main_initSync = initSync;
 
 // Actually perform the load
 __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     // assign this module to be accessible globally
-    window.__dx_mainWasm = wasm;
-    window.__dx_mainInit = __wbg_init;
-    window.__dx_mainInitSync = initSync;
-    window.__dx___wbg_get_imports = __wbg_get_imports;
+    globalThis.__dx_mainWasm = wasm;
+    globalThis.__dx_mainInit = __wbg_init;
+    globalThis.__dx_mainInitSync = initSync;
+    globalThis.__dx___wbg_get_imports = __wbg_get_imports;
 
     if (wasm.__wbindgen_start == undefined) {{
         wasm.main();
@@ -3928,7 +4289,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    /// Get the path to the wasm-bindgen output files. Either the direct file or the opitmized one depending on the build mode
+    /// Get the path to the wasm-bindgen output files. Either the direct file or the optimized one depending on the build mode
     fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
         let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
         if self.should_bundle_to_asset() {
@@ -4000,38 +4361,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        match self.bundle {
-            BundleFormat::Android => {
-                ctx.status_running_gradle();
+        if let BundleFormat::Android = self.bundle {
+            ctx.status_running_gradle();
 
-                // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-                let build_type = if self.release && self.config.bundle.android.is_some() {
-                    "assembleRelease"
-                } else {
-                    "assembleDebug"
-                };
+            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+            let build_type = if self.release && self.config.bundle.android.is_some() {
+                "assembleRelease"
+            } else {
+                "assembleDebug"
+            };
 
-                let output = Command::new(self.gradle_exe()?)
-                    .arg(build_type)
-                    .current_dir(self.root_dir())
-                    .output()
-                    .await?;
+            let output = Command::new(self.gradle_exe()?)
+                .arg(build_type)
+                .current_dir(self.root_dir())
+                .output()
+                .await
+                .context("Failed to run gradle")?;
 
-                if !output.status.success() {
-                    bail!(
-                        "Failed to assemble apk: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
+            if !output.status.success() {
+                bail!(
+                    "Failed to assemble apk: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
             }
-            BundleFormat::Ios => {
-                if self.should_codesign {
-                    ctx.status_codesigning();
-                    self.codesign_ios().await?;
-                }
-            }
+        }
 
-            _ => {}
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        ) && self.should_codesign
+        {
+            self.codesign_apple(ctx).await?;
         }
 
         Ok(())
@@ -4080,7 +4441,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             std::fs::set_permissions(
                 self.root_dir().join("gradlew"),
                 std::fs::Permissions::from_mode(0o755),
-            )?;
+            )
+            .context("Failed to make gradlew executable")?;
         }
 
         let gradle_exec_name = match cfg!(windows) {
@@ -4109,18 +4471,23 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// - extra scaffolding
     ///
     /// It's not guaranteed that they're different from any other folder
-    pub(crate) fn prepare_build_dir(&self) -> Result<()> {
+    pub(crate) fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
-        static INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static PRIMARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static SECONDARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
 
-        let success = INITIALIZED.get_or_init(|| {
-            if self.bundle != BundleFormat::Server {
+        let initializer = if ctx.is_primary_build() {
+            &PRIMARY_INITIALIZED
+        } else {
+            &SECONDARY_INITIALIZED
+        };
+
+        let success = initializer.get_or_init(|| {
+            if ctx.is_primary_build() {
                 _ = remove_dir_all(self.exe_dir());
             }
-
-            self.flush_session_cache();
 
             create_dir_all(self.root_dir())?;
             create_dir_all(self.exe_dir())?;
@@ -4168,12 +4535,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .join("main")
                 .join("assets"),
 
+            // We put assets in public/assets for server apps
+            BundleFormat::Server => self.root_dir().join("public").join("assets"),
+
             // everyone else is soooo normal, just app/assets :)
-            BundleFormat::Web
-            | BundleFormat::Ios
-            | BundleFormat::Windows
-            | BundleFormat::Linux
-            | BundleFormat::Server => self.root_dir().join("assets"),
+            BundleFormat::Web | BundleFormat::Ios | BundleFormat::Windows | BundleFormat::Linux => {
+                self.root_dir().join("assets")
+            }
         }
     }
 
@@ -4228,15 +4596,21 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .with_extension("wasm")
     }
 
-    /// Get the path to the asset optimizer version file
-    pub(crate) fn asset_optimizer_version_file(&self) -> PathBuf {
-        self.platform_dir().join(".cli-version")
+    /// Get the path to the app manifest file
+    ///
+    /// This includes metadata about the build such as the bundle format, target triple, features, etc.
+    /// Manifests are only written by the `PRIMARY` build.
+    pub(crate) fn app_manifest(&self) -> PathBuf {
+        self.platform_dir().join(".manifest.json")
     }
 
-    fn flush_session_cache(&self) {
-        let cache_dir = self.session_cache_dir();
-        _ = std::fs::remove_dir_all(&cache_dir);
-        _ = std::fs::create_dir_all(&cache_dir);
+    pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
+        let manifest_path = self.app_manifest();
+        let manifest_data = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+        let manifest: AppManifest = serde_json::from_str(&manifest_data)
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+        Ok(manifest)
     }
 
     /// Check for tooling that might be required for this build.
@@ -4405,7 +4779,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if matches!(ctx.mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+        if matches!(ctx.mode, BuildMode::Fat) {
             // `dx` compiles everything with `--target` which ends up with a structure like:
             // target/<triple>/<profile>/.fingerprint/<package_name>-<hash>
             //
@@ -4433,13 +4807,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    async fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
-        let exe = match self.bundle {
+    pub(crate) fn patch_cache_exe(&self, exe: &Path) -> PathBuf {
+        match self.bundle {
             BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
-        };
+        }
+    }
 
-        Ok(HotpatchModuleCache::new(&exe, &self.triple)?)
+    pub(crate) fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
+        Ok(HotpatchModuleCache::new(
+            &self.patch_cache_exe(exe),
+            &self.triple,
+        )?)
     }
 
     /// Users create an index.html for their SPA if they want it
@@ -4480,7 +4859,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         };
 
         // Inject any resources from the config into the html
-        self.inject_resources(assets, wasm_path, &mut html)?;
+        self.inject_resources(assets, &mut html)?;
 
         // Inject loading scripts if they are not already present
         self.inject_loading_scripts(assets, &mut html);
@@ -4499,12 +4878,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     }
 
     // Inject any resources from the config into the html
-    fn inject_resources(
-        &self,
-        assets: &AssetManifest,
-        wasm_path: &str,
-        html: &mut String,
-    ) -> Result<()> {
+    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
         use std::fmt::Write;
 
         // Collect all resources into a list of styles and scripts
@@ -4539,7 +4913,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Add the base path to the head if this is a debug build
         if self.is_dev_build() {
-            if let Some(base_path) = &self.base_path() {
+            if let Some(base_path) = &self.trimmed_base_path() {
                 head_resources.push_str(&format_base_path_meta_element(base_path));
             }
         }
@@ -4550,33 +4924,47 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             match asset.options().variant() {
                 AssetVariant::Css(css_options) => {
                     if css_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"style\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if css_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
+                        );
                     }
                 }
                 AssetVariant::Image(image_options) => {
                     if image_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"image\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
                     }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
-                        head_resources.push_str(&format!(
-                            "<link rel=\"preload\" as=\"script\" href=\"/{{base_path}}/assets/{asset_path}\" crossorigin>"
-                        ))
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
+                    if js_options.static_head() {
+                        _ = write!(
+                            head_resources,
+                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
+                        );
                     }
                 }
                 _ => {}
             }
         }
 
-        // Manually inject the wasm file for preloading. WASM currently doesn't support preloading in the manganis asset system
-        head_resources.push_str(&format!(
-            "<link rel=\"preload\" as=\"fetch\" type=\"application/wasm\" href=\"/{{base_path}}/{wasm_path}\" crossorigin>"
-        ));
+        // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
+        // And if they do not match then Safari downloads the wasm file twice.
+        // See https://github.com/wasm-bindgen/wasm-bindgen/blob/ac51055a4c39fa0affe02f7b63fb1d4c9b3ddfaf/crates/cli-support/src/js/mod.rs#L967
         Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
 
         Ok(())
@@ -4635,6 +5023,34 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
+    /// Resolve the configured public directory relative to the crate, if any.
+    pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
+        let path = self.config.application.public_dir.as_ref()?;
+
+        if path.as_os_str().is_empty() {
+            return None;
+        }
+
+        Some(if path.is_absolute() {
+            path.clone()
+        } else {
+            self.crate_dir().join(path)
+        })
+    }
+
+    pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
+        let Some(static_dir) = self.user_public_dir() else {
+            return false;
+        };
+
+        // Canonicalize when possible so we work with editors that use tmp files
+        let canonical_static =
+            dunce::canonicalize(&static_dir).unwrap_or_else(|_| static_dir.clone());
+        let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+
+        canonical_path.starts_with(&canonical_static)
+    }
+
     /// Get the base path from the config or None if this is not a web or server build
     pub(crate) fn base_path(&self) -> Option<&str> {
         self.base_path
@@ -4643,14 +5059,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .filter(|_| matches!(self.bundle, BundleFormat::Web | BundleFormat::Server))
     }
 
-    /// Get the normalized base path for the application with `/` trimmed from both ends. If the base path is not set, this will return `.`.
+    /// Get the normalized base path for the application with `/` trimmed from both ends.
+    pub(crate) fn trimmed_base_path(&self) -> Option<&str> {
+        self.base_path()
+            .map(|p| p.trim_matches('/'))
+            .filter(|p| !p.is_empty())
+    }
+
+    /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
-        let trimmed_path = self.base_path().unwrap_or_default().trim_matches('/');
-        if trimmed_path.is_empty() {
-            "."
-        } else {
-            trimmed_path
-        }
+        self.trimmed_base_path().unwrap_or(".")
     }
 
     /// Get the path to the package manifest directory
@@ -4668,7 +5086,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.config
             .application
             .android_min_sdk_version
-            .unwrap_or(24)
+            .unwrap_or(28)
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
@@ -4810,37 +5228,38 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// Note how every platform gets its own profile, and each platform has a dev and release profile.
     fn profile_args(&self) -> Vec<String> {
+        // Always disable stripping so symbols still exist for the asset system. We will apply strip manually
+        // after assets are built
+        let profile = self.profile.as_str();
+        let mut args = Vec::new();
+        args.push(format!(r#"profile.{profile}.strip=false"#));
+
         // If the user defined the profile in the Cargo.toml, we don't need to add it to our adhoc list
-        if self
+        if !self
             .workspace
             .cargo_toml
             .profile
             .custom
             .contains_key(&self.profile)
         {
-            return vec![];
-        }
+            // Otherwise, we need to add the profile arguments to make it adhoc
+            let inherits = if self.release { "release" } else { "dev" };
 
-        // Otherwise, we need to add the profile arguments to make it adhoc
-        let mut args = Vec::new();
+            // Add the profile definition first.
+            args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
 
-        let profile = self.profile.as_str();
-        let inherits = if self.release { "release" } else { "dev" };
+            // The default dioxus experience is to lightly optimize the web build, both in debug and release
+            // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
+            // that with wasm-opt tooling instead.
+            if matches!(self.bundle, BundleFormat::Web) {
+                if self.release {
+                    args.push(format!(r#"profile.{profile}.opt-level="s""#));
+                }
 
-        // Add the profile definition first.
-        args.push(format!(r#"profile.{profile}.inherits="{inherits}""#));
-
-        // The default dioxus experience is to lightly optimize the web build, both in debug and release
-        // Note that typically in release builds, you would strip debuginfo, but we actually choose to do
-        // that with wasm-opt tooling instead.
-        if matches!(self.bundle, BundleFormat::Web) {
-            if self.release {
-                args.push(format!(r#"profile.{profile}.opt-level="s""#));
-            }
-
-            if self.wasm_split {
-                args.push(format!(r#"profile.{profile}.lto=true"#));
-                args.push(format!(r#"profile.{profile}.debug=true"#));
+                if self.wasm_split {
+                    args.push(format!(r#"profile.{profile}.lto=true"#));
+                    args.push(format!(r#"profile.{profile}.debug=true"#));
+                }
             }
         }
 
@@ -4850,44 +5269,24 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    async fn prebuild(&self) -> Result<()> {
-        if self.bundle == BundleFormat::Server {
-            return Ok(());
-        }
+    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_codesigning();
 
-        // Run the tailwind build before bundling anything else
-        crate::TailwindCli::run_once(
-            self.package_manifest_dir(),
-            self.config.application.tailwind_input.clone(),
-            self.config.application.tailwind_output.clone(),
-        )
-        .await?;
-
-        // We want to copy over the prebuilt OpenSSL binaries to ~/.dx/prebuilt/openssl-<version>
-        if self.bundle == BundleFormat::Android {
-            AndroidTools::unpack_prebuilt_openssl()?;
-        }
-
-        Ok(())
-    }
-
-    pub async fn codesign_ios(&self) -> Result<()> {
         // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
         let mut _saved_entitlements = None;
 
         let mut app_dev_name = self.apple_team_id.clone();
         if app_dev_name.is_none() {
-            app_dev_name =
-                Some(Self::auto_provision_signing_name().await.context(
-                    "Failed to automatically provision signing name for iOS codesigning.",
-                )?);
+            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
+                "Failed to automatically provision signing name for Apple codesigning.",
+            )?);
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
         if entitlements_file.is_none() {
             let entitlements_xml = Self::auto_provision_entitlements()
                 .await
-                .context("Failed to auto-provision entitlements for iOS codesigning.")?;
+                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -4902,10 +5301,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         )?;
 
         tracing::debug!(
-            "Codesigning iOS app with entitlements: {} and dev name: {}",
+            "Codesigning Apple app with entitlements: {} and dev name: {}",
             entitlements_file.display(),
             app_dev_name
         );
+
+        // determine the target exe - the server and macos bundles are different
+        let target_exe = match self.bundle {
+            BundleFormat::MacOS => self.root_dir(),
+            BundleFormat::Ios => self.root_dir(),
+            BundleFormat::Server => self.main_exe(),
+            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
+        };
 
         // codesign the app
         let output = Command::new("codesign")
@@ -4916,7 +5323,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 "--sign",
                 app_dev_name,
             ])
-            .arg(self.root_dir())
+            .arg(target_exe)
             .output()
             .await
             .context("Failed to codesign the app - is `codesign` in your path?")?;
@@ -5062,5 +5469,18 @@ We checked the folders:
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
         ))
+    }
+
+    async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {
+        let manifest = AppManifest {
+            assets: assets.clone(),
+            cli_version: crate::VERSION.to_string(),
+            rust_version: self.workspace.rustc_version.clone(),
+        };
+
+        let manifest_path = self.app_manifest();
+        std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
+
+        Ok(())
     }
 }

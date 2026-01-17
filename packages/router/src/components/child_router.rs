@@ -1,8 +1,8 @@
 /// Components that allow the macro to add child routers. This component provides a context
 /// to the child router that maps child routes to root routes and vice versa.
-use crate::Routable;
+use crate::{Outlet, OutletContext, Routable};
 use dioxus_core::{provide_context, try_consume_context, use_hook, Element};
-use dioxus_core_macro::{component, Props};
+use dioxus_core_macro::{component, rsx, Props};
 
 /// Maps a child route into the root router and vice versa
 // NOTE: Currently child routers only support simple static prefixes, but this
@@ -61,8 +61,9 @@ pub fn ChildRouter<R: Routable>(props: ChildRouterProps<R>) -> Element {
         provide_context(ChildRouteMapping {
             format_route_as_root_route: props.format_route_as_root_route,
             parse_route_from_root_route: props.parse_route_from_root_route,
-        })
+        });
+        provide_context(OutletContext::<R>::new());
     });
 
-    props.route.render(0)
+    rsx! { Outlet::<R> {} }
 }

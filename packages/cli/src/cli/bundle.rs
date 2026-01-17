@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, BundleFormat};
+use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat};
 use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
 use std::collections::HashMap;
@@ -39,17 +39,21 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        AppBuilder::started(&client, BuildMode::Base { run: false })?
-            .finish_build()
-            .await?;
+        let mut server_artifacts = None;
+        let client_artifacts =
+            AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
+                .finish_build()
+                .await?;
 
         tracing::info!(path = ?client.root_dir(), "Client build completed successfully! 🚀");
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
-            AppBuilder::started(server, BuildMode::Base { run: false })?
-                .finish_build()
-                .await?;
+            server_artifacts = Some(
+                AppBuilder::started(server, BuildMode::Base { run: false }, BuildId::SECONDARY)?
+                    .finish_build()
+                    .await?,
+            );
 
             tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
         }
@@ -134,7 +138,14 @@ impl Bundle {
             );
         }
 
-        Ok(StructuredOutput::BundleOutput { bundles })
+        let client = client_artifacts.into_structured_output();
+        let server = server_artifacts.map(|s| s.into_structured_output());
+
+        Ok(StructuredOutput::BundleOutput {
+            bundles,
+            client,
+            server,
+        })
     }
 
     fn bundle_desktop(
@@ -172,7 +183,35 @@ impl Bundle {
             bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
         }
 
+        /// Resolve an icon path relative to the crate dir
+        fn canonicalize_icon_path(build: &BuildRequest, icon: &mut String) -> Result<(), Error> {
+            let icon_path = build
+                .crate_dir()
+                .join(&icon)
+                .canonicalize()
+                .with_context(|| format!("Failed to canonicalize path to icon {icon:?}"))?;
+            *icon = icon_path.to_string_lossy().to_string();
+            Ok(())
+        }
+
+        // Resolve bundle.icon relative to the crate dir
+        if let Some(icons) = bundle_settings.icon.as_mut() {
+            for icon in icons.iter_mut() {
+                canonicalize_icon_path(build, icon)?;
+            }
+        }
+
+        #[allow(deprecated)]
         if cfg!(windows) {
+            // Resolve bundle.windows.icon_path relative to the crate dir
+            let mut windows_icon_path = bundle_settings
+                .windows
+                .icon_path
+                .to_string_lossy()
+                .to_string();
+            canonicalize_icon_path(build, &mut windows_icon_path)?;
+            bundle_settings.windows.icon_path = PathBuf::from(&windows_icon_path);
+
             let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
             if windows_icon_override.is_none() {
                 let icon_path = bundle_settings

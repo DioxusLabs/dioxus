@@ -4,7 +4,7 @@ FROM rustlang/rust:${VARIANT}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install required system libraries and NPM
-# Reference: https://dioxuslabs.com/learn/0.6/contributing/#before-you-contribute
+# Reference: https://dioxuslabs.com/learn/0.7/beyond/contributing#before-you-contribute
 RUN apt-get update -qq \
     && apt-get install -y -qq \
     libgdk3.0-cil \

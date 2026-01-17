@@ -16,7 +16,7 @@ jobs:
   typos:
     if: github.event.pull_request.draft == false
     name: Check for typos
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - name: Check for typos
@@ -26,11 +26,11 @@ jobs:
   link-check:
     if: github.event.pull_request.draft == false
     name: Check For Invalid Links
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v5
       - name: Restore lychee cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .lycheecache
           key: cache-lychee-${{ github.sha }}
@@ -38,5 +38,5 @@ jobs:
       - name: Run lychee
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --base . --config ./lychee.toml './**/*.md'
+          args: --config ./lychee.toml './**/*.md'
           fail: true

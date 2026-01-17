@@ -953,3 +953,13 @@ impl Display for SegmentType {
         }
     }
 }
+
+// /// Routable is implemented for String to allow stringly-typed apps.
+// impl Routable for String {
+//     const SITE_MAP: &'static [SiteMapSegment] = &[];
+
+//     #[doc = " Render the route at the given level"]
+//     fn render(&self, _level: usize) -> Element {
+//         unimplemented!("String routes cannot be rendered as components")
+//     }
+// }

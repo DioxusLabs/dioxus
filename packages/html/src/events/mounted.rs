@@ -61,13 +61,16 @@ impl RenderedElementBacking for () {
 }
 
 /// The way that scrolling should be performed
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(alias = "ScrollIntoViewOptions")]
 pub enum ScrollBehavior {
     /// Scroll to the element immediately
     #[cfg_attr(feature = "serialize", serde(rename = "instant"))]
     Instant,
+
     /// Scroll to the element smoothly
+    #[default]
     #[cfg_attr(feature = "serialize", serde(rename = "smooth"))]
     Smooth,
 }
@@ -274,6 +277,8 @@ impl_event! [
     /// ```
     onmounted
 ];
+
+pub use onmounted as onmount;
 
 /// The MountedResult type for the MountedData
 pub type MountedResult<T> = Result<T, MountedError>;

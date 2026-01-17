@@ -12,3 +12,6 @@ runs:
       sudo rm -rf /usr/share/dotnet
       sudo rm -rf /usr/local/lib/android
       sudo rm -rf /usr/share/swift
+      sudo docker image prune --all --force || true
+
+

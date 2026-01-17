@@ -41,6 +41,14 @@ pub mod internal {
         TemplateGlobalKey,
     };
 
+    #[allow(non_snake_case)]
+    #[doc(hidden)]
+    pub fn Err<T, E>(e: E) -> Result<T, E> {
+        std::result::Result::Err(e)
+    }
+
+    pub use anyhow::__anyhow;
+
     #[doc(hidden)]
     pub use generational_box;
 }
@@ -67,6 +75,14 @@ pub(crate) mod innerlude {
     pub use crate::tasks::*;
     pub use crate::virtual_dom::*;
 
+    pub use anyhow::anyhow;
+    pub use anyhow::Context as AnyhowContext;
+    // pub use anyhow::Error as AnyhowError;
+    // pub type Error = CapturedError;
+
+    /// A result type with a default error of [`CapturedError`].
+    pub type Result<T, E = CapturedError> = std::result::Result<T, E>;
+
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`ScopeId`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
@@ -77,20 +93,43 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    consume_context, consume_context_from_scope, current_owner, current_scope_id, fc_to_builder,
-    force_all_dirty, generation, has_context, needs_update, needs_update_any, parent_scope,
-    provide_context, provide_error_boundary, provide_root_context, queue_effect, remove_future,
-    schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic, suspend,
-    suspense_context, throw_error, try_consume_context, use_after_render, use_before_render,
-    use_drop, use_hook, use_hook_with_cleanup, vdom_is_rendering, with_owner, AnyValue, Attribute,
-    AttributeValue, Callback, CapturedError, Component, ComponentFunction, Context, DynamicNode,
-    Element, ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
+    anyhow, consume_context, consume_context_from_scope, current_owner, current_scope_id,
+    fc_to_builder, generation, has_context, needs_update, needs_update_any, parent_scope,
+    provide_context, provide_create_error_boundary, provide_root_context, queue_effect,
+    remove_future, schedule_update, schedule_update_any, spawn, spawn_forever, spawn_isomorphic,
+    suspend, throw_error, try_consume_context, use_after_render, use_before_render, use_drop,
+    use_hook, use_hook_with_cleanup, with_owner, AnyValue, AnyhowContext, Attribute,
+    AttributeValue, Callback, CapturedError, Component, ComponentFunction, DynamicNode, Element,
+    ElementId, ErrorBoundary, ErrorContext, Event, EventHandler, Fragment, HasAttributes,
     IntoAttributeValue, IntoDynNode, LaunchConfig, ListenerCallback, MarkerWrapper, Mutation,
-    Mutations, NoOpMutations, Ok, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
+    Mutations, NoOpMutations, OptionStringFromMarker, Properties, ReactiveContext, RenderError,
     Result, Runtime, RuntimeGuard, ScopeId, ScopeState, SpawnIfAsync, SubscriberList, Subscribers,
     SuperFrom, SuperInto, SuspendedFuture, SuspenseBoundary, SuspenseBoundaryProps,
-    SuspenseContext, SuspenseExtension, Task, Template, TemplateAttribute, TemplateNode,
-    VComponent, VNode, VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
+    SuspenseContext, Task, Template, TemplateAttribute, TemplateNode, VComponent, VNode,
+    VNodeInner, VPlaceholder, VText, VirtualDom, WriteMutations,
 };
+
+/// Equivalent to `Ok::<_, dioxus::CapturedError>(value)`.
+///
+/// This simplifies creation of an `dioxus::Result` in places where type
+/// inference cannot deduce the `E` type of the result &mdash; without needing
+/// to write`Ok::<_, dioxus::CapturedError>(value)`.
+///
+/// One might think that `dioxus::Result::Ok(value)` would work in such cases
+/// but it does not.
+///
+/// ```console
+/// error[E0282]: type annotations needed for `std::result::Result<i32, E>`
+///   --> src/main.rs:11:13
+///    |
+/// 11 |     let _ = dioxus::Result::Ok(1);
+///    |         -   ^^^^^^^^^^^^^^^^^^ cannot infer type for type parameter `E` declared on the enum `Result`
+///    |         |
+///    |         consider giving this pattern the explicit type `std::result::Result<i32, E>`, where the type parameter `E` is specified
+/// ```
+#[allow(non_snake_case)]
+pub fn Ok<T>(value: T) -> Result<T, CapturedError> {
+    Result::Ok(value)
+}
 
 pub use const_format;

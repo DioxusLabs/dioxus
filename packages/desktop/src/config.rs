@@ -1,8 +1,11 @@
-use dioxus_core::LaunchConfig;
-use std::borrow::Cow;
+use dioxus_core::{LaunchConfig, VirtualDom};
 use std::path::PathBuf;
-use tao::event_loop::{EventLoop, EventLoopWindowTarget};
+use std::{borrow::Cow, sync::Arc};
 use tao::window::{Icon, WindowBuilder};
+use tao::{
+    event_loop::{EventLoop, EventLoopWindowTarget},
+    window::Window,
+};
 use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
@@ -64,6 +67,11 @@ pub struct Config {
     pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
     pub(crate) disable_file_drop_handler: bool,
+    pub(crate) disable_dma_buf_on_wayland: bool,
+    pub(crate) additional_windows_args: Option<String>,
+
+    #[allow(clippy::type_complexity)]
+    pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -111,6 +119,9 @@ impl Config {
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             custom_event_handler: None,
             disable_file_drop_handler: false,
+            disable_dma_buf_on_wayland: true,
+            on_window: None,
+            additional_windows_args: None,
         }
     }
 
@@ -294,6 +305,30 @@ impl Config {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }
+        self
+    }
+
+    /// Allows modifying the window and virtual dom right after they are built, but before the webview is created.
+    ///
+    /// This is important for z-ordering textures in child windows. Note that this callback runs on
+    /// every window creation, so it's up to you to
+    pub fn with_on_window(mut self, f: impl FnMut(Arc<Window>, &mut VirtualDom) + 'static) -> Self {
+        self.on_window = Some(Box::new(f));
+        self
+    }
+
+    /// Set whether or not DMA-BUF usage should be disabled on Wayland.
+    ///
+    /// Defaults to true to avoid issues on some systems. If you want to enable DMA-BUF usage, set this to false.
+    /// See <https://github.com/DioxusLabs/dioxus/issues/4528#issuecomment-3476430611>
+    pub fn with_disable_dma_buf_on_wayland(mut self, disable: bool) -> Self {
+        self.disable_dma_buf_on_wayland = disable;
+        self
+    }
+
+    /// Add additional windows only launch arguments for webview2
+    pub fn with_windows_browser_args(mut self, additional_args: impl ToString) -> Self {
+        self.additional_windows_args = Some(additional_args.to_string());
         self
     }
 }

@@ -26,11 +26,11 @@ impl ScrollData {
         self.inner.as_any().downcast_ref::<T>()
     }
 
-    pub fn scroll_top(&self) -> i32 {
+    pub fn scroll_top(&self) -> f64 {
         self.inner.scroll_top()
     }
 
-    pub fn scroll_left(&self) -> i32 {
+    pub fn scroll_left(&self) -> f64 {
         self.inner.scroll_left()
     }
 
@@ -79,8 +79,8 @@ impl PartialEq for ScrollData {
 /// A serialized version of ScrollData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
 pub struct SerializedScrollData {
-    pub scroll_top: i32,
-    pub scroll_left: i32,
+    pub scroll_top: f64,
+    pub scroll_left: f64,
     pub scroll_width: i32,
     pub scroll_height: i32,
     pub client_width: i32,
@@ -107,11 +107,11 @@ impl HasScrollData for SerializedScrollData {
         self
     }
 
-    fn scroll_top(&self) -> i32 {
+    fn scroll_top(&self) -> f64 {
         self.scroll_top
     }
 
-    fn scroll_left(&self) -> i32 {
+    fn scroll_left(&self) -> f64 {
         self.scroll_left
     }
 
@@ -154,10 +154,10 @@ pub trait HasScrollData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 
     /// Get the vertical scroll position
-    fn scroll_top(&self) -> i32;
+    fn scroll_top(&self) -> f64;
 
     /// Get the horizontal scroll position
-    fn scroll_left(&self) -> i32;
+    fn scroll_left(&self) -> f64;
 
     /// Get the total scrollable width
     fn scroll_width(&self) -> i32;
@@ -177,4 +177,7 @@ impl_event! {
 
     /// onscroll
     onscroll
+
+    /// onscrollend
+    onscrollend
 }
