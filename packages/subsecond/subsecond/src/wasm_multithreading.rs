@@ -654,7 +654,9 @@ impl HotpatchEntry {
             .dyn_into::<WebAssembly::Global>()
             .expect("invalid __tls_base in parent export");
 
-        patch_tls_base_global.set_value(&parent_tls_base_global.value());
+        let parent_tls_base_value = parent_tls_base_global.value();
+        console::debug_2(&"[subsecond] __tls_base : ".into(), &parent_tls_base_value);
+        patch_tls_base_global.set_value(&parent_tls_base_value);
     }
 }
 
