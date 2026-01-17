@@ -13,7 +13,7 @@ use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
+use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
 use futures_util::{pin_mut, FutureExt};
 use std::sync::{atomic::AtomicBool, Arc};
 use std::{cell::OnceCell, time::Duration};
@@ -152,19 +152,35 @@ impl WebviewEdits {
                         .collect(),
                 })))
             }
+            // Which also includes drops...
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                let file_event = hovered_file.current();
-                let file_paths = match file_event {
-                    Some(wry::DragDropEvent::Enter { paths, .. }) => paths,
-                    Some(wry::DragDropEvent::Drop { paths, .. }) => paths,
-                    _ => vec![],
+                let full_file_paths = hovered_file.current_paths();
+
+                let xfer_data = drag.data_transfer.clone();
+                let new_file_data = xfer_data
+                    .files
+                    .iter()
+                    .map(|f| {
+                        let new_path = full_file_paths
+                            .iter()
+                            .find(|p| p.ends_with(&f.path))
+                            .unwrap_or(&f.path);
+                        SerializedFileData {
+                            path: new_path.clone(),
+                            ..f.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let new_xfer_data = dioxus_html::SerializedDataTransfer {
+                    files: new_file_data,
+                    ..xfer_data
                 };
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
-                    data_transfer: drag.data_transfer.clone(),
-                    files: file_paths,
+                    data_transfer: new_xfer_data,
+                    files: full_file_paths,
                 })))
             }
             _ => data.into_any(),
