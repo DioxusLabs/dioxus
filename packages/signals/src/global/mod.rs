@@ -8,7 +8,7 @@ pub use memo::*;
 mod signal;
 pub use signal::*;
 
-use crate::{Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt, WritableRef};
+use crate::{Readable, ReadableRef, Signal, Writable, WritableExt, WritableRef};
 
 /// A trait for an item that can be constructed from an initialization function
 pub trait InitializeFromFunction<T> {
@@ -40,7 +40,7 @@ where
     type Target = dyn Fn() -> R;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+        crate::readable_deref_impl(self)
     }
 }
 
