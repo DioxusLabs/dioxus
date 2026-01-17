@@ -12,9 +12,10 @@ use dioxus_html::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
     FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
-    SerializedMouseData, SerializedPointInteraction,
+    Modifiers, NativeFileData, SerializedFormObject, SerializedMouseData,
+    SerializedPointInteraction,
 };
+use dioxus_web_sys_events::Synthetic;
 
 use serde::{Deserialize, Serialize};
 use std::{
@@ -22,7 +23,7 @@ use std::{
     path::PathBuf,
     rc::Rc,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use wry::DragDropEvent;
 
@@ -304,38 +305,55 @@ impl HasFormData for DesktopFormData {
 
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
-    event: Rc<RefCell<Option<DragDropEvent>>>,
+    event: Arc<Mutex<Option<DragDropEvent>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
-        self.event.borrow_mut().replace(event);
+        *self.event.lock().unwrap() = Some(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
-        self.event.borrow_mut().clone()
+        self.event.lock().unwrap().clone()
     }
 }
 
+/// Desktop-specific drag event that wraps the web-sys drag event and adds native file paths.
 #[derive(Clone)]
 pub(crate) struct DesktopFileDragEvent {
-    pub mouse: SerializedPointInteraction,
-    pub data_transfer: SerializedDataTransfer,
-    pub files: Vec<PathBuf>,
+    /// The inner web-sys drag event
+    inner: Synthetic<web_sys_x::DragEvent>,
+    /// Native file paths from wry::DragDropEvent
+    native_files: Vec<PathBuf>,
+}
+
+impl DesktopFileDragEvent {
+    /// Create a new desktop drag event with native file paths
+    pub fn new(inner: Synthetic<web_sys_x::DragEvent>, native_files: Vec<PathBuf>) -> Self {
+        Self {
+            inner,
+            native_files,
+        }
+    }
 }
 
 impl HasFileData for DesktopFileDragEvent {
     fn files(&self) -> Vec<FileData> {
-        self.files
-            .iter()
-            .cloned()
-            .map(|f| FileData::new(DesktopFileData(f)))
-            .collect()
+        // Return native files if available, otherwise delegate to inner
+        if self.native_files.is_empty() {
+            self.inner.files()
+        } else {
+            self.native_files
+                .iter()
+                .cloned()
+                .map(|f| FileData::new(DesktopFileData(f)))
+                .collect()
+        }
     }
 }
 
 impl HasDataTransferData for DesktopFileDragEvent {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
-        dioxus_html::DataTransfer::new(self.data_transfer.clone())
+        self.inner.data_transfer()
     }
 }
 
@@ -353,41 +371,41 @@ impl HasMouseData for DesktopFileDragEvent {
 
 impl InteractionLocation for DesktopFileDragEvent {
     fn client_coordinates(&self) -> ClientPoint {
-        self.mouse.client_coordinates()
+        self.inner.client_coordinates()
     }
 
     fn page_coordinates(&self) -> PagePoint {
-        self.mouse.page_coordinates()
+        self.inner.page_coordinates()
     }
 
     fn screen_coordinates(&self) -> ScreenPoint {
-        self.mouse.screen_coordinates()
+        self.inner.screen_coordinates()
     }
 }
 
 impl InteractionElementOffset for DesktopFileDragEvent {
     fn element_coordinates(&self) -> ElementPoint {
-        self.mouse.element_coordinates()
+        self.inner.element_coordinates()
     }
 
     fn coordinates(&self) -> Coordinates {
-        self.mouse.coordinates()
+        self.inner.coordinates()
     }
 }
 
 impl ModifiersInteraction for DesktopFileDragEvent {
-    fn modifiers(&self) -> dioxus_html::Modifiers {
-        self.mouse.modifiers()
+    fn modifiers(&self) -> Modifiers {
+        self.inner.modifiers()
     }
 }
 
 impl PointerInteraction for DesktopFileDragEvent {
     fn held_buttons(&self) -> MouseButtonSet {
-        self.mouse.held_buttons()
+        self.inner.held_buttons()
     }
 
     fn trigger_button(&self) -> Option<MouseButton> {
-        self.mouse.trigger_button()
+        self.inner.trigger_button()
     }
 }
 

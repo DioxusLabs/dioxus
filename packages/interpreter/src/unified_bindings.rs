@@ -1,5 +1,5 @@
 #[cfg(feature = "webonly")]
-use web_sys::Node;
+use web_sys_x::Node;
 
 pub const SLEDGEHAMMER_JS: &str = GENERATED_JS;
 
@@ -9,7 +9,7 @@ extern "C" {
     pub type BaseInterpreter;
 
     #[wasm_bindgen(method)]
-    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys::Function);
+    pub fn initialize(this: &BaseInterpreter, root: Node, handler: &js_sys_x::Function);
 
     #[wasm_bindgen(method, js_name = "saveTemplate")]
     pub fn save_template(this: &BaseInterpreter, nodes: Vec<Node>, tmpl_id: u16);
@@ -35,7 +35,7 @@ impl Interpreter {
     }
 }
 
-#[sledgehammer_bindgen::bindgen(module)]
+#[sledgehammer_bindgen::bindgen(wasm_bindgen = wasm_bindgen)]
 mod js {
     // Extend the web base class
     const BASE: &str = "./src/js/core.js";
@@ -182,14 +182,16 @@ mod js {
 
     // if this is a mounted listener, we send the event immediately
     if (event_name === "mounted") {
-        window.ipc.postMessage(
+        if (this.liveview) {
             this.sendSerializedEvent({
                 name: event_name,
                 element: id,
                 data: null,
                 bubbles,
-            })
-        );
+            });
+        } else {
+            window.rustMountedHandler(this_node, id, bubbles);
+        }
     } else {
         this.createListener(event_name, this_node, bubbles, (event) => {
             this.handler(event, event_name, bubbles);

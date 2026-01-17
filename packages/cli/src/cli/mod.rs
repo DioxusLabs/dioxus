@@ -10,6 +10,7 @@ pub(crate) mod doctor;
 pub(crate) mod hotpatch;
 pub(crate) mod init;
 pub(crate) mod link;
+pub(crate) mod patch_wasm_bindgen;
 pub(crate) mod platform_override;
 pub(crate) mod print;
 pub(crate) mod run;
@@ -132,6 +133,10 @@ pub enum BuildTools {
     /// Hotpatch the "tip" of a given "fat" binary. The output here must be from the `dx build` command with "fat" enabled
     #[clap(name = "hotpatch")]
     HotpatchTip(hotpatch::HotpatchTip),
+
+    /// Patch wasm-bindgen crates to use DioxusLabs fork for WRY compatibility.
+    #[clap(name = "patch-wasm-bindgen")]
+    PatchWasmBindgen(patch_wasm_bindgen::PatchWasmBindgen),
 }
 
 pub(crate) static VERSION: LazyLock<String> = LazyLock::new(|| {

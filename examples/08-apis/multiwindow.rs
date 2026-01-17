@@ -12,7 +12,7 @@ fn main() {
 
 fn app() -> Element {
     let onclick = move |_| {
-        dioxus::desktop::window().new_window(VirtualDom::new(popup), Default::default());
+        dioxus::desktop::window().new_window(|| VirtualDom::new(popup), Default::default);
     };
 
     rsx! {

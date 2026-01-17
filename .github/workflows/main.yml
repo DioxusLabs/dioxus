@@ -71,6 +71,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Free Disk Space
         uses: ./.github/actions/free-disk-space
+      - uses: rui314/setup-mold@v1
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -82,7 +83,7 @@ jobs:
         with:
           cache-all-crates: "true"
       - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
+      - run: mold -run cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
     if: github.event.pull_request.draft == false
@@ -92,6 +93,7 @@ jobs:
       - uses: actions/checkout@v5
       - name: Free Disk Space
         uses: ./.github/actions/free-disk-space
+      - uses: rui314/setup-mold@v1
       - uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
@@ -103,7 +105,7 @@ jobs:
         with:
           cache-all-crates: "true"
       - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
+      - run: mold -run cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   fmt:
     if: github.event.pull_request.draft == false
@@ -355,6 +357,10 @@ jobs:
         if: ${{ matrix.platform.cross == true }}
         uses: taiki-e/install-action@cross
 
+      - name: Install mold
+        if: ${{ runner.os == 'Linux' && matrix.platform.cross == false }}
+        uses: rui314/setup-mold@v1
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: "matrix-${{ matrix.platform.target }}"
@@ -362,7 +368,7 @@ jobs:
 
       - name: test
         run: |
-          ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+          ${{ runner.os == 'Linux' && matrix.platform.cross == false && 'mold -run' || '' }} ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
   # borrowed from uv
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml

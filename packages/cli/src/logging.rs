@@ -902,6 +902,9 @@ impl TraceController {
             Commands::Tools(tool) => match tool {
                 BuildTools::BuildAssets(_build_assets) => ("tools assets".to_string(), json!({})),
                 BuildTools::HotpatchTip(_hotpatch_tip) => ("tools hotpatch".to_string(), json!({})),
+                BuildTools::PatchWasmBindgen(_) => {
+                    ("tools patch-wasm-bindgen".to_string(), json!({}))
+                }
             },
             Commands::Print(print) => match print {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),

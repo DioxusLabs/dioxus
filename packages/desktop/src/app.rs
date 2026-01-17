@@ -1,9 +1,9 @@
 use crate::{
     config::{Config, WindowCloseBehaviour},
+    dom_thread::{spawn_dom_thread, DomThreadHandle, VirtualDomEvent},
     edits::EditWebsocket,
     event_handlers::WindowEventHandlers,
     ipc::{IpcMessage, UserWindowEvent},
-    query::QueryResult,
     shortcut::ShortcutRegistry,
     webview::{PendingWebview, WebviewInstance},
 };
@@ -20,12 +20,18 @@ use tao::{
     event_loop::{ControlFlow, EventLoop, EventLoopBuilder, EventLoopProxy, EventLoopWindowTarget},
     window::WindowId,
 };
+use wry_bindgen::wry::WryBindgen;
+
+/// A factory for creating VirtualDom instances on dedicated threads.
+/// This type is Send because it only holds the component function and contexts,
+/// not the VirtualDom itself.
+pub(crate) type MakeVirtualDom = Box<dyn FnOnce() -> VirtualDom + Send + 'static>;
 
 /// The single top-level object that manages all the running windows, assets, shortcuts, etc
 pub(crate) struct App {
     // move the props into a cell so we can pop it out later to create the first window
     // iOS panics if we create a window before the event loop is started, so we toss them into a cell
-    pub(crate) unmounted_dom: Cell<Option<VirtualDom>>,
+    pub(crate) unmounted_dom: Cell<Option<MakeVirtualDom>>,
     pub(crate) cfg: Cell<Option<Config>>,
 
     // Stuff we need mutable access to
@@ -51,14 +57,23 @@ pub(crate) struct SharedContext {
     pub(crate) proxy: EventLoopProxy<UserWindowEvent>,
     pub(crate) target: EventLoopWindowTarget<UserWindowEvent>,
     pub(crate) websocket: EditWebsocket,
+    pub(crate) wry_bindgen: WryBindgen,
+    pub(crate) desktop_thread_handle: DomThreadHandle,
 }
 
 impl App {
-    pub fn new(mut cfg: Config, virtual_dom: VirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
+    pub fn new(mut cfg: Config, virtual_dom: MakeVirtualDom) -> (EventLoop<UserWindowEvent>, Self) {
         let event_loop = cfg
             .event_loop
             .take()
             .unwrap_or_else(|| EventLoopBuilder::<UserWindowEvent>::with_user_event().build());
+
+        let proxy = event_loop.create_proxy();
+        let wry_bindgen = WryBindgen::new({
+            let proxy = proxy.clone();
+            move |app_event| _ = proxy.send_event(UserWindowEvent::WryBindgenEvent(app_event))
+        });
+        let desktop_thread_handle = spawn_dom_thread(proxy.clone());
 
         let app = Self {
             exit_on_last_window_close: cfg.exit_on_last_window_close,
@@ -74,14 +89,18 @@ impl App {
                 event_handlers: WindowEventHandlers::default(),
                 pending_webviews: Default::default(),
                 shortcut_manager: ShortcutRegistry::new(),
-                proxy: event_loop.create_proxy(),
+                proxy,
                 target: event_loop.clone(),
                 websocket: EditWebsocket::start(),
+                wry_bindgen,
+                desktop_thread_handle,
             }),
         };
 
-        // Set the event converter
-        dioxus_html::set_event_converter(Box::new(crate::events::SerializedHtmlEventConverter));
+        // Set the event converter to use desktop-specific converter with native file handling
+        dioxus_html::set_event_converter(Box::new(
+            crate::event_converter::DesktopEventConverter::new(),
+        ));
 
         // Wire up the global hotkey handler
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
@@ -206,16 +225,15 @@ impl App {
                 #[cfg(debug_assertions)]
                 self.persist_window_state();
 
-                self.webviews.remove(&id);
-
-                if self.exit_on_last_window_close && self.webviews.is_empty() {
-                    self.control_flow = ControlFlow::Exit
-                }
+                self.window_destroyed(id);
             }
         };
     }
 
     pub fn window_destroyed(&mut self, id: WindowId) {
+        // Abort the task for this window if it still exists
+        let _ = self.shared.desktop_thread_handle.abort_tx.send(id);
+
         self.webviews.remove(&id);
 
         if self.exit_on_last_window_close && self.webviews.is_empty() {
@@ -282,15 +300,14 @@ impl App {
 
     /// The webview is finally loaded
     ///
-    /// Let's rebuild it and then start polling it
+    /// Send the Initialize event to the VirtualDom thread to trigger initial rebuild
     pub fn handle_initialize_msg(&mut self, id: WindowId) {
-        let view = self.webviews.get_mut(&id).unwrap();
+        let Some(view) = self.webviews.get(&id) else {
+            return;
+        };
 
-        view.edits
-            .wry_queue
-            .with_mutation_state_mut(|f| view.dom.rebuild(f));
-
-        view.edits.wry_queue.send_edits();
+        // Send Initialize event to VirtualDom thread
+        view.dom_handle.send_event(VirtualDomEvent::Initialize);
 
         #[cfg(not(target_os = "linux"))]
         {
@@ -302,22 +319,8 @@ impl App {
         _ = self.shared.proxy.send_event(UserWindowEvent::Poll(id));
     }
 
-    pub fn handle_query_msg(&mut self, msg: IpcMessage, id: WindowId) {
-        let Ok(result) = serde_json::from_value::<QueryResult>(msg.params()) else {
-            return;
-        };
-
-        let Some(view) = self.webviews.get(&id) else {
-            return;
-        };
-
-        view.desktop_context.query.send(result);
-    }
-
     #[cfg(all(feature = "devtools", debug_assertions))]
     pub fn handle_hot_reload_msg(&mut self, msg: dioxus_devtools::DevserverMsg) {
-        use std::time::Duration;
-
         use dioxus_devtools::DevserverMsg;
 
         // Amount of time that toats should be displayed.
@@ -326,20 +329,15 @@ impl App {
 
         match msg {
             DevserverMsg::HotReload(hr_msg) => {
-                for webview in self.webviews.values_mut() {
-                    {
-                        // This is a place where wry says it's threadsafe but it's actually not.
-                        // If we're patching the app, we want to make sure it's not going to progress in the interim.
-                        let lock = crate::android_sync_lock::android_runtime_lock();
-                        dioxus_devtools::apply_changes(&webview.dom, &hr_msg);
-                        drop(lock);
-                    }
-
-                    webview.poll_vdom();
+                // Forward hot reload message to all VirtualDom threads
+                for webview in self.webviews.values() {
+                    webview
+                        .dom_handle
+                        .send_event(VirtualDomEvent::HotReload(hr_msg.clone()));
                 }
 
                 if !hr_msg.assets.is_empty() {
-                    for webview in self.webviews.values_mut() {
+                    for webview in self.webviews.values() {
                         webview.kick_stylsheets();
                     }
                 }
@@ -407,17 +405,22 @@ impl App {
         }
     }
 
-    /// Poll the virtualdom until it's pending
-    ///
-    /// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
-    ///
-    /// All IO is done on the tokio runtime we started earlier
-    pub fn poll_vdom(&mut self, id: WindowId) {
-        let Some(view) = self.webviews.get_mut(&id) else {
-            return;
-        };
+    /// Poll a specific window by its ID.
+    /// Called when the waker sends a Poll event.
+    pub fn poll_window(&mut self, id: tao::window::WindowId) {
+        if let Some(webview) = self.webviews.get_mut(&id) {
+            webview.poll_dom_commands();
+            webview.poll_edits_flushed();
+            webview.poll_new_edits_location();
+        }
+    }
 
-        view.poll_vdom();
+    /// Handle wry-bindgen IPC events.
+    ///
+    /// This forwards the event to wry-bindgen for processing, which may execute
+    /// JavaScript in the webview or handle callbacks from JavaScript.
+    pub fn handle_wry_bindgen_event(&mut self, event: wry_bindgen::runtime::WryBindgenEvent) {
+        self.shared.wry_bindgen.handle_user_event(event);
     }
 
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]

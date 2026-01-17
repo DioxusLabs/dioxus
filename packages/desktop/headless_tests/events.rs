@@ -1,6 +1,8 @@
 use dioxus::html::geometry::euclid::Vector3D;
 use dioxus::prelude::*;
 use dioxus_desktop::DesktopContext;
+use web_sys_x::js_sys::Promise;
+use wry_bindgen::wasm_bindgen;
 
 #[path = "./utils.rs"]
 mod utils;
@@ -60,6 +62,16 @@ fn test_mounted() -> Element {
             width: "100px",
             height: "100px",
             onmounted: move |evt| async move {
+                #[wasm_bindgen(crate = wry_bindgen, inline_js = "export async function wait_for_frame() {
+                    return new Promise((resolve) => setTimeout(() => resolve()));
+                }")]
+                extern "C" {
+                    #[wasm_bindgen]
+                    fn wait_for_frame() -> Promise;
+                }
+                // Wait for layout to be computed using setTimeout
+                wasm_bindgen_futures_x::JsFuture::from(wait_for_frame()).await.unwrap();
+
                 let rect = evt.get_client_rect().await.unwrap();
                 println!("rect: {rect:?}");
                 assert_eq!(rect.width(), 100.0);
@@ -564,9 +576,9 @@ fn test_select_multiple_options() -> Element {
             name: "country",
             multiple: true,
             oninput: move |ev| {
-                let values = ev.value();
-                let values = values.split(',').collect::<Vec<_>>();
-                assert_eq!(values, vec!["usa", "canada"]);
+                let values = ev.values();
+                let stringy_values = values.iter().map(|(_, v)| v).collect::<Vec<_>>();
+                assert_eq!(stringy_values, vec!["usa", "canada"]);
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
             },
             option { id: "usa", value: "usa", "USA" }

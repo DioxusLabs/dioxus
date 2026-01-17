@@ -50,7 +50,7 @@ pub fn mock_event_with_extra(id: &'static str, value: &'static str, extra: &'sta
                 "#
             );
 
-            document::eval(&js).await.unwrap();
+            _ = document::eval(&js).await;
         });
     })
 }

@@ -1,10 +1,10 @@
+use crate::app::MakeVirtualDom;
 use crate::Config;
 use crate::{
     app::App,
     ipc::{IpcMethod, UserWindowEvent},
 };
 use dioxus_core::*;
-use dioxus_document::eval;
 use std::any::Any;
 use tao::event::{Event, StartCause, WindowEvent};
 
@@ -12,11 +12,17 @@ use tao::event::{Event, StartCause, WindowEvent};
 ///
 /// This will block the main thread, and *must* be spawned on the main thread. This function does not assume any runtime
 /// and is equivalent to calling launch_with_props with the tokio feature disabled.
-pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: Config) -> ! {
+pub fn launch_virtual_dom_blocking(
+    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static,
+    mut desktop_config: Config,
+) -> ! {
     let mut custom_event_handler = desktop_config.custom_event_handler.take();
+    let virtual_dom = Box::new(virtual_dom);
     let (event_loop, mut app) = App::new(desktop_config, virtual_dom);
 
     event_loop.run(move |window_event, event_loop, control_flow| {
+        let _lock = crate::android_sync_lock::android_runtime_lock();
+
         // Set the control flow and check if any events need to be handled in the app itself
         app.tick(&window_event);
 
@@ -37,7 +43,6 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
             },
 
             Event::UserEvent(event) => match event {
-                UserWindowEvent::Poll(id) => app.poll_vdom(id),
                 UserWindowEvent::NewWindow => app.handle_new_window(),
                 UserWindowEvent::CloseWindow(id) => app.handle_close_requested(id),
                 UserWindowEvent::Shutdown => app.control_flow = tao::event_loop::ControlFlow::Exit,
@@ -57,45 +62,57 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
                 #[cfg(all(feature = "devtools", debug_assertions))]
                 UserWindowEvent::HotReloadEvent(msg) => app.handle_hot_reload_msg(msg),
 
-                // Windows-only drag-n-drop fix events. We need to call the interpreter drag-n-drop code.
+                // Windows-only drag-n-drop fix events.
                 UserWindowEvent::WindowsDragDrop(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            eval("window.interpreter.handleWindowsDragDrop();");
-                        });
+                        let _ = webview
+                            .desktop_context
+                            .webview
+                            .evaluate_script("window.interpreter.handleWindowsDragDrop();");
                     }
                 }
                 UserWindowEvent::WindowsDragLeave(id) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            eval("window.interpreter.handleWindowsDragLeave();");
-                        });
+                        let _ = webview
+                            .desktop_context
+                            .webview
+                            .evaluate_script("window.interpreter.handleWindowsDragLeave();");
                     }
                 }
                 UserWindowEvent::WindowsDragOver(id, x_pos, y_pos) => {
                     if let Some(webview) = app.webviews.get(&id) {
-                        webview.dom.in_scope(ScopeId::ROOT, || {
-                            let e = eval(
-                                r#"
-                                    const xPos = await dioxus.recv();
-                                    const yPos = await dioxus.recv();
-                                    window.interpreter.handleWindowsDragOver(xPos, yPos)
-                                    "#,
-                            );
-
-                            _ = e.send(x_pos);
-                            _ = e.send(y_pos);
-                        });
+                        let _ = webview.desktop_context.webview.evaluate_script(&format!(
+                            "window.interpreter.handleWindowsDragOver({x_pos}, {y_pos});"
+                        ));
                     }
                 }
 
                 UserWindowEvent::Ipc { id, msg } => match msg.method() {
                     IpcMethod::Initialize => app.handle_initialize_msg(id),
                     IpcMethod::UserEvent => {}
-                    IpcMethod::Query => app.handle_query_msg(msg, id),
                     IpcMethod::BrowserOpen => app.handle_browser_open(msg),
                     IpcMethod::Other(_) => {}
                 },
+
+                // Poll event - process DOM commands for a specific window
+                UserWindowEvent::Poll(id) => {
+                    app.poll_window(id);
+                }
+
+                // wry-bindgen IPC event
+                UserWindowEvent::WryBindgenEvent(wry_event) => {
+                    app.handle_wry_bindgen_event(wry_event);
+                }
+
+                // Run a closure with DesktopService access on the main thread
+                UserWindowEvent::RunWithDesktopService { id, callback } => {
+                    if let Some(inner) = callback.take() {
+                        if let Some(webview) = app.webviews.get(&id) {
+                            let result = (inner.callback)(&webview.desktop_context);
+                            let _ = inner.sender.send(result);
+                        }
+                    }
+                }
             },
             _ => {}
         }
@@ -105,7 +122,10 @@ pub fn launch_virtual_dom_blocking(virtual_dom: VirtualDom, mut desktop_config: 
 }
 
 /// Launches the WebView and runs the event loop, with configuration and root props.
-pub fn launch_virtual_dom(virtual_dom: VirtualDom, desktop_config: Config) -> ! {
+pub fn launch_virtual_dom(
+    virtual_dom: impl FnOnce() -> VirtualDom + Send + 'static,
+    desktop_config: Config,
+) -> ! {
     #[cfg(feature = "tokio_runtime")]
     {
         if let std::result::Result::Ok(handle) = tokio::runtime::Handle::try_current() {
@@ -140,16 +160,20 @@ pub fn launch(
     contexts: Vec<Box<dyn Fn() -> Box<dyn Any> + Send + Sync>>,
     platform_config: Vec<Box<dyn Any>>,
 ) -> ! {
-    let mut virtual_dom = VirtualDom::new(root);
+    // Create a factory function that builds the VirtualDom with contexts
+    let make_dom: MakeVirtualDom = Box::new(move || {
+        let mut virtual_dom = VirtualDom::new(root);
 
-    for context in contexts {
-        virtual_dom.insert_any_root_context(context());
-    }
+        for context in contexts {
+            virtual_dom.insert_any_root_context(context());
+        }
+
+        virtual_dom
+    });
 
     let platform_config = *platform_config
         .into_iter()
         .find_map(|cfg| cfg.downcast::<Config>().ok())
         .unwrap_or_default();
-
-    launch_virtual_dom(virtual_dom, platform_config)
+    launch_virtual_dom(make_dom, platform_config)
 }

@@ -4,7 +4,11 @@
 // provide since it doesn't have access to the dom.
 
 import { BaseInterpreter, NodeId } from "./core";
-import { SerializedEvent, serializeEvent, SerializedFileData, extractSerializedFormValues, SerializedFormObject } from "./serialize";
+import {
+  SerializedEvent,
+  serializeEvent,
+  SerializedFormObject,
+} from "./serialize";
 
 // okay so, we've got this JSChannel thing from sledgehammer, implicitly imported into our scope
 // we want to extend it, and it technically extends base interpreter. To make typescript happy,
@@ -22,7 +26,6 @@ export class NativeInterpreter extends JSChannel_ {
   ipc: any;
   edits: WebSocket;
   baseUri: string;
-  eventsPath: string;
   headless: boolean;
   kickStylesheets: boolean;
   queuedBytes: ArrayBuffer[] = [];
@@ -34,7 +37,6 @@ export class NativeInterpreter extends JSChannel_ {
   constructor(baseUri: string, headless: boolean) {
     super();
     this.baseUri = baseUri;
-    this.eventsPath = `${baseUri}/__events`;
     this.kickStylesheets = false;
     this.headless = headless;
   }
@@ -105,51 +107,41 @@ export class NativeInterpreter extends JSChannel_ {
               values: contents.values,
             };
 
-            this.fetchAgainstHost("__file_dialog", requestData).then(response => response.json()).then(resp => {
-              const formObjects: SerializedFormObject[] = resp.values;
+            this.fetchAgainstHost("__file_dialog", requestData)
+              .then((response) => response.json())
+              .then((resp) => {
+                const formObjects: SerializedFormObject[] = resp.values;
 
-              // Create a new DataTransfer to hold the files
-              const dataTransfer = new DataTransfer();
+                // Create a new DataTransfer to hold the files
+                const dataTransfer = new DataTransfer();
 
-              // We name the file the path, so we can just use the path as the name later on.
-              for (let formObject of formObjects) {
-                if (formObject.key == target_name && formObject.file != null) {
-                  const file = new File([], formObject.file.path, {
-                    type: formObject.file.content_type,
-                    lastModified: formObject.file.last_modified,
-                  });
-                  dataTransfer.items.add(file);
+                // We name the file the path, so we can just use the path as the name later on.
+                for (let formObject of formObjects) {
+                  if (
+                    formObject.key == target_name &&
+                    formObject.file != null
+                  ) {
+                    const file = new File([], formObject.file.path, {
+                      type: formObject.file.content_type,
+                      lastModified: formObject.file.last_modified,
+                    });
+                    dataTransfer.items.add(file);
+                  }
                 }
-              }
 
-              // Set the files on the input
-              target.files = dataTransfer.files;
+                // Set the files on the input
+                target.files = dataTransfer.files;
 
-              let body = {
-                data: contents,
-                element: target_id,
-                bubbles: event.bubbles,
-              };
-
-              // And then dispatch the actual event against the dom
-              contents.values = formObjects;
-              this.sendSerializedEvent({
-                ...body,
-                name: "input",
+                // Dispatch actual DOM events so they go through the normal event handling path
+                target.dispatchEvent(new Event("input", { bubbles: true }));
+                target.dispatchEvent(new Event("change", { bubbles: true }));
               });
-              this.sendSerializedEvent({
-                ...body,
-                name: "change",
-              });
-            });
 
             return;
           }
-
         }
       }
     });
-
 
     // @ts-ignore - wry gives us this
     this.ipc = window.ipc;
@@ -161,7 +153,10 @@ export class NativeInterpreter extends JSChannel_ {
     super.initialize(root, handler);
   }
 
-  fetchAgainstHost(path: string, data: { [key: string]: any }): Promise<Response> {
+  fetchAgainstHost(
+    path: string,
+    data: { [key: string]: any }
+  ): Promise<Response> {
     let encoded_data = new TextEncoder().encode(JSON.stringify(data));
     const base64data = btoa(
       String.fromCharCode.apply(null, Array.from(encoded_data))
@@ -170,8 +165,8 @@ export class NativeInterpreter extends JSChannel_ {
     return fetch(`${this.baseUri}/${path}`, {
       method: "GET",
       headers: {
-        "x-dioxus-data": base64data
-      }
+        "x-dioxus-data": base64data,
+      },
     });
   }
 
@@ -353,43 +348,45 @@ export class NativeInterpreter extends JSChannel_ {
   handleEvent(event: Event, name: string, bubbles: boolean) {
     const target = event.target!;
     const element = getTargetId(target)!;
-    const contents = serializeEvent(event, target);
-
-    // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
-    // Some listeners
-    let body = {
-      name,
-      data: contents,
-      element,
-      bubbles,
-    };
 
     // liveview does not have synchronous event handling, so we need to send the event to the host
-    if (
-      this.liveview &&
-      target instanceof HTMLInputElement &&
-      (event.type === "change" || event.type === "input")
-    ) {
-      if (target.getAttribute("type") === "file") {
-        this.readFiles(target, contents, bubbles, element, name);
-        return;
-      }
-    }
+    if (this.liveview) {
+      const contents = serializeEvent(event, target);
 
-    const response = this.sendSerializedEvent(body);
-    // capture/prevent default of the event if the virtualdom wants to
-    if (response) {
-      if (response.preventDefault) {
-        event.preventDefault();
-      } else {
-        // Attempt to intercept if the event is a click and the default action was not prevented
-        if (target instanceof Element && event.type === "click") {
-          this.handleClickNavigate(event, target);
+      if (
+        target instanceof HTMLInputElement &&
+        (event.type === "change" || event.type === "input")
+      ) {
+        if (target.getAttribute("type") === "file") {
+          this.readFiles(target, contents, bubbles, element, name);
+          return;
         }
       }
 
-      if (response.stopPropagation) {
-        event.stopPropagation();
+      this.sendSerializedEvent({
+        name,
+        data: contents,
+        element,
+        bubbles,
+      });
+      return;
+    }
+
+    // Desktop passes the raw event directly to Rust via wry-bindgen
+    // @ts-ignore - rustEventHandler is set by wry-bindgen from Rust
+    const preventDefault = window.rustEventHandler(
+      event,
+      name,
+      element,
+      bubbles
+    );
+
+    if (preventDefault) {
+      event.preventDefault();
+    } else {
+      // Attempt to intercept if the event is a click and the default action was not prevented
+      if (target instanceof Element && event.type === "click") {
+        this.handleClickNavigate(event, target);
       }
     }
   }
@@ -399,13 +396,9 @@ export class NativeInterpreter extends JSChannel_ {
     element: number;
     data: any;
     bubbles: boolean;
-  }): EventSyncResult | void {
-    if (this.liveview) {
-      this.sendIpcMessage("user_event", body);
-    } else {
-      // Run the event handler on the virtualdom
-      return handleVirtualdomEventSync(this.eventsPath, JSON.stringify(body));
-    }
+  }): void {
+    // Liveview uses async IPC with serialized events
+    this.sendIpcMessage("user_event", body);
   }
 
   handleClickNavigate(event: Event, target: Element) {
@@ -421,7 +414,7 @@ export class NativeInterpreter extends JSChannel_ {
 
       const href = a_element.getAttribute("href");
       if (href !== "" && href !== null && href !== undefined) {
-        this.sendIpcMessage("browser_open", { href })
+        this.sendIpcMessage("browser_open", { href });
       }
     }
   }
@@ -542,52 +535,13 @@ export class NativeInterpreter extends JSChannel_ {
 
     contents.files = { files: file_contents };
 
-    const message = this.sendSerializedEvent({
+    this.sendSerializedEvent({
       name: name,
       element: realId,
       data: contents,
       bubbles,
     });
-
-    this.ipc.postMessage(message);
   }
-}
-
-type EventSyncResult = {
-  preventDefault: boolean;
-  stopPropagation: boolean;
-};
-
-// This function sends the event to the virtualdom and then waits for the virtualdom to process it
-//
-// However, it's not really suitable for liveview, because it's synchronous and will block the main thread
-// We should definitely consider using a websocket if we want to block... or just not block on liveview
-// Liveview is a little bit of a tricky beast
-function handleVirtualdomEventSync(
-  endpoint: string,
-  contents: string
-): EventSyncResult {
-  // Handle the event on the virtualdom and then process whatever its output was
-  const xhr = new XMLHttpRequest();
-
-  // Serialize the event and send it to the custom protocol in the Rust side of things
-  xhr.open("POST", endpoint, false);
-  xhr.setRequestHeader("Content-Type", "application/json");
-
-  // hack for android since we CANT SEND BODIES (because wry is using shouldInterceptRequest)
-  //
-  // https://issuetracker.google.com/issues/119844519
-  // https://stackoverflow.com/questions/43273640/android-webviewclient-how-to-get-post-request-body
-  // https://developer.android.com/reference/android/webkit/WebViewClient#shouldInterceptRequest(android.webkit.WebView,%20android.webkit.WebResourceRequest)
-  //
-  // the issue here isn't that big, tbh, but there's a small chance we lose the event due to header max size (16k per header, 32k max)
-  const contents_bytes = new TextEncoder().encode(contents);
-  const contents_base64 = btoa(String.fromCharCode.apply(null, contents_bytes));
-  xhr.setRequestHeader("dioxus-data", contents_base64);
-  xhr.send();
-
-  // Deserialize the response, and then prevent the default/capture the event if the virtualdom wants to
-  return JSON.parse(xhr.responseText);
 }
 
 function getTargetId(target: EventTarget): NodeId | null {

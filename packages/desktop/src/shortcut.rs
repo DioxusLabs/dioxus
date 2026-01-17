@@ -18,7 +18,7 @@ pub use crate::mobile_shortcut::*;
 use crate::window;
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use slab::Slab;
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::{cell::RefCell, collections::HashMap, str::FromStr, sync::Arc};
 use tao::keyboard::ModifiersState;
 
 /// An global id for a shortcut.
@@ -42,7 +42,7 @@ pub enum ShortcutRegistryError {
     /// The shortcut is invalid.
     InvalidShortcut(String),
     /// An unknown error occurred.
-    Other(Rc<dyn std::error::Error>),
+    Other(Arc<dyn std::error::Error + Send + Sync>),
 }
 
 pub(crate) struct ShortcutRegistry {
@@ -93,7 +93,7 @@ impl ShortcutRegistry {
             HotkeyError::HotKeyParseError(shortcut) => {
                 ShortcutRegistryError::InvalidShortcut(shortcut)
             }
-            err => ShortcutRegistryError::Other(Rc::new(err)),
+            err => ShortcutRegistryError::Other(Arc::new(err)),
         })?;
 
         let mut shortcut = ShortcutInner {

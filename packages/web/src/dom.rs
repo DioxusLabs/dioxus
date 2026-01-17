@@ -13,7 +13,7 @@ use dioxus_core::{ElementId, Template};
 use dioxus_interpreter_js::unified_bindings::Interpreter;
 use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Event, Node};
+use web_sys_x::{Document, Event, Node};
 
 use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
 
@@ -60,7 +60,7 @@ impl WebsysDom {
                 let root = match document.get_element_by_id(&rootname) {
                     Some(root) => root,
                     None => {
-                        web_sys::console::error_1(
+                        web_sys_x::console::error_1(
                             &format!("element '#{}' not found. mounting to the body.", rootname)
                                 .into(),
                         );
@@ -85,7 +85,7 @@ impl WebsysDom {
         // The Closure<dyn Fn(_)> type can invoked recursively, but Closure<dyn FnMut()> cannot
         let handler: Closure<dyn Fn(&Event)> = Closure::wrap(Box::new({
             let runtime = runtime.clone();
-            move |web_sys_event: &web_sys::Event| {
+            move |web_sys_event: &web_sys_x::Event| {
                 let name = web_sys_event.type_();
                 let element = walk_event_for_id(web_sys_event);
                 let bubbles = web_sys_event.bubbles();
@@ -133,18 +133,18 @@ impl WebsysDom {
     }
 }
 
-fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
+fn walk_event_for_id(event: &web_sys_x::Event) -> Option<(ElementId, web_sys_x::Element)> {
     let target = event
         .target()
         .expect("missing target")
-        .dyn_into::<web_sys::Node>()
+        .dyn_into::<web_sys_x::Node>()
         .expect("not a valid node");
 
     walk_element_for_id(&target)
 }
 
-fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys::Element)> {
-    let mut current_target_element = target.dyn_ref::<web_sys::Element>().cloned();
+fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys_x::Element)> {
+    let mut current_target_element = target.dyn_ref::<web_sys_x::Element>().cloned();
 
     loop {
         match (

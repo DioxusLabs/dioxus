@@ -13,10 +13,11 @@ use futures_util::{pin_mut, select, FutureExt, StreamExt};
 mod cfg;
 mod dom;
 
-mod events;
 pub mod launch;
 mod mutations;
-pub use events::*;
+
+// Re-export from the shared web-sys-events crate
+pub use dioxus_web_sys_events::*;
 
 #[cfg(feature = "document")]
 mod document;
@@ -26,12 +27,6 @@ mod history;
 pub use document::WebDocument;
 #[cfg(feature = "document")]
 pub use history::{HashHistory, WebHistory};
-
-mod files;
-pub use files::*;
-
-mod data_transfer;
-pub use data_transfer::*;
 
 #[cfg(all(feature = "devtools", debug_assertions))]
 mod devtools;
@@ -112,7 +107,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 }
             "#)]
             extern "C" {
-                fn get_initial_hydration_data() -> js_sys::Uint8Array;
+                fn get_initial_hydration_data() -> js_sys_x::Uint8Array;
                 fn get_initial_hydration_debug_types() -> Option<Vec<String>>;
                 fn get_initial_hydration_debug_locations() -> Option<Vec<String>>;
             }

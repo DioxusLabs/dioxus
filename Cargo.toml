@@ -18,6 +18,8 @@ members = [
     "packages/html-internal-macro",
     "packages/hooks",
     "packages/web",
+    "packages/web-eval",
+    "packages/web-sys-events",
     "packages/ssr",
     "packages/desktop",
     "packages/interpreter",
@@ -160,6 +162,8 @@ dioxus-html = { path = "packages/html", version = "0.7.2", default-features = fa
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.2" }
 dioxus-hooks = { path = "packages/hooks", version = "0.7.2" }
 dioxus-web = { path = "packages/web", version = "0.7.2", default-features = false }
+dioxus-web-eval = { path = "packages/web-eval", version = "0.7.2" }
+dioxus-web-sys-events = { path = "packages/web-sys-events", version = "0.7.2", default-features = false }
 dioxus-ssr = { path = "packages/ssr", version = "0.7.2", default-features = false }
 dioxus-desktop = { path = "packages/desktop", version = "0.7.2", default-features = false }
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.2" }
@@ -258,10 +262,15 @@ futures = "0.3.31"
 futures-channel = "0.3.31"
 futures-util = { version = "0.3", default-features = false }
 rustc-hash = "2.1.1"
-wasm-bindgen = "0.2.105"
+wasm-bindgen = "0.2.106"
 wasm-bindgen-futures = "0.4.50"
 js-sys = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
+wry-bindgen = "0.2.106-alpha.1"
+wasm-bindgen-x = "0.2.106-alpha.1"
+wasm-bindgen-futures-x = "0.4.56-alpha.1"
+js-sys-x = { version = "0.3.83-alpha.1" }
+web-sys-x = { version = "0.3.83-alpha.1", default-features = false }
 html_parser = "0.7.0"
 thiserror = "2.0.12"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
@@ -497,6 +506,9 @@ uuid = { workspace = true, features = ["v4", "serde"] }
 tower-http = { workspace = true, features = ["timeout"] }
 pollster = "0.4.0"
 
+web-sys-x = { workspace = true, features = ["CssStyleDeclaration", "Element", "HtmlElement", "Window", "CanvasRenderingContext2d", "Document", "HtmlCanvasElement", "MouseEvent"] }
+wasm-bindgen-x = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 getrandom = { workspace = true, features = ["wasm_js"] }
 tokio = { version = "1.48", default-features = false, features = [
@@ -581,6 +593,11 @@ doc-scrape-examples = true
 [[example]]
 name = "repo_readme"
 path = "examples/01-app-demos/repo_readme.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "canvas"
+path = "examples/01-app-demos/canvas.rs"
 doc-scrape-examples = true
 
 [[example]]

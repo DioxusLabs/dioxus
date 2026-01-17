@@ -1,5 +1,50 @@
+use crate::DesktopService;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
+use std::sync::{mpsc::SyncSender, Arc, Mutex};
 use tao::window::WindowId;
+use wry_bindgen::runtime::WryBindgenEvent;
+
+/// Type alias for the desktop service callback function.
+pub(crate) type DesktopServiceCallback =
+    Box<dyn FnOnce(&DesktopService) -> Box<dyn Any + Send> + Send>;
+
+/// Inner type that holds the callback and response channel for DesktopService operations.
+pub(crate) struct DesktopServiceCallbackInner {
+    pub callback: DesktopServiceCallback,
+    pub sender: SyncSender<Box<dyn Any + Send>>,
+}
+
+/// Wrapper for a callback that runs with DesktopService access on the main thread.
+/// The inner Option allows taking the callback exactly once.
+#[derive(Clone)]
+pub struct DesktopServiceCallbackWrapper(
+    pub(crate) Arc<Mutex<Option<DesktopServiceCallbackInner>>>,
+);
+
+impl std::fmt::Debug for DesktopServiceCallbackWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DesktopServiceCallbackWrapper")
+            .field(&"...")
+            .finish()
+    }
+}
+
+impl DesktopServiceCallbackWrapper {
+    pub(crate) fn new(
+        callback: DesktopServiceCallback,
+        sender: SyncSender<Box<dyn Any + Send>>,
+    ) -> Self {
+        Self(Arc::new(Mutex::new(Some(DesktopServiceCallbackInner {
+            callback,
+            sender,
+        }))))
+    }
+
+    pub(crate) fn take(&self) -> Option<DesktopServiceCallbackInner> {
+        self.0.lock().ok()?.take()
+    }
+}
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -43,6 +88,17 @@ pub enum UserWindowEvent {
 
     /// Gracefully shutdown the entire app
     Shutdown,
+
+    /// wry-bindgen IPC event (wrapped for Clone compatibility)
+    WryBindgenEvent(WryBindgenEvent),
+
+    /// Run a closure with access to a specific window's DesktopService on the main thread
+    RunWithDesktopService {
+        /// The window ID to get the DesktopService for
+        id: WindowId,
+        /// The callback wrapper containing the closure and response channel
+        callback: DesktopServiceCallbackWrapper,
+    },
 }
 
 /// A message struct that manages the communication between the webview and the eventloop code
@@ -58,7 +114,6 @@ pub struct IpcMessage {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum IpcMethod<'a> {
     UserEvent,
-    Query,
     BrowserOpen,
     Initialize,
     Other(&'a str),
@@ -68,7 +123,6 @@ impl IpcMessage {
     pub(crate) fn method(&self) -> IpcMethod<'_> {
         match self.method.as_str() {
             "user_event" => IpcMethod::UserEvent,
-            "query" => IpcMethod::Query,
             "browser_open" => IpcMethod::BrowserOpen,
             "initialize" => IpcMethod::Initialize,
             _ => IpcMethod::Other(&self.method),

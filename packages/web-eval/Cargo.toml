@@ -1,0 +1,24 @@
+[package]
+name = "dioxus-web-eval"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+edition = "2021"
+description = "Web-based JavaScript evaluator for Dioxus"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
+keywords = ["dom", "ui", "gui", "web", "wasm"]
+
+[dependencies]
+dioxus-document = { workspace = true }
+generational-box = { workspace = true }
+
+wasm-bindgen = { version = "0.2.106-alpha.1", package = "wasm-bindgen-x" }
+wasm-bindgen-futures = { version = "0.4.56-alpha.1", package = "wasm-bindgen-futures-x" }
+js-sys = { version = "0.3.83-alpha.1", package = "js-sys-x" }
+futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]
+lazy-js-bundle = { workspace = true }

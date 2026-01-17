@@ -4,7 +4,7 @@ use crate::{
     assets::*, ipc::UserWindowEvent, shortcut::IntoAccelerator, window, DesktopContext,
     HotKeyState, ShortcutHandle, ShortcutRegistryError, WryEventHandler,
 };
-use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup, Runtime};
+use dioxus_core::{consume_context, use_hook, use_hook_with_cleanup};
 
 use dioxus_hooks::use_callback;
 use tao::{event::Event, event_loop::EventLoopWindowTarget};
@@ -15,34 +15,28 @@ pub fn use_window() -> DesktopContext {
     use_hook(consume_context::<DesktopContext>)
 }
 
-/// Register an event handler that runs when a wry event is processed.
+/// Register an event handler that runs when a wry event is processed. Unlike most callback hooks, this
+/// will run outside of the virtual dom context
 pub fn use_wry_event_handler(
-    mut handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
+        + Send
+        + 'static,
 ) -> WryEventHandler {
-    use dioxus_core::current_scope_id;
-
-    // Capture the current runtime and scope ID.
-    let runtime = Runtime::current();
-    let scope_id = current_scope_id();
-
     use_hook_with_cleanup(
-        move || {
-            window().create_wry_event_handler(move |event, target| {
-                runtime.in_scope(scope_id, || handler(event, target))
-            })
-        },
+        move || window().create_wry_event_handler(handler),
         move |handler| handler.remove(),
     )
 }
 
-/// Register an event handler that runs when a muda event is processed.
+/// Register an event handler that runs when a muda event is processed. Unlike most callback hooks, this
+/// will run outside of the virtual dom context
 #[cfg_attr(
     docsrs,
     doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
 )]
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub fn use_muda_event_handler(
-    mut handler: impl FnMut(&muda::MenuEvent) + 'static,
+    mut handler: impl FnMut(&muda::MenuEvent) + Send + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
         if let Event::UserEvent(UserWindowEvent::MudaMenuEvent(event)) = event {
@@ -51,14 +45,15 @@ pub fn use_muda_event_handler(
     })
 }
 
-/// Register an event handler that runs when a tray icon menu event is processed.
+/// Register an event handler that runs when a tray icon menu event is processed. Unlike most callback hooks, this
+/// will run outside of the virtual dom context
 #[cfg_attr(
     docsrs,
     doc(cfg(any(target_os = "windows", target_os = "linux", target_os = "macos")))
 )]
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub fn use_tray_menu_event_handler(
-    mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + 'static,
+    mut handler: impl FnMut(&tray_icon::menu::MenuEvent) + Send + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
         if let Event::UserEvent(UserWindowEvent::TrayMenuEvent(event)) = event {
@@ -67,7 +62,8 @@ pub fn use_tray_menu_event_handler(
     })
 }
 
-/// Register an event handler that runs when a tray icon event is processed.
+/// Register an event handler that runs when a tray icon event is processed. Unlike most callback hooks, this
+/// will run outside of the virtual dom context
 /// This is only for tray icon and not it's menus.
 /// If you want to register tray icon menus handler use `use_tray_menu_event_handler` instead.
 #[cfg_attr(
@@ -76,7 +72,7 @@ pub fn use_tray_menu_event_handler(
 )]
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 pub fn use_tray_icon_event_handler(
-    mut handler: impl FnMut(&tray_icon::TrayIconEvent) + 'static,
+    mut handler: impl FnMut(&tray_icon::TrayIconEvent) + Send + 'static,
 ) -> WryEventHandler {
     use_wry_event_handler(move |event, _| {
         if let Event::UserEvent(UserWindowEvent::TrayIconEvent(event)) = event {
@@ -98,14 +94,12 @@ pub fn use_asset_handler(
 
     use_hook_with_cleanup(
         || {
-            crate::window()
-                .asset_handlers
-                .register_handler(name.to_string(), cb);
+            crate::window().register_asset_handler(name, move |req, resp| cb((req, resp)));
 
             Rc::new(name.to_string())
         },
         move |name| {
-            _ = crate::window().asset_handlers.remove_handler(name.as_ref());
+            crate::window().remove_asset_handler(name.as_ref());
         },
     );
 }
@@ -122,9 +116,10 @@ pub fn use_global_shortcut(
         #[allow(clippy::redundant_closure)]
         move || window().create_shortcut(accelerator.accelerator(), move |state| cb(state)),
         |handle| {
-            if let Ok(handle) = handle {
-                handle.remove();
+            if let Ok((shortcut_handle, dom_id)) = handle {
+                window().remove_dom_shortcut(shortcut_handle, dom_id);
             }
         },
     )
+    .map(|(handle, _)| handle)
 }

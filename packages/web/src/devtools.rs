@@ -5,13 +5,13 @@
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
-use js_sys::JsString;
+use js_sys_x::JsString;
 use std::fmt::Display;
 use std::time::Duration;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::{closure::Closure, JsValue};
-use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
+use web_sys_x::{window, CloseEvent, MessageEvent, WebSocket};
 
 const POLL_INTERVAL_MIN: i32 = 250;
 const POLL_INTERVAL_MAX: i32 = 4000;
@@ -44,7 +44,7 @@ pub(crate) fn init(config: &crate::Config) -> UnboundedReceiver<HotReloadMsg> {
 fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
-    let location = web_sys::window().unwrap().location();
+    let location = web_sys_x::window().unwrap().location();
     let url = format!(
         "{protocol}//{host}/_dioxus?build_id={build_id}",
         protocol = match location.protocol().unwrap() {
@@ -77,7 +77,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                 // But if the dev server shutsdown we don't want to be super aggressive about it... let's
                 // play with other devservers to see how they handle this
                 Ok(DevserverMsg::Shutdown) => {
-                    web_sys::console::error_1(&"Connection to the devserver was closed".into())
+                    web_sys_x::console::error_1(&"Connection to the devserver was closed".into())
                 }
 
                 // The devserver is telling us that it started a full rebuild. This does not mean that it is ready.
@@ -119,12 +119,12 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
                     window().unwrap().location().reload().unwrap()
                 }
 
-                Err(e) => web_sys::console::error_1(
+                Err(e) => web_sys_x::console::error_1(
                     &format!("Error parsing devserver message: {}", e).into(),
                 ),
 
                 e => {
-                    web_sys::console::error_1(
+                    web_sys_x::console::error_1(
                         &format!("Error parsing devserver message: {:?}", e).into(),
                     );
                 }
@@ -147,7 +147,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
 
             // set timeout to reload the page in timeout_ms
             let tx = tx.clone();
-            web_sys::window()
+            web_sys_x::window()
                 .unwrap()
                 .set_timeout_with_callback_and_timeout_and_arguments_0(
                     Closure::<dyn FnMut()>::new(move || {
@@ -228,7 +228,7 @@ pub(crate) fn show_toast(
         false => "showDXToast",
     };
 
-    _ = js_sys::eval(&format!(
+    _ = js_sys_x::eval(&format!(
         r#"
             if (typeof {js_fn_name} !== "undefined") {{
                 window.{js_fn_name}(`{header_text}`, `{message}`, `{level}`, {as_ms});
@@ -244,18 +244,18 @@ pub(crate) fn show_toast(
 pub(crate) fn invalidate_browser_asset_cache() {
     // it might be triggering a reload of assets
     // invalidate all the stylesheets on the page
-    let links = web_sys::window()
+    let links = web_sys_x::window()
         .unwrap()
         .document()
         .unwrap()
         .query_selector_all("link[rel=stylesheet]")
         .unwrap();
 
-    let noise = js_sys::Math::random();
+    let noise = js_sys_x::Math::random();
 
     for x in 0..links.length() {
         use wasm_bindgen::JsCast;
-        let link: web_sys::Element = links.get(x).unwrap().unchecked_into();
+        let link: web_sys_x::Element = links.get(x).unwrap().unchecked_into();
         if let Some(href) = link.get_attribute("href") {
             let (url, query) = href.split_once('?').unwrap_or((&href, ""));
             let mut query_params: Vec<&str> = query.split('&').collect();
@@ -277,7 +277,7 @@ pub(crate) fn invalidate_browser_asset_cache() {
 ///
 /// This listens for window message events from other Windows (such as window.top when this is running in an iframe).
 fn playground(tx: UnboundedSender<HotReloadMsg>) {
-    let window = web_sys::window().expect("this code should be running in a web context");
+    let window = web_sys_x::window().expect("this code should be running in a web context");
 
     let binding = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
         let Ok(text) = e.data().dyn_into::<JsString>() else {

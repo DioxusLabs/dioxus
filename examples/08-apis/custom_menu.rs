@@ -32,7 +32,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut text = use_signal(String::new);
+    let mut text = use_signal_sync(String::new);
     // You can use the `use_muda_event_handler` hook to run code when a menu event is triggered.
     use_muda_event_handler(move |muda_event| {
         if muda_event.id() == "switch-text" {

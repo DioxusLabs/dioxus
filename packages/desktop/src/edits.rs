@@ -18,7 +18,6 @@
 //! If this happens, we will automatically switch to a new port and notify the webview of the new location
 //! and key. The webview will then reconnect to the new port and continue receiving edits.
 
-use dioxus_interpreter_js::MutationState;
 use futures_channel::oneshot;
 use futures_util::FutureExt;
 use rand::{RngCore, SeedableRng};
@@ -43,20 +42,14 @@ pub(crate) struct WryQueue {
 }
 
 impl WryQueue {
-    pub(crate) fn with_mutation_state_mut<O: 'static>(
-        &self,
-        callback: impl FnOnce(&mut MutationState) -> O,
-    ) -> O {
-        let mut inner = self.inner.borrow_mut();
-        callback(&mut inner.mutation_state)
-    }
-
-    /// Send a list of mutations to the webview
-    pub(crate) fn send_edits(&self) {
+    /// Send pre-serialized mutations to the webview.
+    ///
+    /// This is used when mutations are generated on a separate thread and sent
+    /// via channel to the main thread for transmission to the webview.
+    pub(crate) fn send_edits_raw(&self, edits: Vec<u8>) {
         let mut myself = self.inner.borrow_mut();
         let webview_id = myself.location.webview_id;
-        let serialized_edits = myself.mutation_state.export_memory();
-        let receiver = myself.websocket.send_edits(webview_id, serialized_edits);
+        let receiver = myself.websocket.send_edits(webview_id, edits);
         myself.edits_in_progress = Some(receiver);
     }
 
@@ -67,9 +60,13 @@ impl WryQueue {
     ) -> std::task::Poll<()> {
         let mut self_mut = self.inner.borrow_mut();
         if let Some(receiver) = self_mut.edits_in_progress.as_mut() {
-            receiver.poll_unpin(cx).map(|_| ())
+            let poll = receiver.poll_unpin(cx).map(|_| ());
+            if poll.is_ready() {
+                self_mut.edits_in_progress = None;
+            }
+            poll
         } else {
-            std::task::Poll::Ready(())
+            std::task::Poll::Pending
         }
     }
 
@@ -119,7 +116,6 @@ pub(crate) struct WryQueueInner {
     // The socket may be killed by the OS while running. If it does, this channel will receive the new server location
     server_location_changed: Arc<Notify>,
     server_location_changed_future: Pin<Box<dyn Future<Output = ()>>>,
-    mutation_state: MutationState,
 }
 
 /// The location of a webview websocket connection. This is used to identify the webview and the port it is connected to.
@@ -387,7 +383,6 @@ impl EditWebsocket {
                 location: WebviewWebsocketLocation { webview_id, server },
                 websocket: self.clone(),
                 edits_in_progress: None,
-                mutation_state: MutationState::default(),
             })),
         }
     }

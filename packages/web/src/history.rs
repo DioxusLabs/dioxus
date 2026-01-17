@@ -1,5 +1,5 @@
 use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use web_sys::{window, Event, History, ScrollRestoration, Window};
+use web_sys_x::{window, Event, History, ScrollRestoration, Window};
 
 /// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///
@@ -363,7 +363,7 @@ impl ScrollPosition {
         let f = Closure::wrap(
             Box::new(move || window.scroll_to_with_x_and_y(x, y)) as Box<dyn FnMut()>
         );
-        web_sys::window()
+        web_sys_x::window()
             .expect("should be run in a context with a `Window` object (dioxus cannot be run from a web worker)")
             .request_animation_frame(&f.into_js_value().unchecked_into())
             .expect("should register `requestAnimationFrame` OK");
@@ -375,7 +375,7 @@ pub(crate) fn replace_state_with_url(
     value: &[f64; 2],
     url: Option<&str>,
 ) -> Result<(), JsValue> {
-    let position = js_sys::Array::new();
+    let position = js_sys_x::Array::new();
     position.push(&JsValue::from(value[0]));
     position.push(&JsValue::from(value[1]));
     history.replace_state_with_url(&position, "", url)
@@ -386,7 +386,7 @@ pub(crate) fn push_state_and_url(
     value: &[f64; 2],
     url: String,
 ) -> Result<(), JsValue> {
-    let position = js_sys::Array::new();
+    let position = js_sys_x::Array::new();
     position.push(&JsValue::from(value[0]));
     position.push(&JsValue::from(value[1]));
     history.push_state_with_url(&position, "", Some(&url))
@@ -395,7 +395,7 @@ pub(crate) fn push_state_and_url(
 pub(crate) fn get_current(history: &History) -> Option<[f64; 2]> {
     use wasm_bindgen::JsCast;
     history.state().ok().and_then(|state| {
-        let state = state.dyn_into::<js_sys::Array>().ok()?;
+        let state = state.dyn_into::<js_sys_x::Array>().ok()?;
         let x = state.get(0).as_f64()?;
         let y = state.get(1).as_f64()?;
         Some([x, y])

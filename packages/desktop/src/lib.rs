@@ -3,6 +3,9 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// The objc crate's msg_send! macro uses cfg(feature = "cargo-clippy") which triggers
+// unexpected_cfgs warnings. This is a known issue with the objc crate.
+#![allow(unexpected_cfgs)]
 
 mod android_sync_lock;
 mod app;
@@ -10,20 +13,20 @@ mod assets;
 mod config;
 mod desktop_context;
 mod document;
+mod dom_thread;
 mod edits;
-mod element;
+mod event_converter;
 mod event_handlers;
-mod events;
 mod file_upload;
 mod hooks;
 mod ipc;
 mod menubar;
 mod mobile;
 mod protocol;
-mod query;
 mod shortcut;
 mod waker;
 mod webview;
+mod wry_bindgen_bridge;
 
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -49,9 +52,8 @@ pub mod trayicon;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
-pub use desktop_context::{
-    window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
-};
+pub use desktop_context::{window, DesktopContext, DesktopService, PendingDesktopContext};
+pub use dioxus_web_sys_events::*;
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};

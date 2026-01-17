@@ -22,8 +22,8 @@ fn app() -> Element {
     let open_compose_window = move |_evt: MouseEvent| {
         let tx = handle.tx();
         dioxus::desktop::window().new_window(
-            VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
-            Default::default(),
+            || VirtualDom::new_with_props(popup, Rc::new(move |s| tx.unbounded_send(s).unwrap())),
+            Default::default,
         );
     };
 
