@@ -44,7 +44,7 @@ fn clear_error_boundary() {
 
     #[component]
     pub fn ThrowsError() -> Element {
-        if THREW_ERROR.load(std::sync::atomic::Ordering::SeqCst) {
+        if !THREW_ERROR.load(std::sync::atomic::Ordering::SeqCst) {
             THREW_ERROR.store(true, std::sync::atomic::Ordering::SeqCst);
             Err(CapturedError::from_display("This is an error").into())
         } else {
@@ -71,7 +71,22 @@ fn clear_error_boundary() {
 
     let mut dom = VirtualDom::new(App);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
-    let out = dioxus_ssr::render(&dom);
+    // The DOM will now contain no text - the error was thrown by ThrowsError and caught by the
+    // ErrorBoundary. This calls `needs_update()`, but the update hasn't been processed yet.
 
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    // The ErrorBoundary has now called its `handle_error` handler. The DOM contains the string
+    // "We cleared it", and `needs_update()` has been called again (by `error.clear_errors()`)
+
+    dom.render_immediate(&mut dioxus_core::NoOpMutations);
+    // `ThrowsError` is re-rendered, but this time does not throw an error, so at the end the DOM
+    // contains "We should see this"
+
+    let out = dioxus_ssr::render(&dom);
     assert_eq!(out, "We should see this");
+
+    // There should be no errors left in the error boundary
+    dom.in_runtime(|| {
+        ScopeId::APP.in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+    })
 }

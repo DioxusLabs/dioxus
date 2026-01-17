@@ -3,6 +3,8 @@ use dioxus_core::ElementId;
 use dioxus_elements::SerializedHtmlEventConverter;
 use std::{any::Any, rc::Rc};
 
+// This test is intended to be run with Miri, and contains no assertions. If it completes under
+// Miri, it has passed.
 #[test]
 fn miri_rollover() {
     set_event_converter(Box::new(SerializedHtmlEventConverter));
