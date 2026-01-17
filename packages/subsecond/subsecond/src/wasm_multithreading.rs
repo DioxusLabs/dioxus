@@ -5,34 +5,31 @@
 //!
 //! Background: Wasm has no native function pointer, only function references. Function reference cannot be directly put into linear memory. Table is array-like thing that can hold function references. The function pointers are actually an index corresponding to a function reference in table.
 //!
-//! (Note that the function index here means index in table, different to function index in Wasm binary)
+//! Currently, only the Wasm linear memory (backed by SharedArrayBuffer) can be shared across threads. Other things including `WebAssembly.Instance` and tables cannot be shared. Each web worker separately initialize their own `WebAssembly.Instance` and tables.
 //!
-//! Currently, only the Wasm linear memory (backed by SharedArrayBuffer) can be shared across threads. Any other thing, including `WebAssembly.Instance` and tables, cannot be shared.
+//! Hotpatching requires dynamic linking. Dynamic linking requires loading new Wasm binary, creating new instance, and putting new functions into table. In Wasm multi-threading, doing dynamic linking requires all web workers to cooperatively dynamic link into their own tables. This is more complex than in single-threaded Wasm.
 //!
-//! Each web worker separately initialize their own `WebAssembly.Instance` and tables.
-//!
-//! Hotpatching requires dynamic linking. Dynamic linking requires loading new Wasm binary, creating new instance, and putting new functions into table. In Wasm multi-threading, doing dynamic linking requires all web workers to cooporatively dynamic link into their own tables. This is harder than in single-threaded Wasm.
-//!
-//! Also, the tables in all threads must be kept in-sync. Because the function pointers(indices) are shared across threads. All threads must dynamic link same Wasm binaries in the same order.
+//! Also, the tables in all threads must be kept in-sync. Because the function pointers(indices) can be shared across threads. All threads must dynamic link same Wasm binaries in the same order.
 //!
 //! The global jump table only updates after all web workers have dynamically linked the new code. (If not, the web worker cannot execute function pointers of new function).
 //!
-//! The multi-threaded dynamic linking is an async process now. If new hotpatch comes before current hotpatch finishes, it needs to be queued.
+//! The multithreaded dynamic linking is an async process now. If new hotpatch comes before current hotpatch finishes, it needs to be queued.
 //!
-//! The design:
+//! It uses `BroadcastChannel` to pass message of hotpatching. The hotpatch can only be triggered in main thread. When it triggers, send a message to workers via `BroadcastChannel`
 //!
-//! - Use `BroadcastChannel` to pass message of hotpatching. It just requires each web worker to run a function on init to set up. (It's less intrusive than directly sending message or passing a `MessageChannel` on web worker init.)
-//! - The hotpatch can only be triggered in main thread. When it triggers, send a message to workers via `BroadcastChannel`
-//! - Add thread id for tracking what threads hasn't dynamic linked. Once all threads dynamic linked, update global jump table then use another `BroadcastChannel` to notify main thread. (Use two broadcast channels to avoid the finishing message to be processed by unrelated web workers.) The main thread will do remaining queued hotpatches.
+//! It internally allocates thread id for tracking what threads hasn't dynamic linked. Once all threads dynamic linked, update global jump table then use another `BroadcastChannel` to notify main thread. The main thread will do remaining queued hotpatches.
 //!
+//! Two public APIs:
+//! - `init_hotpatch_for_current_thread`. It needs to be called once in main thread on init, and called once in each web worker on init.
+//! - `close_hotpatch_for_current_thread`. It needs to be called in web worker before terminating web worker.
 //!
+//! These two APIs are exported to JS.
 
 use crate::wasm_multithreading::CurrHotpatchingState::{
     Idle, MainThreadDynamicLinking, WebWorkersDynamicLinking,
 };
 use crate::PatchError::WasmRelated;
 use crate::{commit_patch, wasm_is_multi_threaded, PatchError};
-use futures::SinkExt;
 use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
 use std::cell::{Cell, RefCell};
@@ -62,18 +59,46 @@ pub async fn init_hotpatch_for_current_thread() {
     inner_init_hotpatch_for_current_thread().await;
 }
 
-async fn inner_init_hotpatch_for_current_thread() {
-    if CURR_THREAD_HOTPATCH_INITIALIZED.get() {
-        console::debug_1(
-            &format!(
-                "Current web worker {:?} has already initialized hotpatch",
-                get_my_thread_id()
-            )
-            .into(),
-        );
+/// It should be called in web worker before closing.
+///
+/// Note: if a web worker that initialized hotpatching is directly terminated without calling this,
+/// next hotpatch will hang. Because hotpatching
+#[wasm_bindgen]
+pub fn close_hotpatch_for_current_thread() {
+    if !cfg!(debug_assertions) {
+        return;
     }
 
-    CURR_THREAD_HOTPATCH_INITIALIZED.set(true);
+    inner_close_hotpatch_for_current_thread();
+}
+
+async fn inner_init_hotpatch_for_current_thread() {
+    let old_state = CURR_THREAD_HOTPATCH_INIT_STATE.get();
+
+    match old_state {
+        CurrThreadHotpatchInitState::Uninitialized => {}
+        CurrThreadHotpatchInitState::Initialized => {
+            console::debug_1(
+                &format!(
+                    "Current thread {:?} has already initialized hotpatch",
+                    get_my_thread_id()
+                )
+                .into(),
+            );
+        }
+        CurrThreadHotpatchInitState::Closed => {
+            console::error_1(
+                &format!(
+                    "Current thread {:?} is already in closed state, cannot init",
+                    get_my_thread_id()
+                )
+                .into(),
+            );
+            return;
+        }
+    }
+
+    CURR_THREAD_HOTPATCH_INIT_STATE.set(CurrThreadHotpatchInitState::Initialized);
 
     assert!(
         wasm_is_multi_threaded(),
@@ -137,6 +162,69 @@ async fn inner_init_hotpatch_for_current_thread() {
     }
 }
 
+fn inner_close_hotpatch_for_current_thread() {
+    assert!(!is_main_thread(), "Cannot be called in main thread");
+
+    let current_state = CURR_THREAD_HOTPATCH_INIT_STATE.get();
+    if current_state == CurrThreadHotpatchInitState::Closed {
+        console::debug_1(
+            &format!(
+                "Current web worker {:?} has already closed hotpatch",
+                get_my_thread_id()
+            )
+            .into(),
+        );
+        return;
+    }
+
+    if current_state == CurrThreadHotpatchInitState::Uninitialized {
+        console::warn_1(
+            &format!(
+                "Current web worker {:?} is closing hotpatch without initializing first",
+                get_my_thread_id()
+            )
+            .into(),
+        );
+        return;
+    }
+
+    CHANNEL_LOCAL_STATE.with(|r| {
+        let mut state = r.borrow_mut();
+        if let Some(channel_state) = &mut *state {
+            channel_state.to_hotpatch_channel.set_onmessage(None);
+            channel_state.hotpatch_finish_channel.set_onmessage(None);
+        }
+        *state = None;
+    });
+
+    // Remove thread ID from global state (only for web workers, not main thread)
+    if !is_main_thread() {
+        let mut global_state = GLOBAL_HOTPATCH_STATE.lock();
+        global_state.worker_thread_ids.remove(&get_my_thread_id());
+
+        // Also remove from pending_thread_ids if currently in WebWorkersDynamicLinking state
+        if let CurrHotpatchingState::WebWorkersDynamicLinking(dynamic_linking_state) =
+            &mut global_state.curr_state
+        {
+            dynamic_linking_state
+                .pending_thread_ids
+                .remove(&get_my_thread_id());
+
+            if dynamic_linking_state.pending_thread_ids.is_empty() {
+                drop(global_state);
+                console::debug_1(
+                    &"All web workers finished hotpatching (triggered on web worker close)".into(),
+                );
+                notify_main_thread_hotpatch_finish();
+            }
+        }
+    }
+
+    CURR_THREAD_HOTPATCH_INIT_STATE.set(CurrThreadHotpatchInitState::Closed);
+
+    console::debug_1(&format!("Thread {:?} closed hotpatch", get_my_thread_id()).into());
+}
+
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Debug)]
@@ -148,7 +236,8 @@ thread_local! {
     /// This thread id is for internally tracking what web worker haven't dynamically linked the patch
     static MY_THREAD_ID: MyThreadId = MyThreadId(NEXT_THREAD_ID.fetch_add(1, Ordering::Relaxed));
 
-    static CURR_THREAD_HOTPATCH_INITIALIZED: Cell<bool> = Cell::new(false);
+    static CURR_THREAD_HOTPATCH_INIT_STATE: Cell<CurrThreadHotpatchInitState> =
+        Cell::new(CurrThreadHotpatchInitState::Uninitialized);
 }
 
 fn get_my_thread_id() -> MyThreadId {
@@ -169,6 +258,13 @@ enum CurrHotpatchingState {
     Idle,
     MainThreadDynamicLinking,
     WebWorkersDynamicLinking(WebWorkersDynamicLinkingState),
+}
+
+#[derive(Copy, Clone, Hash, Ord, PartialOrd, Eq, PartialEq, Debug)]
+enum CurrThreadHotpatchInitState {
+    Uninitialized,
+    Initialized,
+    Closed,
 }
 
 struct WebWorkersDynamicLinkingState {
@@ -250,7 +346,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
 async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> HotpatchEntry {
     assert!(is_main_thread());
     assert!(
-        CURR_THREAD_HOTPATCH_INITIALIZED.get(),
+        CURR_THREAD_HOTPATCH_INIT_STATE.get() == CurrThreadHotpatchInitState::Initialized,
         "main thread hasn't called init_hotpatch_for_current_thread"
     );
 
@@ -412,7 +508,7 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                     .remove(&my_thread_id);
 
                 if !removed {
-                    console::warn_1(
+                    console::error_1(
                         &format!(
                             "Current web worker not in pending_thread_ids {:?}",
                             my_thread_id
@@ -539,6 +635,7 @@ impl HotpatchEntry {
             .call0(&JsValue::undefined());
 
         // https://github.com/WebAssembly/tool-conventions/blob/main/Linking.md#start-section
+        // TODO check is it undefined
         _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
             .unwrap()
             .unchecked_into::<js_sys::Function>()
