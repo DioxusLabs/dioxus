@@ -80,7 +80,7 @@ async fn inner_init_hotpatch_for_current_thread() {
         CurrThreadHotpatchInitState::Initialized => {
             console::debug_1(
                 &format!(
-                    "Current thread {:?} has already initialized hotpatch",
+                    "[subsecond] Current thread {:?} has already initialized hotpatch",
                     get_my_thread_id()
                 )
                 .into(),
@@ -89,7 +89,7 @@ async fn inner_init_hotpatch_for_current_thread() {
         CurrThreadHotpatchInitState::Closed => {
             console::error_1(
                 &format!(
-                    "Current thread {:?} is already in closed state, cannot init",
+                    "[subsecond] Current thread {:?} is already in closed state, cannot init",
                     get_my_thread_id()
                 )
                 .into(),
@@ -105,7 +105,7 @@ async fn inner_init_hotpatch_for_current_thread() {
         "init_hotpatch_for_current_thread can only be used in multi-threading"
     );
 
-    console::debug_1(&format!("Thread {:?} initializing", get_my_thread_id()).into());
+    console::debug_1(&format!("[subsecond] Thread {:?} initializing", get_my_thread_id()).into());
 
     let mut global_hotpatch_state = GLOBAL_HOTPATCH_STATE.lock();
 
@@ -169,7 +169,7 @@ fn inner_close_hotpatch_for_current_thread() {
     if current_state == CurrThreadHotpatchInitState::Closed {
         console::debug_1(
             &format!(
-                "Current web worker {:?} has already closed hotpatch",
+                "[subsecond] Current web worker {:?} has already closed hotpatch",
                 get_my_thread_id()
             )
             .into(),
@@ -180,7 +180,7 @@ fn inner_close_hotpatch_for_current_thread() {
     if current_state == CurrThreadHotpatchInitState::Uninitialized {
         console::warn_1(
             &format!(
-                "Current web worker {:?} is closing hotpatch without initializing first",
+                "[subsecond] Current web worker {:?} is closing hotpatch without initializing first",
                 get_my_thread_id()
             )
             .into(),
@@ -213,7 +213,7 @@ fn inner_close_hotpatch_for_current_thread() {
             if dynamic_linking_state.pending_thread_ids.is_empty() {
                 drop(global_state);
                 console::debug_1(
-                    &"All web workers finished hotpatching (triggered on web worker close)".into(),
+                    &"[subsecond] All web workers finished hotpatching (triggered on web worker close)".into(),
                 );
                 notify_main_thread_hotpatch_finish();
             }
@@ -222,7 +222,7 @@ fn inner_close_hotpatch_for_current_thread() {
 
     CURR_THREAD_HOTPATCH_INIT_STATE.set(CurrThreadHotpatchInitState::Closed);
 
-    console::debug_1(&format!("Thread {:?} closed hotpatch", get_my_thread_id()).into());
+    console::debug_1(&format!("[subsecond] Thread {:?} closed hotpatch", get_my_thread_id()).into());
 }
 
 static NEXT_THREAD_ID: AtomicUsize = AtomicUsize::new(0);
@@ -312,7 +312,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
             }
             _ => {
                 console::debug_1(
-                    &"Received new hotpatch when previous hotpatch hasn't finished. Queue it."
+                    &"[subsecond] Received new hotpatch when previous hotpatch hasn't finished. Queue it."
                         .into(),
                 );
                 hotpatch_state.pending_hotpatches.push(jump_table);
@@ -365,7 +365,7 @@ async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> Hotpatch
 
     console::debug_1(
         &format!(
-            "Patch binary data size {}",
+            "[subsecond] The patch's required data size {}",
             dylink_section_info.mem_info.memory_size
         )
         .into(),
@@ -510,7 +510,7 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                 if !removed {
                     console::error_1(
                         &format!(
-                            "Current web worker not in pending_thread_ids {:?}",
+                            "[subsecond] Current web worker not in pending_thread_ids {:?}",
                             my_thread_id
                         )
                         .into(),
@@ -518,7 +518,7 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
                 }
 
                 console::debug_1(
-                    &format!("Web worker {:?} finished dynamic linking", my_thread_id).into(),
+                    &format!("[subsecond] Web worker {:?} finished dynamic linking", my_thread_id).into(),
                 );
 
                 web_workers_dynamic_linking_state
@@ -531,7 +531,7 @@ fn on_worker_should_dynamic_link(event: &MessageEvent) {
         };
 
         if finished {
-            console::debug_1(&"All web workers finished hotpatching".into());
+            console::debug_1(&"[subsecond] All web workers finished hotpatching".into());
             notify_main_thread_hotpatch_finish();
         }
     });
@@ -618,7 +618,7 @@ impl HotpatchEntry {
             .await
             .expect("instantiating module");
 
-        console::debug_2(&"result instance".into(), &instance);
+        console::debug_2(&"[subsecond] result instance".into(), &instance);
 
         let exports: Object = Reflect::get(&instance, &"exports".into())
             .expect("getting exports")
@@ -646,7 +646,7 @@ impl HotpatchEntry {
 async fn load_wasm_module(jump_table: &JumpTable) -> Module {
     let path = jump_table.lib.to_str().unwrap();
 
-    web_sys::console::debug_1(&format!("Going to load wasm binary: {:?}", path).into());
+    web_sys::console::debug_1(&format!("[subsecond] Going to load wasm binary: {:?}", path).into());
 
     if !path.ends_with(".wasm") {
         panic!("The binary path in hotpatch message doesn't end with .wasm");
@@ -741,7 +741,7 @@ fn parse_dylink_section(module: &Module) -> Result<DylinkSectionInfo, PatchError
             _ => {}
         }
 
-        console::debug_1(&"Read one subsection in dylink.0".into())
+        console::debug_1(&"[subsecond] Read one subsection in dylink.0".into())
     }
 
     Ok(DylinkSectionInfo {
