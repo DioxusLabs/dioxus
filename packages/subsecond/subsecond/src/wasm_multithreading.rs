@@ -496,7 +496,9 @@ fn on_main_thread_receive_hotpatch_finish() {
             .apply_change_to_jump_table();
     }
 
-    state.hotpatched.push(web_worker_dynamic_linking_state.hotpatch_entry);
+    state
+        .hotpatched
+        .push(web_worker_dynamic_linking_state.hotpatch_entry.clone());
     state.curr_state = Idle;
 
     main_thread_run_pending_hotpatches(&mut state);
