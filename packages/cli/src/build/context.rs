@@ -126,10 +126,16 @@ impl BuildContext {
     }
 
     pub(crate) fn status_build_message(&self, line: String) {
-        tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
+        if !crate::logging::verbosity_or_default().quiet {
+            tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
+        }
     }
 
     pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
+        if crate::logging::verbosity_or_default().quiet {
+            return;
+        }
+
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
