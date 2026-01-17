@@ -32,6 +32,7 @@ use crate::PatchError::WasmRelated;
 use crate::{commit_patch, wasm_is_multi_threaded, PatchError};
 use js_sys::WebAssembly::{Memory, Module, Table};
 use js_sys::{ArrayBuffer, Object, Promise, Reflect, Uint8Array, WebAssembly};
+use spin::MutexGuard;
 use std::cell::{Cell, RefCell};
 use std::collections::HashSet;
 use std::io::Read;
@@ -122,7 +123,7 @@ async fn inner_init_hotpatch_for_current_thread() {
 
     if is_main_thread() {
         let closure: Closure<dyn Fn(&MessageEvent)> =
-            Closure::new(move |e: &MessageEvent| on_main_thread_know_hotpatch_finish());
+            Closure::new(move |e: &MessageEvent| on_main_thread_receive_hotpatch_finish());
         let closure_js = closure.into_js_value();
         hotpatch_finish_callback = Some(closure_js.clone());
         hotpatch_finish_channel.set_onmessage(Some(&closure_js.into()));
@@ -371,7 +372,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
 
         if hotpatch_state.worker_thread_ids.is_empty() {
             console::debug_1(&"No web worker, directly finish hotpatch".into());
-            on_main_thread_know_hotpatch_finish();
+            finalize_hotpatch(&mut hotpatch_state);
         } else {
             hotpatch_state.curr_state = WebWorkersDynamicLinking(WebWorkersDynamicLinkingState {
                 hotpatch_entry: Arc::new(entry),
@@ -465,11 +466,15 @@ fn notify_web_workers_to_dynamic_link() {
     })
 }
 
-fn on_main_thread_know_hotpatch_finish() {
+fn on_main_thread_receive_hotpatch_finish() {
     assert!(is_main_thread());
 
     let mut state = GLOBAL_HOTPATCH_STATE.lock();
 
+    finalize_hotpatch(&mut state);
+}
+
+fn finalize_hotpatch(state: &mut MutexGuard<GlobalHotpatchState>) {
     let web_worker_dynamic_linking_state = match state.curr_state {
         WebWorkersDynamicLinking(ref web_workers_dynamic_linking_state) => {
             web_workers_dynamic_linking_state
