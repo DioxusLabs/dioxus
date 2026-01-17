@@ -9,7 +9,7 @@
 //!
 //! Hotpatching requires dynamic linking. Dynamic linking requires loading new Wasm binary, creating new instance, and putting new functions into table. In Wasm multi-threading, doing dynamic linking requires all web workers to cooperatively dynamic link into their own tables. This is more complex than in single-threaded Wasm.
 //!
-//! Also, the tables in all threads must be kept in-sync. Because the function pointers(indices) can be shared across threads. All threads must dynamic link same Wasm binaries in the same order.
+//! Also, the tables in all threads must be kept in-sync. Because the function pointers(indices) can be shared across threads. All threads must dynamic link same Wasm binaries in the same order. If the tables are not synced, may get "RuntimeError: table index is out of bounds" or other kinds of error.
 //!
 //! The global jump table only updates after all web workers have dynamically linked the new code. (If not, the web worker cannot execute function pointers of new function).
 //!
@@ -375,6 +375,7 @@ pub(crate) async unsafe fn wasm_multithreaded_hotpatch_trigger(jump_table: JumpT
 
             entry.apply_change_to_jump_table();
 
+            hotpatch_state.hotpatched.push(Arc::new(entry));
             hotpatch_state.curr_state = Idle;
 
             main_thread_run_pending_hotpatches(&mut hotpatch_state);
@@ -399,8 +400,8 @@ async fn main_thread_prepare_and_hotpatch(mut jump_table: JumpTable) -> Hotpatch
     let funcs: Table = wasm_bindgen::function_table().unchecked_into();
     let table_base = funcs.length();
 
-    // the function addresses are relative. add them with table base to become absolute
-    // in Wasm, function address means offset into function table
+    // the function addresses are relative. add them with table base to turn into absolute address
+    // in Wasm, function address is offset of a function in table
     for v in jump_table.map.values_mut() {
         *v += table_base as u64;
     }
@@ -495,6 +496,7 @@ fn on_main_thread_receive_hotpatch_finish() {
             .apply_change_to_jump_table();
     }
 
+    state.hotpatched.push(web_worker_dynamic_linking_state.hotpatch_entry);
     state.curr_state = Idle;
 
     main_thread_run_pending_hotpatches(&mut state);
@@ -504,7 +506,6 @@ fn main_thread_run_pending_hotpatches(state: &mut MutexGuard<GlobalHotpatchState
     assert!(is_main_thread());
 
     if !state.pending_hotpatches.is_empty() {
-        // transfer state to next hotpatch when holding lock
         let next_to_patch = state.pending_hotpatches.remove(0);
 
         state.curr_state = MainThreadDynamicLinking;
