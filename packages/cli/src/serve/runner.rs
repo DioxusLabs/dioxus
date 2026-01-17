@@ -1309,9 +1309,14 @@ fn is_wsl() -> bool {
     false
 }
 
-/// Format a Duration for human-readable output with millisecond precision.
+/// Format a Duration for human-readable output.
 fn format_duration_ms(d: Duration) -> String {
-    // Format duration with millisecond precision to avoid microsecond/nanosecond noise.
-    // See: https://github.com/chronotope/humantime/issues/35
-    humantime::format_duration(Duration::from_millis(d.as_millis() as u64)).to_string()
+    let total_ms = d.as_millis() as u64;
+
+    if total_ms < 1000 {
+        format!("{total_ms}ms")
+    } else {
+        let secs = total_ms as f64 / 1000.0;
+        format!("{secs:.2}s")
+    }
 }

@@ -108,7 +108,6 @@ tracing-subscriber = { version = "0.3.19", features = [
     "fmt",
 ] }
 console-subscriber = { version = "0.4.1", optional = true }
-humantime = "2.2.0"
 tracing = { workspace = true }
 ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }
