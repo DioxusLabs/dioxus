@@ -494,8 +494,20 @@ impl AppServer {
             // If it's not a rust file, then it might be depended on via include! or similar
             if ext != "rs" {
                 if let Some(artifacts) = self.client.artifacts.as_ref() {
+                    // Check if the path is directly in depinfo
                     if artifacts.depinfo.files.contains(path) {
                         needs_full_rebuild = true;
+                        break;
+                    }
+                    // Also check if the path is under a directory that's in depinfo
+                    // (for directories added via cargo:rerun-if-changed=dir)
+                    for dep_path in &artifacts.depinfo.files {
+                        if dep_path.is_dir() && path.starts_with(dep_path) {
+                            needs_full_rebuild = true;
+                            break;
+                        }
+                    }
+                    if needs_full_rebuild {
                         break;
                     }
                 }
@@ -1008,6 +1020,18 @@ impl AppServer {
 
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
+            }
+        }
+
+        // Watch additional paths from [web.watcher].watch_path config
+        let crate_dir = self.client.build.crate_dir();
+        for watch_path in &self.client.build.config.web.watcher.watch_path {
+            let path = crate_dir.join(watch_path);
+            if path.exists() {
+                tracing::trace!("Watching configured path {path:?}");
+                if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
+                    handle_notify_error(err);
+                }
             }
         }
 
