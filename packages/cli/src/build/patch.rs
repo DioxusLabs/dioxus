@@ -979,6 +979,13 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         }
     }
 
+    if let Some(start_func_id) = new.start {
+        new.exports.add(
+            "__subsecond_original_start_function",
+            ExportItem::Function(start_func_id),
+        );
+    };
+
     // in wasm multithreading, the start section is __wasm_init_memory (in my testing)
     // it should be called
     // previously in single-threaded case it's cleared, keep it same as before

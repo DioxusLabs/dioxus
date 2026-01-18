@@ -1901,7 +1901,7 @@ impl BuildRequest {
                 if is_multithreaded {
                     out_args.push("--shared-memory".to_string());
 
-                    // try to preserve TLS, this requires setting patch instance's __tls_base
+                    // to preserve TLS, this requires setting patch instance's __tls_base
                     out_args.push("--export=__tls_base".to_string());
                 }
 
