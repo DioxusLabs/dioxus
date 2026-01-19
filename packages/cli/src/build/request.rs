@@ -402,6 +402,7 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+    pub(crate) disable_js_glue_shim: bool
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -1011,6 +1012,7 @@ impl BuildRequest {
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
+            disable_js_glue_shim: args.disable_js_glue_shim,
         })
     }
 
@@ -1740,6 +1742,18 @@ impl BuildRequest {
                     dylibs.push(self.frameworks_folder().join(path.file_name().unwrap()));
                 }
             }
+        } else {
+            if let Some(ref tls_symbols) = cache.wasm_mt_tls_symbols {
+                let stub_bytes = crate::build::create_wasm_undefined_tls_symbol_stub(
+                    cache, tls_symbols, &object_files
+                )
+                    .expect("failed to create multithreaded wasm tls symbol stub");
+
+                // Currently we're dropping stub.o in the exe dir, but should probably just move to a tempfile?
+                let patch_file = self.main_exe().with_file_name("stub.o");
+                std::fs::write(&patch_file, stub_bytes)?;
+                object_files.push(patch_file);
+            }
         }
 
         // And now we can run the linker with our new args
@@ -1755,7 +1769,7 @@ impl BuildRequest {
         let mut out_args: Vec<OsString> = vec![];
         out_args.extend(object_files.iter().map(Into::into));
         out_args.extend(dylibs.iter().map(Into::into));
-        out_args.extend(self.thin_link_args(&args)?.iter().map(Into::into));
+        out_args.extend(self.thin_link_args(&args, ctx)?.iter().map(Into::into));
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
@@ -1834,7 +1848,7 @@ impl BuildRequest {
     ///
     /// This is basically just stripping away the rlibs and other libraries that will be satisfied
     /// by our stub step.
-    fn thin_link_args(&self, original_args: &[String]) -> Result<Vec<String>> {
+    fn thin_link_args(&self, original_args: &[String], ctx: &BuildContext) -> Result<Vec<String>> {
         let mut out_args = vec![];
 
         match self.linker_flavor() {
@@ -1872,6 +1886,19 @@ impl BuildRequest {
                     "--pie".to_string(),
                     "--experimental-pic".to_string(),
                 ]);
+
+                let is_multithreaded = match ctx.mode {
+                    BuildMode::Thin { ref cache, .. } => {
+                        cache.wasm_passive_data_segment_offsets.is_some()
+                    }
+                    _ => false
+                };
+                if is_multithreaded {
+                    out_args.push("--shared-memory".to_string());
+
+                    // to preserve TLS, this requires setting patch instance's __tls_base
+                    out_args.push("--export=__tls_base".to_string());
+                }
 
                 // retain exports so post-processing has hooks to work with
                 for (idx, arg) in original_args.iter().enumerate() {
@@ -2374,7 +2401,7 @@ impl BuildRequest {
         let mut jump_table = match triple.operating_system {
             OperatingSystem::Windows => create_windows_jump_table(patch, cache)?,
             _ if triple.architecture == Architecture::Wasm32 => {
-                create_wasm_jump_table(patch, cache)?
+                create_wasm_jump_table(patch, cache).context("create_wasm_jump_table")?
             }
             _ => create_native_jump_table(patch, triple, cache)?,
         };
@@ -4207,7 +4234,9 @@ impl BuildRequest {
         }
 
         // Now that the wasm is registered as an asset, we can write the js glue shim
-        self.write_js_glue_shim(assets)?;
+        if !self.disable_js_glue_shim {
+            self.write_js_glue_shim(assets)?;
+        }
 
         if self.should_bundle_to_asset() {
             // Register the main.js with the asset system so it bundles in the snippets and optimizes

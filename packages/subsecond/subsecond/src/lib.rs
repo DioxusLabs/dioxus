@@ -229,6 +229,8 @@
 //! [sponsoring us on GitHub](https://github.com/sponsors/DioxusLabs) or eventually deploying your
 //! apps with Dioxus Deploy (currently under construction).
 
+pub mod wasm_multithreading;
+
 pub use subsecond_types::JumpTable;
 
 use std::{
@@ -558,6 +560,20 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         use wasm_bindgen::UnwrapThrowExt;
         use wasm_bindgen_futures::JsFuture;
 
+        if wasm_is_multi_threaded() {
+            #[cfg(feature = "experimental_wasm_multithreading_support")]
+            {
+                use crate::wasm_multithreading::wasm_multithreaded_hotpatch_trigger;
+                wasm_multithreaded_hotpatch_trigger(table).await;
+                return;
+            }
+
+            #[cfg(not(feature = "experimental_wasm_multithreading_support"))]
+            {
+                panic!("Requires enabling subsecond feature experimental_wasm_multithreading_support")
+            }
+        }
+
         let funcs: Table = wasm_bindgen::function_table().unchecked_into();
         let memory: Memory = wasm_bindgen::memory().unchecked_into();
         let exports: Object = wasm_bindgen::exports().unchecked_into();
@@ -695,6 +711,9 @@ pub enum PatchError {
     /// The patch failed to apply on Android, most likely due to a permissions issue.
     #[error("Failed to load library on Android: {0}")]
     AndroidMemfd(String),
+
+    // There is no error enum for Wasm, because Wasm dynamic linking is async, but `apply_patch` is sync.
+    // Check errors in console.
 }
 
 /// This function returns the address of the main function in the current executable. This is used as
@@ -950,3 +969,18 @@ impl_hot_function!(
     (Fn8Marker, A, B, C, D, E, F, G, H),
     (Fn9Marker, A, B, C, D, E, F, G, H, I)
 );
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn wasm_is_multi_threaded() -> bool {
+    let memory = wasm_bindgen::memory();
+    let buffer = js_sys::Reflect::get(&memory, &"buffer".into()).unwrap();
+
+    // Should not try to directly cast to SharedArrayBuffer
+    // because it will cause ReferenceError if environment doesn't support SharedArrayBuffer
+    let constructor_name: String = js_sys::Object::get_prototype_of(&buffer)
+        .constructor()
+        .name()
+        .into();
+
+    constructor_name == "SharedArrayBuffer"
+}

@@ -720,7 +720,7 @@ impl AppBuilder {
 
         tracing::debug!("Patching {} -> {}", original.display(), new.display());
 
-        let mut jump_table = self.build.create_jump_table(&new, cache)?;
+        let mut jump_table = self.build.create_jump_table(&new, cache).context("Creating jump table")?;
 
         // If it's android, we need to copy the assets to the device and then change the location of the patch
         if self.build.bundle == BundleFormat::Android {

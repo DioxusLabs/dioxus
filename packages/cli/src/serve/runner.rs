@@ -751,7 +751,7 @@ impl AppServer {
                     .await
             }
             _ => bail!("Invalid build id"),
-        }?;
+        }.context("hotpatching")?;
 
         if id == BuildId::PRIMARY {
             self.applied_client_hot_reload_message.jump_table = self.client.patches.last().cloned();
