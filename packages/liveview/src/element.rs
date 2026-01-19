@@ -131,7 +131,52 @@ impl RenderedElementBacking for LiveviewElement {
         );
 
         let fut = self.query.new_query::<bool>(&script).resolve();
+        Box::pin(async move {
+            match fut.await {
+                Ok(true) => Ok(()),
+                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                    Box::new(DesktopQueryError::FailedToQuery),
+                )),
+                Err(err) => {
+                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+                }
+            }
+        })
+    }
 
+    fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+        let script = format!(
+            "return window.interpreter.setPointerCapture({}, {});",
+            self.id.0, pointer_id
+        );
+
+        let fut = self.query.new_query::<bool>(&script).resolve();
+        Box::pin(async move {
+            match fut.await {
+                Ok(true) => Ok(()),
+                Ok(false) => MountedResult::Err(dioxus_html::MountedError::OperationFailed(
+                    Box::new(DesktopQueryError::FailedToQuery),
+                )),
+                Err(err) => {
+                    MountedResult::Err(dioxus_html::MountedError::OperationFailed(Box::new(err)))
+                }
+            }
+        })
+    }
+
+    fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> std::pin::Pin<Box<dyn futures_util::Future<Output = dioxus_html::MountedResult<()>>>> {
+        let script = format!(
+            "return window.interpreter.releasePointerCapture({}, {});",
+            self.id.0, pointer_id
+        );
+
+        let fut = self.query.new_query::<bool>(&script).resolve();
         Box::pin(async move {
             match fut.await {
                 Ok(true) => Ok(()),

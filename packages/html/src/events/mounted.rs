@@ -52,6 +52,22 @@ pub trait RenderedElementBacking: std::any::Any {
     fn set_focus(&self, _focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         Box::pin(async { Err(MountedError::NotSupported) })
     }
+
+    /// Set the element as the capture target of future pointer events
+    fn set_pointer_capture(
+        &self,
+        _pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
+
+    /// Release pointer capture that was previously set for a specific pointer
+    fn release_pointer_capture(
+        &self,
+        _pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        Box::pin(async { Err(MountedError::NotSupported) })
+    }
 }
 
 impl RenderedElementBacking for () {
@@ -198,6 +214,24 @@ impl MountedData {
     #[doc(alias = "blur")]
     pub fn set_focus(&self, focus: bool) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
         self.inner.set_focus(focus)
+    }
+
+    /// Set the element as the capture target of future pointer events
+    #[doc(alias = "setPointerCapture")]
+    pub fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.set_pointer_capture(pointer_id)
+    }
+
+    /// Release pointer capture that was previously set for a specific pointer
+    #[doc(alias = "releasePointerCapture")]
+    pub fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> Pin<Box<dyn Future<Output = MountedResult<()>>>> {
+        self.inner.release_pointer_capture(pointer_id)
     }
 
     /// Downcast this event to a concrete event type

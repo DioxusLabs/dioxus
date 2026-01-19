@@ -142,6 +142,63 @@ impl dioxus_html::RenderedElementBacking for Synthetic<web_sys::Element> {
             });
         Box::pin(async { result })
     }
+
+    fn set_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> std::pin::Pin<
+        Box<dyn std::prelude::rust_2024::Future<Output = dioxus_html::MountedResult<()>>>,
+    > {
+        #[derive(Debug)]
+        struct SetPointerCaptureError(wasm_bindgen::JsValue);
+
+        impl std::fmt::Display for SetPointerCaptureError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "failed to set pointer capture to element {:?}", self.0)
+            }
+        }
+
+        impl std::error::Error for SetPointerCaptureError {}
+
+        let result = self.event.set_pointer_capture(pointer_id).map_err(|err| {
+            dioxus_html::MountedError::OperationFailed(Box::new(SetPointerCaptureError(err)))
+        });
+
+        Box::pin(async { result })
+    }
+
+    fn release_pointer_capture(
+        &self,
+        pointer_id: i32,
+    ) -> std::pin::Pin<
+        Box<dyn std::prelude::rust_2024::Future<Output = dioxus_html::MountedResult<()>>>,
+    > {
+        #[derive(Debug)]
+        struct ReleasePointerCaptureError(wasm_bindgen::JsValue);
+
+        impl std::fmt::Display for ReleasePointerCaptureError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "failed to release pointer capture from element {:?}",
+                    self.0
+                )
+            }
+        }
+
+        impl std::error::Error for ReleasePointerCaptureError {}
+
+        let result = self
+            .event
+            .release_pointer_capture(pointer_id)
+            .map_err(|err| {
+                dioxus_html::MountedError::OperationFailed(Box::new(ReleasePointerCaptureError(
+                    err,
+                )))
+            });
+
+        Box::pin(async { result })
+    }
 }
 
 impl WebEventExt for MountedData {
