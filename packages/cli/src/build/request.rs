@@ -3405,6 +3405,13 @@ impl BuildRequest {
             ),
         )?;
 
+        // Write file_paths.xml, if specificed
+        if let Some(file_paths) = self.config.application.android_file_paths.as_deref() {
+            let file_path = std::fs::read_to_string(self.package_manifest_dir().join(file_paths))
+                .context("Failed to locate requested file_paths.xml")?;
+            write(res.join("xml").join("file_paths.xml"), file_path)?;
+        };
+
         create_dir_all(res.join("drawable"))?;
         write(
             res.join("drawable").join("ic_launcher_background.xml"),
