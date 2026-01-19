@@ -4,7 +4,7 @@ use headers::Header;
 use http::response::Parts;
 use std::{future::Future, pin::Pin};
 
-use crate::{ClientRequest, ClientResponse};
+use crate::{ClientRequest, ClientResponse, ErrorPayload};
 
 /// The `IntoRequest` trait allows types to be used as the body of a request to a HTTP endpoint or server function.
 ///
@@ -54,9 +54,24 @@ where
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
-            let (parts, _body) = res.into_parts();
-            let mut parts = parts;
-            A::from_response_parts(&mut parts)
+            let status = res.status();
+
+            if status.is_success() {
+                let (parts, _body) = res.into_parts();
+                let mut parts = parts;
+                A::from_response_parts(&mut parts)
+            } else {
+                let ErrorPayload::<serde_json::Value> {
+                    message,
+                    code,
+                    data,
+                } = res.json().await?;
+                Err(ServerFnError::ServerError {
+                    message,
+                    code,
+                    details: data,
+                })
+            }
         }
     }
 }
@@ -202,3 +217,80 @@ pub fn assert_can_encode(_t: impl AssertCanEncode) {}
 
 #[doc(hidden)]
 pub fn assert_can_decode(_t: impl AssertCanDecode) {}
+
+#[cfg(test)]
+mod test {
+    use http::Extensions;
+
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestFromResponse;
+
+    impl FromResponseParts for TestFromResponse {
+        fn from_response_parts(_parts: &mut Parts) -> Result<Self, ServerFnError> {
+            Ok(Self)
+        }
+    }
+
+    fn build_response(status: u16, body: String) -> ClientResponse {
+        let http_response = http::Response::builder()
+            .status(status)
+            .body(body.into_bytes())
+            .unwrap();
+        let reqwest_response = reqwest::Response::from(http_response);
+        ClientResponse {
+            response: Box::new(reqwest_response),
+            extensions: Extensions::new(),
+        }
+    }
+
+    #[test]
+    fn fromresponseparts_path_decodes_ok_on_2xx() {
+        futures::executor::block_on(async {
+            let response = build_response(200, "".to_string());
+            let result = TestFromResponse::from_response(response).await;
+            assert!(
+                result.is_ok(),
+                "expected Ok(..) for HTTP 200 success case, got: {:?}",
+                result
+            );
+        });
+    }
+
+    #[test]
+    fn fromresponseparts_falls_back_to_request_error_on_unparseable_error_body() {
+        futures::executor::block_on(async {
+            let response = build_response(400, "".to_string());
+            let result = TestFromResponse::from_response(response).await;
+            assert!(result.is_err(), "expected Err(..) for HTTP 400 failed case");
+            let error = result.unwrap_err();
+            assert!(matches!(
+                error,
+                ServerFnError::Request(RequestError::Decode(_))
+            ));
+        });
+    }
+
+    #[test]
+    fn fromresponseparts_parses_error_payload_on_http_error() {
+        futures::executor::block_on(async {
+            let body = r#"{
+                "message": "qwerty",
+                "code": 400
+            }"#;
+            let response = build_response(400, body.to_string());
+            let result = TestFromResponse::from_response(response).await;
+            assert!(result.is_err(), "expected Err(..) for HTTP 400 failed case");
+            let error = result.unwrap_err();
+            assert_eq!(
+                error,
+                ServerFnError::ServerError {
+                    message: "qwerty".to_string(),
+                    code: 400,
+                    details: None
+                }
+            );
+        });
+    }
+}
