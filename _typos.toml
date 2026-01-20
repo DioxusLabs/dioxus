@@ -12,4 +12,4 @@ udid = "udid"
 unparented = "unparented"
 
 [files]
-extend-exclude = ["translations/*", "CHANGELOG.md", "*.js", "winres.rs"]
+extend-exclude = ["notes/translations/*", "CHANGELOG.md", "*.js", "winres.rs"]

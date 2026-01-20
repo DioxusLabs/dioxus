@@ -745,7 +745,7 @@ impl Output {
     fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         frame.render_widget(
             Paragraph::new(Line::from({
-                let mut lines = vec!["App features: ".gray(), "[".yellow()];
+                let mut lines = vec!["Features: ".gray(), "[".yellow()];
 
                 let feature_list: Vec<String> = state.runner.client().build.all_target_features();
                 let num_features = feature_list.len();

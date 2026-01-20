@@ -75,10 +75,7 @@ wry = { workspace = true, features = [
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.7.0"
-rfd = { version = "0.15.3", default-features = false, features = [
-    "xdg-portal",
-    "tokio",
-] }
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 muda = { workspace = true }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]

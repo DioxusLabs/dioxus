@@ -98,6 +98,7 @@ brotli = "8.0.1"
 ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }
 
 tracing-subscriber = { version = "0.3.19", features = [
     "std",
@@ -122,6 +123,7 @@ log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
 tempfile = "3.19.1"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
+manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
 wasm-encoder = "0.235.0"
 

@@ -201,8 +201,11 @@ mod field_info {
             if let Some(ref name) = field.ident {
                 let mut builder_attr = field_defaults.with(&field.attrs)?;
 
-                // children field is automatically defaulted to None
-                if name == "children" {
+                let strip_option_auto = builder_attr.strip_option
+                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
+
+                // children field is automatically defaulted to an empty VNode unless it is marked as optional (in which case it defaults to None)
+                if name == "children" && !strip_option_auto {
                     builder_attr.default =
                         Some(syn::parse(quote!(dioxus_core::VNode::empty()).into()).unwrap());
                 }
@@ -226,16 +229,14 @@ mod field_info {
                     builder_attr.auto_into = true;
                 }
 
-                // extended field is automatically empty
+                // If this is a child field or extends, default to Default::default() if a default isn't set
                 if !builder_attr.extends.is_empty() {
-                    builder_attr.default = Some(
-                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap(),
-                    );
+                    builder_attr.default.get_or_insert_with(|| {
+                        syn::parse(quote!(::core::default::Default::default()).into()).unwrap()
+                    });
                 }
 
                 // auto detect optional
-                let strip_option_auto = builder_attr.strip_option
-                    || !builder_attr.ignore_option && type_from_inside_option(&field.ty).is_some();
                 if !builder_attr.strip_option && strip_option_auto {
                     builder_attr.strip_option = true;
                     // only change the default if it isn't manually set above
@@ -696,9 +697,13 @@ mod struct_info {
                 let name = field.name;
                 if optional {
                     quote! {
-                        // If the event handler is None, we don't need to update it
+                        // If both event handler are Some, update them in place
                         if let (Some(old_handler), Some(new_handler)) = (self.#name.as_mut(), new.#name.as_ref()) {
                             old_handler.__point_to(new_handler);
+                        }
+                        // Otherwise just move the new handler into self
+                        else {
+                            self.#name = new.#name;
                         }
                     }
                 } else {
