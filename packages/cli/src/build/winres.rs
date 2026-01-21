@@ -6,7 +6,7 @@
 //! This crate implements a simple generator for Windows resource (.rc) files
 //! for use with either Microsoft `rc.exe` resource compiler or with GNU `windres.exe`
 //!
-//! Maybe it could be replaced by https://crates.io/crates/windows-resource in the future
+//! Maybe it could be replaced by <https://crates.io/crates/windows-resource> in the future
 //! if it's going to be used to compile resources as the name suggests instead of external tools
 
 use dioxus_html::tr;
@@ -24,7 +24,7 @@ use target_lexicon::{Architecture, Environment, OperatingSystem, Triple, X86_32A
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../assets/icon.ico");
 
-pub(crate) fn write_default_icon(output_dir: &PathBuf) -> Result<PathBuf> {
+pub(crate) fn write_default_icon(output_dir: &Path) -> Result<PathBuf> {
     let icon = output_dir.join("icon.ico");
     let mut file = File::create(&icon)?;
     file.write_all(DEFAULT_ICON)?;
@@ -81,7 +81,7 @@ pub enum VersionInfo {
 }
 
 /// Common properties fields
-/// https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource#string-name
+/// <https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource#string-name>
 #[derive(PartialEq, Eq, Hash, Debug)]
 pub enum Properties {
     FileVersion,
@@ -237,7 +237,7 @@ impl WindowsResource {
     /// Set the user interface language of the file
     ///
     /// For possible values look at the `winapi::um::winnt` constants, specifically those
-    /// starting with `LANG_` and `SUBLANG_` or at https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource#langID
+    /// starting with `LANG_` and `SUBLANG_` or at <https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource#langID>
     ///
     /// [`MAKELANGID`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/winnt/fn.MAKELANGID.html
     /// [`winapi::um::winnt`]: https://docs.rs/winapi/0.3/x86_64-pc-windows-msvc/winapi/um/winnt/index.html#constants
@@ -320,7 +320,7 @@ impl WindowsResource {
     /// name IDs, and add the application icon first with the lowest id:
     ///
     /// ```
-    /// see [`IDI`]` for special icons ids
+    /// see [`IDI`] for special icons ids
     pub fn set_icon_with_id(&mut self, path: PathBuf, name_id: impl Into<String>) -> &mut Self {
         self.icons.push(Icon {
             path: path.to_string_lossy().to_string(),
@@ -343,7 +343,7 @@ impl WindowsResource {
     }
 
     /// Write a resource file with the set values
-    fn write_resource_file(&self, path: &PathBuf) -> Result<PathBuf> {
+    fn write_resource_file(&self, path: &Path) -> Result<PathBuf> {
         let path = path.join("resource.rc");
         let mut f = File::create(&path)?;
 
@@ -409,11 +409,7 @@ impl WindowsResource {
     /// This function generates a resource file from the settings or
     /// uses an existing resource file and passes it to the resource compiler
     /// of your toolkit.
-    pub fn compile(
-        &mut self,
-        target: &Triple,
-        output_dir: &PathBuf,
-    ) -> Result<WindowsResourceLinker> {
+    pub fn compile(&mut self, target: &Triple, output_dir: &Path) -> Result<WindowsResourceLinker> {
         if matches!(target.environment, Environment::Msvc) {
             tracing::debug!("Compiling Windows resource file with msvc toolkit");
             self.compile_with_toolkit_msvc(target, output_dir)
@@ -430,10 +426,10 @@ impl WindowsResource {
     fn compile_with_toolkit_gnu(
         &mut self,
         target: &Triple,
-        output_dir: &PathBuf,
+        output_dir: &Path,
     ) -> Result<WindowsResourceLinker> {
         let toolkit_path =
-            if env::var_os("HOST").map_or(false, |v| v.to_string_lossy().contains("windows")) {
+            if env::var_os("HOST").is_some_and(|v| v.to_string_lossy().contains("windows")) {
                 PathBuf::from("\\")
             } else {
                 PathBuf::from("/")
@@ -441,7 +437,7 @@ impl WindowsResource {
 
         let prefix = if env::var_os("HOST")
             .zip(env::var_os("TARGET"))
-            .map_or(false, |(h, t)| h != t)
+            .is_some_and(|(h, t)| h != t)
         {
             match (target.architecture, target.environment) {
                 // Standard MinGW-w64 targets
@@ -529,7 +525,7 @@ impl WindowsResource {
     fn compile_with_toolkit_msvc(
         &mut self,
         target: &Triple,
-        output_dir: &PathBuf,
+        output_dir: &Path,
     ) -> Result<WindowsResourceLinker> {
         // The path to this could also be provided via Dioxus.toml if someone has the exe in other places
         let toolkit = get_sdk(matches!(target.architecture, Architecture::X86_64))?;
@@ -576,18 +572,13 @@ fn get_sdk(is_x64: bool) -> io::Result<PathBuf> {
         .output()?;
 
     if !output.status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Querying the registry failed with error message:\n{}",
-                String::from_utf8(output.stderr)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
-            ),
-        ));
+        return Err(io::Error::other(format!(
+            "Querying the registry failed with error message:\n{}",
+            String::from_utf8(output.stderr).map_err(|e| io::Error::other(e.to_string()))?
+        )));
     }
 
-    let lines = String::from_utf8(output.stdout)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+    let lines = String::from_utf8(output.stdout).map_err(|e| io::Error::other(e.to_string()))?;
     let mut lines: Vec<&str> = lines.lines().collect();
     lines.reverse();
     for line in lines {
@@ -623,10 +614,7 @@ fn get_sdk(is_x64: bool) -> io::Result<PathBuf> {
             }
         }
     }
-    return Err(io::Error::new(
-        io::ErrorKind::Other,
-        "Can not find Windows SDK",
-    ));
+    Err(io::Error::other("Can not find Windows SDK"))
 }
 
 pub(crate) fn escape_string(string: &str) -> String {
