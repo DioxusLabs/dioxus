@@ -44,16 +44,9 @@ fn compile_ts() {
         .run();
 }
 
-fn check_default_icon() {
-    if option_env!("DIOXUS_APP_ICON").is_none() {
-        println!("cargo:rustc-env=DIOXUS_APP_ICON=./assets/default_icon.png")
-    }
-}
-
 fn main() {
     check_gnu();
     compile_ts();
-    check_default_icon();
 }
 
 const EXAMPLES_TOML: &str = r#"

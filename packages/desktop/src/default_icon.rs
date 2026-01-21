@@ -18,8 +18,8 @@ pub trait DioxusIconTrait {
 }
 
 // preferably this would have platform specific implementations, not just for windows
-#[cfg(any(debug_assertions, not(target_os = "windows")))]
-static DEFAULT_ICON: &[u8] = include_bytes!(env!("DIOXUS_APP_ICON"));
+#[cfg(not(target_os = "windows"))]
+static DEFAULT_ICON: &[u8] = include_bytes!("./assets/default_icon.png");
 
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::trayicon::DioxusTrayIcon;
@@ -44,12 +44,12 @@ impl DioxusIconTrait for DioxusTrayIcon {
     where
         Self: Sized,
     {
-        #[cfg(any(debug_assertions, target_os = "linux", target_os = "macos"))]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
             DioxusTrayIcon::from_rgba(img, width, height).expect("image parse failed")
         }
-        #[cfg(all(not(debug_assertions), target_os = "windows"))]
+        #[cfg(target_os = "windows")]
         DioxusTrayIcon::from_resource(32512, None).expect("image parse failed")
     }
 
@@ -83,12 +83,12 @@ impl DioxusIconTrait for DioxusMenuIcon {
     where
         Self: Sized,
     {
-        #[cfg(any(debug_assertions, not(target_os = "windows")))]
+        #[cfg(not(target_os = "windows"))]
         {
             let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
             DioxusMenuIcon::from_rgba(img, width, height).expect("image parse failed")
         }
-        #[cfg(all(not(debug_assertions), target_os = "windows"))]
+        #[cfg(target_os = "windows")]
         DioxusMenuIcon::from_resource(32512, None).expect("image parse failed")
     }
 
@@ -115,7 +115,7 @@ impl DioxusIconTrait for DioxusMenuIcon {
 
 use tao::window::Icon;
 
-#[cfg(all(not(debug_assertions), target_os = "windows"))]
+#[cfg(target_os = "windows")]
 use tao::platform::windows::IconExtWindows;
 
 impl DioxusIconTrait for Icon {
@@ -123,12 +123,12 @@ impl DioxusIconTrait for Icon {
     where
         Self: Sized,
     {
-        #[cfg(any(debug_assertions, not(target_os = "windows")))]
+        #[cfg(not(target_os = "windows"))]
         {
             let (img, width, height) = load_image_from_memory(DEFAULT_ICON);
             Icon::from_rgba(img, width, height).expect("image parse failed")
         }
-        #[cfg(all(not(debug_assertions), target_os = "windows"))]
+        #[cfg(target_os = "windows")]
         Icon::from_resource(32512, None).expect("image parse failed")
     }
 
