@@ -329,7 +329,7 @@ use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
-use dioxus_cli_config::{APP_ICON_ENV, APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
@@ -2702,12 +2702,18 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
-            OperatingSystem::Windows => {
-                if self.release {
-                    let res = self.write_winres().expect("Winres file");
+            OperatingSystem::Windows => match self.write_winres() {
+                Ok(res) => {
                     cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
                 }
-            }
+                Err(err) => {
+                    if self.using_dioxus_explicitly {
+                        panic!("Windows resources couldn't be built. Err: {}", err)
+                    } else {
+                        tracing::warn!("Application may not have an icon.")
+                    }
+                }
+            },
             _ => {}
         }
 
@@ -2815,19 +2821,6 @@ impl BuildRequest {
         ))
     }
 
-    fn app_icon_path(&self) -> Result<PathBuf> {
-        match self
-            .config
-            .bundle
-            .icon
-            .as_ref()
-            .and_then(|v| v.iter().find(|s| !s.to_lowercase().ends_with(".svg")))
-        {
-            Some(value) => self.canonicalize_icon_path(&PathBuf::from(value)),
-            None => Err(anyhow::anyhow!("No icon set in Dioxus.toml")),
-        }
-    }
-
     pub(crate) fn cargo_build_env_vars(
         &self,
         build_mode: &BuildMode,
@@ -2850,15 +2843,6 @@ impl BuildRequest {
                 self.config.web.app.title.clone().into(),
             ));
             env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
-        }
-
-        if self.triple.operating_system == OperatingSystem::Windows && !self.release
-            || self.triple.operating_system != OperatingSystem::Windows
-        {
-            match self.app_icon_path() {
-                Ok(icon_path) => env_vars.push((APP_ICON_ENV.into(), icon_path.into())),
-                Err(err) => tracing::warn!("{:?}", err),
-            }
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -5425,65 +5409,63 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         std::fs::create_dir_all(&output_dir)?;
 
-        let mut winres = WindowsResource::new();
+        let mut winres = WindowsResource::new(version, file_version);
         winres
-            .set_link(false)
-            .set_output_directory(output_dir.to_str().unwrap())
-            .set_assets_path(Some(self.asset_dir().to_string_lossy().to_string()))
-            .set_version_info(VersionInfo::PRODUCTVERSION, version)
-            .set_version_info(VersionInfo::FILEVERSION, file_version)
-            .set("ProductVersion", version_str)
-            .set("FileVersion", file_version_str)
-            .set("ProductName", productname)
-            .set("FileDescription", description);
+            .set(Properties::ProductVersion, version_str)
+            .set(Properties::FileVersion, file_version_str)
+            .set(Properties::ProductName, productname)
+            .set(Properties::FileDescription, description);
 
         if let Some(value) = &bundle.original_file_name {
-            winres.set("OriginalFilename", value);
+            winres.set(Properties::OriginalFilename, value);
         }
 
         if let Some(value) = &bundle.copyright {
-            winres.set("LegalCopyright", value);
+            winres.set(Properties::Copyright, value);
         }
         if let Some(value) = &bundle.trademark {
-            winres.set("LegalTrademark", value);
+            winres.set(Properties::Trademark, value);
         }
 
         if let Some(value) = &bundle.publisher {
-            winres.set("CompanyName", value);
+            winres.set(Properties::CompanyName, value);
         }
 
         if let Some(value) = &bundle.category {
-            winres.set("Category", value);
+            winres.set(Properties::Other("Category"), value);
         }
 
-        let mut default = false;
+        let mut has_default = false;
         if let Some(windows) = bundle.windows.as_ref() {
             if let Some(path) = windows.icon_path.as_ref() {
-                winres.set_icon(path.to_str().unwrap());
-                default = true;
+                winres.set_icon(path.clone());
+                has_default = true;
             }
         };
 
         if let Some(icons) = bundle.icon.as_ref() {
             for (id, icon) in icons.iter().enumerate() {
                 if icon.ends_with(".ico") {
-                    let icon_path = self
-                        .canonicalize_icon_path(&PathBuf::from(icon))?
-                        .to_string_lossy()
-                        .to_string();
-                    if !default {
-                        winres.set_icon(&icon_path);
-                        default = true;
+                    let icon_path = self.canonicalize_icon_path(&PathBuf::from(icon))?;
+                    if !has_default {
+                        // first .ico file will be app icon
+                        winres.set_icon(icon_path);
+                        has_default = true;
                     } else {
-                        winres.set_icon_with_id(&icon_path, &id.to_string());
+                        // other .ico files can be accessed with their index as id
+                        winres.set_icon_with_id(icon_path, id.to_string());
                     };
                 }
             }
         }
 
-        winres.compile()?;
+        if !has_default {
+            let default_icon = write_default_icon(&output_dir)?;
+            let icon = self.canonicalize_icon_path(&default_icon)?;
+            winres.set_icon(icon);
+        }
 
-        Ok(winres.linker)
+        winres.compile(&self.triple, &output_dir)
     }
 
     async fn auto_provision_signing_name() -> Result<String> {
