@@ -259,7 +259,7 @@ mod test {
     }
 
     #[test]
-    fn fromresponseparts_falls_back_to_request_error_on_unparseable_error_body() {
+    fn fromresponseparts_falls_back_to_request_error_on_unparsable_error_body() {
         futures::executor::block_on(async {
             let response = build_response(400, "".to_string());
             let result = TestFromResponse::from_response(response).await;
