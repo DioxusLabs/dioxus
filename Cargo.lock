@@ -5989,11 +5989,13 @@ dependencies = [
  "http 1.4.0",
  "inventory",
  "parking_lot",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
+ "tungstenite 0.27.0",
 ]
 
 [[package]]

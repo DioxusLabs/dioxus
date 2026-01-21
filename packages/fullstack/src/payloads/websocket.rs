@@ -607,7 +607,7 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
                         .map(String::as_str)
                         .collect::<Vec<_>>(),
                 )
-                .unwrap();
+                .map_err(|error| RequestError::Connect(error.to_string()))?;
 
                 return Ok(UpgradingWebsocket {
                     protocol: Some(socket.protocol()),
@@ -619,14 +619,11 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
 
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let response = native::send_request(request, &self.protocols)
-                    .await
-                    .unwrap();
+                let response = native::send_request(request, &self.protocols).await?;
 
                 let (inner, protocol) = response
                     .into_stream_and_protocol(self.protocols, None)
-                    .await
-                    .unwrap();
+                    .await?;
 
                 return Ok(UpgradingWebsocket {
                     protocol,
@@ -843,14 +840,6 @@ pub enum WebsocketError {
     /// Error during serialization/deserialization.
     #[error("error during serialization/deserialization")]
     Serialization(Box<dyn std::error::Error + Send + Sync>),
-
-    /// Error during serialization/deserialization.
-    #[error("serde_json error")]
-    Json(#[from] serde_json::Error),
-
-    /// Error during serialization/deserialization.
-    #[error("ciborium error")]
-    Cbor(#[from] ciborium::de::Error<std::io::Error>),
 }
 
 #[cfg(feature = "web")]
@@ -883,6 +872,25 @@ impl WebsocketError {
 
     pub fn serialization() -> Self {
         Self::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+    }
+}
+
+impl From<WebsocketError> for RequestError {
+    fn from(value: WebsocketError) -> Self {
+        match value {
+            WebsocketError::ConnectionClosed { code, description } => {
+                Self::Connect(format!("connection closed ({code}): {description}"))
+            }
+            WebsocketError::AlreadyClosed => Self::Connect(value.to_string()),
+            WebsocketError::Capacity => Self::Body(value.to_string()),
+            WebsocketError::Unexpected => Self::Request(value.to_string()),
+            WebsocketError::Uninitialized => Self::Builder(value.to_string()),
+            WebsocketError::Handshake(error) => error.into(),
+            WebsocketError::Reqwest(error) => error.into(),
+            WebsocketError::Tungstenite(error) => error.into(),
+            WebsocketError::Serialization(error) => Self::Serialization(error.to_string()),
+            WebsocketError::Deserialization(error) => Self::Decode(error.to_string()),
+        }
     }
 }
 
@@ -1139,6 +1147,7 @@ mod native {
     use crate::ClientRequest;
 
     use super::{CloseCode, Message, WebsocketError};
+    use dioxus_fullstack_core::RequestError;
     use reqwest::{
         header::{HeaderName, HeaderValue},
         Response, StatusCode, Version,
@@ -1259,6 +1268,23 @@ mod native {
 
         #[error("unexpected status code: {0}")]
         UnexpectedStatusCode(StatusCode),
+    }
+
+    impl From<HandshakeError> for RequestError {
+        fn from(value: HandshakeError) -> Self {
+            let string = value.to_string();
+            match value {
+                HandshakeError::UnexpectedStatusCode(status) => {
+                    Self::Status(string, status.as_u16())
+                }
+                HandshakeError::UnsupportedHttpVersion(_)
+                | HandshakeError::MissingHeader { .. }
+                | HandshakeError::UnexpectedHeaderValue { .. }
+                | HandshakeError::ExpectedAProtocol
+                | HandshakeError::UnexpectedProtocol { .. }
+                | HandshakeError::ServerRespondedWithDifferentVersion => Self::Connect(string),
+            }
+        }
     }
 
     pub struct WebSocketResponse {

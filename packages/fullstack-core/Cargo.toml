@@ -24,6 +24,8 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 axum-core = { workspace = true }
 http = { workspace = true }
+reqwest = { workspace = true }
+tungstenite = { workspace = true }
 anyhow = { workspace = true }
 inventory = { workspace = true }
 serde_json = { workspace = true }
