@@ -840,6 +840,14 @@ pub enum WebsocketError {
     /// Error during serialization/deserialization.
     #[error("error during serialization/deserialization")]
     Serialization(Box<dyn std::error::Error + Send + Sync>),
+
+    /// Error during serialization/deserialization.
+    #[error("serde_json error")]
+    Json(#[from] serde_json::Error),
+
+    /// Error during serialization/deserialization.
+    #[error("ciborium error")]
+    Cbor(#[from] ciborium::de::Error<std::io::Error>),
 }
 
 #[cfg(feature = "web")]
@@ -1551,6 +1559,8 @@ mod native {
                 WebsocketError::Tungstenite(error) => error.into_request_error(),
                 WebsocketError::Serialization(error) => Self::Serialization(error.to_string()),
                 WebsocketError::Deserialization(error) => Self::Decode(error.to_string()),
+                WebsocketError::Json(error) => Self::Decode(error.to_string()),
+                WebsocketError::Cbor(error) => Self::Decode(error.to_string()),
             }
         }
     }
