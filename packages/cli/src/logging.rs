@@ -663,7 +663,7 @@ impl TraceController {
             }
         }
 
-        // If we have "safe" error, we we need to log it
+        // If we have "safe" error, we need to log it
         if let Ok(Err(err)) = &res {
             self.record_backtrace(
                 err,
@@ -1081,7 +1081,7 @@ where
             };
 
             // If the event has the captured panic attached, we record it through capture_backtrace directly.
-            // Otherwise, we wont have a backtrace to work with, so we just log the event as a telemetry event.
+            // Otherwise, we won't have a backtrace to work with, so we just log the event as a telemetry event.
             if let Some(error) = visitor.captured_panic {
                 self.record_backtrace(
                     error.error.as_ref(),

@@ -17,7 +17,7 @@ use dioxus_signals::{
 /// - A tree of subscriptions used to make the store reactive.
 ///
 /// The `SelectorScope` contains a view into the lock (`Lens`) and a path into the subscription tree. When
-/// the selector is read to, it will track the current path in the subscription tree. When it it written to
+/// the selector is read to, it will track the current path in the subscription tree. When it is written to
 /// it marks itself and all its children as dirty.
 ///
 /// When you derive the [`Store`](dioxus_stores_macro::Store) macro on your data structure,

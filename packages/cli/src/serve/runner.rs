@@ -46,7 +46,7 @@ pub(crate) struct AppServer {
     pub(crate) client: AppBuilder,
     pub(crate) server: Option<AppBuilder>,
 
-    // Related to to the filesystem watcher
+    // Related to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
     pub(crate) _watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
