@@ -292,7 +292,7 @@ impl Output {
                 });
             }
 
-            // Toggle the more modal by swapping the the terminal with a new one
+            // Toggle the more modal by swapping the terminal with a new one
             // This is a bit of a hack since crossterm doesn't technically support changing the
             // size of an inline viewport.
             KeyCode::Char('/') => {
