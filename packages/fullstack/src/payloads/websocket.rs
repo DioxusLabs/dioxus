@@ -607,7 +607,7 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
                         .map(String::as_str)
                         .collect::<Vec<_>>(),
                 )
-                .unwrap();
+                .map_err(|error| RequestError::Connect(error.to_string()))?;
 
                 return Ok(UpgradingWebsocket {
                     protocol: Some(socket.protocol()),
@@ -619,14 +619,11 @@ impl IntoRequest<UpgradingWebsocket> for WebSocketOptions {
 
             #[cfg(not(target_arch = "wasm32"))]
             {
-                let response = native::send_request(request, &self.protocols)
-                    .await
-                    .unwrap();
+                let response = native::send_request(request, &self.protocols).await?;
 
                 let (inner, protocol) = response
                     .into_stream_and_protocol(self.protocols, None)
-                    .await
-                    .unwrap();
+                    .await?;
 
                 return Ok(UpgradingWebsocket {
                     protocol,
@@ -1139,6 +1136,7 @@ mod native {
     use crate::ClientRequest;
 
     use super::{CloseCode, Message, WebsocketError};
+    use dioxus_fullstack_core::RequestError;
     use reqwest::{
         header::{HeaderName, HeaderValue},
         Response, StatusCode, Version,
@@ -1464,6 +1462,106 @@ mod native {
     impl From<CloseCode> for tungstenite::protocol::frame::coding::CloseCode {
         fn from(value: CloseCode) -> Self {
             u16::from(value).into()
+        }
+    }
+
+    impl From<HandshakeError> for RequestError {
+        fn from(value: HandshakeError) -> Self {
+            let string = value.to_string();
+            match value {
+                HandshakeError::UnexpectedStatusCode(status) => {
+                    Self::Status(string, status.as_u16())
+                }
+                HandshakeError::UnsupportedHttpVersion(_)
+                | HandshakeError::MissingHeader { .. }
+                | HandshakeError::UnexpectedHeaderValue { .. }
+                | HandshakeError::ExpectedAProtocol
+                | HandshakeError::UnexpectedProtocol { .. }
+                | HandshakeError::ServerRespondedWithDifferentVersion => Self::Connect(string),
+            }
+        }
+    }
+
+    trait IntoRequestError {
+        fn into_request_error(self) -> RequestError;
+    }
+
+    impl IntoRequestError for reqwest::Error {
+        fn into_request_error(self) -> RequestError {
+            const DEFAULT_STATUS_CODE: u16 = 0;
+            let string = self.to_string();
+            if self.is_builder() {
+                RequestError::Builder(string)
+            } else if self.is_redirect() {
+                RequestError::Redirect(string)
+            } else if self.is_status() {
+                RequestError::Status(
+                    string,
+                    self.status()
+                        .as_ref()
+                        .map(StatusCode::as_u16)
+                        .unwrap_or(DEFAULT_STATUS_CODE),
+                )
+            } else if self.is_body() {
+                RequestError::Body(string)
+            } else if self.is_decode() {
+                RequestError::Decode(string)
+            } else if self.is_upgrade() {
+                RequestError::Connect(string)
+            } else {
+                RequestError::Request(string)
+            }
+        }
+    }
+
+    impl IntoRequestError for tungstenite::Error {
+        fn into_request_error(self) -> RequestError {
+            match self {
+                tungstenite::Error::ConnectionClosed => {
+                    RequestError::Connect("websocket connection closed".to_owned())
+                }
+                tungstenite::Error::AlreadyClosed => {
+                    RequestError::Connect("websocket already closed".to_owned())
+                }
+                tungstenite::Error::Io(error) => RequestError::Connect(error.to_string()),
+                tungstenite::Error::Tls(error) => RequestError::Connect(error.to_string()),
+                tungstenite::Error::Capacity(error) => RequestError::Body(error.to_string()),
+                tungstenite::Error::Protocol(error) => RequestError::Request(error.to_string()),
+                tungstenite::Error::WriteBufferFull(message) => {
+                    RequestError::Body(message.to_string())
+                }
+                tungstenite::Error::Utf8(error) => RequestError::Decode(error),
+                tungstenite::Error::AttackAttempt => {
+                    RequestError::Request("Tungstenite attack attempt detected".to_owned())
+                }
+                tungstenite::Error::Url(error) => RequestError::Builder(error.to_string()),
+                tungstenite::Error::Http(response) => {
+                    let status_code = response.status();
+                    RequestError::Status(format!("HTTP error: {status_code}"), status_code.as_u16())
+                }
+                tungstenite::Error::HttpFormat(error) => RequestError::Builder(error.to_string()),
+            }
+        }
+    }
+
+    impl From<WebsocketError> for RequestError {
+        fn from(value: WebsocketError) -> Self {
+            match value {
+                WebsocketError::ConnectionClosed { code, description } => {
+                    Self::Connect(format!("connection closed ({code}): {description}"))
+                }
+                WebsocketError::AlreadyClosed => Self::Connect(value.to_string()),
+                WebsocketError::Capacity => Self::Body(value.to_string()),
+                WebsocketError::Unexpected => Self::Request(value.to_string()),
+                WebsocketError::Uninitialized => Self::Builder(value.to_string()),
+                WebsocketError::Handshake(error) => error.into(),
+                WebsocketError::Reqwest(error) => error.into_request_error(),
+                WebsocketError::Tungstenite(error) => error.into_request_error(),
+                WebsocketError::Serialization(error) => Self::Serialization(error.to_string()),
+                WebsocketError::Deserialization(error) => Self::Decode(error.to_string()),
+                WebsocketError::Json(error) => Self::Decode(error.to_string()),
+                WebsocketError::Cbor(error) => Self::Decode(error.to_string()),
+            }
         }
     }
 }
