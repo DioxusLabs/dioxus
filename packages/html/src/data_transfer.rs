@@ -1,5 +1,18 @@
+#[cfg(feature = "serialize")]
+pub use ser::*;
+#[cfg(feature = "serialize")]
+use serde::{Deserialize, Serialize};
+
 pub struct DataTransfer {
     inner: Box<dyn NativeDataTransfer>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
+pub struct DataTransferItem {
+    pub kind: String,
+    pub type_: String,
+    pub data: String,
 }
 
 impl DataTransfer {
@@ -57,6 +70,10 @@ impl DataTransfer {
         self.inner.set_drop_effect(effect)
     }
 
+    pub fn items(&self) -> Vec<DataTransferItem> {
+        self.inner.items()
+    }
+
     pub fn files(&self) -> Vec<crate::file_data::FileData> {
         self.inner.files()
     }
@@ -70,6 +87,10 @@ pub trait NativeDataTransfer: Send + Sync {
     fn set_effect_allowed(&self, effect: &str);
     fn drop_effect(&self) -> String;
     fn set_drop_effect(&self, effect: &str);
+    fn items(&self) -> Vec<DataTransferItem> {
+        //TODO: Good for back compatibility, but this can probably be lost for 0.8
+        Vec::new()
+    }
     fn files(&self) -> Vec<crate::file_data::FileData>;
 }
 
@@ -78,16 +99,12 @@ pub trait HasDataTransferData {
 }
 
 #[cfg(feature = "serialize")]
-pub use ser::*;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
-
-#[cfg(feature = "serialize")]
 mod ser {
     use crate::DragData;
 
     use super::*;
-    use serde::{Deserialize, Serialize};
+
+    type SerializedDataTransferItem = DataTransferItem;
 
     /// A serialized version of DataTransfer
     #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -96,13 +113,6 @@ mod ser {
         pub files: Vec<crate::file_data::SerializedFileData>,
         pub effect_allowed: String,
         pub drop_effect: String,
-    }
-
-    #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
-    pub struct SerializedDataTransferItem {
-        pub kind: String,
-        pub type_: String,
-        pub data: String,
     }
 
     impl NativeDataTransfer for SerializedDataTransfer {
@@ -139,6 +149,10 @@ mod ser {
 
         fn set_drop_effect(&self, _effect: &str) {
             // No-op
+        }
+
+        fn items(&self) -> Vec<DataTransferItem> {
+            self.items.clone()
         }
 
         fn files(&self) -> Vec<crate::file_data::FileData> {
