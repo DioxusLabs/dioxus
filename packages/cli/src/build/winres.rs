@@ -319,7 +319,6 @@ impl WindowsResource {
     /// To keep things simple, we recommend you use only 16-bit unsigned integer
     /// name IDs, and add the application icon first with the lowest id:
     ///
-    /// ```
     /// see [`IDI`] for special icons ids
     pub fn set_icon_with_id(&mut self, path: PathBuf, name_id: impl Into<String>) -> &mut Self {
         self.icons.push(Icon {

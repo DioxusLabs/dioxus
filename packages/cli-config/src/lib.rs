@@ -65,7 +65,6 @@ pub const ALWAYS_ON_TOP_ENV: &str = "DIOXUS_ALWAYS_ON_TOP";
 pub const ASSET_ROOT_ENV: &str = "DIOXUS_ASSET_ROOT";
 pub const APP_TITLE_ENV: &str = "DIOXUS_APP_TITLE";
 pub const PRODUCT_NAME_ENV: &str = "DIOXUS_PRODUCT_NAME";
-pub const APP_ICON_ENV: &str = "DIOXUS_APP_ICON";
 #[deprecated(since = "0.6.0", note = "The CLI currently does not set this.")]
 #[doc(hidden)]
 pub const OUT_DIR: &str = "DIOXUS_OUT_DIR";
