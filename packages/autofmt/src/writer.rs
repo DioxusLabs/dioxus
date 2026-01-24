@@ -879,11 +879,51 @@ impl<'a> Writer<'a> {
 
                 // Comments that are already in the pretty output (from rsx! formatting)
                 // should be output directly. They're already properly indented.
+                // But first, consume any preceding empty lines from source and output them.
                 if trimmed_pretty_line.starts_with("//") {
                     if !output.is_empty() {
                         output.push('\n');
                     }
+
+                    // Consume empty lines from source before this comment
+                    let mut had_preceding_empty = false;
+                    while let Some(src) = source_lines.peek() {
+                        let trimmed = src.trim();
+                        if trimmed.is_empty() {
+                            had_preceding_empty = true;
+                            _ = source_lines.next();
+                        } else if trimmed == trimmed_pretty_line {
+                            // Found the matching comment - consume it
+                            _ = source_lines.next();
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // Output empty line if there was one before the comment
+                    if had_preceding_empty {
+                        output.push('\n');
+                    }
+
                     output.push_str(line);
+                    continue;
+                }
+
+                // Empty lines in pretty output should be preserved
+                // Also consume any empty source lines to keep them in sync
+                if trimmed_pretty_line.is_empty() {
+                    if !output.is_empty() {
+                        output.push('\n');
+                    }
+                    // Consume empty source lines to prevent double-counting
+                    while let Some(src) = source_lines.peek() {
+                        if src.trim().is_empty() {
+                            _ = source_lines.next();
+                        } else {
+                            break;
+                        }
+                    }
                     continue;
                 }
 
@@ -891,32 +931,35 @@ impl<'a> Writer<'a> {
                     output.push('\n');
                 }
 
-                // Track if we found a multi-line source expression that matches the start of our pretty line.
-                // We'll need to consume continuation lines and preserve their formatting.
+                // Track if we found a multi-line source expression
                 let mut found_multiline_start = false;
                 let mut multiline_source_lines: Vec<&str> = Vec::new();
 
-                // Collect comments to output once we find a match
+                // Collect comments - only those immediately before the match
                 let mut pending_comments: Vec<&str> = Vec::new();
-                // Track the last non-empty, non-comment source line we saw (if any)
-                // This helps us know if an empty line is "adjacent" to our match
-                let mut saw_unmatched_code = false;
+                // Track if there was an empty line before the match
+                let mut had_empty_line = false;
+                // Track how many non-matching lines we've skipped (to limit search depth)
+                let mut skipped_lines = 0;
+                const MAX_SEARCH_DEPTH: usize = 50;
 
                 // pull down any source lines with whitespace until we hit a line that matches our current line.
                 while let Some(src) = source_lines.peek() {
                     let trimmed_src = src.trim();
 
-                    // Handle comments and empty lines
+                    // Collect comments and track empty lines
                     if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
                         // Skip source comments that are already in the pretty output
                         let is_already_in_pretty = pretty_comments.contains(trimmed_src);
 
-                        if !trimmed_src.is_empty() && !is_already_in_pretty {
-                            // It's a comment not in pretty - collect it
+                        if trimmed_src.is_empty() {
+                            had_empty_line = true;
+                        } else if !is_already_in_pretty {
                             pending_comments.push(trimmed_src);
+                            had_empty_line = false; // Comment resets empty line tracking
                         }
-                        // For empty lines: we don't collect them because prettyplease
-                        // handles spacing between statements
+                        // Note: if comment IS already in pretty, don't reset had_empty_line
+                        // The empty line should appear before the comment in the pretty output
 
                         _ = source_lines.next();
                         continue;
@@ -924,13 +967,12 @@ impl<'a> Writer<'a> {
 
                     let compacted_src_line = src.replace(" ", "").replace(",", "");
 
-                    // If this source line matches our pretty line exactly, we stop pulling down
+                    // If this source line matches our pretty line exactly, we found the match
                     if compacted_src_line.contains(&compacted_pretty_line) {
                         break;
                     }
 
-                    // Check if the pretty line starts with this source line (for multi-line
-                    // source expressions that get collapsed to a single pretty line)
+                    // Check if the pretty line starts with this source line (multi-line expression)
                     if !compacted_src_line.is_empty()
                         && compacted_pretty_line.starts_with(&compacted_src_line)
                     {
@@ -939,45 +981,50 @@ impl<'a> Writer<'a> {
                         break;
                     }
 
-                    // If we reach here, we're consuming a source line that doesn't match.
-                    // Clear pending comments as they belong to this unmatched line.
+                    // This source line doesn't match - clear pending items and continue
                     pending_comments.clear();
-                    saw_unmatched_code = true;
+                    had_empty_line = false;
+                    skipped_lines += 1;
+
+                    // If we've skipped too many lines, stop searching
+                    if skipped_lines > MAX_SEARCH_DEPTH {
+                        break;
+                    }
 
                     _ = source_lines.next();
                 }
 
-                // Now output any pending comments that belong before this line
-                for comment in &pending_comments {
-                    // Match the whitespace of the pretty line for consistent indentation
-                    for s in line.chars().take_while(|c| c.is_whitespace()) {
-                        output.push(s);
-                    }
-
-                    // Bump out the indent level if the line starts with a closing brace
-                    if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
-                        output.push_str(self.out.indent.indent_str());
-                    }
-
-                    printed_empty_line = false;
-                    output.push_str(comment);
+                // Output empty line if we had one immediately before the match
+                if had_empty_line && pending_comments.is_empty() && skipped_lines <= MAX_SEARCH_DEPTH
+                {
                     output.push('\n');
                 }
 
-                // If we found a multi-line source expression, collect all its lines and
-                // output the original source formatting (preserving line breaks)
+                // Output pending comments (only if we found a match within reasonable depth)
+                if skipped_lines <= MAX_SEARCH_DEPTH {
+                    for comment in &pending_comments {
+                        for s in line.chars().take_while(|c| c.is_whitespace()) {
+                            output.push(s);
+                        }
+                        if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                            output.push_str(self.out.indent.indent_str());
+                        }
+                        output.push_str(comment);
+                        output.push('\n');
+                    }
+                }
+
+                // Handle multi-line source expressions
                 if found_multiline_start {
-                    // Consume the first source line we matched
                     _ = source_lines.next();
 
-                    // Collect remaining continuation lines
                     let mut accumulated_src =
                         multiline_source_lines[0].replace(" ", "").replace(",", "");
 
                     while let Some(src) = source_lines.peek() {
                         let trimmed_src = src.trim();
 
-                        // Skip comments within multi-line expressions (they'll be output separately)
+                        // Skip comments within multi-line expressions
                         if trimmed_src.starts_with("//") {
                             multiline_source_lines.push(src);
                             _ = source_lines.next();
@@ -994,13 +1041,11 @@ impl<'a> Writer<'a> {
                         accumulated_src.push_str(&compacted_src_line);
                         multiline_source_lines.push(src);
 
-                        // Check if we've accumulated the full expression
                         if accumulated_src.contains(&compacted_pretty_line) {
                             _ = source_lines.next();
                             break;
                         }
 
-                        // Check if this is a continuation line
                         let is_continuation = trimmed_src.starts_with('.')
                             || trimmed_src.starts_with("&&")
                             || trimmed_src.starts_with("||")
@@ -1015,34 +1060,27 @@ impl<'a> Writer<'a> {
                             continue;
                         }
 
-                        // Not a continuation - stop
                         break;
                     }
 
-                    // Output the original multi-line source formatting
-                    // Calculate the base indentation from the first source line
+                    // Output the multi-line source with proper indentation
                     let first_src_indent = multiline_source_lines
                         .first()
                         .map(|s| s.chars().take_while(|c| c.is_whitespace()).count())
                         .unwrap_or(0);
 
-                    // Calculate the target indentation from the pretty line
                     let target_indent: String =
                         line.chars().take_while(|c| c.is_whitespace()).collect();
 
                     for (idx, src_line) in multiline_source_lines.iter().enumerate() {
                         let trimmed = src_line.trim();
-
-                        // Calculate this line's extra indentation relative to the first line
                         let src_indent = src_line.chars().take_while(|c| c.is_whitespace()).count();
                         let extra_indent = src_indent.saturating_sub(first_src_indent);
 
-                        // Output target indent + any extra relative indent
                         output.push_str(&target_indent);
                         for _ in 0..extra_indent {
                             output.push(' ');
                         }
-
                         output.push_str(trimmed);
 
                         if idx < multiline_source_lines.len() - 1 {
@@ -1051,7 +1089,7 @@ impl<'a> Writer<'a> {
                     }
                     printed_empty_line = false;
                 } else {
-                    // Single-line case: output the pretty line and consume source
+                    // Single-line case
                     output.push_str(line);
                     printed_empty_line = false;
 
