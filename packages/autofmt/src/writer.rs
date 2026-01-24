@@ -19,7 +19,7 @@ pub struct Writer<'a> {
     pub invalid_exprs: Vec<Span>,
 }
 
-const MAX_SEARCH_DEPTH: usize = 50;
+const MAX_SEARCH_DEPTH: usize = 1;
 
 struct SourceScan<'a> {
     pending_comments: Vec<&'a str>,
