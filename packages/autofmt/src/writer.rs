@@ -854,7 +854,6 @@ impl<'a> Writer<'a> {
         let source_text = src_span.source_text().unwrap_or_default();
         let mut source_lines = source_text.lines().peekable();
         let mut output = String::from("");
-        let mut printed_empty_line = false;
 
         // Collect all comments from the pretty output so we can check if a source comment
         // is already represented in the pretty output (and should be skipped from source)
@@ -953,10 +952,17 @@ impl<'a> Writer<'a> {
                         let is_already_in_pretty = pretty_comments.contains(trimmed_src);
 
                         if trimmed_src.is_empty() {
-                            had_empty_line = true;
+                            // If we haven't collected any comments yet, this empty line should
+                            // appear before subsequent comments or the matched line
+                            if pending_comments.is_empty() {
+                                had_empty_line = true;
+                            }
+                            // If we have pending comments, the empty line after them doesn't
+                            // need special handling - just skip it
                         } else if !is_already_in_pretty {
                             pending_comments.push(trimmed_src);
-                            had_empty_line = false; // Comment resets empty line tracking
+                            // Don't reset had_empty_line here - we want to preserve the empty
+                            // line before the first comment in the group
                         }
                         // Note: if comment IS already in pretty, don't reset had_empty_line
                         // The empty line should appear before the comment in the pretty output
@@ -972,13 +978,24 @@ impl<'a> Writer<'a> {
                         break;
                     }
 
-                    // Check if the pretty line starts with this source line (multi-line expression)
+                    // Check if this is a multi-line method chain (e.g., foo.bar().baz())
+                    // Only preserve multi-line formatting for expressions that look like method chains
+                    // Method chains typically have lines ending with identifiers before the next `.`
+                    // Skip this optimization for function calls like `exit_button(` which should be
+                    // formatted by prettyplease
                     if !compacted_src_line.is_empty()
                         && compacted_pretty_line.starts_with(&compacted_src_line)
                     {
-                        found_multiline_start = true;
-                        multiline_source_lines.push(src);
-                        break;
+                        // Only treat as multi-line if the line doesn't end with `(` or `,`
+                        // (those are function calls/arguments, not method chains)
+                        let ends_with_call = trimmed_src.ends_with('(')
+                            || trimmed_src.ends_with(',')
+                            || trimmed_src.ends_with('{');
+                        if !ends_with_call {
+                            found_multiline_start = true;
+                            multiline_source_lines.push(src);
+                            break;
+                        }
                     }
 
                     // This source line doesn't match - clear pending items and continue
@@ -994,9 +1011,8 @@ impl<'a> Writer<'a> {
                     _ = source_lines.next();
                 }
 
-                // Output empty line if we had one immediately before the match
-                if had_empty_line && pending_comments.is_empty() && skipped_lines <= MAX_SEARCH_DEPTH
-                {
+                // Output empty line if we had one before the match (or before comments)
+                if had_empty_line && skipped_lines <= MAX_SEARCH_DEPTH {
                     output.push('\n');
                 }
 
@@ -1087,11 +1103,9 @@ impl<'a> Writer<'a> {
                             output.push('\n');
                         }
                     }
-                    printed_empty_line = false;
                 } else {
                     // Single-line case
                     output.push_str(line);
-                    printed_empty_line = false;
 
                     let source_line = source_lines.next();
 
