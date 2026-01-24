@@ -847,6 +847,104 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
+        let Ok(expr) = expr else {
+            self.invalid_exprs.push(src_span);
+            return Err(std::fmt::Error);
+        };
+
+        thread_local! {
+            static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
+        }
+
+        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+
+        // Adding comments back to the formatted expression
+        let source_text = src_span.source_text().unwrap_or_default();
+        let mut source_lines = source_text.lines().peekable();
+        let mut output = String::from("");
+
+        // Collect all comments from the pretty output so we can skip source comments
+        // already represented in the pretty output.
+        let pretty_comments = self.collect_pretty_comments(&pretty_expr);
+
+        if source_lines.peek().is_none() {
+            output = pretty_expr;
+        } else {
+            for line in pretty_expr.lines() {
+                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
+                let trimmed_pretty_line = line.trim();
+
+                // Comments already in pretty output should be output directly.
+                if trimmed_pretty_line.starts_with("//") {
+                    self.consume_pretty_comment_line(&mut output, line, &mut source_lines);
+                    continue;
+                }
+
+                // Empty lines in pretty output should be preserved.
+                if trimmed_pretty_line.is_empty() {
+                    self.consume_pretty_empty_line(&mut output, &mut source_lines);
+                    continue;
+                }
+
+                if !output.is_empty() {
+                    output.push('\n');
+                }
+
+                let scan = self.scan_source_for_pretty_line(
+                    &mut source_lines,
+                    &compacted_pretty_line,
+                    &pretty_comments,
+                );
+
+                // Output empty line if we had one before the match (or before comments)
+                if scan.had_empty_line && scan.skipped_lines <= MAX_SEARCH_DEPTH {
+                    output.push('\n');
+                }
+
+                // Output pending comments (only if we found a match within reasonable depth)
+                if scan.skipped_lines <= MAX_SEARCH_DEPTH {
+                    self.emit_pending_comments(
+                        &mut output,
+                        line,
+                        trimmed_pretty_line,
+                        &scan.pending_comments,
+                    );
+                }
+
+                // Handle multi-line source expressions
+                if let Some(mut multiline_source_lines) = scan.multiline {
+                    _ = source_lines.next();
+                    self.extend_multiline_source(
+                        &mut source_lines,
+                        &compacted_pretty_line,
+                        &mut multiline_source_lines,
+                    );
+                    self.write_multiline_source(&mut output, line, &multiline_source_lines);
+                } else {
+                    // Single-line case
+                    output.push_str(line);
+
+                    let source_line = source_lines.next();
+
+                    // Write any inline comments
+                    if let Some(source_line) = source_line {
+                        if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+                            if let Some(comment) = captures.get(1) {
+                                output.push_str(" // ");
+                                output.push_str(comment.as_str().replace("//", "").trim());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        self.write_mulitiline_tokens(output)?;
+
+        Ok(())
+    }
+
     fn collect_pretty_comments<'b>(&self, pretty_expr: &'b str) -> HashSet<&'b str> {
         pretty_expr
             .lines()
@@ -1072,104 +1170,6 @@ impl<'a> Writer<'a> {
                 output.push('\n');
             }
         }
-    }
-
-    fn write_partial_expr(&mut self, expr: syn::Result<Expr>, src_span: Span) -> Result {
-        let Ok(expr) = expr else {
-            self.invalid_exprs.push(src_span);
-            return Err(std::fmt::Error);
-        };
-
-        thread_local! {
-            static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
-        }
-
-        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
-
-        // Adding comments back to the formatted expression
-        let source_text = src_span.source_text().unwrap_or_default();
-        let mut source_lines = source_text.lines().peekable();
-        let mut output = String::from("");
-
-        // Collect all comments from the pretty output so we can skip source comments
-        // already represented in the pretty output.
-        let pretty_comments = self.collect_pretty_comments(&pretty_expr);
-
-        if source_lines.peek().is_none() {
-            output = pretty_expr;
-        } else {
-            for line in pretty_expr.lines() {
-                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
-                let trimmed_pretty_line = line.trim();
-
-                // Comments already in pretty output should be output directly.
-                if trimmed_pretty_line.starts_with("//") {
-                    self.consume_pretty_comment_line(&mut output, line, &mut source_lines);
-                    continue;
-                }
-
-                // Empty lines in pretty output should be preserved.
-                if trimmed_pretty_line.is_empty() {
-                    self.consume_pretty_empty_line(&mut output, &mut source_lines);
-                    continue;
-                }
-
-                if !output.is_empty() {
-                    output.push('\n');
-                }
-
-                let scan = self.scan_source_for_pretty_line(
-                    &mut source_lines,
-                    &compacted_pretty_line,
-                    &pretty_comments,
-                );
-
-                // Output empty line if we had one before the match (or before comments)
-                if scan.had_empty_line && scan.skipped_lines <= MAX_SEARCH_DEPTH {
-                    output.push('\n');
-                }
-
-                // Output pending comments (only if we found a match within reasonable depth)
-                if scan.skipped_lines <= MAX_SEARCH_DEPTH {
-                    self.emit_pending_comments(
-                        &mut output,
-                        line,
-                        trimmed_pretty_line,
-                        &scan.pending_comments,
-                    );
-                }
-
-                // Handle multi-line source expressions
-                if let Some(mut multiline_source_lines) = scan.multiline {
-                    _ = source_lines.next();
-                    self.extend_multiline_source(
-                        &mut source_lines,
-                        &compacted_pretty_line,
-                        &mut multiline_source_lines,
-                    );
-                    self.write_multiline_source(&mut output, line, &multiline_source_lines);
-                } else {
-                    // Single-line case
-                    output.push_str(line);
-
-                    let source_line = source_lines.next();
-
-                    // Write any inline comments
-                    if let Some(source_line) = source_line {
-                        if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
-                            if let Some(comment) = captures.get(1) {
-                                output.push_str(" // ");
-                                output.push_str(comment.as_str().replace("//", "").trim());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        self.write_mulitiline_tokens(output)?;
-
-        Ok(())
     }
 
     fn write_mulitiline_tokens(&mut self, out: String) -> Result {
