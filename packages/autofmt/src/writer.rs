@@ -896,29 +896,27 @@ impl<'a> Writer<'a> {
                 let mut found_multiline_start = false;
                 let mut multiline_source_lines: Vec<&str> = Vec::new();
 
-                // Collect comments and empty lines to output once we find a match
+                // Collect comments to output once we find a match
                 let mut pending_comments: Vec<&str> = Vec::new();
-                let mut pending_empty = false;
+                // Track the last non-empty, non-comment source line we saw (if any)
+                // This helps us know if an empty line is "adjacent" to our match
+                let mut saw_unmatched_code = false;
 
                 // pull down any source lines with whitespace until we hit a line that matches our current line.
                 while let Some(src) = source_lines.peek() {
                     let trimmed_src = src.trim();
 
-                    // Collect comments and empty lines - we'll output them once we find a match
+                    // Handle comments and empty lines
                     if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
                         // Skip source comments that are already in the pretty output
-                        // (these are handled by the rsx formatter or are already formatted)
-                        let should_skip = pretty_comments.contains(trimmed_src);
+                        let is_already_in_pretty = pretty_comments.contains(trimmed_src);
 
-                        if !should_skip {
-                            if !trimmed_src.is_empty() {
-                                pending_comments.push(trimmed_src);
-                                pending_empty = false;
-                            } else if !pending_empty {
-                                pending_comments.push("");
-                                pending_empty = true;
-                            }
+                        if !trimmed_src.is_empty() && !is_already_in_pretty {
+                            // It's a comment not in pretty - collect it
+                            pending_comments.push(trimmed_src);
                         }
+                        // For empty lines: we don't collect them because prettyplease
+                        // handles spacing between statements
 
                         _ = source_lines.next();
                         continue;
@@ -942,35 +940,28 @@ impl<'a> Writer<'a> {
                     }
 
                     // If we reach here, we're consuming a source line that doesn't match.
-                    // Clear pending comments as they might belong to this unmatched line.
+                    // Clear pending comments as they belong to this unmatched line.
                     pending_comments.clear();
-                    pending_empty = false;
+                    saw_unmatched_code = true;
 
                     _ = source_lines.next();
                 }
 
                 // Now output any pending comments that belong before this line
-                for comment in pending_comments {
-                    if comment.is_empty() {
-                        if !printed_empty_line {
-                            output.push('\n');
-                            printed_empty_line = true;
-                        }
-                    } else {
-                        // Match the whitespace of the incoming source line
-                        for s in line.chars().take_while(|c| c.is_whitespace()) {
-                            output.push(s);
-                        }
-
-                        // Bump out the indent level if the line starts with a closing brace
-                        if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
-                            output.push_str(self.out.indent.indent_str());
-                        }
-
-                        printed_empty_line = false;
-                        output.push_str(comment);
-                        output.push('\n');
+                for comment in &pending_comments {
+                    // Match the whitespace of the pretty line for consistent indentation
+                    for s in line.chars().take_while(|c| c.is_whitespace()) {
+                        output.push(s);
                     }
+
+                    // Bump out the indent level if the line starts with a closing brace
+                    if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                        output.push_str(self.out.indent.indent_str());
+                    }
+
+                    printed_empty_line = false;
+                    output.push_str(comment);
+                    output.push('\n');
                 }
 
                 // If we found a multi-line source expression, collect all its lines and
