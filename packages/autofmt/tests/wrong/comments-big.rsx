@@ -62,7 +62,8 @@ pub fn DashboardLayout() -> Element {
                                                                     let _ = vscode_url;
                                                                 }
                                                                 Err(e) => {
-                                                                    ssh_tunnel_error.set(Some(format!("Failed to create tunnel: {}", e)));
+                                                                    ssh_tunnel_error
+                                                                        .set(Some(format!("Failed to create tunnel: {}", e)));
                                                                     show_ssh_tunnel_modal.set(true);
                                                                 }
                                                             }
@@ -105,7 +106,8 @@ pub fn DashboardLayout() -> Element {
                                                                     ssh_tunnel_result.set(Some(tunnel));
                                                                 }
                                                                 Err(e) => {
-                                                                    ssh_tunnel_error.set(Some(format!("Failed to create tunnel: {}", e)));
+                                                                    ssh_tunnel_error
+                                                                        .set(Some(format!("Failed to create tunnel: {}", e)));
                                                                 }
                                                             }
                                                             creating_ssh_tunnel.set(false);

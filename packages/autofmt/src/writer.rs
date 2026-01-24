@@ -856,6 +856,20 @@ impl<'a> Writer<'a> {
         let mut output = String::from("");
         let mut printed_empty_line = false;
 
+        // Collect all comments from the pretty output so we can check if a source comment
+        // is already represented in the pretty output (and should be skipped from source)
+        let pretty_comments: std::collections::HashSet<_> = pretty_expr
+            .lines()
+            .filter_map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with("//") {
+                    Some(trimmed.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+
         if source_lines.peek().is_none() {
             output = pretty_expr;
         } else {
@@ -863,9 +877,13 @@ impl<'a> Writer<'a> {
                 let compacted_pretty_line = line.replace(" ", "").replace(",", "");
                 let trimmed_pretty_line = line.trim();
 
-                // Nested expressions might have comments already. We handle writing all of those
-                // at the outer level, so we skip them here
+                // Comments that are already in the pretty output (from rsx! formatting)
+                // should be output directly. They're already properly indented.
                 if trimmed_pretty_line.starts_with("//") {
+                    if !output.is_empty() {
+                        output.push('\n');
+                    }
+                    output.push_str(line);
                     continue;
                 }
 
@@ -873,29 +891,33 @@ impl<'a> Writer<'a> {
                     output.push('\n');
                 }
 
+                // Track if we found a multi-line source expression that matches the start of our pretty line.
+                // We'll need to consume continuation lines and preserve their formatting.
+                let mut found_multiline_start = false;
+                let mut multiline_source_lines: Vec<&str> = Vec::new();
+
+                // Collect comments and empty lines to output once we find a match
+                let mut pending_comments: Vec<&str> = Vec::new();
+                let mut pending_empty = false;
+
                 // pull down any source lines with whitespace until we hit a line that matches our current line.
                 while let Some(src) = source_lines.peek() {
                     let trimmed_src = src.trim();
 
-                    // Write comments and empty lines as they are
+                    // Collect comments and empty lines - we'll output them once we find a match
                     if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
-                        if !trimmed_src.is_empty() {
-                            // Match the whitespace of the incoming source line
-                            for s in line.chars().take_while(|c| c.is_whitespace()) {
-                                output.push(s);
-                            }
+                        // Skip source comments that are already in the pretty output
+                        // (these are handled by the rsx formatter or are already formatted)
+                        let should_skip = pretty_comments.contains(trimmed_src);
 
-                            // Bump out the indent level if the line starts with a closing brace (ie we're at the end of a block)
-                            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
-                                output.push_str(self.out.indent.indent_str());
+                        if !should_skip {
+                            if !trimmed_src.is_empty() {
+                                pending_comments.push(trimmed_src);
+                                pending_empty = false;
+                            } else if !pending_empty {
+                                pending_comments.push("");
+                                pending_empty = true;
                             }
-
-                            printed_empty_line = false;
-                            output.push_str(trimmed_src);
-                            output.push('\n');
-                        } else if !printed_empty_line {
-                            output.push('\n');
-                            printed_empty_line = true;
                         }
 
                         _ = source_lines.next();
@@ -904,28 +926,153 @@ impl<'a> Writer<'a> {
 
                     let compacted_src_line = src.replace(" ", "").replace(",", "");
 
-                    // If this source line matches our pretty line, we stop pulling down
+                    // If this source line matches our pretty line exactly, we stop pulling down
                     if compacted_src_line.contains(&compacted_pretty_line) {
                         break;
                     }
 
-                    // Otherwise, consume this source line and keep going
+                    // Check if the pretty line starts with this source line (for multi-line
+                    // source expressions that get collapsed to a single pretty line)
+                    if !compacted_src_line.is_empty()
+                        && compacted_pretty_line.starts_with(&compacted_src_line)
+                    {
+                        found_multiline_start = true;
+                        multiline_source_lines.push(src);
+                        break;
+                    }
+
+                    // If we reach here, we're consuming a source line that doesn't match.
+                    // Clear pending comments as they might belong to this unmatched line.
+                    pending_comments.clear();
+                    pending_empty = false;
+
                     _ = source_lines.next();
                 }
 
-                // Once all whitespace is written, write the pretty line
-                output.push_str(line);
-                printed_empty_line = false;
+                // Now output any pending comments that belong before this line
+                for comment in pending_comments {
+                    if comment.is_empty() {
+                        if !printed_empty_line {
+                            output.push('\n');
+                            printed_empty_line = true;
+                        }
+                    } else {
+                        // Match the whitespace of the incoming source line
+                        for s in line.chars().take_while(|c| c.is_whitespace()) {
+                            output.push(s);
+                        }
 
-                // And then pull the corresponding source line
-                let source_line = source_lines.next();
+                        // Bump out the indent level if the line starts with a closing brace
+                        if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
+                            output.push_str(self.out.indent.indent_str());
+                        }
 
-                // And then write any inline comments
-                if let Some(source_line) = source_line {
-                    if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
-                        if let Some(comment) = captures.get(1) {
-                            output.push_str(" // ");
-                            output.push_str(comment.as_str().replace("//", "").trim());
+                        printed_empty_line = false;
+                        output.push_str(comment);
+                        output.push('\n');
+                    }
+                }
+
+                // If we found a multi-line source expression, collect all its lines and
+                // output the original source formatting (preserving line breaks)
+                if found_multiline_start {
+                    // Consume the first source line we matched
+                    _ = source_lines.next();
+
+                    // Collect remaining continuation lines
+                    let mut accumulated_src =
+                        multiline_source_lines[0].replace(" ", "").replace(",", "");
+
+                    while let Some(src) = source_lines.peek() {
+                        let trimmed_src = src.trim();
+
+                        // Skip comments within multi-line expressions (they'll be output separately)
+                        if trimmed_src.starts_with("//") {
+                            multiline_source_lines.push(src);
+                            _ = source_lines.next();
+                            continue;
+                        }
+
+                        // Skip empty lines
+                        if trimmed_src.is_empty() {
+                            _ = source_lines.next();
+                            continue;
+                        }
+
+                        let compacted_src_line = src.replace(" ", "").replace(",", "");
+                        accumulated_src.push_str(&compacted_src_line);
+                        multiline_source_lines.push(src);
+
+                        // Check if we've accumulated the full expression
+                        if accumulated_src.contains(&compacted_pretty_line) {
+                            _ = source_lines.next();
+                            break;
+                        }
+
+                        // Check if this is a continuation line
+                        let is_continuation = trimmed_src.starts_with('.')
+                            || trimmed_src.starts_with("&&")
+                            || trimmed_src.starts_with("||")
+                            || trimmed_src.starts_with('+')
+                            || trimmed_src.starts_with('-')
+                            || trimmed_src.starts_with('*')
+                            || trimmed_src.starts_with('/')
+                            || trimmed_src.starts_with('?');
+
+                        if is_continuation || compacted_pretty_line.starts_with(&accumulated_src) {
+                            _ = source_lines.next();
+                            continue;
+                        }
+
+                        // Not a continuation - stop
+                        break;
+                    }
+
+                    // Output the original multi-line source formatting
+                    // Calculate the base indentation from the first source line
+                    let first_src_indent = multiline_source_lines
+                        .first()
+                        .map(|s| s.chars().take_while(|c| c.is_whitespace()).count())
+                        .unwrap_or(0);
+
+                    // Calculate the target indentation from the pretty line
+                    let target_indent: String =
+                        line.chars().take_while(|c| c.is_whitespace()).collect();
+
+                    for (idx, src_line) in multiline_source_lines.iter().enumerate() {
+                        let trimmed = src_line.trim();
+
+                        // Calculate this line's extra indentation relative to the first line
+                        let src_indent = src_line.chars().take_while(|c| c.is_whitespace()).count();
+                        let extra_indent = src_indent.saturating_sub(first_src_indent);
+
+                        // Output target indent + any extra relative indent
+                        output.push_str(&target_indent);
+                        for _ in 0..extra_indent {
+                            output.push(' ');
+                        }
+
+                        output.push_str(trimmed);
+
+                        if idx < multiline_source_lines.len() - 1 {
+                            output.push('\n');
+                        }
+                    }
+                    printed_empty_line = false;
+                } else {
+                    // Single-line case: output the pretty line and consume source
+                    output.push_str(line);
+                    printed_empty_line = false;
+
+                    let source_line = source_lines.next();
+
+                    // Write any inline comments
+                    if let Some(source_line) = source_line {
+                        if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
+                            if let Some(comment) = captures.get(1) {
+                                output.push_str(" // ");
+                                output.push_str(comment.as_str().replace("//", "").trim());
+                            }
                         }
                     }
                 }
