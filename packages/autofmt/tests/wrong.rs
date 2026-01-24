@@ -41,3 +41,4 @@ twoway!("syntax_error" => syntax_error (IndentOptions::new(IndentType::Spaces, 4
 twoway!("skipfail" => skipfail (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("comments-inline-4sp" => comments_inline_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
 twoway!("comments-attributes-4sp" => comments_attributes_4sp (IndentOptions::new(IndentType::Spaces, 4, false)));
+twoway!("comments-big" => comments_big (IndentOptions::new(IndentType::Spaces, 4, false)));
