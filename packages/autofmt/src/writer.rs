@@ -19,13 +19,11 @@ pub struct Writer<'a> {
     pub invalid_exprs: Vec<Span>,
 }
 
-const MAX_SEARCH_DEPTH: usize = 1;
-
 struct SourceScan<'a> {
     pending_comments: Vec<&'a str>,
     had_empty_line: bool,
     multiline: Option<Vec<&'a str>>,
-    skipped_lines: usize,
+    within_limit: bool,
 }
 
 impl<'a> Writer<'a> {
@@ -898,12 +896,12 @@ impl<'a> Writer<'a> {
                 );
 
                 // Output empty line if we had one before the match (or before comments)
-                if scan.had_empty_line && scan.skipped_lines <= MAX_SEARCH_DEPTH {
+                if scan.had_empty_line && scan.within_limit {
                     output.push('\n');
                 }
 
                 // Output pending comments (only if we found a match within reasonable depth)
-                if scan.skipped_lines <= MAX_SEARCH_DEPTH {
+                if scan.within_limit {
                     self.emit_pending_comments(
                         &mut output,
                         line,
@@ -1017,7 +1015,7 @@ impl<'a> Writer<'a> {
         let mut pending_comments: Vec<&str> = Vec::new();
         let mut had_empty_line = false;
         let mut multiline: Option<Vec<&str>> = None;
-        let mut skipped_lines = 0;
+        let mut skipped_lines = false;
 
         while let Some(src) = source_lines.peek() {
             let trimmed_src = src.trim();
@@ -1057,9 +1055,10 @@ impl<'a> Writer<'a> {
 
             pending_comments.clear();
             had_empty_line = false;
-            skipped_lines += 1;
+            skipped_lines = true;
 
-            if skipped_lines > MAX_SEARCH_DEPTH {
+            if skipped_lines {
+                _ = source_lines.next();
                 break;
             }
 
@@ -1070,7 +1069,7 @@ impl<'a> Writer<'a> {
             pending_comments,
             had_empty_line,
             multiline,
-            skipped_lines,
+            within_limit: !skipped_lines,
         }
     }
 
