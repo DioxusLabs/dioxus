@@ -10,12 +10,18 @@ pub use manganis_macro::widget;
 
 pub use manganis_core::{
     // Core asset types
-    Asset, AssetOptions, AssetVariant, BundledAsset,
+    Asset,
+    AssetOptions,
+    AssetVariant,
+    BundledAsset,
     // Standard asset options
-    CssAssetOptions, CssModuleAssetOptions, FolderAssetOptions, ImageAssetOptions, ImageFormat,
-    ImageSize, JsAssetOptions,
-    // Sidecar asset options
-    AppleWidgetOptions, PrebuiltBinaryOptions, RustBinaryOptions, WasmWorkerOptions,
+    CssAssetOptions,
+    CssModuleAssetOptions,
+    FolderAssetOptions,
+    ImageAssetOptions,
+    ImageFormat,
+    ImageSize,
+    JsAssetOptions,
 };
 
 // Re-export metadata types for FFI and sidecar macros

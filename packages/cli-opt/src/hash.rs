@@ -81,22 +81,8 @@ pub(crate) fn hash_file_with_options(
         | ResolvedAssetType::Css(_)
         | ResolvedAssetType::Image(_)
         | ResolvedAssetType::Json
-        | ResolvedAssetType::File
-        | ResolvedAssetType::PrebuiltBinary(_) => {
+        | ResolvedAssetType::File => {
             hash_file_contents(source, hasher)?;
-        }
-
-        // Sidecar assets that are folders (Swift packages, Rust crates) - hash recursively
-        ResolvedAssetType::AppleWidget(_)
-        | ResolvedAssetType::WasmWorker(_)
-        | ResolvedAssetType::RustBinary(_) => {
-            // These are typically directories (Swift package or Rust crate)
-            // Hash all source files recursively
-            if source.is_dir() {
-                hash_folder_recursive(source, hasher)?;
-            } else {
-                hash_file_contents(source, hasher)?;
-            }
         }
 
         // Or the folder contents recursively

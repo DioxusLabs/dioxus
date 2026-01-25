@@ -319,6 +319,7 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
+use super::permission_mapper::PermissionMapper;
 use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
@@ -336,7 +337,6 @@ use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
 use manganis_core::{AndroidArtifactMetadata, AppleWidgetExtensionMetadata, AssetVariant};
-use super::permission_mapper::PermissionMapper;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -1458,7 +1458,12 @@ impl BuildRequest {
             }
         }
 
-        Ok((asset_manifest, android_artifacts, swift_packages, widget_extensions))
+        Ok((
+            asset_manifest,
+            android_artifacts,
+            swift_packages,
+            widget_extensions,
+        ))
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -2318,20 +2323,6 @@ impl BuildRequest {
 
         // Queue the bundled assets (skip sidecar assets that require special processing)
         for bundled in assets.unique_assets() {
-            // Skip sidecar assets - they're compiled/installed separately
-            match bundled.options().variant() {
-                AssetVariant::AppleWidget(_)
-                | AssetVariant::WasmWorker(_)
-                | AssetVariant::RustBinary(_) => {
-                    tracing::debug!(
-                        "Skipping sidecar asset {} (will be processed separately)",
-                        bundled.absolute_source_path()
-                    );
-                    continue;
-                }
-                _ => {}
-            }
-
             let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
 

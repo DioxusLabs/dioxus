@@ -1,9 +1,6 @@
 use anyhow::Context;
 use manganis::{AssetOptions, CssModuleAssetOptions, FolderAssetOptions};
-use manganis_core::{
-    AppleWidgetOptions, AssetVariant, CssAssetOptions, ImageAssetOptions, JsAssetOptions,
-    PrebuiltBinaryOptions, RustBinaryOptions, WasmWorkerOptions,
-};
+use manganis_core::{AssetVariant, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
 use crate::css::{process_css_module, process_scss};
@@ -87,40 +84,6 @@ pub(crate) fn process_file_to_with_options(
                 )
             })?;
         }
-        // Sidecar asset processing
-        ResolvedAssetType::PrebuiltBinary(opts) => {
-            process_prebuilt_binary(opts, source, &temp_path)?;
-        }
-        ResolvedAssetType::AppleWidget(_opts) => {
-            // Apple Widget Extensions require Swift compilation and .appex bundling
-            // This is handled separately in the build pipeline
-            tracing::warn!(
-                "Apple Widget Extension assets require the full build pipeline. \
-                 Skipping asset processing for: {}",
-                source.display()
-            );
-            return Ok(());
-        }
-        ResolvedAssetType::WasmWorker(_opts) => {
-            // WASM Workers require Rust compilation to wasm32-unknown-unknown
-            // This is handled separately in the build pipeline
-            tracing::warn!(
-                "WASM Worker assets require the full build pipeline. \
-                 Skipping asset processing for: {}",
-                source.display()
-            );
-            return Ok(());
-        }
-        ResolvedAssetType::RustBinary(_opts) => {
-            // Rust Binary sidecars require Rust compilation
-            // This is handled separately in the build pipeline
-            tracing::warn!(
-                "Rust Binary assets require the full build pipeline. \
-                 Skipping asset processing for: {}",
-                source.display()
-            );
-            return Ok(());
-        }
     }
 
     // Remove the existing output file if it exists
@@ -157,15 +120,6 @@ pub(crate) enum ResolvedAssetType {
     Folder(FolderAssetOptions),
     /// A generic file
     File,
-    // Sidecar asset types
-    /// An Apple Widget Extension (iOS/macOS)
-    AppleWidget(AppleWidgetOptions),
-    /// A WASM web worker
-    WasmWorker(WasmWorkerOptions),
-    /// A Rust binary sidecar
-    RustBinary(RustBinaryOptions),
-    /// A prebuilt binary
-    PrebuiltBinary(PrebuiltBinaryOptions),
 }
 
 pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> ResolvedAssetType {
@@ -176,11 +130,6 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> Re
         AssetVariant::Js(js) => ResolvedAssetType::Js(*js),
         AssetVariant::Folder(folder) => ResolvedAssetType::Folder(*folder),
         AssetVariant::Unknown => resolve_unknown_asset_options(source),
-        // Sidecar asset types
-        AssetVariant::AppleWidget(opts) => ResolvedAssetType::AppleWidget(*opts),
-        AssetVariant::WasmWorker(opts) => ResolvedAssetType::WasmWorker(*opts),
-        AssetVariant::RustBinary(opts) => ResolvedAssetType::RustBinary(*opts),
-        AssetVariant::PrebuiltBinary(opts) => ResolvedAssetType::PrebuiltBinary(*opts),
         _ => {
             tracing::warn!("Unknown asset options... you may need to update the Dioxus CLI. Defaulting to a generic file: {:?}", options);
             resolve_unknown_asset_options(source)
@@ -200,38 +149,4 @@ fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
         _ if source.is_dir() => ResolvedAssetType::Folder(FolderAssetOptions::default()),
         _ => ResolvedAssetType::File,
     }
-}
-
-/// Process a prebuilt binary asset by copying it and optionally setting executable permissions
-fn process_prebuilt_binary(
-    options: &PrebuiltBinaryOptions,
-    source: &Path,
-    output: &Path,
-) -> anyhow::Result<()> {
-    // Copy the binary file
-    let source_file = std::fs::File::open(source)
-        .with_context(|| format!("Failed to open prebuilt binary: {}", source.display()))?;
-    let mut reader = std::io::BufReader::new(source_file);
-    let output_file = std::fs::File::create(output)
-        .with_context(|| format!("Failed to create output file: {}", output.display()))?;
-    let mut writer = std::io::BufWriter::new(output_file);
-    std::io::copy(&mut reader, &mut writer)
-        .with_context(|| format!("Failed to copy prebuilt binary to: {}", output.display()))?;
-
-    // Set executable permission on Unix systems if requested
-    #[cfg(unix)]
-    if options.is_executable() {
-        use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(output)?.permissions();
-        // Add executable bits (owner, group, others)
-        let mode = perms.mode() | 0o111;
-        perms.set_mode(mode);
-        std::fs::set_permissions(output, perms)
-            .with_context(|| format!("Failed to set executable permission on: {}", output.display()))?;
-    }
-
-    #[cfg(not(unix))]
-    let _ = options; // Silence unused warning on non-Unix
-
-    Ok(())
 }
