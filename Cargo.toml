@@ -8,7 +8,6 @@ members = [
     "packages/cli-opt",
     "packages/cli-config",
     "packages/cli-telemetry",
-    "packages/core-types",
     "packages/core-macro",
     "packages/config-macro",
     "packages/router-macro",
@@ -24,42 +23,22 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/check",
-    "packages/config-macro",
-    "packages/core-macro",
-    "packages/core-types",
-    "packages/core",
-    "packages/desktop",
     "packages/devtools-types",
     "packages/devtools",
-    "packages/dioxus",
     "packages/document",
-    "packages/extension",
     "packages/fullstack",
     "packages/fullstack-core",
     "packages/fullstack-macro",
     "packages/fullstack-server",
     "packages/generational-box",
     "packages/history",
-    "packages/hooks",
-    "packages/html-internal-macro",
-    "packages/html",
-    "packages/interpreter",
     "packages/lazy-js-bundle",
-    "packages/liveview",
-    "packages/router-macro",
-    "packages/router",
     "packages/rsx-hotreload",
     "packages/rsx-rosetta",
     "packages/rsx",
     "packages/signals",
     "packages/stores",
     "packages/stores-macro",
-    "packages/ssr",
-    "packages/lazy-js-bundle",
-    "packages/cli-config",
-    "packages/devtools",
-    "packages/devtools-types",
-    "packages/rsx-hotreload",
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
@@ -77,9 +56,22 @@ members = [
     # Playwright tests
     "packages/playwright-tests/liveview",
     "packages/playwright-tests/web",
+    "packages/playwright-tests/web-routing",
+    "packages/playwright-tests/web-hash-routing",
+    "packages/playwright-tests/barebones-template",
     "packages/playwright-tests/fullstack",
+    "packages/playwright-tests/fullstack-errors",
+    "packages/playwright-tests/fullstack-mounted",
+    "packages/playwright-tests/fullstack-spread",
+    "packages/playwright-tests/fullstack-routing",
+    "packages/playwright-tests/fullstack-hydration-order",
     "packages/playwright-tests/suspense-carousel",
     "packages/playwright-tests/nested-suspense",
+    "packages/playwright-tests/cli-optimization",
+    "packages/playwright-tests/wasm-split-harness",
+    "packages/playwright-tests/default-features-disabled",
+    "packages/playwright-tests/fullstack-error-codes",
+    "packages/playwright-tests/windows-headless",
 
     # manganis
     "packages/manganis/manganis",
@@ -106,6 +98,7 @@ members = [
     "examples/01-app-demos/bluetooth-scanner",
     "examples/01-app-demos/file-explorer",
     "examples/01-app-demos/hotdog",
+    "examples/01-app-demos/geolocation-native-plugin",
 
     # Fullstack examples
     "examples/07-fullstack/hello-world",
@@ -121,27 +114,8 @@ members = [
     "examples/10-integrations/native-headless",
     "examples/10-integrations/native-headless-in-bevy",
     "examples/10-integrations/bevy",
-
-    # Playwright tests
-    "packages/playwright-tests/liveview",
-    "packages/playwright-tests/web",
-    "packages/playwright-tests/web-routing",
-    "packages/playwright-tests/web-hash-routing",
-    "packages/playwright-tests/barebones-template",
-    "packages/playwright-tests/fullstack",
-    "packages/playwright-tests/fullstack-errors",
-    "packages/playwright-tests/fullstack-mounted",
-    "packages/playwright-tests/fullstack-spread",
-    "packages/playwright-tests/fullstack-routing",
-    "packages/playwright-tests/fullstack-hydration-order",
-    "packages/playwright-tests/suspense-carousel",
-    "packages/playwright-tests/nested-suspense",
-    "packages/playwright-tests/cli-optimization",
-    "packages/playwright-tests/wasm-split-harness",
-    "packages/playwright-tests/default-features-disabled",
-    "packages/playwright-tests/fullstack-error-codes",
-    "packages/playwright-tests/windows-headless",
 ]
+
 
 [workspace.package]
 version = "0.7.3"
@@ -213,7 +187,8 @@ manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.3" }
 manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.3" }
 manganis-core-07 = { path = "packages/manganis/manganis-07", version = "0.7.2" }
 
-# const-serialize. these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
+# const-serialize.
+# these are on "alpha" versions, but really, we are prepping for 0.8 but not committing to it yet
 # once the workspace moves onto 0.8, we can clean this up, moving the const-serialize stuff back to normal versions
 const-serialize = { path = "packages/const-serialize", version = "0.8.0-alpha.0" }
 const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.8.0-alpha.0" }
@@ -292,6 +267,7 @@ rustls = { version = "0.23.28", default-features = false, features = [
 ] }
 serde_json = "1.0.140"
 serde = "1.0.219"
+schemars = "1.0"
 syn = "2.0"
 quote = "1.0"
 axum-core = "0.5"
