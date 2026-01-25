@@ -855,7 +855,8 @@ impl<'a> Writer<'a> {
         // Comments already in pretty output (from nested rsx!) - skip these from source
         let pretty_comments: HashSet<_> = pretty
             .lines()
-            .filter_map(|l| l.trim().starts_with("//").then(|| l.trim()))
+            .filter(|l| l.trim().starts_with("//"))
+            .map(|l| l.trim())
             .collect();
 
         let mut out = String::new();
