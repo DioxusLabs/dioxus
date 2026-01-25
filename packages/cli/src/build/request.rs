@@ -2708,9 +2708,7 @@ impl BuildRequest {
                 }
                 Err(err) => {
                     if self.using_dioxus_explicitly {
-                        panic!("Windows resources couldn't be built. Err: {}", err)
-                    } else {
-                        tracing::warn!("Application may not have an icon.")
+                        tracing::warn!("Application may not have an icon: {err}");
                     }
                 }
             },

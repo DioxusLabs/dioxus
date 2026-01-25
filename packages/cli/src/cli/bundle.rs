@@ -149,31 +149,6 @@ impl Bundle {
         })
     }
 
-    #[allow(deprecated)]
-    fn windows_icon_override(
-        krate: &BuildRequest,
-        bundle_settings: &mut BundleSettings,
-    ) -> Result<(), Error> {
-        if let Some(windows) = krate.config.bundle.windows.as_ref() {
-            if let Some(val) = windows.icon_path.as_ref() {
-                if val.extension() == Some(OsStr::new("ico")) {
-                    let windows_icon = krate.canonicalize_icon_path(val)?;
-                    bundle_settings.windows.icon_path = PathBuf::from(&windows_icon);
-                    return Ok(());
-                }
-            }
-        }
-
-        let icon = match bundle_settings.icon.as_ref() {
-            Some(icons) => icons.iter().find(|i| i.ends_with(".ico")).cloned(),
-            None => None,
-        }
-        .with_context(|| "Missing .ico app icon")?;
-        // for now it still needs to be set even though it's deprecated
-        bundle_settings.windows.icon_path = PathBuf::from(icon);
-        Ok(())
-    }
-
     fn bundle_desktop(
         build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
@@ -293,5 +268,30 @@ impl Bundle {
         })?;
 
         Ok(bundles)
+    }
+
+    #[allow(deprecated)]
+    fn windows_icon_override(
+        krate: &BuildRequest,
+        bundle_settings: &mut BundleSettings,
+    ) -> Result<(), Error> {
+        if let Some(windows) = krate.config.bundle.windows.as_ref() {
+            if let Some(val) = windows.icon_path.as_ref() {
+                if val.extension() == Some(OsStr::new("ico")) {
+                    let windows_icon = krate.canonicalize_icon_path(val)?;
+                    bundle_settings.windows.icon_path = PathBuf::from(&windows_icon);
+                    return Ok(());
+                }
+            }
+        }
+
+        let icon = match bundle_settings.icon.as_ref() {
+            Some(icons) => icons.iter().find(|i| i.ends_with(".ico")).cloned(),
+            None => None,
+        }
+        .with_context(|| "Missing .ico app icon")?;
+        // for now it still needs to be set even though it's deprecated
+        bundle_settings.windows.icon_path = PathBuf::from(icon);
+        Ok(())
     }
 }
