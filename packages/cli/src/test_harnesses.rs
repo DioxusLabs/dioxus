@@ -385,6 +385,7 @@ fn main() {
         _ = crate::VERBOSITY.set(crate::Verbosity {
             verbose: true,
             trace: true,
+            quiet: false,
             json_output: false,
             log_to_file: None,
             locked: false,

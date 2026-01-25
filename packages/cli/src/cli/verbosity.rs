@@ -11,6 +11,15 @@ pub struct Verbosity {
     #[clap(long, global = true)]
     pub(crate) trace: bool,
 
+    /// Use quiet output - only show warnings, errors, and final status [default: false]
+    #[clap(
+        long,
+        global = true,
+        conflicts_with = "verbose",
+        conflicts_with = "trace"
+    )]
+    pub(crate) quiet: bool,
+
     /// Output logs in JSON format
     #[clap(long, global = true)]
     pub(crate) json_output: bool,
