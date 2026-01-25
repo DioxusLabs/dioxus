@@ -334,11 +334,11 @@ impl ComponentCommand {
 /// If both values are None, the default registry will be used
 #[derive(Clone, Debug, Parser, Default, Serialize, Deserialize, JsonSchema)]
 pub struct RemoteComponentRegistry {
-    /// The url of the the component registry
+    /// The url of the component registry
     #[arg(long)]
     git: Option<String>,
 
-    /// The revision of the the component registry
+    /// The revision of the component registry
     #[arg(long)]
     rev: Option<String>,
 }

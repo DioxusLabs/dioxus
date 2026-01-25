@@ -1,0 +1,16 @@
+[package]
+name = "manganis-core-07"
+edition = "2021"
+version = "0.7.2"
+authors = ["Jonathan Kelley"]
+description = "Legacy manganis-core v0.7.2 for backwards compatibility during 0.7.3 release"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "assets"]
+
+# be careful with dependencies you add here - these need to get compiled for the proc macro and therefore
+# prevent the main code from compiling!
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }

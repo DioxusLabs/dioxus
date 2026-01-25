@@ -64,7 +64,7 @@ if (process.platform === "win32") {
     {
       cwd: path.join(process.cwd(), "fullstack"),
       command:
-        'cargo run --package dioxus-cli --release -- run --force-sequential --web --addr "127.0.0.1" --port 3333',
+        'cargo run --package dioxus-cli --release -- run --force-sequential --web --addr "127.0.0.1" --port 3333 --release',
       port: 3333,
       timeout: 50 * 60 * 1000,
       reuseExistingServer: !process.env.CI,

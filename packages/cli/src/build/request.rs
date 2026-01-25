@@ -1223,7 +1223,7 @@ impl BuildRequest {
                     //
                     // { "artifact":"target/debug/deps/libdioxus_core-4f2a0b3c1e5f8b7c.rlib", "emit":"link" }
                     //
-                    // There are other outputs like depinfo that we might be interested in in the future.
+                    // There are other outputs like depinfo that we might be interested in the future.
                     if let Ok(artifact) = serde_json::from_str::<RustcArtifact>(&line) {
                         if artifact.emit == "link" {
                             output_location = Some(artifact.artifact);

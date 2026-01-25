@@ -24,7 +24,7 @@ impl TailwindCli {
         input_path: Option<PathBuf>,
         output_path: Option<PathBuf>,
     ) -> Result<()> {
-        let Some(tailwind) = Self::autodetect(&manifest_dir) else {
+        let Some(tailwind) = Self::autodetect(&manifest_dir, &input_path) else {
             return Ok(());
         };
 
@@ -54,7 +54,7 @@ impl TailwindCli {
         output_path: Option<PathBuf>,
     ) -> tokio::task::JoinHandle<Result<()>> {
         tokio::spawn(async move {
-            let Some(tailwind) = Self::autodetect(&manifest_dir) else {
+            let Some(tailwind) = Self::autodetect(&manifest_dir, &input_path) else {
                 return Ok(());
             };
 
@@ -81,16 +81,22 @@ impl TailwindCli {
     ///
     /// Note that v3 still uses the tailwind.css file, but usually the accompanying js file indicates
     /// that the project is using v3.
-    pub(crate) fn autodetect(manifest_dir: &Path) -> Option<Self> {
-        if manifest_dir.join("tailwind.config.js").exists() {
+    pub(crate) fn autodetect(manifest_dir: &Path, input_path: &Option<PathBuf>) -> Option<Self> {
+        let dir = input_path
+            .as_ref()
+            .map(|p| manifest_dir.join(p))
+            .and_then(|p| p.parent().map(|parent| parent.to_path_buf()))
+            .unwrap_or(manifest_dir.to_path_buf());
+
+        if dir.join("tailwind.config.js").exists() || dir.join("tailwind.config.ts").exists() {
             return Some(Self::v3());
         }
 
-        if manifest_dir.join("tailwind.config.ts").exists() {
-            return Some(Self::v3());
-        }
-
-        if manifest_dir.join("tailwind.css").exists() {
+        if input_path
+            .as_ref()
+            .map(|p| manifest_dir.join(p).exists())
+            .unwrap_or_else(|| manifest_dir.join("tailwind.css").exists())
+        {
             return Some(Self::v4());
         }
 
@@ -216,7 +222,7 @@ impl TailwindCli {
         let arch = match target_lexicon::HOST.architecture {
             target_lexicon::Architecture::X86_64 if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::X86_64 => "x64",
-            // you would think this would be arm64.exe, but tailwind doesnt distribute arm64 binaries
+            // you would think this would be arm64.exe, but tailwind doesn't distribute arm64 binaries
             target_lexicon::Architecture::Aarch64(_) if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::Aarch64(_) => "arm64",
             _ => return None,

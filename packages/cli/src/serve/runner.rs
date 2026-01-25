@@ -46,7 +46,7 @@ pub(crate) struct AppServer {
     pub(crate) client: AppBuilder,
     pub(crate) server: Option<AppBuilder>,
 
-    // Related to to the filesystem watcher
+    // Related to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
     pub(crate) _watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
@@ -604,13 +604,13 @@ impl AppServer {
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
-                    time_taken.as_millis()
+                    "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
+                    format_duration_ms(time_taken)
                 );
             } else {
                 tracing::info!(
-                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
-                    time_taken.as_millis()
+                    "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
+                    format_duration_ms(time_taken)
                 );
             }
 
@@ -1307,4 +1307,16 @@ fn is_wsl() -> bool {
     }
 
     false
+}
+
+/// Format a Duration for human-readable output.
+fn format_duration_ms(d: Duration) -> String {
+    let total_ms = d.as_millis() as u64;
+
+    if total_ms < 1000 {
+        format!("{total_ms}ms")
+    } else {
+        let secs = total_ms as f64 / 1000.0;
+        format!("{secs:.2}s")
+    }
 }

@@ -98,7 +98,7 @@ brotli = "8.0.1"
 ignore = "0.4.23"
 env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
-const-serialize-07 = { workspace = true, features = ["serde"] }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }
 
 tracing-subscriber = { version = "0.3.19", features = [
     "std",

@@ -1,6 +1,6 @@
 [package]
 name = "const-serialize"
-version = "0.8.0"
+version = "0.8.0-alpha.0"
 authors = ["Evan Almloff"]
 edition = "2021"
 description = "A serialization framework that works in const contexts"
@@ -13,10 +13,9 @@ rust-version = "1.83.0"
 [dependencies]
 const-serialize-macro = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }
-const-serialize-07 = { workspace = true, optional = true }
+const-serialize-07 = { package = "const-serialize", version = "=0.7.2", optional = true }
 
 [dev-dependencies]
-const-serialize = { path = "." }
 rand = { workspace = true }
 
 [features]

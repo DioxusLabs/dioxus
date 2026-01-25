@@ -132,7 +132,7 @@
 //!
 //! ```rust
 //! fn main() {
-//!     // Changes to the the `for` loop will cause an unwind to this call.
+//!     // Changes to the `for` loop will cause an unwind to this call.
 //!     subsecond::call(|| {
 //!         for x in 0..5 {
 //!             // Changes to the `println!` will be isolated to this call.
@@ -271,7 +271,7 @@ pub fn call<O>(mut f: impl FnMut() -> O) -> O {
 }
 
 // We use an AtomicPtr with a leaked JumpTable and Relaxed ordering to give us a global jump table
-// with very very little overhead. Reading this amounts of a Relaxed atomic load which basically
+// with very little overhead. Reading this amounts of a Relaxed atomic load which basically
 // is no overhead. We might want to look into using a thread_local with a stop-the-world approach
 // just in case multiple threads try to call the jump table before synchronization with the runtime.
 // For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on

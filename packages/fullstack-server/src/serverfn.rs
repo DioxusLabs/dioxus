@@ -113,7 +113,7 @@ impl ServerFunction {
                                 response.headers_mut().extend(headers);
                             }
 
-                            // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
+                            // if it accepts text/html (i.e., is a plain form post) and doesn't already have a
                             // Location set, then redirect to Referer
                             if accepts_html {
                                 if let Some(referrer) = referrer {
