@@ -19,12 +19,6 @@ pub struct Writer<'a> {
     pub invalid_exprs: Vec<Span>,
 }
 
-struct SourceScan<'a> {
-    pending_comments: Vec<&'a str>,
-    had_empty_line: bool,
-    multiline: Option<Vec<&'a str>>,
-    within_limit: bool,
-}
 
 impl<'a> Writer<'a> {
     pub fn new(raw_src: &'a str, indent: IndentOptions) -> Self {
@@ -855,82 +849,187 @@ impl<'a> Writer<'a> {
             static COMMENT_REGEX: Regex = Regex::new("\"[^\"]*\"|(//.*)").unwrap();
         }
 
-        let pretty_expr = self.retrieve_formatted_expr(&expr).to_string();
+        let pretty = self.retrieve_formatted_expr(&expr).to_string();
+        let source = src_span.source_text().unwrap_or_default();
+        let mut src_lines = source.lines().peekable();
 
-        // Adding comments back to the formatted expression
-        let source_text = src_span.source_text().unwrap_or_default();
-        let mut source_lines = source_text.lines().peekable();
-        let mut output = String::from("");
+        // Comments already in pretty output (from nested rsx!) - skip these from source
+        let pretty_comments: HashSet<_> = pretty
+            .lines()
+            .filter_map(|l| l.trim().starts_with("//").then(|| l.trim()))
+            .collect();
 
-        // Collect all comments from the pretty output so we can skip source comments
-        // already represented in the pretty output.
-        let pretty_comments = self.collect_pretty_comments(&pretty_expr);
+        let mut out = String::new();
 
-        if source_lines.peek().is_none() {
-            output = pretty_expr;
+        if src_lines.peek().is_none() {
+            out = pretty;
         } else {
-            for line in pretty_expr.lines() {
-                let compacted_pretty_line = line.replace(" ", "").replace(",", "");
-                let trimmed_pretty_line = line.trim();
+            for line in pretty.lines() {
+                let trimmed = line.trim();
+                let compacted = line.replace(" ", "").replace(",", "");
 
-                // Comments already in pretty output should be output directly.
-                if trimmed_pretty_line.starts_with("//") {
-                    self.consume_pretty_comment_line(&mut output, line, &mut source_lines);
+                // Pretty comments: consume matching source lines, preserve preceding empty lines
+                if trimmed.starts_with("//") {
+                    if !out.is_empty() {
+                        out.push('\n');
+                    }
+                    let mut had_empty = false;
+                    while let Some(s) = src_lines.peek() {
+                        let t = s.trim();
+                        if t.is_empty() {
+                            had_empty = true;
+                            src_lines.next();
+                        } else if t == trimmed {
+                            src_lines.next();
+                            break;
+                        } else {
+                            break;
+                        }
+                    }
+                    if had_empty {
+                        out.push('\n');
+                    }
+                    out.push_str(line);
                     continue;
                 }
 
-                // Empty lines in pretty output should be preserved.
-                if trimmed_pretty_line.is_empty() {
-                    self.consume_pretty_empty_line(&mut output, &mut source_lines);
+                // Pretty empty lines: preserve and sync with source
+                if trimmed.is_empty() {
+                    if !out.is_empty() {
+                        out.push('\n');
+                    }
+                    while src_lines.peek().map(|s| s.trim().is_empty()).unwrap_or(false) {
+                        src_lines.next();
+                    }
                     continue;
                 }
 
-                if !output.is_empty() {
-                    output.push('\n');
+                if !out.is_empty() {
+                    out.push('\n');
                 }
 
-                let scan = self.scan_source_for_pretty_line(
-                    &mut source_lines,
-                    &compacted_pretty_line,
-                    &pretty_comments,
-                );
+                // Scan source for comments/empty lines before the matching line
+                let mut pending_comments = Vec::new();
+                let mut had_empty = false;
+                let mut multiline: Option<Vec<&str>> = None;
 
-                // Output empty line if we had one before the match (or before comments)
-                if scan.had_empty_line && scan.within_limit {
-                    output.push('\n');
+                while let Some(src) = src_lines.peek() {
+                    let src_trimmed = src.trim();
+
+                    if src_trimmed.is_empty() || src_trimmed.starts_with("//") {
+                        if src_trimmed.is_empty() {
+                            if pending_comments.is_empty() {
+                                had_empty = true;
+                            }
+                        } else if !pretty_comments.contains(src_trimmed) {
+                            pending_comments.push(src_trimmed);
+                        }
+                        src_lines.next();
+                        continue;
+                    }
+
+                    let src_compacted = src.replace(" ", "").replace(",", "");
+
+                    // Exact match
+                    if src_compacted.contains(&compacted) {
+                        break;
+                    }
+
+                    // Multi-line method chain (e.g., foo\n  .bar()\n  .baz())
+                    if !src_compacted.is_empty() && compacted.starts_with(&src_compacted) {
+                        let is_call = src_trimmed.ends_with('(')
+                            || src_trimmed.ends_with(',')
+                            || src_trimmed.ends_with('{');
+                        if !is_call {
+                            multiline = Some(vec![*src]);
+                            break;
+                        }
+                    }
+
+                    // Non-matching line - clear pending and skip
+                    pending_comments.clear();
+                    had_empty = false;
+                    src_lines.next();
+                    break;
                 }
 
-                // Output pending comments (only if we found a match within reasonable depth)
-                if scan.within_limit {
-                    self.emit_pending_comments(
-                        &mut output,
-                        line,
-                        trimmed_pretty_line,
-                        &scan.pending_comments,
-                    );
+                // Output empty line if needed
+                if had_empty {
+                    out.push('\n');
                 }
 
-                // Handle multi-line source expressions
-                if let Some(mut multiline_source_lines) = scan.multiline {
-                    _ = source_lines.next();
-                    self.extend_multiline_source(
-                        &mut source_lines,
-                        &compacted_pretty_line,
-                        &mut multiline_source_lines,
-                    );
-                    self.write_multiline_source(&mut output, line, &multiline_source_lines);
+                // Output pending comments
+                for comment in &pending_comments {
+                    for c in line.chars().take_while(|c| c.is_whitespace()) {
+                        out.push(c);
+                    }
+                    if matches!(trimmed.chars().next(), Some(')' | '}' | ']')) {
+                        out.push_str(self.out.indent.indent_str());
+                    }
+                    out.push_str(comment);
+                    out.push('\n');
+                }
+
+                // Handle multi-line method chains
+                if let Some(mut ml) = multiline {
+                    src_lines.next();
+                    let mut acc = ml[0].replace(" ", "").replace(",", "");
+
+                    while let Some(src) = src_lines.peek() {
+                        let t = src.trim();
+                        if t.starts_with("//") {
+                            ml.push(src);
+                            src_lines.next();
+                            continue;
+                        }
+                        if t.is_empty() {
+                            src_lines.next();
+                            continue;
+                        }
+
+                        acc.push_str(&src.replace(" ", "").replace(",", ""));
+                        ml.push(src);
+
+                        if acc.contains(&compacted) {
+                            src_lines.next();
+                            break;
+                        }
+
+                        let cont = t.starts_with('.')
+                            || t.starts_with("&&")
+                            || t.starts_with("||")
+                            || matches!(t.chars().next(), Some('+' | '-' | '*' | '/' | '?'));
+
+                        if cont || compacted.starts_with(&acc) {
+                            src_lines.next();
+                            continue;
+                        }
+                        break;
+                    }
+
+                    // Write multi-line with adjusted indentation
+                    let base_indent = ml[0].chars().take_while(|c| c.is_whitespace()).count();
+                    let target: String = line.chars().take_while(|c| c.is_whitespace()).collect();
+
+                    for (i, src_line) in ml.iter().enumerate() {
+                        let indent = src_line.chars().take_while(|c| c.is_whitespace()).count();
+                        out.push_str(&target);
+                        for _ in 0..indent.saturating_sub(base_indent) {
+                            out.push(' ');
+                        }
+                        out.push_str(src_line.trim());
+                        if i < ml.len() - 1 {
+                            out.push('\n');
+                        }
+                    }
                 } else {
-                    // Single-line case
-                    output.push_str(line);
-
-                    let source_line = source_lines.next();
-
-                    // Write any inline comments
-                    if let Some(source_line) = source_line {
-                        if let Some(captures) = COMMENT_REGEX.with(|f| f.captures(source_line)) {
-                            if let Some(comment) = captures.get(1) {
-                                output.push_str(" // ");
-                                output.push_str(comment.as_str().replace("//", "").trim());
+                    // Single line - output pretty line and capture inline comments
+                    out.push_str(line);
+                    if let Some(src_line) = src_lines.next() {
+                        if let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line)) {
+                            if let Some(c) = cap.get(1) {
+                                out.push_str(" // ");
+                                out.push_str(c.as_str().replace("//", "").trim());
                             }
                         }
                     }
@@ -938,237 +1037,8 @@ impl<'a> Writer<'a> {
             }
         }
 
-        self.write_mulitiline_tokens(output)?;
-
+        self.write_mulitiline_tokens(out)?;
         Ok(())
-    }
-
-    fn collect_pretty_comments<'b>(&self, pretty_expr: &'b str) -> HashSet<&'b str> {
-        pretty_expr
-            .lines()
-            .filter_map(|line| {
-                let trimmed = line.trim();
-                if trimmed.starts_with("//") {
-                    Some(trimmed)
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    fn consume_pretty_comment_line<'s>(
-        &self,
-        output: &mut String,
-        line: &str,
-        source_lines: &mut std::iter::Peekable<std::str::Lines<'s>>,
-    ) {
-        if !output.is_empty() {
-            output.push('\n');
-        }
-
-        let mut had_preceding_empty = false;
-        while let Some(src) = source_lines.peek() {
-            let trimmed = src.trim();
-            if trimmed.is_empty() {
-                had_preceding_empty = true;
-                _ = source_lines.next();
-            } else if trimmed == line.trim() {
-                _ = source_lines.next();
-                break;
-            } else {
-                break;
-            }
-        }
-
-        if had_preceding_empty {
-            output.push('\n');
-        }
-
-        output.push_str(line);
-    }
-
-    fn consume_pretty_empty_line<'s>(
-        &self,
-        output: &mut String,
-        source_lines: &mut std::iter::Peekable<std::str::Lines<'s>>,
-    ) {
-        if !output.is_empty() {
-            output.push('\n');
-        }
-
-        while let Some(src) = source_lines.peek() {
-            if src.trim().is_empty() {
-                _ = source_lines.next();
-            } else {
-                break;
-            }
-        }
-    }
-
-    fn scan_source_for_pretty_line<'s>(
-        &self,
-        source_lines: &mut std::iter::Peekable<std::str::Lines<'s>>,
-        compacted_pretty_line: &str,
-        pretty_comments: &HashSet<&str>,
-    ) -> SourceScan<'s> {
-        let mut pending_comments: Vec<&str> = Vec::new();
-        let mut had_empty_line = false;
-        let mut multiline: Option<Vec<&str>> = None;
-        let mut skipped_lines = false;
-
-        while let Some(src) = source_lines.peek() {
-            let trimmed_src = src.trim();
-
-            if trimmed_src.starts_with("//") || trimmed_src.is_empty() {
-                let is_already_in_pretty = pretty_comments.contains(trimmed_src);
-
-                if trimmed_src.is_empty() {
-                    if pending_comments.is_empty() {
-                        had_empty_line = true;
-                    }
-                } else if !is_already_in_pretty {
-                    pending_comments.push(trimmed_src);
-                }
-
-                _ = source_lines.next();
-                continue;
-            }
-
-            let compacted_src_line = src.replace(" ", "").replace(",", "");
-
-            if compacted_src_line.contains(compacted_pretty_line) {
-                break;
-            }
-
-            if !compacted_src_line.is_empty()
-                && compacted_pretty_line.starts_with(&compacted_src_line)
-            {
-                let ends_with_call = trimmed_src.ends_with('(')
-                    || trimmed_src.ends_with(',')
-                    || trimmed_src.ends_with('{');
-                if !ends_with_call {
-                    multiline = Some(vec![*src]);
-                    break;
-                }
-            }
-
-            pending_comments.clear();
-            had_empty_line = false;
-            skipped_lines = true;
-
-            if skipped_lines {
-                _ = source_lines.next();
-                break;
-            }
-
-            _ = source_lines.next();
-        }
-
-        SourceScan {
-            pending_comments,
-            had_empty_line,
-            multiline,
-            within_limit: !skipped_lines,
-        }
-    }
-
-    fn emit_pending_comments(
-        &self,
-        output: &mut String,
-        line: &str,
-        trimmed_pretty_line: &str,
-        pending_comments: &[&str],
-    ) {
-        for comment in pending_comments {
-            for s in line.chars().take_while(|c| c.is_whitespace()) {
-                output.push(s);
-            }
-            if matches!(trimmed_pretty_line.chars().next(), Some(')' | '}' | ']')) {
-                output.push_str(self.out.indent.indent_str());
-            }
-            output.push_str(comment);
-            output.push('\n');
-        }
-    }
-
-    fn extend_multiline_source<'s>(
-        &self,
-        source_lines: &mut std::iter::Peekable<std::str::Lines<'s>>,
-        compacted_pretty_line: &str,
-        multiline_source_lines: &mut Vec<&'s str>,
-    ) {
-        let mut accumulated_src = multiline_source_lines[0].replace(" ", "").replace(",", "");
-
-        while let Some(src) = source_lines.peek() {
-            let trimmed_src = src.trim();
-
-            if trimmed_src.starts_with("//") {
-                multiline_source_lines.push(src);
-                _ = source_lines.next();
-                continue;
-            }
-
-            if trimmed_src.is_empty() {
-                _ = source_lines.next();
-                continue;
-            }
-
-            let compacted_src_line = src.replace(" ", "").replace(",", "");
-            accumulated_src.push_str(&compacted_src_line);
-            multiline_source_lines.push(src);
-
-            if accumulated_src.contains(compacted_pretty_line) {
-                _ = source_lines.next();
-                break;
-            }
-
-            let is_continuation = trimmed_src.starts_with('.')
-                || trimmed_src.starts_with("&&")
-                || trimmed_src.starts_with("||")
-                || trimmed_src.starts_with('+')
-                || trimmed_src.starts_with('-')
-                || trimmed_src.starts_with('*')
-                || trimmed_src.starts_with('/')
-                || trimmed_src.starts_with('?');
-
-            if is_continuation || compacted_pretty_line.starts_with(&accumulated_src) {
-                _ = source_lines.next();
-                continue;
-            }
-
-            break;
-        }
-    }
-
-    fn write_multiline_source(
-        &self,
-        output: &mut String,
-        line: &str,
-        multiline_source_lines: &[&str],
-    ) {
-        let first_src_indent = multiline_source_lines
-            .first()
-            .map(|s| s.chars().take_while(|c| c.is_whitespace()).count())
-            .unwrap_or(0);
-
-        let target_indent: String = line.chars().take_while(|c| c.is_whitespace()).collect();
-
-        for (idx, src_line) in multiline_source_lines.iter().enumerate() {
-            let trimmed = src_line.trim();
-            let src_indent = src_line.chars().take_while(|c| c.is_whitespace()).count();
-            let extra_indent = src_indent.saturating_sub(first_src_indent);
-
-            output.push_str(&target_indent);
-            for _ in 0..extra_indent {
-                output.push(' ');
-            }
-            output.push_str(trimmed);
-
-            if idx < multiline_source_lines.len() - 1 {
-                output.push('\n');
-            }
-        }
     }
 
     fn write_mulitiline_tokens(&mut self, out: String) -> Result {
