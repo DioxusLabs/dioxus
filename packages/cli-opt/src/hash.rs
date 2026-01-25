@@ -127,23 +127,6 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
     Ok(())
 }
 
-/// Hash all files in a directory recursively
-fn hash_folder_recursive(source: &Path, hasher: &mut impl Hasher) -> anyhow::Result<()> {
-    for entry in std::fs::read_dir(source)?.flatten() {
-        let path = entry.path();
-        // Hash the relative path to include directory structure in the hash
-        if let Some(file_name) = path.file_name() {
-            hasher.write(file_name.to_string_lossy().as_bytes());
-        }
-        if path.is_dir() {
-            hash_folder_recursive(&path, hasher)?;
-        } else if path.is_file() {
-            hash_file_contents(&path, hasher)?;
-        }
-    }
-    Ok(())
-}
-
 /// Add a hash to the asset, or log an error if it fails
 pub fn add_hash_to_asset(asset: &mut BundledAsset) {
     let source = asset.absolute_source_path();

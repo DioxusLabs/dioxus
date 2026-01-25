@@ -6,7 +6,6 @@ pub mod macro_helpers;
 pub use manganis_macro::asset;
 pub use manganis_macro::css_module;
 pub use manganis_macro::option_asset;
-pub use manganis_macro::widget;
 
 pub use manganis_core::{
     // Core asset types

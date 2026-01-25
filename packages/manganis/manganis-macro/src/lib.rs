@@ -15,7 +15,6 @@ pub(crate) mod asset;
 pub(crate) mod css_module;
 pub(crate) mod ffi;
 pub(crate) mod linker;
-pub(crate) mod widget;
 
 use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 
@@ -283,50 +282,6 @@ pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
         Ok(parser) => parser.generate().into(),
         Err(err) => err.to_compile_error().into(),
     }
-}
-
-/// Embed an Apple Widget Extension for Live Activities
-///
-/// This macro embeds metadata about a widget extension that should be compiled
-/// and bundled with the app. It uses the SymbolData system to avoid the buffer
-/// size limitations of the legacy asset system.
-///
-/// # Syntax
-///
-/// ```rust,ignore
-/// manganis::widget!(
-///     "/widgets/LocationWidget",
-///     display_name = "Location Widget",
-///     bundle_id_suffix = "location-widget",
-///     deployment_target = "17.0"
-/// );
-/// ```
-///
-/// # Parameters
-///
-/// - **Path**: Path to the Swift package containing the widget extension (relative to crate root)
-/// - **display_name**: Display name shown in the widget gallery
-/// - **bundle_id_suffix**: Suffix for the bundle identifier (e.g., "location-widget" becomes com.app.id.location-widget)
-/// - **deployment_target**: Minimum iOS version (defaults to "17.0")
-///
-/// # Example
-///
-/// ```rust,ignore
-/// // In your main.rs or lib.rs
-/// manganis::widget!(
-///     "/widgets/LocationWidget",
-///     display_name = "Location Widget",
-///     bundle_id_suffix = "location-widget"
-/// );
-///
-/// fn main() {
-///     // Widget extension will be compiled and bundled automatically by dx
-/// }
-/// ```
-#[proc_macro]
-pub fn widget(input: TokenStream) -> TokenStream {
-    let widget = parse_macro_input!(input as widget::WidgetParser);
-    widget.generate().into()
 }
 
 fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {

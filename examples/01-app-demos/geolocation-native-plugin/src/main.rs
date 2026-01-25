@@ -14,24 +14,6 @@ use plugin::{
     Geolocation, LiveActivityResult, PermissionState, PermissionStatus, Position, PositionOptions,
 };
 
-/// Widget Extension for displaying Live Activity on lock screen (iOS 16.2+)
-///
-/// This widget!() macro tells the CLI to:
-/// 1. Compile the Swift package at `src/ios/widget`
-/// 2. Create a `.appex` bundle with proper Info.plist
-/// 3. Install it to the app's `PlugIns/` folder
-///
-/// The widget provides the lock screen UI for Live Activities started by the plugin.
-/// The `module_name` MUST match the main Swift plugin's module name for ActivityKit
-/// type matching to work (both must define `GeolocationPlugin.LocationPermissionAttributes`).
-manganis::widget!(
-    "/src/ios/widget",
-    display_name = "Location Widget",
-    bundle_id_suffix = "location-widget",
-    module_name = "GeolocationPlugin",
-    deployment_target = "17.0"
-);
-
 fn main() {
     dioxus::launch(App);
 }
