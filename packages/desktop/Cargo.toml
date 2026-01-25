@@ -15,26 +15,35 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-document = { workspace = true }
 dioxus-signals = { workspace = true, optional = true }
-dioxus-interpreter-js = { workspace = true, features = ["binary-protocol", "serialize"] }
+dioxus-interpreter-js = { workspace = true, features = [
+    "binary-protocol",
+    "serialize",
+] }
 dioxus-cli-config = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
+anyhow = { workspace = true }
+image = { workspace = true }
 serde = "1.0.219"
 serde_json = "1.0.140"
 thiserror = { workspace = true }
 tracing = { workspace = true }
-wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
+wry = { workspace = true, default-features = false, features = [
+    "os-webview",
+    "protocol",
+    "drag-drop",
+] }
 futures-channel = { workspace = true }
 tokio = { workspace = true, features = [
-  "sync",
-  "rt-multi-thread",
-  "rt",
-  "time",
-  "macros",
-  "fs",
-  "io-util",
+    "sync",
+    "rt-multi-thread",
+    "rt",
+    "time",
+    "macros",
+    "fs",
+    "io-util",
 ], optional = true }
 infer = { workspace = true }
 dunce = { workspace = true }
@@ -57,7 +66,12 @@ webbrowser = { workspace = true }
 signal-hook = "0.3.18"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "linux-body"] }
+wry = { workspace = true, features = [
+    "os-webview",
+    "protocol",
+    "drag-drop",
+    "linux-body",
+] }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.7.0"
@@ -104,12 +118,12 @@ features = ["tokio_runtime", "devtools"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 default-features = false
 targets = [
-  "x86_64-unknown-linux-gnu",
-  "x86_64-pc-windows-msvc",
-  "aarch64-apple-darwin",
-  "aarch64-apple-ios",
-  "aarch64-linux-android",
-  "armv7-linux-androideabi",
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+    "aarch64-apple-ios",
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
 ]
 
 [dev-dependencies]
