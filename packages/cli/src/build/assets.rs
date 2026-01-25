@@ -38,9 +38,7 @@ use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
-use manganis_core::{
-    AndroidArtifactMetadata, AppleWidgetExtensionMetadata, SwiftPackageMetadata, SymbolData,
-};
+use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -707,9 +705,6 @@ pub(crate) struct SymbolExtractionResult {
 
     /// Swift packages discovered in the binary
     pub swift_packages: Vec<SwiftPackageMetadata>,
-
-    /// Apple Widget Extensions discovered in the binary
-    pub widget_extensions: Vec<AppleWidgetExtensionMetadata>,
 }
 
 /// Find all assets in the given file, hash them, and write them back to the file.
@@ -734,7 +729,6 @@ pub(crate) async fn extract_symbols_from_file(
     let mut assets = Vec::new();
     let mut android_artifacts = Vec::new();
     let mut swift_packages = Vec::new();
-    let mut widget_extensions = Vec::new();
     let mut write_entries = Vec::new();
 
     // Read each symbol from the data section using the offsets
@@ -762,51 +756,37 @@ pub(crate) async fn extract_symbols_from_file(
         // The deserialization should work even with padding (zeros) at the end
         if let Some(result) = version.deserialize(data_in_range) {
             match result {
-                SymbolDataOrAsset::SymbolData(symbol_data) => {
-                    match *symbol_data {
-                        SymbolData::Asset(asset) => {
-                            tracing::debug!(
-                                "Found asset (via SymbolData) at offset {offset}: {:?}",
-                                asset.absolute_source_path()
-                            );
-                            let asset_index = assets.len();
-                            assets.push(asset);
-                            write_entries.push(AssetWriteEntry::new(
-                                symbol,
-                                asset_index,
-                                AssetRepresentation::SymbolData,
-                            ));
-                        }
-                        SymbolData::Permission(_) => {
-                            // Permissions are now configured via Dioxus.toml, not extracted from binary
-                            tracing::trace!(
-                                "Ignoring legacy permission! macro at offset {offset} - use [permissions] in Dioxus.toml instead"
-                            );
-                        }
-                        SymbolData::AndroidArtifact(meta) => {
-                            tracing::debug!(
-                                "Found Android artifact declaration for plugin {}",
-                                meta.plugin_name.as_str()
-                            );
-                            android_artifacts.push(meta);
-                        }
-                        SymbolData::SwiftPackage(meta) => {
-                            tracing::debug!(
-                                "Found Swift package declaration for plugin {}",
-                                meta.plugin_name.as_str()
-                            );
-                            swift_packages.push(meta);
-                        }
-                        SymbolData::AppleWidgetExtension(meta) => {
-                            tracing::debug!(
-                                "Found Apple Widget Extension declaration: {}",
-                                meta.display_name.as_str()
-                            );
-                            widget_extensions.push(meta);
-                        }
-                        _ => {}
+                SymbolDataOrAsset::SymbolData(symbol_data) => match *symbol_data {
+                    SymbolData::Asset(asset) => {
+                        tracing::debug!(
+                            "Found asset (via SymbolData) at offset {offset}: {:?}",
+                            asset.absolute_source_path()
+                        );
+                        let asset_index = assets.len();
+                        assets.push(asset);
+                        write_entries.push(AssetWriteEntry::new(
+                            symbol,
+                            asset_index,
+                            AssetRepresentation::SymbolData,
+                        ));
                     }
-                }
+
+                    SymbolData::AndroidArtifact(meta) => {
+                        tracing::debug!(
+                            "Found Android artifact declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        android_artifacts.push(meta);
+                    }
+                    SymbolData::SwiftPackage(meta) => {
+                        tracing::debug!(
+                            "Found Swift package declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        swift_packages.push(meta);
+                    }
+                    _ => {}
+                },
                 SymbolDataOrAsset::Asset(asset) => {
                     tracing::debug!(
                         "Found asset (old format) at offset {offset}: {:?}",
@@ -900,7 +880,6 @@ pub(crate) async fn extract_symbols_from_file(
         assets,
         android_artifacts,
         swift_packages,
-        widget_extensions,
     })
 }
 

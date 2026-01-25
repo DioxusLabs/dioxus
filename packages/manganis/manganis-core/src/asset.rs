@@ -22,8 +22,10 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
+
     /// The bundled path of the asset
     bundled_path: ConstStr,
+
     /// The options for the asset
     options: AssetOptions,
 }

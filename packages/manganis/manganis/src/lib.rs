@@ -25,7 +25,7 @@ pub use manganis_core::{
 
 // Re-export metadata types for FFI and sidecar macros
 pub use manganis_core::SwiftPackageMetadata;
-pub use manganis_core::{AppleWidgetExtensionMetadata, SymbolData};
+pub use manganis_core::SymbolData;
 
 // FFI utilities and plugin metadata for Dioxus mobile platform APIs
 //

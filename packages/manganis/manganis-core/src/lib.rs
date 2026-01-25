@@ -22,5 +22,5 @@ pub use css_module::*;
 mod css_module_parser;
 pub use css_module_parser::*;
 
-mod permissions;
-pub use permissions::*;
+mod ffi;
+pub use ffi::*;

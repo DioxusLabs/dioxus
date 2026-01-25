@@ -336,7 +336,7 @@ use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
-use manganis_core::{AndroidArtifactMetadata, AppleWidgetExtensionMetadata, AssetVariant};
+use manganis_core::{AndroidArtifactMetadata, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString};
@@ -456,7 +456,6 @@ pub struct BuildArtifacts {
     pub(crate) assets: AssetManifest,
     pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
     pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
-    pub(crate) widget_extensions: Vec<AppleWidgetExtensionMetadata>,
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1118,14 +1117,14 @@ impl BuildRequest {
                         .context("Failed to embed Swift standard libraries")?;
                 }
 
-                // Compile and install Apple Widget Extensions
-                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-                    && !artifacts.widget_extensions.is_empty()
-                {
-                    self.compile_widget_extensions(&artifacts.widget_extensions)
-                        .await
-                        .context("Failed to compile widget extensions")?;
-                }
+                // // Compile and install Apple Widget Extensions
+                // if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+                //     && !artifacts.widget_extensions.is_empty()
+                // {
+                //     self.compile_widget_extensions(&artifacts.widget_extensions)
+                //         .await
+                //         .context("Failed to compile widget extensions")?;
+                // }
 
                 self.update_manifests_with_permissions()
                     .context("Failed to update manifests with permissions")?;
@@ -1317,7 +1316,7 @@ impl BuildRequest {
         }
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
-        let (assets, android_artifacts, swift_sources, widget_extensions) =
+        let (assets, android_artifacts, swift_sources) =
             self.collect_assets_and_metadata(&exe, ctx).await?;
 
         let time_end = SystemTime::now();
@@ -1338,7 +1337,6 @@ impl BuildRequest {
             assets,
             android_artifacts,
             swift_sources,
-            widget_extensions,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1359,7 +1357,6 @@ impl BuildRequest {
         AssetManifest,
         Vec<AndroidArtifactMetadata>,
         Vec<SwiftPackageMetadata>,
-        Vec<AppleWidgetExtensionMetadata>,
     )> {
         use super::assets::extract_symbols_from_file;
 
@@ -1368,7 +1365,7 @@ impl BuildRequest {
         let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
         if skip_assets && !needs_android_artifacts && !needs_swift_packages {
-            return Ok((AssetManifest::default(), Vec::new(), Vec::new(), Vec::new()));
+            return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
         }
 
         ctx.status_extracting_assets();
@@ -1376,7 +1373,6 @@ impl BuildRequest {
             assets: extracted_assets,
             android_artifacts,
             swift_packages,
-            widget_extensions,
         } = extract_symbols_from_file(exe).await?;
 
         let asset_manifest = if skip_assets {
@@ -1443,27 +1439,7 @@ impl BuildRequest {
             }
         }
 
-        if !widget_extensions.is_empty() {
-            tracing::debug!(
-                "Found {} Apple Widget Extension declaration(s)",
-                widget_extensions.len()
-            );
-            for widget in &widget_extensions {
-                tracing::debug!(
-                    "  Widget: {} (path={} bundle_id_suffix={})",
-                    widget.display_name.as_str(),
-                    widget.package_path.as_str(),
-                    widget.bundle_id_suffix.as_str()
-                );
-            }
-        }
-
-        Ok((
-            asset_manifest,
-            android_artifacts,
-            swift_packages,
-            widget_extensions,
-        ))
+        Ok((asset_manifest, android_artifacts, swift_packages))
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -1771,79 +1747,79 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Compile and install Apple Widget Extensions from embedded metadata.
-    ///
-    /// This processes widget extensions discovered via the widget!() macro by:
-    /// 1. Compiling the Swift package as a Widget Extension executable
-    /// 2. Creating the .appex bundle structure with Info.plist
-    /// 3. Installing to the app's PlugIns folder
-    async fn compile_widget_extensions(
-        &self,
-        widget_extensions: &[AppleWidgetExtensionMetadata],
-    ) -> Result<()> {
-        tracing::info!(
-            "Compiling {} Apple Widget Extension(s)",
-            widget_extensions.len()
-        );
+    // /// Compile and install Apple Widget Extensions from embedded metadata.
+    // ///
+    // /// This processes widget extensions discovered via the widget!() macro by:
+    // /// 1. Compiling the Swift package as a Widget Extension executable
+    // /// 2. Creating the .appex bundle structure with Info.plist
+    // /// 3. Installing to the app's PlugIns folder
+    // async fn compile_widget_extensions(
+    //     &self,
+    //     widget_extensions: &[AppleWidgetExtensionMetadata],
+    // ) -> Result<()> {
+    //     tracing::info!(
+    //         "Compiling {} Apple Widget Extension(s)",
+    //         widget_extensions.len()
+    //     );
 
-        let build_dir = self.target_dir.join("widget-build");
-        std::fs::create_dir_all(&build_dir)?;
+    //     let build_dir = self.target_dir.join("widget-build");
+    //     std::fs::create_dir_all(&build_dir)?;
 
-        // Get the app bundle identifier for deriving widget bundle IDs
-        let app_bundle_id = self.bundle_identifier();
+    //     // Get the app bundle identifier for deriving widget bundle IDs
+    //     let app_bundle_id = self.bundle_identifier();
 
-        let plugins_dir = self.plugins_folder();
-        std::fs::create_dir_all(&plugins_dir)?;
+    //     let plugins_dir = self.plugins_folder();
+    //     std::fs::create_dir_all(&plugins_dir)?;
 
-        for meta in widget_extensions {
-            let widget_source = super::ios_swift::AppleWidgetSource {
-                source_path: PathBuf::from(meta.package_path.as_str()),
-                display_name: meta.display_name.as_str().to_string(),
-                bundle_id_suffix: meta.bundle_id_suffix.as_str().to_string(),
-                deployment_target: meta.deployment_target.as_str().to_string(),
-                module_name: meta.module_name.as_str().to_string(),
-            };
+    //     for meta in widget_extensions {
+    //         let widget_source = super::ios_swift::AppleWidgetSource {
+    //             source_path: PathBuf::from(meta.package_path.as_str()),
+    //             display_name: meta.display_name.as_str().to_string(),
+    //             bundle_id_suffix: meta.bundle_id_suffix.as_str().to_string(),
+    //             deployment_target: meta.deployment_target.as_str().to_string(),
+    //             module_name: meta.module_name.as_str().to_string(),
+    //         };
 
-            // Compile the widget extension
-            let appex_path = super::ios_swift::compile_apple_widget(
-                &widget_source,
-                &self.triple,
-                &build_dir,
-                &app_bundle_id,
-                self.release,
-            )
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to compile widget extension '{}'",
-                    widget_source.display_name
-                )
-            })?;
+    //         // Compile the widget extension
+    //         let appex_path = super::ios_swift::compile_apple_widget(
+    //             &widget_source,
+    //             &self.triple,
+    //             &build_dir,
+    //             &app_bundle_id,
+    //             self.release,
+    //         )
+    //         .await
+    //         .with_context(|| {
+    //             format!(
+    //                 "Failed to compile widget extension '{}'",
+    //                 widget_source.display_name
+    //             )
+    //         })?;
 
-            // Install the .appex bundle to PlugIns/
-            let appex_name = appex_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Widget.appex".to_string());
-            let dest_path = plugins_dir.join(&appex_name);
+    //         // Install the .appex bundle to PlugIns/
+    //         let appex_name = appex_path
+    //             .file_name()
+    //             .map(|n| n.to_string_lossy().to_string())
+    //             .unwrap_or_else(|| "Widget.appex".to_string());
+    //         let dest_path = plugins_dir.join(&appex_name);
 
-            // Remove existing if present
-            if dest_path.exists() {
-                std::fs::remove_dir_all(&dest_path)?;
-            }
+    //         // Remove existing if present
+    //         if dest_path.exists() {
+    //             std::fs::remove_dir_all(&dest_path)?;
+    //         }
 
-            // Copy the entire .appex bundle
-            self.copy_dir_recursive(&appex_path, &dest_path)?;
+    //         // Copy the entire .appex bundle
+    //         self.copy_dir_recursive(&appex_path, &dest_path)?;
 
-            tracing::info!(
-                "Installed widget extension '{}' to {}",
-                widget_source.display_name,
-                dest_path.display()
-            );
-        }
+    //         tracing::info!(
+    //             "Installed widget extension '{}' to {}",
+    //             widget_source.display_name,
+    //             dest_path.display()
+    //         );
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     /// Update platform manifests with permissions from Dioxus.toml config
     ///
@@ -2573,13 +2549,12 @@ impl BuildRequest {
         }
 
         // Now extract linker metadata from the fat binary (assets, plugin data)
-        let (assets, android_artifacts, swift_sources, widget_extensions) = self
+        let (assets, android_artifacts, swift_sources) = self
             .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
         artifacts.assets = assets;
         artifacts.android_artifacts = android_artifacts;
         artifacts.swift_sources = swift_sources;
-        artifacts.widget_extensions = widget_extensions;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
