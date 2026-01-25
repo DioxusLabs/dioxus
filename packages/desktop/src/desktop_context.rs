@@ -8,9 +8,10 @@ use crate::{
     webview::PendingWebview,
     AssetRequest, Config, WindowCloseBehaviour, WryEventHandler,
 };
-use dioxus_core::{Callback, VirtualDom};
+use dioxus_core::{Callback, ElementId, VirtualDom};
+use rustc_hash::FxHashMap;
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     future::{Future, IntoFuture},
     pin::Pin,
     rc::{Rc, Weak},
@@ -70,6 +71,10 @@ pub struct DesktopService {
     pub(crate) file_hover: NativeFileHover,
     pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
 
+    /// Cleanup closures for mounted elements, keyed by ElementId.
+    /// These are invoked when the element is freed via the FreeId mutation.
+    pub(crate) element_cleanup_closures: RefCell<FxHashMap<ElementId, Box<dyn FnOnce()>>>,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -100,8 +105,16 @@ impl DesktopService {
             file_hover,
             close_behaviour: Rc::new(Cell::new(close_behaviour)),
             query: Default::default(),
+            element_cleanup_closures: RefCell::new(FxHashMap::default()),
             #[cfg(target_os = "ios")]
             views: Default::default(),
+        }
+    }
+
+    /// Invoke the cleanup closure for an element, if one was registered.
+    pub(crate) fn invoke_cleanup(&self, id: ElementId) {
+        if let Some(cleanup) = self.element_cleanup_closures.borrow_mut().remove(&id) {
+            cleanup();
         }
     }
 

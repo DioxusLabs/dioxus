@@ -263,6 +263,13 @@ impl WriteMutations for MutationWriter<'_> {
             self.state.event_handler_counts[idx] -= 1;
         }
     }
+
+    fn free_id(&mut self, id: ElementId) {
+        // Clear the node_id_mapping for this element to allow the NodeId to be freed
+        if id.0 < self.state.node_id_mapping.len() {
+            self.state.node_id_mapping[id.0] = None;
+        }
+    }
 }
 
 fn create_template_node(docm: &mut DocumentMutator<'_>, node: &TemplateNode) -> NodeId {
