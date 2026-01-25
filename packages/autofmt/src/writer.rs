@@ -19,7 +19,6 @@ pub struct Writer<'a> {
     pub invalid_exprs: Vec<Span>,
 }
 
-
 impl<'a> Writer<'a> {
     pub fn new(raw_src: &'a str, indent: IndentOptions) -> Self {
         Self {
@@ -898,7 +897,11 @@ impl<'a> Writer<'a> {
                     if !out.is_empty() {
                         out.push('\n');
                     }
-                    while src_lines.peek().map(|s| s.trim().is_empty()).unwrap_or(false) {
+                    while src_lines
+                        .peek()
+                        .map(|s| s.trim().is_empty())
+                        .unwrap_or(false)
+                    {
                         src_lines.next();
                     }
                     continue;
