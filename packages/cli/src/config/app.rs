@@ -47,6 +47,11 @@ pub(crate) struct ApplicationConfig {
     #[serde(default)]
     pub(crate) android_main_activity: Option<PathBuf>,
 
+    /// Use this file for the file_paths.xml associated with the Android app.
+    /// `dx` will merge any required settings into this file required to build the app
+    #[serde(default)]
+    pub(crate) android_file_paths: Option<PathBuf>,
+
     /// Specified minimum sdk version for gradle to build the app with.
     #[serde(default)]
     pub(crate) android_min_sdk_version: Option<u32>,
