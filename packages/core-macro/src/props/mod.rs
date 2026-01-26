@@ -767,11 +767,11 @@ mod struct_info {
 
         pub fn builder_creation_impl(&self) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref vis,
-                ref name,
-                ref builder_name,
+                vis,
+                name,
+                builder_name,
                 ..
-            } = *self;
+            } = self;
 
             let generics = self.generics.clone();
             let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
@@ -1235,14 +1235,11 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn required_field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref name,
-                ref builder_name,
-                ..
+                name, builder_name, ..
             } = self;
 
             let FieldInfo {
-                name: ref field_name,
-                ..
+                name: field_name, ..
             } = field;
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics

@@ -575,7 +575,7 @@ fn rebind_mutability(f: &FnArg) -> TokenStream {
 fn strip_pat_mutability(pat: &Pat) -> Pat {
     let mut pat = pat.clone();
     // rip off mutability, but still write it out eventually
-    if let Pat::Ident(ref mut pat_ident) = &mut pat {
+    if let Pat::Ident(pat_ident) = &mut pat {
         pat_ident.mutability = None;
     }
 
