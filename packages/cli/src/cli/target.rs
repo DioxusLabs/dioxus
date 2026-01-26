@@ -169,6 +169,10 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     #[serde(default)]
     pub(crate) raw_json_diagnostics: bool,
+
+    #[clap(long, help_heading = HELP_HEADING)]
+    #[serde(default)]
+    pub(crate) disable_js_glue_shim: bool,
 }
 
 impl Anonymized for TargetArgs {
