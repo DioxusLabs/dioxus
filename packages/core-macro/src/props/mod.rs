@@ -1729,10 +1729,10 @@ fn strip_option(type_: &Type) -> Option<Type> {
         let option_segment = segments_iter.next()?;
         if option_segment.ident == "Option" && segments_iter.next().is_none() {
             // It should have a single generic argument
-            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
-                if let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first() {
-                    return Some(ty.clone());
-                }
+            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments
+                && let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first()
+            {
+                return Some(ty.clone());
             }
         }
     }

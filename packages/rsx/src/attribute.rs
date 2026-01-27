@@ -311,13 +311,10 @@ impl Attribute {
         // Or if it is a builtin attribute with a single ident value
         if let (AttributeName::BuiltIn(name), AttributeValue::AttrExpr(expr)) =
             (&self.name, &self.value)
-        {
-            if let Ok(Expr::Path(path)) = expr.as_expr() {
-                if path.path.get_ident() == Some(name) {
-                    return true;
-                }
+            && let Ok(Expr::Path(path)) = expr.as_expr()
+            && path.path.get_ident() == Some(name) {
+                return true;
             }
-        }
 
         false
     }
