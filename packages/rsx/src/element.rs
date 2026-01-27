@@ -1,14 +1,14 @@
 use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use std::fmt::{Display, Formatter};
 use syn::{
+    Ident, LitStr, Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Brace,
-    Ident, LitStr, Result, Token,
 };
 
 /// Parse the VNode::Element type
@@ -704,11 +704,13 @@ mod tests {
         assert_eq!(parsed.diagnostics.len(), 3);
 
         // style should not generate a diagnostic
-        assert!(!parsed
-            .diagnostics
-            .diagnostics
-            .into_iter()
-            .any(|f| f.emit_as_item_tokens().to_string().contains("style")));
+        assert!(
+            !parsed
+                .diagnostics
+                .diagnostics
+                .into_iter()
+                .any(|f| f.emit_as_item_tokens().to_string().contains("style"))
+        );
     }
 
     #[test]

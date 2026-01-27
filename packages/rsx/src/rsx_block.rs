@@ -10,11 +10,11 @@ use crate::innerlude::*;
 use proc_macro2::Span;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
 use syn::{
+    Expr, Ident, LitStr, Token,
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
     spanned::Spanned,
     token::{self, Brace},
-    Expr, Ident, LitStr, Token,
 };
 
 /// An item in the form of

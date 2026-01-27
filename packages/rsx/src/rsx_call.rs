@@ -7,8 +7,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use std::{cell::Cell, fmt::Debug};
 use syn::{
-    parse::{Parse, ParseStream},
     Result,
+    parse::{Parse, ParseStream},
 };
 
 use crate::{BodyNode, TemplateBody};

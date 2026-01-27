@@ -3,9 +3,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
+    Expr, Result, Token,
     parse::{Parse, ParseStream},
     token::Brace,
-    Expr, Result, Token,
 };
 
 use crate::TemplateBody;

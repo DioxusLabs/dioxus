@@ -19,12 +19,13 @@
 use crate::innerlude::*;
 use proc_macro2::TokenStream as TokenStream2;
 use proc_macro2_diagnostics::SpanDiagnosticExt;
-use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::{collections::HashSet, vec};
 use syn::{
+    AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Expr, Ident, PathArguments, Result,
+    token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
