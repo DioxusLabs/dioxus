@@ -6,8 +6,8 @@ use dioxus_core::generation;
 #[test]
 fn text_diff() {
     fn app() -> Element {
-        let gen = generation();
-        rsx!( h1 { "hello {gen}" } )
+        let generation_count = generation();
+        rsx!( h1 { "hello {generation_count}" } )
     }
 
     let mut vdom = VirtualDom::new(app);
@@ -35,9 +35,9 @@ fn text_diff() {
 #[test]
 fn element_swap() {
     fn app() -> Element {
-        let gen = generation();
+        let generation_count = generation();
 
-        match gen % 2 {
+        match generation_count % 2 {
             0 => rsx!( h1 { "hello 1" } ),
             1 => rsx!( h2 { "hello 2" } ),
             _ => unreachable!(),
@@ -87,10 +87,10 @@ fn element_swap() {
 #[test]
 fn attribute_diff() {
     fn app() -> Element {
-        let gen = generation();
+        let generation_count = generation();
 
         // attributes have to be sorted by name
-        let attrs = match gen % 5 {
+        let attrs = match generation_count % 5 {
             0 => vec![Attribute::new(
                 "a",
                 AttributeValue::Text("hello".into()),
