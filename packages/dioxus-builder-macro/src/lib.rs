@@ -18,7 +18,7 @@ use syn::{parse_macro_input, DeriveInput, Error, FnArg, Ident, ItemFn, Pat};
 /// use dioxus_builder::BuilderProps;
 ///
 /// #[derive(Builder, Clone, PartialEq, BuilderProps)]
-/// #[component(MyCoolComponent)]
+/// #[builder_props(component = MyCoolComponent)]
 /// struct MyComponentProps {
 ///     #[builder(into)]
 ///     title: String,
@@ -34,7 +34,7 @@ use syn::{parse_macro_input, DeriveInput, Error, FnArg, Ident, ItemFn, Pat};
 /// This generates:
 /// - `impl Properties for MyComponentProps` with builder() and memoize() methods
 /// - `impl IntoDynNode for MyComponentPropsBuilder<S>` where S: IsComplete
-#[proc_macro_derive(BuilderProps, attributes(component))]
+#[proc_macro_derive(BuilderProps, attributes(builder_props))]
 pub fn derive_builder_props(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -47,7 +47,7 @@ pub fn derive_builder_props(input: TokenStream) -> TokenStream {
 fn derive_builder_props_impl(input: DeriveInput) -> Result<proc_macro2::TokenStream, Error> {
     let struct_name = &input.ident;
 
-    // Find the #[component(ComponentName)] attribute
+    // Find the #[builder_props(component = ComponentName)] attribute
     let component_name = find_component_attr(&input)?;
 
     // Generate the builder type name (e.g., MyComponentProps -> MyComponentPropsBuilder)
@@ -90,15 +90,29 @@ fn derive_builder_props_impl(input: DeriveInput) -> Result<proc_macro2::TokenStr
 
 fn find_component_attr(input: &DeriveInput) -> Result<Ident, Error> {
     for attr in &input.attrs {
-        if attr.path().is_ident("component") {
-            let component_name: Ident = attr.parse_args()?;
-            return Ok(component_name);
+        if attr.path().is_ident("builder_props") {
+            let mut component_name: Option<Ident> = None;
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("component") {
+                    let value: Ident = meta.value()?.parse()?;
+                    component_name = Some(value);
+                    return Ok(());
+                }
+
+                Err(meta.error(
+                    "Unsupported builder_props attribute; expected `component = Name`",
+                ))
+            })?;
+
+            if let Some(name) = component_name {
+                return Ok(name);
+            }
         }
     }
 
     Err(Error::new_spanned(
         &input.ident,
-        "Missing #[component(ComponentName)] attribute. \
+        "Missing #[builder_props(component = ComponentName)] attribute. \
          BuilderProps requires specifying the component function name.",
     ))
 }
@@ -120,7 +134,7 @@ fn to_snake_case(s: &str) -> String {
 /// #[builder_component]
 /// fn Counter(initial: i32, #[builder(into)] label: String) -> Element {
 ///     let count = use_signal(|| initial);
-///     div().text(format!("{}: {}", label, count)).build()
+///     div().text(format!("{}: {}", label, count())).build()
 /// }
 /// // Generates: CounterProps { initial: i32, label: String }
 /// // With full Properties + IntoDynNode implementations
@@ -152,20 +166,36 @@ fn builder_component_impl(func: ItemFn) -> Result<proc_macro2::TokenStream, Erro
     let mut field_names = Vec::new();
     let mut field_types = Vec::new();
     let mut field_attrs: Vec<Vec<_>> = Vec::new();
+    let mut field_patterns: Vec<proc_macro2::TokenStream> = Vec::new();
 
     for arg in &func.sig.inputs {
         if let FnArg::Typed(pat_type) = arg {
             // Extract field name from pattern
-            if let Pat::Ident(pat_ident) = pat_type.pat.as_ref() {
-                field_names.push(&pat_ident.ident);
-                field_types.push(&pat_type.ty);
-                // Collect #[builder(...)] attributes
-                let builder_attrs: Vec<_> = pat_type
-                    .attrs
-                    .iter()
-                    .filter(|a| a.path().is_ident("builder"))
-                    .collect();
-                field_attrs.push(builder_attrs);
+            match pat_type.pat.as_ref() {
+                Pat::Ident(pat_ident) => {
+                    if pat_ident.subpat.is_some() {
+                        return Err(Error::new_spanned(
+                            &pat_type.pat,
+                            "builder_component does not support subpatterns in parameters",
+                        ));
+                    }
+                    field_names.push(&pat_ident.ident);
+                    field_types.push(&pat_type.ty);
+                    field_patterns.push(quote! { #pat_ident });
+                    // Collect #[builder(...)] attributes
+                    let builder_attrs: Vec<_> = pat_type
+                        .attrs
+                        .iter()
+                        .filter(|a| a.path().is_ident("builder"))
+                        .collect();
+                    field_attrs.push(builder_attrs);
+                }
+                _ => {
+                    return Err(Error::new_spanned(
+                        &pat_type.pat,
+                        "builder_component only supports identifier parameters (e.g. `value: Type`)",
+                    ));
+                }
             }
         }
     }
@@ -202,7 +232,7 @@ fn builder_component_impl(func: ItemFn) -> Result<proc_macro2::TokenStream, Erro
 
         #[allow(non_snake_case)]
         #fn_vis fn #fn_name(props: #props_name) -> ::dioxus_core::Element {
-            let #props_name { #(#field_names),* } = props;
+            let #props_name { #(#field_patterns),* } = props;
             #fn_block
         }
     };

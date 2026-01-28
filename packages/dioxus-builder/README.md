@@ -72,7 +72,7 @@ use dioxus::prelude::*;
 use dioxus_builder::{BuilderProps, FunctionComponent};
 
 #[derive(bon::Builder, Clone, PartialEq, BuilderProps)]
-#[component(MyCard)]
+#[builder_props(component = MyCard)]
 struct MyCardProps {
     #[builder(into)]
     title: String,
@@ -96,7 +96,7 @@ use dioxus_builder::builder_component;
 #[builder_component]
 fn Counter(initial: i32, #[builder(into)] label: String) -> Element {
     let count = use_signal(|| initial);
-    div().text(format!("{}: {}", label, count)).build()
+    div().text(format!("{}: {}", label, count())).build()
 }
 
 // Usage:

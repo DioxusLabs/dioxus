@@ -573,7 +573,7 @@ fn test_builder_props_derive() {
     use dioxus_builder::BuilderProps;
 
     #[derive(Builder, Clone, PartialEq, BuilderProps)]
-    #[component(TestDeriveComponent)]
+    #[builder_props(component = TestDeriveComponent)]
     struct TestDeriveProps {
         #[builder(into)]
         label: String,

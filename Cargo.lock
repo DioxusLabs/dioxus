@@ -3407,7 +3407,6 @@ dependencies = [
 name = "builder_demo"
 version = "0.7.2"
 dependencies = [
- "bon",
  "dioxus",
  "dioxus-builder",
 ]

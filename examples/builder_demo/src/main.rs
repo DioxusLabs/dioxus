@@ -1,18 +1,10 @@
 use dioxus::prelude::*;
-use dioxus_builder::{data, BuilderExt, BuilderProps, FunctionComponent};
 use dioxus_builder::*;
+use dioxus_builder::{BuilderExt, FunctionComponent, data};
 // Minimal, type-safe builder pattern with a small counter app.
 
-#[derive(bon::Builder, Clone, PartialEq, BuilderProps)]
-#[component(CounterCard)]
-struct CounterCardProps {
-    #[builder(into)]
-    title: String,
-    count: Signal<i32>,
-}
-
-#[allow(non_snake_case)]
-fn CounterCard(props: CounterCardProps) -> Element {
+#[component(builder)]
+fn CounterCard(#[props(into)] title: String, count: Signal<i32>) -> Element {
     div()
         .class("p-4 rounded-lg border border-gray-200 bg-white shadow-sm")
         .aria_label("Counter component")
@@ -31,11 +23,11 @@ fn CounterCard(props: CounterCardProps) -> Element {
                         .aria_hidden(true)
                         .child(path().d("M12 6v6l4 2")),
                 )
-                .child(h2().class("text-lg font-semibold").text(props.title)),
+                .child(h2().class("text-lg font-semibold").text(title)),
         )
         .child(
             p().class("text-sm text-gray-600")
-                .text(format!("Count is {}", props.count)),
+                .text(format!("Count is {}", count())),
         )
         .build()
 }
@@ -82,7 +74,7 @@ fn app() -> Element {
                             span()
                                 .class("text-lg font-mono text-gray-800")
                                 .aria_live("polite")
-                                .text(count.to_string()),
+                                .text(count().to_string()),
                         )
                         .child(
                             button()

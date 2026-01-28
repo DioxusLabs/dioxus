@@ -1000,7 +1000,7 @@ doc-scrape-examples = true
 
 [[example]]
 name = "builder_demo"
-path = "examples/builder_demo.rs"
+path = "examples/builder_demo/src/main.rs"
 doc-scrape-examples = true
 
 [[example]]
