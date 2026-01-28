@@ -71,7 +71,6 @@ members = [
     "packages/depinfo",
     "packages/component-manifest",
     "packages/dioxus-builder",
-    "packages/dioxus-builder-macro",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -188,7 +187,6 @@ dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.2" }
 dioxus-config-macros = { path = "packages/config-macros", version = "0.7.2" }
 dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.2" }
 dioxus-builder = { path = "packages/dioxus-builder", version = "0.1.0" }
-dioxus-builder-macro = { path = "packages/dioxus-builder-macro", version = "0.1.0" }
 
 generational-box = { path = "packages/generational-box", version = "0.7.2" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.2" }

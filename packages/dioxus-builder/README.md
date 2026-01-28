@@ -8,7 +8,7 @@ This crate provides a fluent builder interface for constructing HTML elements wi
 
 - **Full IDE Autocomplete** - Type-safe builder methods with complete IntelliSense support
 - **Fluent API** - Chain methods naturally: `div().class("foo").id("bar").child(...).build()`
-- **Component Macros** - `#[derive(BuilderProps)]` and `#[builder_component]` remove props boilerplate
+- **Component Builders** - Use `#[component(builder)]` with `#[props(into)]` for typed builders
 - **80+ HTML Elements** - All standard HTML elements with proper namespaces for SVG/MathML
 - **SVG Attributes** - Typed helpers like `.viewBox()`, `.stroke()`, `.d()`, and more
 - **Smart Class Merging** - Multiple `.class()` calls are automatically merged
@@ -31,12 +31,6 @@ dioxus-builder = { version = "0.7" }
 
 # For document head helpers (title, stylesheet, meta tags):
 dioxus-builder = { version = "0.7", features = ["document"] }
-```
-
-If you use the component macros (`BuilderProps` or `builder_component`), add:
-
-```toml
-bon = "3"
 ```
 
 ## Quick Start
@@ -65,36 +59,14 @@ fn app() -> Element {
 
 ## Component Integration
 
-### Derive Props with `BuilderProps`
+### Component Macro: `#[component(builder)]`
 
 ```rust,ignore
 use dioxus::prelude::*;
-use dioxus_builder::{BuilderProps, FunctionComponent};
+use dioxus_builder::FunctionComponent;
 
-#[derive(bon::Builder, Clone, PartialEq, BuilderProps)]
-#[builder_props(component = MyCard)]
-struct MyCardProps {
-    #[builder(into)]
-    title: String,
-}
-
-#[allow(non_snake_case)]
-fn MyCard(props: MyCardProps) -> Element {
-    div().class("card").text(props.title).build()
-}
-
-// Usage:
-// MyCard.new().title("Hello").build()
-```
-
-### Component Macro: `#[builder_component]`
-
-```rust,ignore
-use dioxus::prelude::*;
-use dioxus_builder::builder_component;
-
-#[builder_component]
-fn Counter(initial: i32, #[builder(into)] label: String) -> Element {
+#[component(builder)]
+fn Counter(initial: i32, #[props(into)] label: String) -> Element {
     let count = use_signal(|| initial);
     div().text(format!("{}: {}", label, count())).build()
 }

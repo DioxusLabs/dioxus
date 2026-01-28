@@ -5478,25 +5478,11 @@ version = "0.1.0"
 dependencies = [
  "bon",
  "dioxus",
- "dioxus-builder-macro",
  "dioxus-core",
  "dioxus-document",
  "dioxus-html",
  "dioxus-ssr",
  "parking_lot",
-]
-
-[[package]]
-name = "dioxus-builder-macro"
-version = "0.1.0"
-dependencies = [
- "bon",
- "convert_case 0.8.0",
- "dioxus",
- "dioxus-builder",
- "proc-macro2",
- "quote",
- "syn 2.0.111",
 ]
 
 [[package]]

@@ -60,4 +60,3 @@ pub mod document;
 
 pub use element::*;
 pub use component::*;
-pub use dioxus_builder_macro::{builder_component, BuilderProps};
