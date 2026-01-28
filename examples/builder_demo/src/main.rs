@@ -1,6 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_builder::*;
-use dioxus_builder::{BuilderExt, FunctionComponent, data};
 // Minimal, type-safe builder pattern with a small counter app.
 
 #[component(builder)]

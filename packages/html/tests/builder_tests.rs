@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_builder::*;
 use dioxus_core::{NoOpMutations, Template};
 
 // =============================================================================
@@ -411,7 +410,7 @@ fn test_mixed_static_dynamic_matches_rsx() {
 
 #[test]
 fn test_static_element() {
-    use dioxus_builder::{ChildNode, StaticAttribute, StaticElement};
+    use dioxus::prelude::{ChildNode, StaticAttribute, StaticElement};
 
     fn builder_app() -> Element {
         div()
@@ -475,7 +474,7 @@ fn test_static_with_attributes() {
 
 #[test]
 fn test_static_str_macro() {
-    use dioxus_builder::{static_str, BuilderExt};
+    use dioxus::prelude::{static_str, BuilderExt};
 
     fn builder_app() -> Element {
         div()
@@ -496,7 +495,7 @@ fn test_static_str_macro() {
 
 #[test]
 fn test_static_str_macro_two_arg() {
-    use dioxus_builder::static_str;
+    use dioxus::prelude::static_str;
 
     fn builder_app() -> Element {
         let builder = div();
@@ -545,7 +544,7 @@ fn test_template_cache_reuses_dynamic_template() {
 
 #[test]
 fn test_template_cache_reuses_static_element_template() {
-    use dioxus_builder::{ChildNode, StaticAttribute, StaticElement};
+    use dioxus::prelude::{ChildNode, StaticAttribute, StaticElement};
 
     let static_elem = StaticElement {
         tag: "span",
@@ -614,7 +613,7 @@ fn test_aria_live_region() {
 
 #[test]
 fn test_data_attribute_macro() {
-    use dioxus_builder::data;
+    use dioxus::prelude::data;
 
     fn builder_app() -> Element {
         let builder = div();

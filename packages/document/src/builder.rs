@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use dioxus_builder::document::*;
+//! use dioxus::prelude::*;
 //!
 //! fn app() -> Element {
 //!     fragment()
@@ -19,9 +19,9 @@
 //! ```
 
 use dioxus_core::Element;
-use dioxus_document::{self as document, LinkProps, MetaProps, TitleProps};
+use dioxus_html::builder::text_node;
 
-use crate::text_node;
+use crate::{self as document, LinkProps, MetaProps, TitleProps};
 
 /// Create a document title element with the given text.
 ///

@@ -8,8 +8,8 @@ use parking_lot::RwLock;
 use std::collections::{HashMap, VecDeque};
 use std::fmt::Arguments;
 
-pub use dioxus_html::GlobalAttributesExtension;
-pub use dioxus_html::SvgAttributesExtension;
+use crate::GlobalAttributesExtension;
+use crate::SvgAttributesExtension;
 
 impl GlobalAttributesExtension for ElementBuilder {}
 impl SvgAttributesExtension for ElementBuilder {}
@@ -412,7 +412,7 @@ impl ElementBuilder {
     ///
     /// For **guaranteed** const evaluation, use the [`static_str!`] macro:
     /// ```rust,ignore
-    /// use dioxus_builder::{div, static_str, BuilderExt};
+    /// use dioxus::prelude::*;
     ///
     /// div()
     ///     .pipe(static_str!("Hello, "))  // Guaranteed const, embedded in template
@@ -1954,7 +1954,7 @@ pub fn template() -> ElementBuilder {
 ///
 /// # Example
 /// ```rust,ignore
-/// use dioxus_builder::{div, static_str};
+/// use dioxus::prelude::*;
 ///
 /// div()
 ///     .pipe(static_str!("Hello, "))    // Guaranteed const
@@ -1965,7 +1965,7 @@ pub fn template() -> ElementBuilder {
 ///
 /// Or use the extension trait method:
 /// ```rust,ignore
-/// use dioxus_builder::*;
+/// use dioxus::prelude::*;
 ///
 /// let builder = div();
 /// static_str!(builder, "Hello, World!")
@@ -1979,7 +1979,7 @@ macro_rules! static_str {
     }};
     ($text:literal) => {{
         const TEXT: &'static str = $text;
-        |builder: $crate::ElementBuilder| builder.static_text(TEXT)
+        |builder: $crate::builder::ElementBuilder| builder.static_text(TEXT)
     }};
 }
 
@@ -2004,7 +2004,7 @@ impl BuilderExt for ElementBuilder {
 ///
 /// # Example
 /// ```rust,ignore
-/// use dioxus_builder::{div, data};
+/// use dioxus::prelude::*;
 ///
 /// let builder = div();
 /// data!(builder, "testid", "my-element")

@@ -2,13 +2,13 @@
 //!
 //! A GPUI-style typed builder API for Dioxus.
 //!
-//! This crate provides a fluent builder interface for constructing HTML elements
+//! This module provides a fluent builder interface for constructing HTML elements
 //! with full IDE autocomplete support.
 //!
 //! ## Example
 //!
 //! ```rust,ignore
-//! use dioxus_builder::*;
+//! use dioxus::prelude::*;
 //!
 //! fn app() -> Element {
 //!     div()
@@ -38,10 +38,10 @@
 //!     .build()
 //! ```
 //!
-//! ## Document Helpers (requires `document` feature)
+//! ## Document Helpers
 //!
 //! ```rust,ignore
-//! use dioxus_builder::document::*;
+//! use dioxus::prelude::*;
 //!
 //! fn app() -> Element {
 //!     fragment()
@@ -55,8 +55,11 @@
 mod element;
 mod component;
 
-#[cfg(feature = "document")]
-pub mod document;
-
 pub use element::*;
 pub use component::*;
+
+/// Prelude of builder helpers.
+pub mod prelude {
+    pub use super::component::*;
+    pub use super::element::*;
+}

@@ -4,8 +4,7 @@ edition = "2024"
 version.workspace = true
 
 [dependencies]
-dioxus = {  workspace = true, features = ["fullstack"]}
-dioxus-builder = { workspace = true, features = ["document"] }
+dioxus = { workspace = true, features = ["fullstack"] }
 
 [features]
 default = []
