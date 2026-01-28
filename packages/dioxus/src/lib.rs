@@ -150,6 +150,11 @@ pub mod prelude {
     #[cfg(feature = "document")]
     #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
     #[doc(inline)]
+    pub use dioxus_document::builder::*;
+
+    #[cfg(feature = "document")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "document")))]
+    #[doc(inline)]
     pub use dioxus_history::{history, History};
 
     #[cfg(feature = "launch")]
@@ -196,6 +201,21 @@ pub mod prelude {
         events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
         GlobalAttributesExtension, SvgAttributesExtension,
     };
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(inline)]
+    pub use dioxus_elements::builder as builder;
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(inline)]
+    pub use dioxus_elements::builder::prelude::*;
+
+    #[cfg(feature = "html")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
+    #[doc(inline)]
+    pub use dioxus_elements::{data, static_str};
 
     #[cfg(feature = "devtools")]
     #[cfg_attr(docsrs, doc(cfg(feature = "devtools")))]

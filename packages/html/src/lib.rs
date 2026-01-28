@@ -24,6 +24,7 @@ pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
 pub mod events;
 pub(crate) mod file_data;
 pub use file_data::*;
+pub mod builder;
 mod attribute_groups;
 mod data_transfer;
 pub mod geometry;
