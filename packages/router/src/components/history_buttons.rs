@@ -1,6 +1,7 @@
 use dioxus_core::{Element, VNode};
 use dioxus_core_macro::{rsx, Props};
 use dioxus_html as dioxus_elements;
+use dioxus_html::prelude::*;
 
 use tracing::error;
 
@@ -11,6 +12,10 @@ use crate::utils::use_router_internal::use_router_internal;
 pub struct HistoryButtonProps {
     /// The children to render within the generated HTML button tag.
     pub children: Element,
+
+    /// Additional attributes to pass to the button element.
+    #[props(extends = GlobalAttributes)]
+    attributes: Vec<Attribute>,
 }
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
@@ -43,6 +48,7 @@ pub struct HistoryButtonProps {
 /// fn Index() -> Element {
 ///     rsx! {
 ///         GoBackButton {
+///             class: "btn btn-primary",
 ///             "go back"
 ///         }
 ///     }
@@ -52,11 +58,14 @@ pub struct HistoryButtonProps {
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
-/// #     r#"<button disabled="true">go back</button>"#
+/// #     r#"<button disabled="true" class="btn btn-primary">go back</button>"#
 /// # );
 /// ```
 pub fn GoBackButton(props: HistoryButtonProps) -> Element {
-    let HistoryButtonProps { children } = props;
+    let HistoryButtonProps {
+        children,
+        attributes,
+    } = props;
 
     // hook up to router
     let router = match use_router_internal() {
@@ -80,6 +89,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
                 evt.prevent_default();
                 router.go_back()
             },
+            ..attributes,
             {children}
         }
     }
@@ -115,6 +125,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// fn Index() -> Element {
 ///     rsx! {
 ///         GoForwardButton {
+///             class: "btn btn-primary",
 ///             "go forward"
 ///         }
 ///     }
@@ -124,11 +135,14 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// # vdom.rebuild_in_place();
 /// # assert_eq!(
 /// #     dioxus_ssr::render(&vdom),
-/// #     r#"<button disabled="true">go forward</button>"#
+/// #     r#"<button disabled="true" class="btn btn-primary">go forward</button>"#
 /// # );
 /// ```
 pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
-    let HistoryButtonProps { children } = props;
+    let HistoryButtonProps {
+        children,
+        attributes,
+    } = props;
 
     // hook up to router
     let router = match use_router_internal() {
@@ -152,6 +166,7 @@ pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
                 evt.prevent_default();
                 router.go_forward()
             },
+            ..attributes,
             {children}
         }
     }
