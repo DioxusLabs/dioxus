@@ -224,7 +224,7 @@ impl WriteMutations for MutationWriter<'_> {
         // TODO: proper template node support
         let template_entry = self.state.templates.entry(template).or_insert_with(|| {
             let template_root_ids: Vec<NodeId> = template
-                .roots
+                .roots()
                 .iter()
                 .map(|root| create_template_node(&mut self.docm, root))
                 .collect();

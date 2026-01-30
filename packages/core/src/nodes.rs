@@ -139,11 +139,7 @@ impl VNode {
                     key: None,
                     dynamic_nodes: Box::new([DynamicNode::Placeholder(Default::default())]),
                     dynamic_attrs: Box::new([]),
-                    template: Template {
-                        roots: &[TemplateNode::Dynamic { id: 0 }],
-                        node_paths: &[&[0]],
-                        attr_paths: &[],
-                    },
+                    template: Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
                 })
             })
             .clone()
@@ -176,7 +172,7 @@ impl VNode {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&DynamicNode> {
-        self.template.roots[idx]
+        self.template.roots()[idx]
             .dynamic_id()
             .map(|id| &self.dynamic_nodes[id])
     }
@@ -276,7 +272,7 @@ pub struct Template {
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
     #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
-    pub roots: StaticTemplateArray,
+    roots: StaticTemplateArray,
 
     /// The paths of each node relative to the root of the template.
     ///
@@ -286,7 +282,7 @@ pub struct Template {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky")
     )]
-    pub node_paths: StaticPathArray,
+    node_paths: StaticPathArray,
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
@@ -296,50 +292,152 @@ pub struct Template {
         feature = "serialize",
         serde(deserialize_with = "deserialize_bytes_leaky", bound = "")
     )]
-    pub attr_paths: StaticPathArray,
+    attr_paths: StaticPathArray,
+
+    /// Compile-time hash of template content for reliable cross-crate comparison.
+    /// This ensures identical templates compare equal regardless of optimization levels.
+    ///
+    /// Uses xxh64 (64-bit hash). By the birthday paradox, collision probability is:
+    /// P ≈ 1 - e^(-n²/(2 × 2^64)) where n = number of templates.
+    ///
+    /// - 1,000 templates: P ≈ 2.7 × 10^-14 (essentially zero)
+    /// - 10,000 templates: P ≈ 2.7 × 10^-12 (essentially zero)
+    /// - 1 million templates: P ≈ 0.000003%
+    /// - 50% collision chance requires ~5 billion templates
+    ///
+    /// For any realistic application, collision probability is negligible.
+    hash: u64,
 }
 
-// Are identical static items merged in the current build. Rust doesn't have a cfg(merge_statics) attribute
-// so we have to check this manually
-#[allow(unpredictable_function_pointer_comparisons)] // This attribute should be removed once MSRV is 1.85 or greater and the below change is made
-fn static_items_merged() -> bool {
-    fn a() {}
-    fn b() {}
-    a as fn() == b as fn()
-    // std::ptr::fn_addr_eq(a as fn(), b as fn()) <<<<---- This should replace the a as fn() === b as fn() once the MSRV is 1.85 or greater
+impl Template {
+    /// Create a new Template with the given roots, node_paths, and attr_paths.
+    /// The hash is computed automatically from the template content.
+    pub const fn new(
+        roots: &'static [TemplateNode],
+        node_paths: &'static [&'static [u8]],
+        attr_paths: &'static [&'static [u8]],
+    ) -> Self {
+        Self {
+            roots,
+            node_paths,
+            attr_paths,
+            hash: Self::compute_hash(roots, node_paths, attr_paths),
+        }
+    }
+
+    /// Get the template nodes that make up this template.
+    pub const fn roots(&self) -> &'static [TemplateNode] {
+        self.roots
+    }
+
+    /// Get the paths of each dynamic node relative to the root of the template.
+    pub const fn node_paths(&self) -> &'static [&'static [u8]] {
+        self.node_paths
+    }
+
+    /// Get the paths of each dynamic attribute relative to the root of the template.
+    pub const fn attr_paths(&self) -> &'static [&'static [u8]] {
+        self.attr_paths
+    }
+
+    /// Compute a content-based hash of template structure.
+    /// This is const so it can be used both at compile time and runtime.
+    const fn compute_hash(
+        roots: &[TemplateNode],
+        node_paths: &[&[u8]],
+        attr_paths: &[&[u8]],
+    ) -> u64 {
+        use xxhash_rust::const_xxh64::xxh64;
+
+        let mut hash = 0u64;
+
+        // Hash roots
+        let mut i = 0;
+        while i < roots.len() {
+            hash = hash_template_node(&roots[i], hash);
+            i += 1;
+        }
+
+        // Hash node paths
+        let mut i = 0;
+        while i < node_paths.len() {
+            hash = xxh64(node_paths[i], hash);
+            i += 1;
+        }
+
+        // Hash attr paths
+        let mut i = 0;
+        while i < attr_paths.len() {
+            hash = xxh64(attr_paths[i], hash);
+            i += 1;
+        }
+
+        hash
+    }
+}
+
+const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
+    use xxhash_rust::const_xxh64::xxh64;
+
+    match node {
+        TemplateNode::Element {
+            tag,
+            namespace,
+            attrs,
+            children,
+        } => {
+            let mut h = xxh64(tag.as_bytes(), seed);
+            if let Some(ns) = *namespace {
+                h = xxh64(ns.as_bytes(), h);
+            }
+            // Hash attributes (already in deterministic order from macro)
+            let mut i = 0;
+            while i < attrs.len() {
+                h = hash_template_attribute(&attrs[i], h);
+                i += 1;
+            }
+            // Hash children
+            let mut i = 0;
+            while i < children.len() {
+                h = hash_template_node(&children[i], h);
+                i += 1;
+            }
+            h
+        }
+        TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
+        TemplateNode::Dynamic { id } => xxh64(&[0xFF, *id as u8], seed),
+    }
+}
+
+const fn hash_template_attribute(attr: &TemplateAttribute, seed: u64) -> u64 {
+    use xxhash_rust::const_xxh64::xxh64;
+
+    match attr {
+        TemplateAttribute::Static {
+            name,
+            value,
+            namespace,
+        } => {
+            let mut h = xxh64(name.as_bytes(), seed);
+            h = xxh64(value.as_bytes(), h);
+            if let Some(ns) = *namespace {
+                h = xxh64(ns.as_bytes(), h);
+            }
+            h
+        }
+        TemplateAttribute::Dynamic { id } => xxh64(&[0xFE, *id as u8], seed),
+    }
 }
 
 impl std::hash::Hash for Template {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        // If identical static items are merged, we can compare templates by pointer
-        if static_items_merged() {
-            std::ptr::hash(self.roots as *const _, state);
-            std::ptr::hash(self.node_paths as *const _, state);
-            std::ptr::hash(self.attr_paths as *const _, state);
-        }
-        // Otherwise, we hash by value
-        else {
-            self.roots.hash(state);
-            self.node_paths.hash(state);
-            self.attr_paths.hash(state);
-        }
+        self.hash.hash(state);
     }
 }
 
 impl PartialEq for Template {
     fn eq(&self, other: &Self) -> bool {
-        // If identical static items are merged, we can compare templates by pointer
-        if static_items_merged() {
-            std::ptr::eq(self.roots as *const _, other.roots as *const _)
-                && std::ptr::eq(self.node_paths as *const _, other.node_paths as *const _)
-                && std::ptr::eq(self.attr_paths as *const _, other.attr_paths as *const _)
-        }
-        // Otherwise, we compare by value
-        else {
-            self.roots == other.roots
-                && self.node_paths == other.node_paths
-                && self.attr_paths == other.attr_paths
-        }
+        self.hash == other.hash
     }
 }
 

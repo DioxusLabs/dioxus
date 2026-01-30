@@ -7,11 +7,11 @@ use crate::{
 #[allow(non_snake_case)]
 #[allow(clippy::let_and_return)]
 pub(crate) fn RootScopeWrapper(props: RootProps<VComponent>) -> Element {
-    static TEMPLATE: Template = Template {
-        roots: &[TemplateNode::Dynamic { id: 0usize }],
-        node_paths: &[&[0u8]],
-        attr_paths: &[],
-    };
+    static TEMPLATE: Template = Template::new(
+        &[TemplateNode::Dynamic { id: 0usize }],
+        &[&[0u8]],
+        &[],
+    );
     Element::Ok(VNode::new(
         None,
         TEMPLATE,

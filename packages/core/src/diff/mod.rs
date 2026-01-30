@@ -98,11 +98,11 @@ impl VirtualDom {
 #[allow(dead_code)]
 fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
     let template = node.template;
-    let path = template.node_paths[idx];
+    let path = template.node_paths()[idx];
 
     // use a loop to index every static node's children until the path has run out
     // only break if the last path index is a dynamic node
-    let mut static_node = &template.roots[path[0] as usize];
+    let mut static_node = &template.roots()[path[0] as usize];
 
     for i in 1..path.len() - 1 {
         match static_node {

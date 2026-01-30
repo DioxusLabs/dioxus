@@ -25,6 +25,7 @@ futures-util = { workspace = true, default-features = false, features = ["alloc"
 serde = { workspace = true, optional = true, features = ["derive"] }
 subsecond = { workspace = true }
 anyhow = { workspace = true }
+xxhash-rust = { workspace = true, features = ["const_xxh64"] }
 
 [dev-dependencies]
 dioxus = { workspace = true }

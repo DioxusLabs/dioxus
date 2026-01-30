@@ -100,11 +100,11 @@ impl WriteMutations for MutationState {
             let tmpl_id = self.templates.len() as u16;
             self.templates.insert(template, tmpl_id);
 
-            for root in template.roots.iter() {
+            for root in template.roots().iter() {
                 self.create_template_node(root);
             }
 
-            let len = template.roots.len() as u16;
+            let len = template.roots().len() as u16;
             self.channel.add_templates(tmpl_id, len);
 
             tmpl_id

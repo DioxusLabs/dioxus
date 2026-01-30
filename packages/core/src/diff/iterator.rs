@@ -483,7 +483,7 @@ impl VNode {
         let mount = mounts.get(self.mount.get().0).unwrap();
 
         template
-            .roots
+            .roots()
             .iter()
             .enumerate()
             .map(
