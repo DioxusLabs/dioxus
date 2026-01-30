@@ -320,11 +320,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template = Template::new(
-                &[TemplateNode::Dynamic { id: 0usize }],
-                &[&[0u8]],
-                &[],
-            );
+            static TEMPLATE: Template =
+                Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
             VNode::new(
                 None,
                 TEMPLATE,

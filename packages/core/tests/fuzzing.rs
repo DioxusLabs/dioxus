@@ -182,11 +182,7 @@ fn create_random_dynamic_node(depth: u8) -> DynamicNode {
             .map(|_| {
                 VNode::new(
                     None,
-                    Template::new(
-                        &[TemplateNode::Dynamic { id: 0 }],
-                        &[&[0]],
-                        &[],
-                    ),
+                    Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
                     Box::new([DynamicNode::Component(VComponent::new(
                         create_random_element,
                         DepthProps { depth, root: false },
