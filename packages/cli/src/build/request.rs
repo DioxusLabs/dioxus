@@ -347,7 +347,7 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem, Triple};
@@ -1414,7 +1414,34 @@ impl BuildRequest {
             | BundleFormat::Ios
             | BundleFormat::Server => {
                 std::fs::create_dir_all(self.exe_dir())?;
-                std::fs::copy(exe, self.main_exe())?;
+
+                // Retry copy with exponential backoff to handle race conditions
+                // where cargo hasn't fully released file handles yet
+                let mut attempts = 0;
+                let max_attempts = 5;
+                loop {
+                    match std::fs::copy(exe, self.main_exe()) {
+                        Ok(_) => {
+                            if attempts > 0 {
+                                tracing::info!(
+                                    "✅ Executable copy succeeded after {} retries",
+                                    attempts
+                                );
+                            }
+                            break;
+                        }
+                        Err(e) if e.raw_os_error() == Some(1) && attempts < max_attempts => {
+                            attempts += 1;
+                            let delay = Duration::from_millis(10 * 2_u64.pow(attempts));
+                            tracing::warn!(
+                                "⚠️  Failed to copy executable (attempt {}/{}), retrying in {:?}: {}",
+                                attempts, max_attempts, delay, e
+                            );
+                            tokio::time::sleep(delay).await;
+                        }
+                        Err(e) => return Err(e.into()),
+                    }
+                }
             }
         }
 
