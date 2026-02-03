@@ -64,7 +64,7 @@ rkyv = { optional = true,  default-features = true, version = "0.8" }
 futures = { workspace = true, default-features = true }
 pin-project = { workspace = true }
 thiserror = { workspace = true }
-bytes = {version = "1.10.1", features = ["serde"]}
+bytes = {version = "1.11.1", features = ["serde"]}
 tower-http = { workspace = true, features = ["fs"] }
 tower = { workspace = true, features = ["util"] }
 tower-layer = { version = "0.3.3", optional = true }
