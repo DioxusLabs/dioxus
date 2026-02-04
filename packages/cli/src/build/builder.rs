@@ -940,17 +940,18 @@ impl AppBuilder {
     async fn open_ios_device(&mut self, device_query: &str) -> Result<()> {
         let device_query = device_query.to_string();
         let root_dir = self.build.root_dir().clone();
+        let application_id = self.build.bundle_identifier();
         self.spawn_handle = Some(tokio::task::spawn(async move {
             // 1. Find an active device
             let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
             tracing::info!("Uploading app to iOS device, this might take a while...");
 
-            // 2. Get the installation URL of the app
-            let installation_url = Self::get_ios_installation_url(&device_uuid, &root_dir).await?;
+            // 2. Install the app to the device
+            Self::install_ios_app(&device_uuid, &root_dir).await?;
 
             // 3. Launch the app into the background, paused
-            Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
+            Self::launch_ios_app_paused(&device_uuid, &application_id).await?;
 
             Result::Ok(()) as Result<()>
         }));
@@ -1092,7 +1093,7 @@ impl AppBuilder {
             .context("Failed to extract device UUID")
     }
 
-    async fn get_ios_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+    async fn install_ios_app(device_uuid: &str, app_path: &Path) -> Result<()> {
         let tmpfile = tempfile::NamedTempFile::new()
             .context("Failed to create temporary file for device list")?;
 
@@ -1119,21 +1120,12 @@ impl AppBuilder {
             );
         }
 
-        let json: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
-                .context("Failed to parse xcrun output")?;
-        let installation_url = json["result"]["installedApplications"][0]["installationURL"]
-            .as_str()
-            .context("Failed to extract installation URL from xcrun output")?
-            .to_string();
-
-        Ok(installation_url)
+        Ok(())
     }
 
-    async fn launch_ios_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+    async fn launch_ios_app_paused(device_uuid: &str, application_id: &str) -> Result<()> {
         let tmpfile = tempfile::NamedTempFile::new()
             .context("Failed to create temporary file for device list")?;
-
         let output = Command::new("xcrun")
             .args([
                 "devicectl",
@@ -1144,7 +1136,7 @@ impl AppBuilder {
                 "--verbose",
                 "--device",
                 device_uuid,
-                installation_url,
+                &application_id,
                 "--json-output",
             ])
             .arg(tmpfile.path())
