@@ -405,9 +405,7 @@ const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
             h
         }
         TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
-        TemplateNode::Dynamic { id } => {
-            xxh64((*id as u64).to_le_bytes().as_ref(), xxh64(&[0xFF], seed))
-        }
+        TemplateNode::Dynamic { id } => xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed)),
     }
 }
 
@@ -428,7 +426,7 @@ const fn hash_template_attribute(attr: &TemplateAttribute, seed: u64) -> u64 {
             h
         }
         TemplateAttribute::Dynamic { id } => {
-            xxh64((*id as u64).to_le_bytes().as_ref(), xxh64(&[0xFF], seed))
+            xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
         }
     }
 }
