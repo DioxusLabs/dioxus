@@ -44,6 +44,14 @@ pub struct JumpTable {
     /// The amount of ifuncs this will register. This is used by WASM to know how much space to allocate
     /// for the ifuncs in the ifunc table
     pub ifunc_count: u64,
+
+    /// TLS fixup entries for future runtime TLS sharing.
+    ///
+    /// Maps patch-relative GOT/TLV-descriptor offset to the correct TP-relative offset from the
+    /// original binary. Currently empty — will be populated when runtime TLS fixup is implemented
+    /// to allow patches to share the main executable's TLS block instead of getting fresh copies.
+    #[serde(default)]
+    pub tls_fixups: AddressMap,
 }
 
 /// An address to address hashmap that does not hash addresses since addresses are by definition unique.

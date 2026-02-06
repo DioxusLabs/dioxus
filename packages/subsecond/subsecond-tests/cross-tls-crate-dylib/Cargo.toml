@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
-[lib]
-# when testing, use a dylib
+# [lib]
+# # when testing, use a dylib
 # crate-type = ["dylib"]
 
 [dependencies]

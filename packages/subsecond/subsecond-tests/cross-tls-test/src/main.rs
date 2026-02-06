@@ -11,10 +11,10 @@ fn main() {
             use cross_tls_crate_dylib::BAZ;
 
             thread_local! {
-                pub static FOO: Cell<f32> = const { Cell::new(2.0) };
+                pub static FOO: Cell<f32> = const { Cell::new(1.0) };
             }
 
-            println!("Hello  123s123123s: {}", FOO.get());
+            println!("Hello world! two: {}", FOO.get());
             get_bar().with(|f| println!("Bar: {:?}", f.borrow()));
             thread::sleep(Duration::from_secs(1));
 

@@ -4,7 +4,7 @@ use object::{
     macho::{self},
     read::File,
     write::{MachOBuildVersion, SectionId, StandardSection, Symbol, SymbolId, SymbolSection},
-    Endianness, Object, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
+    Endianness, Object, ObjectSection, ObjectSymbol, SymbolFlags, SymbolKind, SymbolScope,
 };
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
@@ -76,6 +76,16 @@ pub struct HotpatchModuleCache {
 
     // ... native stuff
     pub symbol_table: HashMap<String, CachedSymbol>,
+
+    /// Contents of the .tdata section from the original binary (TLS initialization image).
+    /// Used to provide correct init data for TLS symbol stubs instead of garbage addresses.
+    pub tls_init_data: Vec<u8>,
+
+    /// Map from `$tlv$init` symbol name to (offset_in_tdata, computed_size).
+    /// On macOS, Mach-O nlist doesn't carry symbol sizes, so we compute them from
+    /// adjacent symbol addresses in the `__thread_data` section. This lets us provide
+    /// correctly-sized TLS init data in stubs instead of defaulting to pointer_width.
+    pub tls_init_sizes: HashMap<String, (u64, u64)>,
 }
 
 pub struct CachedSymbol {
@@ -277,10 +287,56 @@ impl HotpatchModuleCache {
                         ))
                     })
                     .collect::<HashMap<_, _>>();
+
+                // Extract TLS initialization data and section metadata.
+                // This is used to correctly initialize TLS symbols in the stub
+                // instead of writing bogus absolute addresses into .tdata.
+                let tls_section = obj
+                    .sections()
+                    .find(|s| matches!(s.name(), Ok(".tdata" | "__thread_data")));
+
+                let tls_init_data = tls_section
+                    .as_ref()
+                    .and_then(|s| s.data().ok())
+                    .unwrap_or(&[])
+                    .to_vec();
+
+                // Build TLS init size map for macOS. Mach-O nlist doesn't carry symbol
+                // sizes, so we compute them from adjacent symbols in __thread_data.
+                // LLVM/rustc names init data symbols as `FOO$tlv$init` in __thread_data.
+                let tls_data_addr = tls_section.as_ref().map(|s| s.address()).unwrap_or(0);
+                let tls_data_size = tls_section.as_ref().map(|s| s.size()).unwrap_or(0);
+                let tls_section_index = tls_section.as_ref().map(|s| s.index());
+
+                let mut tls_init_syms: Vec<(u64, String)> = Vec::new();
+                for sym in obj.symbols() {
+                    if let (Some(section_idx), Ok(sname)) = (sym.section_index(), sym.name())
+                    {
+                        if Some(section_idx) == tls_section_index {
+                            let offset = sym.address().saturating_sub(tls_data_addr);
+                            tls_init_syms.push((offset, sname.to_string()));
+                        }
+                    }
+                }
+                tls_init_syms.sort_by_key(|(addr, _)| *addr);
+                tls_init_syms.dedup_by_key(|(addr, _)| *addr);
+
+                let mut tls_init_sizes: HashMap<String, (u64, u64)> = HashMap::new();
+                for (i, (offset, sname)) in tls_init_syms.iter().enumerate() {
+                    let size = if i + 1 < tls_init_syms.len() {
+                        tls_init_syms[i + 1].0 - offset
+                    } else {
+                        tls_data_size.saturating_sub(*offset)
+                    };
+                    tls_init_sizes.insert(sname.clone(), (*offset, size));
+                }
+
                 HotpatchModuleCache {
                     symbol_table,
                     path: original.to_path_buf(),
                     old_bytes,
+                    tls_init_data,
+                    tls_init_sizes,
                     ..Default::default()
                 }
             }
@@ -332,6 +388,7 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
+        tls_fixups: Default::default(),
     })
 }
 
@@ -383,6 +440,7 @@ pub fn create_native_jump_table(
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
+        tls_fixups: Default::default(),
     })
 }
 
@@ -686,6 +744,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         ifunc_count,
         aslr_reference: 0,
         new_base_address: 0,
+        tls_fixups: Default::default(),
     })
 }
 
@@ -1106,36 +1165,61 @@ pub fn create_undefined_symbol_stub(
                     PointerWidth::U64 => 8,
                 };
 
-                let size = if sym.size == 0 {
-                    pointer_width
-                } else {
-                    sym.size
-                };
+                // Resolve the TLS init data offset and size.
+                //
+                // On ELF: sym.address IS the TLS offset and sym.size is the data size.
+                // On Mach-O: sym.address points to __thread_vars (TLV descriptor), NOT
+                // __thread_data. Mach-O nlist has no size field (always 0). We look up
+                // the corresponding $tlv$init symbol (LLVM convention) to get the real
+                // offset and size within __thread_data.
+                //
+                // Note: each patch gets its own TLS copy (not shared with the main exe).
+                // TLS variables reset to their initial value on patch.
+                // Use the full name (with Mach-O `_` prefix) since tls_init_sizes
+                // keys come from the same symbol table and include the prefix.
+                let init_key = format!("{}$tlv$init", name);
+                let (tls_offset, size) =
+                    if let Some(&(offset, size)) = cache.tls_init_sizes.get(&init_key) {
+                        // macOS: found the $tlv$init symbol with correct offset and size
+                        (offset, size)
+                    } else if sym.size > 0 {
+                        // ELF: sym.address is the TLS offset, sym.size is the data size
+                        (sym.address, sym.size)
+                    } else if !cache.tls_init_sizes.is_empty() {
+                        // macOS fallback: $tlv$init not found but map isn't empty (binary
+                        // might be partially stripped). Use entire tdata as upper bound.
+                        (0, cache.tls_init_data.len() as u64)
+                    } else {
+                        // Last resort (ELF with size=0): use pointer width
+                        (sym.address, pointer_width)
+                    };
 
                 let align = size.min(pointer_width).next_power_of_two();
-                let mut init = vec![0u8; size as usize];
 
-                // write the contents of the symbol to the init vec
-                init.iter_mut()
-                    .zip(match triple.endianness() {
-                        Ok(target_lexicon::Endianness::Little) => abs_addr.to_le_bytes(),
-                        Ok(target_lexicon::Endianness::Big) => abs_addr.to_be_bytes(),
-                        _ => return Err(PatchError::UnsupportedPlatform(triple.to_string())),
-                    })
-                    .for_each(|(b, v)| *b = v);
+                let start = tls_offset as usize;
+                let end = start + size as usize;
+                let init = if end <= cache.tls_init_data.len() {
+                    cache.tls_init_data[start..end].to_vec()
+                } else {
+                    // Beyond .tdata bounds (.tbss) or Mach-O fallback: zero-init
+                    vec![0u8; size as usize]
+                };
 
-                let offset = obj.append_section_data(tls_section, &init, align);
-
-                obj.add_symbol(Symbol {
+                // Use add_symbol_data() so the object crate's Mach-O writer auto-creates
+                // __thread_vars TLV descriptors (via macho_add_thread_var). Without this,
+                // the symbol stays in __thread_data and the runtime misinterprets raw init
+                // bytes as a TLV descriptor — first 8 bytes become the thunk pointer.
+                let sym_id = obj.add_symbol(Symbol {
                     name: name.as_bytes()[name_offset..].to_vec(),
-                    value: offset, // offset inside .tdata
-                    size,
+                    value: 0,
+                    size: 0,
                     scope: SymbolScope::Linkage,
                     kind: SymbolKind::Tls,
                     weak: false,
-                    section: SymbolSection::Section(tls_section),
-                    flags: SymbolFlags::None, // ignore for these stubs
+                    section: SymbolSection::Undefined,
+                    flags: SymbolFlags::None,
                 });
+                obj.add_symbol_data(sym_id, tls_section, &init, align);
             }
 
             // We just assume all non-text symbols are data (globals, statics, etc)
