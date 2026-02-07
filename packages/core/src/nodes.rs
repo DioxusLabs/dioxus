@@ -303,9 +303,10 @@ pub struct Template {
 // so we have to check this manually
 #[allow(unpredictable_function_pointer_comparisons)] // This attribute should be removed once MSRV is 1.85 or greater and the below change is made
 fn static_items_merged() -> bool {
-    // true
-    // std::ptr::fn_addr_eq(a as fn(), b as fn())
-    false
+    fn a() {}
+    fn b() {}
+    a as fn() == b as fn()
+    // std::ptr::fn_addr_eq(a as fn(), b as fn()) <<<<---- This should replace the a as fn() === b as fn() once the MSRV is 1.85 or greater
 }
 
 impl std::hash::Hash for Template {
