@@ -5477,6 +5477,7 @@ dependencies = [
  "backtrace",
  "brotli",
  "built 0.8.0",
+ "bytes",
  "cargo-config2",
  "cargo-generate",
  "cargo_metadata",

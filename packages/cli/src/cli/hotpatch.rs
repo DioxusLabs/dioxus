@@ -70,15 +70,24 @@ impl HotpatchTip {
         //       consider a shared-mem approach or a binary serializer? something like arrow / parquet / bincode?
         let cache = Arc::new(HotpatchModuleCache::new(&exe, &request.triple)?);
 
-        let mode = BuildMode::Thin {
-            rustc_args: crate::RustcArgs {
+        let tip_crate_name = request.main_target.replace('-', "_");
+        let mut workspace_rustc_args = std::collections::HashMap::new();
+        workspace_rustc_args.insert(
+            tip_crate_name,
+            crate::RustcArgs {
                 args: rustc_args,
                 envs: rustc_envs,
                 link_args,
             },
+        );
+        let mode = BuildMode::Thin {
+            workspace_rustc_args,
             changed_files: vec![],
+            changed_crates: vec![],
+            modified_crates: std::collections::HashSet::new(),
             aslr_reference: self.aslr_reference,
             cache: cache.clone(),
+            object_cache: crate::ObjectCache::new(),
         };
 
         let artifacts = AppBuilder::started(request, mode, build_id)?

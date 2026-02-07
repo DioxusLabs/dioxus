@@ -10,7 +10,9 @@
 
 mod assets;
 mod builder;
+pub(crate) mod cache;
 mod context;
+pub(crate) mod diff;
 mod manifest;
 mod patch;
 mod pre_render;
@@ -19,6 +21,7 @@ mod tools;
 
 pub(crate) use assets::*;
 pub(crate) use builder::*;
+pub(crate) use cache::*;
 pub(crate) use context::*;
 pub(crate) use manifest::*;
 pub(crate) use patch::*;

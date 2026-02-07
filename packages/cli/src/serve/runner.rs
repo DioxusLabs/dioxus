@@ -24,7 +24,7 @@ use notify::{
 use std::{
     collections::{HashMap, HashSet},
     net::{IpAddr, TcpListener},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -511,9 +511,18 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
+                // Determine which workspace crates changed based on the file paths.
+                // Order them so deeper deps compile first (leaves before dependents).
+                let changed_set: HashSet<String> = files
+                    .iter()
+                    .filter_map(|f| self.file_to_workspace_crate(f))
+                    .collect();
+                let changed_crates = self.order_changed_crates(&changed_set);
+
+                self.client
+                    .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
+                    server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -1161,6 +1170,147 @@ impl AppServer {
         krates.dedup();
 
         krates
+    }
+
+    /// Map a changed file path to the workspace crate it belongs to.
+    ///
+    /// Returns the crate name in rustc convention (hyphens → underscores), matching the
+    /// `--crate-name` arg used by rustc and the keys in `workspace_rustc_args`.
+    ///
+    /// Finds the workspace member whose crate directory is the longest prefix of the file path.
+    pub(crate) fn file_to_workspace_crate(&self, file: &Path) -> Option<String> {
+        let mut best_match: Option<(String, usize)> = None;
+
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                let Some(crate_dir) = krate.manifest_path.parent() else {
+                    continue;
+                };
+                if let Ok(relative) = file.strip_prefix(crate_dir.as_std_path()) {
+                    let depth = relative.components().count();
+                    let is_better = best_match
+                        .as_ref()
+                        .map_or(true, |(_, best_depth)| depth < *best_depth);
+                    if is_better {
+                        best_match = Some((krate.name.replace('-', "_"), depth));
+                    }
+                }
+            }
+        }
+
+        best_match.map(|(name, _)| name)
+    }
+
+    /// Compute the ordered compilation chain from a changed workspace crate to the tip crate.
+    ///
+    /// Returns crate names (underscore-normalized) in compilation order: the changed crate first,
+    /// then each intermediate workspace crate that depends on it, ending with the tip crate.
+    ///
+    /// Uses BFS from the tip crate through its workspace dependencies to find the path.
+    /// If the changed crate IS the tip crate, returns just `[tip]`.
+    pub(crate) fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
+        let tip_name = self.client.build.main_target.replace('-', "_");
+
+        // If the changed crate is the tip, no chain needed
+        if changed_crate == tip_name {
+            return vec![tip_name];
+        }
+
+        // Build a map of workspace crate names to their krates NodeIds
+        let mut name_to_node: HashMap<String, NodeId> = HashMap::new();
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { id, krate, .. } = member {
+                let normalized = krate.name.replace('-', "_");
+                name_to_node.insert(normalized, self.workspace.krates.nid_for_kid(id).unwrap());
+            }
+        }
+
+        // BFS/DFS from tip through workspace deps to find path to changed crate.
+        // We walk the dependency edges (tip → its deps → their deps → ...) looking for changed_crate.
+        let Some(&tip_node) = name_to_node.get(&tip_name) else {
+            return vec![changed_crate.to_string()];
+        };
+
+        // parent[node] = the workspace crate that depends on it (closer to tip)
+        let mut parent: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        parent.insert(tip_node, None);
+        let mut queue = std::collections::VecDeque::new();
+        queue.push_back(tip_node);
+
+        let mut target_node = None;
+
+        while let Some(current) = queue.pop_front() {
+            for (dep, _edge) in self.workspace.krates.get_deps(current) {
+                let (dep_name, dep_nid) = match dep {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let normalized = krate.name.replace('-', "_");
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (normalized, nid)
+                    }
+                    _ => continue,
+                };
+
+                // Only traverse workspace members
+                if !name_to_node.contains_key(&dep_name) {
+                    continue;
+                }
+
+                if parent.contains_key(&dep_nid) {
+                    continue; // already visited
+                }
+
+                parent.insert(dep_nid, Some(current));
+
+                if dep_name == changed_crate {
+                    target_node = Some(dep_nid);
+                    break;
+                }
+
+                queue.push_back(dep_nid);
+            }
+
+            if target_node.is_some() {
+                break;
+            }
+        }
+
+        // Reconstruct the path from changed_crate → ... → tip
+        let Some(target) = target_node else {
+            // Changed crate not found in workspace dep graph — just compile it alone
+            return vec![changed_crate.to_string()];
+        };
+
+        let mut chain = vec![];
+        let mut node = target;
+        loop {
+            // Find the crate name for this node
+            let krate = &self.workspace.krates[node];
+            chain.push(krate.name.replace('-', "_"));
+
+            match parent.get(&node) {
+                Some(Some(parent_node)) => node = *parent_node,
+                _ => break,
+            }
+        }
+
+        chain
+    }
+
+    /// Order a set of changed workspace crates so that deeper dependencies compile first.
+    ///
+    /// Uses `workspace_dep_chain` to determine the depth of each crate in the dependency graph,
+    /// then sorts so that leaves (deepest deps) compile before crates closer to the tip.
+    fn order_changed_crates(&self, changed: &HashSet<String>) -> Vec<String> {
+        let mut crates_with_depth: Vec<_> = changed
+            .iter()
+            .map(|c| {
+                let depth = self.workspace_dep_chain(c).len();
+                (c.clone(), depth)
+            })
+            .collect();
+        // Longer chain = deeper in dep tree = should compile first
+        crates_with_depth.sort_by(|a, b| b.1.cmp(&a.1));
+        crates_with_depth.into_iter().map(|(c, _)| c).collect()
     }
 
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.

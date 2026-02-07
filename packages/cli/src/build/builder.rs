@@ -1,12 +1,15 @@
 use crate::{
-    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
-    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    build::cache::ObjectCache,
+    serve::WebServer,
+    verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
+    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context, Error};
 use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
 use std::{
+    collections::HashSet,
     env,
     time::{Duration, Instant, SystemTime},
 };
@@ -103,6 +106,13 @@ pub(crate) struct AppBuilder {
 
     /// The debugger for the app - must be enabled with the `d` key
     pub(crate) pid: Option<u32>,
+
+    /// Cumulative set of workspace crates modified since the last fat build.
+    /// Each patch includes objects from ALL crates in this set.
+    pub modified_crates: HashSet<String>,
+
+    /// Cache of the latest `.rcgu.o` files for each modified workspace crate.
+    pub object_cache: ObjectCache,
 }
 
 impl AppBuilder {
@@ -159,6 +169,8 @@ impl AppBuilder {
             artifacts: None,
             patch_cache: None,
             pid: None,
+            modified_crates: HashSet::new(),
+            object_cache: ObjectCache::new(),
         })
     }
 
@@ -319,7 +331,12 @@ impl AppBuilder {
         update
     }
 
-    pub(crate) fn patch_rebuild(&mut self, changed_files: Vec<PathBuf>, build_id: BuildId) {
+    pub(crate) fn patch_rebuild(
+        &mut self,
+        changed_files: Vec<PathBuf>,
+        changed_crates: Vec<String>,
+        build_id: BuildId,
+    ) {
         // We need the rustc args from the original build to pass to the new build
         let Some(artifacts) = self.artifacts.as_ref().cloned() else {
             tracing::warn!(
@@ -353,6 +370,24 @@ impl AppBuilder {
             .context("Failed to get patch cache")
             .unwrap();
 
+        // Add the changed crates to the cumulative modified set.
+        // Every patch includes objects from ALL crates that have been modified since the fat build.
+        let tip_crate_name = self.build.main_target.replace('-', "_");
+        for crate_name in &changed_crates {
+            self.modified_crates.insert(crate_name.clone());
+        }
+
+        // The tip crate is always in the modified set since we always relink it.
+        // (It might not need recompilation if assembly diff shows no cascade, but
+        // its objects must be in the patch dylib.)
+        self.modified_crates.insert(tip_crate_name);
+
+        tracing::debug!(
+            "Patch rebuild: changed_crates={:?}, modified_crates={:?}",
+            changed_crates,
+            self.modified_crates,
+        );
+
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all(BuildStage::Restarting);
         self.build_task = tokio::spawn({
@@ -362,9 +397,12 @@ impl AppBuilder {
                 tx: self.tx.clone(),
                 mode: BuildMode::Thin {
                     changed_files,
-                    rustc_args: artifacts.direct_rustc,
+                    changed_crates,
+                    modified_crates: self.modified_crates.clone(),
+                    workspace_rustc_args: artifacts.workspace_rustc_args,
                     aslr_reference,
                     cache,
+                    object_cache: self.object_cache.clone(),
                 },
             };
             async move { request.build(&ctx).await }
@@ -545,12 +583,21 @@ impl AppBuilder {
             ));
         }
 
-        // If there's any CARGO vars in the rustc_wrapper files, push those too
-        if let Ok(res) = std::fs::read_to_string(self.build.rustc_wrapper_args_file()) {
-            if let Ok(res) = serde_json::from_str::<RustcArgs>(&res) {
-                for (key, value) in res.envs {
-                    if key.starts_with("CARGO_") {
-                        envs.push((key, value));
+        // If there's any CARGO vars in the rustc_wrapper files, push those too.
+        // Read from any per-crate args file in the directory (they all share the same CARGO_ envs).
+        if let Ok(entries) = std::fs::read_dir(self.build.rustc_wrapper_args_dir()) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "json") {
+                    if let Ok(contents) = std::fs::read_to_string(&path) {
+                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
+                            for (key, value) in args.envs {
+                                if key.starts_with("CARGO_") {
+                                    envs.push((key, value));
+                                }
+                            }
+                            break; // Only need one file for CARGO_ env vars
+                        }
                     }
                 }
             }
@@ -750,6 +797,11 @@ impl AppBuilder {
         );
 
         self.patches.push(jump_table.clone());
+
+        // Sync the updated object cache and modified crates back from the build result
+        // so subsequent thin builds can use them for assembly diffing and accumulated relinking.
+        self.object_cache = res.object_cache.clone();
+        self.modified_crates = res.modified_crates.clone();
 
         Ok(jump_table)
     }
