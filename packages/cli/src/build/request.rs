@@ -1137,10 +1137,15 @@ impl BuildRequest {
 
                 modified_crates.insert(crate_name.clone());
 
-                // Assembly diff: compare old vs new objects to detect cascade.
-                // If cross-crate symbols changed, add workspace dependents to the
-                // compile list so they get recompiled against the new rlib.
-                let needs_cascade = if let (Some(old), Some(new)) =
+                // Assembly diff: compare old vs new objects for informational logging.
+                // Note: we ALWAYS cascade to dependents regardless of the diff result,
+                // because rustc's SVH (stable version hash) changes on ANY recompilation,
+                // even for implementation-only changes. Downstream crates compiled against
+                // the old SVH become invalid and must be recompiled.
+                //
+                // In the future, the diff result could be used to skip the TIP crate
+                // compilation (Phase 2), but intermediate dep crates must always cascade.
+                if let (Some(old), Some(new)) =
                     (old_objects.as_deref(), object_cache.get(&crate_name))
                 {
                     let diff = crate::build::diff::diff_objects(old, new);
@@ -1149,21 +1154,16 @@ impl BuildRequest {
                         diff.changed_symbols.len(),
                         diff.needs_downstream_recompile
                     );
-                    diff.needs_downstream_recompile
-                } else {
-                    // No old objects to compare — first time seeing this crate,
-                    // conservatively assume cascade is needed.
-                    true
-                };
+                }
 
-                if needs_cascade {
-                    for dependent in self.workspace_dependents_of(&crate_name) {
-                        if dependent != tip_name && !compiled.contains(&dependent) {
-                            tracing::debug!(
-                                "Cascade: {crate_name} changed publicly, adding {dependent} to compile list"
-                            );
-                            crates_to_compile.push(dependent);
-                        }
+                // Always cascade: recompile workspace dependents so their rlibs have
+                // consistent SVH references to the just-recompiled crate.
+                for dependent in self.workspace_dependents_of(&crate_name) {
+                    if dependent != tip_name && !compiled.contains(&dependent) {
+                        tracing::debug!(
+                            "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
+                        );
+                        crates_to_compile.push(dependent);
                     }
                 }
             }
