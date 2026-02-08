@@ -288,3 +288,4 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you, shall be licensed as MIT or Apache-2, without any additional
 terms or conditions.
 <!-- Documentation formatting reviewed -->
+<!-- Documentation review: formatting tweak -->
