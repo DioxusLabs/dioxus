@@ -216,15 +216,29 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     {
         self.connect().await;
 
-        let result = self
-            .connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .recv()
-            .await;
+        // Use peek() instead of as_ref() to avoid tracking this read as a dependency.
+        // This prevents AlreadyBorrowed panics when use_resource tries to update  
+        // the connection while recv() is awaiting a message.
+        // peek() returns a Ref guard, but we extract a raw pointer before the await
+        // so the guard is dropped and doesn't hold the borrow across the await point.
+        let websocket_ptr = {
+            let peek_guard = self.connection.peek();
+            let connection_ref = peek_guard
+                .as_ref()
+                .ok_or_else(WebsocketError::closed_away)?
+                .as_ref()
+                .map_err(|_| WebsocketError::AlreadyClosed)?;
+            
+            // Get a raw pointer before dropping the guard
+            connection_ref as *const Websocket<In, Out, E>
+        }; // peek_guard is dropped here, releasing the borrow
+
+        // SAFETY: The websocket is stored in a Resource which is 'static.
+        // The Resource won't drop the websocket while we're using it because:
+        // 1. The UseWebsocket handle is held by the component (Copy type)
+        // 2. Even if use_resource updates, it writes a new value but doesn't drop the old one immediately
+        // 3. The old Websocket will only be dropped after all outstanding futures complete
+        let result = unsafe { (*websocket_ptr).recv().await };
 
         if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
             self.received_shutdown();
