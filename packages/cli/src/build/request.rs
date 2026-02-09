@@ -5152,7 +5152,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
     /// Find the rlib path for a workspace crate from its captured rustc args.
     ///
-    /// Extracts `--out-dir` from the args and globs for `lib<crate_name>-*.rlib`.
+    /// Extracts `--out-dir` and `-C extra-filename` from the args to construct the exact
+    /// rlib filename. This is important because multiple rlibs for the same crate can coexist
+    /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
+    /// and globbing would return an arbitrary one.
     fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Option<PathBuf> {
         // Extract --out-dir from the captured args
         let out_dir = rustc_args
@@ -5162,7 +5165,34 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .find(|(flag, _)| *flag == "--out-dir")
             .map(|(_, dir)| PathBuf::from(dir))?;
 
-        // Glob for lib<crate_name>-<hash>.rlib in the output directory
+        // Extract -C extra-filename from captured args.
+        // Cargo passes this to rustc to disambiguate output filenames via metadata hash.
+        // Handle all forms: `-Cextra-filename=X`, `-C extra-filename=X`, and `-C` `extra-filename=X`.
+        let extra_filename = rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
+            arg.strip_prefix("-Cextra-filename=")
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    // Handle `-C` followed by `extra-filename=X` as separate args
+                    if arg == "-C" {
+                        rustc_args.args.get(i + 1).and_then(|next| {
+                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
+                        })
+                    } else {
+                        None
+                    }
+                })
+        });
+
+        // If we have an exact extra-filename, construct the precise rlib path.
+        if let Some(extra) = &extra_filename {
+            let exact = out_dir.join(format!("lib{crate_name}{extra}.rlib"));
+            if exact.exists() {
+                return Some(exact);
+            }
+        }
+
+        // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
+        // This handles cases where -C extra-filename isn't in the captured args.
         let prefix = format!("lib{crate_name}-");
         let entries = std::fs::read_dir(&out_dir).ok()?;
         for entry in entries.flatten() {
