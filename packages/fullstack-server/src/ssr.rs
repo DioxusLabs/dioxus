@@ -1,4 +1,5 @@
 //! A shared pool of renderers for efficient server side rendering.
+
 use crate::isrg::{
     CachedRender, IncrementalRenderer, IncrementalRendererConfig, IncrementalRendererError,
     RenderFreshness,
@@ -559,8 +560,7 @@ impl SsrRendererPool {
     fn take_from_scope(context: &HydrationContext, vdom: &VirtualDom, scope: ScopeId) {
         vdom.in_scope(scope, || {
             // Grab any serializable server context from this scope
-            let other: Option<HydrationContext> = has_context();
-            if let Some(other) = other {
+            if let Some(other) = has_context::<HydrationContext>() {
                 context.extend(&other);
             }
         });

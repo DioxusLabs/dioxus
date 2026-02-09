@@ -64,8 +64,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
 
     let runtime = virtual_dom.runtime();
 
-    // If the hydrate feature is enabled, launch the client with hydration enabled
-    let should_hydrate = web_config.hydrate || cfg!(feature = "hydrate");
+    // Respect runtime hydrate config — don't let compile-time feature override it
+    let should_hydrate = web_config.hydrate;
 
     let mut websys_dom = WebsysDom::new(web_config, runtime);
 

@@ -42,11 +42,13 @@ where
     let storage_entry: crate::transport::SerializeContextEntry<Result<T, CapturedError>> =
         use_hook(|| serialize_context.create_entry());
 
-    #[cfg(feature = "server")]
+    // Use target_arch instead of cfg(feature) because cargo feature unification
+    // can enable both "web" and "server" features simultaneously.
+    #[cfg(not(target_arch = "wasm32"))]
     let caller = std::panic::Location::caller();
 
     // If this is the first run and we are on the web client, the data might be cached
-    #[cfg(feature = "web")]
+    #[cfg(target_arch = "wasm32")]
     let initial_web_result =
         use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Some(storage_entry.get()))));
 
@@ -55,18 +57,18 @@ where
     let mut loader_state = use_signal(|| LoaderState::Pending);
 
     let resource = use_resource(move || {
-        #[cfg(feature = "server")]
+        #[cfg(not(target_arch = "wasm32"))]
         let storage_entry = storage_entry.clone();
 
         let user_fut = future();
 
-        #[cfg(feature = "web")]
+        #[cfg(target_arch = "wasm32")]
         let initial_web_result = initial_web_result.clone();
 
         #[allow(clippy::let_and_return)]
         async move {
             // If this is the first run and we are on the web client, the data might be cached
-            #[cfg(feature = "web")]
+            #[cfg(target_arch = "wasm32")]
             match initial_web_result.take() {
                 // The data was deserialized successfully from the server
                 Some(Ok(o)) => {
@@ -106,7 +108,7 @@ where
             });
 
             // If this is the first run and we are on the server, cache the data in the slot we reserved for it
-            #[cfg(feature = "server")]
+            #[cfg(not(target_arch = "wasm32"))]
             storage_entry.insert(&out, caller);
 
             match out {
