@@ -430,6 +430,10 @@ impl AppBuilder {
         self.abort_all(BuildStage::Restarting);
         self.artifacts.take();
         self.patch_cache.take();
+
+        // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
+        self.modified_crates.clear();
+        self.object_cache = ObjectCache::new(&self.build.session_cache_dir());
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext {
