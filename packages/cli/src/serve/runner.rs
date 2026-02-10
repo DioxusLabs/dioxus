@@ -22,7 +22,7 @@ use notify::{
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     net::{IpAddr, TcpListener},
     path::{Path, PathBuf},
     sync::Arc,
@@ -1167,35 +1167,6 @@ impl AppServer {
         krates
     }
 
-    /// Map a changed file path to the workspace crate it belongs to.
-    ///
-    /// Returns the crate name in rustc convention (hyphens → underscores), matching the
-    /// `--crate-name` arg used by rustc and the keys in `workspace_rustc_args`.
-    ///
-    /// Finds the workspace member whose crate directory is the longest prefix of the file path.
-    pub(crate) fn file_to_workspace_crate(&self, file: &Path) -> Option<String> {
-        let mut best_match: Option<(String, usize)> = None;
-
-        for member in self.workspace.krates.workspace_members() {
-            if let krates::Node::Krate { krate, .. } = member {
-                let Some(crate_dir) = krate.manifest_path.parent() else {
-                    continue;
-                };
-                if let Ok(relative) = file.strip_prefix(crate_dir.as_std_path()) {
-                    let depth = relative.components().count();
-                    let is_better = best_match
-                        .as_ref()
-                        .map_or(true, |(_, best_depth)| depth < *best_depth);
-                    if is_better {
-                        best_match = Some((krate.name.replace('-', "_"), depth));
-                    }
-                }
-            }
-        }
-
-        best_match.map(|(name, _)| name)
-    }
-
     /// Compute the ordered compilation chain from a changed workspace crate to the tip crate.
     ///
     /// Returns crate names (underscore-normalized) in compilation order: the changed crate first,
@@ -1229,7 +1200,7 @@ impl AppServer {
         // parent[node] = the workspace crate that depends on it (closer to tip)
         let mut parent: HashMap<NodeId, Option<NodeId>> = HashMap::new();
         parent.insert(tip_node, None);
-        let mut queue = std::collections::VecDeque::new();
+        let mut queue = VecDeque::new();
         queue.push_back(tip_node);
 
         let mut target_node = None;
@@ -1311,6 +1282,35 @@ impl AppServer {
         // Longer chain = deeper in dep tree = should compile first
         crates_with_depth.sort_by(|a, b| b.1.cmp(&a.1));
         crates_with_depth.into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// Map a changed file path to the workspace crate it belongs to.
+    ///
+    /// Returns the crate name in rustc convention (hyphens → underscores), matching the
+    /// `--crate-name` arg used by rustc and the keys in `workspace_rustc_args`.
+    ///
+    /// Finds the workspace member whose crate directory is the longest prefix of the file path.
+    fn file_to_workspace_crate(&self, file: &Path) -> Option<String> {
+        let mut best_match: Option<(String, usize)> = None;
+
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                let Some(crate_dir) = krate.manifest_path.parent() else {
+                    continue;
+                };
+                if let Ok(relative) = file.strip_prefix(crate_dir.as_std_path()) {
+                    let depth = relative.components().count();
+                    let is_better = best_match
+                        .as_ref()
+                        .map_or(true, |(_, best_depth)| depth < *best_depth);
+                    if is_better {
+                        best_match = Some((krate.name.replace('-', "_"), depth));
+                    }
+                }
+            }
+        }
+
+        best_match.map(|(name, _)| name)
     }
 
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
