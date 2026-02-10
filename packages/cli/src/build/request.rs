@@ -475,6 +475,12 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
     pub(crate) build_id: BuildId,
+
+    /// Cache of compiled `.rcgu.o` files from workspace crates (for accumulated relinking).
+    pub(crate) object_cache: ObjectCache,
+
+    /// Cumulative set of workspace crates modified since the last fat build.
+    pub(crate) modified_crates: HashSet<String>,
 }
 
 impl BuildRequest {
@@ -1071,12 +1077,8 @@ impl BuildRequest {
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(ctx);
 
-        // For thin builds, compile workspace dep crates BEFORE the tip crate.
-        // This updates their rlibs on disk so cargo links the tip against fresh code.
-        let mut thin_state = self.compile_workspace_deps(ctx).await?;
-
         // Run the cargo build to produce our artifacts.
-        // For Thin mode this compiles the tip's bin target (deps already updated above).
+        // For thin builds this also pre-compiles workspace dep crates before the tip.
         let mut artifacts = self.cargo_build(ctx).await?;
 
         // Write the build artifacts to the bundle on the disk
@@ -1086,18 +1088,8 @@ impl BuildRequest {
                 cache,
                 ..
             } => {
-                let (object_cache, modified_crates) = thin_state
-                    .as_mut()
-                    .expect("thin_state must be set for Thin mode");
-                self.link_thin_patch(
-                    ctx,
-                    &mut artifacts,
-                    *aslr_reference,
-                    cache,
-                    object_cache,
-                    modified_crates,
-                )
-                .await?;
+                self.link_thin_patch(ctx, &mut artifacts, *aslr_reference, cache)
+                    .await?;
             }
 
             BuildMode::Base { .. } | BuildMode::Fat => {
@@ -1167,11 +1159,11 @@ impl BuildRequest {
     /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
     /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
     ///
-    /// Returns `Some((object_cache, modified_crates))` for thin builds, `None` otherwise.
+    /// Returns `(object_cache, modified_crates)` — defaulting to empty for non-thin builds.
     async fn compile_workspace_deps(
         &self,
         ctx: &BuildContext,
-    ) -> Result<Option<(ObjectCache, HashSet<String>)>> {
+    ) -> Result<(ObjectCache, HashSet<String>)> {
         let BuildMode::Thin {
             workspace_rustc_args,
             changed_crates,
@@ -1180,7 +1172,7 @@ impl BuildRequest {
             ..
         } = &ctx.mode
         else {
-            return Ok(None);
+            return Ok((ObjectCache::new(&self.session_cache_dir()), HashSet::new()));
         };
 
         let tip_name = self.tip_crate_name();
@@ -1282,7 +1274,7 @@ impl BuildRequest {
             );
         }
 
-        Ok(Some((object_cache, modified_crates)))
+        Ok((object_cache, modified_crates))
     }
 
     /// Cache tip objects from the just-completed cargo build, collect dep object paths from
@@ -1293,8 +1285,6 @@ impl BuildRequest {
         artifacts: &mut BuildArtifacts,
         aslr_reference: u64,
         cache: &Arc<HotpatchModuleCache>,
-        object_cache: &mut ObjectCache,
-        modified_crates: &mut HashSet<String>,
     ) -> Result<()> {
         let tip_name = self.tip_crate_name();
 
@@ -1312,17 +1302,17 @@ impl BuildRequest {
             .map(PathBuf::from)
             .collect();
         if !tip_object_paths.is_empty() {
-            if let Err(e) = object_cache.cache_from_paths(&tip_name, &tip_object_paths) {
+            if let Err(e) = artifacts.object_cache.cache_from_paths(&tip_name, &tip_object_paths) {
                 tracing::warn!("Failed to cache tip crate objects: {e}");
             }
         }
-        modified_crates.insert(tip_name.clone());
+        artifacts.modified_crates.insert(tip_name.clone());
 
         // Collect cached object paths from all modified dep crates.
         // Objects are already on disk in the object cache directory.
         let mut extra_object_paths: Vec<PathBuf> = Vec::new();
-        for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
-            if let Some(paths) = object_cache.get(dep_name) {
+        for dep_name in artifacts.modified_crates.iter().filter(|c| *c != &tip_name) {
+            if let Some(paths) = artifacts.object_cache.get(dep_name) {
                 extra_object_paths.extend(paths.iter().cloned());
             }
         }
@@ -1331,8 +1321,8 @@ impl BuildRequest {
             "Linking patch with {} tip objects + {} dep objects from {} modified crates ({:?})",
             tip_object_paths.len(),
             extra_object_paths.len(),
-            modified_crates.len(),
-            modified_crates,
+            artifacts.modified_crates.len(),
+            artifacts.modified_crates,
         );
 
         self.write_patch(
@@ -1352,6 +1342,10 @@ impl BuildRequest {
     /// be very confusing to the user.
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
+
+        // For thin builds, compile workspace dep crates before the tip.
+        // This updates dep rlibs on disk so cargo links the tip against fresh code.
+        let (object_cache, modified_crates) = self.compile_workspace_deps(ctx).await?;
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
@@ -1558,6 +1552,8 @@ impl BuildRequest {
             root_dir: self.root_dir(),
             patch_cache: None,
             build_id: ctx.build_id,
+            object_cache,
+            modified_crates,
         })
     }
 

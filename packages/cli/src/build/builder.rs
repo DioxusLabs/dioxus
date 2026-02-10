@@ -797,6 +797,11 @@ impl AppBuilder {
 
         self.patches.push(jump_table.clone());
 
+        // Sync the updated object cache and modified crates back from the build artifacts.
+        // The object files we link with will have changed.
+        self.object_cache = res.object_cache.clone();
+        self.modified_crates = res.modified_crates.clone();
+
         Ok(jump_table)
     }
 
