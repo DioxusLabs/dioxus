@@ -805,9 +805,9 @@ impl AppBuilder {
         tracing::info!(
             "Hot-patching: {NOTE_STYLE}{}{NOTE_STYLE:#} took {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
             changed_file
-                .display()
-                .to_string()
-                .trim_start_matches(&self.build.crate_dir().display().to_string()),
+                .strip_prefix(self.build.workspace_dir())
+                .unwrap_or(changed_file)
+                .display(),
             SystemTime::now()
                 .duration_since(res.time_start)
                 .unwrap()

@@ -1096,12 +1096,8 @@ impl BuildRequest {
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
-                let tip_args = artifacts
-                    .workspace_rustc_args
-                    .get(&self.tip_crate_name())
-                    .cloned()
-                    .unwrap_or_default();
-                self.write_frameworks(ctx, &tip_args)
+
+                self.write_frameworks(ctx, &artifacts)
                     .await
                     .context("Failed to write frameworks")?;
                 self.write_assets(ctx, &artifacts.assets)
@@ -1191,9 +1187,7 @@ impl BuildRequest {
             }
 
             let Some(rustc_args) = workspace_rustc_args.get(&crate_name) else {
-                tracing::warn!(
-                    "No captured rustc args for workspace crate {crate_name}, skipping"
-                );
+                tracing::warn!("No captured rustc args for workspace crate {crate_name}, skipping");
                 continue;
             };
 
@@ -1298,7 +1292,10 @@ impl BuildRequest {
             .map(PathBuf::from)
             .collect();
         if !tip_object_paths.is_empty() {
-            if let Err(e) = artifacts.object_cache.cache_from_paths(&tip_name, &tip_object_paths) {
+            if let Err(e) = artifacts
+                .object_cache
+                .cache_from_paths(&tip_name, &tip_object_paths)
+            {
                 tracing::warn!("Failed to cache tip crate objects: {e}");
             }
         }
@@ -1476,7 +1473,8 @@ impl BuildRequest {
                 }
             }
         }
-        tracing::debug!(
+
+        tracing::trace!(
             "Loaded workspace rustc args from {}: keys={:?}",
             args_dir.display(),
             workspace_rustc_args.keys().collect::<Vec<_>>(),
@@ -1494,15 +1492,13 @@ impl BuildRequest {
         }
 
         // Collect the linker args and attach them to the tip crate's entry
-        let link_args: Vec<String> = std::fs::read_to_string(self.link_args_file())
-            .context("Failed to read link args from file")?
-            .lines()
-            .map(|s| s.to_string())
-            .collect();
-
         let tip_crate_name = self.tip_crate_name();
         if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_crate_name) {
-            tip_args.link_args = link_args;
+            tip_args.link_args = std::fs::read_to_string(self.link_args_file())
+                .context("Failed to read link args from file")?
+                .lines()
+                .map(|s| s.to_string())
+                .collect();
         }
 
         let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
@@ -1511,11 +1507,14 @@ impl BuildRequest {
         if matches!(ctx.mode, BuildMode::Fat) {
             ctx.status_starting_link();
             let link_start = SystemTime::now();
-            let tip_args = workspace_rustc_args
-                .get(&tip_crate_name)
-                .cloned()
-                .unwrap_or_default();
-            self.run_fat_link(&exe, &tip_args).await?;
+            self.run_fat_link(
+                &exe,
+                &workspace_rustc_args
+                    .get(&tip_crate_name)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .await?;
             tracing::debug!(
                 "Fat linking completed in {}us",
                 SystemTime::now()
@@ -1659,8 +1658,19 @@ impl BuildRequest {
         Ok(())
     }
 
-    async fn write_frameworks(&self, _ctx: &BuildContext, direct_rustc: &RustcArgs) -> Result<()> {
+    async fn write_frameworks(
+        &self,
+        _ctx: &BuildContext,
+        artifacts: &BuildArtifacts,
+    ) -> Result<()> {
         let framework_dir = self.frameworks_folder();
+
+        // We use the rustc for the tip crate `main.rs` because that's where the linking happens
+        let direct_rustc = artifacts
+            .workspace_rustc_args
+            .get(&self.tip_crate_name())
+            .cloned()
+            .unwrap_or_default();
 
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
@@ -1871,7 +1881,6 @@ impl BuildRequest {
     /// manually do any linking.
     ///
     /// We also run some post processing steps here, like extracting out any new assets.
-    /// Run our custom linker setup to generate a patch file in the right location.
     ///
     /// `extra_objects` contains additional object file paths from compiled workspace dep crates
     /// that should be included in the patch dylib. These are combined with the tip crate's
@@ -1887,10 +1896,9 @@ impl BuildRequest {
     ) -> Result<()> {
         ctx.status_hotpatching();
 
-        let tip_crate_name = self.tip_crate_name();
         let args = artifacts
             .workspace_rustc_args
-            .get(&tip_crate_name)
+            .get(&self.tip_crate_name())
             .map(|a| a.link_args.clone())
             .unwrap_or_default();
 
