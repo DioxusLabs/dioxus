@@ -310,8 +310,7 @@ impl HotpatchModuleCache {
 
                 let mut tls_init_syms: Vec<(u64, String)> = Vec::new();
                 for sym in obj.symbols() {
-                    if let (Some(section_idx), Ok(sname)) = (sym.section_index(), sym.name())
-                    {
+                    if let (Some(section_idx), Ok(sname)) = (sym.section_index(), sym.name()) {
                         if Some(section_idx) == tls_section_index {
                             let offset = sym.address().saturating_sub(tls_data_addr);
                             tls_init_syms.push((offset, sname.to_string()));
@@ -388,7 +387,6 @@ pub fn create_windows_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> R
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
-        tls_fixups: Default::default(),
     })
 }
 
@@ -440,7 +438,6 @@ pub fn create_native_jump_table(
         new_base_address,
         aslr_reference,
         ifunc_count: 0,
-        tls_fixups: Default::default(),
     })
 }
 
@@ -744,7 +741,6 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
         ifunc_count,
         aslr_reference: 0,
         new_base_address: 0,
-        tls_fixups: Default::default(),
     })
 }
 
