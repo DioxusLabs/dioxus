@@ -87,7 +87,7 @@ impl HotpatchTip {
             modified_crates: std::collections::HashSet::new(),
             aslr_reference: self.aslr_reference,
             cache: cache.clone(),
-            object_cache: crate::ObjectCache::new(),
+            object_cache: crate::ObjectCache::new(&request.session_cache_dir()),
         };
 
         let artifacts = AppBuilder::started(request, mode, build_id)?

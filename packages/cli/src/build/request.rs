@@ -1221,24 +1221,12 @@ impl BuildRequest {
                 }
                 modified_crates.insert(tip_name.clone());
 
-                // Write dep crate objects from the cache to temp files for the linker.
-                let dep_object_dir = self.session_cache_dir().join("dep_objects");
-                std::fs::create_dir_all(&dep_object_dir)
-                    .context("Failed to create dep objects directory")?;
-                let mut extra_object_paths = Vec::new();
-
-                // Collect objects from all modified dep crates (not tip — tip objects come
-                // from the linker args and are already handled by write_patch).
+                // Collect cached object paths from all modified dep crates.
+                // Objects are already on disk in the object cache directory.
+                let mut extra_object_paths: Vec<PathBuf> = Vec::new();
                 for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
-                    if let Some(objects) = object_cache.get(dep_name) {
-                        for obj in objects {
-                            let obj_path =
-                                dep_object_dir.join(format!("{}-{}", dep_name, obj.name));
-                            std::fs::write(&obj_path, &obj.data).with_context(|| {
-                                format!("Failed to write dep object file: {}", obj_path.display())
-                            })?;
-                            extra_object_paths.push(obj_path);
-                        }
+                    if let Some(paths) = object_cache.get(dep_name) {
+                        extra_object_paths.extend(paths.iter().cloned());
                     }
                 }
 
@@ -1540,7 +1528,7 @@ impl BuildRequest {
             root_dir: self.root_dir(),
             patch_cache: None,
             build_id: ctx.build_id,
-            object_cache: ObjectCache::new(),
+            object_cache: ObjectCache::new(&self.session_cache_dir()),
             modified_crates: HashSet::new(),
         })
     }

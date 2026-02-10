@@ -170,7 +170,7 @@ impl AppBuilder {
             patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
-            object_cache: ObjectCache::new(),
+            object_cache: ObjectCache::new(&request.session_cache_dir()),
         })
     }
 
