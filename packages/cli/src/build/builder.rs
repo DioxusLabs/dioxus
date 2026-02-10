@@ -797,10 +797,6 @@ impl AppBuilder {
 
         self.patches.push(jump_table.clone());
 
-        // Sync the updated object cache and modified crates back from the build result
-        // so subsequent thin builds can use them for assembly diffing and accumulated relinking.
-        self.object_cache = res.object_cache.clone();
-
         Ok(jump_table)
     }
 

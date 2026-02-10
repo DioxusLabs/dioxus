@@ -475,9 +475,6 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
     pub(crate) build_id: BuildId,
-
-    /// Updated object cache after thin build (returned to AppBuilder for persistence).
-    pub(crate) object_cache: ObjectCache,
 }
 
 impl BuildRequest {
@@ -1258,9 +1255,6 @@ impl BuildRequest {
                     &extra_object_paths,
                 )
                 .await?;
-
-                // Return updated state in artifacts so AppBuilder can persist it.
-                artifacts.object_cache = object_cache;
             }
 
             BuildMode::Base { .. } | BuildMode::Fat => {
@@ -1537,7 +1531,6 @@ impl BuildRequest {
             root_dir: self.root_dir(),
             patch_cache: None,
             build_id: ctx.build_id,
-            object_cache: ObjectCache::new(&self.session_cache_dir()),
         })
     }
 
