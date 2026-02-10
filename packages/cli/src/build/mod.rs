@@ -10,7 +10,7 @@
 
 mod assets;
 mod builder;
-pub(crate) mod cache;
+mod cache;
 mod context;
 mod manifest;
 mod patch;

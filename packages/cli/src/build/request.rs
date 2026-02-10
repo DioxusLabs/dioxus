@@ -320,9 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    build::cache::ObjectCache, AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat,
-    DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs,
-    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
+    TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -5168,51 +5168,46 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// but that would require relying on cargo internals.
     ///
     /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
-    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if matches!(ctx.mode, BuildMode::Fat) {
-            // Bust fingerprints for ALL workspace member crates during Fat builds.
-            // This ensures cargo recompiles them through RUSTC_WORKSPACE_WRAPPER
-            // so we capture their rustc args for later thin builds.
-            let mut busted = Vec::new();
-            for member in self.workspace.krates.workspace_members() {
-                if let krates::Node::Krate { krate, .. } = member {
-                    self.bust_fingerprint_for_package(&krate.name)?;
-                    busted.push(krate.name.clone());
-                }
-            }
-            tracing::debug!("Busted fingerprints for workspace members: {busted:?}");
-        }
-        Ok(())
-    }
-
-    /// Bust cargo fingerprints for a specific package name.
     ///
     /// `dx` compiles everything with `--target` which ends up with a structure like:
     /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`
     ///
     /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
     /// target arg guarantees this will work.
-    pub(crate) fn bust_fingerprint_for_package(&self, package_name: &str) -> Result<()> {
-        let fingerprint_dir = self
-            .target_dir
-            .join(self.triple.to_string())
-            .join(&self.profile)
-            .join(".fingerprint");
+    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+        if matches!(ctx.mode, BuildMode::Fat) {
+            let fingerprint_dir = self
+                .target_dir
+                .join(self.triple.to_string())
+                .join(&self.profile)
+                .join(".fingerprint");
 
-        // split at the last `-` used to separate the hash from the name
-        // This causes to more aggressively bust hashes for all combinations of features
-        // and fingerprints for this package since we're just ignoring the hash
-        if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
-            for entry in entries.flatten() {
-                if let Some(fname) = entry.file_name().to_str() {
-                    if let Some((name, _)) = fname.rsplit_once('-') {
-                        if name == package_name {
-                            _ = std::fs::remove_dir_all(entry.path());
+            // Bust fingerprints for ALL workspace member crates during Fat builds.
+            // This ensures cargo recompiles them through RUSTC_WORKSPACE_WRAPPER
+            // so we capture their rustc args for later thin builds.
+            let mut busted = HashSet::new();
+            for member in self.workspace.krates.workspace_members() {
+                if let krates::Node::Krate { krate, .. } = member {
+                    busted.insert(krate.name.as_str());
+                }
+            }
+
+            // split at the last `-` used to separate the hash from the name
+            // This causes to more aggressively bust hashes for all combinations of features
+            // and fingerprints for this package since we're just ignoring the hash
+            if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
+                for entry in entries.flatten() {
+                    if let Some(fname) = entry.file_name().to_str() {
+                        if let Some((name, _)) = fname.rsplit_once('-') {
+                            if busted.contains(name) {
+                                _ = std::fs::remove_dir_all(entry.path());
+                            }
                         }
                     }
                 }
             }
         }
+
         Ok(())
     }
 
