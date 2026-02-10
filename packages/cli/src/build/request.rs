@@ -1850,10 +1850,11 @@ impl BuildRequest {
 
         // Collect cached object paths from all modified dep crates.
         // Objects are already on disk in the object cache directory.
-        let mut object_files: Vec<PathBuf> = Vec::new();
+        // These must NOT be deleted after linking — they persist across patches.
+        let mut cached_objects: Vec<PathBuf> = Vec::new();
         for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
             if let Some(paths) = artifacts.object_cache.get(dep_name) {
-                object_files.extend(paths.iter().cloned());
+                cached_objects.extend(paths.iter().cloned());
             }
         }
 
@@ -1910,13 +1911,20 @@ impl BuildRequest {
         //     -Wl,-all_load
         // ```
         let mut dylibs = vec![];
-        object_files.extend(
-            args.args
-                .iter()
-                .filter(|arg| arg.ends_with(".rcgu.o"))
-                .sorted()
-                .map(PathBuf::from),
-        );
+
+        // Tip objects from link_args are temps — safe to delete after linking.
+        let temp_objects: Vec<PathBuf> = args
+            .link_args
+            .iter()
+            .filter(|arg| arg.ends_with(".rcgu.o"))
+            .sorted()
+            .map(PathBuf::from)
+            .collect();
+
+        // Merge both sets for the linker.
+        let mut object_files: Vec<PathBuf> = Vec::with_capacity(cached_objects.len() + temp_objects.len());
+        object_files.append(&mut cached_objects);
+        object_files.extend(temp_objects.iter().cloned());
 
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
         // fat binary into direct addresses from the running process.
@@ -2034,9 +2042,9 @@ impl BuildRequest {
         self.write_index_html(&artifacts.assets)
             .context("Failed to write index.html")?;
 
-        // Clean up the temps manually
-        // todo: we might want to keep them around for debugging purposes
-        for file in object_files {
+        // Clean up temp object files (tip incremental objects + stub.o).
+        // Cached dep objects in object_cache/ are NOT deleted — they persist across patches.
+        for file in &temp_objects {
             _ = std::fs::remove_file(file);
         }
 
