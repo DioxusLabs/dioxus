@@ -12,7 +12,6 @@ mod assets;
 mod builder;
 pub(crate) mod cache;
 mod context;
-pub(crate) mod diff;
 mod manifest;
 mod patch;
 mod pre_render;

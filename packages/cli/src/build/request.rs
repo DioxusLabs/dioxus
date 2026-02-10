@@ -320,10 +320,9 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use crate::{
-    build::cache::ObjectCache,
-    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
-    LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
-    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    build::cache::ObjectCache, AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat,
+    DioxusConfig, Error, LinkAction, LinkerFlavor, Platform, Renderer, Result, RustcArgs,
+    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -1110,51 +1109,21 @@ impl BuildRequest {
                     continue;
                 };
 
-                // Get old objects for assembly diffing (if we have them cached)
-                let old_objects = object_cache.get(&crate_name).cloned();
-
                 // Compile the dep crate directly with rustc
                 tracing::debug!("Compiling workspace dep crate: {crate_name}");
                 if let Err(e) = self.compile_dep_crate(&crate_name, rustc_args).await {
-                    tracing::warn!(
-                        "Failed to compile workspace dep crate {crate_name}: {e}"
-                    );
+                    tracing::warn!("Failed to compile workspace dep crate {crate_name}: {e}");
                     continue;
                 }
 
                 // Find and cache the new objects from the rlib
-                if let Some(rlib_path) =
-                    self.find_rlib_for_crate(&crate_name, rustc_args)
-                {
-                    if let Err(e) =
-                        object_cache.cache_from_rlib(&crate_name, &rlib_path)
-                    {
-                        tracing::warn!(
-                            "Failed to cache objects from rlib for {crate_name}: {e}"
-                        );
+                if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
+                    if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
+                        tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
                     }
                 }
 
                 modified_crates.insert(crate_name.clone());
-
-                // Assembly diff: compare old vs new objects for informational logging.
-                // Note: we ALWAYS cascade to dependents regardless of the diff result,
-                // because rustc's SVH (stable version hash) changes on ANY recompilation,
-                // even for implementation-only changes. Downstream crates compiled against
-                // the old SVH become invalid and must be recompiled.
-                //
-                // In the future, the diff result could be used to skip the TIP crate
-                // compilation (Phase 2), but intermediate dep crates must always cascade.
-                if let (Some(old), Some(new)) =
-                    (old_objects.as_deref(), object_cache.get(&crate_name))
-                {
-                    let diff = crate::build::diff::diff_objects(old, new);
-                    tracing::debug!(
-                        "Assembly diff for {crate_name}: {} changed symbols, cascade={}",
-                        diff.changed_symbols.len(),
-                        diff.needs_downstream_recompile
-                    );
-                }
 
                 // Always cascade: recompile workspace dependents so their rlibs have
                 // consistent SVH references to the just-recompiled crate.
@@ -1304,7 +1273,8 @@ impl BuildRequest {
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
-                let tip_args = artifacts.workspace_rustc_args
+                let tip_args = artifacts
+                    .workspace_rustc_args
                     .get(&self.tip_crate_name())
                     .cloned()
                     .unwrap_or_default();
@@ -5142,9 +5112,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let output = cmd.output().await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!(
-                "Failed to compile workspace dep crate '{crate_name}':\n{stderr}"
-            );
+            bail!("Failed to compile workspace dep crate '{crate_name}':\n{stderr}");
         }
 
         Ok(())
@@ -5259,7 +5227,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
         Ok(())
     }
-
 
     pub(crate) fn patch_cache_exe(&self, exe: &Path) -> PathBuf {
         match self.bundle {
