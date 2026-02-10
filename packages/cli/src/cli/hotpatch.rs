@@ -73,7 +73,7 @@ impl HotpatchTip {
         let tip_crate_name = request.main_target.replace('-', "_");
         let mut workspace_rustc_args = HashMap::new();
         workspace_rustc_args.insert(
-            tip_crate_name,
+            format!("{tip_crate_name}.bin"),
             crate::RustcArgs {
                 args: rustc_args,
                 envs: rustc_envs,

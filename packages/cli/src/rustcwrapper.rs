@@ -113,23 +113,20 @@ pub fn run_rustc() -> ExitCode {
             let serialized_args =
                 serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
 
-            // Always write to {crate_name}.json so dep crate args are found by name.
+            // Write args with an explicit target suffix: {crate_name}.lib.json or
+            // {crate_name}.bin.json. This avoids the ambiguity of a bare {crate_name}.json
+            // and ensures lib+bin crates don't overwrite each other.
+            let suffix = match crate_type {
+                Some("lib" | "rlib") => "lib",
+                Some("bin") => "bin",
+                _ => "bin", // proc-macro, cdylib, etc. — treat as bin
+            };
+
             std::fs::write(
-                args_dir.join(format!("{crate_name}.json")),
+                args_dir.join(format!("{crate_name}.{suffix}.json")),
                 &serialized_args,
             )
             .expect("Failed to write rustc args to file");
-
-            // For crates with both lib and bin targets (src/lib.rs + src/main.rs),
-            // cargo compiles lib first, then bin — the bin args overwrite the lib's.
-            // To preserve the lib args, also write a copy to {crate_name}.lib.json.
-            if matches!(crate_type, Some("lib" | "rlib")) {
-                std::fs::write(
-                    args_dir.join(format!("{crate_name}.lib.json")),
-                    &serialized_args,
-                )
-                .expect("Failed to write rustc lib args to file");
-            }
         }
     }
 

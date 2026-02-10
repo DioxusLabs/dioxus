@@ -1186,7 +1186,7 @@ impl BuildRequest {
                 continue;
             }
 
-            let Some(rustc_args) = workspace_rustc_args.get(&crate_name) else {
+            let Some(rustc_args) = workspace_rustc_args.get(&format!("{crate_name}.lib")) else {
                 tracing::warn!("No captured rustc args for workspace crate {crate_name}, skipping");
                 continue;
             };
@@ -1282,7 +1282,7 @@ impl BuildRequest {
         // thin build, not the stale ones from ctx.mode's fat build).
         let tip_args = artifacts
             .workspace_rustc_args
-            .get(&tip_name)
+            .get(&format!("{tip_name}.bin"))
             .cloned()
             .unwrap_or_default();
         let tip_object_paths: Vec<PathBuf> = tip_args
@@ -1309,7 +1309,7 @@ impl BuildRequest {
             }
         }
 
-        tracing::info!(
+        tracing::debug!(
             "Linking patch with {} tip objects + {} dep objects from {} modified crates ({:?})",
             tip_object_paths.len(),
             extra_object_paths.len(),
@@ -1453,10 +1453,9 @@ impl BuildRequest {
         }
 
         // Load per-crate rustc args from the wrapper directory.
-        // Each workspace crate compiled through the wrapper has its own JSON file.
-        // For crates with both lib.rs and main.rs, the lib target is stored as
-        // "{crate_name}.lib.json" (key: "{crate_name}.lib") and the bin target as
-        // "{crate_name}.json" (key: "{crate_name}").
+        // Each workspace crate compiled through the wrapper has its own JSON file:
+        // "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
+        // "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
         let mut workspace_rustc_args = HashMap::new();
         let args_dir = self.rustc_wrapper_args_dir();
         if let Ok(entries) = std::fs::read_dir(&args_dir) {
@@ -1491,9 +1490,10 @@ impl BuildRequest {
             }
         }
 
-        // Collect the linker args and attach them to the tip crate's entry
+        // Collect the linker args and attach them to the tip crate's bin entry
         let tip_crate_name = self.tip_crate_name();
-        if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_crate_name) {
+        let tip_bin_key = format!("{tip_crate_name}.bin");
+        if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_bin_key) {
             tip_args.link_args = std::fs::read_to_string(self.link_args_file())
                 .context("Failed to read link args from file")?
                 .lines()
@@ -1510,7 +1510,7 @@ impl BuildRequest {
             self.run_fat_link(
                 &exe,
                 &workspace_rustc_args
-                    .get(&tip_crate_name)
+                    .get(&tip_bin_key)
                     .cloned()
                     .unwrap_or_default(),
             )
@@ -1668,7 +1668,7 @@ impl BuildRequest {
         // We use the rustc for the tip crate `main.rs` because that's where the linking happens
         let direct_rustc = artifacts
             .workspace_rustc_args
-            .get(&self.tip_crate_name())
+            .get(&format!("{}.bin", self.tip_crate_name()))
             .cloned()
             .unwrap_or_default();
 
@@ -1898,7 +1898,7 @@ impl BuildRequest {
 
         let args = artifacts
             .workspace_rustc_args
-            .get(&self.tip_crate_name())
+            .get(&format!("{}.bin", self.tip_crate_name()))
             .map(|a| a.link_args.clone())
             .unwrap_or_default();
 
@@ -2773,9 +2773,8 @@ impl BuildRequest {
                 workspace_rustc_args,
                 ..
             } => {
-                let tip_crate_name = self.tip_crate_name();
                 let rustc_args = workspace_rustc_args
-                    .get(&tip_crate_name)
+                    .get(&format!("{}.bin", self.tip_crate_name()))
                     .context("Missing rustc args for tip crate")?;
 
                 let mut cmd = Command::new("rustc");
