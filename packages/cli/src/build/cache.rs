@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 pub struct ObjectCache {
     /// Root directory: `session_cache_dir/object_cache/`
     dir: PathBuf,
+
     /// crate_name -> object file paths on disk
     objects: HashMap<String, Vec<PathBuf>>,
 }

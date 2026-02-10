@@ -1073,125 +1073,7 @@ impl BuildRequest {
 
         // For thin builds, compile workspace dep crates BEFORE the tip crate.
         // This updates their rlibs on disk so cargo links the tip against fresh code.
-        let mut thin_pre_state: Option<(ObjectCache, HashSet<String>)> = None;
-        if let BuildMode::Thin {
-            workspace_rustc_args,
-            changed_crates,
-            modified_crates,
-            object_cache,
-            ..
-        } = &ctx.mode
-        {
-            let tip_name = self.tip_crate_name();
-            let mut object_cache = object_cache.clone();
-            let mut modified_crates = modified_crates.clone();
-
-            // Compile workspace dep crates with cascade detection.
-            //
-            // Start with the explicitly changed dep crates (already in leaf-first order
-            // from handle_file_change). As we compile each, assembly-diff to detect
-            // cross-crate changes. If cascade is needed, add the crate's workspace
-            // dependents to the compile list so they get recompiled too.
-            let mut crates_to_compile: Vec<String> = changed_crates
-                .iter()
-                .filter(|c| *c != &tip_name)
-                .cloned()
-                .collect();
-            let mut compiled = HashSet::new();
-            let mut idx = 0;
-
-            while idx < crates_to_compile.len() {
-                let crate_name = crates_to_compile[idx].clone();
-                idx += 1;
-
-                // Skip already-compiled crates and the tip (compiled separately below)
-                if !compiled.insert(crate_name.clone()) || crate_name == tip_name {
-                    continue;
-                }
-
-                let Some(rustc_args) = workspace_rustc_args.get(&crate_name) else {
-                    tracing::warn!(
-                        "No captured rustc args for workspace crate {crate_name}, skipping"
-                    );
-                    continue;
-                };
-
-                // Compile the dep crate directly with rustc
-                tracing::debug!("Compiling workspace dep crate: {crate_name}");
-                if let Err(e) = self.compile_dep_crate(&crate_name, rustc_args).await {
-                    tracing::warn!("Failed to compile workspace dep crate {crate_name}: {e}");
-                    continue;
-                }
-
-                // Find and cache the new objects from the rlib
-                if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
-                    if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
-                        tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
-                    }
-                }
-
-                modified_crates.insert(crate_name.clone());
-
-                // Always cascade: recompile workspace dependents so their rlibs have
-                // consistent SVH references to the just-recompiled crate.
-                for dependent in self.workspace_dependents_of(&crate_name) {
-                    if dependent != tip_name && !compiled.contains(&dependent) {
-                        tracing::debug!(
-                            "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
-                        );
-                        crates_to_compile.push(dependent);
-                    }
-                }
-            }
-
-            // If the tip crate has a lib target (src/lib.rs + src/main.rs), compile it
-            // before the bin target so the bin links against the fresh lib rlib.
-            let lib_key = format!("{tip_name}.lib");
-            if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
-                // Check rlib mod time before compilation to verify it actually changes
-                let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args);
-                let pre_modified = rlib_pre
-                    .as_ref()
-                    .and_then(|p| std::fs::metadata(p).ok())
-                    .and_then(|m| m.modified().ok());
-
-                tracing::info!("Compiling tip lib target: {lib_key}");
-                if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
-                    tracing::warn!("Failed to compile tip lib target: {e}");
-                } else if let Some(rlib_path) = self.find_rlib_for_crate(&tip_name, lib_args) {
-                    let post_modified = std::fs::metadata(&rlib_path)
-                        .ok()
-                        .and_then(|m| m.modified().ok());
-                    let rlib_changed = match (pre_modified, post_modified) {
-                        (Some(pre), Some(post)) => post > pre,
-                        _ => true, // assume changed if we can't check
-                    };
-                    tracing::info!(
-                        "Found lib rlib at: {} (modified={})",
-                        rlib_path.display(),
-                        rlib_changed,
-                    );
-
-                    match object_cache.cache_from_rlib(&lib_key, &rlib_path) {
-                        Ok(()) => {
-                            let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
-                            tracing::info!("Cached {count} objects from tip lib rlib");
-                            modified_crates.insert(lib_key);
-                        }
-                        Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
-                    }
-                } else {
-                    tracing::warn!("Could not find rlib for tip lib target {tip_name}");
-                }
-            } else {
-                tracing::debug!(
-                    "No lib target for tip crate (key '{lib_key}' not in workspace_rustc_args, keys={:?})",
-                    workspace_rustc_args.keys().collect::<Vec<_>>()
-                );
-            }
-
-            thin_pre_state = Some((object_cache, modified_crates));
-        }
+        let mut thin_state = self.compile_workspace_deps(ctx).await?;
 
         // Run the cargo build to produce our artifacts.
         // For Thin mode this compiles the tip's bin target (deps already updated above).
@@ -1204,55 +1086,16 @@ impl BuildRequest {
                 cache,
                 ..
             } => {
-                let (mut object_cache, mut modified_crates) =
-                    thin_pre_state.expect("thin_pre_state must be set for Thin mode");
-                let tip_name = self.tip_crate_name();
-
-                // Cache tip crate objects from the FRESH linker args (from the just-completed
-                // thin build, not the stale ones from ctx.mode's fat build).
-                let tip_args = artifacts
-                    .workspace_rustc_args
-                    .get(&tip_name)
-                    .cloned()
-                    .unwrap_or_default();
-                let tip_object_paths: Vec<PathBuf> = tip_args
-                    .link_args
-                    .iter()
-                    .filter(|arg| arg.ends_with(".rcgu.o"))
-                    .map(PathBuf::from)
-                    .collect();
-                if !tip_object_paths.is_empty() {
-                    if let Err(e) = object_cache.cache_from_paths(&tip_name, &tip_object_paths) {
-                        tracing::warn!("Failed to cache tip crate objects: {e}");
-                    }
-                }
-                modified_crates.insert(tip_name.clone());
-
-                // Collect cached object paths from all modified dep crates.
-                // Objects are already on disk in the object cache directory.
-                let mut extra_object_paths: Vec<PathBuf> = Vec::new();
-                for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
-                    if let Some(paths) = object_cache.get(dep_name) {
-                        extra_object_paths.extend(paths.iter().cloned());
-                    }
-                }
-
-                tracing::info!(
-                    "Linking patch with {} tip objects + {} dep objects from {} modified crates ({:?})",
-                    tip_object_paths.len(),
-                    extra_object_paths.len(),
-                    modified_crates.len(),
-                    modified_crates,
-                );
-
-                // Link the patch dylib with all accumulated objects.
-                self.write_patch(
+                let (object_cache, modified_crates) = thin_state
+                    .as_mut()
+                    .expect("thin_state must be set for Thin mode");
+                self.link_thin_patch(
                     ctx,
-                    *aslr_reference,
                     &mut artifacts,
+                    *aslr_reference,
                     cache,
-                    &tip_args,
-                    &extra_object_paths,
+                    object_cache,
+                    modified_crates,
                 )
                 .await?;
             }
@@ -1317,6 +1160,190 @@ impl BuildRequest {
         );
 
         Ok(artifacts)
+    }
+
+    /// For thin builds, compile workspace dep crates BEFORE the tip crate.
+    ///
+    /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
+    /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
+    ///
+    /// Returns `Some((object_cache, modified_crates))` for thin builds, `None` otherwise.
+    async fn compile_workspace_deps(
+        &self,
+        ctx: &BuildContext,
+    ) -> Result<Option<(ObjectCache, HashSet<String>)>> {
+        let BuildMode::Thin {
+            workspace_rustc_args,
+            changed_crates,
+            modified_crates,
+            object_cache,
+            ..
+        } = &ctx.mode
+        else {
+            return Ok(None);
+        };
+
+        let tip_name = self.tip_crate_name();
+        let mut object_cache = object_cache.clone();
+        let mut modified_crates = modified_crates.clone();
+
+        // Compile workspace dep crates with cascade. Start with the explicitly changed dep
+        // crates (already in leaf-first order from handle_file_change). As we compile each,
+        // add the crate's workspace dependents so their rlibs have consistent SVH references.
+        let mut crates_to_compile: Vec<String> = changed_crates
+            .iter()
+            .filter(|c| *c != &tip_name)
+            .cloned()
+            .collect();
+        let mut compiled = HashSet::new();
+        let mut idx = 0;
+
+        while idx < crates_to_compile.len() {
+            let crate_name = crates_to_compile[idx].clone();
+            idx += 1;
+
+            if !compiled.insert(crate_name.clone()) || crate_name == tip_name {
+                continue;
+            }
+
+            let Some(rustc_args) = workspace_rustc_args.get(&crate_name) else {
+                tracing::warn!(
+                    "No captured rustc args for workspace crate {crate_name}, skipping"
+                );
+                continue;
+            };
+
+            tracing::debug!("Compiling workspace dep crate: {crate_name}");
+            if let Err(e) = self.compile_dep_crate(&crate_name, rustc_args).await {
+                tracing::warn!("Failed to compile workspace dep crate {crate_name}: {e}");
+                continue;
+            }
+
+            if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
+                if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
+                    tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
+                }
+            }
+
+            modified_crates.insert(crate_name.clone());
+
+            for dependent in self.workspace_dependents_of(&crate_name) {
+                if dependent != tip_name && !compiled.contains(&dependent) {
+                    tracing::debug!(
+                        "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
+                    );
+                    crates_to_compile.push(dependent);
+                }
+            }
+        }
+
+        // If the tip crate has a lib target (src/lib.rs + src/main.rs), compile it
+        // before the bin target so the bin links against the fresh lib rlib.
+        let lib_key = format!("{tip_name}.lib");
+        if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
+            let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args);
+            let pre_modified = rlib_pre
+                .as_ref()
+                .and_then(|p| std::fs::metadata(p).ok())
+                .and_then(|m| m.modified().ok());
+
+            tracing::info!("Compiling tip lib target: {lib_key}");
+            if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
+                tracing::warn!("Failed to compile tip lib target: {e}");
+            } else if let Some(rlib_path) = self.find_rlib_for_crate(&tip_name, lib_args) {
+                let post_modified = std::fs::metadata(&rlib_path)
+                    .ok()
+                    .and_then(|m| m.modified().ok());
+                let rlib_changed = match (pre_modified, post_modified) {
+                    (Some(pre), Some(post)) => post > pre,
+                    _ => true,
+                };
+                tracing::info!(
+                    "Found lib rlib at: {} (modified={})",
+                    rlib_path.display(),
+                    rlib_changed,
+                );
+
+                match object_cache.cache_from_rlib(&lib_key, &rlib_path) {
+                    Ok(()) => {
+                        let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
+                        tracing::info!("Cached {count} objects from tip lib rlib");
+                        modified_crates.insert(lib_key);
+                    }
+                    Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
+                }
+            } else {
+                tracing::warn!("Could not find rlib for tip lib target {tip_name}");
+            }
+        } else {
+            tracing::debug!(
+                "No lib target for tip crate (key '{lib_key}' not in workspace_rustc_args, keys={:?})",
+                workspace_rustc_args.keys().collect::<Vec<_>>()
+            );
+        }
+
+        Ok(Some((object_cache, modified_crates)))
+    }
+
+    /// Cache tip objects from the just-completed cargo build, collect dep object paths from
+    /// the cache, and link everything into a patch dylib.
+    async fn link_thin_patch(
+        &self,
+        ctx: &BuildContext,
+        artifacts: &mut BuildArtifacts,
+        aslr_reference: u64,
+        cache: &Arc<HotpatchModuleCache>,
+        object_cache: &mut ObjectCache,
+        modified_crates: &mut HashSet<String>,
+    ) -> Result<()> {
+        let tip_name = self.tip_crate_name();
+
+        // Cache tip crate objects from the FRESH linker args (from the just-completed
+        // thin build, not the stale ones from ctx.mode's fat build).
+        let tip_args = artifacts
+            .workspace_rustc_args
+            .get(&tip_name)
+            .cloned()
+            .unwrap_or_default();
+        let tip_object_paths: Vec<PathBuf> = tip_args
+            .link_args
+            .iter()
+            .filter(|arg| arg.ends_with(".rcgu.o"))
+            .map(PathBuf::from)
+            .collect();
+        if !tip_object_paths.is_empty() {
+            if let Err(e) = object_cache.cache_from_paths(&tip_name, &tip_object_paths) {
+                tracing::warn!("Failed to cache tip crate objects: {e}");
+            }
+        }
+        modified_crates.insert(tip_name.clone());
+
+        // Collect cached object paths from all modified dep crates.
+        // Objects are already on disk in the object cache directory.
+        let mut extra_object_paths: Vec<PathBuf> = Vec::new();
+        for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
+            if let Some(paths) = object_cache.get(dep_name) {
+                extra_object_paths.extend(paths.iter().cloned());
+            }
+        }
+
+        tracing::info!(
+            "Linking patch with {} tip objects + {} dep objects from {} modified crates ({:?})",
+            tip_object_paths.len(),
+            extra_object_paths.len(),
+            modified_crates.len(),
+            modified_crates,
+        );
+
+        self.write_patch(
+            ctx,
+            aslr_reference,
+            artifacts,
+            cache,
+            &tip_args,
+            &extra_object_paths,
+        )
+        .await
     }
 
     /// Run the cargo build by assembling the build command and executing it.
