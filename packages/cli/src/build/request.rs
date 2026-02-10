@@ -1976,7 +1976,7 @@ impl BuildRequest {
         let mut out_args: Vec<OsString> = vec![];
         out_args.extend(object_files.iter().map(Into::into));
         out_args.extend(dylibs.iter().map(Into::into));
-        out_args.extend(self.thin_link_args(&args.args)?.iter().map(Into::into));
+        out_args.extend(self.thin_link_args(&args.link_args)?.iter().map(Into::into));
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
@@ -2029,8 +2029,8 @@ impl BuildRequest {
         //
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
-        if let Some(idx) = args.args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(PathBuf::from(args.args[idx + 1].as_str()));
+        if let Some(idx) = args.link_args.iter().position(|arg| *arg == "-o") {
+            _ = std::fs::remove_file(PathBuf::from(args.link_args[idx + 1].as_str()));
         }
 
         // Now extract the assets from the fat binary
