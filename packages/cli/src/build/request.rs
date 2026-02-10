@@ -478,9 +478,6 @@ pub struct BuildArtifacts {
 
     /// Cache of compiled `.rcgu.o` files from workspace crates (for accumulated relinking).
     pub(crate) object_cache: ObjectCache,
-
-    /// Cumulative set of workspace crates modified since the last fat build.
-    pub(crate) modified_crates: HashSet<String>,
 }
 
 impl BuildRequest {
@@ -1159,25 +1156,20 @@ impl BuildRequest {
     /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
     /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
     ///
-    /// Returns `(object_cache, modified_crates)` — defaulting to empty for non-thin builds.
-    async fn compile_workspace_deps(
-        &self,
-        ctx: &BuildContext,
-    ) -> Result<(ObjectCache, HashSet<String>)> {
+    /// Returns the updated `ObjectCache` — defaulting to empty for non-thin builds.
+    async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
         let BuildMode::Thin {
             workspace_rustc_args,
             changed_crates,
-            modified_crates,
             object_cache,
             ..
         } = &ctx.mode
         else {
-            return Ok((ObjectCache::new(&self.session_cache_dir()), HashSet::new()));
+            return Ok(ObjectCache::new(&self.session_cache_dir()));
         };
 
         let tip_name = self.tip_crate_name();
         let mut object_cache = object_cache.clone();
-        let mut modified_crates = modified_crates.clone();
 
         // Compile workspace dep crates with cascade. Start with the explicitly changed dep
         // crates (already in leaf-first order from handle_file_change). As we compile each,
@@ -1216,8 +1208,6 @@ impl BuildRequest {
                     tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
                 }
             }
-
-            modified_crates.insert(crate_name.clone());
 
             for dependent in self.workspace_dependents_of(&crate_name) {
                 if dependent != tip_name && !compiled.contains(&dependent) {
@@ -1260,7 +1250,6 @@ impl BuildRequest {
                     Ok(()) => {
                         let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
                         tracing::info!("Cached {count} objects from tip lib rlib");
-                        modified_crates.insert(lib_key);
                     }
                     Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
                 }
@@ -1274,7 +1263,7 @@ impl BuildRequest {
             );
         }
 
-        Ok((object_cache, modified_crates))
+        Ok(object_cache)
     }
 
     /// Cache tip objects from the just-completed cargo build, collect dep object paths from
@@ -1286,6 +1275,13 @@ impl BuildRequest {
         aslr_reference: u64,
         cache: &Arc<HotpatchModuleCache>,
     ) -> Result<()> {
+        let BuildMode::Thin {
+            modified_crates, ..
+        } = &ctx.mode
+        else {
+            unreachable!("link_thin_patch called in non-thin mode");
+        };
+
         let tip_name = self.tip_crate_name();
 
         // Cache tip crate objects from the FRESH linker args (from the just-completed
@@ -1306,12 +1302,11 @@ impl BuildRequest {
                 tracing::warn!("Failed to cache tip crate objects: {e}");
             }
         }
-        artifacts.modified_crates.insert(tip_name.clone());
 
         // Collect cached object paths from all modified dep crates.
         // Objects are already on disk in the object cache directory.
         let mut extra_object_paths: Vec<PathBuf> = Vec::new();
-        for dep_name in artifacts.modified_crates.iter().filter(|c| *c != &tip_name) {
+        for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
             if let Some(paths) = artifacts.object_cache.get(dep_name) {
                 extra_object_paths.extend(paths.iter().cloned());
             }
@@ -1321,8 +1316,8 @@ impl BuildRequest {
             "Linking patch with {} tip objects + {} dep objects from {} modified crates ({:?})",
             tip_object_paths.len(),
             extra_object_paths.len(),
-            artifacts.modified_crates.len(),
-            artifacts.modified_crates,
+            modified_crates.len(),
+            modified_crates,
         );
 
         self.write_patch(
@@ -1345,7 +1340,7 @@ impl BuildRequest {
 
         // For thin builds, compile workspace dep crates before the tip.
         // This updates dep rlibs on disk so cargo links the tip against fresh code.
-        let (object_cache, modified_crates) = self.compile_workspace_deps(ctx).await?;
+        let object_cache = self.compile_workspace_deps(ctx).await?;
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
@@ -1553,7 +1548,6 @@ impl BuildRequest {
             patch_cache: None,
             build_id: ctx.build_id,
             object_cache,
-            modified_crates,
         })
     }
 
@@ -5049,7 +5043,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Returns underscore-normalized crate names of workspace members that have `crate_name`
     /// as a dependency. Used for cascade detection — when a dep's public symbols change,
     /// its dependents need recompilation too.
-    fn workspace_dependents_of(&self, crate_name: &str) -> Vec<String> {
+    pub(crate) fn workspace_dependents_of(&self, crate_name: &str) -> Vec<String> {
         let krates = &self.workspace.krates;
 
         // Find the NodeId for the target crate

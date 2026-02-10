@@ -369,17 +369,32 @@ impl AppBuilder {
             .context("Failed to get patch cache")
             .unwrap();
 
-        // Add the changed crates to the cumulative modified set.
-        // Every patch includes objects from ALL crates that have been modified since the fat build.
+        // Pre-compute the cumulative modified_crates set. Every patch includes objects from
+        // ALL crates modified since the fat build. We compute the full cascade closure here
+        // (while we have &mut self) so it doesn't need to be round-tripped through BuildArtifacts.
         let tip_crate_name = self.build.main_target.replace('-', "_");
-        for crate_name in &changed_crates {
-            self.modified_crates.insert(crate_name.clone());
+        self.modified_crates.insert(tip_crate_name.clone());
+
+        // Add changed crates and their transitive workspace dependents (cascade).
+        let mut to_visit: Vec<String> = changed_crates.clone();
+        let mut visited = HashSet::new();
+        while let Some(c) = to_visit.pop() {
+            if !visited.insert(c.clone()) {
+                continue;
+            }
+            self.modified_crates.insert(c.clone());
+            for dep in self.build.workspace_dependents_of(&c) {
+                if dep != tip_crate_name && !visited.contains(&dep) {
+                    to_visit.push(dep);
+                }
+            }
         }
 
-        // The tip crate is always in the modified set since we always relink it.
-        // (It might not need recompilation if assembly diff shows no cascade, but
-        // its objects must be in the patch dylib.)
-        self.modified_crates.insert(tip_crate_name);
+        // If the tip has a lib target, it'll be compiled too.
+        let lib_key = format!("{tip_crate_name}.lib");
+        if artifacts.workspace_rustc_args.contains_key(&lib_key) {
+            self.modified_crates.insert(lib_key);
+        }
 
         tracing::debug!(
             "Patch rebuild: changed_crates={:?}, modified_crates={:?}",
@@ -795,12 +810,11 @@ impl AppBuilder {
                 .as_millis()
         );
 
+        // Commit this patch
         self.patches.push(jump_table.clone());
 
-        // Sync the updated object cache and modified crates back from the build artifacts.
-        // The object files we link with will have changed.
+        // Sync the updated object cache back from the build artifacts.
         self.object_cache = res.object_cache.clone();
-        self.modified_crates = res.modified_crates.clone();
 
         Ok(jump_table)
     }
