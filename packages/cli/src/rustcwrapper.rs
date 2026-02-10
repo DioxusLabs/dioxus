@@ -114,27 +114,22 @@ pub fn run_rustc() -> ExitCode {
                 serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
 
             // Always write to {crate_name}.json so dep crate args are found by name.
+            std::fs::write(
+                args_dir.join(format!("{crate_name}.json")),
+                &serialized_args,
+            )
+            .expect("Failed to write rustc args to file");
+
             // For crates with both lib and bin targets (src/lib.rs + src/main.rs),
             // cargo compiles lib first, then bin — the bin args overwrite the lib's.
             // To preserve the lib args, also write a copy to {crate_name}.lib.json.
-            let main_file = args_dir.join(format!("{crate_name}.json"));
-            let is_lib = matches!(crate_type, Some("lib" | "rlib"));
-
-            if is_lib {
-                let lib_file = args_dir.join(format!("{crate_name}.lib.json"));
-                std::fs::write(&lib_file, &serialized_args)
-                    .expect("Failed to write rustc lib args to file");
+            if matches!(crate_type, Some("lib" | "rlib")) {
+                std::fs::write(
+                    args_dir.join(format!("{crate_name}.lib.json")),
+                    &serialized_args,
+                )
+                .expect("Failed to write rustc lib args to file");
             }
-
-            std::fs::write(&main_file, &serialized_args)
-                .expect("Failed to write rustc args to file");
-
-            eprintln!(
-                "[dx-rustc-wrapper] Capturing args for crate '{}' (type={:?}) -> {}",
-                crate_name,
-                crate_type,
-                main_file.display()
-            );
         }
     }
 

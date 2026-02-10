@@ -511,16 +511,11 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                // Determine which workspace crates changed based on the file paths.
-                // Order them so deeper deps compile first (leaves before dependents).
-                let changed_set: HashSet<String> = files
-                    .iter()
-                    .filter_map(|f| self.file_to_workspace_crate(f))
-                    .collect();
-                let changed_crates = self.order_changed_crates(&changed_set);
+                let changed_crates = self.order_changed_crates(&files);
 
                 self.client
                     .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
+
                 if let Some(server) = self.server.as_mut() {
                     server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
                 }
@@ -1300,14 +1295,19 @@ impl AppServer {
     ///
     /// Uses `workspace_dep_chain` to determine the depth of each crate in the dependency graph,
     /// then sorts so that leaves (deepest deps) compile before crates closer to the tip.
-    fn order_changed_crates(&self, changed: &HashSet<String>) -> Vec<String> {
-        let mut crates_with_depth: Vec<_> = changed
+    fn order_changed_crates(&self, files: &[PathBuf]) -> Vec<String> {
+        // Determine which workspace crates changed based on the file paths.
+        // Order them so deeper deps compile first (leaves before dependents).
+        let changed_set: HashSet<String> = files
             .iter()
-            .map(|c| {
-                let depth = self.workspace_dep_chain(c).len();
-                (c.clone(), depth)
-            })
+            .filter_map(|f| self.file_to_workspace_crate(f))
             .collect();
+
+        let mut crates_with_depth: Vec<_> = changed_set
+            .iter()
+            .map(|c| (c.clone(), self.workspace_dep_chain(c).len()))
+            .collect();
+
         // Longer chain = deeper in dep tree = should compile first
         crates_with_depth.sort_by(|a, b| b.1.cmp(&a.1));
         crates_with_depth.into_iter().map(|(c, _)| c).collect()

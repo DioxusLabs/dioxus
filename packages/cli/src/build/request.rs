@@ -433,16 +433,27 @@ pub enum BuildMode {
 
     /// A "thin" build generated with `rustc` directly and dx as a custom linker
     Thin {
-        workspace_rustc_args: HashMap<String, RustcArgs>,
+        /// List of changed files causing this rebuild. Mostly used for diagnostics
         changed_files: Vec<PathBuf>,
+
         /// Which workspace crates had source file changes in this edit.
         changed_crates: Vec<String>,
+
+        /// The ASLR slide of the running program, used to hardcode symbol jumps
+        aslr_reference: u64,
+
+        /// The captured RustcArgs for every crate in the workspace, collected by RUSTC_WORKSPACE_WRAPPER
+        /// This is used for replaying rustc invocations for workspace hotpatching
+        workspace_rustc_args: HashMap<String, RustcArgs>,
+
         /// Cumulative set of all workspace crates modified since the fat build.
         modified_crates: HashSet<String>,
-        aslr_reference: u64,
-        cache: Arc<HotpatchModuleCache>,
-        /// Cache of compiled objects from previous thin builds, for assembly diffing and relinking.
+
+        /// Cache of compiled objects from previous thin builds, used by future re-linking
         object_cache: ObjectCache,
+
+        /// Cache of initial binary parsing which speeds up stub creation
+        cache: Arc<HotpatchModuleCache>,
     },
 }
 
@@ -464,10 +475,9 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
     pub(crate) build_id: BuildId,
+
     /// Updated object cache after thin build (returned to AppBuilder for persistence).
     pub(crate) object_cache: ObjectCache,
-    /// Updated cumulative modified crates set after thin build.
-    pub(crate) modified_crates: HashSet<String>,
 }
 
 impl BuildRequest {
@@ -1251,7 +1261,6 @@ impl BuildRequest {
 
                 // Return updated state in artifacts so AppBuilder can persist it.
                 artifacts.object_cache = object_cache;
-                artifacts.modified_crates = modified_crates;
             }
 
             BuildMode::Base { .. } | BuildMode::Fat => {
@@ -1529,7 +1538,6 @@ impl BuildRequest {
             patch_cache: None,
             build_id: ctx.build_id,
             object_cache: ObjectCache::new(&self.session_cache_dir()),
-            modified_crates: HashSet::new(),
         })
     }
 

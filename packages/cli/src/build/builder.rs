@@ -1,8 +1,7 @@
 use crate::{
-    build::cache::ObjectCache,
-    serve::WebServer,
-    verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat,
-    ProgressRx, ProgressTx, Result, RustcArgs, StructuredOutput,
+    build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
+    BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
+    RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context, Error};
 use dioxus_cli_opt::process_file_to;
@@ -801,7 +800,6 @@ impl AppBuilder {
         // Sync the updated object cache and modified crates back from the build result
         // so subsequent thin builds can use them for assembly diffing and accumulated relinking.
         self.object_cache = res.object_cache.clone();
-        self.modified_crates = res.modified_crates.clone();
 
         Ok(jump_table)
     }

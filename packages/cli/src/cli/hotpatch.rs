@@ -5,8 +5,8 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
-use std::io::Read;
 use std::sync::Arc;
+use std::{collections::HashMap, io::Read};
 
 const HELP_HEADING: &str = "Hotpatching a binary";
 
@@ -71,7 +71,7 @@ impl HotpatchTip {
         let cache = Arc::new(HotpatchModuleCache::new(&exe, &request.triple)?);
 
         let tip_crate_name = request.main_target.replace('-', "_");
-        let mut workspace_rustc_args = std::collections::HashMap::new();
+        let mut workspace_rustc_args = HashMap::new();
         workspace_rustc_args.insert(
             tip_crate_name,
             crate::RustcArgs {
@@ -80,6 +80,7 @@ impl HotpatchTip {
                 link_args,
             },
         );
+
         let mode = BuildMode::Thin {
             workspace_rustc_args,
             changed_files: vec![],
