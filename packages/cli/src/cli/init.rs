@@ -86,7 +86,7 @@ impl Init {
             ..Default::default()
         };
 
-        let path = cargo_generate::generate(args)?;
+        let path = create::cargo_generate_with_gitconfig_fallback(args)?;
         _ = create::post_create(&path, &self.vcs.unwrap_or(Vcs::Git));
         Ok(StructuredOutput::Success)
     }
