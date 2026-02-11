@@ -414,6 +414,13 @@ incremental = true
 [profile.dev.package.walrus]
 opt-level = 3
 
+# ensure we have adversarial setup for tls
+[profile.dev.package.cross-tls-crate]
+opt-level = 2
+
+[profile.dev.package.cross-tls-crate-dylib]
+opt-level = 2
+
 [profile.release-max-opt]
 inherits = "release"
 lto = true
