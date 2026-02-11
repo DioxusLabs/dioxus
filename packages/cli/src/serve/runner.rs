@@ -511,7 +511,7 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                let changed_crates = self.order_changed_crates(&files);
+                let changed_crates = self.order_changed_crates(files);
 
                 self.client
                     .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
