@@ -1411,10 +1411,9 @@ impl BuildRequest {
             };
 
             tracing::debug!("Compiling workspace dep crate: {crate_name}");
-            if let Err(e) = self.compile_dep_crate(&crate_name, rustc_args).await {
-                tracing::warn!("Failed to compile workspace dep crate {crate_name}: {e}");
-                continue;
-            }
+            self.compile_dep_crate(&crate_name, rustc_args)
+                .await
+                .with_context(|| format!("Failed to compile workspace dep crate '{crate_name}'"))?;
 
             if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
                 if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
@@ -1828,11 +1827,18 @@ impl BuildRequest {
 
         // Cache tip crate objects from the FRESH linker args (from the just-completed
         // thin build, not the stale ones from ctx.mode's fat build).
+        let tip_bin_key = format!("{tip_name}.bin");
         let args = artifacts
             .workspace_rustc_args
-            .get(&format!("{tip_name}.bin"))
+            .get(&tip_bin_key)
             .cloned()
-            .unwrap_or_default();
+            .with_context(|| {
+                format!(
+                    "Missing rustc args for tip bin target '{tip_bin_key}' \
+                     (available keys: {:?})",
+                    artifacts.workspace_rustc_args.keys().collect::<Vec<_>>()
+                )
+            })?;
 
         // Collect objs from tip and re-cache them in the obj cache map
         let tip_object_paths: Vec<PathBuf> = args
@@ -1856,6 +1862,12 @@ impl BuildRequest {
             if let Some(paths) = artifacts.object_cache.get(dep_name) {
                 cached_objects.extend(paths.iter().cloned());
             }
+        }
+
+        // If the tip has a lib target (lib+bin crate), include its cached objects too.
+        let lib_key = format!("{tip_name}.lib");
+        if let Some(paths) = artifacts.object_cache.get(&lib_key) {
+            cached_objects.extend(paths.iter().cloned());
         }
 
         // Extract out the incremental object files.
@@ -5135,14 +5147,22 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
         // This handles cases where -C extra-filename isn't in the captured args.
+        // Prefer the most recently modified rlib to avoid picking up stale artifacts.
         let prefix = format!("lib{crate_name}-");
         let entries = std::fs::read_dir(&out_dir).ok()?;
+        let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with(&prefix) && name.ends_with(".rlib") {
-                    return Some(entry.path());
+                    let mtime = entry.metadata().ok()?.modified().ok()?;
+                    if best.as_ref().map_or(true, |(_, t)| mtime > *t) {
+                        best = Some((entry.path(), mtime));
+                    }
                 }
             }
+        }
+        if let Some((path, _)) = best {
+            return Some(path);
         }
 
         None

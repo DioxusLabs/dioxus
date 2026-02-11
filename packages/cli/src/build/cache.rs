@@ -63,8 +63,8 @@ impl ObjectCache {
                 continue;
             }
 
-            // Only keep .rcgu.o object files
-            if !name.ends_with(".rcgu.o") && !name.ends_with(".o") {
+            // Only keep object files
+            if !name.ends_with(".o") {
                 continue;
             }
 

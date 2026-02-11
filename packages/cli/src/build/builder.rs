@@ -372,6 +372,11 @@ impl AppBuilder {
         // Pre-compute the cumulative modified_crates set. Every patch includes objects from
         // ALL crates modified since the fat build. We compute the full cascade closure here
         // (while we have &mut self) so it doesn't need to be round-tripped through BuildArtifacts.
+        //
+        // Note: compile_workspace_deps() independently computes which crates to compile for THIS
+        // patch (starting from changed_crates + cascade). That serves a different purpose — it only
+        // compiles what changed now, not everything ever modified. Both use workspace_dependents_of
+        // for the BFS, so they stay in sync automatically.
         let tip_crate_name = self.build.main_target.replace('-', "_");
         self.modified_crates.insert(tip_crate_name.clone());
 
@@ -388,12 +393,6 @@ impl AppBuilder {
                     to_visit.push(dep);
                 }
             }
-        }
-
-        // If the tip has a lib target, it'll be compiled too.
-        let lib_key = format!("{tip_crate_name}.lib");
-        if artifacts.workspace_rustc_args.contains_key(&lib_key) {
-            self.modified_crates.insert(lib_key);
         }
 
         tracing::debug!(
