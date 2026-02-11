@@ -201,6 +201,24 @@ impl LaunchBuilder {
         }
     }
 
+    /// Switch to an embedded-friendly desktop launcher.
+    ///
+    /// This is intended for applications that embed Dioxus Desktop inside an existing host process
+    /// (for example, as a plugin/add-in). On Windows, `tao::EventLoop::run` will call
+    /// `std::process::exit` when the event loop exits, which can terminate the host process.
+    ///
+    /// When the current platform is Desktop, this switches the launcher to
+    /// `dioxus_desktop::launch::launch_return` which uses `run_return` so the event loop can exit
+    /// without calling `std::process::exit`.
+    #[cfg(feature = "desktop")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "desktop")))]
+    pub fn embedded(mut self) -> Self {
+        if matches!(self.platform, KnownPlatform::Desktop) {
+            self.platform = KnownPlatform::Other(dioxus_desktop::launch::launch_return);
+        }
+        self
+    }
+
     /// Inject state into the root component's context that is created on the thread that the app is launched on.
     ///
     /// # Example
