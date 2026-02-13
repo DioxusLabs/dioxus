@@ -18,9 +18,9 @@ fn attributes_pass_properly() {
 
     let template = &o.template;
 
-    assert_eq!(template.attr_paths.len(), 3);
+    assert_eq!(template.attr_paths().len(), 3);
 
-    let _circle = template.roots[0];
+    let _circle = template.roots()[0];
     let TemplateNode::Element { attrs, tag, namespace, children } = _circle else {
         panic!("Expected an element");
     };

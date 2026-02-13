@@ -129,7 +129,7 @@ impl WriteMutations for WebsysDom {
         }
         let tmpl_id = self.templates.get(&template).cloned().unwrap_or_else(|| {
             let mut roots = vec![];
-            for root in template.roots {
+            for root in template.roots() {
                 roots.push(self.create_template_node(root))
             }
             let id = self.templates.len() as u16;

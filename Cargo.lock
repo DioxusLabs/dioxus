@@ -5716,6 +5716,7 @@ dependencies = [
  "tracing-fluent-assertions",
  "tracing-subscriber",
  "web-sys",
+ "xxhash-rust",
 ]
 
 [[package]]

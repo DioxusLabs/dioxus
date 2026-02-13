@@ -171,7 +171,7 @@ fn create_random_template(depth: u8) -> (Template, Box<[DynamicNode]>) {
             DynamicNodeType::Other => create_random_dynamic_node(depth + 1),
         })
         .collect();
-    (Template { roots, node_paths, attr_paths }, dynamic_nodes)
+    (Template::new(roots, node_paths, attr_paths), dynamic_nodes)
 }
 
 fn create_random_dynamic_node(depth: u8) -> DynamicNode {
@@ -182,11 +182,7 @@ fn create_random_dynamic_node(depth: u8) -> DynamicNode {
             .map(|_| {
                 VNode::new(
                     None,
-                    Template {
-                        roots: &[TemplateNode::Dynamic { id: 0 }],
-                        node_paths: &[&[0]],
-                        attr_paths: &[],
-                    },
+                    Template::new(&[TemplateNode::Dynamic { id: 0 }], &[&[0]], &[]),
                     Box::new([DynamicNode::Component(VComponent::new(
                         create_random_element,
                         DepthProps { depth, root: false },
@@ -248,7 +244,7 @@ fn create_random_element(cx: DepthProps) -> Element {
                 None,
                 template,
                 dynamic_nodes,
-                (0..template.attr_paths.len())
+                (0..template.attr_paths().len())
                     .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
             )
@@ -258,7 +254,7 @@ fn create_random_element(cx: DepthProps) -> Element {
             let (template, dynamic_nodes) = match *last_template.borrow() {
                 Some(template) => (
                     template,
-                    (0..template.node_paths.len())
+                    (0..template.node_paths().len())
                         .map(|_| create_random_dynamic_node(cx.depth + 1))
                         .collect(),
                 ),
@@ -268,7 +264,7 @@ fn create_random_element(cx: DepthProps) -> Element {
                 None,
                 template,
                 dynamic_nodes,
-                (0..template.attr_paths.len())
+                (0..template.attr_paths().len())
                     .map(|_| Box::new([create_random_dynamic_attr()]) as Box<[Attribute]>)
                     .collect(),
             )

@@ -143,7 +143,7 @@ impl VNode {
         &self,
         root_idx: usize,
     ) -> Option<(usize, &DynamicNode)> {
-        self.template.roots[root_idx]
+        self.template.roots()[root_idx]
             .dynamic_id()
             .map(|id| (id, &self.dynamic_nodes[id]))
     }
@@ -180,7 +180,7 @@ impl VNode {
 
     pub(crate) fn find_last_element(&self, dom: &VirtualDom) -> ElementId {
         let mount_id = self.mount.get();
-        let last_root_index = self.template.roots.len() - 1;
+        let last_root_index = self.template.roots().len() - 1;
         let last = match self.get_dynamic_root_node_and_id(last_root_index) {
             // This node is static, just get the root id
             None => dom.get_mounted_root_node(mount_id, last_root_index),
@@ -306,7 +306,7 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        let roots = self.template.roots;
+        let roots = self.template.roots();
         for (idx, node) in roots.iter().enumerate() {
             let last_node = idx == roots.len() - 1;
             if let Some(id) = node.dynamic_id() {
@@ -343,7 +343,7 @@ impl VNode {
     ) {
         let template = self.template;
         for (idx, dyn_node) in self.dynamic_nodes.iter().enumerate() {
-            let path_len = template.node_paths.get(idx).map(|path| path.len());
+            let path_len = template.node_paths().get(idx).map(|path| path.len());
             // Roots are cleaned up automatically above and nodes with a empty path are placeholders
             if let Some(2..) = path_len {
                 self.remove_dynamic_node(
@@ -398,7 +398,7 @@ impl VNode {
 
     pub(super) fn reclaim_attributes(&self, mount: MountId, dom: &mut VirtualDom) {
         let mut next_id = None;
-        for (idx, path) in self.template.attr_paths.iter().enumerate() {
+        for (idx, path) in self.template.attr_paths().iter().enumerate() {
             // We clean up the roots in the next step, so don't worry about them here
             if path.len() <= 1 {
                 continue;
@@ -429,7 +429,7 @@ impl VNode {
             let mut old_attributes_iter = old_attrs.iter().peekable();
             let mut new_attributes_iter = new_attrs.iter().peekable();
             let attribute_id = dom.get_mounted_dyn_attr(mount_id, idx);
-            let path = self.template.attr_paths[idx];
+            let path = self.template.attr_paths()[idx];
 
             loop {
                 match (old_attributes_iter.peek(), new_attributes_iter.peek()) {
@@ -558,18 +558,18 @@ impl VNode {
             entry.insert(VNodeMount {
                 node: self.clone(),
                 parent,
-                root_ids: vec![ElementId(0); template.roots.len()].into_boxed_slice(),
-                mounted_attributes: vec![ElementId(0); template.attr_paths.len()]
+                root_ids: vec![ElementId(0); template.roots().len()].into_boxed_slice(),
+                mounted_attributes: vec![ElementId(0); template.attr_paths().len()]
                     .into_boxed_slice(),
-                mounted_dynamic_nodes: vec![usize::MAX; template.node_paths.len()]
+                mounted_dynamic_nodes: vec![usize::MAX; template.node_paths().len()]
                     .into_boxed_slice(),
             });
         }
 
         // Walk the roots, creating nodes and assigning IDs
         // nodes in an iterator of (dynamic_node_index, path) and attrs in an iterator of (attr_index, path)
-        let mut nodes = template.node_paths.iter().copied().enumerate().peekable();
-        let mut attrs = template.attr_paths.iter().copied().enumerate().peekable();
+        let mut nodes = template.node_paths().iter().copied().enumerate().peekable();
+        let mut attrs = template.attr_paths().iter().copied().enumerate().peekable();
 
         // Get the mounted id of this block
         // At this point, we should have already mounted the block
@@ -588,7 +588,7 @@ impl VNode {
         // Go through each root node and create the node, adding it to the stack.
         // Each node already exists in the template, so we can just clone it from the template
         let nodes_created = template
-            .roots
+            .roots()
             .iter()
             .enumerate()
             .map(|(root_idx, root)| {
@@ -646,7 +646,7 @@ impl VNode {
     fn reference_to_dynamic_node(&self, mount: MountId, dynamic_node_id: usize) -> ElementRef {
         ElementRef {
             path: ElementPath {
-                path: self.template.node_paths[dynamic_node_id],
+                path: self.template.node_paths()[dynamic_node_id],
             },
             mount,
         }
@@ -772,7 +772,7 @@ impl VNode {
                 // If we actually created real new nodes, we need to replace the placeholder for this dynamic node with the new dynamic nodes
                 if m > 0 {
                     // The path is one shorter because the top node is the root
-                    let path = &self.template.node_paths[dynamic_node_id][1..];
+                    let path = &self.template.node_paths()[dynamic_node_id][1..];
                     to.replace_placeholder_with_nodes(path, m);
                 }
             }

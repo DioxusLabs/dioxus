@@ -153,8 +153,8 @@ impl<F: Fn(ErrorContext) -> Element + 'static> From<F> for ErrorHandler {
 }
 
 fn default_handler(errors: ErrorContext) -> Element {
-    static TEMPLATE: Template = Template {
-        roots: &[TemplateNode::Element {
+    static TEMPLATE: Template = Template::new(
+        &[TemplateNode::Element {
             tag: "div",
             namespace: None,
             attrs: &[TemplateAttribute::Static {
@@ -164,9 +164,9 @@ fn default_handler(errors: ErrorContext) -> Element {
             }],
             children: &[TemplateNode::Dynamic { id: 0usize }],
         }],
-        node_paths: &[&[0u8, 0u8]],
-        attr_paths: &[],
-    };
+        &[&[0u8, 0u8]],
+        &[],
+    );
     std::result::Result::Ok(VNode::new(
         None,
         TEMPLATE,
@@ -174,19 +174,19 @@ fn default_handler(errors: ErrorContext) -> Element {
             .error()
             .iter()
             .map(|e| {
-                static TEMPLATE: Template = Template {
-                    roots: &[TemplateNode::Element {
+                static INNER_TEMPLATE: Template = Template::new(
+                    &[TemplateNode::Element {
                         tag: "pre",
                         namespace: None,
                         attrs: &[],
                         children: &[TemplateNode::Dynamic { id: 0usize }],
                     }],
-                    node_paths: &[&[0u8, 0u8]],
-                    attr_paths: &[],
-                };
+                    &[&[0u8, 0u8]],
+                    &[],
+                );
                 VNode::new(
                     None,
-                    TEMPLATE,
+                    INNER_TEMPLATE,
                     Box::new([e.to_string().into_dyn_node()]),
                     Default::default(),
                 )
@@ -320,11 +320,8 @@ pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
         (props.handle_error.0)(error_boundary.clone())
     } else {
         std::result::Result::Ok({
-            static TEMPLATE: Template = Template {
-                roots: &[TemplateNode::Dynamic { id: 0usize }],
-                node_paths: &[&[0u8]],
-                attr_paths: &[],
-            };
+            static TEMPLATE: Template =
+                Template::new(&[TemplateNode::Dynamic { id: 0usize }], &[&[0u8]], &[]);
             VNode::new(
                 None,
                 TEMPLATE,

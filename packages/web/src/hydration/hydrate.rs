@@ -268,7 +268,7 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
     ) -> Result<(), RehydrationError> {
-        for (i, root) in vnode.template.roots.iter().enumerate() {
+        for (i, root) in vnode.template.roots().iter().enumerate() {
             self.rehydrate_template_node(
                 dom,
                 vnode,
