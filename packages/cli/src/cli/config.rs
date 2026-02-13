@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CliSettings, TraceSrc, Workspace};
+use crate::{settings::SupportedEditor, CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
@@ -38,6 +38,8 @@ pub(crate) enum Setting {
     WSLFilePollInterval { value: u16 },
     /// Disable the built-in telemetry for the CLI
     DisableTelemetry { value: BoolValue },
+    /// Set the preferred editor for debug sessions
+    PreferredEditor { value: SupportedEditor },
 }
 
 impl Display for Setting {
@@ -48,6 +50,7 @@ impl Display for Setting {
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
             Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
+            Self::PreferredEditor { value: _ } => write!(f, "preferred-editor"),
         }
     }
 }
@@ -113,6 +116,9 @@ impl Config {
                     }
                     Setting::DisableTelemetry { value } => {
                         settings.disable_telemetry = Some(value.into());
+                    }
+                    Setting::PreferredEditor { value } => {
+                        settings.preferred_editor = Some(value);
                     }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");

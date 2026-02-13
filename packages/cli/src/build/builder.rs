@@ -1606,6 +1606,21 @@ impl AppBuilder {
     }
 
     pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
+        // Get the preferred editor from workspace settings, defaulting to VS Code
+        use crate::settings::SupportedEditor;
+        let preferred_editor = self
+            .build
+            .workspace
+            .settings
+            .preferred_editor
+            .unwrap_or(SupportedEditor::Vscode);
+
+        // Map the editor to its binary and URL scheme
+        let (editor_binary, url_scheme) = match preferred_editor {
+            SupportedEditor::Vscode => ("code", "vscode"),
+            SupportedEditor::Cursor => ("cursor", "cursor"),
+        };
+
         let url = match self.build.bundle {
             BundleFormat::MacOS
             | BundleFormat::Windows
@@ -1617,7 +1632,7 @@ impl AppBuilder {
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                    "{url_scheme}://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 
@@ -1632,7 +1647,7 @@ impl AppBuilder {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
                     None => "".to_owned(),
                 };
-                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+                format!("{url_scheme}://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
             }
 
             BundleFormat::Ios => {
@@ -1642,7 +1657,7 @@ impl AppBuilder {
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                    "{url_scheme}://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 
@@ -1737,7 +1752,7 @@ impl AppBuilder {
 
                 let program_path = self.build.main_exe();
                 format!(
-                    r#"vscode://vadimcn.vscode-lldb/launch/config?{{
+                    r#"{url_scheme}://vadimcn.vscode-lldb/launch/config?{{
                         'name':'Attach to Android',
                         'type':'lldb',
                         'request':'attach',
@@ -1764,7 +1779,7 @@ impl AppBuilder {
 
         tracing::info!("Opening debugger for [{}]: {url}", self.build.bundle);
 
-        _ = tokio::process::Command::new("code")
+        _ = tokio::process::Command::new(editor_binary)
             .arg("--open-url")
             .arg(url)
             .spawn();
