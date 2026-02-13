@@ -842,6 +842,12 @@ impl TraceController {
                 }),
             ),
             Commands::Doctor(_cmd) => ("doctor".to_string(), json!({})),
+            Commands::ShellCompletions(cmd) => (
+                "completions".to_string(),
+                json!({
+                    "shell": cmd.shell.to_string(),
+                }),
+            ),
             Commands::Translate(cmd) => (
                 "translate".to_string(),
                 json!({
