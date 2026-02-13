@@ -1,8 +1,9 @@
-//! Maps unified permissions from Dioxus.toml to platform-specific identifiers.
+//! Maps unified Dioxus.toml config to platform-specific manifest data.
 //!
-//! This module converts the cross-platform permission declarations into:
-//! - Android: `<uses-permission>` entries for AndroidManifest.xml
-//! - iOS/macOS: Info.plist usage description keys
+//! This module converts cross-platform declarations (permissions, deep links,
+//! background modes) into platform-specific identifiers:
+//! - Android: `<uses-permission>` entries, intent filters, foreground service types
+//! - iOS/macOS: Info.plist keys, URL schemes, UIBackgroundModes
 
 use crate::config::{
     AndroidConfig, BackgroundConfig, DeepLinkConfig, IosConfig, LocationPrecision, MacosConfig,
@@ -29,7 +30,7 @@ pub struct PlistEntry {
 
 /// Maps unified permissions, deep links, and background modes to platform-specific identifiers
 #[derive(Debug, Default)]
-pub struct PermissionMapper {
+pub struct ManifestMapper {
     pub android_permissions: Vec<AndroidPermissionEntry>,
     pub android_features: Vec<String>,
     pub ios_plist_entries: Vec<PlistEntry>,
@@ -54,7 +55,7 @@ pub struct PermissionMapper {
     pub android_foreground_service_types: Vec<String>,
 }
 
-impl PermissionMapper {
+impl ManifestMapper {
     /// Create a new permission mapper from the unified config
     pub fn from_config(
         permissions: &PermissionsConfig,
@@ -103,6 +104,14 @@ impl PermissionMapper {
 
         // Map background modes
         mapper.map_background_modes(background, android, ios);
+
+        // Log mapped permissions for debugging
+        for perm in &mapper.android_permissions {
+            tracing::debug!("Android permission: {} - {}", perm.permission, perm.description);
+        }
+        for entry in &mapper.ios_plist_entries {
+            tracing::debug!("iOS plist: {} = {}", entry.key, entry.value);
+        }
 
         mapper
     }
@@ -609,29 +618,6 @@ impl PermissionMapper {
         self.android_foreground_service_types = android_types;
     }
 
-    /// Generate iOS plist XML for Info.plist
-    pub fn generate_ios_plist_xml(&self) -> String {
-        let mut xml = String::new();
-        for entry in &self.ios_plist_entries {
-            xml.push_str(&format!(
-                "\t<key>{}</key>\n\t<string>{}</string>\n",
-                entry.key, entry.value
-            ));
-        }
-        xml
-    }
-
-    /// Generate macOS plist XML for Info.plist
-    pub fn generate_macos_plist_xml(&self) -> String {
-        let mut xml = String::new();
-        for entry in &self.macos_plist_entries {
-            xml.push_str(&format!(
-                "\t<key>{}</key>\n\t<string>{}</string>\n",
-                entry.key, entry.value
-            ));
-        }
-        xml
-    }
 }
 
 #[cfg(test)]
@@ -649,7 +635,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mapper = PermissionMapper::from_config(
+        let mapper = ManifestMapper::from_config(
             &permissions,
             &DeepLinkConfig::default(),
             &BackgroundConfig::default(),
@@ -684,7 +670,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mapper = PermissionMapper::from_config(
+        let mapper = ManifestMapper::from_config(
             &permissions,
             &DeepLinkConfig::default(),
             &BackgroundConfig::default(),
@@ -712,7 +698,7 @@ mod tests {
             ..Default::default()
         };
 
-        let mapper = PermissionMapper::from_config(
+        let mapper = ManifestMapper::from_config(
             &permissions,
             &DeepLinkConfig::default(),
             &BackgroundConfig::default(),

@@ -319,7 +319,6 @@
 //! ## Extra links
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
-use super::permission_mapper::PermissionMapper;
 use super::HotpatchModuleCache;
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
@@ -1126,9 +1125,6 @@ impl BuildRequest {
                         .context("Failed to compile widget extensions")?;
                 }
 
-                self.update_manifests()
-                    .context("Failed to update manifests with permissions")?;
-
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
@@ -1828,266 +1824,6 @@ impl BuildRequest {
             );
         }
 
-        Ok(())
-    }
-
-    /// Update platform manifests with permissions, deep links, and background modes from Dioxus.toml.
-    ///
-    /// This reads from the unified `[permissions]`, `[deep_links]`, and `[background]` sections
-    /// and platform-specific overrides, then injects them into the appropriate manifest files.
-    pub(crate) fn update_manifests(&self) -> Result<()> {
-        // Create permission mapper from config
-        let mapper = PermissionMapper::from_config(
-            &self.config.permissions,
-            &self.config.deep_links,
-            &self.config.background,
-            &self.config.android,
-            &self.config.ios,
-            &self.config.macos,
-        );
-
-        match self.bundle {
-            BundleFormat::Android => {
-                self.inject_android_permissions(&mapper)?;
-                self.inject_android_raw_config()?;
-            }
-            BundleFormat::Ios => {
-                self.inject_ios_permissions(&mapper)?;
-                self.inject_ios_raw_config()?;
-            }
-            BundleFormat::MacOS => {
-                self.inject_macos_permissions(&mapper)?;
-                self.inject_macos_raw_config()?;
-            }
-            _ => {}
-        }
-
-        Ok(())
-    }
-
-    /// Inject Android permissions from the permission mapper
-    fn inject_android_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
-        if mapper.android_permissions.is_empty() && mapper.android_features.is_empty() {
-            tracing::debug!("No Android permissions found in Dioxus.toml");
-            return Ok(());
-        }
-
-        let manifest_path = self
-            .root_dir()
-            .join("app")
-            .join("src")
-            .join("main")
-            .join("AndroidManifest.xml");
-
-        if !manifest_path.exists() {
-            tracing::warn!("AndroidManifest.xml not found, skipping permission injection");
-            return Ok(());
-        }
-
-        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
-
-        // Find the position after the INTERNET permission
-        let internet_permission =
-            r#"<uses-permission android:name="android.permission.INTERNET" />"#;
-
-        if let Some(pos) = manifest_content.find(internet_permission) {
-            let insert_pos = pos + internet_permission.len();
-
-            // Generate permission and feature declarations
-            let mut declarations = String::new();
-            for perm in &mapper.android_permissions {
-                declarations.push_str(&format!(
-                    "\n    <uses-permission android:name=\"{}\" />",
-                    perm.permission
-                ));
-            }
-            for feature in &mapper.android_features {
-                declarations.push_str(&format!(
-                    "\n    <uses-feature android:name=\"{}\" android:required=\"true\" />",
-                    feature
-                ));
-            }
-
-            manifest_content.insert_str(insert_pos, &declarations);
-            std::fs::write(&manifest_path, manifest_content)?;
-
-            tracing::debug!(
-                "Added {} Android permissions and {} features to AndroidManifest.xml",
-                mapper.android_permissions.len(),
-                mapper.android_features.len()
-            );
-            for perm in &mapper.android_permissions {
-                tracing::debug!("  • {} - {}", perm.permission, perm.description);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Inject raw Android config from Dioxus.toml
-    fn inject_android_raw_config(&self) -> Result<()> {
-        let raw = &self.config.android.raw;
-
-        if raw.manifest.is_none() {
-            return Ok(());
-        }
-
-        let manifest_path = self
-            .root_dir()
-            .join("app")
-            .join("src")
-            .join("main")
-            .join("AndroidManifest.xml");
-
-        if !manifest_path.exists() {
-            return Ok(());
-        }
-
-        let mut manifest_content = std::fs::read_to_string(&manifest_path)?;
-
-        // Inject raw manifest content after permissions
-        if let Some(raw_manifest) = &raw.manifest {
-            let internet_permission =
-                r#"<uses-permission android:name="android.permission.INTERNET" />"#;
-            if let Some(pos) = manifest_content.find(internet_permission) {
-                let insert_pos = pos + internet_permission.len();
-                manifest_content.insert_str(insert_pos, &format!("\n{}", raw_manifest.trim()));
-                tracing::debug!("Injected raw manifest XML from Dioxus.toml");
-            }
-        }
-
-        std::fs::write(&manifest_path, manifest_content)?;
-        Ok(())
-    }
-
-    /// Inject iOS permissions from the permission mapper
-    fn inject_ios_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
-        if mapper.ios_plist_entries.is_empty() {
-            tracing::debug!("No iOS permissions found in Dioxus.toml");
-            return Ok(());
-        }
-
-        // For iOS, Info.plist is at the root of the .app bundle
-        let plist_path = self.root_dir().join("Info.plist");
-
-        if !plist_path.exists() {
-            tracing::debug!(
-                "Info.plist not found at {:?}, skipping permission injection",
-                plist_path
-            );
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Find the position before the closing </dict>
-        if let Some(pos) = plist_content.rfind("</dict>") {
-            let permission_xml = mapper.generate_ios_plist_xml();
-            plist_content.insert_str(pos, &permission_xml);
-            std::fs::write(&plist_path, plist_content)?;
-
-            tracing::debug!(
-                "Added {} iOS permissions to Info.plist",
-                mapper.ios_plist_entries.len()
-            );
-            for entry in &mapper.ios_plist_entries {
-                tracing::debug!("  • {} - {}", entry.key, entry.value);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Inject raw iOS config from Dioxus.toml
-    fn inject_ios_raw_config(&self) -> Result<()> {
-        let raw = &self.config.ios.raw;
-
-        if raw.info_plist.is_none() {
-            return Ok(());
-        }
-
-        let plist_path = self.root_dir().join("Info.plist");
-
-        if !plist_path.exists() {
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Inject raw plist content before closing </dict>
-        if let Some(raw_plist) = &raw.info_plist {
-            if let Some(pos) = plist_content.rfind("</dict>") {
-                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
-                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
-            }
-        }
-
-        std::fs::write(&plist_path, plist_content)?;
-        Ok(())
-    }
-
-    /// Inject macOS permissions from the permission mapper
-    fn inject_macos_permissions(&self, mapper: &PermissionMapper) -> Result<()> {
-        if mapper.macos_plist_entries.is_empty() {
-            return Ok(());
-        }
-
-        // For macOS, Info.plist is at Contents/Info.plist inside the .app bundle
-        let plist_path = self.root_dir().join("Contents").join("Info.plist");
-
-        if !plist_path.exists() {
-            tracing::warn!(
-                "Info.plist not found at {:?}, skipping permission injection",
-                plist_path
-            );
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Find the position before the closing </dict>
-        if let Some(pos) = plist_content.rfind("</dict>") {
-            let permission_xml = mapper.generate_macos_plist_xml();
-            plist_content.insert_str(pos, &permission_xml);
-            std::fs::write(&plist_path, plist_content)?;
-
-            tracing::debug!(
-                "Added {} macOS permissions to Info.plist",
-                mapper.macos_plist_entries.len()
-            );
-            for entry in &mapper.macos_plist_entries {
-                tracing::debug!("  • {} - {}", entry.key, entry.value);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Inject raw macOS config from Dioxus.toml
-    fn inject_macos_raw_config(&self) -> Result<()> {
-        let raw = &self.config.macos.raw;
-
-        if raw.info_plist.is_none() {
-            return Ok(());
-        }
-
-        let plist_path = self.root_dir().join("Contents").join("Info.plist");
-
-        if !plist_path.exists() {
-            return Ok(());
-        }
-
-        let mut plist_content = std::fs::read_to_string(&plist_path)?;
-
-        // Inject raw plist content before closing </dict>
-        if let Some(raw_plist) = &raw.info_plist {
-            if let Some(pos) = plist_content.rfind("</dict>") {
-                plist_content.insert_str(pos, &format!("{}\n", raw_plist.trim()));
-                tracing::debug!("Injected raw Info.plist XML from Dioxus.toml");
-            }
-        }
-
-        std::fs::write(&plist_path, plist_content)?;
         Ok(())
     }
 
@@ -4137,7 +3873,12 @@ impl BuildRequest {
         struct AndroidHandlebarsObjects {
             application_id: String,
             app_name: String,
+            version: String,
             android_bundle: Option<crate::AndroidSettings>,
+            /// Android SDK version settings
+            min_sdk: u32,
+            target_sdk: u32,
+            compile_sdk: u32,
             /// Android permission strings (e.g., "android.permission.CAMERA")
             permissions: Vec<String>,
             /// Android hardware features (e.g., "android.hardware.location.gps")
@@ -4153,7 +3894,7 @@ impl BuildRequest {
         }
 
         // Get permission mapper from config
-        let mapper = super::permission_mapper::PermissionMapper::from_config(
+        let mapper = super::manifest_mapper::ManifestMapper::from_config(
             &self.config.permissions,
             &self.config.deep_links,
             &self.config.background,
@@ -4181,7 +3922,11 @@ impl BuildRequest {
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
+            version: self.crate_version(),
             android_bundle: self.config.bundle.android.clone(),
+            min_sdk: self.config.android.min_sdk.unwrap_or(24),
+            target_sdk: self.config.android.target_sdk.unwrap_or(34),
+            compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
             permissions,
             features,
             raw_manifest,
@@ -4715,6 +4460,13 @@ impl BuildRequest {
         self.executable_name().to_case(Case::Pascal)
     }
 
+    /// Get the crate version from Cargo.toml (e.g., "0.1.0")
+    fn crate_version(&self) -> String {
+        self.workspace.krates[self.crate_package]
+            .version
+            .to_string()
+    }
+
     pub(crate) fn bundle_identifier(&self) -> String {
         use crate::config::BundlePlatform;
 
@@ -4729,7 +4481,9 @@ impl BuildRequest {
             {
                 return identifier;
             } else {
-                panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`");
+                tracing::error!(
+                    "Invalid bundle identifier: {identifier:?}. Must contain at least one '.' and not start/end with '.'. E.g. `com.example.app`"
+                );
             }
         }
 
@@ -5227,6 +4981,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             pub bundle_name: String,
             pub bundle_identifier: String,
             pub executable_name: String,
+            /// App version string (from Cargo.toml)
+            pub version: String,
             /// Permission usage descriptions
             pub permissions: Vec<PlistPermission>,
             /// Additional plist entries as raw XML
@@ -5258,7 +5014,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         // Get permission mapper from config
-        let mapper = super::permission_mapper::PermissionMapper::from_config(
+        let mapper = super::manifest_mapper::ManifestMapper::from_config(
             &self.config.permissions,
             &self.config.deep_links,
             &self.config.background,
@@ -5297,6 +5053,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                             bundle_name: self.bundled_app_name(),
                             executable_name: self.platform_exe_name(),
                             bundle_identifier: self.bundle_identifier(),
+                            version: self.crate_version(),
                             permissions,
                             plist_entries,
                             raw_plist,
@@ -5330,6 +5087,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                             bundle_name: self.bundled_app_name(),
                             executable_name: self.platform_exe_name(),
                             bundle_identifier: self.bundle_identifier(),
+                            version: self.crate_version(),
                             permissions,
                             plist_entries,
                             raw_plist,

@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace="{{ application_id }}"
-    compileSdk = 34
+    compileSdk = {{ compile_sdk }}
     defaultConfig {
         applicationId = "{{ application_id }}"
-        minSdk = 24
-        targetSdk = 34
+        minSdk = {{ min_sdk }}
+        targetSdk = {{ target_sdk }}
         versionCode = 1
-        versionName = "1.0"
+        versionName = "{{ version }}"
     }
     {{#if android_bundle}}
     signingConfigs {
