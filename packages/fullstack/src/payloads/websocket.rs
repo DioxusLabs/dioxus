@@ -177,8 +177,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// To send a message with a particular type, see the `.send()` method instead.
     pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
         self.connect().await;
-        let ws = self.get_connection()?;
-        ws.send_raw(msg).await
+        self.get_connection()?.send_raw(msg).await
     }
 
     /// Receive a raw message from the WebSocket connection
@@ -187,13 +186,26 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
         self.connect().await;
         let ws = self.get_connection()?;
-        let result = ws.recv_raw().await;
 
-        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
-            self.received_shutdown();
+        // Race the recv against the waker — if the connection is being recreated
+        // (e.g. a reactive dependency changed), the waker fires and we return an error
+        // so the caller's loop can restart and pick up the new connection.
+        let recv_fut = ws.recv_raw();
+        let waker_fut = self.waker.wait();
+        futures::pin_mut!(recv_fut, waker_fut);
+
+        match futures::future::select(recv_fut, waker_fut).await {
+            futures::future::Either::Left((recv_result, _)) => {
+                if let Err(WebsocketError::ConnectionClosed { .. }) = recv_result.as_ref() {
+                    self.received_shutdown();
+                }
+                recv_result
+            }
+            futures::future::Either::Right(_) => Err(WebsocketError::ConnectionClosed {
+                code: CloseCode::Away,
+                description: "Connection replaced by a new one".to_string(),
+            }),
         }
-
-        result
     }
 
     pub async fn send(&self, msg: In) -> Result<(), WebsocketError>
@@ -221,13 +233,23 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     {
         self.connect().await;
         let ws = self.get_connection()?;
-        let result = ws.recv().await;
 
-        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
-            self.received_shutdown();
+        let recv_fut = ws.recv();
+        let waker_fut = self.waker.wait();
+        futures::pin_mut!(recv_fut, waker_fut);
+
+        match futures::future::select(recv_fut, waker_fut).await {
+            futures::future::Either::Left((recv_result, _)) => {
+                if let Err(WebsocketError::ConnectionClosed { .. }) = recv_result.as_ref() {
+                    self.received_shutdown();
+                }
+                recv_result
+            }
+            futures::future::Either::Right(_) => Err(WebsocketError::ConnectionClosed {
+                code: CloseCode::Away,
+                description: "Connection replaced by a new one".to_string(),
+            }),
         }
-
-        result
     }
 
     /// Set the WebSocket connection.

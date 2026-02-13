@@ -24,21 +24,23 @@ fn main() {
 }
 
 fn app() -> Element {
-    // Track the messages we've received from the server.
     let mut messages = use_signal(std::vec::Vec::new);
 
-    // The `use_websocket` wraps the `WebSocket` connection and provides a reactive handle to easily
-    // send and receive messages and track the connection state.
-    //
-    // We can customize the websocket connection with the `WebSocketOptions` struct, allowing us to
-    // set things like custom headers, protocols, reconnection strategies, etc.
-    let mut socket = use_websocket(|| uppercase_ws("John Doe".into(), 30, WebSocketOptions::new()));
+    // This signal is read inside the use_websocket closure, making it a reactive dependency.
+    // When it changes, use_resource will try to recreate the connection. If recv() is awaiting
+    // at that moment, it would previously panic with AlreadyBorrowed because recv() held a
+    // read borrow on the Resource while use_resource tried to write a new value.
+    let mut name = use_signal(|| "John Doe".to_string());
 
-    // Calling `.recv()` automatically waits for the connection to be established and deserializes
-    // messages as they arrive.
+    let mut socket =
+        use_websocket(move || uppercase_ws(name.cloned(), 30, WebSocketOptions::new()));
+
     use_future(move || async move {
-        while let Ok(msg) = socket.recv().await {
-            messages.push(msg);
+        loop {
+            _ = socket.connect().await;
+            while let Ok(msg) = socket.recv().await {
+                messages.push(msg);
+            }
         }
     });
 
@@ -46,6 +48,12 @@ fn app() -> Element {
         h1 { "WebSocket Example" }
         p { "Type a message and see it echoed back in uppercase!" }
         p { "Connection status: {socket.status():?}" }
+        p { "Change your name to trigger a websocket re-connect" }
+        input {
+            placeholder: "Your name",
+            value: "{name}",
+            oninput: move |e| name.set(e.value()),
+        }
         input {
             placeholder: "Type a message",
             oninput: move |e| async move { _ = socket.send(ClientEvent::TextInput(e.value())).await; },
