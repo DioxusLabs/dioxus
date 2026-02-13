@@ -96,7 +96,6 @@ impl DioxusConfig {
         };
         platform_override.or(self.bundle.identifier.as_deref())
     }
-
 }
 
 impl Default for DioxusConfig {

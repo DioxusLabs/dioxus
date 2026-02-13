@@ -10,9 +10,9 @@ use dioxus::prelude::*;
 
 // Import the local plugin module
 mod plugin;
-use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions};
 #[cfg(target_os = "ios")]
 use plugin::LiveActivityResult;
+use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions};
 
 fn main() {
     dioxus::launch(App);
@@ -277,9 +277,6 @@ fn LiveActivityCard(
 
 #[cfg(not(target_os = "ios"))]
 #[component]
-fn LiveActivityCard(
-    geolocation: Signal<Geolocation>,
-    error: Signal<Option<String>>,
-) -> Element {
+fn LiveActivityCard(geolocation: Signal<Geolocation>, error: Signal<Option<String>>) -> Element {
     VNode::empty()
 }

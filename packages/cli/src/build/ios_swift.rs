@@ -219,10 +219,7 @@ pub async fn compile_swift_sources(
 
         // Modify the Package.swift to produce a dynamic library
         if let Err(e) = modify_package_for_dynamic_library(&dest_path, product_name) {
-            tracing::warn!(
-                "Failed to modify Package.swift for dynamic library: {}",
-                e
-            );
+            tracing::warn!("Failed to modify Package.swift for dynamic library: {}", e);
         }
 
         plugin_paths.push((plugin_name.to_string(), product_name.to_string(), dest_path));
@@ -363,7 +360,10 @@ pub async fn compile_swift_sources(
             &format!("com.dioxus.swift.{}", name.to_lowercase()),
         )
         .await?;
-        tracing::debug!("Created additional framework: {}", extra_framework.display());
+        tracing::debug!(
+            "Created additional framework: {}",
+            extra_framework.display()
+        );
     }
 
     Ok(Some(framework_path))
@@ -394,7 +394,10 @@ fn modify_package_for_dynamic_library(package_path: &Path, product_name: &str) -
         r#".library\s*\(\s*name\s*:\s*"{}"\s*,\s*targets"#,
         regex::escape(product_name)
     );
-    let replacement = format!(r#".library(name: "{}", type: .dynamic, targets"#, product_name);
+    let replacement = format!(
+        r#".library(name: "{}", type: .dynamic, targets"#,
+        product_name
+    );
 
     let modified = if let Ok(re) = regex::Regex::new(&pattern) {
         re.replace_all(&modified, replacement.as_str()).to_string()
@@ -794,7 +797,10 @@ pub async fn compile_apple_widget(
 
     // Critical: Use _NSExtensionMain as the entry point for widget extensions
     // Without this, the widget crashes because ExtensionFoundation's singleton isn't initialized
-    cmd.arg("-Xlinker").arg("-e").arg("-Xlinker").arg("_NSExtensionMain");
+    cmd.arg("-Xlinker")
+        .arg("-e")
+        .arg("-Xlinker")
+        .arg("_NSExtensionMain");
 
     // Link Objective-C runtime (required for Swift/ObjC interop)
     cmd.arg("-lobjc");
@@ -906,10 +912,7 @@ pub async fn compile_apple_widget(
 
     std::fs::write(appex_dir.join("Info.plist"), info_plist)?;
 
-    tracing::debug!(
-        "Created Widget Extension bundle: {}",
-        appex_dir.display()
-    );
+    tracing::debug!("Created Widget Extension bundle: {}", appex_dir.display());
 
     Ok(appex_dir)
 }

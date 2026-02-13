@@ -107,7 +107,11 @@ impl ManifestMapper {
 
         // Log mapped permissions for debugging
         for perm in &mapper.android_permissions {
-            tracing::debug!("Android permission: {} - {}", perm.permission, perm.description);
+            tracing::debug!(
+                "Android permission: {} - {}",
+                perm.permission,
+                perm.description
+            );
         }
         for entry in &mapper.ios_plist_entries {
             tracing::debug!("iOS plist: {} = {}", entry.key, entry.value);
@@ -532,8 +536,7 @@ impl ManifestMapper {
 
         // Map universal link hosts to iOS associated domains
         for host in &deep_links.hosts {
-            self.ios_associated_domains
-                .push(format!("applinks:{host}"));
+            self.ios_associated_domains.push(format!("applinks:{host}"));
         }
 
         // Store app link hosts for Android auto-verify intent filters
@@ -617,7 +620,6 @@ impl ManifestMapper {
         }
         self.android_foreground_service_types = android_types;
     }
-
 }
 
 #[cfg(test)]

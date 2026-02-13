@@ -458,11 +458,9 @@ impl Workspace {
 
         // Merge configs: inline overrides base
         match (base_config, inline_config) {
-            (Some(base), Some(inline)) => {
-                crate::config::merge_with_inline_config(&base, inline)
-                    .map(Some)
-                    .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}"))
-            }
+            (Some(base), Some(inline)) => crate::config::merge_with_inline_config(&base, inline)
+                .map(Some)
+                .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}")),
             (Some(base), None) => Ok(Some(base)),
             (None, Some(inline)) => {
                 // No Dioxus.toml, but we have inline config - use defaults + inline
