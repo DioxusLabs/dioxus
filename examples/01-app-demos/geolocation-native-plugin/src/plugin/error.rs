@@ -8,15 +8,6 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    // /// Android-specific error
-    // #[cfg(target_os = "android")]
-    // #[error("Android error: {0}")]
-    // Android(#[from] jni::errors::Error),
-    /// iOS-specific error
-    #[cfg(target_os = "ios")]
-    #[error("iOS error: {0}")]
-    Ios(String),
-
     /// JSON serialization/deserialization error
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
@@ -25,21 +16,9 @@ pub enum Error {
     #[error("Platform bridge error: {0}")]
     PlatformBridge(String),
 
-    /// Location services are disabled
-    #[error("Location services are disabled")]
-    LocationServicesDisabled,
-
-    /// Permission denied
-    #[error("Permission denied")]
-    PermissionDenied,
-
     /// Location unavailable
     #[error("Location unavailable: {0}")]
     LocationUnavailable(String),
-
-    /// Timeout waiting for location
-    #[error("Timeout waiting for location")]
-    Timeout,
 
     /// Live Activity error (iOS 16.1+)
     #[error("Live Activity error: {0}")]

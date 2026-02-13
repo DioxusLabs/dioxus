@@ -24,7 +24,7 @@ pub(crate) use builder::*;
 pub(crate) use context::*;
 pub(crate) use manifest::*;
 pub(crate) use patch::*;
-pub(crate) use permission_mapper::*;
+// permission_mapper is used internally by request.rs
 pub(crate) use pre_render::*;
 pub(crate) use request::*;
 pub(crate) use tools::*;

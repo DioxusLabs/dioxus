@@ -370,6 +370,50 @@ pub struct IosConfig {
     /// Imported type identifiers.
     #[serde(default)]
     pub imported_type_identifiers: Vec<IosTypeIdentifier>,
+
+    /// Widget extensions to compile and bundle.
+    /// Each entry defines a Swift-based widget extension (.appex) that will be
+    /// compiled and installed into the app's PlugIns folder.
+    #[serde(default)]
+    pub widget_extensions: Vec<WidgetExtensionConfig>,
+}
+
+/// Configuration for an iOS Widget Extension.
+///
+/// Widget extensions are compiled as Swift executables and bundled as .appex
+/// bundles in the app's PlugIns folder.
+///
+/// Example in Dioxus.toml:
+/// ```toml
+/// [[ios.widget_extensions]]
+/// source = "src/ios/widget"
+/// display_name = "Location Widget"
+/// bundle_id_suffix = "location-widget"
+/// deployment_target = "16.2"
+/// module_name = "GeolocationPlugin"
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct WidgetExtensionConfig {
+    /// Path to the Swift package source directory (relative to project root).
+    pub source: String,
+
+    /// Display name for the widget (shown in system UI).
+    pub display_name: String,
+
+    /// Bundle ID suffix appended to the app's bundle identifier.
+    /// For example, if the app is "com.example.app" and suffix is "location-widget",
+    /// the widget bundle ID will be "com.example.app.location-widget".
+    pub bundle_id_suffix: String,
+
+    /// Minimum deployment target (e.g., "16.2").
+    /// Defaults to the app's iOS deployment target if not specified.
+    #[serde(default)]
+    pub deployment_target: Option<String>,
+
+    /// Swift module name for the widget.
+    /// This MUST match the module name used by the main app's Swift plugin
+    /// for ActivityKit type matching to work.
+    pub module_name: String,
 }
 
 /// iOS document type declaration.

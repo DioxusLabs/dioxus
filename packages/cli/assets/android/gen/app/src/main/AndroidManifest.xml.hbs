@@ -30,6 +30,33 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            {{#each url_schemes}}
+            <!-- URL scheme deep link: {{ this }}:// -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="{{ this }}" />
+            </intent-filter>
+            {{/each}}
+
+            {{#each app_link_hosts}}
+            <!-- App link: https://{{ this }} -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="{{ this }}" />
+            </intent-filter>
+            {{/each}}
         </activity>
+
+        {{#if foreground_service_type}}
+        <service
+            android:name=".DioxusForegroundService"
+            android:foregroundServiceType="{{ foreground_service_type }}"
+            android:exported="false" />
+        {{/if}}
     </application>
 </manifest>

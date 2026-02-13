@@ -41,6 +41,21 @@
 		<string>{{ this.description }}</string>
 		{{/each}}
 
+		{{#if url_schemes}}
+		<!-- URL schemes from Dioxus.toml [deep_links] and [macos] sections -->
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					{{#each url_schemes}}
+					<string>{{ this }}</string>
+					{{/each}}
+				</array>
+			</dict>
+		</array>
+		{{/if}}
+
 		<!-- Additional plist entries from Dioxus.toml [macos.plist] section -->
 		{{{ plist_entries }}}
 

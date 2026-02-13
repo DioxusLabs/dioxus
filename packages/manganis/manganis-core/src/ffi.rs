@@ -1,7 +1,7 @@
 use crate::BundledAsset;
 use const_serialize::{ConstStr, SerializeConst};
 use const_serialize_08 as const_serialize;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 
 /// Unified symbol data that can represent both assets and permissions
 ///

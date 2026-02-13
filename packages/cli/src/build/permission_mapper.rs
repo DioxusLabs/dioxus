@@ -5,7 +5,8 @@
 //! - iOS/macOS: Info.plist usage description keys
 
 use crate::config::{
-    AndroidConfig, IosConfig, LocationPrecision, MacosConfig, PermissionsConfig, StorageAccess,
+    AndroidConfig, BackgroundConfig, DeepLinkConfig, IosConfig, LocationPrecision, MacosConfig,
+    PermissionsConfig, StorageAccess,
 };
 
 /// Android permission entry for AndroidManifest.xml
@@ -26,22 +27,42 @@ pub struct PlistEntry {
     pub value: String,
 }
 
-/// Maps unified permissions to platform-specific identifiers
+/// Maps unified permissions, deep links, and background modes to platform-specific identifiers
 #[derive(Debug, Default)]
 pub struct PermissionMapper {
     pub android_permissions: Vec<AndroidPermissionEntry>,
     pub android_features: Vec<String>,
     pub ios_plist_entries: Vec<PlistEntry>,
     pub macos_plist_entries: Vec<PlistEntry>,
+
+    /// URL schemes for iOS CFBundleURLTypes (merged from deep_links.schemes + ios.url_schemes)
+    pub ios_url_schemes: Vec<String>,
+    /// URL schemes for macOS CFBundleURLTypes (merged from deep_links.schemes + macos.url_schemes)
+    pub macos_url_schemes: Vec<String>,
+    /// URL schemes for Android intent-filter (merged from deep_links.schemes + android.url_schemes)
+    pub android_url_schemes: Vec<String>,
+    /// Associated domains for iOS (from deep_links.hosts → "applinks:host")
+    pub ios_associated_domains: Vec<String>,
+    /// Android intent filters from config (android.intent_filters)
+    pub android_intent_filters: Vec<crate::config::AndroidIntentFilter>,
+    /// App link hosts for Android auto-verify (from deep_links.hosts)
+    pub android_app_link_hosts: Vec<String>,
+
+    /// iOS UIBackgroundModes (merged from BackgroundConfig + ios.background_modes)
+    pub ios_background_modes: Vec<String>,
+    /// Android foreground service types (from BackgroundConfig + android.foreground_service_types)
+    pub android_foreground_service_types: Vec<String>,
 }
 
 impl PermissionMapper {
     /// Create a new permission mapper from the unified config
     pub fn from_config(
         permissions: &PermissionsConfig,
+        deep_links: &DeepLinkConfig,
+        background: &BackgroundConfig,
         android: &AndroidConfig,
-        _ios: &IosConfig,
-        _macos: &MacosConfig,
+        ios: &IosConfig,
+        macos: &MacosConfig,
     ) -> Self {
         let mut mapper = Self::default();
 
@@ -76,6 +97,12 @@ impl PermissionMapper {
 
         // Add Android features
         mapper.android_features.extend(android.features.clone());
+
+        // Map deep links
+        mapper.map_deep_links(deep_links, android, ios, macos);
+
+        // Map background modes
+        mapper.map_background_modes(background, android, ios);
 
         mapper
     }
@@ -470,22 +497,116 @@ impl PermissionMapper {
         }
     }
 
-    /// Generate Android permission XML for AndroidManifest.xml
-    pub fn generate_android_permissions_xml(&self) -> String {
-        let mut xml = String::new();
-        for perm in &self.android_permissions {
-            xml.push_str(&format!(
-                "    <uses-permission android:name=\"{}\" />\n",
-                perm.permission
-            ));
+    /// Map deep link config to platform-specific URL schemes, associated domains, and intent filters
+    fn map_deep_links(
+        &mut self,
+        deep_links: &DeepLinkConfig,
+        android: &AndroidConfig,
+        ios: &IosConfig,
+        macos: &MacosConfig,
+    ) {
+        // Merge unified schemes with platform-specific overrides
+        let mut ios_schemes: Vec<String> = deep_links.schemes.clone();
+        ios_schemes.extend(ios.url_schemes.clone());
+        ios_schemes.dedup();
+        self.ios_url_schemes = ios_schemes;
+
+        let mut macos_schemes: Vec<String> = deep_links.schemes.clone();
+        macos_schemes.extend(macos.url_schemes.clone());
+        macos_schemes.dedup();
+        self.macos_url_schemes = macos_schemes;
+
+        let mut android_schemes: Vec<String> = deep_links.schemes.clone();
+        android_schemes.extend(android.url_schemes.clone());
+        android_schemes.dedup();
+        self.android_url_schemes = android_schemes;
+
+        // Map universal link hosts to iOS associated domains
+        for host in &deep_links.hosts {
+            self.ios_associated_domains
+                .push(format!("applinks:{host}"));
         }
-        for feature in &self.android_features {
-            xml.push_str(&format!(
-                "    <uses-feature android:name=\"{}\" android:required=\"true\" />\n",
-                feature
-            ));
+
+        // Store app link hosts for Android auto-verify intent filters
+        self.android_app_link_hosts = deep_links.hosts.clone();
+
+        // Add explicit Android intent filters from config
+        self.android_intent_filters = android.intent_filters.clone();
+    }
+
+    /// Map background mode config to platform-specific background capabilities
+    fn map_background_modes(
+        &mut self,
+        background: &BackgroundConfig,
+        android: &AndroidConfig,
+        ios: &IosConfig,
+    ) {
+        // Build iOS UIBackgroundModes from unified config
+        let mut ios_modes: Vec<String> = Vec::new();
+        if background.location {
+            ios_modes.push("location".to_string());
         }
-        xml
+        if background.audio {
+            ios_modes.push("audio".to_string());
+        }
+        if background.fetch {
+            ios_modes.push("fetch".to_string());
+        }
+        if background.remote_notifications {
+            ios_modes.push("remote-notification".to_string());
+        }
+        if background.voip {
+            ios_modes.push("voip".to_string());
+        }
+        if background.bluetooth {
+            ios_modes.push("bluetooth-central".to_string());
+            ios_modes.push("bluetooth-peripheral".to_string());
+        }
+        if background.external_accessory {
+            ios_modes.push("external-accessory".to_string());
+        }
+        if background.processing {
+            ios_modes.push("processing".to_string());
+        }
+        // Merge platform-specific overrides
+        for mode in &ios.background_modes {
+            if !ios_modes.contains(mode) {
+                ios_modes.push(mode.clone());
+            }
+        }
+        self.ios_background_modes = ios_modes;
+
+        // Build Android foreground service types and permissions
+        let mut android_types: Vec<String> = Vec::new();
+        if background.location {
+            self.android_permissions.push(AndroidPermissionEntry {
+                permission: "android.permission.ACCESS_BACKGROUND_LOCATION".to_string(),
+                description: "Background location updates".to_string(),
+            });
+        }
+        if background.audio {
+            android_types.push("mediaPlayback".to_string());
+        }
+        if background.voip {
+            android_types.push("phoneCall".to_string());
+        }
+        if background.bluetooth {
+            android_types.push("connectedDevice".to_string());
+        }
+        // Merge platform-specific overrides
+        for stype in &android.foreground_service_types {
+            if !android_types.contains(stype) {
+                android_types.push(stype.clone());
+            }
+        }
+        // If we have any foreground service types, add the FOREGROUND_SERVICE permission
+        if !android_types.is_empty() {
+            self.android_permissions.push(AndroidPermissionEntry {
+                permission: "android.permission.FOREGROUND_SERVICE".to_string(),
+                description: "Run foreground services".to_string(),
+            });
+        }
+        self.android_foreground_service_types = android_types;
     }
 
     /// Generate iOS plist XML for Info.plist
@@ -530,6 +651,8 @@ mod tests {
 
         let mapper = PermissionMapper::from_config(
             &permissions,
+            &DeepLinkConfig::default(),
+            &BackgroundConfig::default(),
             &AndroidConfig::default(),
             &IosConfig::default(),
             &MacosConfig::default(),
@@ -563,6 +686,8 @@ mod tests {
 
         let mapper = PermissionMapper::from_config(
             &permissions,
+            &DeepLinkConfig::default(),
+            &BackgroundConfig::default(),
             &AndroidConfig::default(),
             &IosConfig::default(),
             &MacosConfig::default(),
@@ -579,7 +704,7 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_android_xml() {
+    fn test_android_camera_permission_data() {
         let permissions = PermissionsConfig {
             camera: Some(SimplePermission {
                 description: "Take photos".to_string(),
@@ -589,13 +714,16 @@ mod tests {
 
         let mapper = PermissionMapper::from_config(
             &permissions,
+            &DeepLinkConfig::default(),
+            &BackgroundConfig::default(),
             &AndroidConfig::default(),
             &IosConfig::default(),
             &MacosConfig::default(),
         );
 
-        let xml = mapper.generate_android_permissions_xml();
-        assert!(xml.contains("android.permission.CAMERA"));
-        assert!(xml.contains("uses-permission"));
+        assert!(mapper
+            .android_permissions
+            .iter()
+            .any(|p| p.permission == "android.permission.CAMERA"));
     }
 }

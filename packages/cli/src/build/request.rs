@@ -1117,16 +1117,16 @@ impl BuildRequest {
                         .context("Failed to embed Swift standard libraries")?;
                 }
 
-                // // Compile and install Apple Widget Extensions
-                // if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-                //     && !artifacts.widget_extensions.is_empty()
-                // {
-                //     self.compile_widget_extensions(&artifacts.widget_extensions)
-                //         .await
-                //         .context("Failed to compile widget extensions")?;
-                // }
+                // Compile and install Apple Widget Extensions from Dioxus.toml config
+                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+                    && !self.config.ios.widget_extensions.is_empty()
+                {
+                    self.compile_widget_extensions()
+                        .await
+                        .context("Failed to compile widget extensions")?;
+                }
 
-                self.update_manifests_with_permissions()
+                self.update_manifests()
                     .context("Failed to update manifests with permissions")?;
 
                 self.optimize(ctx)
@@ -1747,88 +1747,100 @@ impl BuildRequest {
         Ok(())
     }
 
-    // /// Compile and install Apple Widget Extensions from embedded metadata.
-    // ///
-    // /// This processes widget extensions discovered via the widget!() macro by:
-    // /// 1. Compiling the Swift package as a Widget Extension executable
-    // /// 2. Creating the .appex bundle structure with Info.plist
-    // /// 3. Installing to the app's PlugIns folder
-    // async fn compile_widget_extensions(
-    //     &self,
-    //     widget_extensions: &[AppleWidgetExtensionMetadata],
-    // ) -> Result<()> {
-    //     tracing::info!(
-    //         "Compiling {} Apple Widget Extension(s)",
-    //         widget_extensions.len()
-    //     );
-
-    //     let build_dir = self.target_dir.join("widget-build");
-    //     std::fs::create_dir_all(&build_dir)?;
-
-    //     // Get the app bundle identifier for deriving widget bundle IDs
-    //     let app_bundle_id = self.bundle_identifier();
-
-    //     let plugins_dir = self.plugins_folder();
-    //     std::fs::create_dir_all(&plugins_dir)?;
-
-    //     for meta in widget_extensions {
-    //         let widget_source = super::ios_swift::AppleWidgetSource {
-    //             source_path: PathBuf::from(meta.package_path.as_str()),
-    //             display_name: meta.display_name.as_str().to_string(),
-    //             bundle_id_suffix: meta.bundle_id_suffix.as_str().to_string(),
-    //             deployment_target: meta.deployment_target.as_str().to_string(),
-    //             module_name: meta.module_name.as_str().to_string(),
-    //         };
-
-    //         // Compile the widget extension
-    //         let appex_path = super::ios_swift::compile_apple_widget(
-    //             &widget_source,
-    //             &self.triple,
-    //             &build_dir,
-    //             &app_bundle_id,
-    //             self.release,
-    //         )
-    //         .await
-    //         .with_context(|| {
-    //             format!(
-    //                 "Failed to compile widget extension '{}'",
-    //                 widget_source.display_name
-    //             )
-    //         })?;
-
-    //         // Install the .appex bundle to PlugIns/
-    //         let appex_name = appex_path
-    //             .file_name()
-    //             .map(|n| n.to_string_lossy().to_string())
-    //             .unwrap_or_else(|| "Widget.appex".to_string());
-    //         let dest_path = plugins_dir.join(&appex_name);
-
-    //         // Remove existing if present
-    //         if dest_path.exists() {
-    //             std::fs::remove_dir_all(&dest_path)?;
-    //         }
-
-    //         // Copy the entire .appex bundle
-    //         self.copy_dir_recursive(&appex_path, &dest_path)?;
-
-    //         tracing::info!(
-    //             "Installed widget extension '{}' to {}",
-    //             widget_source.display_name,
-    //             dest_path.display()
-    //         );
-    //     }
-
-    //     Ok(())
-    // }
-
-    /// Update platform manifests with permissions from Dioxus.toml config
+    /// Compile and install Apple Widget Extensions from Dioxus.toml config.
     ///
-    /// This reads permissions from the unified `[permissions]` section in Dioxus.toml
-    /// and injects them into the appropriate platform manifest files.
-    pub(crate) fn update_manifests_with_permissions(&self) -> Result<()> {
+    /// This processes widget extensions declared in `[[ios.widget_extensions]]` by:
+    /// 1. Compiling the Swift package as a Widget Extension executable
+    /// 2. Creating the .appex bundle structure with Info.plist
+    /// 3. Installing to the app's PlugIns folder
+    async fn compile_widget_extensions(&self) -> Result<()> {
+        let widget_configs = &self.config.ios.widget_extensions;
+        if widget_configs.is_empty() {
+            return Ok(());
+        }
+
+        tracing::info!(
+            "Compiling {} Apple Widget Extension(s)",
+            widget_configs.len()
+        );
+
+        let build_dir = self.target_dir.join("widget-build");
+        std::fs::create_dir_all(&build_dir)?;
+
+        let app_bundle_id = self.bundle_identifier();
+        let default_deployment_target = self
+            .config
+            .ios
+            .deployment_target
+            .as_deref()
+            .unwrap_or("16.0");
+
+        let plugins_dir = self.plugins_folder();
+        std::fs::create_dir_all(&plugins_dir)?;
+
+        for widget_config in widget_configs {
+            let source_path = self.workspace_dir().join(&widget_config.source);
+            let deployment_target = widget_config
+                .deployment_target
+                .as_deref()
+                .unwrap_or(default_deployment_target);
+
+            let widget_source = super::ios_swift::AppleWidgetSource {
+                source_path,
+                display_name: widget_config.display_name.clone(),
+                bundle_id_suffix: widget_config.bundle_id_suffix.clone(),
+                deployment_target: deployment_target.to_string(),
+                module_name: widget_config.module_name.clone(),
+            };
+
+            let appex_path = super::ios_swift::compile_apple_widget(
+                &widget_source,
+                &self.triple,
+                &build_dir,
+                &app_bundle_id,
+                self.release,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to compile widget extension '{}'",
+                    widget_source.display_name
+                )
+            })?;
+
+            // Install the .appex bundle to PlugIns/
+            let appex_name = appex_path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "Widget.appex".to_string());
+            let dest_path = plugins_dir.join(&appex_name);
+
+            if dest_path.exists() {
+                std::fs::remove_dir_all(&dest_path)?;
+            }
+
+            self.copy_dir_recursive(&appex_path, &dest_path)?;
+
+            tracing::info!(
+                "Installed widget extension '{}' to {}",
+                widget_source.display_name,
+                dest_path.display()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Update platform manifests with permissions, deep links, and background modes from Dioxus.toml.
+    ///
+    /// This reads from the unified `[permissions]`, `[deep_links]`, and `[background]` sections
+    /// and platform-specific overrides, then injects them into the appropriate manifest files.
+    pub(crate) fn update_manifests(&self) -> Result<()> {
         // Create permission mapper from config
         let mapper = PermissionMapper::from_config(
             &self.config.permissions,
+            &self.config.deep_links,
+            &self.config.background,
             &self.config.android,
             &self.config.ios,
             &self.config.macos,
@@ -4132,11 +4144,19 @@ impl BuildRequest {
             features: Vec<String>,
             /// Raw manifest XML to inject
             raw_manifest: String,
+            /// URL schemes for deep linking
+            url_schemes: Vec<String>,
+            /// App link hosts for auto-verified deep links
+            app_link_hosts: Vec<String>,
+            /// Pipe-joined foreground service type string (e.g., "location|mediaPlayback")
+            foreground_service_type: String,
         }
 
         // Get permission mapper from config
         let mapper = super::permission_mapper::PermissionMapper::from_config(
             &self.config.permissions,
+            &self.config.deep_links,
+            &self.config.background,
             &self.config.android,
             &self.config.ios,
             &self.config.macos,
@@ -4155,6 +4175,9 @@ impl BuildRequest {
         // Get raw manifest XML
         let raw_manifest = self.config.android.raw.manifest.clone().unwrap_or_default();
 
+        // Foreground service types as pipe-separated string
+        let foreground_service_type = mapper.android_foreground_service_types.join("|");
+
         let hbs_data = AndroidHandlebarsObjects {
             application_id: self.bundle_identifier(),
             app_name: self.bundled_app_name(),
@@ -4162,6 +4185,9 @@ impl BuildRequest {
             permissions,
             features,
             raw_manifest,
+            url_schemes: mapper.android_url_schemes,
+            app_link_hosts: mapper.android_app_link_hosts,
+            foreground_service_type,
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -4690,18 +4716,19 @@ impl BuildRequest {
     }
 
     pub(crate) fn bundle_identifier(&self) -> String {
-        if let Some(identifier) = &self.config.bundle.identifier {
+        use crate::config::BundlePlatform;
+
+        // Check platform-specific identifier override first, then fall back to base bundle
+        let platform: BundlePlatform = self.bundle.into();
+        if let Some(identifier) = self.config.resolved_identifier(platform) {
+            let identifier = identifier.to_string();
             if identifier.contains('.')
                 && !identifier.starts_with('.')
                 && !identifier.ends_with('.')
                 && !identifier.contains("..")
             {
-                return identifier.clone();
+                return identifier;
             } else {
-                // The original `mobile_org` function used `expect` directly.
-                // Maybe it's acceptable for the CLI to panic directly when this error occurs.
-                // And if we change it to a Result type, the `client_connected` function in serve/runner.rs does not return a Result and cannot call `?`,
-                // We also need to handle the error in place, otherwise it will expand the scope of modifications further.
                 panic!("Invalid bundle identifier: {identifier:?}. E.g. `com.example`, `com.example.app`");
             }
         }
@@ -5208,6 +5235,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             pub raw_plist: String,
             /// Minimum system version (macOS only)
             pub minimum_system_version: String,
+            /// URL schemes for deep linking
+            pub url_schemes: Vec<String>,
+            /// iOS UIBackgroundModes
+            pub background_modes: Vec<String>,
         }
 
         // Attempt to use the user's manually specified
@@ -5229,6 +5260,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Get permission mapper from config
         let mapper = super::permission_mapper::PermissionMapper::from_config(
             &self.config.permissions,
+            &self.config.deep_links,
+            &self.config.background,
             &self.config.android,
             &self.config.ios,
             &self.config.macos,
@@ -5268,6 +5301,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                             plist_entries,
                             raw_plist,
                             minimum_system_version,
+                            url_schemes: mapper.macos_url_schemes.clone(),
+                            background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
                         },
                     )
                     .map_err(|e| e.into())
@@ -5299,6 +5334,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                             plist_entries,
                             raw_plist,
                             minimum_system_version: String::new(), // Not used for iOS
+                            url_schemes: mapper.ios_url_schemes.clone(),
+                            background_modes: mapper.ios_background_modes.clone(),
                         },
                     )
                     .map_err(|e| e.into())
