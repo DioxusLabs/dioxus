@@ -214,7 +214,7 @@ impl Default for Geolocation {
 
 /// iOS/macOS native bindings - the macro generates all FFI code automatically.
 /// The path "src/ios/plugin" points to the SwiftPM package containing GeolocationPlugin.swift
-#[cfg(all(any(target_os = "ios", target_os = "macos")))]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[manganis::ffi("src/ios/plugin")]
 extern "Swift" {
     /// The native GeolocationPlugin class

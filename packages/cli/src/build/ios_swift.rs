@@ -607,13 +607,10 @@ fn extract_swift_from_bytes(bytes: &[u8]) -> Result<Vec<SwiftPackageMetadata>> {
                     if offset < data.len() {
                         let symbol_data = &data[offset..];
                         // Try to deserialize as SymbolData
-                        if let Some((_, symbol_data)) =
+                        if let Some((_, SymbolData::SwiftPackage(meta))) =
                             const_serialize::deserialize_const!(SymbolData, symbol_data)
                         {
-                            // swift pm is no longer stored as a metadata symbol.
-                            if let SymbolData::SwiftPackage(meta) = symbol_data {
-                                results.push(meta);
-                            }
+                            results.push(meta);
                         }
                     }
                 }
@@ -639,7 +636,7 @@ fn collect_swift_files(dir: &Path) -> Result<Vec<PathBuf>> {
         if path.is_dir() {
             // Recursively collect from subdirectories
             swift_files.extend(collect_swift_files(&path)?);
-        } else if path.extension().map_or(false, |ext| ext == "swift") {
+        } else if path.extension().is_some_and(|ext| ext == "swift") {
             swift_files.push(path);
         }
     }

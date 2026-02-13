@@ -198,9 +198,11 @@ impl ManganisVersion {
 
 /// Result of deserializing a symbol - can be either SymbolData or legacy Asset
 #[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
 enum SymbolDataOrAsset {
     /// New unified format (can contain Asset or Permission)
     SymbolData(Box<SymbolData>),
+
     /// Old asset format (backward compatibility)
     Asset(BundledAsset),
 }

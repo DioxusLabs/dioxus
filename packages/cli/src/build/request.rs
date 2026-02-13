@@ -1196,7 +1196,7 @@ impl BuildRequest {
         }
 
         // Record the build duration as a telemetry event
-        self.record_build_duration(time_start, &ctx);
+        self.record_build_duration(time_start, ctx);
 
         Ok(artifacts)
     }
@@ -1668,7 +1668,7 @@ impl BuildRequest {
 
                 // Create module directory
                 let module_dir = plugins_dir.join(plugin_name);
-                self.copy_dir_recursive(&artifact_path, &module_dir)?;
+                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
 
                 // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
                 self.strip_gradle_plugin_versions(&module_dir)?;
@@ -1739,7 +1739,8 @@ impl BuildRequest {
     }
 
     /// Recursively copy a directory and its contents.
-    fn copy_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+    #[allow(clippy::only_used_in_recursion)]
+    fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
         std::fs::create_dir_all(dst)?;
 
         for entry in std::fs::read_dir(src)? {
@@ -1754,7 +1755,8 @@ impl BuildRequest {
                 if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
                     continue;
                 }
-                self.copy_dir_recursive(&src_path, &dst_path)?;
+
+                self.copy_build_dir_recursive(&src_path, &dst_path)?;
             } else {
                 std::fs::copy(&src_path, &dst_path)?;
             }
@@ -1866,7 +1868,7 @@ impl BuildRequest {
         }
 
         // Copy the entire framework bundle
-        self.copy_dir_recursive(framework_path, &dest)?;
+        self.copy_build_dir_recursive(framework_path, &dest)?;
 
         tracing::debug!(
             "Installed Swift framework '{}' to {}",
@@ -2013,7 +2015,7 @@ impl BuildRequest {
                 std::fs::remove_dir_all(&dest_path)?;
             }
 
-            self.copy_dir_recursive(&appex_path, &dest_path)?;
+            self.copy_build_dir_recursive(&appex_path, &dest_path)?;
 
             tracing::debug!(
                 "Installed widget extension '{}' to {}",
