@@ -5700,13 +5700,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         let mut entitlements_file = self.apple_entitlements.clone();
+        let mut provisioning_profile_path = None;
         if entitlements_file.is_none() {
-            let entitlements_xml = Self::auto_provision_entitlements()
+            let bundle_id = self.bundle_identifier();
+            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(&bundle_id)
                 .await
                 .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
+            provisioning_profile_path = Some(profile_path);
             _saved_entitlements = Some(entitlements_temp_file);
         }
 
@@ -5730,6 +5733,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             BundleFormat::Server => self.main_exe(),
             _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
         };
+
+        // iOS devices require the provisioning profile to be embedded in the .app bundle
+        if self.bundle == BundleFormat::Ios {
+            if let Some(profile_path) = &provisioning_profile_path {
+                let dest = target_exe.join("embedded.mobileprovision");
+                std::fs::copy(profile_path, &dest)
+                    .context("Failed to embed provisioning profile into .app bundle")?;
+            }
+        }
 
         // codesign the app
         let output = Command::new("codesign")
@@ -5780,7 +5792,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(app_dev_name.to_string())
     }
 
-    async fn auto_provision_entitlements() -> Result<String> {
+    async fn auto_provision_entitlements(bundle_id: &str) -> Result<(String, PathBuf)> {
         const CODESIGN_ERROR: &str = r#"This is likely because you haven't
 - Created a provisioning profile before
 - Accepted the Apple Developer Program License Agreement
@@ -5815,20 +5827,28 @@ We checked the folders:
             )
         }
 
-        // Acquire the provision file
-        let provision_file = profiles_folder
-            .read_dir()?
-            .flatten()
-            .find(|entry| {
-                entry
-                    .file_name()
-                    .to_str()
-                    .map(|s| s.contains("mobileprovision"))
-                    .unwrap_or_default()
-            })
-            .context("Failed to find a provisioning profile. \n\n{CODESIGN_ERROR}")?;
+        #[derive(serde::Deserialize, Debug)]
+        struct ProvisioningProfile {
+            #[serde(rename = "TeamIdentifier")]
+            team_identifier: Vec<String>,
+            #[serde(rename = "Entitlements")]
+            entitlements: ProfileEntitlements,
+            #[allow(dead_code)]
+            #[serde(rename = "ApplicationIdentifierPrefix")]
+            application_identifier_prefix: Vec<String>,
+            #[serde(rename = "ProvisionedDevices", default)]
+            provisioned_devices: Vec<String>,
+        }
 
-        // The .mobileprovision file has some random binary thrown into into, but it's still basically a plist
+        #[derive(serde::Deserialize, Debug)]
+        struct ProfileEntitlements {
+            #[serde(rename = "application-identifier")]
+            application_identifier: String,
+            #[serde(rename = "keychain-access-groups")]
+            keychain_access_groups: Vec<String>,
+        }
+
+        // The .mobileprovision file has some random binary thrown into it, but it's still basically a plist
         // Let's use the plist markers to find the start and end of the plist
         fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
             bytes
@@ -5838,34 +5858,131 @@ We checked the folders:
                 .find(|(_, slice)| *slice == byte_match)
                 .map(|(i, _)| i + byte_match.len())
         }
-        let bytes = std::fs::read(provision_file.path())?;
-        let cut1 = cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
-        let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
-            .context("Failed to parse .mobileprovision file")?;
-        let sub_bytes = &bytes[(cut1 - 6)..cut2];
-        let mbfile: ProvisioningProfile =
-            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")?;
 
-        #[derive(serde::Deserialize, Debug)]
-        struct ProvisioningProfile {
-            #[serde(rename = "TeamIdentifier")]
-            team_identifier: Vec<String>,
-            #[serde(rename = "Entitlements")]
-            entitlements: Entitlements,
-            #[allow(dead_code)]
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
+        fn parse_profile(path: &Path) -> Result<ProvisioningProfile> {
+            let bytes = std::fs::read(path)?;
+            let cut1 =
+                cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
+            let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
+                .context("Failed to parse .mobileprovision file")?;
+            let sub_bytes = &bytes[(cut1 - 6)..cut2];
+            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")
         }
 
-        #[derive(serde::Deserialize, Debug)]
-        struct Entitlements {
-            #[serde(rename = "application-identifier")]
-            application_identifier: String,
-            #[serde(rename = "keychain-access-groups")]
-            keychain_access_groups: Vec<String>,
+        /// Check if a provisioning profile's application-identifier matches the given bundle ID.
+        /// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
+        fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
+            // Strip the team ID prefix (everything before and including the first dot)
+            let app_id_suffix = match app_identifier.split_once('.') {
+                Some((_, suffix)) => suffix,
+                None => return false,
+            };
+
+            // Wildcard profile matches everything
+            if app_id_suffix == "*" {
+                return true;
+            }
+
+            // Check exact match
+            if app_id_suffix == bundle_id {
+                return true;
+            }
+
+            // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
+            if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
+                return bundle_id.starts_with(prefix);
+            }
+
+            false
         }
 
-        Ok(format!(
+        // Collect all provisioning profiles and find the best match for the bundle ID.
+        // Priority: exact app ID match > more provisioned devices > newer file.
+        let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
+
+        for entry in profiles_folder.read_dir()?.flatten() {
+            let path = entry.path();
+            let is_mobileprovision = path
+                .extension()
+                .map(|e| e == "mobileprovision")
+                .unwrap_or(false);
+
+            if !is_mobileprovision {
+                continue;
+            }
+
+            let profile = match parse_profile(&path) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::debug!("Skipping profile {}: {e}", path.display());
+                    continue;
+                }
+            };
+
+            let app_id = &profile.entitlements.application_identifier;
+            if !profile_matches_bundle_id(app_id, bundle_id) {
+                tracing::debug!(
+                    "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
+                    path.display()
+                );
+                continue;
+            }
+
+            let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
+            let num_devices = profile.provisioned_devices.len();
+
+            tracing::debug!(
+                "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
+                path.display()
+            );
+
+            // Prefer: exact match > more provisioned devices (newer profiles have more devices)
+            let dominated = match &best_match {
+                Some((_, _, prev_exact, prev_devices)) => {
+                    if *prev_exact && !is_exact {
+                        true // existing exact match beats wildcard
+                    } else if is_exact && !*prev_exact {
+                        false // new exact match beats existing wildcard
+                    } else {
+                        // same specificity — prefer more provisioned devices
+                        num_devices <= *prev_devices
+                    }
+                }
+                None => false,
+            };
+
+            if !dominated {
+                best_match = Some((path, profile, is_exact, num_devices));
+            }
+        }
+
+        let (profile_path, mbfile) = match best_match {
+            Some((path, profile, _, _)) => {
+                tracing::info!(
+                    "Using provisioning profile: {} (app ID: {})",
+                    path.display(),
+                    profile.entitlements.application_identifier
+                );
+                (path, profile)
+            }
+            None => {
+                bail!(
+                    "No provisioning profile found matching bundle identifier \"{bundle_id}\".\n\
+                     \n\
+                     Your provisioning profiles are in: {}\n\
+                     \n\
+                     To fix this, either:\n  \
+                     1. Set `bundle.identifier` in Dioxus.toml to match an existing profile\n  \
+                     2. Create a wildcard provisioning profile in your Apple Developer account\n  \
+                     3. Open the project in Xcode and let it auto-provision\n\
+                     \n\
+                     {CODESIGN_ERROR}",
+                    profiles_folder.display()
+                );
+            }
+        };
+
+        let entitlements_xml = format!(
             r#"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -5885,7 +6002,9 @@ We checked the folders:
             APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
             APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
             TEAM_IDENTIFIER = mbfile.team_identifier[0],
-        ))
+        );
+
+        Ok((entitlements_xml, profile_path))
     }
 
     async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {

@@ -221,6 +221,8 @@ impl AppBuilder {
                 StderrReceived {  msg }
             },
             Some(msg) = OptionFuture::from(self.spawn_handle.as_mut()) => {
+                // Prevent re-polling the spawn future, similar to above
+                self.spawn_handle = None;
                 match msg {
                     Ok(Ok(_)) => StdoutReceived { msg: "Finished launching app".to_string() },
                     Ok(Err(err)) => StderrReceived { msg: err.to_string() },
@@ -1008,17 +1010,18 @@ impl AppBuilder {
     async fn open_ios_device(&mut self, device_query: &str) -> Result<()> {
         let device_query = device_query.to_string();
         let root_dir = self.build.root_dir().clone();
+        let application_id = self.build.bundle_identifier();
         self.spawn_handle = Some(tokio::task::spawn(async move {
             // 1. Find an active device
             let device_uuid = Self::get_ios_device_uuid(&device_query).await?;
 
             tracing::info!("Uploading app to iOS device, this might take a while...");
 
-            // 2. Get the installation URL of the app
-            let installation_url = Self::get_ios_installation_url(&device_uuid, &root_dir).await?;
+            // 2. Install the app to the device
+            Self::install_ios_app(&device_uuid, &root_dir).await?;
 
             // 3. Launch the app into the background, paused
-            Self::launch_ios_app_paused(&device_uuid, &installation_url).await?;
+            Self::launch_ios_app_paused(&device_uuid, &application_id).await?;
 
             Result::Ok(()) as Result<()>
         }));
@@ -1139,11 +1142,20 @@ impl AppBuilder {
                         .unwrap_or(false);
 
                     let is_ios_device = matches!(
-                        device.get("deviceType").and_then(|s| s.as_str()),
+                        device
+                            .get("hardwareProperties")
+                            .and_then(|h| h.get("deviceType"))
+                            .and_then(|s| s.as_str()),
                         Some("iPhone") | Some("iPad") | Some("iPod")
                     );
 
-                    if is_paired && is_ios_device {
+                    let is_available = device
+                        .get("connectionProperties")
+                        .and_then(|c| c.get("tunnelState"))
+                        .and_then(|s| s.as_str())
+                        != Some("unavailable");
+
+                    if is_paired && is_ios_device && is_available {
                         device_idx = idx;
                         break;
                     }
@@ -1160,7 +1172,7 @@ impl AppBuilder {
             .context("Failed to extract device UUID")
     }
 
-    async fn get_ios_installation_url(device_uuid: &str, app_path: &Path) -> Result<String> {
+    async fn install_ios_app(device_uuid: &str, app_path: &Path) -> Result<()> {
         let tmpfile = tempfile::NamedTempFile::new()
             .context("Failed to create temporary file for device list")?;
 
@@ -1181,27 +1193,60 @@ impl AppBuilder {
             .await?;
 
         if !output.status.success() {
-            bail!(
-                "Failed to install app: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            if stderr.contains("DeviceLocked") || stderr.contains("device is locked") {
+                bail!(
+                    "Failed to install app: your device is locked.\n\
+                     Unlock your iPhone/iPad and try again."
+                );
+            }
+
+            if stderr.contains("cannot be installed on this device")
+                || stderr.contains("0xe8008012")
+            {
+                bail!(
+                    "Failed to install app: your device is not registered in the provisioning profile.\n\n\
+                     Your device UDID needs to be added to your Apple Developer account and the \
+                     provisioning profile regenerated.\n\n\
+                     To fix this:\n  \
+                     1. Accept the latest Program License Agreement at:\n     \
+                        https://developer.apple.com/account\n  \
+                     2. Register your device at:\n     \
+                        https://developer.apple.com/account/resources/devices\n  \
+                     3. Regenerate your provisioning profile to include the new device\n  \
+                     4. Or open any project in Xcode, select your device, and build —\n     \
+                        Xcode will update the profile automatically\n\n\
+                     Raw error: {stderr}"
+                );
+            }
+
+            if stderr.contains("provisioning profile")
+                || stderr.contains("ApplicationVerificationFailed")
+                || stderr.contains("code signature")
+            {
+                bail!(
+                    "Failed to install app: code signing error.\n\
+                     A valid provisioning profile was not found for this app.\n\n\
+                     To fix this:\n  \
+                     1. Accept the latest Program License Agreement at:\n     \
+                        https://developer.apple.com/account\n  \
+                     2. Open the project in Xcode, select your device, and build once —\n     \
+                        Xcode will set up signing and provisioning automatically\n  \
+                     3. Ensure your device is registered in your Apple Developer account\n\n\
+                     Raw error: {stderr}"
+                );
+            }
+
+            bail!("Failed to install app to device {device_uuid}: {stderr}");
         }
 
-        let json: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(tmpfile.path())?)
-                .context("Failed to parse xcrun output")?;
-        let installation_url = json["result"]["installedApplications"][0]["installationURL"]
-            .as_str()
-            .context("Failed to extract installation URL from xcrun output")?
-            .to_string();
-
-        Ok(installation_url)
+        Ok(())
     }
 
-    async fn launch_ios_app_paused(device_uuid: &str, installation_url: &str) -> Result<()> {
+    async fn launch_ios_app_paused(device_uuid: &str, application_id: &str) -> Result<()> {
         let tmpfile = tempfile::NamedTempFile::new()
             .context("Failed to create temporary file for device list")?;
-
         let output = Command::new("xcrun")
             .args([
                 "devicectl",
@@ -1212,7 +1257,7 @@ impl AppBuilder {
                 "--verbose",
                 "--device",
                 device_uuid,
-                installation_url,
+                application_id,
                 "--json-output",
             ])
             .arg(tmpfile.path())
