@@ -1943,7 +1943,7 @@ impl BuildRequest {
         std::fs::create_dir_all(&plugins_dir)?;
 
         for widget_config in widget_configs {
-            let source_path = self.workspace_dir().join(&widget_config.source);
+            let source_path = self.package_manifest_dir().join(&widget_config.source);
             let deployment_target = widget_config
                 .deployment_target
                 .as_deref()

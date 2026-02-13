@@ -21,6 +21,7 @@ pub enum Error {
     LocationUnavailable(String),
 
     /// Live Activity error (iOS 16.1+)
+    #[cfg(target_os = "ios")]
     #[error("Live Activity error: {0}")]
     LiveActivity(String),
 }

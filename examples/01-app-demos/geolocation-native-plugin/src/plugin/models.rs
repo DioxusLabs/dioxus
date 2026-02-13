@@ -106,6 +106,7 @@ pub struct Position {
 // =============================================================================
 
 /// Result from starting a Live Activity
+#[cfg(target_os = "ios")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LiveActivityResult {
@@ -120,6 +121,7 @@ pub struct LiveActivityResult {
 }
 
 /// Result from updating a Live Activity
+#[cfg(target_os = "ios")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LiveActivityUpdate {

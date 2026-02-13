@@ -10,9 +10,9 @@ use dioxus::prelude::*;
 
 // Import the local plugin module
 mod plugin;
-use plugin::{
-    Geolocation, LiveActivityResult, PermissionState, PermissionStatus, Position, PositionOptions,
-};
+use plugin::{Geolocation, PermissionState, PermissionStatus, Position, PositionOptions};
+#[cfg(target_os = "ios")]
+use plugin::LiveActivityResult;
 
 fn main() {
     dioxus::launch(App);
@@ -26,7 +26,6 @@ fn App() -> Element {
     let mut error = use_signal(|| None::<String>);
     let mut use_high_accuracy = use_signal(|| true);
     let mut max_age_input = use_signal(|| String::from("0"));
-    let mut live_activity = use_signal(|| None::<LiveActivityResult>);
 
     let on_check_permissions = {
         move |_| match geolocation.write().check_permissions() {
@@ -78,28 +77,6 @@ fn App() -> Element {
         "High accuracy: on"
     } else {
         "High accuracy: off"
-    };
-
-    // Live Activity handlers
-    let on_start_live_activity = move |_| match geolocation.write().start_live_activity() {
-        Ok(result) => {
-            live_activity.set(Some(result));
-            error.set(None);
-        }
-        Err(err) => error.set(Some(err.to_string())),
-    };
-
-    let on_update_live_activity = move |_| match geolocation.write().update_live_activity() {
-        Ok(_) => error.set(None),
-        Err(err) => error.set(Some(err.to_string())),
-    };
-
-    let on_end_live_activity = move |_| match geolocation.write().end_live_activity() {
-        Ok(_) => {
-            live_activity.set(None);
-            error.set(None);
-        }
-        Err(err) => error.set(Some(err.to_string())),
     };
 
     rsx! {
@@ -184,43 +161,8 @@ fn App() -> Element {
                     }
                 }
 
-                // Live Activity card (iOS 16.1+)
-                section { class: "card",
-                    h2 { "Live Activity" }
-                    p { class: "muted",
-                        "Start a Live Activity to show your current location on the lock screen. \
-                        Fetch your position first, then start the activity." }
-                    div { class: "button-row",
-                        button { onclick: on_start_live_activity, "Start Activity" }
-                        button { class: "secondary", onclick: on_update_live_activity, "Update" }
-                        button { class: "secondary", onclick: on_end_live_activity, "End" }
-                    }
-                    match live_activity() {
-                        Some(activity) => rsx! {
-                            div { class: "status-grid",
-                                div { class: "permission-row",
-                                    span { class: "muted", "Activity ID" }
-                                    span { "{activity.activity_id}" }
-                                }
-                                div { class: "permission-row",
-                                    span { class: "muted", "Latitude" }
-                                    span { "{activity.latitude:.6}" }
-                                }
-                                div { class: "permission-row",
-                                    span { class: "muted", "Longitude" }
-                                    span { "{activity.longitude:.6}" }
-                                }
-                                div { class: "permission-row",
-                                    span { class: "muted", "Accuracy" }
-                                    span { class: "badge badge--granted", "{activity.accuracy:.1}m" }
-                                }
-                            }
-                        },
-                        None => rsx! {
-                            p { class: "muted", "No Live Activity running." }
-                        },
-                    }
-                }
+                // Live Activity card (iOS only)
+                LiveActivityCard { geolocation, error }
             }
 
             if let Some(message) = error() {
@@ -262,4 +204,82 @@ fn format_optional(value: Option<f64>) -> String {
     value
         .map(|inner| format!("{inner:.2}"))
         .unwrap_or_else(|| "—".to_string())
+}
+
+#[cfg(target_os = "ios")]
+#[component]
+fn LiveActivityCard(
+    mut geolocation: Signal<Geolocation>,
+    mut error: Signal<Option<String>>,
+) -> Element {
+    let mut live_activity = use_signal(|| None::<LiveActivityResult>);
+
+    let on_start_live_activity = move |_| match geolocation.write().start_live_activity() {
+        Ok(result) => {
+            live_activity.set(Some(result));
+            error.set(None);
+        }
+        Err(err) => error.set(Some(err.to_string())),
+    };
+
+    let on_update_live_activity = move |_| match geolocation.write().update_live_activity() {
+        Ok(_) => error.set(None),
+        Err(err) => error.set(Some(err.to_string())),
+    };
+
+    let on_end_live_activity = move |_| match geolocation.write().end_live_activity() {
+        Ok(_) => {
+            live_activity.set(None);
+            error.set(None);
+        }
+        Err(err) => error.set(Some(err.to_string())),
+    };
+
+    rsx! {
+        section { class: "card",
+            h2 { "Live Activity" }
+            p { class: "muted",
+                "Start a Live Activity to show your current location on the lock screen. \
+                Fetch your position first, then start the activity." }
+            div { class: "button-row",
+                button { onclick: on_start_live_activity, "Start Activity" }
+                button { class: "secondary", onclick: on_update_live_activity, "Update" }
+                button { class: "secondary", onclick: on_end_live_activity, "End" }
+            }
+            match live_activity() {
+                Some(activity) => rsx! {
+                    div { class: "status-grid",
+                        div { class: "permission-row",
+                            span { class: "muted", "Activity ID" }
+                            span { "{activity.activity_id}" }
+                        }
+                        div { class: "permission-row",
+                            span { class: "muted", "Latitude" }
+                            span { "{activity.latitude:.6}" }
+                        }
+                        div { class: "permission-row",
+                            span { class: "muted", "Longitude" }
+                            span { "{activity.longitude:.6}" }
+                        }
+                        div { class: "permission-row",
+                            span { class: "muted", "Accuracy" }
+                            span { class: "badge badge--granted", "{activity.accuracy:.1}m" }
+                        }
+                    }
+                },
+                None => rsx! {
+                    p { class: "muted", "No Live Activity running." }
+                },
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "ios"))]
+#[component]
+fn LiveActivityCard(
+    geolocation: Signal<Geolocation>,
+    error: Signal<Option<String>>,
+) -> Element {
+    VNode::empty()
 }

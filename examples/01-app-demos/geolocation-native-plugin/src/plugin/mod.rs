@@ -150,6 +150,7 @@ impl Geolocation {
     /// # Returns
     ///
     /// Returns the activity ID and current permission status, or an error.
+    #[cfg(target_os = "ios")]
     pub fn start_live_activity(&mut self) -> Result<LiveActivityResult> {
         let plugin = self.get_plugin()?;
         let result_json = startLiveActivityJson(plugin)?;
@@ -170,6 +171,7 @@ impl Geolocation {
     /// Update the Live Activity with the current permission status.
     ///
     /// Call this after permission changes to reflect the new state.
+    #[cfg(target_os = "ios")]
     pub fn update_live_activity(&mut self) -> Result<LiveActivityUpdate> {
         let plugin = self.get_plugin()?;
         let result_json = updateLiveActivityJson(plugin, "{}".to_string())?;
@@ -187,6 +189,7 @@ impl Geolocation {
     }
 
     /// End all Live Activities for this app.
+    #[cfg(target_os = "ios")]
     pub fn end_live_activity(&mut self) -> Result<()> {
         let plugin = self.get_plugin()?;
         let result_json = endLiveActivityJson(plugin)?;

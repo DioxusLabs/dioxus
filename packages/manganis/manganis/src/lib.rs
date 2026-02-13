@@ -1,5 +1,4 @@
 #![doc = include_str!("../README.md")]
-// #![deny(missing_docs)]
 
 #[doc(hidden)]
 pub mod macro_helpers;
@@ -36,7 +35,6 @@ pub use manganis_core::SymbolData;
 
 /// Android platform utilities
 #[doc(hidden)]
-#[cfg(any(target_os = "android"))]
 pub mod android;
 
 /// Darwin (iOS/macOS) platform utilities
