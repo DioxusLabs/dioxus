@@ -262,7 +262,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         _self.waker.wake(());
     }
 
-    /// Clone the Rc<Websocket> out of the Resource using peek, so we don't hold a borrow
+    /// Clone the `Rc<Websocket>` out of the Resource using peek, so we don't hold a borrow
     /// guard across await points. This prevents AlreadyBorrowed panics when the Resource
     /// tries to write while recv() is awaiting.
     #[allow(clippy::result_large_err)]
