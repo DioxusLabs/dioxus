@@ -146,12 +146,12 @@ impl<T> SerializeContextEntry<T> {
 
 /// Check if the client is currently rendering a component for hydration. Always returns true on the server.
 pub fn is_hydrating() -> bool {
-    #[cfg(feature = "web")]
+    #[cfg(target_arch = "wasm32")]
     {
         // On the client, we can check if the context is set
         CONTEXT.with(|context| context.borrow().is_some())
     }
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(target_arch = "wasm32"))]
     {
         true
     }
@@ -160,18 +160,24 @@ pub fn is_hydrating() -> bool {
 /// Get or insert the current serialize context. On the client, the hydration context this returns
 /// will always return `TakeDataError::DataNotAvailable` if hydration of the current chunk is finished.
 pub fn serialize_context() -> HydrationContext {
-    #[cfg(feature = "web")]
-    // On the client, the hydration logic provides the context in a global
-    if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
-        current_context
-    } else {
-        // If the context is not set, then suspense is not active
-        HydrationContext {
-            suspense_finished: true,
-            ..Default::default()
+    // Use target_arch to distinguish server (native) from client (wasm32)
+    // instead of cfg(feature = "web") because cargo feature unification
+    // can enable both "web" and "server" features simultaneously.
+    #[cfg(target_arch = "wasm32")]
+    {
+        // On the client, the hydration logic provides the context in a global
+        if let Some(current_context) = CONTEXT.with(|context| context.borrow().clone()) {
+            current_context
+        } else {
+            // If the context is not set, then suspense is not active
+            HydrationContext {
+                #[cfg(feature = "web")]
+                suspense_finished: true,
+                ..Default::default()
+            }
         }
     }
-    #[cfg(not(feature = "web"))]
+    #[cfg(not(target_arch = "wasm32"))]
     {
         // On the server each scope creates the context lazily
         dioxus_core::has_context()
