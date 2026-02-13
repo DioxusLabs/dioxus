@@ -116,6 +116,7 @@ where
     Out: 'static,
     Enc: 'static,
 {
+    #[allow(clippy::type_complexity)]
     connection: Resource<Result<Rc<Websocket<In, Out, Enc>>, CapturedError>>,
     waker: UseWaker<()>,
     status: Signal<WebsocketState>,
@@ -157,19 +158,6 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// Get the current status of the WebSocket connection.
     pub fn status(&self) -> ReadSignal<WebsocketState> {
         self.status_read
-    }
-
-    /// Clone the Rc<Websocket> out of the Resource using peek, so we don't hold a borrow
-    /// guard across await points. This prevents AlreadyBorrowed panics when the Resource
-    /// tries to write while recv() is awaiting.
-    fn get_connection(&self) -> Result<Rc<Websocket<In, Out, E>>, WebsocketError> {
-        self.connection.with_peek(|opt| {
-            opt.as_ref()
-                .ok_or_else(WebsocketError::closed_away)?
-                .as_ref()
-                .map(|ws| Rc::clone(ws))
-                .map_err(|_| WebsocketError::AlreadyClosed)
-        })
     }
 
     /// Send a raw message over the WebSocket connection
@@ -272,6 +260,20 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         let mut _self = *self;
         _self.status.set(WebsocketState::Closed);
         _self.waker.wake(());
+    }
+
+    /// Clone the Rc<Websocket> out of the Resource using peek, so we don't hold a borrow
+    /// guard across await points. This prevents AlreadyBorrowed panics when the Resource
+    /// tries to write while recv() is awaiting.
+    #[allow(clippy::result_large_err)]
+    fn get_connection(&self) -> Result<Rc<Websocket<In, Out, E>>, WebsocketError> {
+        self.connection.with_peek(|opt| {
+            opt.as_ref()
+                .ok_or_else(WebsocketError::closed_away)?
+                .as_ref()
+                .map(Rc::clone)
+                .map_err(|_| WebsocketError::AlreadyClosed)
+        })
     }
 }
 
