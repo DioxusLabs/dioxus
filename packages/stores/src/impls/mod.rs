@@ -4,5 +4,5 @@ pub mod hashmap;
 pub mod index;
 mod option;
 mod result;
-mod slice;
+pub mod slice;
 mod vec;
