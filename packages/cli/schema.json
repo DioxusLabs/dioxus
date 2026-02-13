@@ -11,7 +11,7 @@
       "$ref": "#/definitions/ApplicationConfig"
     },
     "background": {
-      "description": "Unified background mode configuration. Background capabilities declared here are mapped to platform-specific configurations. Use [ios], [android] sections for overrides.",
+      "description": "Unified background mode configuration. Background capabilities declared here are mapped to platform-specific configurations. Use `[ios]`, `[android]` sections for overrides.",
       "$ref": "#/definitions/BackgroundConfig"
     },
     "bundle": {
@@ -21,7 +21,7 @@
       "$ref": "#/definitions/ComponentConfig"
     },
     "deep_links": {
-      "description": "Unified deep linking configuration. URL schemes and universal links declared here are mapped to platform-specific configurations. Use [ios], [android], [macos] sections for overrides.",
+      "description": "Unified deep linking configuration. URL schemes and universal links declared here are mapped to platform-specific configurations. Use `[ios]`, `[android]`, `[macos]` sections for overrides.",
       "$ref": "#/definitions/DeepLinkConfig"
     },
     "ios": {
@@ -159,7 +159,7 @@
           ]
         },
         "intent_filters": {
-          "description": "Intent filters for deep linking. These extend the unified [deep_links] configuration with Android-specific options.",
+          "description": "Intent filters for deep linking. These extend the unified `[deep_links]` configuration with Android-specific options.",
           "type": "array",
           "items": {
             "$ref": "#/definitions/AndroidIntentFilter"
@@ -255,7 +255,7 @@
           "minimum": 0.0
         },
         "url_schemes": {
-          "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
           "type": "array",
           "items": {
             "type": "string"
@@ -400,14 +400,14 @@
       "type": "object",
       "properties": {
         "application": {
-          "description": "Raw XML inside <application> element.",
+          "description": "Raw XML inside `<application>` element.",
           "type": [
             "string",
             "null"
           ]
         },
         "application_attrs": {
-          "description": "Raw attributes for <application> element.",
+          "description": "Raw attributes for `<application>` element.",
           "type": [
             "string",
             "null"
@@ -920,7 +920,7 @@
       "type": "object",
       "properties": {
         "background_modes": {
-          "description": "Additional background modes beyond unified [background]. Valid values: \"audio\", \"location\", \"voip\", \"fetch\", \"remote-notification\", \"newsstand-content\", \"external-accessory\", \"bluetooth-central\", \"bluetooth-peripheral\", \"processing\"",
+          "description": "Additional background modes beyond unified `[background]`. Valid values: \"audio\", \"location\", \"voip\", \"fetch\", \"remote-notification\", \"newsstand-content\", \"external-accessory\", \"bluetooth-central\", \"bluetooth-peripheral\", \"processing\"",
           "type": "array",
           "items": {
             "type": "string"
@@ -1037,7 +1037,7 @@
           ]
         },
         "url_schemes": {
-          "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
           "type": "array",
           "items": {
             "type": "string"
@@ -1731,7 +1731,7 @@
           ]
         },
         "url_schemes": {
-          "description": "Additional URL schemes beyond unified [deep_links].schemes. These are merged with the unified schemes.",
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
           "type": "array",
           "items": {
             "type": "string"

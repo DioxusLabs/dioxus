@@ -26,13 +26,13 @@ pub(crate) struct DioxusConfig {
 
     /// Unified deep linking configuration.
     /// URL schemes and universal links declared here are mapped to platform-specific
-    /// configurations. Use \[ios\], \[android\], \[macos\] sections for overrides.
+    /// configurations. Use `[ios]`, `[android]`, `[macos]` sections for overrides.
     #[serde(default)]
     pub(crate) deep_links: DeepLinkConfig,
 
     /// Unified background mode configuration.
     /// Background capabilities declared here are mapped to platform-specific
-    /// configurations. Use [ios], [android] sections for overrides.
+    /// configurations. Use `[ios]`, `[android]` sections for overrides.
     #[serde(default)]
     pub(crate) background: BackgroundConfig,
 
