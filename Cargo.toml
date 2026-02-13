@@ -634,6 +634,11 @@ path = "examples/04-managing-state/error_handling.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "chaining_resource"
+path = "examples/05-using-async/chaining_resource.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "backgrounded_futures"
 path = "examples/05-using-async/backgrounded_futures.rs"
 doc-scrape-examples = true
