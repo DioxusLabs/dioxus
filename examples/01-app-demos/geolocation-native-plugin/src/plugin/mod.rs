@@ -311,21 +311,4 @@ mod fallback {
         ))
     }
 
-    pub fn startLiveActivityJson(_: &GeolocationPlugin) -> Result<String> {
-        Err(Error::LiveActivity(
-            "Live Activities are only supported on iOS 16.1+".to_string(),
-        ))
-    }
-
-    pub fn updateLiveActivityJson(_: &GeolocationPlugin, _: String) -> Result<String> {
-        Err(Error::LiveActivity(
-            "Live Activities are only supported on iOS 16.1+".to_string(),
-        ))
-    }
-
-    pub fn endLiveActivityJson(_: &GeolocationPlugin) -> Result<String> {
-        Err(Error::LiveActivity(
-            "Live Activities are only supported on iOS 16.1+".to_string(),
-        ))
-    }
 }
