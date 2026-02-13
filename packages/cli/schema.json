@@ -1,0 +1,3285 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DioxusConfig",
+  "type": "object",
+  "properties": {
+    "android": {
+      "description": "Android-specific configuration.",
+      "$ref": "#/definitions/AndroidConfig"
+    },
+    "application": {
+      "$ref": "#/definitions/ApplicationConfig"
+    },
+    "background": {
+      "description": "Unified background mode configuration. Background capabilities declared here are mapped to platform-specific configurations. Use `[ios]`, `[android]` sections for overrides.",
+      "$ref": "#/definitions/BackgroundConfig"
+    },
+    "bundle": {
+      "$ref": "#/definitions/BundleConfig"
+    },
+    "components": {
+      "$ref": "#/definitions/ComponentConfig"
+    },
+    "deep_links": {
+      "description": "Unified deep linking configuration. URL schemes and universal links declared here are mapped to platform-specific configurations. Use `[ios]`, `[android]`, `[macos]` sections for overrides.",
+      "$ref": "#/definitions/DeepLinkConfig"
+    },
+    "ios": {
+      "description": "iOS-specific configuration.",
+      "$ref": "#/definitions/IosConfig"
+    },
+    "linux": {
+      "description": "Linux-specific configuration.",
+      "$ref": "#/definitions/LinuxConfig"
+    },
+    "macos": {
+      "description": "macOS-specific configuration.",
+      "$ref": "#/definitions/MacosConfig"
+    },
+    "permissions": {
+      "description": "Unified permissions configuration. Permissions declared here are automatically mapped to platform-specific identifiers (AndroidManifest.xml, Info.plist, etc.)",
+      "$ref": "#/definitions/PermissionsConfig"
+    },
+    "web": {
+      "$ref": "#/definitions/WebConfig"
+    },
+    "windows": {
+      "description": "Windows-specific configuration.",
+      "$ref": "#/definitions/WindowsConfig"
+    }
+  },
+  "definitions": {
+    "AndroidApplicationConfig": {
+      "type": "object",
+      "properties": {
+        "large_heap": {
+          "description": "Enable large heap.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "supports_rtl": {
+          "description": "RTL layout support.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "theme": {
+          "description": "Application theme.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "uses_cleartext_traffic": {
+          "description": "Enable cleartext (HTTP) traffic.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "AndroidConfig": {
+      "description": "Android-specific configuration.\n\nExample: ```toml [android] min_sdk = 24 target_sdk = 34 identifier = \"com.example.myapp.android\"  # Override bundle.identifier for Android features = [\"android.hardware.location.gps\"]\n\n# Android signing configuration (previously in [bundle.android]) [android.signing] jks_file = \"keystore.jks\" jks_password = \"password\" key_alias = \"mykey\" key_password = \"keypassword\"\n\n[android.permissions] \"android.permission.FOREGROUND_SERVICE\" = { description = \"Background service\" } ```",
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Application-level config.",
+          "$ref": "#/definitions/AndroidApplicationConfig"
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compile_sdk": {
+          "description": "Compile SDK version.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "features": {
+          "description": "Hardware/software features required.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "foreground_service_types": {
+          "description": "Foreground service types for background operations. Valid values: \"camera\", \"connectedDevice\", \"dataSync\", \"health\", \"location\", \"mediaPlayback\", \"mediaProjection\", \"microphone\", \"phoneCall\", \"remoteMessaging\", \"shortService\", \"specialUse\", \"systemExempted\"",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gradle_dependencies": {
+          "description": "Gradle dependencies to add.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gradle_plugins": {
+          "description": "Gradle plugins to apply.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Android builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intent_filters": {
+          "description": "Intent filters for deep linking. These extend the unified `[deep_links]` configuration with Android-specific options.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AndroidIntentFilter"
+          }
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manifest": {
+          "description": "Path to custom AndroidManifest.xml to merge.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "min_sdk": {
+          "description": "Minimum SDK version.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "permissions": {
+          "description": "Additional Android permissions not in unified config.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/RawPermission"
+          }
+        },
+        "proguard_rules": {
+          "description": "ProGuard rule files.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "queries": {
+          "description": "Queries for package visibility (required for Android 11+). Specify packages or intents your app needs to query.",
+          "$ref": "#/definitions/AndroidQueries"
+        },
+        "raw": {
+          "description": "Raw XML injection points.",
+          "$ref": "#/definitions/AndroidRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Android builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Android builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signing": {
+          "description": "Android signing configuration for release builds. This replaces the deprecated `[bundle.android]` section.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AndroidSigningConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_sdk": {
+          "description": "Target SDK version.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "url_schemes": {
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "AndroidIntentData": {
+      "description": "Android intent data specification.",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Host (e.g., \"example.com\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_type": {
+          "description": "MIME type.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path (exact match).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path_pattern": {
+          "description": "Path pattern (with wildcards).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path_prefix": {
+          "description": "Path prefix.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "port": {
+          "description": "Port number.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scheme": {
+          "description": "URL scheme (e.g., \"https\", \"myapp\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "AndroidIntentFilter": {
+      "description": "Android intent filter for deep linking.",
+      "type": "object",
+      "properties": {
+        "actions": {
+          "description": "Actions (e.g., \"android.intent.action.VIEW\").",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "auto_verify": {
+          "description": "Auto-verify for App Links (requires HTTPS and assetlinks.json).",
+          "type": "boolean"
+        },
+        "categories": {
+          "description": "Categories (e.g., \"android.intent.category.DEFAULT\", \"android.intent.category.BROWSABLE\").",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data": {
+          "description": "Data specifications.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AndroidIntentData"
+          }
+        }
+      }
+    },
+    "AndroidQueries": {
+      "description": "Android package visibility queries.",
+      "type": "object",
+      "properties": {
+        "intents": {
+          "description": "Intent actions to query.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AndroidQueryIntent"
+          }
+        },
+        "packages": {
+          "description": "Package names to query.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "AndroidQueryIntent": {
+      "description": "Android query intent specification.",
+      "type": "object",
+      "required": [
+        "action"
+      ],
+      "properties": {
+        "action": {
+          "description": "Action (e.g., \"android.intent.action.SEND\").",
+          "type": "string"
+        },
+        "mime_type": {
+          "description": "MIME type (e.g., \"text/plain\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scheme": {
+          "description": "Data scheme (e.g., \"mailto\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "AndroidRawConfig": {
+      "type": "object",
+      "properties": {
+        "application": {
+          "description": "Raw XML inside `<application>` element.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "application_attrs": {
+          "description": "Raw attributes for `<application>` element.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "manifest": {
+          "description": "Raw XML to inject into manifest (after permissions).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "AndroidSettings": {
+      "type": "object",
+      "required": [
+        "jks_file",
+        "jks_password",
+        "key_alias",
+        "key_password"
+      ],
+      "properties": {
+        "jks_file": {
+          "type": "string"
+        },
+        "jks_password": {
+          "type": "string"
+        },
+        "key_alias": {
+          "type": "string"
+        },
+        "key_password": {
+          "type": "string"
+        }
+      }
+    },
+    "AndroidSigningConfig": {
+      "description": "Android signing configuration for release builds.",
+      "type": "object",
+      "required": [
+        "jks_file",
+        "jks_password",
+        "key_alias",
+        "key_password"
+      ],
+      "properties": {
+        "jks_file": {
+          "description": "Path to the Java keystore file.",
+          "type": "string"
+        },
+        "jks_password": {
+          "description": "Password for the keystore.",
+          "type": "string"
+        },
+        "key_alias": {
+          "description": "Alias of the key in the keystore.",
+          "type": "string"
+        },
+        "key_password": {
+          "description": "Password for the key.",
+          "type": "string"
+        }
+      }
+    },
+    "ApplicationConfig": {
+      "type": "object",
+      "properties": {
+        "android_main_activity": {
+          "description": "Use this file for the MainActivity.kt associated with the Android app.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "android_manifest": {
+          "description": "Use this file for the AndroidManifest.xml associated with the Android app. `dx` will merge any required settings into this file required to build the app",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "android_min_sdk_version": {
+          "description": "Specified minimum sdk version for gradle to build the app with.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "asset_dir": {
+          "description": "The path where global assets will be added when components are added with `dx components add`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ios_entitlements": {
+          "description": "Use this file for the entitlements.plist associated with the iOS app.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ios_info_plist": {
+          "description": "Use this file for the info.plist associated with the iOS app. `dx` will merge any required settings into this file required to build the app",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "macos_entitlements": {
+          "description": "Use this file for the entitlements.plist associated with the macOS app.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "macos_info_plist": {
+          "description": "Use this file for the info.plist associated with the macOS app. `dx` will merge any required settings into this file required to build the app",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "out_dir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "public_dir": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tailwind_input": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tailwind_output": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "BackgroundConfig": {
+      "description": "Unified background execution configuration.\n\nThis provides a cross-platform interface for background capabilities. Platform-specific overrides can be configured in `[ios]` and `[android]` sections.\n\nExample: ```toml [background] location = true audio = true fetch = true ```",
+      "type": "object",
+      "properties": {
+        "audio": {
+          "description": "Background audio playback. iOS: UIBackgroundModes \"audio\" Android: FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+          "type": "boolean"
+        },
+        "bluetooth": {
+          "description": "Bluetooth LE accessories. iOS: UIBackgroundModes \"bluetooth-central\" and \"bluetooth-peripheral\" Android: FOREGROUND_SERVICE_CONNECTED_DEVICE",
+          "type": "boolean"
+        },
+        "external-accessory": {
+          "description": "External accessory communication. iOS: UIBackgroundModes \"external-accessory\"",
+          "type": "boolean"
+        },
+        "fetch": {
+          "description": "Background data fetch. iOS: UIBackgroundModes \"fetch\" Android: WorkManager or foreground service",
+          "type": "boolean"
+        },
+        "location": {
+          "description": "Background location updates. iOS: UIBackgroundModes \"location\" Android: ACCESS_BACKGROUND_LOCATION permission",
+          "type": "boolean"
+        },
+        "processing": {
+          "description": "Background processing tasks. iOS: UIBackgroundModes \"processing\" Android: WorkManager",
+          "type": "boolean"
+        },
+        "remote-notifications": {
+          "description": "Remote push notifications. iOS: UIBackgroundModes \"remote-notification\" Android: Firebase Cloud Messaging",
+          "type": "boolean"
+        },
+        "voip": {
+          "description": "VoIP calls. iOS: UIBackgroundModes \"voip\" Android: FOREGROUND_SERVICE_PHONE_CALL",
+          "type": "boolean"
+        }
+      }
+    },
+    "BundleConfig": {
+      "type": "object",
+      "properties": {
+        "android": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AndroidSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deb": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DebianSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "external_bin": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "macos": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MacOsSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publisher": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "windows": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "ComponentConfig": {
+      "description": "Configuration for the `dioxus component` commands",
+      "type": "object",
+      "properties": {
+        "components_dir": {
+          "description": "The path where components are stored when adding or removing components",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry": {
+          "description": "The component registry to default to when adding components",
+          "$ref": "#/definitions/ComponentRegistry"
+        }
+      }
+    },
+    "ComponentRegistry": {
+      "description": "Arguments for a component registry Either a path to a local directory or a remote git repo (with optional rev)",
+      "type": "object",
+      "properties": {
+        "git": {
+          "description": "The url of the component registry",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "The path to the components directory",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rev": {
+          "description": "The revision of the component registry",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "CustomSignCommandSettings": {
+      "type": "object",
+      "required": [
+        "args",
+        "cmd"
+      ],
+      "properties": {
+        "args": {
+          "description": "The arguments to pass to the command.\n\n\"%1\" will be replaced with the path to the binary to be signed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cmd": {
+          "description": "The command to run to sign the binary.",
+          "type": "string"
+        }
+      }
+    },
+    "DebianSettings": {
+      "type": "object",
+      "properties": {
+        "changelog": {
+          "description": "Path of the uncompressed Changelog file, to be stored at /usr/share/doc/package-name/changelog.gz. See <https://www.debian.org/doc/debian-policy/ch-docs.html#changelog-files-and-release-notes>",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflicts": {
+          "description": "the list of package conflicts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "depends": {
+          "description": "the list of debian dependencies.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "desktop_template": {
+          "description": "Path to a custom desktop file Handlebars template.\n\nAvailable variables: `categories`, `comment` (optional), `exec`, `icon` and `name`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "List of custom files to add to the deb package. Maps the path on the debian package to the path of the file to include (relative to the current working directory).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "post_install_script": {
+          "description": "Path to script that will be executed after the package is unpacked. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_remove_script": {
+          "description": "Path to script that will be executed after the package is removed. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_install_script": {
+          "description": "Path to script that will be executed before the package is unpacked. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_remove_script": {
+          "description": "Path to script that will be executed before the package is removed. See <https://www.debian.org/doc/debian-policy/ch-maintainerscripts.html>",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "Change the priority of the Debian Package. By default, it is set to `optional`. Recognized Priorities as of now are :  `required`, `important`, `standard`, `optional`, `extra`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provides": {
+          "description": "the list of dependencies the package provides.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "the list of recommended debian dependencies.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "replaces": {
+          "description": "the list of package replaces.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "section": {
+          "description": "Define the section in Debian Control file. See : <https://www.debian.org/doc/debian-policy/ch-archive.html#s-subsections>",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "DeepLinkConfig": {
+      "description": "Unified deep linking configuration.\n\nThis provides a cross-platform interface for URL schemes and universal/app links. Platform-specific overrides can be configured in `[ios]` and `[android]` sections.\n\nExample: ```toml [deep_links] schemes = [\"myapp\", \"com.example.myapp\"] hosts = [\"example.com\", \"*.example.com\"] ```",
+      "type": "object",
+      "properties": {
+        "hosts": {
+          "description": "Universal link / App link hosts (e.g., \"example.com\"). Maps to Associated Domains on iOS and App Links on Android. Supports wildcards like \"*.example.com\".",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "paths": {
+          "description": "Path patterns for universal/app links (e.g., \"/app/*\", \"/share/*\"). If empty, all paths are matched.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "schemes": {
+          "description": "Custom URL schemes (e.g., \"myapp\" for myapp://path). Maps to CFBundleURLSchemes on iOS/macOS and intent-filter on Android.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "IosConfig": {
+      "description": "iOS-specific configuration.\n\nExample: ```toml [ios] deployment_target = \"15.0\" identifier = \"com.example.myapp.ios\"  # Override bundle.identifier for iOS\n\n[ios.entitlements] app-groups = [\"group.com.example.app\"]\n\n[ios.plist] UIBackgroundModes = [\"location\", \"fetch\"] ```",
+      "type": "object",
+      "properties": {
+        "background_modes": {
+          "description": "Additional background modes beyond unified `[background]`. Valid values: \"audio\", \"location\", \"voip\", \"fetch\", \"remote-notification\", \"newsstand-content\", \"external-accessory\", \"bluetooth-central\", \"bluetooth-peripheral\", \"processing\"",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "deployment_target": {
+          "description": "Minimum iOS deployment target (e.g., \"15.0\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "document_types": {
+          "description": "Document types the app can open.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosDocumentType"
+          }
+        },
+        "entitlements": {
+          "description": "iOS entitlements configuration.",
+          "$ref": "#/definitions/IosEntitlements"
+        },
+        "exported_type_identifiers": {
+          "description": "Exported type identifiers (custom UTIs).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosTypeIdentifier"
+          }
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for iOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imported_type_identifiers": {
+          "description": "Imported type identifiers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosTypeIdentifier"
+          }
+        },
+        "info_plist": {
+          "description": "Path to custom Info.plist to merge with generated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plist": {
+          "description": "Additional Info.plist keys to merge.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw": {
+          "description": "Raw XML injection points.",
+          "$ref": "#/definitions/IosRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for iOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for iOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_schemes": {
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "widget_extensions": {
+          "description": "Widget extensions to compile and bundle. Each entry defines a Swift-based widget extension (.appex) that will be compiled and installed into the app's PlugIns folder.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WidgetExtensionConfig"
+          }
+        }
+      }
+    },
+    "IosDocumentType": {
+      "description": "iOS document type declaration.",
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "extensions": {
+          "description": "File extensions (e.g., [\"txt\", \"md\"]).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "description": "Icon file name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_types": {
+          "description": "MIME types.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "name": {
+          "description": "Document type name.",
+          "type": "string"
+        },
+        "role": {
+          "description": "Role: \"Editor\", \"Viewer\", \"Shell\", or \"None\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "types": {
+          "description": "UTI types.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "IosEntitlements": {
+      "type": "object",
+      "properties": {
+        "app-groups": {
+          "description": "App groups for shared data.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "apple-pay": {
+          "description": "Enable Apple Pay.",
+          "type": "boolean"
+        },
+        "aps-environment": {
+          "description": "Push notification environment: \"development\" or \"production\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "associated-domains": {
+          "description": "Associated domains for universal links.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "healthkit": {
+          "description": "Enable HealthKit.",
+          "type": "boolean"
+        },
+        "homekit": {
+          "description": "Enable HomeKit.",
+          "type": "boolean"
+        },
+        "icloud": {
+          "description": "Enable iCloud container support.",
+          "type": "boolean"
+        },
+        "keychain-access-groups": {
+          "description": "Keychain access groups.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "IosRawConfig": {
+      "type": "object",
+      "properties": {
+        "entitlements": {
+          "description": "Raw XML to inject into entitlements.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "info_plist": {
+          "description": "Raw XML to inject into Info.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "IosTypeIdentifier": {
+      "description": "iOS Uniform Type Identifier declaration.",
+      "type": "object",
+      "required": [
+        "identifier"
+      ],
+      "properties": {
+        "conforms_to": {
+          "description": "Conforms to these UTIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "description": "Human-readable description.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "extensions": {
+          "description": "File extensions.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "UTI identifier (e.g., \"com.example.myformat\").",
+          "type": "string"
+        },
+        "mime_types": {
+          "description": "MIME types.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "LinuxConfig": {
+      "description": "Linux-specific configuration.\n\nExample: ```toml [linux] identifier = \"com.example.myapp.linux\"  # Override bundle.identifier for Linux categories = [\"Utility\"]\n\n# Debian package settings (previously in [bundle.deb]) [linux.deb] depends = [\"libwebkit2gtk-4.0-37\"] section = \"utils\" ```",
+      "type": "object",
+      "properties": {
+        "categories": {
+          "description": "Desktop entry categories.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dbus_access": {
+          "description": "D-Bus interfaces to access.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "deb": {
+          "description": "Debian-specific package settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LinuxDebSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flatpak_permissions": {
+          "description": "Flatpak sandbox permissions.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "keywords": {
+          "description": "Desktop entry keywords.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mime_types": {
+          "description": "MIME types the app can handle.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Linux builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Linux builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "LinuxDebSettings": {
+      "description": "Debian package settings.",
+      "type": "object",
+      "properties": {
+        "changelog": {
+          "description": "Path to changelog file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "conflicts": {
+          "description": "Package conflicts.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "depends": {
+          "description": "Package dependencies.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "desktop_template": {
+          "description": "Path to custom desktop template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "Additional files to include. Maps package path to source path.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "post_install_script": {
+          "description": "Post-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "post_remove_script": {
+          "description": "Post-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_install_script": {
+          "description": "Pre-install script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pre_remove_script": {
+          "description": "Pre-remove script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "priority": {
+          "description": "Package priority (\"required\", \"important\", \"standard\", \"optional\", \"extra\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provides": {
+          "description": "Packages this provides.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "recommends": {
+          "description": "Recommended packages.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "replaces": {
+          "description": "Packages this replaces.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "section": {
+          "description": "Debian section (e.g., \"utils\", \"web\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "LocationPermission": {
+      "description": "Location permission with precision control.",
+      "type": "object",
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "description": {
+          "description": "User-facing description shown in permission dialogs.",
+          "type": "string"
+        },
+        "precision": {
+          "description": "Precision level: \"fine\" (GPS) or \"coarse\" (network-based).",
+          "$ref": "#/definitions/LocationPrecision"
+        }
+      }
+    },
+    "LocationPrecision": {
+      "type": "string",
+      "enum": [
+        "fine",
+        "coarse"
+      ]
+    },
+    "MacOsSettings": {
+      "type": "object",
+      "properties": {
+        "bundle_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundle_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entitlements": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exception_domain": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "List of custom files to add to the application bundle. Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "frameworks": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "hardened_runtime": {
+          "description": "Preserve the hardened runtime version flag, see <https://developer.apple.com/documentation/security/hardened_runtime>\n\nSettings this to `false` is useful when using an ad-hoc signature, making it less strict.",
+          "type": "boolean"
+        },
+        "info_plist_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_system_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "provider_short_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signing_identity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "MacosConfig": {
+      "description": "macOS-specific configuration.\n\nExample: ```toml [macos] minimum_system_version = \"11.0\" identifier = \"com.example.myapp.macos\"  # Override bundle.identifier for macOS\n\n# macOS signing (previously in [bundle.macos]) signing_identity = \"Developer ID Application: My Company\" provider_short_name = \"MYCOMPANY\" ```",
+      "type": "object",
+      "properties": {
+        "bundle_name": {
+          "description": "The bundle short version string (CFBundleShortVersionString).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bundle_version": {
+          "description": "The bundle version string (CFBundleVersion).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "description": "App category for the Mac App Store. E.g., \"public.app-category.productivity\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "document_types": {
+          "description": "Document types the app can open (uses same format as iOS).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosDocumentType"
+          }
+        },
+        "entitlements": {
+          "description": "macOS entitlements.",
+          "$ref": "#/definitions/MacosEntitlements"
+        },
+        "entitlements_file": {
+          "description": "Path to custom entitlements file for code signing. This overrides the generated entitlements.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exception_domain": {
+          "description": "Exception domain for App Transport Security.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exported_type_identifiers": {
+          "description": "Exported type identifiers (custom UTIs).",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosTypeIdentifier"
+          }
+        },
+        "files": {
+          "description": "Additional files to include in the app bundle. Maps the path in the Contents directory to the source file path.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "frameworks": {
+          "description": "Frameworks to embed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "hardened_runtime": {
+          "description": "Preserve the hardened runtime version flag. Setting this to false is useful when using an ad-hoc signature.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for macOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "imported_type_identifiers": {
+          "description": "Imported type identifiers.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/IosTypeIdentifier"
+          }
+        },
+        "info_plist": {
+          "description": "Path to custom Info.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "license": {
+          "description": "License file to include in DMG.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_system_version": {
+          "description": "Minimum macOS version (e.g., \"11.0\").",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plist": {
+          "description": "Additional Info.plist keys.",
+          "type": "object",
+          "additionalProperties": true
+        },
+        "provider_short_name": {
+          "description": "The provider short name for notarization.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw": {
+          "description": "Raw injection points.",
+          "$ref": "#/definitions/MacosRawConfig"
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for macOS builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for macOS builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "signing_identity": {
+          "description": "The signing identity to use for code signing. E.g., \"Developer ID Application: My Company (TEAMID)\"",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "url_schemes": {
+          "description": "Additional URL schemes beyond unified `[deep_links]`.schemes. These are merged with the unified schemes.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "MacosEntitlements": {
+      "type": "object",
+      "properties": {
+        "addressbook": {
+          "description": "Address book access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allow-jit": {
+          "description": "Allow JIT.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "allow-unsigned-executable-memory": {
+          "description": "Allow unsigned executable memory.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "app-sandbox": {
+          "description": "Enable App Sandbox.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "bluetooth": {
+          "description": "Bluetooth access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "calendars": {
+          "description": "Calendars access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "camera": {
+          "description": "Camera access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "disable-library-validation": {
+          "description": "Disable library validation.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "files-user-selected": {
+          "description": "User-selected file access (read-write).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "files-user-selected-readonly": {
+          "description": "User-selected file access (read-only).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "location": {
+          "description": "Location services.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "microphone": {
+          "description": "Microphone access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "network-client": {
+          "description": "Outgoing network connections.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "network-server": {
+          "description": "Incoming network connections.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "print": {
+          "description": "Printing.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "usb": {
+          "description": "USB access.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "MacosRawConfig": {
+      "type": "object",
+      "properties": {
+        "entitlements": {
+          "description": "Raw XML to inject into entitlements.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "info_plist": {
+          "description": "Raw XML to inject into Info.plist.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "NSISInstallerMode": {
+      "type": "string",
+      "enum": [
+        "CurrentUser",
+        "PerMachine",
+        "Both"
+      ]
+    },
+    "NsisSettings": {
+      "type": "object",
+      "properties": {
+        "custom_language_files": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "display_language_selector": {
+          "type": "boolean"
+        },
+        "header_image": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install_mode": {
+          "$ref": "#/definitions/NSISInstallerMode"
+        },
+        "installer_hooks": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installer_icon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languages": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_webview2_version": {
+          "description": "Try to ensure that the WebView2 version is equal to or newer than this version, if the user's WebView2 is older than this version, the installer will try to trigger a WebView2 update.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sidebar_image": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_menu_folder": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "PermissionsConfig": {
+      "description": "Unified permission configuration that maps to platform-specific identifiers.\n\nExample: ```toml [permissions] location = { precision = \"fine\", description = \"Track your runs\" } camera = { description = \"Take photos for your profile\" } ```",
+      "type": "object",
+      "properties": {
+        "background-location": {
+          "description": "Background location updates.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "biometrics": {
+          "description": "Biometric authentication (Face ID, fingerprint).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bluetooth": {
+          "description": "Bluetooth connectivity.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calendar": {
+          "description": "Calendar access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoragePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "camera": {
+          "description": "Camera access permission.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "contacts": {
+          "description": "Contacts access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoragePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "description": "Health data access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoragePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "homekit": {
+          "description": "HomeKit integration (iOS only).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "local-network": {
+          "description": "Local network access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location": {
+          "description": "Location permission with precision level. Maps to ACCESS_FINE_LOCATION/ACCESS_COARSE_LOCATION on Android, NSLocationWhenInUseUsageDescription on iOS/macOS.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/LocationPermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "media-library": {
+          "description": "Media library access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "microphone": {
+          "description": "Microphone access permission.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "motion": {
+          "description": "Motion and fitness data.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nearby-wifi": {
+          "description": "Nearby Wi-Fi devices (Android).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nfc": {
+          "description": "NFC access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notifications": {
+          "description": "Push notifications permission.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "photos": {
+          "description": "Photo library access.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StoragePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "siri": {
+          "description": "Siri integration (iOS only).",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "speech": {
+          "description": "Speech recognition.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SimplePermission"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "RawPermission": {
+      "description": "Raw platform permission entry.",
+      "type": "object",
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "SimplePermission": {
+      "description": "Simple permission with just a description.",
+      "type": "object",
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "description": {
+          "description": "User-facing description shown in permission dialogs.",
+          "type": "string"
+        }
+      }
+    },
+    "StorageAccess": {
+      "type": "string",
+      "enum": [
+        "read",
+        "write",
+        "read-write"
+      ]
+    },
+    "StoragePermission": {
+      "description": "Storage permission with access level control.",
+      "type": "object",
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "access": {
+          "description": "Access level: \"read\", \"write\", or \"read-write\".",
+          "$ref": "#/definitions/StorageAccess"
+        },
+        "description": {
+          "description": "User-facing description shown in permission dialogs.",
+          "type": "string"
+        }
+      }
+    },
+    "WasmOptConfig": {
+      "description": "The wasm-opt configuration",
+      "type": "object",
+      "properties": {
+        "debug": {
+          "description": "Keep debug symbols in the wasm file",
+          "type": "boolean"
+        },
+        "extra_features": {
+          "description": "Extra arguments to pass to wasm-opt\n\nFor example, to enable simd, you can set this to `[\"--enable-simd\"]`.\n\nYou can also disable features by prefixing them with `--disable-`, e.g. `[\"--disable-bulk-memory\"]`.\n\nCurrently only --enable and --disable flags are supported.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "keep_names": {
+          "description": "Keep the wasm name section, useful for profiling and debugging\n\nUnlike `debug` which preserves DWARF debug symbols (requiring a browser extension to read), the name section allows tools like `console_error_panic_hook` to print backtraces with human-readable function names without any browser extension.",
+          "type": "boolean"
+        },
+        "level": {
+          "description": "The wasm-opt level to use for release builds [default: s] Options: - z: optimize aggressively for size - s: optimize for size - 1: optimize for speed - 2: optimize for more for speed - 3: optimize for even more for speed - 4: optimize aggressively for speed",
+          "$ref": "#/definitions/WasmOptLevel"
+        },
+        "memory_packing": {
+          "description": "Enable memory packing",
+          "type": "boolean"
+        }
+      }
+    },
+    "WasmOptLevel": {
+      "description": "The wasm-opt level to use for release web builds [default: Z]",
+      "oneOf": [
+        {
+          "description": "Optimize aggressively for size",
+          "type": "string",
+          "enum": [
+            "z"
+          ]
+        },
+        {
+          "description": "Optimize for size",
+          "type": "string",
+          "enum": [
+            "s"
+          ]
+        },
+        {
+          "description": "Don't optimize",
+          "type": "string",
+          "enum": [
+            "0"
+          ]
+        },
+        {
+          "description": "Optimize for speed",
+          "type": "string",
+          "enum": [
+            "1"
+          ]
+        },
+        {
+          "description": "Optimize for more for speed",
+          "type": "string",
+          "enum": [
+            "2"
+          ]
+        },
+        {
+          "description": "Optimize for even more for speed",
+          "type": "string",
+          "enum": [
+            "3"
+          ]
+        },
+        {
+          "description": "Optimize aggressively for speed",
+          "type": "string",
+          "enum": [
+            "4"
+          ]
+        }
+      ]
+    },
+    "WebAppConfig": {
+      "type": "object",
+      "properties": {
+        "base_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "type": "string"
+        }
+      }
+    },
+    "WebConfig": {
+      "type": "object",
+      "properties": {
+        "app": {
+          "$ref": "#/definitions/WebAppConfig"
+        },
+        "https": {
+          "$ref": "#/definitions/WebHttpsConfig"
+        },
+        "pre_compress": {
+          "description": "Whether to enable pre-compression of assets and wasm during a web build in release mode",
+          "type": "boolean"
+        },
+        "proxy": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WebProxyConfig"
+          }
+        },
+        "resource": {
+          "$ref": "#/definitions/WebResourceConfig"
+        },
+        "wasm_opt": {
+          "description": "The wasm-opt configuration",
+          "$ref": "#/definitions/WasmOptConfig"
+        },
+        "watcher": {
+          "$ref": "#/definitions/WebWatcherConfig"
+        }
+      }
+    },
+    "WebDevResourceConfig": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "style": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "WebHttpsConfig": {
+      "type": "object",
+      "properties": {
+        "cert_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "key_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mkcert": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "WebProxyConfig": {
+      "type": "object",
+      "required": [
+        "backend"
+      ],
+      "properties": {
+        "backend": {
+          "type": "string"
+        }
+      }
+    },
+    "WebResourceConfig": {
+      "type": "object",
+      "required": [
+        "dev"
+      ],
+      "properties": {
+        "dev": {
+          "$ref": "#/definitions/WebDevResourceConfig"
+        },
+        "script": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "style": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "WebWatcherConfig": {
+      "type": "object",
+      "properties": {
+        "index_on_404": {
+          "type": "boolean"
+        },
+        "reload_html": {
+          "type": "boolean"
+        },
+        "watch_path": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "WebviewInstallMode": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "Skip"
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "DownloadBootstrapper"
+          ],
+          "properties": {
+            "DownloadBootstrapper": {
+              "type": "object",
+              "required": [
+                "silent"
+              ],
+              "properties": {
+                "silent": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "EmbedBootstrapper"
+          ],
+          "properties": {
+            "EmbedBootstrapper": {
+              "type": "object",
+              "required": [
+                "silent"
+              ],
+              "properties": {
+                "silent": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "OfflineInstaller"
+          ],
+          "properties": {
+            "OfflineInstaller": {
+              "type": "object",
+              "required": [
+                "silent"
+              ],
+              "properties": {
+                "silent": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "FixedRuntime"
+          ],
+          "properties": {
+            "FixedRuntime": {
+              "type": "object",
+              "required": [
+                "path"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WidgetExtensionConfig": {
+      "description": "Configuration for an iOS Widget Extension.\n\nWidget extensions are compiled as Swift executables and bundled as .appex bundles in the app's PlugIns folder.\n\nExample in Dioxus.toml: ```toml [[ios.widget_extensions]] source = \"src/ios/widget\" display_name = \"Location Widget\" bundle_id_suffix = \"location-widget\" deployment_target = \"16.2\" module_name = \"GeolocationPlugin\" ```",
+      "type": "object",
+      "required": [
+        "bundle_id_suffix",
+        "display_name",
+        "module_name",
+        "source"
+      ],
+      "properties": {
+        "bundle_id_suffix": {
+          "description": "Bundle ID suffix appended to the app's bundle identifier. For example, if the app is \"com.example.app\" and suffix is \"location-widget\", the widget bundle ID will be \"com.example.app.location-widget\".",
+          "type": "string"
+        },
+        "deployment_target": {
+          "description": "Minimum deployment target (e.g., \"16.2\"). Defaults to the app's iOS deployment target if not specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "description": "Display name for the widget (shown in system UI).",
+          "type": "string"
+        },
+        "module_name": {
+          "description": "Swift module name for the widget. This MUST match the module name used by the main app's Swift plugin for ActivityKit type matching to work.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Path to the Swift package source directory (relative to project root).",
+          "type": "string"
+        }
+      }
+    },
+    "WindowsConfig": {
+      "description": "Windows-specific configuration.\n\nExample: ```toml [windows] identifier = \"com.example.myapp.windows\"  # Override bundle.identifier for Windows\n\n# Windows installer settings (previously in [bundle.windows]) [windows.nsis] install_mode = \"PerMachine\"\n\n[windows.wix] language = [[\"en-US\", null]] ```",
+      "type": "object",
+      "properties": {
+        "allow_downgrades": {
+          "description": "Allow downgrades when installing.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "capabilities": {
+          "description": "UWP/MSIX capabilities.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "category": {
+          "description": "App category. Overrides `bundle.category` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "certificate_thumbprint": {
+          "description": "Certificate thumbprint for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copyright": {
+          "description": "Copyright notice. Overrides `bundle.copyright` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "device_capabilities": {
+          "description": "Device capabilities.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "digest_algorithm": {
+          "description": "Digest algorithm for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon": {
+          "description": "Icons for the app. Overrides `bundle.icon` for Windows builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "icon_path": {
+          "description": "Path to custom Windows icon.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identifier": {
+          "description": "The app's identifier (e.g., \"com.example.myapp\"). Overrides `bundle.identifier` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "long_description": {
+          "description": "Long description. Overrides `bundle.long_description` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nsis": {
+          "description": "NSIS installer settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsNsisSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publisher": {
+          "description": "The app's publisher. Overrides `bundle.publisher` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resources": {
+          "description": "Additional resources to bundle. Overrides `bundle.resources` for Windows builds.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "restricted_capabilities": {
+          "description": "Restricted capabilities.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "short_description": {
+          "description": "Short description. Overrides `bundle.short_description` for Windows builds.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sign_command": {
+          "description": "Custom sign command.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsSignCommand"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp_url": {
+          "description": "Timestamp server URL for code signing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tsp": {
+          "description": "Use TSP (RFC 3161) timestamp.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "webview_install_mode": {
+          "description": "WebView2 installation mode.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsWebviewInstallMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wix": {
+          "description": "WiX installer settings.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WindowsWixSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "WindowsNsisSettings": {
+      "description": "NSIS installer settings.",
+      "type": "object",
+      "properties": {
+        "custom_language_files": {
+          "description": "Custom language files.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "display_language_selector": {
+          "description": "Display language selector.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "header_image": {
+          "description": "Header image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "install_mode": {
+          "description": "Installation mode: \"CurrentUser\", \"PerMachine\", or \"Both\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installer_hooks": {
+          "description": "Installer hooks script path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "installer_icon": {
+          "description": "Installer icon path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "languages": {
+          "description": "Languages to include.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "license": {
+          "description": "License file path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "minimum_webview2_version": {
+          "description": "Minimum WebView2 version required.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sidebar_image": {
+          "description": "Sidebar image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_menu_folder": {
+          "description": "Start menu folder name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Path to custom NSIS template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "WindowsSettings": {
+      "type": "object",
+      "properties": {
+        "allow_downgrades": {
+          "type": "boolean"
+        },
+        "certificate_thumbprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "digest_algorithm": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "icon_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nsis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NsisSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sign_command": {
+          "description": "Specify a custom command to sign the binaries. This command needs to have a `%1` in it which is just a placeholder for the binary path, which we will detect and replace before calling the command.\n\nExample: ```text sign-cli --arg1 --arg2 %1 ```\n\nBy Default we use `signtool.exe` which can be found only on Windows so if you are on another platform and want to cross-compile and sign you will need to use another tool like `osslsigncode`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CustomSignCommandSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timestamp_url": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tsp": {
+          "type": "boolean"
+        },
+        "webview_fixed_runtime_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "webview_install_mode": {
+          "$ref": "#/definitions/WebviewInstallMode"
+        },
+        "wix": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WixSettings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "WindowsSignCommand": {
+      "description": "Custom sign command for Windows code signing.",
+      "type": "object",
+      "required": [
+        "args",
+        "cmd"
+      ],
+      "properties": {
+        "args": {
+          "description": "Command arguments. Use \"%1\" as placeholder for binary path.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cmd": {
+          "description": "The command to run.",
+          "type": "string"
+        }
+      }
+    },
+    "WindowsWebviewInstallMode": {
+      "description": "WebView2 installation mode.",
+      "oneOf": [
+        {
+          "description": "Skip WebView2 installation.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "Skip"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Download bootstrapper.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "DownloadBootstrapper"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Embed bootstrapper.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "EmbedBootstrapper"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Use offline installer.",
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "silent": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "OfflineInstaller"
+              ]
+            }
+          }
+        },
+        {
+          "description": "Use fixed runtime from path.",
+          "type": "object",
+          "required": [
+            "path",
+            "type"
+          ],
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "FixedRuntime"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "WindowsWixSettings": {
+      "description": "WiX installer settings.",
+      "type": "object",
+      "properties": {
+        "banner_path": {
+          "description": "Banner image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "component_group_refs": {
+          "description": "Component group references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "component_refs": {
+          "description": "Component references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dialog_image_path": {
+          "description": "Dialog image path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_elevated_update_task": {
+          "description": "Enable elevated update task.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "feature_group_refs": {
+          "description": "Feature group references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feature_refs": {
+          "description": "Feature references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fips_compliant": {
+          "description": "FIPS compliant mode.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "fragment_paths": {
+          "description": "WiX fragment files to include.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "language": {
+          "description": "Languages and their locale paths.",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        },
+        "license": {
+          "description": "License file path.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_refs": {
+          "description": "Merge module references.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skip_webview_install": {
+          "description": "Skip WebView2 installation.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "template": {
+          "description": "Path to custom WiX template.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upgrade_code": {
+          "description": "MSI upgrade code (GUID).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "MSI version string.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "WixSettings": {
+      "type": "object",
+      "properties": {
+        "banner_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "component_group_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "component_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dialog_image_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enable_elevated_update_task": {
+          "type": "boolean"
+        },
+        "feature_group_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "feature_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fips_compliant": {
+          "type": "boolean"
+        },
+        "fragment_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "language": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": [
+              {
+                "type": "string"
+              },
+              {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            ],
+            "maxItems": 2,
+            "minItems": 2
+          }
+        },
+        "license": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skip_webview_install": {
+          "type": "boolean"
+        },
+        "template": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "upgrade_code": {
+          "description": "A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**, otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.\n\nBy default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace. You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.\n\nIt is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code whenever you want to change your product name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
+          "description": "MSI installer version in the format `major.minor.patch.build` (build is optional).\n\nBecause a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.\n\nThe first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255. The third and fourth fields have a maximum value of 65,535.\n\nSee <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

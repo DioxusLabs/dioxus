@@ -1,4 +1,3 @@
-
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -16,9 +15,9 @@
 	<string>{{ bundle_name }}</string>
 
 	<key>CFBundleVersion</key>
-	<string>0.1.0</string>
+	<string>{{ version }}</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>{{ version }}</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en_US</string>
 	<key>UILaunchStoryboardName</key>
@@ -42,8 +41,6 @@
 		<string>iPhoneOS</string>
 		<string>iPadOS</string>
 	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -57,5 +54,42 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+
+	<!-- Permission usage descriptions from Dioxus.toml [permissions] section -->
+	{{#each permissions}}
+	<key>{{ this.key }}</key>
+	<string>{{ this.description }}</string>
+	{{/each}}
+
+	{{#if url_schemes}}
+	<!-- URL schemes from Dioxus.toml [deep_links] and [ios] sections -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				{{#each url_schemes}}
+				<string>{{ this }}</string>
+				{{/each}}
+			</array>
+		</dict>
+	</array>
+	{{/if}}
+
+	{{#if background_modes}}
+	<!-- Background modes from Dioxus.toml [background] and [ios] sections -->
+	<key>UIBackgroundModes</key>
+	<array>
+		{{#each background_modes}}
+		<string>{{ this }}</string>
+		{{/each}}
+	</array>
+	{{/if}}
+
+	<!-- Additional plist entries from Dioxus.toml [ios.plist] section -->
+	{{{ plist_entries }}}
+
+	<!-- Raw plist XML from Dioxus.toml [ios.raw.info_plist] -->
+	{{{ raw_plist }}}
 </dict>
 </plist>

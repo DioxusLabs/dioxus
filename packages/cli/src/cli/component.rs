@@ -11,6 +11,7 @@ use dioxus_component_manifest::{
     component_manifest_schema, CargoDependency, Component, ComponentDependency,
 };
 use git2::Repository;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
@@ -292,7 +293,7 @@ impl ComponentCommand {
         let crate_package = workspace.find_main_package(None)?;
 
         Ok(workspace
-            .load_dioxus_config(crate_package)?
+            .load_dioxus_config(crate_package, None)?
             .unwrap_or_default())
     }
 
@@ -331,7 +332,7 @@ impl ComponentCommand {
 
 /// Arguments for the default or custom remote registry
 /// If both values are None, the default registry will be used
-#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize, JsonSchema)]
 pub struct RemoteComponentRegistry {
     /// The url of the component registry
     #[arg(long)]
@@ -449,7 +450,7 @@ impl RemoteComponentRegistry {
 
 /// Arguments for a component registry
 /// Either a path to a local directory or a remote git repo (with optional rev)
-#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize)]
+#[derive(Clone, Debug, Parser, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ComponentRegistry {
     /// The remote repo args
     #[clap(flatten)]

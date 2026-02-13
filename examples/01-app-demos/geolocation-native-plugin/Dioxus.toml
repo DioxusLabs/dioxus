@@ -1,0 +1,27 @@
+#:schema ../../../packages/cli/schema.json
+
+[bundle]
+identifier = "com.dioxuslabs.geolocation"
+publisher = "Dioxus Labs"
+
+[ios]
+deployment_target = "16.2"
+background_modes = ["location"]
+
+[ios.plist]
+NSSupportsLiveActivities = true
+
+[[ios.widget_extensions]]
+source = "src/ios/widget"
+display_name = "Location Widget"
+bundle_id_suffix = "location-widget"
+deployment_target = "16.2"
+module_name = "GeolocationPlugin"
+
+[android]
+min_sdk = 24
+target_sdk = 34
+features = ["android.hardware.location.gps"]
+
+[permissions]
+location = { precision = "fine", description = "Access your precise location to provide location-based services" }

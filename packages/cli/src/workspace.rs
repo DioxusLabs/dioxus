@@ -390,7 +390,23 @@ impl Workspace {
         Ok(package)
     }
 
-    pub fn load_dioxus_config(&self, package: NodeId) -> Result<Option<DioxusConfig>> {
+    /// Load the Dioxus.toml configuration for a package.
+    ///
+    /// Optionally accepts a source file path to extract inline configuration from doc comments.
+    /// Inline config is merged with the base Dioxus.toml, with inline values taking precedence.
+    ///
+    /// This allows examples and binaries to embed config in their doc comments:
+    /// ```rust,ignore
+    /// //! ```dioxus.toml
+    /// //! [bundle]
+    /// //! identifier = "com.example.app"
+    /// //! ```
+    /// ```
+    pub fn load_dioxus_config(
+        &self,
+        package: NodeId,
+        source_file: Option<&Path>,
+    ) -> Result<Option<DioxusConfig>> {
         // Walk up from the cargo.toml to the root of the workspace looking for Dioxus.toml
         let mut current_dir = self.krates[package]
             .manifest_path
@@ -426,15 +442,35 @@ impl Workspace {
                 .to_path_buf();
         }
 
-        let Some(dioxus_conf_file) = dioxus_conf_file else {
-            return Ok(None);
+        // Load base config from Dioxus.toml (if it exists)
+        let base_config: Option<DioxusConfig> = match &dioxus_conf_file {
+            Some(path) => {
+                let content = std::fs::read_to_string(path)?;
+                Some(toml::from_str(&content).map_err(|err| {
+                    anyhow::anyhow!("Failed to parse Dioxus.toml at {path:?}: {err}")
+                })?)
+            }
+            None => None,
         };
 
-        toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
-            .map_err(|err| {
-                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}")
-            })
-            .map(Some)
+        // Extract inline config from source file (if provided)
+        let inline_config = source_file.and_then(crate::config::extract_inline_config_from_file);
+
+        // Merge configs: inline overrides base
+        match (base_config, inline_config) {
+            (Some(base), Some(inline)) => crate::config::merge_with_inline_config(&base, inline)
+                .map(Some)
+                .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}")),
+            (Some(base), None) => Ok(Some(base)),
+            (None, Some(inline)) => {
+                // No Dioxus.toml, but we have inline config - use defaults + inline
+                let base = DioxusConfig::default();
+                crate::config::merge_with_inline_config(&base, inline)
+                    .map(Some)
+                    .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}"))
+            }
+            (None, None) => Ok(None),
+        }
     }
 
     /// Create a new gitignore map for this target crate

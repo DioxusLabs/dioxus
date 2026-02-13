@@ -16,7 +16,18 @@ keywords = ["assets"]
 const-serialize = { workspace = true }
 manganis-core = { workspace = true }
 manganis-macro = { workspace = true }
+thiserror = { workspace = true }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1.1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.3"
 
 [features]
 default = []

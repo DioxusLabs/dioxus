@@ -1,7 +1,8 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct ApplicationConfig {
     /// The path where global assets will be added when components are added with `dx components add`
     #[serde(default)]

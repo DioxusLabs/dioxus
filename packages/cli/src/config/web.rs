@@ -1,7 +1,8 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebConfig {
     #[serde(default)]
     pub(crate) app: WebAppConfig,
@@ -42,7 +43,7 @@ impl Default for WebConfig {
 }
 
 /// The wasm-opt configuration
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct WasmOptConfig {
     /// The wasm-opt level to use for release builds [default: s]
     /// Options:
@@ -83,7 +84,7 @@ pub(crate) struct WasmOptConfig {
 }
 
 /// The wasm-opt level to use for release web builds [default: Z]
-#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Copy, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum WasmOptLevel {
     /// Optimize aggressively for size
     #[serde(rename = "z")]
@@ -109,7 +110,7 @@ pub(crate) enum WasmOptLevel {
     Four,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebAppConfig {
     #[serde(default = "default_title")]
     pub(crate) title: String,
@@ -125,12 +126,12 @@ impl Default for WebAppConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebProxyConfig {
     pub(crate) backend: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebWatcherConfig {
     #[serde(default = "watch_path_default")]
     pub(crate) watch_path: Vec<PathBuf>,
@@ -156,14 +157,14 @@ fn watch_path_default() -> Vec<PathBuf> {
     vec![PathBuf::from("src"), PathBuf::from("examples")]
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebResourceConfig {
     pub(crate) dev: WebDevResourceConfig,
     pub(crate) style: Option<Vec<PathBuf>>,
     pub(crate) script: Option<Vec<PathBuf>>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebDevResourceConfig {
     #[serde(default)]
     pub(crate) style: Vec<PathBuf>,
@@ -171,7 +172,7 @@ pub(crate) struct WebDevResourceConfig {
     pub(crate) script: Vec<PathBuf>,
 }
 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct WebHttpsConfig {
     pub(crate) enabled: Option<bool>,
     pub(crate) mkcert: Option<bool>,

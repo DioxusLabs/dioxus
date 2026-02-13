@@ -24,6 +24,14 @@ pub(crate) enum Config {
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
+
+    /// Generate JSON schema for Dioxus.toml configuration.
+    /// Useful for IDE autocomplete and validation.
+    Schema {
+        /// Output file path. If not provided, prints to stdout.
+        #[clap(long, short)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
@@ -116,6 +124,17 @@ impl Config {
                     }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
+            }
+            Config::Schema { out } => {
+                let schema = crate::config::generate_manifest_schema();
+                let json = serde_json::to_string_pretty(&schema)?;
+                match out {
+                    Some(path) => {
+                        std::fs::write(&path, format!("{json}\n"))?;
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Schema written to {}", path.display());
+                    }
+                    None => println!("{json}"),
+                }
             }
         }
 

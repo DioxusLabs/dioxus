@@ -109,6 +109,14 @@ impl BuildContext {
         })
     }
 
+    pub(crate) fn status_compiling_native_plugins(&self, detail: impl Into<String>) {
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
+            stage: BuildStage::CompilingNativePlugins {
+                detail: detail.into(),
+            },
+        });
+    }
+
     pub(crate) fn status_codesigning(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CodeSigning,
