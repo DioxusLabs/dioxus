@@ -310,5 +310,4 @@ mod fallback {
             "Geolocation is only supported on Android, iOS, and macOS".to_string(),
         ))
     }
-
 }

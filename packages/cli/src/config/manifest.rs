@@ -347,7 +347,7 @@ pub struct IosConfig {
     pub raw: IosRawConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// Additional URL schemes beyond unified \[deep_links\].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
     pub url_schemes: Vec<String>,
@@ -635,13 +635,13 @@ pub struct AndroidConfig {
     pub application: AndroidApplicationConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// Additional URL schemes beyond unified \[deep_links\].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
     pub url_schemes: Vec<String>,
 
     /// Intent filters for deep linking.
-    /// These extend the unified [deep_links] configuration with Android-specific options.
+    /// These extend the unified \[deep_links\] configuration with Android-specific options.
     #[serde(default)]
     pub intent_filters: Vec<AndroidIntentFilter>,
 
@@ -759,11 +759,11 @@ pub struct AndroidRawConfig {
     #[serde(default)]
     pub manifest: Option<String>,
 
-    /// Raw attributes for <application> element.
+    /// Raw attributes for `<application>` element.
     #[serde(default)]
     pub application_attrs: Option<String>,
 
-    /// Raw XML inside <application> element.
+    /// Raw XML inside `<application>` element.
     #[serde(default)]
     pub application: Option<String>,
 }
@@ -908,7 +908,7 @@ pub struct MacosConfig {
     pub raw: MacosRawConfig,
 
     // === Platform-specific overrides (extend unified config) ===
-    /// Additional URL schemes beyond unified [deep_links].schemes.
+    /// Additional URL schemes beyond unified \[deep_links\].schemes.
     /// These are merged with the unified schemes.
     #[serde(default)]
     pub url_schemes: Vec<String>,
