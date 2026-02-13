@@ -60,6 +60,14 @@ pub(crate) struct WasmOptConfig {
     #[serde(default = "false_bool")]
     pub(crate) debug: bool,
 
+    /// Keep the wasm name section, useful for profiling and debugging
+    ///
+    /// Unlike `debug` which preserves DWARF debug symbols (requiring a browser extension to read),
+    /// the name section allows tools like `console_error_panic_hook` to print backtraces with
+    /// human-readable function names without any browser extension.
+    #[serde(default = "false_bool")]
+    pub(crate) keep_names: bool,
+
     /// Enable memory packing
     #[serde(default = "false_bool")]
     pub(crate) memory_packing: bool,
