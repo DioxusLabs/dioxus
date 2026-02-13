@@ -5286,10 +5286,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         let mut provisioning_profile_path = None;
         if entitlements_file.is_none() {
             let bundle_id = self.bundle_identifier();
-            let (entitlements_xml, profile_path) =
-                Self::auto_provision_entitlements(&bundle_id)
-                    .await
-                    .context("Failed to auto-provision entitlements for Apple codesigning.")?;
+            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(&bundle_id)
+                .await
+                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -5322,9 +5321,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         if self.bundle == BundleFormat::Ios {
             if let Some(profile_path) = &provisioning_profile_path {
                 let dest = target_exe.join("embedded.mobileprovision");
-                std::fs::copy(profile_path, &dest).context(
-                    "Failed to embed provisioning profile into .app bundle",
-                )?;
+                std::fs::copy(profile_path, &dest)
+                    .context("Failed to embed provisioning profile into .app bundle")?;
             }
         }
 

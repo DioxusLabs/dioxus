@@ -1170,9 +1170,7 @@ impl AppBuilder {
                 );
             }
 
-            bail!(
-                "Failed to install app to device {device_uuid}: {stderr}"
-            );
+            bail!("Failed to install app to device {device_uuid}: {stderr}");
         }
 
         Ok(())
@@ -1191,7 +1189,7 @@ impl AppBuilder {
                 "--verbose",
                 "--device",
                 device_uuid,
-                &application_id,
+                application_id,
                 "--json-output",
             ])
             .arg(tmpfile.path())
