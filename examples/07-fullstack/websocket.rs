@@ -27,9 +27,7 @@ fn app() -> Element {
     let mut messages = use_signal(std::vec::Vec::new);
 
     // This signal is read inside the use_websocket closure, making it a reactive dependency.
-    // When it changes, use_resource will try to recreate the connection. If recv() is awaiting
-    // at that moment, it would previously panic with AlreadyBorrowed because recv() held a
-    // read borrow on the Resource while use_resource tried to write a new value.
+    // Whenver it changes, the websocket will automatically re-connect.
     let mut name = use_signal(|| "John Doe".to_string());
 
     let mut socket =
@@ -37,7 +35,11 @@ fn app() -> Element {
 
     use_future(move || async move {
         loop {
+            // Wait for the socket to connect
             _ = socket.connect().await;
+
+            // Loop poll with recv. Throws an error when the connection closes, making it possible
+            // to run code before the socket re-connects when the name input changes
             while let Ok(msg) = socket.recv().await {
                 messages.push(msg);
             }
