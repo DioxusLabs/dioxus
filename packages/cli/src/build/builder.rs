@@ -210,6 +210,8 @@ impl AppBuilder {
                 StderrReceived {  msg }
             },
             Some(msg) = OptionFuture::from(self.spawn_handle.as_mut()) => {
+                // Prevent re-polling the spawn future, similar to above
+                self.spawn_handle = None;
                 match msg {
                     Ok(Ok(_)) => StdoutReceived { msg: "Finished launching app".to_string() },
                     Ok(Err(err)) => StderrReceived { msg: err.to_string() },
@@ -1072,11 +1074,20 @@ impl AppBuilder {
                         .unwrap_or(false);
 
                     let is_ios_device = matches!(
-                        device.get("deviceType").and_then(|s| s.as_str()),
+                        device
+                            .get("hardwareProperties")
+                            .and_then(|h| h.get("deviceType"))
+                            .and_then(|s| s.as_str()),
                         Some("iPhone") | Some("iPad") | Some("iPod")
                     );
 
-                    if is_paired && is_ios_device {
+                    let is_available = device
+                        .get("connectionProperties")
+                        .and_then(|c| c.get("tunnelState"))
+                        .and_then(|s| s.as_str())
+                        != Some("unavailable");
+
+                    if is_paired && is_ios_device && is_available {
                         device_idx = idx;
                         break;
                     }
@@ -1114,9 +1125,53 @@ impl AppBuilder {
             .await?;
 
         if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            if stderr.contains("DeviceLocked") || stderr.contains("device is locked") {
+                bail!(
+                    "Failed to install app: your device is locked.\n\
+                     Unlock your iPhone/iPad and try again."
+                );
+            }
+
+            if stderr.contains("cannot be installed on this device")
+                || stderr.contains("0xe8008012")
+            {
+                bail!(
+                    "Failed to install app: your device is not registered in the provisioning profile.\n\n\
+                     Your device UDID needs to be added to your Apple Developer account and the \
+                     provisioning profile regenerated.\n\n\
+                     To fix this:\n  \
+                     1. Accept the latest Program License Agreement at:\n     \
+                        https://developer.apple.com/account\n  \
+                     2. Register your device at:\n     \
+                        https://developer.apple.com/account/resources/devices\n  \
+                     3. Regenerate your provisioning profile to include the new device\n  \
+                     4. Or open any project in Xcode, select your device, and build —\n     \
+                        Xcode will update the profile automatically\n\n\
+                     Raw error: {stderr}"
+                );
+            }
+
+            if stderr.contains("provisioning profile")
+                || stderr.contains("ApplicationVerificationFailed")
+                || stderr.contains("code signature")
+            {
+                bail!(
+                    "Failed to install app: code signing error.\n\
+                     A valid provisioning profile was not found for this app.\n\n\
+                     To fix this:\n  \
+                     1. Accept the latest Program License Agreement at:\n     \
+                        https://developer.apple.com/account\n  \
+                     2. Open the project in Xcode, select your device, and build once —\n     \
+                        Xcode will set up signing and provisioning automatically\n  \
+                     3. Ensure your device is registered in your Apple Developer account\n\n\
+                     Raw error: {stderr}"
+                );
+            }
+
             bail!(
-                "Failed to install app: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "Failed to install app to device {device_uuid}: {stderr}"
             );
         }
 
