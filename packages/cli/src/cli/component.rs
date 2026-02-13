@@ -15,6 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tokio::{process::Command, task::JoinSet};
 use tracing::debug;
+use uuid::Uuid;
 
 #[derive(Clone, Debug, Parser)]
 pub enum ComponentCommand {
@@ -559,7 +560,7 @@ async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -
 }
 
 /// How should we handle the component if it already exists
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum ComponentExistsBehavior {
     /// Return an error (default)
     Error,
@@ -572,6 +573,7 @@ enum ComponentExistsBehavior {
 }
 
 /// Add a component to the managed component module
+/// Uses atomic operations: all-or-nothing with automatic rollback on failure
 async fn add_component(
     registry_root: &Path,
     assets_path: Option<&Path>,
@@ -580,42 +582,112 @@ async fn add_component(
     behavior: ComponentExistsBehavior,
     config: &DioxusConfig,
 ) -> Result<()> {
-    // Copy the folder content to the components directory
     let components_root = components_root(component_path, config)?;
-    let copied = copy_component_files(
-        &component.path,
-        &components_root.join(&component.name),
-        &component.exclude,
-        behavior,
-    )
-    .await?;
-    if !copied {
-        debug!(
-            "Component '{}' already exists, skipping copy",
-            component.name
-        );
-        return Ok(());
+    let final_component_dest = components_root.join(&component.name);
+
+    // Check if component already exists before starting any operations
+    if final_component_dest.exists() {
+        match behavior {
+            ComponentExistsBehavior::Error => {
+                bail!("Destination directory '{}' already exists", final_component_dest.display());
+            }
+            ComponentExistsBehavior::Return => {
+                debug!(
+                    "Destination directory '{}' already exists, returning early",
+                    final_component_dest.display()
+                );
+                return Ok(());
+            }
+            ComponentExistsBehavior::Overwrite => {
+                debug!(
+                    "Destination directory '{}' already exists, will overwrite",
+                    final_component_dest.display()
+                );
+            }
+        }
     }
 
-    // Copy any global assets
+    // Create a temporary directory for atomic operations
+    let temp_dir = {
+        let temp_base = components_root.join(".dx-tmp");
+        tokio::fs::create_dir_all(&temp_base).await?;
+        temp_base.join(format!("component-{}", Uuid::new_v4()))
+    };
+
+    // Guard to ensure cleanup on error
+    struct TempDirGuard(PathBuf);
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            // Attempt cleanup on drop (ignoring errors)
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let _temp_guard = TempDirGuard(temp_dir.clone());
+
+    // Stage 1: Copy component files to temporary location (validate before committing)
+    let temp_component_dest = temp_dir.join(&component.name);
+    let copied = copy_component_files(
+        &component.path,
+        &temp_component_dest,
+        &component.exclude,
+        ComponentExistsBehavior::Error,
+    )
+    .await?;
+
+    if !copied {
+        return Err(anyhow::anyhow!(
+            "Failed to copy component '{}'",
+            component.name
+        ));
+    }
+
+    // Stage 2: Copy global assets to temporary location
     let assets_root = global_assets_root(assets_path, config).await?;
-    copy_global_assets(registry_root, &assets_root, component).await?;
+    let temp_assets_dir = temp_dir.join("assets");
+    tokio::fs::create_dir_all(&temp_assets_dir).await?;
+    copy_global_assets_to_temp(registry_root, &temp_assets_dir, component).await?;
 
-    // Add the module to the components mod.rs
+    // Stage 3: Prepare mod.rs changes (validate before committing)
     let mod_rs_path = components_root.join("mod.rs");
-    let mut mod_rs = tokio::fs::OpenOptions::new()
-        .append(true)
-        .read(true)
-        .open(&mod_rs_path)
-        .await
-        .with_context(|| format!("Failed to open {}", mod_rs_path.display()))?;
-
-    // Check if the module already exists
     let mod_rs_content = tokio::fs::read_to_string(&mod_rs_path)
         .await
         .with_context(|| format!("Failed to read {}", mod_rs_path.display()))?;
-    if !mod_rs_content.contains(&format!("mod {};", component.name)) {
-        let mod_line = format!("pub mod {};\n", component.name);
+    let mod_line = format!("pub mod {};\n", component.name);
+    let should_add_mod = !mod_rs_content.contains(&format!("mod {};", component.name));
+
+    // ALL VALIDATIONS COMPLETE - NOW COMMIT CHANGES ATOMICALLY
+
+    // Remove overwrite target if necessary
+    if behavior == ComponentExistsBehavior::Overwrite && final_component_dest.exists() {
+        tokio::fs::remove_dir_all(&final_component_dest).await?;
+    }
+
+    // Commit Stage 1: Move component from temp to final location
+    tokio::fs::rename(&temp_component_dest, &final_component_dest).await?;
+
+    // Commit Stage 2: Move assets from temp to final location
+    for entry in tokio::fs::read_dir(&temp_assets_dir)
+        .await?
+        .collect::<Vec<_>>()
+        .await
+    {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_file() {
+                let file_name = path.file_name().unwrap();
+                let dest = assets_root.join(file_name);
+                tokio::fs::copy(&path, &dest).await?;
+            }
+        }
+    }
+
+    // Commit Stage 3: Update mod.rs
+    if should_add_mod {
+        let mut mod_rs = tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(&mod_rs_path)
+            .await
+            .with_context(|| format!("Failed to open {}", mod_rs_path.display()))?;
         tokio::io::AsyncWriteExt::write_all(&mut mod_rs, mod_line.as_bytes())
             .await
             .with_context(|| format!("Failed to write to {}", mod_rs_path.display()))?;
@@ -783,6 +855,53 @@ async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComp
         components.push(component);
     }
     Ok(components)
+}
+
+/// Copy any global assets for the component to a temporary staging directory (atomic operation)
+async fn copy_global_assets_to_temp(
+    registry_root: &Path,
+    temp_assets_dir: &Path,
+    component: &ResolvedComponent,
+) -> Result<()> {
+    let canonical_registry_root = dunce::canonicalize(registry_root)?;
+    for path in &component.global_assets {
+        let src = component.path.join(path);
+        let absolute_source = dunce::canonicalize(&src).with_context(|| {
+            format!(
+                "Failed to find global asset '{}' for component '{}'",
+                src.display(),
+                component.name
+            )
+        })?;
+
+        // Make sure the source is inside the component registry somewhere
+        if !absolute_source.starts_with(&canonical_registry_root) {
+            bail!(
+                "Cannot copy global asset '{}' for component '{}' because it is outside of the component registry '{}'",
+                absolute_source.display(),
+                component.name,
+                canonical_registry_root.display()
+            );
+        }
+
+        // Copy the file into the temporary assets directory, preserving the file name and extension
+        let dest = temp_assets_dir.join(
+            absolute_source
+                .components()
+                .next_back()
+                .context("Global assets must have at least one file component")?,
+        );
+
+        tokio::fs::copy(&src, &dest).await.with_context(|| {
+            format!(
+                "Failed to copy global asset from {} to {}",
+                src.display(),
+                dest.display()
+            )
+        })?;
+    }
+
+    Ok(())
 }
 
 /// Copy any global assets for the component
