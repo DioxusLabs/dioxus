@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    {{#each gradle_plugins}}
+    id("{{ this }}")
+    {{/each}}
 }
 
 android {
@@ -68,4 +71,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.6.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.8.0")
+    {{#each gradle_dependencies}}
+    implementation("{{ this }}")
+    {{/each}}
 }

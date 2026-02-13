@@ -3891,6 +3891,15 @@ impl BuildRequest {
             app_link_hosts: Vec<String>,
             /// Pipe-joined foreground service type string (e.g., "location|mediaPlayback")
             foreground_service_type: String,
+            /// Extra Gradle dependencies from [android] config
+            gradle_dependencies: Vec<String>,
+            /// Extra Gradle plugins from [android] config
+            gradle_plugins: Vec<String>,
+            /// Application-level manifest attributes from [android.application]
+            uses_cleartext_traffic: Option<bool>,
+            app_theme: Option<String>,
+            supports_rtl: Option<bool>,
+            large_heap: Option<bool>,
         }
 
         // Get permission mapper from config
@@ -3933,6 +3942,12 @@ impl BuildRequest {
             url_schemes: mapper.android_url_schemes,
             app_link_hosts: mapper.android_app_link_hosts,
             foreground_service_type,
+            gradle_dependencies: self.config.android.gradle_dependencies.clone(),
+            gradle_plugins: self.config.android.gradle_plugins.clone(),
+            uses_cleartext_traffic: self.config.android.application.uses_cleartext_traffic,
+            app_theme: self.config.android.application.theme.clone(),
+            supports_rtl: self.config.android.application.supports_rtl,
+            large_heap: self.config.android.application.large_heap,
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -3980,6 +3995,25 @@ impl BuildRequest {
             app.join("proguard-rules.pro"),
             include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
         )?;
+
+        // Copy additional ProGuard rule files from Dioxus.toml [android] config
+        for rule_file in &self.config.android.proguard_rules {
+            let src = self.package_manifest_dir().join(rule_file);
+            if src.exists() {
+                let dest_name = src
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                std::fs::copy(&src, app.join(&dest_name))?;
+                tracing::debug!("Copied ProGuard rules: {}", dest_name);
+            } else {
+                tracing::warn!(
+                    "ProGuard rules file not found: {}",
+                    src.display()
+                );
+            }
+        }
 
         let manifest_xml = match self.config.application.android_manifest.as_deref() {
             Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
@@ -6029,9 +6063,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         let mut entitlements_file = self.apple_entitlements.clone();
         if entitlements_file.is_none() {
-            let entitlements_xml = Self::auto_provision_entitlements()
+            let mut entitlements_xml = Self::auto_provision_entitlements()
                 .await
                 .context("Failed to auto-provision entitlements for Apple codesigning.")?;
+
+            // Enrich with entitlements from Dioxus.toml config
+            entitlements_xml =
+                self.enrich_entitlements_from_config(entitlements_xml)?;
+
             let entitlements_temp_file = tempfile::NamedTempFile::new()?;
             std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
             entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
@@ -6106,6 +6145,234 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             )?;
 
         Ok(app_dev_name.to_string())
+    }
+
+    /// Enrich auto-provisioned entitlements XML with config from Dioxus.toml.
+    ///
+    /// Injects entitlements from `[ios.entitlements]` or `[macos.entitlements]` sections
+    /// and associated domains from `[deep_links]` into the base entitlements XML.
+    fn enrich_entitlements_from_config(&self, base_xml: String) -> Result<String> {
+        let mut extra_entries = String::new();
+
+        match self.bundle {
+            BundleFormat::Ios => {
+                let ent = &self.config.ios.entitlements;
+
+                // Associated domains (from deep_links.hosts + ios.entitlements.associated-domains)
+                let mapper = super::manifest_mapper::ManifestMapper::from_config(
+                    &self.config.permissions,
+                    &self.config.deep_links,
+                    &self.config.background,
+                    &self.config.android,
+                    &self.config.ios,
+                    &self.config.macos,
+                );
+                let mut domains: Vec<String> = mapper.ios_associated_domains;
+                domains.extend(ent.associated_domains.clone());
+                domains.dedup();
+                if !domains.is_empty() {
+                    extra_entries.push_str("    <key>com.apple.developer.associated-domains</key>\n    <array>\n");
+                    for domain in &domains {
+                        extra_entries.push_str(&format!("        <string>{domain}</string>\n"));
+                    }
+                    extra_entries.push_str("    </array>\n");
+                }
+
+                // App groups
+                if !ent.app_groups.is_empty() {
+                    extra_entries.push_str("    <key>com.apple.security.application-groups</key>\n    <array>\n");
+                    for group in &ent.app_groups {
+                        extra_entries.push_str(&format!("        <string>{group}</string>\n"));
+                    }
+                    extra_entries.push_str("    </array>\n");
+                }
+
+                // APS environment (push notifications)
+                if let Some(env) = &ent.aps_environment {
+                    extra_entries.push_str(&format!(
+                        "    <key>aps-environment</key>\n    <string>{env}</string>\n"
+                    ));
+                }
+
+                // iCloud
+                if ent.icloud {
+                    extra_entries.push_str(
+                        "    <key>com.apple.developer.icloud-container-identifiers</key>\n    <array/>\n\
+                         <key>com.apple.developer.icloud-services</key>\n    <array>\n        <string>CloudDocuments</string>\n    </array>\n"
+                    );
+                }
+
+                // Keychain access groups
+                // (base entitlements already include one from provisioning profile, only add extras)
+                if !ent.keychain_access_groups.is_empty() {
+                    extra_entries.push_str("    <key>keychain-access-groups</key>\n    <array>\n");
+                    for group in &ent.keychain_access_groups {
+                        extra_entries.push_str(&format!("        <string>{group}</string>\n"));
+                    }
+                    extra_entries.push_str("    </array>\n");
+                }
+
+                // Apple Pay
+                if ent.apple_pay {
+                    extra_entries.push_str(
+                        "    <key>com.apple.developer.in-app-payments</key>\n    <array>\n        <string>merchant.*</string>\n    </array>\n"
+                    );
+                }
+
+                // HealthKit
+                if ent.healthkit {
+                    extra_entries.push_str(
+                        "    <key>com.apple.developer.healthkit</key>\n    <true/>\n"
+                    );
+                }
+
+                // HomeKit
+                if ent.homekit {
+                    extra_entries.push_str(
+                        "    <key>com.apple.developer.homekit</key>\n    <true/>\n"
+                    );
+                }
+
+                // Additional entitlements from the flat map
+                for (key, value) in &ent.additional {
+                    extra_entries.push_str(&format!(
+                        "    <key>{key}</key>\n    {}\n",
+                        value_to_plist_xml(value, 1)
+                    ));
+                }
+
+                // Raw entitlements XML
+                if let Some(raw) = &self.config.ios.raw.entitlements {
+                    extra_entries.push_str(raw);
+                    extra_entries.push('\n');
+                }
+            }
+            BundleFormat::MacOS => {
+                let ent = &self.config.macos.entitlements;
+
+                // App Sandbox
+                if let Some(v) = ent.app_sandbox {
+                    extra_entries.push_str(&format!(
+                        "    <key>com.apple.security.app-sandbox</key>\n    <{v}/>\n"
+                    ));
+                }
+
+                // File access
+                if let Some(true) = ent.files_user_selected {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.files.user-selected.read-write</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.files_user_selected_readonly {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.files.user-selected.read-only</key>\n    <true/>\n"
+                    );
+                }
+
+                // Network
+                if let Some(true) = ent.network_client {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.network.client</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.network_server {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.network.server</key>\n    <true/>\n"
+                    );
+                }
+
+                // Device access
+                if let Some(true) = ent.camera {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.device.camera</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.microphone {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.device.microphone</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.usb {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.device.usb</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.bluetooth {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.device.bluetooth</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.print {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.print</key>\n    <true/>\n"
+                    );
+                }
+
+                // Personal information
+                if let Some(true) = ent.location {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.personal-information.location</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.addressbook {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.personal-information.addressbook</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.calendars {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.personal-information.calendars</key>\n    <true/>\n"
+                    );
+                }
+
+                // Runtime exceptions
+                if let Some(true) = ent.disable_library_validation {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.cs.disable-library-validation</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.allow_jit {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.cs.allow-jit</key>\n    <true/>\n"
+                    );
+                }
+                if let Some(true) = ent.allow_unsigned_executable_memory {
+                    extra_entries.push_str(
+                        "    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>\n    <true/>\n"
+                    );
+                }
+
+                // Additional entitlements from the flat map
+                for (key, value) in &ent.additional {
+                    extra_entries.push_str(&format!(
+                        "    <key>{key}</key>\n    {}\n",
+                        value_to_plist_xml(value, 1)
+                    ));
+                }
+
+                // Raw entitlements XML
+                if let Some(raw) = &self.config.macos.raw.entitlements {
+                    extra_entries.push_str(raw);
+                    extra_entries.push('\n');
+                }
+            }
+            _ => {}
+        }
+
+        if extra_entries.is_empty() {
+            return Ok(base_xml);
+        }
+
+        // Insert before closing </dict></plist>
+        if let Some(pos) = base_xml.rfind("</dict>") {
+            let mut enriched = base_xml[..pos].to_string();
+            enriched.push_str(&extra_entries);
+            enriched.push_str(&base_xml[pos..]);
+            Ok(enriched)
+        } else {
+            tracing::warn!("Could not find </dict> in entitlements XML to inject config entries");
+            Ok(base_xml)
+        }
     }
 
     async fn auto_provision_entitlements() -> Result<String> {
