@@ -728,7 +728,7 @@
       "type": "object",
       "properties": {
         "git": {
-          "description": "The url of the the component registry",
+          "description": "The url of the component registry",
           "type": [
             "string",
             "null"
@@ -742,7 +742,7 @@
           ]
         },
         "rev": {
-          "description": "The revision of the the component registry",
+          "description": "The revision of the component registry",
           "type": [
             "string",
             "null"
@@ -1041,6 +1041,13 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "widget_extensions": {
+          "description": "Widget extensions to compile and bundle. Each entry defines a Swift-based widget extension (.appex) that will be compiled and installed into the app's PlugIns folder.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WidgetExtensionConfig"
           }
         }
       }
@@ -2235,6 +2242,10 @@
             "type": "string"
           }
         },
+        "keep_names": {
+          "description": "Keep the wasm name section, useful for profiling and debugging\n\nUnlike `debug` which preserves DWARF debug symbols (requiring a browser extension to read), the name section allows tools like `console_error_panic_hook` to print backtraces with human-readable function names without any browser extension.",
+          "type": "boolean"
+        },
         "level": {
           "description": "The wasm-opt level to use for release builds [default: s] Options: - z: optimize aggressively for size - s: optimize for size - 1: optimize for speed - 2: optimize for more for speed - 3: optimize for even more for speed - 4: optimize aggressively for speed",
           "$ref": "#/definitions/WasmOptLevel"
@@ -2536,6 +2547,41 @@
           "additionalProperties": false
         }
       ]
+    },
+    "WidgetExtensionConfig": {
+      "description": "Configuration for an iOS Widget Extension.\n\nWidget extensions are compiled as Swift executables and bundled as .appex bundles in the app's PlugIns folder.\n\nExample in Dioxus.toml: ```toml [[ios.widget_extensions]] source = \"src/ios/widget\" display_name = \"Location Widget\" bundle_id_suffix = \"location-widget\" deployment_target = \"16.2\" module_name = \"GeolocationPlugin\" ```",
+      "type": "object",
+      "required": [
+        "bundle_id_suffix",
+        "display_name",
+        "module_name",
+        "source"
+      ],
+      "properties": {
+        "bundle_id_suffix": {
+          "description": "Bundle ID suffix appended to the app's bundle identifier. For example, if the app is \"com.example.app\" and suffix is \"location-widget\", the widget bundle ID will be \"com.example.app.location-widget\".",
+          "type": "string"
+        },
+        "deployment_target": {
+          "description": "Minimum deployment target (e.g., \"16.2\"). Defaults to the app's iOS deployment target if not specified.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display_name": {
+          "description": "Display name for the widget (shown in system UI).",
+          "type": "string"
+        },
+        "module_name": {
+          "description": "Swift module name for the widget. This MUST match the module name used by the main app's Swift plugin for ActivityKit type matching to work.",
+          "type": "string"
+        },
+        "source": {
+          "description": "Path to the Swift package source directory (relative to project root).",
+          "type": "string"
+        }
+      }
     },
     "WindowsConfig": {
       "description": "Windows-specific configuration.\n\nExample: ```toml [windows] identifier = \"com.example.myapp.windows\"  # Override bundle.identifier for Windows\n\n# Windows installer settings (previously in [bundle.windows]) [windows.nsis] install_mode = \"PerMachine\"\n\n[windows.wix] language = [[\"en-US\", null]] ```",
