@@ -27,7 +27,7 @@ fn app() -> Element {
     let mut messages = use_signal(std::vec::Vec::new);
 
     // This signal is read inside the use_websocket closure, making it a reactive dependency.
-    // Whenver it changes, the websocket will automatically re-connect.
+    // Whenever it changes, the websocket will automatically re-connect.
     let mut name = use_signal(|| "John Doe".to_string());
 
     let mut socket =
