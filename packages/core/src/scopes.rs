@@ -43,6 +43,7 @@ impl ScopeId {
     /// use dioxus::prelude::*;
     /// let my_persistent_state = Signal::new_in_scope(String::new(), ScopeId::APP);
     /// ```
+    // Refer to `RootScopeWrapper` (root_wrapper.rs) to see where these constants come from.
     // ScopeId(0) is the root scope wrapper
     // ScopeId(1) is the default suspense boundary
     // ScopeId(2) is the default error boundary

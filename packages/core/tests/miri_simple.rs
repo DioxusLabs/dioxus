@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_core::generation;
 
+// The tests in this file are intended to be run with Miri, and contain no assertions. If they
+// complete under Miri, they have passed.
+
 #[test]
 fn app_drops() {
     fn app() -> Element {
