@@ -42,6 +42,7 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     prelude::rust_2024::Future,
+    rc::Rc,
     task::{ready, Context, Poll},
 };
 
@@ -89,7 +90,9 @@ pub fn use_websocket<
             // Wake up the `.recv()` calls waiting for the connection to be established
             waker.wake(());
 
-            connection
+            // Wrap in Rc so we can clone it out of the Resource without holding
+            // a borrow guard across await points
+            connection.map(Rc::new)
         }
     });
 
@@ -113,7 +116,7 @@ where
     Out: 'static,
     Enc: 'static,
 {
-    connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
+    connection: Resource<Result<Rc<Websocket<In, Out, Enc>>, CapturedError>>,
     waker: UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
@@ -156,20 +159,26 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         self.status_read
     }
 
+    /// Clone the Rc<Websocket> out of the Resource using peek, so we don't hold a borrow
+    /// guard across await points. This prevents AlreadyBorrowed panics when the Resource
+    /// tries to write while recv() is awaiting.
+    fn get_connection(&self) -> Result<Rc<Websocket<In, Out, E>>, WebsocketError> {
+        self.connection.with_peek(|opt| {
+            opt.as_ref()
+                .ok_or_else(WebsocketError::closed_away)?
+                .as_ref()
+                .map(|ws| Rc::clone(ws))
+                .map_err(|_| WebsocketError::AlreadyClosed)
+        })
+    }
+
     /// Send a raw message over the WebSocket connection
     ///
     /// To send a message with a particular type, see the `.send()` method instead.
     pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
         self.connect().await;
-
-        self.connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .send_raw(msg)
-            .await
+        let ws = self.get_connection()?;
+        ws.send_raw(msg).await
     }
 
     /// Receive a raw message from the WebSocket connection
@@ -177,16 +186,8 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// To receive a message with a particular type, see the `.recv()` method instead.
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
         self.connect().await;
-
-        let result = self
-            .connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .recv_raw()
-            .await;
+        let ws = self.get_connection()?;
+        let result = ws.recv_raw().await;
 
         if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
             self.received_shutdown();
@@ -219,30 +220,8 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         E: Encoding,
     {
         self.connect().await;
-
-        // Use peek() instead of as_ref() to avoid tracking this read as a dependency.
-        // This prevents AlreadyBorrowed panics when use_resource tries to update  
-        // the connection while recv() is awaiting a message.
-        // peek() returns a Ref guard, but we extract a raw pointer before the await
-        // so the guard is dropped and doesn't hold the borrow across the await point.
-        let websocket_ptr = {
-            let peek_guard = self.connection.peek();
-            let connection_ref = peek_guard
-                .as_ref()
-                .ok_or_else(WebsocketError::closed_away)?
-                .as_ref()
-                .map_err(|_| WebsocketError::AlreadyClosed)?;
-            
-            // Get a raw pointer before dropping the guard
-            connection_ref as *const Websocket<In, Out, E>
-        }; // peek_guard is dropped here, releasing the borrow
-
-        // SAFETY: The websocket is stored in a Resource which is 'static.
-        // The Resource won't drop the websocket while we're using it because:
-        // 1. The UseWebsocket handle is held by the component (Copy type)
-        // 2. Even if use_resource updates, it writes a new value but doesn't drop the old one immediately
-        // 3. The old Websocket will only be dropped after all outstanding futures complete
-        let result = unsafe { (*websocket_ptr).recv().await };
+        let ws = self.get_connection()?;
+        let result = ws.recv().await;
 
         if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
             self.received_shutdown();
@@ -261,7 +240,8 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
             Err(_) => self.status.set(WebsocketState::FailedToConnect),
         }
 
-        self.connection.set(Some(socket.map_err(|e| e.into())));
+        self.connection
+            .set(Some(socket.map(Rc::new).map_err(|e| e.into())));
         self.waker.wake(());
     }
 
