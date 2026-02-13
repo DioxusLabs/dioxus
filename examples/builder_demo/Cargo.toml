@@ -1,0 +1,13 @@
+[package]
+name = "builder_demo"
+edition = "2024"
+version.workspace = true
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+
+[features]
+default = []
+web = ["dioxus/web"]
+desktop = ["dioxus/desktop"]
+server = ["dioxus/server"]

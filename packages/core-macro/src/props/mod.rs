@@ -13,7 +13,7 @@ use syn::spanned::Spanned;
 use syn::{parse::Error, PathArguments};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
+use syn::{parse_quote, Expr, GenericArgument, Ident, PathSegment, Type};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -325,7 +325,7 @@ mod field_info {
                 }
 
                 let as_expr = attr.parse_args_with(
-                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                    Punctuated::<syn::Expr, syn::Token![,]>::parse_separated_nonempty,
                 )?;
 
                 for expr in as_expr.into_iter() {
@@ -1471,6 +1471,18 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote!()
             };
 
+            let into_dyn_node_impl = self.builder_attr.component.as_ref().map(|component| {
+                quote! {
+                    impl #impl_generics dioxus_core::IntoDynNode for #builder_name #modified_ty_generics #where_clause {
+                        fn into_dyn_node(self) -> dioxus_core::DynamicNode {
+                            let props = self.build();
+                            use dioxus_core::Properties as _;
+                            dioxus_core::DynamicNode::Component(props.into_vcomponent(#component))
+                        }
+                    }
+                }
+            });
+
             if self.has_child_owned_fields() {
                 let name = Ident::new(&format!("{}WithOwner", name), name.span());
                 let original_name = &self.name;
@@ -1529,6 +1541,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             }
                         }
                     }
+                    #into_dyn_node_impl
                 }
             } else {
                 quote!(
@@ -1543,6 +1556,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                             }
                         }
                     }
+                    #into_dyn_node_impl
                 )
             }
         }
@@ -1563,6 +1577,9 @@ Finally, call `.build()` to create the instance of `{name}`.
         /// Docs on the `TypeBuilder.build()` method. Specifying this implies `doc`, but you can just
         /// specify `doc` instead and a default value will be filled in here.
         pub build_method_doc: Option<syn::Expr>,
+
+        /// Optional component path used to generate IntoDynNode for the builder.
+        pub component: Option<syn::Path>,
 
         pub field_defaults: FieldBuilderAttr,
     }
@@ -1592,6 +1609,52 @@ Finally, call `.build()` to create the instance of `{name}`.
 
                 for expr in as_expr.into_iter() {
                     result.apply_meta(expr)?;
+                }
+            }
+
+            for attr in attrs {
+                if path_to_single_string(attr.path()).as_deref() != Some("props") {
+                    continue;
+                }
+
+                match &attr.meta {
+                    syn::Meta::List(list) => {
+                        if list.tokens.is_empty() {
+                            continue;
+                        }
+                    }
+                    _ => {
+                        continue;
+                    }
+                }
+
+                let as_expr = attr.parse_args_with(
+                    Punctuated::<Expr, syn::Token![,]>::parse_separated_nonempty,
+                )?;
+
+                for expr in as_expr.into_iter() {
+                    if let syn::Expr::Assign(assign) = expr {
+                        let name = expr_to_single_string(&assign.left).ok_or_else(|| {
+                            Error::new_spanned(&assign.left, "Expected identifier")
+                        })?;
+                        if name == "component" {
+                            if result.component.is_some() {
+                                return Err(Error::new_spanned(
+                                    &assign,
+                                    "Duplicate component assignment",
+                                ));
+                            }
+
+                            if let syn::Expr::Path(path) = *assign.right {
+                                result.component = Some(path.path);
+                            } else {
+                                return Err(Error::new_spanned(
+                                    &assign.right,
+                                    "Expected component path",
+                                ));
+                            }
+                        }
+                    }
                 }
             }
 

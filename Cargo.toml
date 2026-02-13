@@ -140,7 +140,7 @@ members = [
     "packages/playwright-tests/wasm-split-harness",
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes",
-    "packages/playwright-tests/windows-headless",
+    "packages/playwright-tests/windows-headless", "examples/builder_demo",
 ]
 
 [workspace.package]
@@ -995,6 +995,11 @@ doc-scrape-examples = true
 [[example]]
 name = "rsx_usage"
 path = "examples/09-reference/rsx_usage.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "builder_demo"
+path = "examples/builder_demo/src/main.rs"
 doc-scrape-examples = true
 
 [[example]]

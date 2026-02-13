@@ -31,6 +31,7 @@ rustversion = { workspace = true }
 euclid = "0.22.11"
 enumset = "1.1.6"
 bytes = { workspace = true }
+parking_lot = "0.12.5"
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -39,6 +40,7 @@ lazy-js-bundle = { workspace = true }
 serde_json = "1"
 dioxus = { workspace = true }
 dioxus-web = { workspace = true }
+dioxus-ssr = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
 

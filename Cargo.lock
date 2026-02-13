@@ -3358,6 +3358,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "builder_demo"
+version = "0.7.2"
+dependencies = [
+ "dioxus",
+]
+
+[[package]]
 name = "built"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6053,6 +6060,7 @@ dependencies = [
  "dioxus-hooks",
  "dioxus-html-internal-macro",
  "dioxus-rsx",
+ "dioxus-ssr",
  "dioxus-web",
  "enumset",
  "euclid",
@@ -6063,6 +6071,7 @@ dependencies = [
  "keyboard-types",
  "lazy-js-bundle",
  "manganis",
+ "parking_lot",
  "rustversion",
  "serde",
  "serde_json",

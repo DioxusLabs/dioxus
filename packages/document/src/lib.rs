@@ -4,6 +4,7 @@ mod document;
 mod elements;
 mod error;
 mod eval;
+pub mod builder;
 
 pub use document::*;
 pub use elements::*;

@@ -243,8 +243,14 @@ impl ComponentBody {
             .collect::<Vec<_>>();
         let struct_ident = Ident::new(&format!("{ident}Props"), ident.span());
 
+        let component_builder_attr = self
+            .options
+            .builder
+            .then(|| quote!(#[props(component = #ident)]));
+
         let item_struct = parse_quote! {
             #[derive(Props)]
+            #component_builder_attr
             #[allow(non_camel_case_types)]
             #vis struct #struct_ident #generics #where_clause {
                 #(#struct_fields),*
@@ -634,17 +640,21 @@ fn allow_camel_case_for_fn_ident(item_fn: &ItemFn) -> ItemFn {
 #[derive(Default)]
 pub struct ComponentMacroOptions {
     pub lazy: bool,
+    pub builder: bool,
 }
 
 impl Parse for ComponentMacroOptions {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut lazy_load = false;
+        let mut builder = false;
 
         while !input.is_empty() {
             let ident = input.parse::<Ident>()?;
             let ident_name = ident.to_string();
             if ident_name == "lazy" {
                 lazy_load = true;
+            } else if ident_name == "builder" {
+                builder = true;
             } else if ident_name == "no_case_check" {
                 // we used to have this?
             } else {
@@ -659,6 +669,9 @@ impl Parse for ComponentMacroOptions {
             }
         }
 
-        Ok(Self { lazy: lazy_load })
+        Ok(Self {
+            lazy: lazy_load,
+            builder,
+        })
     }
 }
