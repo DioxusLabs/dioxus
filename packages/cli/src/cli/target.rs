@@ -104,6 +104,14 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
+    /// Keep the name section in the wasm binary, useful for profiling and debugging [default: false]
+    ///
+    /// Unlike --debug-symbols which preserves DWARF debug info (requiring a browser extension to
+    /// read), the name section allows tools like console_error_panic_hook to print backtraces with
+    /// human-readable function names without any browser extension.
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
+    pub(crate) keep_names: bool,
+
     /// The name of the device we are hoping to upload to. By default, dx tries to upload to the active
     /// simulator. If the device name is passed, we will upload to that device instead.
     ///
@@ -190,6 +198,7 @@ impl Anonymized for TargetArgs {
             "inject_loading_scripts": self.inject_loading_scripts,
             "wasm_split": self.wasm_split,
             "debug_symbols": self.debug_symbols,
+            "keep_names": self.keep_names,
             "device": self.device,
             "base_path": self.base_path.is_some(),
             "cargo_args": self.cargo_args.is_some(),
