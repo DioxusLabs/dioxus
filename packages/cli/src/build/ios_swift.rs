@@ -159,7 +159,7 @@ pub async fn create_framework_bundle(
         }
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Created {} framework bundle: {}",
         if is_ios { "iOS" } else { "macOS" },
         framework_dir.display()
@@ -185,7 +185,7 @@ pub async fn compile_swift_sources(
         return Ok(None);
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Compiling {} Swift plugin(s) for {}",
         swift_sources.len(),
         target_triple
@@ -248,7 +248,7 @@ pub async fn compile_swift_sources(
 
     // Build each plugin package individually
     for (plugin_name, product_name, package_path) in &plugin_paths {
-        tracing::info!(
+        tracing::debug!(
             "Building Swift plugin '{}' (product: {})",
             plugin_name,
             product_name
@@ -363,7 +363,7 @@ pub async fn compile_swift_sources(
             &format!("com.dioxus.swift.{}", name.to_lowercase()),
         )
         .await?;
-        tracing::info!("Created additional framework: {}", extra_framework.display());
+        tracing::debug!("Created additional framework: {}", extra_framework.display());
     }
 
     Ok(Some(framework_path))
@@ -714,7 +714,7 @@ pub async fn compile_apple_widget(
         );
     }
 
-    tracing::info!(
+    tracing::debug!(
         "Compiling Apple Widget Extension '{}' for {}",
         widget.display_name,
         target_triple
@@ -906,7 +906,7 @@ pub async fn compile_apple_widget(
 
     std::fs::write(appex_dir.join("Info.plist"), info_plist)?;
 
-    tracing::info!(
+    tracing::debug!(
         "Created Widget Extension bundle: {}",
         appex_dir.display()
     );

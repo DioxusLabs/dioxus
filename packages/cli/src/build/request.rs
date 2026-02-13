@@ -1120,6 +1120,10 @@ impl BuildRequest {
 
                 // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
                 if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+                    let names: Vec<_> = artifacts.android_artifacts.iter()
+                        .map(|a| a.plugin_name.as_str().to_string())
+                        .collect();
+                    ctx.status_compiling_native_plugins(format!("Kotlin build: {}", names.join(", ")));
                     self.install_android_artifacts(&artifacts.android_artifacts)
                         .context("Failed to install Android plugin artifacts")?;
                 }
@@ -1127,6 +1131,11 @@ impl BuildRequest {
                 if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
                     && !artifacts.swift_sources.is_empty()
                 {
+                    let names: Vec<_> = artifacts.swift_sources.iter()
+                        .map(|s| s.plugin_name.as_str().to_string())
+                        .collect();
+                    ctx.status_compiling_native_plugins(format!("Swift build: {}", names.join(", ")));
+
                     // Compile Swift packages from source
                     self.compile_swift_sources(&artifacts.swift_sources)
                         .await
@@ -1142,6 +1151,10 @@ impl BuildRequest {
                 if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
                     && !self.config.ios.widget_extensions.is_empty()
                 {
+                    let names: Vec<_> = self.config.ios.widget_extensions.iter()
+                        .map(|w| w.display_name.clone())
+                        .collect();
+                    ctx.status_compiling_native_plugins(format!("Widget build: {}", names.join(", ")));
                     self.compile_widget_extensions()
                         .await
                         .context("Failed to compile widget extensions")?;
@@ -1630,7 +1643,7 @@ impl BuildRequest {
 
             if artifact_path.is_dir() {
                 // It's a source folder - copy it as a Gradle submodule
-                tracing::info!(
+                tracing::debug!(
                     "Bundling Android plugin '{}' from source: {}",
                     plugin_name,
                     artifact_path.display()
@@ -1838,7 +1851,7 @@ impl BuildRequest {
         // Copy the entire framework bundle
         self.copy_dir_recursive(framework_path, &dest)?;
 
-        tracing::info!(
+        tracing::debug!(
             "Installed Swift framework '{}' to {}",
             framework_name.to_string_lossy(),
             frameworks_dir.display()
@@ -1923,7 +1936,7 @@ impl BuildRequest {
             return Ok(());
         }
 
-        tracing::info!(
+        tracing::debug!(
             "Compiling {} Apple Widget Extension(s)",
             widget_configs.len()
         );
@@ -1985,7 +1998,7 @@ impl BuildRequest {
 
             self.copy_dir_recursive(&appex_path, &dest_path)?;
 
-            tracing::info!(
+            tracing::debug!(
                 "Installed widget extension '{}' to {}",
                 widget_source.display_name,
                 dest_path.display()

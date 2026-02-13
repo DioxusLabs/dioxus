@@ -108,6 +108,9 @@ pub enum BuildStage {
     },
     Bundling,
     RunningGradle,
+    CompilingNativePlugins {
+        detail: String,
+    },
     CodeSigning,
     Success,
     Failed,
