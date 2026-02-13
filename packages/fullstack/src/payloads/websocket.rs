@@ -42,6 +42,7 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     prelude::rust_2024::Future,
+    rc::Rc,
     task::{ready, Context, Poll},
 };
 
@@ -89,7 +90,9 @@ pub fn use_websocket<
             // Wake up the `.recv()` calls waiting for the connection to be established
             waker.wake(());
 
-            connection
+            // Wrap in Rc so we can clone it out of the Resource without holding
+            // a borrow guard across await points
+            connection.map(Rc::new)
         }
     });
 
@@ -113,7 +116,8 @@ where
     Out: 'static,
     Enc: 'static,
 {
-    connection: Resource<Result<Websocket<In, Out, Enc>, CapturedError>>,
+    #[allow(clippy::type_complexity)]
+    connection: Resource<Result<Rc<Websocket<In, Out, Enc>>, CapturedError>>,
     waker: UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
@@ -161,15 +165,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// To send a message with a particular type, see the `.send()` method instead.
     pub async fn send_raw(&self, msg: Message) -> Result<(), WebsocketError> {
         self.connect().await;
-
-        self.connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .send_raw(msg)
-            .await
+        self.get_connection()?.send_raw(msg).await
     }
 
     /// Receive a raw message from the WebSocket connection
@@ -177,22 +173,27 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// To receive a message with a particular type, see the `.recv()` method instead.
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
         self.connect().await;
+        let ws = self.get_connection()?;
 
-        let result = self
-            .connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .recv_raw()
-            .await;
+        // Race the recv against the waker — if the connection is being recreated
+        // (e.g. a reactive dependency changed), the waker fires and we return an error
+        // so the caller's loop can restart and pick up the new connection.
+        let recv_fut = ws.recv_raw();
+        let waker_fut = self.waker.wait();
+        futures::pin_mut!(recv_fut, waker_fut);
 
-        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
-            self.received_shutdown();
+        match futures::future::select(recv_fut, waker_fut).await {
+            futures::future::Either::Left((recv_result, _)) => {
+                if let Err(WebsocketError::ConnectionClosed { .. }) = recv_result.as_ref() {
+                    self.received_shutdown();
+                }
+                recv_result
+            }
+            futures::future::Either::Right(_) => Err(WebsocketError::ConnectionClosed {
+                code: CloseCode::Away,
+                description: "Connection replaced by a new one".to_string(),
+            }),
         }
-
-        result
     }
 
     pub async fn send(&self, msg: In) -> Result<(), WebsocketError>
@@ -219,22 +220,24 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         E: Encoding,
     {
         self.connect().await;
+        let ws = self.get_connection()?;
 
-        let result = self
-            .connection
-            .as_ref()
-            .as_deref()
-            .ok_or_else(WebsocketError::closed_away)?
-            .as_ref()
-            .map_err(|_| WebsocketError::AlreadyClosed)?
-            .recv()
-            .await;
+        let recv_fut = ws.recv();
+        let waker_fut = self.waker.wait();
+        futures::pin_mut!(recv_fut, waker_fut);
 
-        if let Err(WebsocketError::ConnectionClosed { .. }) = result.as_ref() {
-            self.received_shutdown();
+        match futures::future::select(recv_fut, waker_fut).await {
+            futures::future::Either::Left((recv_result, _)) => {
+                if let Err(WebsocketError::ConnectionClosed { .. }) = recv_result.as_ref() {
+                    self.received_shutdown();
+                }
+                recv_result
+            }
+            futures::future::Either::Right(_) => Err(WebsocketError::ConnectionClosed {
+                code: CloseCode::Away,
+                description: "Connection replaced by a new one".to_string(),
+            }),
         }
-
-        result
     }
 
     /// Set the WebSocket connection.
@@ -247,7 +250,8 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
             Err(_) => self.status.set(WebsocketState::FailedToConnect),
         }
 
-        self.connection.set(Some(socket.map_err(|e| e.into())));
+        self.connection
+            .set(Some(socket.map(Rc::new).map_err(|e| e.into())));
         self.waker.wake(());
     }
 
@@ -256,6 +260,20 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
         let mut _self = *self;
         _self.status.set(WebsocketState::Closed);
         _self.waker.wake(());
+    }
+
+    /// Clone the `Rc<Websocket>` out of the Resource using peek, so we don't hold a borrow
+    /// guard across await points. This prevents AlreadyBorrowed panics when the Resource
+    /// tries to write while recv() is awaiting.
+    #[allow(clippy::result_large_err)]
+    fn get_connection(&self) -> Result<Rc<Websocket<In, Out, E>>, WebsocketError> {
+        self.connection.with_peek(|opt| {
+            opt.as_ref()
+                .ok_or_else(WebsocketError::closed_away)?
+                .as_ref()
+                .map(Rc::clone)
+                .map_err(|_| WebsocketError::AlreadyClosed)
+        })
     }
 }
 
