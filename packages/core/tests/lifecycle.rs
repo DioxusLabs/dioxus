@@ -74,7 +74,8 @@ fn events_generate() {
         edits.edits,
         [
             CreatePlaceholder { id: ElementId(2) },
-            ReplaceWith { id: ElementId(1), m: 1 }
+            ReplaceWith { id: ElementId(1), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     )
 }

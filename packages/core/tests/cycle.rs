@@ -28,6 +28,7 @@ fn cycling_elements() {
         [
             LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -38,6 +39,7 @@ fn cycling_elements() {
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -47,6 +49,7 @@ fn cycling_elements() {
         [
             LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 }

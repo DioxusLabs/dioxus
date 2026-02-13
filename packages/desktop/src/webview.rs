@@ -118,10 +118,33 @@ impl WebviewEdits {
         let hovered_file = desktop_context.file_hover.clone();
 
         // check for a mounted event placeholder and replace it with a desktop specific element
+        // For mounted events, we create MountedData directly so we can retrieve cleanup after handler returns
+        if matches!(data, dioxus_html::EventData::Mounted) {
+            let desktop_element =
+                DesktopElement::new(element, desktop_context.clone(), query.clone());
+            // Create MountedData directly so we can access cleanup after handler returns
+            let mounted_data = Rc::new(dioxus_html::MountedData::new(desktop_element));
+
+            let event = dioxus_core::Event::new(
+                mounted_data.clone() as Rc<dyn std::any::Any>,
+                bubbles,
+            );
+            self.runtime.handle_event(&name, event.clone(), element);
+
+            // Retrieve cleanup from shared MountedData after handler returns
+            if let Some(cleanup) = mounted_data.take_cleanup() {
+                desktop_context
+                    .element_cleanup_closures
+                    .borrow_mut()
+                    .insert(element, cleanup);
+            }
+
+            return SynchronousEventResponse::new(!event.default_action_enabled());
+        }
+
         let as_any = match data {
             dioxus_html::EventData::Mounted => {
-                let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
-                Rc::new(PlatformEventData::new(Box::new(element)))
+                unreachable!("Handled above")
             }
             dioxus_html::EventData::Form(form) => {
                 Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
@@ -573,9 +596,14 @@ impl WebviewInstance {
             #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
-            self.edits
-                .wry_queue
-                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
+            self.edits.wry_queue.with_mutation_state_mut(|f| {
+                // Wrap MutationState to invoke cleanup on free_id
+                let mut wrapper = DesktopMutations {
+                    inner: f,
+                    desktop_context: &self.desktop_context,
+                };
+                self.dom.render_immediate(&mut wrapper);
+            });
             self.edits.wry_queue.send_edits();
         }
     }
@@ -656,5 +684,95 @@ impl PendingWebview {
         _ = self.sender.send(cx);
 
         window
+    }
+}
+
+/// A wrapper around `MutationState` that invokes cleanup closures on `free_id`.
+///
+/// Desktop needs to invoke cleanup closures stored in `DesktopContext` when elements are freed.
+/// Since `MutationState` doesn't have access to `DesktopContext`, we wrap it here.
+struct DesktopMutations<'a> {
+    inner: &'a mut dioxus_interpreter_js::MutationState,
+    desktop_context: &'a DesktopContext,
+}
+
+impl dioxus_core::WriteMutations for DesktopMutations<'_> {
+    fn append_children(&mut self, id: dioxus_core::ElementId, m: usize) {
+        self.inner.append_children(id, m);
+    }
+
+    fn assign_node_id(&mut self, path: &'static [u8], id: dioxus_core::ElementId) {
+        self.inner.assign_node_id(path, id);
+    }
+
+    fn create_placeholder(&mut self, id: dioxus_core::ElementId) {
+        self.inner.create_placeholder(id);
+    }
+
+    fn create_text_node(&mut self, value: &str, id: dioxus_core::ElementId) {
+        self.inner.create_text_node(value, id);
+    }
+
+    fn load_template(
+        &mut self,
+        template: dioxus_core::Template,
+        index: usize,
+        id: dioxus_core::ElementId,
+    ) {
+        self.inner.load_template(template, index, id);
+    }
+
+    fn replace_node_with(&mut self, id: dioxus_core::ElementId, m: usize) {
+        self.inner.replace_node_with(id, m);
+    }
+
+    fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
+        self.inner.replace_placeholder_with_nodes(path, m);
+    }
+
+    fn insert_nodes_after(&mut self, id: dioxus_core::ElementId, m: usize) {
+        self.inner.insert_nodes_after(id, m);
+    }
+
+    fn insert_nodes_before(&mut self, id: dioxus_core::ElementId, m: usize) {
+        self.inner.insert_nodes_before(id, m);
+    }
+
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        ns: Option<&'static str>,
+        value: &dioxus_core::AttributeValue,
+        id: dioxus_core::ElementId,
+    ) {
+        self.inner.set_attribute(name, ns, value, id);
+    }
+
+    fn set_node_text(&mut self, value: &str, id: dioxus_core::ElementId) {
+        self.inner.set_node_text(value, id);
+    }
+
+    fn create_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
+        self.inner.create_event_listener(name, id);
+    }
+
+    fn remove_event_listener(&mut self, name: &'static str, id: dioxus_core::ElementId) {
+        self.inner.remove_event_listener(name, id);
+    }
+
+    fn remove_node(&mut self, id: dioxus_core::ElementId) {
+        self.inner.remove_node(id);
+    }
+
+    fn push_root(&mut self, id: dioxus_core::ElementId) {
+        self.inner.push_root(id);
+    }
+
+    fn free_id(&mut self, id: dioxus_core::ElementId) {
+        // Invoke cleanup closure for this element
+        self.desktop_context.invoke_cleanup(id);
+
+        // Forward to inner MutationState to send to JS
+        self.inner.free_id(id);
     }
 }

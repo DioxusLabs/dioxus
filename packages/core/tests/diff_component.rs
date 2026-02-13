@@ -92,7 +92,8 @@ fn component_swap() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
+            ReplaceWith { id: ElementId(5), m: 1 },
+            FreeId { id: ElementId(5) },
         ]
     );
 
@@ -101,7 +102,8 @@ fn component_swap() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(5) },
-            ReplaceWith { id: ElementId(6), m: 1 }
+            ReplaceWith { id: ElementId(6), m: 1 },
+            FreeId { id: ElementId(6) },
         ]
     );
 
@@ -110,7 +112,8 @@ fn component_swap() {
         dom.render_immediate_to_vec().edits,
         [
             LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
+            ReplaceWith { id: ElementId(5), m: 1 },
+            FreeId { id: ElementId(5) },
         ]
     );
 }

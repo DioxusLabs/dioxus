@@ -39,6 +39,7 @@ fn list_creates_one_by_one() {
             CreateTextNode { value: "0".to_string(), id: ElementId(4,) },
             ReplacePlaceholder { path: &[0], m: 1 },
             ReplaceWith { id: ElementId(2,), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -121,14 +122,14 @@ fn removes_one_by_one() {
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
-        [Remove { id: ElementId(6) }]
+        [Remove { id: ElementId(6) }, FreeId { id: ElementId(6) }]
     );
 
     // Remove div(2)
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
-        [Remove { id: ElementId(4) }]
+        [Remove { id: ElementId(4) }, FreeId { id: ElementId(4) }]
     );
 
     // Remove div(1) and replace with a placeholder
@@ -138,7 +139,8 @@ fn removes_one_by_one() {
         dom.render_immediate_to_vec().edits,
         [
             CreatePlaceholder { id: ElementId(4) },
-            ReplaceWith { id: ElementId(2), m: 1 }
+            ReplaceWith { id: ElementId(2), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -157,7 +159,8 @@ fn removes_one_by_one() {
             LoadTemplate { index: 0, id: ElementId(7) },
             CreateTextNode { value: "2".to_string(), id: ElementId(8) },
             ReplacePlaceholder { path: &[0], m: 1 },
-            ReplaceWith { id: ElementId(4), m: 3 }
+            ReplaceWith { id: ElementId(4), m: 3 },
+            FreeId { id: ElementId(4) },
         ]
     );
 }
@@ -195,7 +198,8 @@ fn list_shrink_multiroot() {
             LoadTemplate { index: 1, id: ElementId(5) },
             CreateTextNode { value: "0".to_string(), id: ElementId(6) },
             ReplacePlaceholder { path: &[0], m: 1 },
-            ReplaceWith { id: ElementId(2), m: 2 }
+            ReplaceWith { id: ElementId(2), m: 2 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -275,13 +279,23 @@ fn removes_one_by_one_multiroot() {
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
-        [Remove { id: ElementId(10) }, Remove { id: ElementId(12) }]
+        [
+            Remove { id: ElementId(10) },
+            FreeId { id: ElementId(10) },
+            Remove { id: ElementId(12) },
+            FreeId { id: ElementId(12) },
+        ]
     );
 
     dom.mark_dirty(ScopeId::APP);
     assert_eq!(
         dom.render_immediate_to_vec().edits,
-        [Remove { id: ElementId(6) }, Remove { id: ElementId(8) }]
+        [
+            Remove { id: ElementId(6) },
+            FreeId { id: ElementId(6) },
+            Remove { id: ElementId(8) },
+            FreeId { id: ElementId(8) },
+        ]
     );
 
     dom.mark_dirty(ScopeId::APP);
@@ -290,7 +304,9 @@ fn removes_one_by_one_multiroot() {
         [
             CreatePlaceholder { id: ElementId(8) },
             Remove { id: ElementId(2) },
-            ReplaceWith { id: ElementId(4), m: 1 }
+            FreeId { id: ElementId(2) },
+            ReplaceWith { id: ElementId(4), m: 1 },
+            FreeId { id: ElementId(4) },
         ]
     );
 }
@@ -363,6 +379,7 @@ fn remove_many() {
                 CreateTextNode { value: "hello 0".to_string(), id: ElementId(3,) },
                 ReplacePlaceholder { path: &[0,], m: 1 },
                 ReplaceWith { id: ElementId(1,), m: 1 },
+                FreeId { id: ElementId(1) },
             ]
         );
     }
@@ -396,11 +413,13 @@ fn remove_many() {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
         assert_eq!(edits.edits[0], CreatePlaceholder { id: ElementId(11,) });
-        let removed = edits.edits[1..5]
+        // With FreeId after each Remove, we have 4 Remove + 4 FreeId = 8 mutations in edits[1..9]
+        let removed = edits.edits[1..9]
             .iter()
-            .map(|edit| match edit {
-                Mutation::Remove { id } => *id,
-                _ => panic!("Expected remove"),
+            .filter_map(|edit| match edit {
+                Mutation::Remove { id } => Some(*id),
+                Mutation::FreeId { id } => Some(*id), // FreeId should match the Remove
+                _ => panic!("Expected remove or free_id"),
             })
             .collect::<HashSet<_>>();
         assert_eq!(
@@ -409,7 +428,13 @@ fn remove_many() {
                 .into_iter()
                 .collect::<HashSet<_>>()
         );
-        assert_eq!(edits.edits[5..], [ReplaceWith { id: ElementId(9,), m: 1 },]);
+        assert_eq!(
+            edits.edits[9..],
+            [
+                ReplaceWith { id: ElementId(9,), m: 1 },
+                FreeId { id: ElementId(9) },
+            ]
+        );
     }
 
     // len = 1
@@ -423,6 +448,7 @@ fn remove_many() {
                 CreateTextNode { value: "hello 0".to_string(), id: ElementId(10,) },
                 ReplacePlaceholder { path: &[0,], m: 1 },
                 ReplaceWith { id: ElementId(11,), m: 1 },
+                FreeId { id: ElementId(11) },
             ]
         )
     }
@@ -473,6 +499,7 @@ fn replace_and_add_items() {
             [
                 LoadTemplate { index: 0, id: ElementId(3,) },
                 ReplaceWith { id: ElementId(2,), m: 1 },
+                FreeId { id: ElementId(2) },
             ]
         );
     }
@@ -488,6 +515,7 @@ fn replace_and_add_items() {
                 InsertAfter { id: ElementId(3,), m: 1 },
                 CreatePlaceholder { id: ElementId(4,) },
                 ReplaceWith { id: ElementId(3,), m: 1 },
+                FreeId { id: ElementId(3) },
             ]
         );
     }
@@ -503,8 +531,10 @@ fn replace_and_add_items() {
                 InsertAfter { id: ElementId(2,), m: 1 },
                 LoadTemplate { index: 0, id: ElementId(5,) },
                 ReplaceWith { id: ElementId(4,), m: 1 },
+                FreeId { id: ElementId(4) },
                 LoadTemplate { index: 0, id: ElementId(4,) },
                 ReplaceWith { id: ElementId(2,), m: 1 },
+                FreeId { id: ElementId(2) },
             ]
         );
     }

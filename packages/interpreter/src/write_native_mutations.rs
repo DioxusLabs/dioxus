@@ -191,4 +191,8 @@ impl WriteMutations for MutationState {
     fn push_root(&mut self, id: dioxus_core::ElementId) {
         self.channel.push_root(id.0 as _);
     }
+
+    fn free_id(&mut self, id: dioxus_core::ElementId) {
+        self.channel.free_id(id.0 as u32);
+    }
 }

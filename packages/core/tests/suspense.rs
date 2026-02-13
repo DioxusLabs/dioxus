@@ -437,6 +437,7 @@ fn toggle_suspense() {
                 [
                     Mutation::CreatePlaceholder { id: ElementId(2) },
                     Mutation::ReplaceWith { id: ElementId(1), m: 1 },
+                    Mutation::FreeId { id: ElementId(1) },
                 ]
             );
 
@@ -450,6 +451,7 @@ fn toggle_suspense() {
                 [
                     Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+                    Mutation::FreeId { id: ElementId(2) },
                 ]
             );
 
@@ -463,8 +465,10 @@ fn toggle_suspense() {
                 [
                     Mutation::CreatePlaceholder { id: ElementId(2,) },
                     Mutation::ReplaceWith { id: ElementId(1,), m: 1 },
+                    Mutation::FreeId { id: ElementId(1) },
                     Mutation::LoadTemplate { index: 0, id: ElementId(1) },
                     Mutation::ReplaceWith { id: ElementId(2), m: 1 },
+                    Mutation::FreeId { id: ElementId(2) },
                 ]
             );
         });
@@ -612,14 +616,17 @@ fn nested_suspense_resolves_client() {
                     // Then we need to replace what we just rendered with the suspense placeholder
                     CreatePlaceholder { id: ElementId(3,) },
                     ReplaceWith { id: ElementId(1,), m: 1 },
+                    FreeId { id: ElementId(1,) },
 
                     // Replace the pending placeholder with the title placeholder
                     CreatePlaceholder { id: ElementId(1,) },
                     ReplaceWith { id: ElementId(3,), m: 1 },
+                    FreeId { id: ElementId(3,) },
 
                     // Replace loading... with a placeholder for us to fill in later
                     CreatePlaceholder { id: ElementId(3,) },
                     ReplaceWith { id: ElementId(2,), m: 1 },
+                    FreeId { id: ElementId(2,) },
 
                     // Load the title
                     LoadTemplate {  index: 0, id: ElementId(2,) },
@@ -657,6 +664,7 @@ fn nested_suspense_resolves_client() {
 
                     // Finally replace the loading placeholder in the body with the resolved children
                     ReplaceWith { id: ElementId(3,), m: 3 },
+                    FreeId { id: ElementId(3,) },
                 ]
             );
 
@@ -683,6 +691,11 @@ fn nested_suspense_resolves_client() {
                             8,
                         ),
                         m: 1,
+                    },
+                    FreeId {
+                        id: ElementId(
+                            8,
+                        ),
                     },
 
                     // Load the nested suspense
@@ -756,6 +769,11 @@ fn nested_suspense_resolves_client() {
                         ),
                         m: 3,
                     },
+                    FreeId {
+                        id: ElementId(
+                            3,
+                        ),
+                    },
 
                     // Replace the second loading placeholder with a placeholder for us to fill in later
                     CreatePlaceholder {
@@ -768,6 +786,11 @@ fn nested_suspense_resolves_client() {
                             9,
                         ),
                         m: 1,
+                    },
+                    FreeId {
+                        id: ElementId(
+                            9,
+                        ),
                     },
                     LoadTemplate {
                         index: 0,
@@ -837,6 +860,11 @@ fn nested_suspense_resolves_client() {
                         ),
                         m: 3,
                     },
+                    FreeId {
+                        id: ElementId(
+                            3,
+                        ),
+                    },
                 ]
             );
 
@@ -855,6 +883,11 @@ fn nested_suspense_resolves_client() {
                             19,
                         ),
                         m: 1,
+                    },
+                    FreeId {
+                        id: ElementId(
+                            19,
+                        ),
                     },
                     LoadTemplate {
 
@@ -925,6 +958,11 @@ fn nested_suspense_resolves_client() {
                             3,
                         ),
                         m: 3,
+                    },
+                    FreeId {
+                        id: ElementId(
+                            3,
+                        ),
                     },
                 ]
             )
