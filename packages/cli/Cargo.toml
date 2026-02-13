@@ -29,6 +29,7 @@ subsecond-types = { workspace = true }
 dioxus-cli-telemetry = { workspace =  true }
 dioxus-component-manifest = { workspace = true }
 
+bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }

@@ -33,13 +33,17 @@ use dioxus_fullstack_core::{HttpError, RequestError};
 use dioxus_hooks::{use_resource, Resource, UseWaker};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
-use futures::StreamExt;
 use futures::{
     stream::{SplitSink, SplitStream},
-    SinkExt, TryFutureExt,
+    Sink, SinkExt, Stream, StreamExt, TryFutureExt,
 };
 use serde::{de::DeserializeOwned, Serialize};
-use std::{marker::PhantomData, prelude::rust_2024::Future};
+use std::{
+    marker::PhantomData,
+    pin::Pin,
+    prelude::rust_2024::Future,
+    task::{ready, Context, Poll},
+};
 
 #[cfg(feature = "web")]
 use {
@@ -705,61 +709,18 @@ pub struct TypedWebsocket<In, Out, E = JsonEncoding> {
 #[cfg(feature = "server")]
 impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, E> {
     /// Receive an incoming message from the client.
-    ///
-    /// Returns `None` if the stream has closed.
     pub async fn recv(&mut self) -> Result<In, WebsocketError> {
-        use axum::extract::ws::Message as AxumMessage;
-
-        loop {
-            let Some(res) = self.inner.next().await else {
-                return Err(WebsocketError::closed_away());
-            };
-
-            match res {
-                Ok(res) => match res {
-                    AxumMessage::Text(utf8_bytes) => {
-                        let e: In = E::decode(utf8_bytes.into())
-                            .ok_or_else(WebsocketError::deserialization)?;
-                        return Ok(e);
-                    }
-                    AxumMessage::Binary(bytes) => {
-                        let e: In = E::decode(bytes).ok_or_else(WebsocketError::deserialization)?;
-                        return Ok(e);
-                    }
-
-                    AxumMessage::Close(Some(close_frame)) => {
-                        return Err(WebsocketError::ConnectionClosed {
-                            code: close_frame.code.into(),
-                            description: close_frame.reason.to_string(),
-                        });
-                    }
-                    AxumMessage::Close(None) => return Err(WebsocketError::AlreadyClosed),
-
-                    AxumMessage::Ping(_bytes) => continue,
-                    AxumMessage::Pong(_bytes) => continue,
-                },
-                Err(_res) => return Err(WebsocketError::closed_away()),
-            }
-        }
+        self.next()
+            .await
+            .unwrap_or(Err(WebsocketError::closed_away()))
     }
 
     /// Send an outgoing message.
     pub async fn send(&mut self, msg: Out) -> Result<(), WebsocketError> {
-        use axum::extract::ws::Message;
-
-        let to_bytes = E::to_bytes(&msg).ok_or_else(|| {
-            WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
-        })?;
-
-        self.inner
-            .send(Message::Binary(to_bytes))
-            .await
-            .map_err(|_err| WebsocketError::AlreadyClosed)
+        SinkExt::send(self, msg).await
     }
 
     /// Receive another message.
-    ///
-    /// Returns `None` if the stream has closed.
     pub async fn recv_raw(&mut self) -> Result<Message, WebsocketError> {
         use axum::extract::ws::Message as AxumMessage;
 
@@ -813,6 +774,83 @@ impl<In: DeserializeOwned, Out: Serialize, E: Encoding> TypedWebsocket<In, Out, 
     /// Get a mutable reference to the underlying Axum WebSocket.
     pub fn socket(&mut self) -> &mut axum::extract::ws::WebSocket {
         &mut self.inner
+    }
+}
+
+#[cfg(feature = "server")]
+impl<In: DeserializeOwned, Out: Serialize, E: Encoding> Stream for TypedWebsocket<In, Out, E> {
+    type Item = Result<In, WebsocketError>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        use axum::extract::ws::Message as AxumMessage;
+
+        loop {
+            match ready!(self.inner.poll_next_unpin(cx)) {
+                Some(Ok(msg)) => match msg {
+                    AxumMessage::Text(utf8_bytes) => {
+                        let e: In = E::decode(utf8_bytes.into())
+                            .ok_or_else(WebsocketError::deserialization)?;
+                        return Poll::Ready(Some(Ok(e)));
+                    }
+                    AxumMessage::Binary(bytes) => {
+                        let e: In = E::decode(bytes).ok_or_else(WebsocketError::deserialization)?;
+                        return Poll::Ready(Some(Ok(e)));
+                    }
+
+                    AxumMessage::Close(Some(close_frame)) => {
+                        return Poll::Ready(Some(Err(WebsocketError::ConnectionClosed {
+                            code: close_frame.code.into(),
+                            description: close_frame.reason.to_string(),
+                        })));
+                    }
+                    AxumMessage::Close(None) => {
+                        return Poll::Ready(Some(Err(WebsocketError::AlreadyClosed)));
+                    }
+
+                    AxumMessage::Ping(_bytes) => continue,
+                    AxumMessage::Pong(_bytes) => continue,
+                },
+                Some(Err(_)) => {
+                    return Poll::Ready(Some(Err(WebsocketError::closed_away())));
+                }
+                None => return Poll::Ready(None),
+            }
+        }
+    }
+}
+
+#[cfg(feature = "server")]
+impl<In: DeserializeOwned, Out: Serialize, E: Encoding> Sink<Out> for TypedWebsocket<In, Out, E> {
+    type Error = WebsocketError;
+
+    fn poll_ready(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.inner)
+            .poll_ready(cx)
+            .map_err(|_| WebsocketError::AlreadyClosed)
+    }
+
+    fn start_send(mut self: Pin<&mut Self>, item: Out) -> Result<(), Self::Error> {
+        use axum::extract::ws::Message;
+
+        let to_bytes = E::to_bytes(&item).ok_or_else(|| {
+            WebsocketError::Serialization(anyhow::anyhow!("Failed to serialize message").into())
+        })?;
+
+        Pin::new(&mut self.inner)
+            .start_send(Message::Binary(to_bytes))
+            .map_err(|_| WebsocketError::AlreadyClosed)
+    }
+
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.inner)
+            .poll_flush(cx)
+            .map_err(|_| WebsocketError::AlreadyClosed)
+    }
+
+    fn poll_close(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        Pin::new(&mut self.inner)
+            .poll_close(cx)
+            .map_err(|_| WebsocketError::AlreadyClosed)
     }
 }
 
@@ -1250,7 +1288,9 @@ mod native {
         #[error("unsupported http version: {0:?}")]
         UnsupportedHttpVersion(Version),
 
-        #[error("the server responded with a different http version. this could be the case because reqwest silently upgraded the connection to http2. see: https://github.com/jgraef/reqwest-websocket/issues/2")]
+        #[error(
+            "the server responded with a different http version. this could be the case because reqwest silently upgraded the connection to http2. see: https://github.com/jgraef/reqwest-websocket/issues/2"
+        )]
         ServerRespondedWithDifferentVersion,
 
         #[error("missing header {header}")]

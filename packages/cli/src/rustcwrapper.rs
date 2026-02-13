@@ -5,9 +5,10 @@ use std::{
     process::ExitCode,
 };
 
-/// The environment variable indicating where the args file is located.
+/// The environment variable indicating where the args directory is located.
 ///
-/// When `dx-rustc` runs, it writes its arguments to this file.
+/// When `dx-rustc` runs, it writes each workspace crate's arguments to a
+/// separate file in this directory: `{dir}/{crate_name}.json`.
 pub const DX_RUSTC_WRAPPER_ENV_VAR: &str = "DX_RUSTC";
 
 /// Is `dx` being used as a rustc wrapper?
@@ -64,7 +65,7 @@ fn has_linking_args() -> bool {
     false
 }
 
-/// Run rustc directly, but output the result to a file.
+/// Run rustc directly, but output the result to a per-crate file in the args directory.
 ///
 /// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
 pub fn run_rustc() -> ExitCode {
@@ -75,11 +76,11 @@ pub fn run_rustc() -> ExitCode {
             .run_link();
     }
 
-    let var_file: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
+    let args_dir: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
         .expect("DX_RUSTC env var must be set")
         .into();
 
-    // Cargo invokes a wrapper like: `wrapper-name rustc [args...]`
+    // Cargo invokes a workspace wrapper like: `wrapper-name rustc [args...]`
     // We skip our own executable name (`wrapper-name`) to get the args passed to us.
     let captured_args = args().skip(1).collect::<Vec<_>>();
 
@@ -89,32 +90,51 @@ pub fn run_rustc() -> ExitCode {
         link_args: Default::default(),
     };
 
-    // Another terrible hack to avoid caching non-sensical args when
-    // a build is completely fresh (rustc is invoked with --crate-name ___)
-    if rustc_args
+    // Extract the crate name from the args to use as the filename.
+    // Skip non-sensical args when a build is completely fresh (rustc is invoked with --crate-name ___)
+    let crate_name = rustc_args
         .args
         .iter()
         .skip_while(|arg| *arg != "--crate-name")
-        .nth(1)
-        .is_some_and(|name| name != "___")
-    {
-        let parent_dir = var_file
-            .parent()
-            .expect("Args file path has no parent directory");
-        std::fs::create_dir_all(parent_dir)
-            .expect("Failed to create parent directory for args file");
+        .nth(1);
 
-        let serialized_args =
-            serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
+    if let Some(crate_name) = crate_name {
+        if crate_name != "___" {
+            std::fs::create_dir_all(&args_dir)
+                .expect("Failed to create args directory for rustc wrapper");
 
-        std::fs::write(&var_file, serialized_args).expect("Failed to write rustc args to file");
+            let crate_type = rustc_args
+                .args
+                .iter()
+                .skip_while(|arg| *arg != "--crate-type")
+                .nth(1)
+                .map(|s| s.as_str());
+
+            let serialized_args =
+                serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
+
+            // Write args with an explicit target suffix: {crate_name}.lib.json or
+            // {crate_name}.bin.json. This avoids the ambiguity of a bare {crate_name}.json
+            // and ensures lib+bin crates don't overwrite each other.
+            let suffix = match crate_type {
+                Some("lib" | "rlib") => "lib",
+                Some("bin") => "bin",
+                _ => "bin", // proc-macro, cdylib, etc. — treat as bin
+            };
+
+            std::fs::write(
+                args_dir.join(format!("{crate_name}.{suffix}.json")),
+                &serialized_args,
+            )
+            .expect("Failed to write rustc args to file");
+        }
     }
 
     // Run the actual rustc command.
     // We want all stdout/stderr to be inherited, so the user sees the compiler output.
     let mut cmd = std::process::Command::new("rustc");
 
-    // The first argument in `captured_args` is "rustc", which we need to skip
+    // The first argument in `captured_args` is the rustc path, which we need to skip
     // when passing arguments to the `rustc` command we are spawning.
     cmd.args(captured_args.iter().skip(1));
     cmd.envs(rustc_args.envs);
