@@ -213,6 +213,23 @@ impl Display for ToastLevel {
     }
 }
 
+#[wasm_bindgen(inline_js = r#"
+export function js_show_toast(header_text, message, level, as_ms) {
+    if (typeof showDXToast !== "undefined") {{
+        window.showDXToast(header_text, message, level, as_ms);
+    }}
+}
+export function js_schedule_toast(header_text, message, level, as_ms) {
+    if (typeof scheduleDXToast !== "undefined") {{
+        window.scheduleDXToast(header_text, message, level, as_ms);
+    }}
+}
+"#)]
+extern "C" {
+    fn js_schedule_toast(header_text: &str, message: &str, level: String, as_ms: u32);
+    fn js_show_toast(header_text: &str, message: &str, level: String, as_ms: u32);
+}
+
 /// Displays a toast to the developer.
 pub(crate) fn show_toast(
     header_text: &str,
@@ -221,20 +238,12 @@ pub(crate) fn show_toast(
     duration: Duration,
     after_reload: bool,
 ) {
-    let as_ms = duration.as_millis();
+    let as_ms: u32 = duration.as_millis().try_into().unwrap();
 
-    let js_fn_name = match after_reload {
-        true => "scheduleDXToast",
-        false => "showDXToast",
-    };
-
-    _ = js_sys::eval(&format!(
-        r#"
-            if (typeof {js_fn_name} !== "undefined") {{
-                window.{js_fn_name}(`{header_text}`, `{message}`, `{level}`, {as_ms});
-            }}
-            "#,
-    ));
+    match after_reload {
+        true => js_schedule_toast(header_text, message, level.to_string(), as_ms),
+        false => js_show_toast(header_text, message, level.to_string(), as_ms),
+    }
 }
 
 /// Force a hotreload of the assets on this page by walking them and changing their URLs to include
