@@ -1,8 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::{
-    mem::MaybeUninit,
-    ops::{Deref, Index},
-};
+use std::ops::{Deref, Index};
 
 use crate::{ext_methods, MappedSignal, ReadSignal};
 use dioxus_core::Subscribers;
@@ -241,49 +238,93 @@ pub trait ReadableExt: Readable {
     {
         <Self::Storage as AnyStorage>::map(self.read(), |v| v.index(index))
     }
-
-    /// SAFETY: You must call this function directly with `self` as the argument.
-    /// This function relies on the size of the object you return from the deref
-    /// being the same as the object you pass in
-    #[doc(hidden)]
-    unsafe fn deref_impl<'a>(&self) -> &'a dyn Fn() -> Self::Target
-    where
-        Self: Sized + 'a,
-        Self::Target: Clone + 'static,
-    {
-        // https://github.com/dtolnay/case-studies/tree/master/callable-types
-
-        // First we create a closure that captures something with the Same in memory layout as Self (MaybeUninit<Self>).
-        let uninit_callable = MaybeUninit::<Self>::uninit();
-        // Then move that value into the closure. We assume that the closure now has a in memory layout of Self.
-        let uninit_closure = move || Self::read(unsafe { &*uninit_callable.as_ptr() }).clone();
-
-        // Check that the size of the closure is the same as the size of Self in case the compiler changed the layout of the closure.
-        let size_of_closure = std::mem::size_of_val(&uninit_closure);
-        assert_eq!(size_of_closure, std::mem::size_of::<Self>());
-
-        // Then cast the lifetime of the closure to the lifetime of &self.
-        fn cast_lifetime<'a, T>(_a: &T, b: &'a T) -> &'a T {
-            b
-        }
-        let reference_to_closure = cast_lifetime(
-            {
-                // The real closure that we will never use.
-                &uninit_closure
-            },
-            #[allow(clippy::missing_transmute_annotations)]
-            // We transmute self into a reference to the closure. This is safe because we know that the closure has the same memory layout as Self so &Closure == &Self.
-            unsafe {
-                std::mem::transmute(self)
-            },
-        );
-
-        // Cast the closure to a trait object.
-        reference_to_closure as &_
-    }
 }
 
 impl<R: Readable + ?Sized> ReadableExt for R {}
+
+/// Casts this [`Readable`] into a closure which defers to [read](ReadableExt::read).
+#[doc(hidden)]
+pub const fn readable_deref_impl<T>(readable: &T) -> &impl Fn() -> T::Target
+where
+    T: Readable,
+    T::Target: Clone + 'static,
+{
+    // https://github.com/dtolnay/case-studies/tree/master/callable-types
+
+    use ::core::{
+        alloc::Layout,
+        marker::PhantomData,
+        mem::{transmute, MaybeUninit},
+    };
+
+    /// Asserts at compile-time that the [Layout] of `A` and `B` are equal.
+    /// This will panic during const evaluation if the types are not layout-compatible.
+    /// Thus, causing a compile-time error.
+    #[inline(always)]
+    const fn const_assert_layout<A, B>(_: PhantomData<A>, _: PhantomData<B>) {
+        const {
+            let a = Layout::new::<A>();
+            let b = Layout::new::<B>();
+
+            if a.align() != b.align() || a.size() != b.size() {
+                panic!("incompatible layout!");
+            }
+        }
+    }
+
+    /// Helper function to transmute `a` from a `&'a A` into a `&'a B`.
+    /// Unlike [transmute], this method uses a reference to
+    /// the `B` value to allow inferring the destination type.
+    /// This allows transmuting into an unnameable type (e.g., a closure).
+    ///
+    /// Note that the lifetime of `a`, `'a`, is unmodified by this operation.
+    /// This can only be used to change the type a reference points to; it **cannot**
+    /// extend the lifetime of a reference.
+    ///
+    /// # Safety
+    ///
+    /// The [Layout](core::alloc::Layout) of `A` and `B` is compile-time checked
+    /// by this function, however this only validates alignment and size.
+    /// **All** other safety invariants of [transmute] **must** be upheld by the
+    /// caller of this function.
+    #[inline(always)]
+    const unsafe fn transmute_ref_by_phantom<'a, A, B>(a: &'a A, _: PhantomData<B>) -> &'a B {
+        const_assert_layout::<A, B>(PhantomData, PhantomData);
+
+        unsafe { transmute::<&'a A, &B>(a) }
+    }
+
+    /// Returns a [PhantomData] value representing the provided type `T`.
+    /// This can be helpful for referring to the type of anonymous items
+    /// (e.g., closures) without keeping the original value in scope.
+    const fn sacrifice<T: ?Sized>(_: &T) -> PhantomData<T> {
+        PhantomData
+    }
+
+    // A PhantomData<...> of the real closure that we will never use.
+    // Storing a PhantomData ensures even in unoptimized builds that no
+    // operations are generated for e.g. copying in a closure constant.
+    let uninit_closure = const {
+        // First we create a closure that captures something with the same
+        // in memory layout as Self (MaybeUninit<Self>).
+        let uninit_callable = MaybeUninit::<T>::uninit();
+
+        // Then move that value into the closure.
+        // sacrifice(...) is used to ensure the uninit_closure constant is
+        // zero-sized, avoiding redundant operations in unoptimized builds.
+        sacrifice(&move || {
+            // SAFETY: Initialization comes from transposing `self` into the position of `uninit_callable`.
+            let this: &T = unsafe { uninit_callable.assume_init_ref() };
+            T::read(this).clone()
+        })
+    };
+
+    // We transmute self into a reference to the closure.
+    // SAFETY: uninit_closure is known to contain a single value of type Self.
+    //         transmute_ref_by_phantom ensures both types have identical Layout.
+    //         Therefore, uninit_closure must be equivalent to self.
+    unsafe { transmute_ref_by_phantom::<T, _>(readable, uninit_closure) }
+}
 
 /// An extension trait for `Readable` types that can be boxed into a trait object.
 pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
