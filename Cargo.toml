@@ -339,6 +339,7 @@ pin-project = { version = "1.1.10" }
 postcard = { version = "1.1.3", default-features = false }
 serde_urlencoded = "0.7"
 form_urlencoded = "1.2.1"
+image = "0.25.6"
 winnow = "0.7.14"
 
 # desktop

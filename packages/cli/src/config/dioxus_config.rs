@@ -102,7 +102,9 @@ impl Default for DioxusConfig {
     fn default() -> Self {
         Self {
             application: ApplicationConfig {
+                name: None,
                 asset_dir: None,
+                sub_package: None,
                 out_dir: None,
                 public_dir: Some("public".into()),
                 tailwind_input: None,

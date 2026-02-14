@@ -19,7 +19,7 @@ mod patch;
 mod pre_render;
 mod request;
 mod tools;
-
+pub(crate) mod winres;
 pub(crate) use assets::*;
 pub(crate) use builder::*;
 pub(crate) use cache::*;

@@ -3506,6 +3506,16 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
+            OperatingSystem::Windows => match self.write_winres() {
+                Ok(res) => {
+                    cargo_args.extend(["-L".to_string(), res.path, "-l".to_string(), res.lib]);
+                }
+                Err(err) => {
+                    if self.using_dioxus_explicitly {
+                        tracing::warn!("Application may not have an icon: {err}");
+                    }
+                }
+            },
             _ => {}
         }
 
@@ -3592,6 +3602,25 @@ impl BuildRequest {
         }
 
         cargo_args
+    }
+
+    pub(crate) fn canonicalize_icon_path(&self, icon_path: &PathBuf) -> Result<PathBuf, Error> {
+        if icon_path.is_absolute() && icon_path.is_file() {
+            return Ok(dunce::canonicalize(icon_path)?);
+        }
+        let crate_icon = self.crate_dir().join(icon_path);
+        if crate_icon.is_file() {
+            return Ok(dunce::canonicalize(crate_icon)?);
+        }
+        let workspace_icon = self.workspace_dir().join(icon_path);
+        if workspace_icon.is_file() {
+            return Ok(dunce::canonicalize(workspace_icon)?);
+        }
+
+        Err(anyhow::anyhow!(
+            "Could not find icon from path {:?}",
+            icon_path
+        ))
     }
 
     pub(crate) fn cargo_build_env_vars(
@@ -6577,6 +6606,105 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         Ok(())
+    }
+
+    // needs to only run when tomls are updated
+    fn write_winres(&self) -> Result<crate::winres::WindowsResourceLinker> {
+        use crate::winres::*;
+        let bundle = &self.config.bundle;
+        let package = self.package();
+
+        let (version_str, version) = match bundle.version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (
+                &format!(
+                    "{}.{}.{}",
+                    package.version.major, package.version.minor, package.version.patch
+                ),
+                VersionInfo::version_from_krate(&package.version),
+            ),
+        };
+
+        let (file_version_str, file_version) = match bundle.file_version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (version_str, version),
+        };
+
+        let productname = match self.config.application.name.as_ref() {
+            Some(n) => n,
+            None => &self.bundled_app_name(),
+        };
+
+        let binding = package.description.clone().unwrap_or_default();
+        let description = match bundle.short_description.as_ref() {
+            Some(val) => val,
+            None => bundle.long_description.as_ref().unwrap_or(&binding),
+        };
+
+        // platform dir gets cleared on bundle
+        let mut output_dir = self.platform_dir();
+        output_dir.pop();
+        output_dir.push("winres");
+
+        std::fs::create_dir_all(&output_dir)?;
+
+        let mut winres = WindowsResource::new(version, file_version);
+        winres
+            .set(Properties::ProductVersion, version_str)
+            .set(Properties::FileVersion, file_version_str)
+            .set(Properties::ProductName, productname)
+            .set(Properties::FileDescription, description);
+
+        if let Some(value) = &bundle.original_file_name {
+            winres.set(Properties::OriginalFilename, value);
+        }
+
+        if let Some(value) = &bundle.copyright {
+            winres.set(Properties::Copyright, value);
+        }
+        if let Some(value) = &bundle.trademark {
+            winres.set(Properties::Trademark, value);
+        }
+
+        if let Some(value) = &bundle.publisher {
+            winres.set(Properties::CompanyName, value);
+        }
+
+        if let Some(value) = &bundle.category {
+            winres.set(Properties::Other("Category"), value);
+        }
+
+        let mut has_default = false;
+        if let Some(windows) = bundle.windows.as_ref() {
+            if let Some(path) = windows.icon_path.as_ref() {
+                winres.set_icon(path.clone());
+                has_default = true;
+            }
+        };
+
+        if let Some(icons) = bundle.icon.as_ref() {
+            for (id, icon) in icons.iter().enumerate() {
+                if icon.ends_with(".ico") {
+                    let icon_path = self.canonicalize_icon_path(&PathBuf::from(icon))?;
+                    if !has_default {
+                        // first .ico file will be app icon
+                        winres.set_icon(icon_path);
+                        has_default = true;
+                    } else {
+                        // other .ico files can be accessed with their index as id
+                        winres.set_icon_with_id(icon_path, id.to_string());
+                    };
+                }
+            }
+        }
+
+        if !has_default {
+            let default_icon = write_default_icon(&output_dir)?;
+            let icon = self.canonicalize_icon_path(&default_icon)?;
+            winres.set_icon(icon);
+        }
+
+        winres.compile(&self.triple, &output_dir)
     }
 
     async fn auto_provision_signing_name() -> Result<String> {

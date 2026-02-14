@@ -33,12 +33,7 @@ pub fn init_tray_icon(menu: DioxusTrayMenu, icon: Option<DioxusTrayIcon>) -> Dio
             .with_menu_on_left_click(false)
             .with_icon(match icon {
                 Some(value) => value,
-                None => tray_icon::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
+                None => crate::default_icon(),
             });
 
         provide_context(builder.build().expect("tray icon builder failed"))

@@ -234,14 +234,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
+            window = window.with_window_icon(Some(crate::default_icon()));
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
