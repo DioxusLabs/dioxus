@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
@@ -349,20 +349,20 @@ impl ComponentBody {
     }
 
     fn is_explicit_props_ident(&self) -> bool {
-        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
-            if let Pat::Ident(ident) = pat.as_ref() {
-                return ident.ident == "props";
-            }
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first()
+            && let Pat::Ident(ident) = pat.as_ref()
+        {
+            return ident.ident == "props";
         }
 
         false
     }
 
     fn has_struct_parameter_pattern(&self) -> bool {
-        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first() {
-            if matches!(pat.as_ref(), Pat::Struct(_)) {
-                return true;
-            }
+        if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first()
+            && matches!(pat.as_ref(), Pat::Struct(_))
+        {
+            return true;
         }
 
         false
@@ -575,7 +575,7 @@ fn rebind_mutability(f: &FnArg) -> TokenStream {
 fn strip_pat_mutability(pat: &Pat) -> Pat {
     let mut pat = pat.clone();
     // rip off mutability, but still write it out eventually
-    if let Pat::Ident(ref mut pat_ident) = &mut pat {
+    if let Pat::Ident(pat_ident) = &mut pat {
         pat_ident.mutability = None;
     }
 

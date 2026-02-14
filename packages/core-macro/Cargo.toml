@@ -2,7 +2,7 @@
 name = "dioxus-core-macro"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "Core macro for Dioxus Virtual DOM"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

@@ -3,9 +3,9 @@
 use proc_macro2::TokenStream as TokenStream2;
 use std::{fmt::Debug, hash::Hash};
 use syn::{
+    Ident,
     ext::IdentExt,
     parse::{Parse, ParseBuffer},
-    Ident,
 };
 
 /// Parse a raw ident and return a new ident with the r# prefix added
