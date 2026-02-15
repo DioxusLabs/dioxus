@@ -370,15 +370,29 @@ impl FullstackState {
                     .into_response()
             }
 
-            Err(SSRError::HttpError { status, message }) => Response::builder()
-                .status(status)
-                .body(Body::from(message.unwrap_or_else(|| {
-                    status
-                        .canonical_reason()
-                        .unwrap_or("An unknown error occurred")
-                        .to_string()
-                })))
-                .unwrap(),
+            Err(SSRError::HttpError {
+                status,
+                message,
+                headers,
+            }) => {
+                let mut response = Response::builder()
+                    .status(status)
+                    .body(Body::from(message.unwrap_or_else(|| {
+                        status
+                            .canonical_reason()
+                            .unwrap_or("An unknown error occurred")
+                            .to_string()
+                    })))
+                    .unwrap();
+
+                for (key, value) in headers.into_iter() {
+                    if let Some(key) = key {
+                        response.headers_mut().insert(key, value);
+                    }
+                }
+
+                response
+            }
         }
     }
 }
