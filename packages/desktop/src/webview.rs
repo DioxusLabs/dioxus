@@ -1,21 +1,21 @@
+use crate::PendingDesktopContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
-use crate::PendingDesktopContext;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
+    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    waker::tao_waker,
 };
-use crate::{document::DesktopDocument, WeakDesktopContext};
+use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
+use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{pin_mut, FutureExt};
-use std::sync::{atomic::AtomicBool, Arc};
+use futures_util::{FutureExt, pin_mut};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -29,11 +29,7 @@ pub(crate) struct WebviewEdits {
 
 impl WebviewEdits {
     fn new(runtime: Rc<Runtime>, wry_queue: WryQueue) -> Self {
-        Self {
-            runtime,
-            wry_queue,
-            desktop_context: Default::default(),
-        }
+        Self { runtime, wry_queue, desktop_context: Default::default() }
     }
 
     fn set_desktop_context(&self, context: WeakDesktopContext) {
@@ -45,9 +41,7 @@ impl WebviewEdits {
         request: wry::http::Request<Vec<u8>>,
         responder: wry::RequestAsyncResponder,
     ) {
-        let body = self
-            .try_handle_event(request)
-            .expect("Writing bodies to succeed");
+        let body = self.try_handle_event(request).expect("Writing bodies to succeed");
         responder.respond(wry::http::Response::new(body))
     }
 
@@ -81,7 +75,7 @@ impl WebviewEdits {
                 #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 self.handle_html_event(event)
-            }
+            },
             Err(err) => {
                 tracing::error!(
                     "Error parsing user_event: {:?}. \n Contents: {:?}, \nraw: {:#?}",
@@ -90,7 +84,7 @@ impl WebviewEdits {
                     request
                 );
                 SynchronousEventResponse::new(false)
-            }
+            },
         };
 
         serde_json::to_vec(&response).inspect_err(|err| {
@@ -99,12 +93,7 @@ impl WebviewEdits {
     }
 
     pub fn handle_html_event(&self, event: HtmlEvent) -> SynchronousEventResponse {
-        let HtmlEvent {
-            element,
-            name,
-            bubbles,
-            data,
-        } = event;
+        let HtmlEvent { element, name, bubbles, data } = event;
         let Some(desktop_context) = self.desktop_context.get() else {
             tracing::error!(
                 "Tried to handle event before setting the desktop context on the event handler"
@@ -122,7 +111,7 @@ impl WebviewEdits {
             dioxus_html::EventData::Mounted => {
                 let element = DesktopElement::new(element, desktop_context.clone(), query.clone());
                 Rc::new(PlatformEventData::new(Box::new(element)))
-            }
+            },
             dioxus_html::EventData::Form(form) => {
                 Rc::new(PlatformEventData::new(Box::new(DesktopFormData {
                     value: form.value,
@@ -152,7 +141,7 @@ impl WebviewEdits {
                         })
                         .collect(),
                 })))
-            }
+            },
             // Which also includes drops...
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
@@ -167,23 +156,18 @@ impl WebviewEdits {
                             .iter()
                             .find(|p| p.ends_with(&f.path))
                             .unwrap_or(&f.path);
-                        SerializedFileData {
-                            path: new_path.clone(),
-                            ..f.clone()
-                        }
+                        SerializedFileData { path: new_path.clone(), ..f.clone() }
                     })
                     .collect::<Vec<_>>();
-                let new_xfer_data = dioxus_html::SerializedDataTransfer {
-                    files: new_file_data,
-                    ..xfer_data
-                };
+                let new_xfer_data =
+                    dioxus_html::SerializedDataTransfer { files: new_file_data, ..xfer_data };
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
                     data_transfer: new_xfer_data,
                     files: full_file_paths,
                 })))
-            }
+            },
             _ => data.into_any(),
         };
 
@@ -273,13 +257,7 @@ impl WebviewInstance {
         let headless = !cfg.window.window.visible;
 
         let request_handler = {
-            to_owned![
-                cfg.custom_head,
-                cfg.custom_index,
-                cfg.root_name,
-                asset_handlers,
-                edits
-            ];
+            to_owned![cfg.custom_head, cfg.custom_index, cfg.root_name, asset_handlers, edits];
 
             #[cfg(feature = "tokio_runtime")]
             let tokio_rt = tokio::runtime::Handle::current();
@@ -327,21 +305,18 @@ impl WebviewInstance {
                     // Solution: this glue code to mimic drag drop events.
                     file_hover.set(evt.clone());
                     match evt {
-                        wry::DragDropEvent::Drop {
-                            paths: _,
-                            position: _,
-                        } => {
+                        wry::DragDropEvent::Drop { paths: _, position: _ } => {
                             _ = proxy.send_event(UserWindowEvent::WindowsDragDrop(window_id));
-                        }
+                        },
                         wry::DragDropEvent::Over { position } => {
                             _ = proxy.send_event(UserWindowEvent::WindowsDragOver(
                                 window_id, position.0, position.1,
                             ));
-                        }
+                        },
                         wry::DragDropEvent::Leave => {
                             _ = proxy.send_event(UserWindowEvent::WindowsDragLeave(window_id));
-                        }
-                        _ => {}
+                        },
+                        _ => {},
                     }
                 }
 
@@ -349,6 +324,7 @@ impl WebviewInstance {
             }
         };
 
+        let navigation_handler = cfg.navigation_handler.take();
         let page_loaded = AtomicBool::new(false);
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
@@ -373,6 +349,9 @@ impl WebviewInstance {
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
                     !page_loaded
                 } else {
+                    if let Some(handler) = navigation_handler.as_ref() {
+                        return handler(&var);
+                    }
                     if var.starts_with("http://")
                         || var.starts_with("https://")
                         || var.starts_with("mailto:")
@@ -537,12 +516,7 @@ impl WebviewInstance {
             // find the socket has been closed, we create a new socket and send it to
             // the webview to continue on
             // https://github.com/DioxusLabs/dioxus/issues/4374
-            if self
-                .edits
-                .wry_queue
-                .poll_new_edits_location(&mut cx)
-                .is_ready()
-            {
+            if self.edits.wry_queue.poll_new_edits_location(&mut cx).is_ready() {
                 _ = self.desktop_context.webview.evaluate_script(&format!(
                     "window.interpreter.waitForRequest(\"{edits_path}\", \"{expected_key}\");",
                     edits_path = self.edits.wry_queue.edits_path(),
@@ -564,7 +538,7 @@ impl WebviewInstance {
                 pin_mut!(fut);
 
                 match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(_) => {}
+                    std::task::Poll::Ready(_) => {},
                     std::task::Poll::Pending => return,
                 }
             }
@@ -573,9 +547,7 @@ impl WebviewInstance {
             #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
-            self.edits
-                .wry_queue
-                .with_mutation_state_mut(|f| self.dom.render_immediate(f));
+            self.edits.wry_queue.with_mutation_state_mut(|f| self.dom.render_immediate(f));
             self.edits.wry_queue.send_edits();
         }
     }
@@ -650,9 +622,7 @@ impl PendingWebview {
     pub(crate) fn create_window(self, shared: &Rc<SharedContext>) -> WebviewInstance {
         let window = WebviewInstance::new(self.cfg, self.dom, shared.clone());
 
-        let cx = window
-            .dom
-            .in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
+        let cx = window.dom.in_scope(ScopeId::ROOT, consume_context::<Rc<DesktopService>>);
         _ = self.sender.send(cx);
 
         window
