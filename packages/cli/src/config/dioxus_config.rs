@@ -110,6 +110,7 @@ impl Default for DioxusConfig {
                 ios_info_plist: None,
                 android_manifest: None,
                 android_main_activity: None,
+                android_file_paths: None,
                 android_min_sdk_version: None,
                 macos_info_plist: None,
                 ios_entitlements: None,
