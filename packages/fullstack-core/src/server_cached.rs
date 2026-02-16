@@ -45,23 +45,20 @@ where
     #[allow(unused)]
     let entry: SerializeContextEntry<O> = serialize.create_entry();
 
-    #[cfg(feature = "server")]
+    // Use target_arch instead of cfg(feature) because cargo feature unification
+    // can enable both "web" and "server" features simultaneously.
+    #[cfg(not(target_arch = "wasm32"))]
     {
         let data = value();
         entry.insert(&data, location);
         data
     }
 
-    #[cfg(all(not(feature = "server"), feature = "web"))]
+    #[cfg(target_arch = "wasm32")]
     {
         match entry.get() {
             Ok(value) => value,
             Err(_) => value(),
         }
-    }
-
-    #[cfg(not(any(feature = "server", feature = "web")))]
-    {
-        value()
     }
 }

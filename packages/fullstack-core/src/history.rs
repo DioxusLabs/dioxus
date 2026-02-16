@@ -38,12 +38,14 @@ pub(crate) fn finalize_route() {
         return;
     };
 
-    if cfg!(feature = "server") {
+    // Use target_arch instead of cfg(feature) because cargo feature unification
+    // can enable both "web" and "server" features simultaneously.
+    if cfg!(not(target_arch = "wasm32")) {
         let history = history();
         let route = history.current_route();
         entry.insert(&route, std::panic::Location::caller());
         provide_context(ResolvedRouteContext { route });
-    } else if cfg!(feature = "web") {
+    } else if cfg!(target_arch = "wasm32") {
         let route = entry
             .get()
             .expect("Failed to get initial route from hydration context");
