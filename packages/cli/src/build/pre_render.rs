@@ -39,7 +39,13 @@ pub(crate) async fn pre_render_static_routes(
     let address = &address;
     let port = &port;
 
-    tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
+    let url = if let Some(base_path) = builder.build.base_path() {
+        format!("http://{address}:{port}/{base_path}")
+    } else {
+        format!("http://{address}:{port}")
+    };
+
+    tracing::info!("Running SSG at {url} for {server_exe:?}");
 
     let vars = builder.child_environment_variables(
         devserver_ip,
@@ -71,7 +77,7 @@ pub(crate) async fn pre_render_static_routes(
         );
 
         let request = reqwest_client
-            .post(format!("http://{address}:{port}/api/static_routes"))
+            .post(format!("{url}/api/static_routes"))
             .body("{}".to_string())
             .send()
             .await;
@@ -102,34 +108,37 @@ pub(crate) async fn pre_render_static_routes(
     // Create a pool of futures that cache each route
     let mut resolved_routes = routes
         .into_iter()
-        .map(|route| async move {
-            tracing::info!("Rendering {route} for SSG");
+        .map(|route| {
+            let url = url.clone();
+            async move {
+                tracing::info!("Rendering {route} for SSG");
 
-            // For each route, ping the server to force it to cache the response for ssg
-            let request = reqwest_client
-                .get(format!("http://{address}:{port}{route}"))
-                .header("Accept", "text/html")
-                .send()
-                .await?;
+                // For each route, ping the server to force it to cache the response for ssg
+                let request = reqwest_client
+                    .get(format!("{url}{route}"))
+                    .header("Accept", "text/html")
+                    .send()
+                    .await?;
 
-            // If it takes longer than 30 seconds to resolve the route, log a warning
-            let warning_task = tokio::spawn({
-                let route = route.clone();
-                async move {
-                    tokio::time::sleep(Duration::from_secs(30)).await;
-                    tracing::warn!("Route {route} has been rendering for 30 seconds");
-                }
-            });
+                // If it takes longer than 30 seconds to resolve the route, log a warning
+                let warning_task = tokio::spawn({
+                    let route = route.clone();
+                    async move {
+                        tokio::time::sleep(Duration::from_secs(30)).await;
+                        tracing::warn!("Route {route} has been rendering for 30 seconds");
+                    }
+                });
 
-            // Wait for the streaming response to completely finish before continuing. We don't use the html it returns directly
-            // because it may contain artifacts of intermediate streaming steps while the page is loading. The SSG app should write
-            // the final clean HTML to the disk automatically after the request completes.
-            let _html = request.text().await?;
+                // Wait for the streaming response to completely finish before continuing. We don't use the html it returns directly
+                // because it may contain artifacts of intermediate streaming steps while the page is loading. The SSG app should write
+                // the final clean HTML to the disk automatically after the request completes.
+                let _html = request.text().await?;
 
-            // Cancel the warning task if it hasn't already run
-            warning_task.abort();
+                // Cancel the warning task if it hasn't already run
+                warning_task.abort();
 
-            Ok::<_, reqwest::Error>(route)
+                Ok::<_, reqwest::Error>(route)
+            }
         })
         .collect::<FuturesUnordered<_>>();
 
