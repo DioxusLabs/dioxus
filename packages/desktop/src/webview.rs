@@ -251,18 +251,13 @@ impl WebviewInstance {
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
-        #[allow(deprecated)]
         {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
+            use objc2::rc::Retained;
+            use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
             use tao::platform::macos::WindowExtMacOS;
-
-            unsafe {
-                let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
+            let ns_window: Retained<NSWindow> =
+                unsafe { Retained::retain(window.ns_window().cast()) }.unwrap();
+            ns_window.setCollectionBehavior(NSWindowCollectionBehavior::Managed)
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone());

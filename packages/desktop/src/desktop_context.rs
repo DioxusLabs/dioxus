@@ -24,6 +24,10 @@ use tao::{
 use wry::{RequestAsyncResponder, WebView};
 
 #[cfg(target_os = "ios")]
+use objc2::rc::Retained;
+#[cfg(target_os = "ios")]
+use objc2_ui_kit::UIView;
+#[cfg(target_os = "ios")]
 use tao::platform::ios::WindowExtIOS;
 
 /// Get an imperative handle to the current window without using a hook
@@ -71,7 +75,7 @@ pub struct DesktopService {
     pub(crate) close_behaviour: Rc<Cell<WindowCloseBehaviour>>,
 
     #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<std::cell::RefCell<Vec<*mut objc::runtime::Object>>>,
+    pub(crate) views: Rc<std::cell::RefCell<Vec<Retained<UIView>>>>,
 }
 
 /// A smart pointer to the current window.
@@ -288,51 +292,54 @@ impl DesktopService {
         self.asset_handlers.remove_handler(name).map(|_| ())
     }
 
+    #[cfg(target_os = "ios")]
+    /// Get a retained reference to the current UIView
+    pub fn ui_view(&self) -> objc2::rc::Retained<objc2_ui_kit::UIView> {
+        use objc2::rc::Retained;
+        use objc2_ui_kit::UIView;
+        let ui_view = self.window.ui_view().cast::<UIView>();
+        unsafe { Retained::retain(ui_view) }.unwrap()
+    }
+
+    #[cfg(target_os = "ios")]
+    /// Get a retained reference to the current UIViewController
+    pub fn ui_view_controller(&self) -> objc2::rc::Retained<objc2_ui_kit::UIViewController> {
+        use objc2::rc::Retained;
+        use objc2_ui_kit::UIViewController;
+        let ui_view_controller = self.window.ui_view_controller().cast::<UIViewController>();
+        unsafe { Retained::retain(ui_view_controller) }.unwrap()
+    }
+
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
-    pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
-        let window = &self.window;
+    pub fn push_view(&self, new_view: Retained<UIView>) {
+        use objc2_ui_kit::UIViewAutoresizing;
 
-        unsafe {
-            use objc::runtime::Object;
-            use objc::*;
-            assert!(is_main_thread());
-            let ui_view = window.ui_view() as *mut Object;
-            let ui_view_frame: *mut Object = msg_send![ui_view, frame];
-            let _: () = msg_send![view, setFrame: ui_view_frame];
-            let _: () = msg_send![view, setAutoresizingMask: 31];
+        assert!(is_main_thread());
+        let current_ui_view = self.ui_view();
+        let current_ui_view_frame = current_ui_view.frame();
 
-            let ui_view_controller = window.ui_view_controller() as *mut Object;
-            let _: () = msg_send![ui_view_controller, setView: view];
-            self.views.borrow_mut().push(ui_view);
-        }
+        new_view.setFrame(current_ui_view_frame);
+        new_view.setAutoresizingMask(UIViewAutoresizing::from_bits(31).unwrap());
+
+        let ui_view_controller = self.ui_view_controller();
+        ui_view_controller.setView(Some(&new_view));
+        self.views.borrow_mut().push(new_view);
     }
 
     /// Pop an objc view from the window
     #[cfg(target_os = "ios")]
     pub fn pop_view(&self) {
-        let window = &self.window;
-
-        unsafe {
-            use objc::runtime::Object;
-            use objc::*;
-            assert!(is_main_thread());
-            if let Some(view) = self.views.borrow_mut().pop() {
-                let ui_view_controller = window.ui_view_controller() as *mut Object;
-                let _: () = msg_send![ui_view_controller, setView: view];
-            }
+        assert!(is_main_thread());
+        if let Some(view) = self.views.borrow_mut().pop() {
+            self.ui_view_controller().setView(Some(&view));
         }
     }
 }
 
 #[cfg(target_os = "ios")]
 fn is_main_thread() -> bool {
-    use objc::runtime::{Class, BOOL, NO};
-    use objc::*;
-
-    let cls = Class::get("NSThread").unwrap();
-    let result: BOOL = unsafe { msg_send![cls, isMainThread] };
-    result != NO
+    objc2_foundation::NSThread::isMainThread_class()
 }
 
 /// A [`DesktopContext`] that is pending creation.
