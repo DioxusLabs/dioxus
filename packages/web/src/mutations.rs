@@ -22,6 +22,7 @@ impl WebsysDom {
                     Some(ns) => self.document.create_element_ns(Some(ns), tag).unwrap(),
                     None => self.document.create_element(tag).unwrap(),
                 };
+                let mut style_string = String::from("");
                 for attr in *attrs {
                     if let TemplateAttribute::Static {
                         name,
@@ -29,13 +30,27 @@ impl WebsysDom {
                         namespace,
                     } = attr
                     {
-                        minimal_bindings::setAttributeInner(
-                            el.clone().into(),
-                            name,
-                            JsValue::from_str(value),
-                            *namespace,
-                        );
+                        if *name == "style" {
+                            style_string = format!("{style_string} {value}");
+                        } else if *namespace == Some("style") {
+                            style_string = format!("{style_string} {name}: {value};");
+                        } else {
+                            minimal_bindings::setAttributeInner(
+                                el.clone().into(),
+                                name,
+                                JsValue::from_str(value),
+                                *namespace,
+                            );
+                        }
                     }
+                }
+                if !style_string.is_empty() {
+                    minimal_bindings::setAttributeInner(
+                        el.clone().into(),
+                        "style",
+                        JsValue::from_str(style_string.trim()),
+                        None,
+                    );
                 }
                 for child in *children {
                     let _ = el.append_child(&self.create_template_node(child));
