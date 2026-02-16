@@ -322,29 +322,29 @@ impl Workspace {
         if let Some(ws) = &self.cargo_toml.workspace {
             for default in &ws.default_members {
                 let mut workspace_members = self.krates.workspace_members();
-                let default_member_path = std::fs::canonicalize(default).unwrap();
+                if let Ok(default_member_path) = std::fs::canonicalize(default) {
+                    let found = workspace_members.find_map(|node| {
+                        if let krates::Node::Krate { id, krate, .. } = node {
+                            // Skip this default member if it doesn't have any binary targets
+                            if !krate
+                                .targets
+                                .iter()
+                                .any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))
+                            {
+                                return None;
+                            }
+                            if std::fs::canonicalize(krate.manifest_path.parent().unwrap())
+                                .is_ok_and(|member_path| member_path == default_member_path)
+                            {
+                                return Some(id);
+                            }
+                        }
+                        None
+                    });
 
-                let found = workspace_members.find_map(|node| {
-                    if let krates::Node::Krate { id, krate, .. } = node {
-                        // Skip this default member if it doesn't have any binary targets
-                        if !krate
-                            .targets
-                            .iter()
-                            .any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))
-                        {
-                            return None;
-                        }
-                        let member_path =
-                            std::fs::canonicalize(krate.manifest_path.parent().unwrap()).unwrap();
-                        if member_path == default_member_path {
-                            return Some(id);
-                        }
+                    if let Some(kid) = found {
+                        return Ok(self.krates.nid_for_kid(kid).unwrap());
                     }
-                    None
-                });
-
-                if let Some(kid) = found {
-                    return Ok(self.krates.nid_for_kid(kid).unwrap());
                 }
             }
         }
