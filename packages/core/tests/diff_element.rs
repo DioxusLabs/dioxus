@@ -53,6 +53,7 @@ fn element_swap() {
         [
             LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -62,6 +63,7 @@ fn element_swap() {
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 
@@ -71,6 +73,7 @@ fn element_swap() {
         [
             LoadTemplate { index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     );
 
@@ -80,6 +83,7 @@ fn element_swap() {
         [
             LoadTemplate { index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
+            FreeId { id: ElementId(2) },
         ]
     );
 }
@@ -204,6 +208,7 @@ fn diff_empty() {
         [
             CreatePlaceholder { id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
+            FreeId { id: ElementId(1) },
         ]
     )
 }
