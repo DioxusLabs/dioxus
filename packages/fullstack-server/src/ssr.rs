@@ -583,8 +583,8 @@ impl SsrRendererPool {
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
         let template = &vnode.template;
-        let mut dynamic_nodes_iter = template.node_paths.iter().copied().enumerate().peekable();
-        for (root_idx, node) in template.roots.iter().enumerate() {
+        let mut dynamic_nodes_iter = template.node_paths().iter().copied().enumerate().peekable();
+        for (root_idx, node) in template.roots().iter().enumerate() {
             match node {
                 TemplateNode::Element { .. } => {
                     // dioxus core runs nodes in an odd order to not mess up template order. We need to match
