@@ -135,6 +135,16 @@ impl NativeFileData for WebFileData {
     }
 
     fn path(&self) -> std::path::PathBuf {
+        let key = wasm_bindgen::JsValue::from_str("webkitRelativePath");
+
+        if let Ok(value) = js_sys::Reflect::get(&self.file, &key) {
+            if let Some(path_str) = value.as_string() {
+                if !path_str.is_empty() {
+                    return std::path::PathBuf::from(path_str);
+                }
+            }
+        }
+
         std::path::PathBuf::from(self.file.name())
     }
 

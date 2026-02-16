@@ -48,7 +48,7 @@ fn app() -> Element {
 //
 // To add multiple middleware layers, simply stack multiple `#[middleware]` attributes.
 #[get("/api/count")]
-#[middleware(TimeoutLayer::new(Duration::from_secs(3)))]
+#[middleware(TimeoutLayer::with_status_code(408.try_into().unwrap(), Duration::from_secs(3)))]
 async fn per_route_middleware() -> Result<String> {
     tokio::time::sleep(Duration::from_secs(5)).await;
     Ok("Hello, world!".to_string())

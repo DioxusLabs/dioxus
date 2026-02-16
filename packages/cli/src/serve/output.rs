@@ -292,7 +292,7 @@ impl Output {
                 });
             }
 
-            // Toggle the more modal by swapping the the terminal with a new one
+            // Toggle the more modal by swapping the terminal with a new one
             // This is a bit of a hack since crossterm doesn't technically support changing the
             // size of an inline viewport.
             KeyCode::Char('/') => {
@@ -582,6 +582,15 @@ impl Output {
             BuildStage::CompressingAssets => lines.push("Compressing assets".yellow()),
             BuildStage::RunningBindgen => lines.push("Running wasm-bindgen".yellow()),
             BuildStage::RunningGradle => lines.push("Running gradle assemble".yellow()),
+            BuildStage::CompilingNativePlugins { detail } => {
+                // detail is "Swift build: name" — split into label (yellow) and name (white)
+                if let Some((label, name)) = detail.split_once(": ") {
+                    lines.push(format!("{label}: ").yellow());
+                    lines.push(name.white());
+                } else {
+                    lines.push(detail.clone().yellow());
+                }
+            }
             BuildStage::CodeSigning => lines.push("Code signing app".yellow()),
             BuildStage::Bundling => lines.push("Bundling app".yellow()),
             BuildStage::CopyingAssets {
@@ -745,7 +754,7 @@ impl Output {
     fn render_feature_list(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
         frame.render_widget(
             Paragraph::new(Line::from({
-                let mut lines = vec!["App features: ".gray(), "[".yellow()];
+                let mut lines = vec!["Features: ".gray(), "[".yellow()];
 
                 let feature_list: Vec<String> = state.runner.client().build.all_target_features();
                 let num_features = feature_list.len();

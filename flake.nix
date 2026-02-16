@@ -43,16 +43,10 @@
             pkgs.webkitgtk_4_1
             pkgs.xdotool
           ]
-          ++ lib.optionals pkgs.stdenv.isDarwin (
-            with pkgs.darwin.apple_sdk.frameworks;
-            [
-              IOKit
-              Carbon
-              WebKit
-              Security
-              Cocoa
-            ]
-          );
+          ++ lib.optionals pkgs.stdenv.isDarwin [
+            pkgs.apple-sdk
+            pkgs.libiconv
+          ];
 
           cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
 

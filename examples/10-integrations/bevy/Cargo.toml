@@ -6,15 +6,11 @@ license = "MIT"
 publish = false
 
 [features]
-default = ["desktop"]
-desktop = ["dioxus/desktop"]
-native = ["dioxus/native"]
 tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 
 [dependencies]
 bevy = { workspace = true }
-dioxus-native = { workspace = true }
-dioxus = { workspace = true }
+dioxus-native = { workspace = true, features = ["prelude"] }
 wgpu = { workspace = true }
 color = "0.3"
 tracing-subscriber = { workspace = true, optional = true }

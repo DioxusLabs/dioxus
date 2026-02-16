@@ -154,6 +154,32 @@ fn DocumentElements() -> Element {
         document::Stylesheet { id: "stylesheet-head", href: "https://fonts.googleapis.com/css?family=Roboto:300,300italic,700,700italic" }
         document::Script { id: "script-head", async: true, "console.log('hello world');" }
         document::Style { id: "style-head", "body {{ font-family: 'Roboto'; }}" }
+
+        // Test that links with same href but different rel are NOT deduplicated
+        // See https://github.com/DioxusLabs/dioxus/issues/5070
+        document::Link {
+            id: "dedup-preload",
+            rel: "preload",
+            href: "dedup-test.css",
+            r#as: "style",
+        }
+        document::Link {
+            id: "dedup-stylesheet",
+            rel: "stylesheet",
+            href: "dedup-test.css",
+        }
+
+        // Test that links with same href AND same rel ARE deduplicated
+        document::Link {
+            id: "dedup-first",
+            rel: "stylesheet",
+            href: "dedup-same.css",
+        }
+        document::Link {
+            id: "dedup-second",
+            rel: "stylesheet",
+            href: "dedup-same.css",
+        }
     }
 }
 

@@ -17,5 +17,6 @@ anyhow = { workspace = true }
 default = ["web", "server"]
 web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
+native = ["dioxus/native"]
 mobile = ["dioxus/mobile"]
 server = ["dioxus/server", "dep:rusqlite"]

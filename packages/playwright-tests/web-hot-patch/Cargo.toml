@@ -8,5 +8,7 @@ publish = false
 
 [dependencies]
 dioxus = { path = "../../dioxus", features = ["web"] }
+wasm-bindgen = { version = "0.2.100" }
+web-sys = { version = "*", features = ["MouseEvent"] }
 
 [workspace]

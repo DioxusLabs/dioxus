@@ -223,7 +223,6 @@ rsx! {
         rsx! { "one two three" }
     }
 
-
     // Please dont eat me 1
     //
     // Please dont eat me 2

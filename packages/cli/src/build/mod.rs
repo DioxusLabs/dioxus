@@ -10,8 +10,11 @@
 
 mod assets;
 mod builder;
+mod cache;
 mod context;
+mod ios_swift;
 mod manifest;
+mod manifest_mapper;
 mod patch;
 mod pre_render;
 mod request;
@@ -19,6 +22,7 @@ mod tools;
 
 pub(crate) use assets::*;
 pub(crate) use builder::*;
+pub(crate) use cache::*;
 pub(crate) use context::*;
 pub(crate) use manifest::*;
 pub(crate) use patch::*;

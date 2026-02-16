@@ -48,11 +48,11 @@
 //! - Hot reloading `Component { "hello" }`:
 //!   - Try to hot reload the component body `"hello"` with the dynamic pool from `"{text}"`: Success with 1 unused dynamic item
 //!   - Try to hot reload the component body `"hello"` with the dynamic pool from `"hello"`: Success with 0 unused dynamic items
-//!   - We use the the template that leaves the least unused dynamic items in the pool - `"hello"`
+//!   - We use the template that leaves the least unused dynamic items in the pool - `"hello"`
 //! - Hot reloading `Component { "{text}" }`:
 //!   - Try to hot reload the component body `"{text}"` with the dynamic pool from `"{text}"`: Success with 0 unused dynamic items
 //!   - The `"hello"` template has already been hot reloaded, so we don't try to hot reload it again
-//!   - We use the the template that leaves the least unused dynamic items in the pool - `"{text}"`
+//!   - We use the template that leaves the least unused dynamic items in the pool - `"{text}"`
 //!
 //! Greedy algorithms are optimal when:
 //! - The step we take reduces the problem size

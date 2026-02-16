@@ -84,7 +84,7 @@ content_disposition = "0.4.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.31.0", default-features = false, features = ["futures-03-sink"], optional = true }
 tungstenite = { version = "0.27", default-features = false, features = ["handshake"], optional = true }
-tokio-util = { workspace = true, features = ["codec", "compat"] }
+tokio-util = { workspace = true, features = ["codec", "compat", "rt"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }

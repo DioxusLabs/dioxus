@@ -38,6 +38,8 @@ impl NetProvider<Resource> for DioxusNativeNetProvider {
         handler: blitz_traits::net::BoxedHandler<Resource>,
     ) {
         if request.url.scheme() == "dioxus" {
+            #[allow(clippy::single_match)]
+            // cfg'd code has multiple branches in some configurations
             match dioxus_asset_resolver::native::serve_asset(request.url.path()) {
                 Ok(res) => {
                     #[cfg(feature = "tracing")]

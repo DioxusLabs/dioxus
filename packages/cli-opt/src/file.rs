@@ -55,7 +55,7 @@ pub(crate) fn process_file_to_with_options(
             process_css(options, source, &temp_path)?;
         }
         ResolvedAssetType::CssModule(options) => {
-            process_css_module(options, source, output_path, &temp_path)?;
+            process_css_module(options, source, &temp_path)?;
         }
         ResolvedAssetType::Scss(options) => {
             process_scss(options, source, &temp_path)?;

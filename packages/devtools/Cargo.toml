@@ -24,7 +24,6 @@ futures-channel = { workspace = true, optional = true }
 
 # hot reloading serve
 tracing = { workspace = true }
-warnings = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tungstenite = { workspace = true }
