@@ -1,7 +1,8 @@
 use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat};
 use anyhow::{bail, Context};
 use path_absolutize::Absolutize;
-use std::collections::HashMap;
+use std::{collections::HashMap, ffi::OsStr};
+use target_lexicon::OperatingSystem;
 use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
 
 use walkdir::WalkDir;
@@ -159,7 +160,8 @@ impl Bundle {
 
         let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
-        if cfg!(windows) {
+
+        if build.triple.operating_system == OperatingSystem::Windows {
             name.set_extension("exe");
         }
         std::fs::create_dir_all(krate.bundle_dir(build.bundle))
@@ -183,46 +185,16 @@ impl Bundle {
             bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
         }
 
-        /// Resolve an icon path relative to the crate dir
-        fn canonicalize_icon_path(build: &BuildRequest, icon: &mut String) -> Result<(), Error> {
-            let icon_path = build
-                .crate_dir()
-                .join(&icon)
-                .canonicalize()
-                .with_context(|| format!("Failed to canonicalize path to icon {icon:?}"))?;
-            *icon = icon_path.to_string_lossy().to_string();
-            Ok(())
-        }
-
         // Resolve bundle.icon relative to the crate dir
         if let Some(icons) = bundle_settings.icon.as_mut() {
             for icon in icons.iter_mut() {
-                canonicalize_icon_path(build, icon)?;
+                let path = build.canonicalize_icon_path(&PathBuf::from(&icon))?;
+                *icon = path.to_string_lossy().to_string();
             }
         }
 
-        #[allow(deprecated)]
-        if cfg!(windows) {
-            // Resolve bundle.windows.icon_path relative to the crate dir
-            let mut windows_icon_path = bundle_settings
-                .windows
-                .icon_path
-                .to_string_lossy()
-                .to_string();
-            canonicalize_icon_path(build, &mut windows_icon_path)?;
-            bundle_settings.windows.icon_path = PathBuf::from(&windows_icon_path);
-
-            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
-
-                if let Some(icon_path) = icon_path {
-                    bundle_settings.icon = Some(vec![icon_path.into()]);
-                };
-            }
+        if build.triple.operating_system == OperatingSystem::Windows {
+            Self::windows_icon_override(build, &mut bundle_settings)?;
         }
 
         if bundle_settings.resources_map.is_none() {
@@ -296,5 +268,30 @@ impl Bundle {
         })?;
 
         Ok(bundles)
+    }
+
+    #[allow(deprecated)]
+    fn windows_icon_override(
+        krate: &BuildRequest,
+        bundle_settings: &mut BundleSettings,
+    ) -> Result<(), Error> {
+        if let Some(windows) = krate.config.bundle.windows.as_ref() {
+            if let Some(val) = windows.icon_path.as_ref() {
+                if val.extension() == Some(OsStr::new("ico")) {
+                    let windows_icon = krate.canonicalize_icon_path(val)?;
+                    bundle_settings.windows.icon_path = PathBuf::from(&windows_icon);
+                    return Ok(());
+                }
+            }
+        }
+
+        let icon = match bundle_settings.icon.as_ref() {
+            Some(icons) => icons.iter().find(|i| i.ends_with(".ico")).cloned(),
+            None => None,
+        }
+        .with_context(|| "Missing .ico app icon")?;
+        // for now it still needs to be set even though it's deprecated
+        bundle_settings.windows.icon_path = PathBuf::from(icon);
+        Ok(())
     }
 }
