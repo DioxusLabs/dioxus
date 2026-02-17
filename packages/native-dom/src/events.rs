@@ -1,3 +1,4 @@
+use blitz_dom::Node;
 use blitz_traits::events::{BlitzKeyEvent, BlitzMouseButtonEvent, MouseEventButton};
 use dioxus_html::{
     geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
@@ -228,4 +229,8 @@ impl HasFocusData for NativeFocusData {
     fn as_any(&self) -> &dyn std::any::Any {
         self as &dyn std::any::Any
     }
+}
+
+pub fn synthetic_click_event(node: &Node, modifiers: Modifiers) -> Box<dyn Any> {
+    Box::new(NativeClickData(node.synthetic_click_event_data(modifiers)))
 }
