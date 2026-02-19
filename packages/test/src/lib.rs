@@ -1,32 +1,99 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
-// TODO: Turn this into real text
-//! A testing library for Dioxus.
+//! A testing crate for Dioxus.
 //!
-//! - Facilitates rendering, interacting with, and querying the DOM.
-//! - Completely headless.
-//! - Based on dioxus-native crate, using Blitz to layout.
-//! - Much more flexible than using dioxus-ssr (which doesn't allow interaction) and much easier to
-//!   write tests than Playwright.
-//! - Allows fairly precise control over asynchronous operations, so tests can assert on the state
-//!   while async operations are in progress.
+//! This crate facilitates rendering, interacting with, and querying the DOM in tests of Dioxus
+//! apps. Tests have fairlz precise control over both the rendering lifecycle and asynchronous
+//! operations. Thus they can assert both on the final outcome of interactions, such as the
+//! rendered data obtained from a call to a backend, as well as intermediate states, such as the
+//! presence of a spinner while loading data.
+//!
+//! This uses the dioxus-native crate to manage the DOM, which in turn uses
+//! [Blitz](https://crates.io/crates/blitz) for layout. It does not depend on a browser or any
+//! other external process.
+//!
+//! Tests operate "headless", so they cannot render their state to the screen.
 //!
 //! ## Usage
 //!
-//! - How to build a Tester
-//! - How to query and interact with elements
-//! - How to assert on elements
+//! Tests can construct a [Tester] instance to render and interact with the DOM. To construct a
+//! [Tester], the test can invoke the [render] function on a Dioxus component. They must invoke the
+//! `build` to trigger the initial layout. The tester provides methods for querying elements by
+//! CSS selector or by test ID.
+//!
+//! ```
+//! use dioxus::prelude::*;
+//! use dioxus_test::render;
+//!
+//! #[component]
+//! fn MyComponent() -> Element {
+//!     rsx! {
+//!         div {
+//!              class: "test-component",
+//!              "Hello, world!"
+//!         }
+//!     }
+//! }
+//!
+//! #[test]
+//! fn my_component_renders_correctly() {
+//!     let tester = render(MyComponent).build();
+//!     assert_eq!(
+//!         tester.find_by_css_selector(".test-component").unwrap().inner_html(),
+//!         "Hello, world!"
+//!     );
+//! }
+//! ```
+//!
+//! [Tester] also provides methods for interacting with elements and driving the runtime. After
+//! interacting with an element, the test must call [Tester::pump] to cause the event handler to be
+//! invoked.
+//!
+//! ```
+//! use dioxus::prelude::*;
+//! use dioxus_test::render;
+//!
+//! #[component]
+//! fn MyComponent() -> Element {
+//!     let text = use_signal(|| "Click me!");
+//!     rsx! {
+//!         button {
+//!              class: "test-button",
+//!              onclick: |_| {
+//!                  *text.write() = "Don't click any more!";
+//!              },
+//!              text.read()
+//!         }
+//!     }
+//! }
+//!
+//! #[tokio::test]
+//! async fn my_component_changes_button_text_on_click() {
+//!     let tester = render(MyComponent).build();
+//!     tester.find_by_css_selector(".test-button").unwrap().click();
+//!     tester.pump().await;
+//!     assert_eq!(
+//!         tester.find_by_css_selector(".test-button").unwrap().inner_html(),
+//!         "Don't click any more!"
+//!     );
+//! }
+//! ```
 //!
 //! ## Asynchronous operations
 //!
-//! - Asserting on "in flight" asynchronous operations
-//! - Resolving asynchronous operations
+//! The method [Tester::pump] returns control to the async runtime and thus drives any asynchronous
+//! operations such as requests to the backend. If any rendering depends on the result of a request,
+//! then the test must invoke [Tester::pump] to resolve that.
+//!
+//! The test can also assert on the state of the DOM while backend requests are in flight.
 //!
 //! ## Limitations
 //!
-//! - Interactions operate directly on elements, not on the screen. So if, say, you dispatch a click
-//!   on an element which is covered by a frost, the element will respond as though it were
-//!   reachable even though it would not be in reality.
-//! - Limited by what the Blitz layout system can support. Layouts might not be as in reality.
+//! Interactions with the DOM operate directly on elements, not on the screen. So if, say, the test
+//! dispatches a click on an element which is covered by a frost, the element will respond as though
+//! it were reachable even though it would not be in reality.
+//!
+//! The layout system is limited by what the Blitz layout system can support. Since Blitz is not
+//! complete as of the time of writing, computed layouts will often not be as in reality.
 
 mod element;
 mod tester;
