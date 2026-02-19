@@ -17,3 +17,7 @@ dioxus-native-dom = { workspace = true }
 taffy = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+dioxus = { workspace = true }
+tokio = { version = "1.48", features = ["rt", "macros"] }

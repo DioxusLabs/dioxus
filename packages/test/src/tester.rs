@@ -84,6 +84,11 @@ impl Tester {
     /// continue the event handler from that point.
     ///
     /// ```no_run
+    /// # use dioxus::prelude::*;
+    /// # #[component]
+    /// # fn AComponent() -> Element { rsx! { } }
+    /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let mut tester = dioxus_test::render(AComponent).build();
     /// tester.find_by_test_id("make-request-button")?.click();
     ///
     /// tester.pump().await?; // React to the click
@@ -92,6 +97,8 @@ impl Tester {
     /// tester.pump().await?; // Receive the server response
     /// // Assert on the state of the UI after the response is received and the UI has been
     /// // rerendered.
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// If this method is invoked with no pending asynchronous operations, then it times out after

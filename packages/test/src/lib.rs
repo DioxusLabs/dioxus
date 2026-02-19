@@ -54,25 +54,25 @@
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
-//!     let text = use_signal(|| "Click me!");
+//!     let mut text = use_signal(|| "Click me!");
 //!     rsx! {
 //!         button {
 //!              class: "test-button",
-//!              onclick: |_| {
+//!              onclick: move |_| {
 //!                  *text.write() = "Don't click any more!";
 //!              },
-//!              text.read()
+//!              {text}
 //!         }
 //!     }
 //! }
 //!
 //! #[tokio::test]
 //! async fn my_component_changes_button_text_on_click() {
-//!     let tester = render(MyComponent).build();
-//!     tester.find_by_css_selector(".test-button").unwrap().click();
+//!     let mut tester = render(MyComponent).build();
+//!     tester.find_first_by_css_selector(".test-button").unwrap().click();
 //!     tester.pump().await;
 //!     assert_eq!(
-//!         tester.find_by_css_selector(".test-button").unwrap().inner_html(),
+//!         tester.find_first_by_css_selector(".test-button").unwrap().inner_html(),
 //!         "Don't click any more!"
 //!     );
 //! }

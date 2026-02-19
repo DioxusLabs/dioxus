@@ -6515,6 +6515,7 @@ name = "dioxus-test"
 version = "0.7.3"
 dependencies = [
  "blitz-dom",
+ "dioxus",
  "dioxus-core",
  "dioxus-html",
  "dioxus-native-dom",
