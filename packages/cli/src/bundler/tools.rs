@@ -1,7 +1,11 @@
 //! Tool downloading and caching for external bundling tools.
 //!
-//! Downloads WiX, NSIS, and linuxdeploy to ~/.cache/dioxus/ and verifies hashes.
+//! All downloads happen upfront via `resolve_tools()` before any bundling starts.
+//! This keeps blocking HTTP calls out of the bundle format modules.
 
+use super::context::Arch;
+use super::windows::util::arch_to_windows_string;
+use crate::{PackageType, WebviewInstallMode, WindowsSettings};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -22,9 +26,97 @@ const WIX_SHA256: &str = "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7d
 const LINUXDEPLOY_URL_BASE: &str =
     "https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy";
 
-/// Ensure NSIS is available, downloading if necessary.
-/// Returns the path to the NSIS directory containing makensis.
-pub(crate) fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
+/// WebView2 download URLs.
+const WEBVIEW2_BOOTSTRAPPER_URL: &str = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
+const WEBVIEW2_X64_INSTALLER_URL: &str = "https://go.microsoft.com/fwlink/?linkid=2099617";
+const WEBVIEW2_X86_INSTALLER_URL: &str = "https://go.microsoft.com/fwlink/?linkid=2099617";
+const WEBVIEW2_ARM64_INSTALLER_URL: &str = "https://go.microsoft.com/fwlink/?linkid=2099617";
+
+/// Pre-resolved tool paths. All downloads happen before bundling starts.
+pub(crate) struct ResolvedTools {
+    /// Path to the NSIS directory (contains makensis). Set if NSIS bundling is requested.
+    pub nsis_dir: Option<PathBuf>,
+    /// Path to the WiX directory (contains candle.exe, light.exe). Set if MSI bundling is requested.
+    pub wix_dir: Option<PathBuf>,
+    /// Path to the linuxdeploy binary. Set if AppImage bundling is requested.
+    pub linuxdeploy: Option<PathBuf>,
+    /// Path to a downloaded WebView2 bootstrapper or offline installer, if needed by NSIS.
+    pub webview2_installer: Option<PathBuf>,
+}
+
+/// Resolve and download all tools needed for the given package types.
+///
+/// This must be called before `bundle_project()` so that no blocking HTTP
+/// calls happen during the actual bundling phase.
+pub(crate) fn resolve_tools(
+    tools_dir: &Path,
+    package_types: &[PackageType],
+    windows_settings: &WindowsSettings,
+    arch: Arch,
+) -> Result<ResolvedTools> {
+    let mut resolved = ResolvedTools {
+        nsis_dir: None,
+        wix_dir: None,
+        linuxdeploy: None,
+        webview2_installer: None,
+    };
+
+    for pt in package_types {
+        match pt {
+            PackageType::Nsis => {
+                resolved.nsis_dir = Some(ensure_nsis(tools_dir)?);
+                resolved.webview2_installer =
+                    resolve_webview2(tools_dir, windows_settings, arch)?;
+            }
+            PackageType::WindowsMsi => {
+                resolved.wix_dir = Some(ensure_wix(tools_dir)?);
+            }
+            PackageType::AppImage => {
+                let linuxdeploy_arch = match arch {
+                    Arch::X86_64 => "x86_64",
+                    Arch::X86 => "i386",
+                    Arch::AArch64 => "aarch64",
+                    Arch::Armhf | Arch::Armel => "armhf",
+                    Arch::Riscv64 | Arch::Universal => "x86_64",
+                };
+                resolved.linuxdeploy = Some(ensure_linuxdeploy(tools_dir, linuxdeploy_arch)?);
+            }
+            _ => {}
+        }
+    }
+
+    Ok(resolved)
+}
+
+/// Determine if a WebView2 installer needs to be downloaded based on NSIS settings,
+/// and download it if so.
+fn resolve_webview2(
+    tools_dir: &Path,
+    settings: &WindowsSettings,
+    arch: Arch,
+) -> Result<Option<PathBuf>> {
+    let mode = &settings.webview_install_mode;
+
+    match mode {
+        WebviewInstallMode::Skip | WebviewInstallMode::FixedRuntime { .. } => Ok(None),
+        WebviewInstallMode::DownloadBootstrapper { .. }
+        | WebviewInstallMode::EmbedBootstrapper { .. } => {
+            Ok(Some(download_webview2_bootstrapper(tools_dir)?))
+        }
+        WebviewInstallMode::OfflineInstaller { .. } => {
+            let arch_str = arch_to_windows_string(&arch);
+            Ok(Some(download_webview2_offline_installer(
+                tools_dir, arch_str,
+            )?))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Individual tool ensure functions
+// ---------------------------------------------------------------------------
+
+fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
     let nsis_dir = tools_dir.join("nsis-3.11");
     let makensis = if cfg!(target_os = "windows") {
         nsis_dir.join("makensis.exe")
@@ -52,16 +144,13 @@ pub(crate) fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
         );
     }
 
-    // Make executable on unix
     #[cfg(unix)]
     let _ = std::fs::set_permissions(&makensis, std::fs::Permissions::from_mode(0o755));
 
     Ok(nsis_dir)
 }
 
-/// Ensure WiX is available, downloading if necessary.
-/// Returns the path to the WiX directory containing candle.exe and light.exe.
-pub(crate) fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
+fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     let wix_dir = tools_dir.join("wix314");
     let candle = wix_dir.join("candle.exe");
 
@@ -89,9 +178,7 @@ pub(crate) fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     Ok(wix_dir)
 }
 
-/// Ensure linuxdeploy is available, downloading if necessary.
-/// Returns the path to the linuxdeploy binary.
-pub(crate) fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
+fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     let linuxdeploy_name = format!("linuxdeploy-{arch}.AppImage");
     let linuxdeploy_path = tools_dir.join(&linuxdeploy_name);
 
@@ -112,19 +199,52 @@ pub(crate) fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf
     std::fs::create_dir_all(tools_dir)?;
     std::fs::write(&linuxdeploy_path, &data)?;
 
-    // Make executable
     #[cfg(unix)]
-    let _ = std::fs::set_permissions(&linuxdeploy_path, std::fs::Permissions::from_mode(0o755))?;
+    std::fs::set_permissions(&linuxdeploy_path, std::fs::Permissions::from_mode(0o755))?;
 
     Ok(linuxdeploy_path)
 }
+
+fn download_webview2_bootstrapper(tools_dir: &Path) -> Result<PathBuf> {
+    let path = tools_dir.join("MicrosoftEdgeWebview2Setup.exe");
+    if path.exists() {
+        return Ok(path);
+    }
+    tracing::info!("Downloading WebView2 bootstrapper...");
+    let data = download_bytes(WEBVIEW2_BOOTSTRAPPER_URL)?;
+    std::fs::create_dir_all(tools_dir)?;
+    std::fs::write(&path, &data).context("Failed to write WebView2 bootstrapper")?;
+    Ok(path)
+}
+
+fn download_webview2_offline_installer(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
+    let name = format!("MicrosoftEdgeWebView2RuntimeInstaller_{arch}.exe");
+    let path = tools_dir.join(&name);
+    if path.exists() {
+        return Ok(path);
+    }
+    let url = match arch {
+        "x64" => WEBVIEW2_X64_INSTALLER_URL,
+        "x86" => WEBVIEW2_X86_INSTALLER_URL,
+        "arm64" => WEBVIEW2_ARM64_INSTALLER_URL,
+        _ => bail!("Unsupported architecture for WebView2 offline installer: {arch}"),
+    };
+    tracing::info!("Downloading WebView2 offline installer for {arch}...");
+    let data = download_bytes(url)?;
+    std::fs::create_dir_all(tools_dir)?;
+    std::fs::write(&path, &data).context("Failed to write WebView2 offline installer")?;
+    Ok(path)
+}
+
+// ---------------------------------------------------------------------------
+// Download helpers
+// ---------------------------------------------------------------------------
 
 enum HashAlgo {
     Sha1,
     Sha256,
 }
 
-/// Download a URL and verify its hash.
 fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result<Vec<u8>> {
     let data = download_bytes(url)?;
 
@@ -151,8 +271,7 @@ fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result
 }
 
 /// Download bytes from a URL using a blocking reqwest client.
-fn download_bytes(url: &str) -> Result<Vec<u8>> {
-    // Use a simple blocking approach - we're already in a sync context
+pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>> {
     let response =
         reqwest::blocking::get(url).with_context(|| format!("Failed to download {url}"))?;
 
@@ -188,7 +307,6 @@ fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
             let mut outfile = std::fs::File::create(&outpath)?;
             std::io::copy(&mut file, &mut outfile)?;
 
-            // Set permissions on unix
             #[cfg(unix)]
             if let Some(mode) = file.unix_mode() {
                 std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;

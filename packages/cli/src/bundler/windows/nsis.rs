@@ -6,7 +6,6 @@
 
 use super::sign;
 use super::util;
-use crate::bundler::tools::ensure_nsis;
 use crate::bundler::BundleContext;
 use crate::{NSISInstallerMode, WebviewInstallMode};
 use anyhow::{bail, Context, Result};
@@ -172,8 +171,12 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     let nsis_settings = ctx.windows().nsis.unwrap_or_default();
     let windows_settings = ctx.windows();
 
-    // Ensure NSIS toolchain is available
-    let nsis_dir = ensure_nsis(&ctx.tools_dir())?;
+    // Get pre-resolved NSIS directory
+    let nsis_dir = ctx
+        .tools
+        .nsis_dir
+        .as_ref()
+        .context("NSIS tools were not resolved. This is a bug.")?;
     let makensis = if cfg!(target_os = "windows") {
         nsis_dir.join("makensis.exe")
     } else {
@@ -435,10 +438,17 @@ fn generate_webview_install_code(
     ctx: &BundleContext,
 ) -> Result<(bool, String)> {
     match mode {
-        WebviewInstallMode::Skip => Ok((false, String::new())),
+        WebviewInstallMode::Skip | WebviewInstallMode::FixedRuntime { .. } => {
+            Ok((false, String::new()))
+        }
 
-        WebviewInstallMode::DownloadBootstrapper { silent } => {
-            let bootstrapper_path = util::download_webview2_bootstrapper(&ctx.tools_dir())?;
+        WebviewInstallMode::DownloadBootstrapper { silent }
+        | WebviewInstallMode::EmbedBootstrapper { silent } => {
+            let installer_path = ctx
+                .tools
+                .webview2_installer
+                .as_ref()
+                .context("WebView2 installer was not pre-downloaded. This is a bug.")?;
             let silent_flag = if *silent { " /silent" } else { "" };
             let code = format!(
                 r#"    ; Install WebView2 via bootstrapper
@@ -446,32 +456,17 @@ fn generate_webview_install_code(
     File "{bootstrapper}"
     ExecWait '"$TEMP\MicrosoftEdgeWebview2Setup.exe"{silent_flag} /install' $0
     Delete "$TEMP\MicrosoftEdgeWebview2Setup.exe""#,
-                bootstrapper = bootstrapper_path.to_string_lossy().replace('/', "\\"),
-                silent_flag = silent_flag,
-            );
-            Ok((true, code))
-        }
-
-        WebviewInstallMode::EmbedBootstrapper { silent } => {
-            let bootstrapper_path = util::download_webview2_bootstrapper(&ctx.tools_dir())?;
-            let silent_flag = if *silent { " /silent" } else { "" };
-            let code = format!(
-                r#"    ; Install WebView2 via embedded bootstrapper
-    SetOutPath "$TEMP"
-    File "{bootstrapper}"
-    ExecWait '"$TEMP\MicrosoftEdgeWebview2Setup.exe"{silent_flag} /install' $0
-    Delete "$TEMP\MicrosoftEdgeWebview2Setup.exe""#,
-                bootstrapper = bootstrapper_path.to_string_lossy().replace('/', "\\"),
-                silent_flag = silent_flag,
+                bootstrapper = installer_path.to_string_lossy().replace('/', "\\"),
             );
             Ok((true, code))
         }
 
         WebviewInstallMode::OfflineInstaller { silent } => {
-            let arch = ctx.binary_arch();
-            let arch_str = util::arch_to_windows_string(&arch);
-            let installer_path =
-                util::download_webview2_offline_installer(&ctx.tools_dir(), arch_str)?;
+            let installer_path = ctx
+                .tools
+                .webview2_installer
+                .as_ref()
+                .context("WebView2 installer was not pre-downloaded. This is a bug.")?;
             let silent_flag = if *silent { " /silent" } else { "" };
             let installer_name = installer_path
                 .file_name()
@@ -484,17 +479,8 @@ fn generate_webview_install_code(
     ExecWait '"$TEMP\{installer_name}"{silent_flag} /install' $0
     Delete "$TEMP\{installer_name}""#,
                 installer = installer_path.to_string_lossy().replace('/', "\\"),
-                installer_name = installer_name,
-                silent_flag = silent_flag,
             );
             Ok((true, code))
-        }
-
-        WebviewInstallMode::FixedRuntime { path } => {
-            // Fixed runtime doesn't need an installer step - the runtime files
-            // are bundled directly with the application.
-            let _ = path; // The runtime path is used at app startup, not install time
-            Ok((false, String::new()))
         }
     }
 }

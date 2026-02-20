@@ -5,10 +5,8 @@
 //!
 //! This module is Windows-only since WiX only runs on Windows.
 
-use super::sign;
-use super::util;
+use super::{sign, util};
 use crate::bundler::context::Arch;
-use crate::bundler::tools::ensure_wix;
 use crate::bundler::BundleContext;
 use anyhow::{bail, Context, Result};
 use handlebars::Handlebars;
@@ -170,8 +168,12 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     let wix_settings = ctx.windows().wix.unwrap_or_default();
     let windows_settings = ctx.windows();
 
-    // Ensure WiX toolchain is available
-    let wix_dir = ensure_wix(&ctx.tools_dir())?;
+    // Get pre-resolved WiX directory
+    let wix_dir = ctx
+        .tools
+        .wix_dir
+        .as_ref()
+        .context("WiX tools were not resolved. This is a bug.")?;
     let candle = wix_dir.join("candle.exe");
     let light = wix_dir.join("light.exe");
 

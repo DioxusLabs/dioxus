@@ -5,7 +5,7 @@
 //! then linuxdeploy processes it into a self-contained AppImage.
 
 use super::{debian, freedesktop};
-use crate::bundler::{context::Arch, tools, BundleContext};
+use crate::bundler::{context::Arch, BundleContext};
 use anyhow::{bail, Context, Result};
 use std::{
     fs,
@@ -46,9 +46,12 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     // Create the AppRun symlink -> usr/bin/{binary}
     create_appdir_symlinks(&appdir, &name, ctx)?;
 
-    // Ensure linuxdeploy is available
-    let linuxdeploy_arch = linuxdeploy_arch(arch);
-    let linuxdeploy = tools::ensure_linuxdeploy(&ctx.tools_dir(), linuxdeploy_arch)?;
+    // Get pre-resolved linuxdeploy path
+    let linuxdeploy = ctx
+        .tools
+        .linuxdeploy
+        .as_ref()
+        .context("linuxdeploy was not resolved. This is a bug.")?;
 
     // Run linuxdeploy to create the AppImage
     tracing::info!("Running linuxdeploy...");
@@ -255,15 +258,3 @@ fn appimage_arch(arch: Arch) -> &'static str {
     }
 }
 
-/// Map Arch to the architecture string used in linuxdeploy binary names.
-fn linuxdeploy_arch(arch: Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "x86_64",
-        Arch::X86 => "i386",
-        Arch::AArch64 => "aarch64",
-        Arch::Armhf => "armhf",
-        Arch::Armel => "armhf",
-        Arch::Riscv64 => "x86_64", // fallback: linuxdeploy may not have riscv64 builds
-        Arch::Universal => "x86_64",
-    }
-}

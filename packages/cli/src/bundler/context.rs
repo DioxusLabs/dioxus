@@ -1,3 +1,4 @@
+use super::tools::{self, ResolvedTools};
 use crate::{BuildRequest, DebianSettings, MacOsSettings, PackageType, WindowsSettings};
 use anyhow::{Context, Result};
 use std::{
@@ -39,6 +40,8 @@ pub(crate) struct BundleContext<'a> {
     pub(crate) package_types: Vec<PackageType>,
     /// Pre-computed resource map: source path -> target path in bundle
     pub(crate) resources_map: HashMap<String, String>,
+    /// Pre-resolved tool paths (NSIS, WiX, linuxdeploy, WebView2).
+    pub(crate) tools: ResolvedTools,
 }
 
 impl<'a> BundleContext<'a> {
@@ -75,10 +78,44 @@ impl<'a> BundleContext<'a> {
             }
         }
 
+        let tools_dir = dirs::cache_dir()
+            .unwrap_or_else(|| PathBuf::from(".cache"))
+            .join("dioxus");
+        let _ = std::fs::create_dir_all(&tools_dir);
+
+        let arch = {
+            let target = build.triple.to_string();
+            if target.starts_with("x86_64") {
+                Arch::X86_64
+            } else if target.starts_with('i') {
+                Arch::X86
+            } else if target.starts_with("arm") && target.ends_with("hf") {
+                Arch::Armhf
+            } else if target.starts_with("arm") {
+                Arch::Armel
+            } else if target.starts_with("aarch64") {
+                Arch::AArch64
+            } else if target.starts_with("riscv64") {
+                Arch::Riscv64
+            } else if target.starts_with("universal") {
+                Arch::Universal
+            } else if cfg!(target_arch = "x86_64") {
+                Arch::X86_64
+            } else if cfg!(target_arch = "aarch64") {
+                Arch::AArch64
+            } else {
+                Arch::X86_64
+            }
+        };
+
+        let windows_settings = build.config.bundle.windows.clone().unwrap_or_default();
+        let tools = tools::resolve_tools(&tools_dir, &package_types, &windows_settings, arch)?;
+
         Ok(Self {
             build,
             package_types,
             resources_map,
+            tools,
         })
     }
 
@@ -293,12 +330,4 @@ impl<'a> BundleContext<'a> {
         self.build.config.bundle.windows.clone().unwrap_or_default()
     }
 
-    /// Get the tools cache directory (~/.cache/dioxus/)
-    pub(crate) fn tools_dir(&self) -> PathBuf {
-        let dir = dirs::cache_dir()
-            .unwrap_or_else(|| PathBuf::from(".cache"))
-            .join("dioxus");
-        let _ = std::fs::create_dir_all(&dir);
-        dir
-    }
 }
