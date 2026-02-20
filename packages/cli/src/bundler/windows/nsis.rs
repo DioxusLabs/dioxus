@@ -163,9 +163,11 @@ SectionEnd
 ///
 /// Returns the path(s) to the generated installer(s).
 pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
-    let output_dir = ctx.project_out_directory().join("bundle").join(util::NSIS_OUTPUT_FOLDER_NAME);
-    std::fs::create_dir_all(&output_dir)
-        .context("Failed to create NSIS output directory")?;
+    let output_dir = ctx
+        .project_out_directory()
+        .join("bundle")
+        .join(util::NSIS_OUTPUT_FOLDER_NAME);
+    std::fs::create_dir_all(&output_dir).context("Failed to create NSIS output directory")?;
 
     let nsis_settings = ctx.windows().nsis.unwrap_or_default();
     let windows_settings = ctx.windows();
@@ -201,12 +203,13 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
         ctx.main_binary_name().to_string()
     };
     let main_binary_dest = staging_dir.join(&main_binary_name);
-    std::fs::copy(&main_binary_src, &main_binary_dest)
-        .with_context(|| format!(
+    std::fs::copy(&main_binary_src, &main_binary_dest).with_context(|| {
+        format!(
             "Failed to copy main binary from {} to {}",
             main_binary_src.display(),
             main_binary_dest.display()
-        ))?;
+        )
+    })?;
 
     // Copy resources to staging
     let resources_dir = staging_dir.join("resources");
@@ -222,17 +225,31 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     // Build the template data
     let mut data = BTreeMap::new();
-    data.insert("product_name".to_string(), JsonValue::String(product_name.clone()));
+    data.insert(
+        "product_name".to_string(),
+        JsonValue::String(product_name.clone()),
+    );
     data.insert("version".to_string(), JsonValue::String(version.clone()));
-    data.insert("output_path".to_string(), JsonValue::String(
-        output_path.to_string_lossy().replace('/', "\\"),
-    ));
-    data.insert("main_binary_path".to_string(), JsonValue::String(
-        main_binary_dest.to_string_lossy().replace('/', "\\"),
-    ));
-    data.insert("main_binary_name".to_string(), JsonValue::String(main_binary_name.clone()));
-    data.insert("short_description".to_string(), JsonValue::String(ctx.short_description()));
-    data.insert("bundle_id".to_string(), JsonValue::String(ctx.bundle_identifier()));
+    data.insert(
+        "output_path".to_string(),
+        JsonValue::String(output_path.to_string_lossy().replace('/', "\\")),
+    );
+    data.insert(
+        "main_binary_path".to_string(),
+        JsonValue::String(main_binary_dest.to_string_lossy().replace('/', "\\")),
+    );
+    data.insert(
+        "main_binary_name".to_string(),
+        JsonValue::String(main_binary_name.clone()),
+    );
+    data.insert(
+        "short_description".to_string(),
+        JsonValue::String(ctx.short_description()),
+    );
+    data.insert(
+        "bundle_id".to_string(),
+        JsonValue::String(ctx.bundle_identifier()),
+    );
 
     // Publisher
     let publisher = ctx
@@ -244,7 +261,10 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     // Copyright
     if let Some(copyright) = ctx.copyright_string() {
-        data.insert("copyright".to_string(), JsonValue::String(copyright.to_string()));
+        data.insert(
+            "copyright".to_string(),
+            JsonValue::String(copyright.to_string()),
+        );
     }
 
     // Install mode
@@ -263,44 +283,52 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
         .start_menu_folder
         .clone()
         .unwrap_or_else(|| product_name.clone());
-    data.insert("start_menu_folder".to_string(), JsonValue::String(start_menu_folder));
+    data.insert(
+        "start_menu_folder".to_string(),
+        JsonValue::String(start_menu_folder),
+    );
 
     // Icons
     if let Some(icon) = &nsis_settings.installer_icon {
         let icon_path = ctx.crate_dir().join(icon);
-        data.insert("installer_icon".to_string(), JsonValue::String(
-            icon_path.to_string_lossy().replace('/', "\\"),
-        ));
+        data.insert(
+            "installer_icon".to_string(),
+            JsonValue::String(icon_path.to_string_lossy().replace('/', "\\")),
+        );
     }
 
     if let Some(header) = &nsis_settings.header_image {
         let header_path = ctx.crate_dir().join(header);
-        data.insert("header_image".to_string(), JsonValue::String(
-            header_path.to_string_lossy().replace('/', "\\"),
-        ));
+        data.insert(
+            "header_image".to_string(),
+            JsonValue::String(header_path.to_string_lossy().replace('/', "\\")),
+        );
     }
 
     if let Some(sidebar) = &nsis_settings.sidebar_image {
         let sidebar_path = ctx.crate_dir().join(sidebar);
-        data.insert("sidebar_image".to_string(), JsonValue::String(
-            sidebar_path.to_string_lossy().replace('/', "\\"),
-        ));
+        data.insert(
+            "sidebar_image".to_string(),
+            JsonValue::String(sidebar_path.to_string_lossy().replace('/', "\\")),
+        );
     }
 
     // License
     if let Some(license) = &nsis_settings.license {
         let license_path = ctx.crate_dir().join(license);
-        data.insert("license".to_string(), JsonValue::String(
-            license_path.to_string_lossy().replace('/', "\\"),
-        ));
+        data.insert(
+            "license".to_string(),
+            JsonValue::String(license_path.to_string_lossy().replace('/', "\\")),
+        );
     }
 
     // Installer hooks
     if let Some(hooks) = &nsis_settings.installer_hooks {
         let hooks_path = ctx.crate_dir().join(hooks);
-        data.insert("installer_hooks".to_string(), JsonValue::String(
-            hooks_path.to_string_lossy().replace('/', "\\"),
-        ));
+        data.insert(
+            "installer_hooks".to_string(),
+            JsonValue::String(hooks_path.to_string_lossy().replace('/', "\\")),
+        );
     }
 
     // Additional languages
@@ -310,12 +338,21 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
             .filter(|l| l.as_str() != "English") // English is always included
             .map(|l| JsonValue::String(l.clone()))
             .collect();
-        data.insert("additional_languages".to_string(), JsonValue::Array(lang_values));
+        data.insert(
+            "additional_languages".to_string(),
+            JsonValue::Array(lang_values),
+        );
     }
 
     // WebView2 installation
-    data.insert("install_webview".to_string(), JsonValue::Bool(install_webview));
-    data.insert("webview_install_code".to_string(), JsonValue::String(webview_install_code));
+    data.insert(
+        "install_webview".to_string(),
+        JsonValue::Bool(install_webview),
+    );
+    data.insert(
+        "webview_install_code".to_string(),
+        JsonValue::String(webview_install_code),
+    );
 
     // Resources list (simplified - just note that resources are in the resources subdir)
     data.insert("resources".to_string(), JsonValue::Array(Vec::new()));
@@ -323,8 +360,12 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     // Render the NSIS script
     let nsi_content = if let Some(custom_template) = &nsis_settings.template {
         let template_path = ctx.crate_dir().join(custom_template);
-        let template_str = std::fs::read_to_string(&template_path)
-            .with_context(|| format!("Failed to read custom NSIS template: {}", template_path.display()))?;
+        let template_str = std::fs::read_to_string(&template_path).with_context(|| {
+            format!(
+                "Failed to read custom NSIS template: {}",
+                template_path.display()
+            )
+        })?;
         render_template(&template_str, &data)?
     } else {
         render_template(NSIS_TEMPLATE, &data)?
@@ -332,8 +373,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     // Write the .nsi script
     let nsi_path = output_dir.join(format!("{product_name}.nsi"));
-    std::fs::write(&nsi_path, &nsi_content)
-        .context("Failed to write NSIS script")?;
+    std::fs::write(&nsi_path, &nsi_content).context("Failed to write NSIS script")?;
 
     // Run makensis
     tracing::info!("Running makensis to build NSIS installer...");
@@ -376,10 +416,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 }
 
 /// Render a Handlebars template with the given data.
-fn render_template(
-    template: &str,
-    data: &BTreeMap<String, JsonValue>,
-) -> Result<String> {
+fn render_template(template: &str, data: &BTreeMap<String, JsonValue>) -> Result<String> {
     let mut hbs = Handlebars::new();
     hbs.set_strict_mode(false);
     // Disable HTML escaping since we're generating NSIS scripts, not HTML

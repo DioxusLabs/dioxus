@@ -141,6 +141,7 @@ icns = { workspace = true }
 image = { workspace = true }
 zip = { workspace = true }
 sha1 = { workspace = true }
+sha2 = { workspace = true }
 md5 = { workspace = true }
 rpm = { workspace = true }
 include_dir = "0.7.4"

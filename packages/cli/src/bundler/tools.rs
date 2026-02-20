@@ -5,16 +5,17 @@
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 /// NSIS download URL and expected hash
 const NSIS_URL: &str =
     "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip";
 const NSIS_SHA1: &str = "EF7FF767E5CBD9EDD22ADD3A32C9B8F4500BB10D";
 
 /// WiX download URL and expected hash
-#[cfg(target_os = "windows")]
 const WIX_URL: &str =
     "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip";
-#[cfg(target_os = "windows")]
 const WIX_SHA256: &str = "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31";
 
 /// linuxdeploy download base URL
@@ -35,10 +36,12 @@ pub(crate) fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
         return Ok(nsis_dir);
     }
 
-    #[cfg(feature = "no-downloads")]
-    bail!("NSIS not found and automatic downloads are disabled. Install NSIS manually.");
+    if cfg!(feature = "no-downloads") {
+        bail!("NSIS not found and automatic downloads are disabled. Install NSIS manually.");
+    }
 
     tracing::info!("Downloading NSIS...");
+
     let data = download_and_verify(NSIS_URL, NSIS_SHA1, HashAlgo::Sha1)?;
     extract_zip(&data, tools_dir)?;
 
@@ -51,17 +54,13 @@ pub(crate) fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
 
     // Make executable on unix
     #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&makensis, std::fs::Permissions::from_mode(0o755));
-    }
+    let _ = std::fs::set_permissions(&makensis, std::fs::Permissions::from_mode(0o755));
 
     Ok(nsis_dir)
 }
 
 /// Ensure WiX is available, downloading if necessary.
 /// Returns the path to the WiX directory containing candle.exe and light.exe.
-#[cfg(target_os = "windows")]
 pub(crate) fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     let wix_dir = tools_dir.join("wix314");
     let candle = wix_dir.join("candle.exe");
@@ -70,8 +69,9 @@ pub(crate) fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
         return Ok(wix_dir);
     }
 
-    #[cfg(feature = "no-downloads")]
-    bail!("WiX not found and automatic downloads are disabled. Install WiX manually.");
+    if cfg!(feature = "no-downloads") {
+        bail!("WiX not found and automatic downloads are disabled. Install WiX manually.");
+    }
 
     tracing::info!("Downloading WiX toolset...");
     let data = download_and_verify(WIX_URL, WIX_SHA256, HashAlgo::Sha256)?;
@@ -99,8 +99,11 @@ pub(crate) fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf
         return Ok(linuxdeploy_path);
     }
 
-    #[cfg(feature = "no-downloads")]
-    bail!("linuxdeploy not found and automatic downloads are disabled. Install linuxdeploy manually.");
+    if cfg!(feature = "no-downloads") {
+        bail!(
+            "linuxdeploy not found and automatic downloads are disabled. Install linuxdeploy manually."
+        );
+    }
 
     let url = format!("{LINUXDEPLOY_URL_BASE}/{linuxdeploy_name}");
     tracing::info!("Downloading linuxdeploy from {url}...");
@@ -111,17 +114,13 @@ pub(crate) fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf
 
     // Make executable
     #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&linuxdeploy_path, std::fs::Permissions::from_mode(0o755))?;
-    }
+    let _ = std::fs::set_permissions(&linuxdeploy_path, std::fs::Permissions::from_mode(0o755))?;
 
     Ok(linuxdeploy_path)
 }
 
 enum HashAlgo {
     Sha1,
-    #[cfg(target_os = "windows")]
     Sha256,
 }
 
@@ -136,7 +135,6 @@ fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result
             hasher.update(&data);
             format!("{:X}", hasher.finalize())
         }
-        #[cfg(target_os = "windows")]
         HashAlgo::Sha256 => {
             use sha2::Digest;
             let mut hasher = sha2::Sha256::new();
@@ -146,9 +144,7 @@ fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result
     };
 
     if computed.to_uppercase() != expected_hash.to_uppercase() {
-        bail!(
-            "Hash mismatch for {url}: expected {expected_hash}, got {computed}"
-        );
+        bail!("Hash mismatch for {url}: expected {expected_hash}, got {computed}");
     }
 
     Ok(data)
@@ -157,8 +153,8 @@ fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result
 /// Download bytes from a URL using a blocking reqwest client.
 fn download_bytes(url: &str) -> Result<Vec<u8>> {
     // Use a simple blocking approach - we're already in a sync context
-    let response = reqwest::blocking::get(url)
-        .with_context(|| format!("Failed to download {url}"))?;
+    let response =
+        reqwest::blocking::get(url).with_context(|| format!("Failed to download {url}"))?;
 
     if !response.status().is_success() {
         bail!("Download failed with status {}: {url}", response.status());
@@ -194,11 +190,8 @@ fn extract_zip(data: &[u8], dest: &Path) -> Result<()> {
 
             // Set permissions on unix
             #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                if let Some(mode) = file.unix_mode() {
-                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
-                }
+            if let Some(mode) = file.unix_mode() {
+                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
             }
         }
     }
