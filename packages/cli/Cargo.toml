@@ -33,7 +33,7 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-uuid = { workspace = true, features = ["v4", "v5"] }
+uuid = { workspace = true, features = ["v4", "v5", "v7"] }
 # swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
 # but pinning serde fixes the issue in the meantime
 serde = { version = "=1.0.221", features = ["derive"] }
@@ -161,7 +161,6 @@ self_update = { version = "0.42.0", features = [
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
-posthog-rs = { version = "0.3.5", default-features = false }
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
