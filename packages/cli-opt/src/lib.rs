@@ -18,6 +18,7 @@ mod json;
 
 pub use file::process_file_to;
 pub use hash::add_hash_to_asset;
+pub use js::set_esbuild_binary_path;
 
 /// A manifest of all assets collected from dependencies
 ///

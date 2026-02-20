@@ -11,6 +11,7 @@ mod cli;
 mod config;
 mod devcfg;
 mod dx_build_info;
+mod esbuild;
 mod error;
 mod fastfs;
 mod logging;
