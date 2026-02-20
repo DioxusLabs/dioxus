@@ -1,0 +1,427 @@
+use crate::bundler::category::AppCategory;
+use crate::bundler::macos::{icon, sign};
+use crate::bundler::BundleContext;
+use anyhow::{bail, Context, Result};
+use std::fs;
+use std::path::{Path, PathBuf};
+
+/// Create/enrich a macOS `.app` bundle.
+///
+/// The Dioxus build system already creates a basic `.app` structure at
+/// `ctx.build.root_dir()`. For `dx bundle`, we copy it to the bundle output
+/// directory and enrich it with:
+///
+/// - ICNS icon
+/// - Info.plist (programmatically built)
+/// - Frameworks
+/// - Custom files from `MacOsSettings::files`
+/// - External binaries
+/// - Resources
+/// - Code signing + notarization
+///
+/// Returns the list of output paths (the `.app` directory).
+pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
+    let product_name = ctx.product_name();
+    let macos_settings = ctx.macos();
+
+    let bundle_name = macos_settings
+        .bundle_name
+        .as_deref()
+        .unwrap_or(&product_name);
+
+    let output_dir = ctx.project_out_directory().join("macos");
+    let app_dir = output_dir.join(format!("{bundle_name}.app"));
+
+    tracing::info!("Creating macOS .app bundle at {}", app_dir.display());
+
+    // Clean and create the .app structure
+    if app_dir.exists() {
+        fs::remove_dir_all(&app_dir)
+            .with_context(|| format!("Failed to clean existing .app: {}", app_dir.display()))?;
+    }
+
+    let contents_dir = app_dir.join("Contents");
+    let macos_dir = contents_dir.join("MacOS");
+    let resources_dir = contents_dir.join("Resources");
+    let frameworks_dir = contents_dir.join("Frameworks");
+
+    fs::create_dir_all(&macos_dir)?;
+    fs::create_dir_all(&resources_dir)?;
+
+    // Copy the main binary
+    let binary_src = ctx.main_binary_path();
+    let binary_dest = macos_dir.join(ctx.main_binary_name());
+    tracing::debug!(
+        "Copying binary: {} -> {}",
+        binary_src.display(),
+        binary_dest.display()
+    );
+    fs::copy(&binary_src, &binary_dest)
+        .with_context(|| format!("Failed to copy main binary to {}", binary_dest.display()))?;
+
+    // Make the binary executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&binary_dest, fs::Permissions::from_mode(0o755))?;
+    }
+
+    // Generate the ICNS icon
+    let icon_path = icon::create_icns_file(&resources_dir, ctx)?;
+    let icon_filename = icon_path
+        .as_ref()
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().to_string());
+
+    // Copy resources (assets, etc.)
+    ctx.copy_resources(&resources_dir)?;
+
+    // Copy external binaries
+    let _external_bins = ctx.copy_external_binaries(&macos_dir)?;
+
+    // Copy frameworks
+    if let Some(frameworks) = &macos_settings.frameworks {
+        if !frameworks.is_empty() {
+            fs::create_dir_all(&frameworks_dir)?;
+            for framework in frameworks {
+                let framework_path = PathBuf::from(framework);
+                if !framework_path.exists() {
+                    // Try resolving relative to crate dir
+                    let resolved = ctx.crate_dir().join(&framework_path);
+                    if resolved.exists() {
+                        copy_framework(&resolved, &frameworks_dir)?;
+                    } else {
+                        // It might be a system framework name like "WebKit"
+                        tracing::debug!(
+                            "Framework not found as file, assuming system framework: {}",
+                            framework
+                        );
+                    }
+                } else {
+                    copy_framework(&framework_path, &frameworks_dir)?;
+                }
+            }
+        }
+    }
+
+    // Copy custom files from MacOsSettings::files
+    // The key is the path within Contents/, the value is the source file path
+    for (bundle_path, source_path) in &macos_settings.files {
+        let dest = contents_dir.join(bundle_path);
+        let src = if source_path.is_relative() {
+            ctx.crate_dir().join(source_path)
+        } else {
+            source_path.clone()
+        };
+
+        if !src.exists() {
+            tracing::warn!(
+                "Custom file not found: {} (for bundle path {})",
+                src.display(),
+                bundle_path.display()
+            );
+            continue;
+        }
+
+        if let Some(parent) = dest.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        if src.is_dir() {
+            copy_dir_recursive(&src, &dest)?;
+        } else {
+            fs::copy(&src, &dest).with_context(|| {
+                format!("Failed to copy custom file {} -> {}", src.display(), dest.display())
+            })?;
+        }
+    }
+
+    // Generate Info.plist
+    let info_plist = create_info_plist(ctx, &macos_settings, icon_filename.as_deref())?;
+    let plist_path = contents_dir.join("Info.plist");
+
+    // If the user provided a custom Info.plist, merge or use it
+    if let Some(custom_plist_path) = &macos_settings.info_plist_path {
+        let custom_path = if custom_plist_path.is_relative() {
+            ctx.crate_dir().join(custom_plist_path)
+        } else {
+            custom_plist_path.clone()
+        };
+        if custom_path.exists() {
+            tracing::info!("Using custom Info.plist from {}", custom_path.display());
+            fs::copy(&custom_path, &plist_path)?;
+        } else {
+            tracing::warn!(
+                "Custom Info.plist not found at {}, generating default",
+                custom_path.display()
+            );
+            write_plist(&info_plist, &plist_path)?;
+        }
+    } else {
+        write_plist(&info_plist, &plist_path)?;
+    }
+
+    // Write PkgInfo
+    fs::write(contents_dir.join("PkgInfo"), "APPL????")?;
+
+    // Code signing
+    let signing_identity = sign::setup_keychain(macos_settings.signing_identity.as_deref())?;
+
+    if let Some(identity) = &signing_identity {
+        tracing::info!("Signing .app bundle with identity: {}", identity.identity);
+
+        // Collect all signable targets: frameworks first, then binaries, then the .app itself
+        let mut sign_targets = Vec::new();
+
+        // Sign frameworks
+        if frameworks_dir.exists() {
+            for entry in fs::read_dir(&frameworks_dir)? {
+                let entry = entry?;
+                sign_targets.push(sign::SignTarget {
+                    path: entry.path(),
+                    is_an_executable: false,
+                });
+            }
+        }
+
+        // Sign the main binary
+        sign_targets.push(sign::SignTarget {
+            path: binary_dest.clone(),
+            is_an_executable: true,
+        });
+
+        // Sign the .app bundle itself
+        sign_targets.push(sign::SignTarget {
+            path: app_dir.clone(),
+            is_an_executable: false,
+        });
+
+        sign::sign_paths(identity, sign_targets, &macos_settings)?;
+
+        // Notarize if credentials are available
+        let should_notarize = std::env::var("APPLE_ID").is_ok()
+            || std::env::var("APPLE_API_KEY").is_ok();
+
+        if should_notarize {
+            // For notarization, we need to zip the .app first
+            let zip_path = output_dir.join(format!("{bundle_name}.zip"));
+            tracing::info!("Creating zip for notarization: {}", zip_path.display());
+
+            let status = std::process::Command::new("ditto")
+                .args([
+                    "-c",
+                    "-k",
+                    "--sequesterRsrc",
+                    "--keepParent",
+                    &app_dir.display().to_string(),
+                    &zip_path.display().to_string(),
+                ])
+                .status()
+                .context("Failed to run ditto for zip creation")?;
+
+            if !status.success() {
+                bail!("ditto failed to create zip for notarization");
+            }
+
+            match sign::notarize(&zip_path) {
+                Ok(()) => {
+                    // Clean up the zip
+                    let _ = fs::remove_file(&zip_path);
+                }
+                Err(e) => {
+                    let _ = fs::remove_file(&zip_path);
+                    return Err(e.context("Notarization failed"));
+                }
+            }
+        }
+    } else {
+        tracing::debug!("No signing identity found; skipping code signing");
+    }
+
+    Ok(vec![app_dir])
+}
+
+/// Build a `plist::Dictionary` for Info.plist.
+fn create_info_plist(
+    ctx: &BundleContext,
+    macos_settings: &crate::MacOsSettings,
+    icon_filename: Option<&str>,
+) -> Result<plist::Dictionary> {
+    let mut dict = plist::Dictionary::new();
+
+    let product_name = ctx.product_name();
+    let bundle_name = macos_settings
+        .bundle_name
+        .as_deref()
+        .unwrap_or(&product_name);
+
+    dict.insert(
+        "CFBundleDevelopmentRegion".into(),
+        plist::Value::String("English".into()),
+    );
+    dict.insert(
+        "CFBundleDisplayName".into(),
+        plist::Value::String(bundle_name.to_string()),
+    );
+    dict.insert(
+        "CFBundleExecutable".into(),
+        plist::Value::String(ctx.main_binary_name().to_string()),
+    );
+
+    if let Some(icon) = icon_filename {
+        dict.insert(
+            "CFBundleIconFile".into(),
+            plist::Value::String(icon.to_string()),
+        );
+    }
+
+    dict.insert(
+        "CFBundleIdentifier".into(),
+        plist::Value::String(ctx.bundle_identifier()),
+    );
+    dict.insert(
+        "CFBundleInfoDictionaryVersion".into(),
+        plist::Value::String("6.0".into()),
+    );
+    dict.insert(
+        "CFBundleName".into(),
+        plist::Value::String(bundle_name.to_string()),
+    );
+    dict.insert(
+        "CFBundlePackageType".into(),
+        plist::Value::String("APPL".into()),
+    );
+
+    let version = ctx.version_string();
+    let bundle_version = macos_settings
+        .bundle_version
+        .as_deref()
+        .unwrap_or(&version);
+
+    dict.insert(
+        "CFBundleShortVersionString".into(),
+        plist::Value::String(version.clone()),
+    );
+    dict.insert(
+        "CFBundleVersion".into(),
+        plist::Value::String(bundle_version.to_string()),
+    );
+
+    // Minimum system version
+    let min_version = macos_settings
+        .minimum_system_version
+        .as_deref()
+        .unwrap_or("10.13");
+    dict.insert(
+        "LSMinimumSystemVersion".into(),
+        plist::Value::String(min_version.to_string()),
+    );
+
+    // App category
+    if let Some(category_str) = ctx.app_category() {
+        if let Ok(category) = category_str.parse::<AppCategory>() {
+            dict.insert(
+                "LSApplicationCategoryType".into(),
+                plist::Value::String(
+                    category.macos_application_category_type().to_string(),
+                ),
+            );
+        }
+    }
+
+    // Copyright
+    if let Some(copyright) = ctx.copyright_string() {
+        dict.insert(
+            "NSHumanReadableCopyright".into(),
+            plist::Value::String(copyright.to_string()),
+        );
+    }
+
+    // High-resolution capable
+    dict.insert("NSHighResolutionCapable".into(), plist::Value::Boolean(true));
+
+    // NSAppTransportSecurity exception domain
+    if let Some(domain) = &macos_settings.exception_domain {
+        let mut ats_dict = plist::Dictionary::new();
+        let mut exception_dict = plist::Dictionary::new();
+        let mut domain_dict = plist::Dictionary::new();
+        domain_dict.insert(
+            "NSExceptionAllowsInsecureHTTPLoads".into(),
+            plist::Value::Boolean(true),
+        );
+        domain_dict.insert(
+            "NSIncludesSubdomains".into(),
+            plist::Value::Boolean(true),
+        );
+        exception_dict.insert(
+            domain.clone(),
+            plist::Value::Dictionary(domain_dict),
+        );
+        ats_dict.insert(
+            "NSExceptionDomains".into(),
+            plist::Value::Dictionary(exception_dict),
+        );
+        dict.insert(
+            "NSAppTransportSecurity".into(),
+            plist::Value::Dictionary(ats_dict),
+        );
+    }
+
+    // Provider short name (for distribution)
+    if let Some(provider) = &macos_settings.provider_short_name {
+        dict.insert(
+            "ITSAppUsesNonExemptEncryption".into(),
+            plist::Value::Boolean(false),
+        );
+        // Store provider for reference (not a standard plist key, but useful)
+        let _ = provider; // Provider is used for notarization, not in Info.plist
+    }
+
+    Ok(dict)
+}
+
+/// Write a plist dictionary to a file.
+fn write_plist(dict: &plist::Dictionary, path: &Path) -> Result<()> {
+    let value = plist::Value::Dictionary(dict.clone());
+    value
+        .to_file_xml(path)
+        .with_context(|| format!("Failed to write Info.plist to {}", path.display()))?;
+    Ok(())
+}
+
+/// Copy a framework (directory or .dylib) to the Frameworks directory.
+fn copy_framework(src: &Path, frameworks_dir: &Path) -> Result<()> {
+    let dest = frameworks_dir.join(
+        src.file_name()
+            .context("Framework path has no filename")?,
+    );
+
+    tracing::debug!(
+        "Copying framework: {} -> {}",
+        src.display(),
+        dest.display()
+    );
+
+    if src.is_dir() {
+        copy_dir_recursive(src, &dest)?;
+    } else {
+        fs::copy(src, &dest)?;
+    }
+
+    Ok(())
+}
+
+/// Recursively copy a directory.
+fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
+    fs::create_dir_all(dest)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let entry_dest = dest.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_recursive(&entry.path(), &entry_dest)?;
+        } else {
+            fs::copy(entry.path(), &entry_dest)?;
+        }
+    }
+    Ok(())
+}

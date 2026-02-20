@@ -238,9 +238,12 @@ thiserror = "2.0.12"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.22.1" }
-tauri-utils = { version = "=2.5.0" }
-tauri-macos-sign = { version = "=2.2.0" }
-tauri-bundler = { version = "=2.5.0" }
+icns = "0.4.0"
+image = "0.25"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+sha1 = "0.10"
+md5 = "0.8.0"
+rpm = "0.19.0"
 lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }

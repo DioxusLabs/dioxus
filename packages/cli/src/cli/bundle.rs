@@ -1,10 +1,7 @@
 use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat};
-use anyhow::{bail, Context};
+use anyhow::Context;
 use path_absolutize::Absolutize;
-use std::collections::HashMap;
-use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
-
-use walkdir::WalkDir;
+use std::path::PathBuf;
 
 use super::*;
 
@@ -72,7 +69,7 @@ impl Bundle {
 
         // Create a list of bundles that we might need to copy
         match client.bundle {
-            // By default, mac/win/linux work with tauri bundle
+            // Desktop platforms use our built-in bundler
             BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows => {
                 tracing::info!("Running desktop bundler...");
                 for bundle in Self::bundle_desktop(&client, &self.package_types)? {
@@ -151,13 +148,14 @@ impl Bundle {
     fn bundle_desktop(
         build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
-    ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
+    ) -> Result<Vec<crate::bundler::Bundle>, Error> {
+        use anyhow::bail;
+
         let krate = &build;
         let exe = build.main_exe();
 
         _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
 
-        let package = krate.package();
         let mut name: PathBuf = krate.executable_name().into();
         if cfg!(windows) {
             name.set_extension("exe");
@@ -167,128 +165,19 @@ impl Bundle {
         std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name))
             .with_context(|| "Failed to copy the output executable into the bundle directory")?;
 
-        let binaries = vec![
-            // We use the name of the exe but it has to be in the same directory
-            BundleBinary::new(krate.executable_name().to_string(), true)
-                .set_src_path(Some(exe.display().to_string())),
-        ];
-
-        let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
-
         // Check if required fields are provided instead of failing silently.
-        if bundle_settings.identifier.is_none() {
+        if build.config.bundle.identifier.is_none() {
             bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
         }
-        if bundle_settings.publisher.is_none() {
+        if build.config.bundle.publisher.is_none() {
             bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
         }
 
-        /// Resolve an icon path relative to the crate dir
-        fn canonicalize_icon_path(build: &BuildRequest, icon: &mut String) -> Result<(), Error> {
-            let icon_path = build
-                .crate_dir()
-                .join(&icon)
-                .canonicalize()
-                .with_context(|| format!("Failed to canonicalize path to icon {icon:?}"))?;
-            *icon = icon_path.to_string_lossy().to_string();
-            Ok(())
-        }
+        let ctx = crate::bundler::BundleContext::new(build, package_types)?;
 
-        // Resolve bundle.icon relative to the crate dir
-        if let Some(icons) = bundle_settings.icon.as_mut() {
-            for icon in icons.iter_mut() {
-                canonicalize_icon_path(build, icon)?;
-            }
-        }
+        tracing::debug!("Bundling project for {:?}", ctx.package_types());
 
-        #[allow(deprecated)]
-        if cfg!(windows) {
-            // Resolve bundle.windows.icon_path relative to the crate dir
-            let mut windows_icon_path = bundle_settings
-                .windows
-                .icon_path
-                .to_string_lossy()
-                .to_string();
-            canonicalize_icon_path(build, &mut windows_icon_path)?;
-            bundle_settings.windows.icon_path = PathBuf::from(&windows_icon_path);
-
-            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
-
-                if let Some(icon_path) = icon_path {
-                    bundle_settings.icon = Some(vec![icon_path.into()]);
-                };
-            }
-        }
-
-        if bundle_settings.resources_map.is_none() {
-            bundle_settings.resources_map = Some(HashMap::new());
-        }
-
-        let asset_dir = build.asset_dir();
-        if asset_dir.exists() {
-            for entry in WalkDir::new(&asset_dir) {
-                let entry = entry.unwrap();
-                let path = entry.path();
-
-                if path.is_file() {
-                    let old = path
-                        .canonicalize()
-                        .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-                    let new =
-                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
-
-                    tracing::debug!("Bundled asset: {old:?} -> {new:?}");
-                    bundle_settings
-                        .resources_map
-                        .as_mut()
-                        .expect("to be set")
-                        .insert(old.display().to_string(), new.display().to_string());
-                }
-            }
-        }
-
-        for resource_path in bundle_settings.resources.take().into_iter().flatten() {
-            bundle_settings
-                .resources_map
-                .as_mut()
-                .expect("to be set")
-                .insert(resource_path, "".to_string());
-        }
-
-        let mut settings = SettingsBuilder::new()
-            .project_out_directory(krate.bundle_dir(build.bundle))
-            .package_settings(PackageSettings {
-                product_name: krate.bundled_app_name(),
-                version: package.version.to_string(),
-                description: package.description.clone().unwrap_or_default(),
-                homepage: Some(package.homepage.clone().unwrap_or_default()),
-                authors: Some(package.authors.clone()),
-                default_run: Some(name.display().to_string()),
-            })
-            .log_level(log::Level::Debug)
-            .binaries(binaries)
-            .bundle_settings(bundle_settings);
-
-        if let Some(packages) = &package_types {
-            settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
-        }
-
-        settings = settings.target(build.triple.to_string());
-
-        let settings = settings
-            .build()
-            .context("failed to bundle tauri bundle settings")?;
-        tracing::debug!("Bundling project with settings: {:#?}", settings);
-        if cfg!(target_os = "macos") {
-            std::env::set_var("CI", "true");
-        }
-
-        let bundles = tauri_bundler::bundle::bundle_project(&settings).inspect_err(|err| {
+        let bundles = crate::bundler::bundle_project(&ctx).inspect_err(|err| {
             tracing::error!("Failed to bundle project: {:#?}", err);
             if cfg!(target_os = "macos") {
                 tracing::error!("Make sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)");
