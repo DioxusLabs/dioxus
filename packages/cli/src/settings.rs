@@ -1,6 +1,7 @@
 use crate::{Result, TraceSrc};
 use anyhow::bail;
 use serde::{Deserialize, Serialize};
+use std::io::IsTerminal;
 use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
@@ -152,13 +153,39 @@ impl CliSettings {
 
     pub(crate) fn is_ci() -> bool {
         static CI: LazyLock<bool> = LazyLock::new(|| {
+            // Explicit dx override
+            if matches!(std::env::var("DX_CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
+            {
+                return true;
+            }
+
+            // Generic CI variable (GitHub Actions, GitLab CI, Travis, etc.)
             if matches!(std::env::var("CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
             {
                 return true;
             }
 
-            if matches!(std::env::var("DX_CI"), Ok(val) if val.eq_ignore_ascii_case("true") || val == "1")
-            {
+            // Provider-specific env vars for CIs that don't set CI=true
+            const CI_ENV_VARS: &[&str] = &[
+                "GITHUB_ACTIONS",
+                "GITLAB_CI",
+                "CIRCLECI",
+                "TRAVIS",
+                "JENKINS_URL",
+                "BUILDKITE",
+                "TF_BUILD",
+                "CODEBUILD_BUILD_ID",
+                "BITBUCKET_PIPELINE",
+                "HEROKU_TEST_RUN_ID",
+                "TEAMCITY_VERSION",
+            ];
+
+            if CI_ENV_VARS.iter().any(|var| std::env::var(var).is_ok()) {
+                return true;
+            }
+
+            // No TTY likely means a script, bot, or CI we don't recognize
+            if !std::io::stdout().is_terminal() {
                 return true;
             }
 

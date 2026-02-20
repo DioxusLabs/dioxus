@@ -579,6 +579,70 @@ impl TraceController {
     }
 
     fn enroll_reporter() -> Result<Reporter> {
+        /// Generate a deterministic UUID v5 from the OS machine ID.
+        /// Falls back to UUID v4 if the machine ID can't be read.
+        fn machine_fingerprint() -> Uuid {
+            // A fixed namespace so the same machine ID always produces the same UUID.
+            const DX_NAMESPACE: Uuid = Uuid::from_bytes([
+                0x64, 0x69, 0x6f, 0x78, 0x75, 0x73, 0x2d, 0x63,
+                0x6c, 0x69, 0x2d, 0x74, 0x65, 0x6c, 0x65, 0x6d,
+            ]);
+
+            read_machine_id()
+                .map(|id| Uuid::new_v5(&DX_NAMESPACE, id.trim().as_bytes()))
+                .unwrap_or_else(|| Uuid::new_v4())
+        }
+
+        /// Read the OS-level machine identifier.
+        fn read_machine_id() -> Option<String> {
+            #[cfg(target_os = "macos")]
+            {
+                // IOPlatformUUID from the IORegistry
+                std::process::Command::new("ioreg")
+                    .args(["-rd1", "-c", "IOPlatformExpertDevice"])
+                    .output()
+                    .ok()
+                    .and_then(|out| {
+                        let stdout = String::from_utf8_lossy(&out.stdout);
+                        stdout
+                            .lines()
+                            .find(|l| l.contains("IOPlatformUUID"))
+                            .and_then(|l| l.split('"').nth(3))
+                            .map(|s| s.to_string())
+                    })
+            }
+            #[cfg(target_os = "linux")]
+            {
+                std::fs::read_to_string("/etc/machine-id")
+                    .or_else(|_| std::fs::read_to_string("/var/lib/dbus/machine-id"))
+                    .ok()
+            }
+            #[cfg(target_os = "windows")]
+            {
+                std::process::Command::new("reg")
+                    .args([
+                        "query",
+                        r"HKLM\SOFTWARE\Microsoft\Cryptography",
+                        "/v",
+                        "MachineGuid",
+                    ])
+                    .output()
+                    .ok()
+                    .and_then(|out| {
+                        let stdout = String::from_utf8_lossy(&out.stdout);
+                        stdout
+                            .lines()
+                            .find(|l| l.contains("MachineGuid"))
+                            .and_then(|l| l.split_whitespace().last())
+                            .map(|s| s.to_string())
+                    })
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+            {
+                None
+            }
+        }
+
         #[derive(Debug, Deserialize, Serialize)]
         struct ReporterSession {
             reporter_id: Uuid,
@@ -599,16 +663,18 @@ impl TraceController {
             std::fs::create_dir_all(&sessions_folder)?;
         }
 
-        // Create a reporter_id. If we find an invalid reporter_id, we use `nil` as the reporter ID.
+        // Create a reporter_id. Prefer reading from disk, fall back to machine fingerprint, then random.
         let distinct_id_file = stats_folder.join("reporter.json");
         let reporter_session = std::fs::read_to_string(&distinct_id_file)
             .map(|e| serde_json5::from_str::<ReporterSession>(&e));
 
         // If we have a valid reporter session, we use it, otherwise we create a new one.
+        // Use a machine-derived UUID v5 so the same machine always gets the same ID,
+        // even if reporter.json is deleted or this is a fresh CI environment.
         let mut reporter = match reporter_session {
             Ok(Ok(session)) => session,
             _ => ReporterSession {
-                reporter_id: Uuid::new_v4(),
+                reporter_id: machine_fingerprint(),
                 session_id: Uuid::new_v7(uuid::Timestamp::now(
                     uuid::timestamp::context::ContextV7::new(),
                 )),
@@ -618,9 +684,8 @@ impl TraceController {
         };
 
         // Update the last used time to now, updating the session ID if it's older than 30 minutes.
-        if reporter
-            .last_used
-            .duration_since(SystemTime::now())
+        if SystemTime::now()
+            .duration_since(reporter.last_used)
             .map(|d| d.as_secs() > (30 * 60))
             .unwrap_or(true)
         {
@@ -729,8 +794,15 @@ impl TraceController {
             true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
+                let reporter = self.reporter.as_ref().context("No reporter initialized")?;
                 let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
-                    .filter_map(|msg| serde_json::to_value(msg).ok())
+                    .map(|event| {
+                        Self::telemetry_to_posthog(
+                            reporter.session_id,
+                            reporter.distinct_id,
+                            event,
+                        )
+                    })
                     .collect::<Vec<_>>();
 
                 _ = self.upload_to_posthog(&request_body).await;
