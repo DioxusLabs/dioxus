@@ -45,7 +45,7 @@ pub enum LinkerFlavor {
     Darwin,
     WasmLld,
     Msvc,
-    Unsupported, // a catch-all for unsupported linkers, usually the stripped-down unix ones
+    Unsupported,
 }
 
 impl LinkAction {
@@ -110,12 +110,8 @@ impl LinkAction {
         let link_err_file = self.link_err_file.clone();
         if let Err(err) = self.run_link_inner() {
             eprintln!("Linker error: {err}");
-
-            // If we failed to run the linker, we need to write the error to the file
-            // so that the main process can read it.
             _ = std::fs::create_dir_all(link_err_file.parent().unwrap());
             _ = std::fs::write(link_err_file, format!("Linker error: {err}"));
-
             return ExitCode::FAILURE;
         }
 
@@ -149,9 +145,9 @@ impl LinkAction {
                 let mut cmd = std::process::Command::new(linker);
                 match cfg!(target_os = "windows") {
                     true => cmd.arg(format!("@{}", &self.link_args_file.display())),
-                    false => cmd.args(args),
+                    false => cmd.args(&args),
                 };
-                let res = cmd.output().expect("Failed to run linker");
+                let res = cmd.output().context("Failed to run linker")?;
 
                 if !res.status.success() {
                     bail!(
@@ -175,16 +171,7 @@ impl LinkAction {
             }
             None => {
                 // Extract the out path - we're going to write a dummy object file to satisfy the linker
-                let out_file: PathBuf = match self.triple.operating_system {
-                    target_lexicon::OperatingSystem::Windows => {
-                        let out_arg = args.iter().find(|arg| arg.starts_with("/OUT")).unwrap();
-                        out_arg.trim_start_matches("/OUT:").to_string().into()
-                    }
-                    _ => {
-                        let out = args.iter().position(|arg| arg == "-o").unwrap();
-                        args[out + 1].clone().into()
-                    }
-                };
+                let out_file = resolve_output_path(&args, &self.triple)?;
 
                 // This creates an object file that satisfies rust's use of llvm-objcopy
                 //
@@ -240,6 +227,32 @@ impl LinkAction {
     }
 }
 
+/// Resolves the output file path from linker arguments.
+///
+/// On Windows, looks for `/OUT:<path>`. On all other platforms, looks for `-o <path>`.
+/// Returns an error if the expected argument is missing or malformed.
+fn resolve_output_path(args: &[String], triple: &Triple) -> Result<PathBuf> {
+    match triple.operating_system {
+        target_lexicon::OperatingSystem::Windows => {
+            let out_arg = args
+                .iter()
+                .find(|arg| arg.starts_with("/OUT:"))
+                .context("Missing /OUT: argument in linker args")?;
+            Ok(out_arg.trim_start_matches("/OUT:").to_string().into())
+        }
+        _ => {
+            let pos = args
+                .iter()
+                .position(|arg| arg == "-o")
+                .context("Missing -o argument in linker args")?;
+            let path = args
+                .get(pos + 1)
+                .context("Missing output path after -o in linker args")?;
+            Ok(path.clone().into())
+        }
+    }
+}
+
 pub fn get_actual_linker_args_excluding_program_name(args: Vec<String>) -> Vec<String> {
     args.into_iter()
         .skip(1) // the first arg is program name
@@ -256,12 +269,10 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
 
         // This may be a utf-16le file. Let's try utf-8 first.
         let mut content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
-            // Convert Vec<u8> to Vec<u16> to convert into a String
             let binary_u16le: Vec<u16> = file_binary
                 .chunks_exact(2)
                 .map(|a| u16::from_le_bytes([a[0], a[1]]))
                 .collect();
-
             String::from_utf16_lossy(&binary_u16le)
         });
 
@@ -276,8 +287,7 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
             .map(|line| {
                 let line_parsed = line.trim().to_string();
                 let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                line_parsed
+                line_parsed.trim_start_matches('"').to_string()
             })
             .collect()
     } else {
