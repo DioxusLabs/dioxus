@@ -169,7 +169,7 @@ mod inner {
         let output_dir = ctx
             .project_out_directory()
             .join("bundle")
-            .join(util::WIX_OUTPUT_FOLDER_NAME);
+            .join("msi");
         std::fs::create_dir_all(&output_dir).context("Failed to create MSI output directory")?;
 
         let wix_settings = ctx.windows().wix.unwrap_or_default();

@@ -179,7 +179,6 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
                 let entry = entry?;
                 sign_targets.push(sign::SignTarget {
                     path: entry.path(),
-                    is_an_executable: false,
                 });
             }
         }
@@ -187,13 +186,11 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
         // Sign the main binary
         sign_targets.push(sign::SignTarget {
             path: binary_dest.clone(),
-            is_an_executable: true,
         });
 
         // Sign the .app bundle itself
         sign_targets.push(sign::SignTarget {
             path: app_dir.clone(),
-            is_an_executable: false,
         });
 
         sign::sign_paths(identity, sign_targets, &macos_settings)?;

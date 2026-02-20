@@ -114,7 +114,6 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
             identity,
             vec![sign::SignTarget {
                 path: dmg_path.clone(),
-                is_an_executable: false,
             }],
             &macos_settings,
         )?;

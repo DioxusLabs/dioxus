@@ -33,7 +33,6 @@ impl Drop for TempKeychain {
 /// A target to be code-signed.
 pub(crate) struct SignTarget {
     pub path: PathBuf,
-    pub is_an_executable: bool,
 }
 
 /// Set up the signing identity.

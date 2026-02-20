@@ -9,9 +9,6 @@ use std::path::{Path, PathBuf};
 /// Output folder name for NSIS installers within the bundle directory.
 pub(crate) const NSIS_OUTPUT_FOLDER_NAME: &str = "nsis";
 
-/// Output folder name for MSI installers within the bundle directory.
-pub(crate) const WIX_OUTPUT_FOLDER_NAME: &str = "msi";
-
 /// WebView2 bootstrapper download URL.
 const WEBVIEW2_BOOTSTRAPPER_URL: &str = "https://go.microsoft.com/fwlink/p/?LinkId=2124703";
 

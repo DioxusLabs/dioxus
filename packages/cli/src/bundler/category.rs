@@ -72,7 +72,6 @@ impl FromStr for AppCategory {
     }
 }
 
-#[allow(dead_code)]
 impl AppCategory {
     /// Map to closest set of Freedesktop categories.
     pub(crate) fn freedesktop_categories(self) -> &'static str {

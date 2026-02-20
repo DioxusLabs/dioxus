@@ -33,7 +33,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     // Start building the RPM package
     let mut builder = rpm::PackageBuilder::new(&name, &version, &license, arch, &description)
-        .compression(rpm::CompressionType::Gzip);
+        .using_config(rpm::BuildConfig::v4().compression(rpm::CompressionType::Gzip));
 
     // Add the main binary
     let binary_path = ctx.main_binary_path();

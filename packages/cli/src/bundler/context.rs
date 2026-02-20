@@ -1,4 +1,4 @@
-use crate::{BuildRequest, BundleFormat, DebianSettings, MacOsSettings, PackageType, WindowsSettings};
+use crate::{BuildRequest, DebianSettings, MacOsSettings, PackageType, WindowsSettings};
 use anyhow::{Context, Result};
 use std::{
     collections::HashMap,
@@ -34,7 +34,6 @@ impl std::fmt::Display for Arch {
 /// BundleContext wraps a BuildRequest and provides the settings API
 /// that bundle format modules need. This is the adapter between
 /// Dioxus build infrastructure and the individual bundler implementations.
-#[allow(dead_code)]
 pub(crate) struct BundleContext<'a> {
     pub(crate) build: &'a BuildRequest,
     pub(crate) package_types: Vec<PackageType>,
@@ -42,7 +41,6 @@ pub(crate) struct BundleContext<'a> {
     pub(crate) resources_map: HashMap<String, String>,
 }
 
-#[allow(dead_code)]
 impl<'a> BundleContext<'a> {
     /// Create a new BundleContext from a BuildRequest and optional package types.
     pub(crate) fn new(
@@ -293,11 +291,6 @@ impl<'a> BundleContext<'a> {
     /// Windows settings from config.
     pub(crate) fn windows(&self) -> WindowsSettings {
         self.build.config.bundle.windows.clone().unwrap_or_default()
-    }
-
-    /// The bundle format (MacOS, Windows, Linux, etc.).
-    pub(crate) fn bundle_format(&self) -> BundleFormat {
-        self.build.bundle
     }
 
     /// Get the tools cache directory (~/.cache/dioxus/)

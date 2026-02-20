@@ -1,6 +1,5 @@
 mod category;
 mod context;
-#[cfg(target_os = "linux")]
 pub(crate) mod linux;
 #[cfg(target_os = "macos")]
 pub(crate) mod macos;
@@ -54,13 +53,9 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<Bundle>> {
                 }
                 bundled.dmg
             }
-            #[cfg(target_os = "linux")]
             PackageType::Deb => linux::debian::bundle_project(ctx)?,
-            #[cfg(target_os = "linux")]
             PackageType::Rpm => linux::rpm::bundle_project(ctx)?,
-            #[cfg(target_os = "linux")]
             PackageType::AppImage => linux::appimage::bundle_project(ctx)?,
-            #[cfg(target_os = "windows")]
             PackageType::WindowsMsi => windows::msi::bundle_project(ctx)?,
             PackageType::Nsis => windows::nsis::bundle_project(ctx)?,
             PackageType::Updater => updater::bundle_project(ctx, &bundles)?,

@@ -72,7 +72,6 @@ syn = { workspace = true, features = [
     "visit-mut",
 ] }
 
-headers = "0.4.1"
 walkdir = "2"
 dunce = { workspace = true }
 
@@ -97,7 +96,6 @@ prettyplease = { workspace = true }
 # Assets
 brotli = "8.0.1"
 ignore = "0.4.23"
-env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }
 
@@ -127,7 +125,6 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
-wasm-encoder = "0.235.0"
 
 # Extracting data from an executable
 object = { workspace = true, features = ["all"] }
@@ -136,8 +133,6 @@ itertools = { workspace = true }
 throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
-strum = { version = "0.27.1", features = ["derive"] }
-memmap = "0.7.0"
 walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
@@ -154,7 +149,6 @@ tar = "0.4.44"
 local-ip-address = "0.6.5"
 dircpy = "0.3.19"
 plist = "1.7.4"
-memoize = "0.5.1"
 backtrace = "0.3.74"
 ar = "0.9.0"
 wasm-bindgen-externref-xform = "0.2.100"
@@ -167,7 +161,7 @@ self_update = { version = "0.42.0", features = [
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
-posthog-rs = "0.3.5"
+posthog-rs = { version = "0.3.5", default-features = false }
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"

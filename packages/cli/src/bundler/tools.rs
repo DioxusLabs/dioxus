@@ -18,7 +18,6 @@ const WIX_URL: &str =
 const WIX_SHA256: &str = "6ac824e1642d6f7277d0ed7ea09411a508f6116ba6fae0aa5f2c7daa2ff43d31";
 
 /// linuxdeploy download base URL
-#[cfg(target_os = "linux")]
 const LINUXDEPLOY_URL_BASE: &str =
     "https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy";
 
@@ -92,7 +91,6 @@ pub(crate) fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
 
 /// Ensure linuxdeploy is available, downloading if necessary.
 /// Returns the path to the linuxdeploy binary.
-#[cfg(target_os = "linux")]
 pub(crate) fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     let linuxdeploy_name = format!("linuxdeploy-{arch}.AppImage");
     let linuxdeploy_path = tools_dir.join(&linuxdeploy_name);

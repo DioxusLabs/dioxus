@@ -131,22 +131,3 @@ fn run_signtool_sign(
     Ok(())
 }
 
-/// Verify a signed binary using signtool.exe.
-///
-/// Returns `true` if the signature is valid, `false` if verification fails.
-/// On non-Windows platforms, this always returns `Ok(false)`.
-#[cfg(target_os = "windows")]
-pub(crate) fn verify(path: &Path) -> Result<bool> {
-    let output = std::process::Command::new("signtool.exe")
-        .args(["verify", "/pa", &path.to_string_lossy()])
-        .output()
-        .context("Failed to run signtool.exe verify")?;
-
-    Ok(output.status.success())
-}
-
-#[cfg(not(target_os = "windows"))]
-pub(crate) fn verify(_path: &Path) -> Result<bool> {
-    tracing::debug!("Signature verification is only available on Windows");
-    Ok(false)
-}
