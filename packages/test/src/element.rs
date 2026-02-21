@@ -6,7 +6,7 @@ use dioxus_html::{
 use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
 use std::rc::Rc;
 
-/// A reference to DOM node managed by a [Tester].
+/// A reference to DOM node managed by a [crate::Tester].
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.
@@ -25,7 +25,8 @@ impl<'vdom> TestElement<'vdom> {
     ///
     /// The exact location of the click is unspecified.
     ///
-    /// If the element has an `onclick` handler, it will be invoked once [Tester::pump] is called.
+    /// If the element has an `onclick` handler, it will be invoked once [crate::Tester::pump] is
+    /// called.
     pub fn click(&self) {
         self.send_event(
             "click",
@@ -41,8 +42,8 @@ impl<'vdom> TestElement<'vdom> {
 
     /// Sends an event with the given `name` to this element.
     ///
-    /// The event is registered with the Dioxus runtime. A subsequent call to [Tester::pump] causes
-    /// the event handler to be invoked, if one is present.
+    /// The event is registered with the Dioxus runtime. A subsequent call to [crate::Tester::pump]
+    /// causes the event handler to be invoked, if one is present.
     ///
     /// If no event handler is registered corresponding to the event `name`, then this method has no
     /// effect.

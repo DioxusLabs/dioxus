@@ -7,7 +7,7 @@ use tokio::time::{error::Elapsed, timeout};
 
 const PUMP_TIMEOUT: Duration = Duration::from_millis(1000);
 
-/// Returns a new [Tester] resulting from rendering the given [element].
+/// Returns a new [Tester] resulting from rendering the given [Element].
 pub fn render(element: fn() -> Element) -> Tester {
     Tester::from_element(element)
 }
