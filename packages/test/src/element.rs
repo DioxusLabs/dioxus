@@ -6,9 +6,9 @@ use dioxus_html::{
 use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
 use std::rc::Rc;
 
-/// A refernce to DOM node managed by a [Tester].
+/// A reference to DOM node managed by a [Tester].
 ///
-/// This provides facilities for interacting with the node, querying its layout properites, and
+/// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.
 pub struct TestElement<'doc> {
     pub(crate) document: &'doc DioxusDocument,
