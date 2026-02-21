@@ -5683,6 +5683,10 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         self.verify_toolchain_installed().await?;
 
+        // esbuild is used for JS asset processing on all platforms
+        let esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
+        dioxus_cli_opt::set_esbuild_binary_path(esbuild_path);
+
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
             BundleFormat::Ios => self.verify_ios_tooling().await?,

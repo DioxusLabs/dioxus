@@ -121,7 +121,7 @@ pub(crate) struct WixSettings {
     pub(crate) fips_compliant: bool,
     /// MSI installer version in the format `major.minor.patch.build` (build is optional).
     ///
-    /// Because a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.
+    /// Because a valid version is required for MSI installer, it will be derived from the package version if this field is not set.
     ///
     /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
     /// The third and fourth fields have a maximum value of 65,535.
@@ -132,10 +132,9 @@ pub(crate) struct WixSettings {
     /// A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**,
     /// otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.
     ///
-    /// By default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
-    /// You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.
+    /// By default, this code is generated as a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
     ///
-    /// It is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code
+    /// It is recommended that you set this value in your Dioxus.toml to avoid accidental changes in your upgrade code
     /// whenever you want to change your product name.
     #[serde(default)]
     #[schemars(with = "Option<String>")]
@@ -290,7 +289,7 @@ pub struct CustomSignCommandSettings {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, clap::ValueEnum, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize)]
 pub(crate) enum PackageType {
     /// The macOS application bundle (.app).
     #[clap(name = "macos")]

@@ -238,9 +238,12 @@ thiserror = "2.0.12"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.22.1" }
-tauri-utils = { version = "=2.5.0" }
-tauri-macos-sign = { version = "=2.2.0" }
-tauri-bundler = { version = "=2.5.0" }
+icns = "0.4.0"
+image = "0.25"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+sha1 = "0.10"
+md5 = "0.8.0"
+rpm = "0.19.0"
 lru = "0.16.0"
 async-trait = "0.1.88"
 axum = { version = "0.8.4", default-features = false }
@@ -282,8 +285,8 @@ ciborium = "0.2.2"
 base64 = "0.22.1"
 uuid = "1.17.0"
 convert_case = "0.8.0"
-tungstenite = { version = "0.27.0" }
-tokio-tungstenite = { version = "0.27.0" }
+tungstenite = { version = "0.28.0" }
+tokio-tungstenite = { version = "0.28.0" }
 gloo-timers = "0.3.0"
 internment = { version = "0.8.6" }
 proc-macro2-diagnostics = { version = "0.10", default-features = false }
@@ -359,7 +362,7 @@ gloo-dialogs = "0.2.0"
 ansi-to-tui = "7.0"
 ansi-to-html = "0.2.2"
 path-absolutize = "3.1"
-crossterm = { version = "0.29.0" }
+crossterm = { version = "0.28.1" }
 ratatui = { version = "0.29.0" }
 shell-words = "1.1.0"
 

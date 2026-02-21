@@ -521,7 +521,7 @@ impl TraceController {
             error_handled,
         } = event;
 
-        let mut ph_event = posthog_rs::Event::new(action, distinct_id.to_string());
+        let mut ph_event = PosthogEvent::new(action, distinct_id.to_string());
 
         // The reporter's fields
         _ = ph_event.insert_prop("is_ci", CliSettings::is_ci());
@@ -1372,7 +1372,37 @@ async fn run_with_ctrl_c(
 /// We only store non-pii information in telemetry to track issues and performance
 /// across the CLI.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Reporter {
-    pub session_id: Uuid,
-    pub distinct_id: Uuid,
+struct Reporter {
+    session_id: Uuid,
+    distinct_id: Uuid,
+}
+
+/// A minimal PostHog event, replacing the `posthog-rs` crate dependency.
+/// See <https://posthog.com/docs/api/capture>
+#[derive(Serialize, Debug)]
+struct PosthogEvent {
+    event: String,
+    #[serde(rename = "$distinct_id")]
+    distinct_id: String,
+    properties: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl PosthogEvent {
+    fn new(event: impl Into<String>, distinct_id: impl Into<String>) -> Self {
+        Self {
+            event: event.into(),
+            distinct_id: distinct_id.into(),
+            properties: std::collections::HashMap::new(),
+        }
+    }
+
+    fn insert_prop<V: Serialize>(
+        &mut self,
+        key: impl Into<String>,
+        value: V,
+    ) -> Result<(), serde_json::Error> {
+        self.properties
+            .insert(key.into(), serde_json::to_value(value)?);
+        Ok(())
+    }
 }

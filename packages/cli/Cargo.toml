@@ -21,7 +21,6 @@ dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
-dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
@@ -33,10 +32,8 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
-# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
-# but pinning serde fixes the issue in the meantime
-serde = { version = "=1.0.221", features = ["derive"] }
+uuid = { workspace = true, features = ["v4", "v5", "v7"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
@@ -61,7 +58,7 @@ console = "0.16.0"
 ctrlc = "3.4.7"
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
-axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
@@ -72,13 +69,12 @@ syn = { workspace = true, features = [
     "visit-mut",
 ] }
 
-headers = "0.4.1"
 walkdir = "2"
 dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
+reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json", "blocking"] }
 tower = { workspace = true }
 git2 = "0.20.2"
 
@@ -97,7 +93,6 @@ prettyplease = { workspace = true }
 # Assets
 brotli = "8.0.1"
 ignore = "0.4.23"
-env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }
 
@@ -127,7 +122,6 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
-wasm-encoder = "0.235.0"
 
 # Extracting data from an executable
 object = { workspace = true, features = ["all"] }
@@ -136,24 +130,24 @@ itertools = { workspace = true }
 throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
-strum = { version = "0.27.1", features = ["derive"] }
-memmap = "0.7.0"
 walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
-tauri-utils = { workspace = true }
-tauri-macos-sign = { workspace = true }
-tauri-bundler = { workspace = true }
+# bundler dependencies
+icns = { workspace = true }
+image = { workspace = true }
+zip = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+md5 = { workspace = true }
+rpm = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
 tar = "0.4.44"
-local-ip-address = "0.6.5"
 dircpy = "0.3.19"
 plist = "1.7.4"
-memoize = "0.5.1"
 backtrace = "0.3.74"
 ar = "0.9.0"
-wasm-bindgen-externref-xform = "0.2.100"
 pdb = "0.8.0"
 self_update = { version = "0.42.0", features = [
     "archive-tar",
@@ -163,7 +157,6 @@ self_update = { version = "0.42.0", features = [
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
-posthog-rs = "0.3.5"
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
