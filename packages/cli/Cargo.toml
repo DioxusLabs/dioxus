@@ -59,7 +59,7 @@ console = "0.16.0"
 ctrlc = "3.4.7"
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
-axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
