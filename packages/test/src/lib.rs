@@ -1,4 +1,5 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(clippy::test_attr_in_doctest)] // The doctests need to show examples of tests
 //! A testing crate for Dioxus.
 //!
 //! This crate facilitates rendering, interacting with, and querying the DOM in tests of Dioxus

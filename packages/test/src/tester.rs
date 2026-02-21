@@ -165,15 +165,15 @@ impl Tester {
             .map_err(|_| TesterError::InvalidCssSelector(selector.into()))?;
         Ok(node_ids
             .into_iter()
-            .filter_map(|node_id| {
+            .map(|node_id| {
                 let node = self
                     .document
                     .get_node(node_id)
                     .expect("Element must be attached");
-                Some(TestElement {
+                TestElement {
                     document: &self.document,
                     node,
-                })
+                }
             })
             .collect())
     }
