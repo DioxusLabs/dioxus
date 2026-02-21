@@ -21,7 +21,6 @@ dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
 dioxus-cli-opt = { workspace = true }
-dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
