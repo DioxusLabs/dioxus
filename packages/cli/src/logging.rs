@@ -887,6 +887,7 @@ impl TraceController {
                         Setting::AlwaysOnTop { value } => json!({ "value": value }),
                         Setting::WSLFilePollInterval { value } => json!({ "value": value }),
                         Setting::DisableTelemetry { value } => json!({ "value": value }),
+                        Setting::PreferredEditor { value } => json!({ "value": format!("{:?}", value) }),
                     },
                 ),
             },
