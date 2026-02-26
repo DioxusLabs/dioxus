@@ -464,7 +464,7 @@ fn replace_and_add_items() {
         );
     }
 
-    // Rerendering adds an a static template
+    // Rerendering adds a static template
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
