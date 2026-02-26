@@ -7,8 +7,8 @@ use crate::streaming::{Mount, StreamingRenderer};
 use crate::{document::ServerDocument, ServeConfig};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    consume_context, has_context, try_consume_context, DynamicNode, ErrorContext, Runtime, ScopeId,
-    SuspenseContext, TemplateNode, VNode, VirtualDom,
+    consume_context, has_context, try_consume_context, DynamicNode, ErrorContext, RenderRedirect,
+    Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
 use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
@@ -17,7 +17,7 @@ use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::{request::Parts, HeaderMap, StatusCode};
+use http::{header::LOCATION, request::Parts, HeaderMap, HeaderValue, StatusCode};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -29,6 +29,18 @@ use tokio_util::task::LocalPoolHandle;
 
 use crate::StreamingMode;
 
+fn redirect_from_render_redirect(
+    error: &dioxus_core::CapturedError,
+) -> Option<(StatusCode, HeaderMap)> {
+    let redirect = error.downcast_ref::<RenderRedirect>()?;
+    let status = StatusCode::from_u16(redirect.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let mut headers = HeaderMap::new();
+    if let Ok(value) = HeaderValue::from_str(&redirect.location) {
+        headers.insert(LOCATION, value);
+    }
+    Some((status, headers))
+}
+
 /// Errors that can occur during server side rendering before the initial chunk is sent down
 pub enum SSRError {
     /// An error from the incremental renderer. This should result in a 500 code
@@ -37,6 +49,7 @@ pub enum SSRError {
     HttpError {
         status: StatusCode,
         message: Option<String>,
+        headers: HeaderMap,
     },
 }
 
@@ -140,6 +153,7 @@ impl SsrRendererPool {
             .ok_or_else(|| SSRError::HttpError {
                 status: StatusCode::BAD_REQUEST,
                 message: None,
+                headers: HeaderMap::new(),
             })?
             .to_string();
 
@@ -244,6 +258,16 @@ impl SsrRendererPool {
             if let Some(error) = error {
                 let mut status_code = None;
                 let mut out_message = None;
+                let mut out_headers = HeaderMap::new();
+
+                // Redirect control-flow injected by fullstack hooks (eg `use_loader`) should short-circuit
+                // SSR with a 3xx + Location, without treating it like a normal error page.
+                if let Some((status, headers)) = redirect_from_render_redirect(&error) {
+                    status_code = Some(status);
+                    out_message = None;
+                    out_headers.extend(headers);
+                }
+                // If it wasn't a RenderRedirect, keep checking other error types below.
 
                 // If the errors include an `HttpError` or `StatusCode` or `ServerFnError`, we need
                 // to try and return the appropriate status code
@@ -258,15 +282,30 @@ impl SsrRendererPool {
 
                 // todo - the user is allowed to return anything that impls `From<ServerFnError>`
                 // we need to eventually be able to downcast that and get the status code from it
-                if let Some(ServerFnError::ServerError { message, code, .. }) = error.downcast_ref()
-                {
-                    status_code = Some(
-                        (*code)
-                            .try_into()
-                            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-                    );
-
-                    out_message = Some(message.clone());
+                if let Some(server_fn_error) = error.downcast_ref::<ServerFnError>() {
+                    // Redirects are encoded as `ServerError` with a redirect status and structured details.
+                    if let Some(location) = server_fn_error.redirect_location() {
+                        if let ServerFnError::ServerError { code, .. } = server_fn_error {
+                            status_code = Some(
+                                (*code)
+                                    .try_into()
+                                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            );
+                        }
+                        // Redirects are control-flow; no message body by default.
+                        out_message = None;
+                        if let Ok(value) = HeaderValue::from_str(location) {
+                            out_headers.insert(LOCATION, value);
+                        }
+                    } else if let ServerFnError::ServerError { message, code, .. } = server_fn_error
+                    {
+                        status_code = Some(
+                            (*code)
+                                .try_into()
+                                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                        );
+                        out_message = Some(message.clone());
+                    }
                 }
 
                 // If there was an error while routing, return the error with a 404 status
@@ -281,6 +320,7 @@ impl SsrRendererPool {
                     _ = initial_result_tx.send(Err(SSRError::HttpError {
                         status: status_code,
                         message: out_message,
+                        headers: out_headers,
                     }));
                     return;
                 }
@@ -763,5 +803,24 @@ impl SsrRendererPool {
         to.write_str(&cfg.index.after_closing_body_tag)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn redirect_from_render_redirect_extracts_status_and_location() {
+        let captured =
+            dioxus_core::CapturedError::new(dioxus_core::RenderRedirect::new(307, "/sign-up"));
+
+        let (status, headers) =
+            redirect_from_render_redirect(&captured).expect("expected redirect");
+        assert_eq!(status, StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            headers.get(LOCATION).and_then(|v| v.to_str().ok()).unwrap(),
+            "/sign-up"
+        );
     }
 }
