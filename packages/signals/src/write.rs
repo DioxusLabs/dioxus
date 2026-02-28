@@ -447,6 +447,45 @@ pub trait WritableOptionExt<T>: Writable<Target = Option<T>> {
 
 impl<T, W> WritableOptionExt<T> for W where W: Writable<Target = Option<T>> {}
 
+/// An extension trait for [`Writable<Result<T, E>>`] that provides some convenience methods.
+pub trait WritableResultExt<T, E>: Writable<Target = Result<T, E>> {
+    /// Unwraps the inner value mutably, panicking if the Result is an error.
+    #[track_caller]
+    fn unwrap_mut(&mut self) -> WritableRef<'_, Self, T>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        WriteLock::filter_map(self.write(), |v| v.as_mut().ok())
+            .expect("Tried to unwrap a Result that was an error")
+    }
+
+    /// Attempts to mutably access the inner value of the Result.
+    #[track_caller]
+    fn as_mut(&mut self) -> Result<WritableRef<'_, Self, T>, WritableRef<'_, Self, E>>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        let is_ok = self.read().is_ok();
+        if is_ok {
+            Ok(WriteLock::map(self.write(), |v| {
+                v.as_mut()
+                    .ok()
+                    .expect("Result variant changed between read and write")
+            }))
+        } else {
+            Err(WriteLock::map(self.write(), |v| {
+                v.as_mut()
+                    .err()
+                    .expect("Result variant changed between read and write")
+            }))
+        }
+    }
+}
+
+impl<T, E, W> WritableResultExt<T, E> for W where W: Writable<Target = Result<T, E>> {}
+
 /// An extension trait for [`Writable<Vec<T>>`] that provides some convenience methods.
 pub trait WritableVecExt<T>: Writable<Target = Vec<T>> {
     /// Pushes a new value to the end of the vector.
