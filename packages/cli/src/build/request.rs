@@ -3996,7 +3996,7 @@ impl BuildRequest {
 
     /// Check if the wasm output should be bundled to an asset type app.
     fn should_bundle_to_asset(&self) -> bool {
-        self.release && !self.wasm_split && self.bundle == BundleFormat::Web
+        self.release && self.bundle == BundleFormat::Web
     }
 
     /// Bundle the web app
