@@ -148,6 +148,10 @@ fn app() -> Element {
 }
 
 fn calc_val(val: &str) -> f64 {
+    if val.is_empty() {
+        return 0.0;
+    }
+
     let mut temp = String::new();
     let mut operation = "+".to_string();
 
