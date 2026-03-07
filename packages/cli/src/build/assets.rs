@@ -35,9 +35,10 @@ use std::{
 
 use crate::Result;
 use anyhow::{bail, Context};
-use const_serialize::{serialize_const, ConstVec, SerializeConst};
+use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use dioxus_cli_opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
+use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -60,6 +61,7 @@ enum ManganisVersion {
     /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
     Legacy,
     /// The new version of the manganis format 0.7.2 onward
+    /// This now includes both assets (old BundledAsset format) and permissions (SymbolData format)
     New,
 }
 
@@ -69,11 +71,18 @@ impl ManganisVersion {
             ManganisVersion::Legacy => {
                 <manganis_core_07::BundledAsset as const_serialize_07::SerializeConst>::MEMORY_LAYOUT.size()
             }
-            ManganisVersion::New => BundledAsset::MEMORY_LAYOUT.size(),
+            // For new format, we use a larger buffer size to accommodate variable-length CBOR
+            // The actual size will be determined by CBOR deserialization
+            ManganisVersion::New => 4096,
         }
     }
 
-    fn deserialize(&self, data: &[u8]) -> Option<BundledAsset> {
+    /// Deserialize data, trying multiple formats for backward compatibility
+    ///
+    /// Tries in order:
+    /// 1. SymbolData (new unified format) - can contain Asset or Permission
+    /// 2. BundledAsset (old asset format) - for backward compatibility
+    fn deserialize(&self, data: &[u8]) -> Option<SymbolDataOrAsset> {
         match self {
             ManganisVersion::Legacy => {
                 let buffer = const_serialize_07::ConstReadBuffer::new(data);
@@ -81,18 +90,75 @@ impl ManganisVersion {
                 let (_, legacy_asset) =
                     const_serialize_07::deserialize_const!(manganis_core_07::BundledAsset, buffer)?;
 
-                Some(legacy_asset_to_modern_asset(&legacy_asset))
+                Some(SymbolDataOrAsset::Asset(legacy_asset_to_modern_asset(
+                    &legacy_asset,
+                )))
             }
             ManganisVersion::New => {
-                let (_, asset) =
-                    const_serialize::deserialize_const!(manganis_core::BundledAsset, data)?;
+                // First try SymbolData (new format with enum variant)
+                // const-serialize deserialization returns (remaining_bytes, value)
+                // We accept if remaining is empty or contains only padding (zeros)
+                if let Some((remaining, symbol_data)) = deserialize_const!(SymbolData, data) {
+                    // Check if remaining bytes are all zeros (padding) or empty
+                    // This handles the case where the linker section is larger than the actual data
+                    // Be very lenient with padding - as long as we successfully deserialized, accept it
+                    // The padding is just zeros added to fill the buffer size
+                    let is_valid = remaining.is_empty()
+                        || remaining.iter().all(|&b| b == 0)
+                        || remaining.len() <= data.len(); // Allow any amount of padding as long as it's not larger than data
 
-                Some(asset)
+                    if is_valid {
+                        return Some(SymbolDataOrAsset::SymbolData(Box::new(symbol_data)));
+                    } else {
+                        tracing::debug!(
+                            "SymbolData deserialized but invalid padding: {} remaining bytes out of {} total (first few bytes: {:?})",
+                            remaining.len(),
+                            data.len(),
+                            &data[..data.len().min(32)]
+                        );
+                    }
+                } else {
+                    tracing::debug!(
+                        "Failed to deserialize as SymbolData. Data length: {}, first few bytes: {:?}",
+                        data.len(),
+                        &data[..data.len().min(32)]
+                    );
+                }
+
+                // Fallback: try BundledAsset (direct format - assets are now serialized this way)
+                // This handles assets that were serialized directly as BundledAsset (not wrapped in SymbolData)
+                if let Some((remaining, asset)) = deserialize_const!(BundledAsset, data) {
+                    // Check if remaining bytes are all zeros (padding) or empty
+                    // Accept any amount of padding as long as it's all zeros (which is what we pad with)
+                    let is_valid = remaining.is_empty() || remaining.iter().all(|&b| b == 0);
+
+                    if is_valid {
+                        tracing::debug!(
+                            "Successfully deserialized BundledAsset, remaining padding: {} bytes",
+                            remaining.len()
+                        );
+                        return Some(SymbolDataOrAsset::Asset(asset));
+                    } else {
+                        tracing::warn!(
+                            "BundledAsset deserialized but remaining bytes are not all zeros: {} remaining bytes, first few: {:?}",
+                            remaining.len(),
+                            &remaining[..remaining.len().min(16)]
+                        );
+                    }
+                } else {
+                    tracing::warn!(
+                        "Failed to deserialize as BundledAsset. Data length: {}, first 32 bytes: {:?}",
+                        data.len(),
+                        &data[..data.len().min(32)]
+                    );
+                }
+
+                None
             }
         }
     }
 
-    fn serialize(&self, asset: &BundledAsset) -> Vec<u8> {
+    fn serialize_asset(&self, asset: &BundledAsset) -> Vec<u8> {
         match self {
             ManganisVersion::Legacy => {
                 let legacy_asset = modern_asset_to_legacy_asset(asset);
@@ -103,11 +169,71 @@ impl ManganisVersion {
                 buffer.as_ref().to_vec()
             }
             ManganisVersion::New => {
+                // New format: serialize as BundledAsset directly (backward compatible)
+                // Pad to 4096 bytes to match the linker output size
                 let buffer = serialize_const(asset, ConstVec::new());
-                buffer.as_ref().to_vec()
+                let mut data = buffer.as_ref().to_vec();
+                if data.len() < 4096 {
+                    data.resize(4096, 0);
+                }
+                data
             }
         }
     }
+
+    fn serialize_symbol_data(&self, data: &SymbolData) -> Option<Vec<u8>> {
+        match self {
+            ManganisVersion::Legacy => None,
+            ManganisVersion::New => {
+                let buffer = serialize_const(data, ConstVec::new());
+                let mut bytes = buffer.as_ref().to_vec();
+                if bytes.len() < 4096 {
+                    bytes.resize(4096, 0);
+                }
+                Some(bytes)
+            }
+        }
+    }
+}
+
+/// Result of deserializing a symbol - can be either SymbolData or legacy Asset
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+enum SymbolDataOrAsset {
+    /// New unified format (can contain Asset or Permission)
+    SymbolData(Box<SymbolData>),
+
+    /// Old asset format (backward compatibility)
+    Asset(BundledAsset),
+}
+
+#[derive(Clone, Copy)]
+struct AssetWriteEntry {
+    symbol: ManganisSymbolOffset,
+    asset_index: usize,
+    representation: AssetRepresentation,
+}
+
+impl AssetWriteEntry {
+    fn new(
+        symbol: ManganisSymbolOffset,
+        asset_index: usize,
+        representation: AssetRepresentation,
+    ) -> Self {
+        Self {
+            symbol,
+            asset_index,
+            representation,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+enum AssetRepresentation {
+    /// Serialized as a raw BundledAsset (legacy or new format)
+    RawBundled,
+    /// Serialized as SymbolData::Asset (new CBOR format)
+    SymbolData,
 }
 
 fn legacy_asset_to_modern_asset(
@@ -570,9 +696,24 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     Ok(offsets)
 }
 
+/// Result of extracting symbols from a binary file
+#[derive(Debug, Clone)]
+pub(crate) struct SymbolExtractionResult {
+    /// Assets found in the binary
+    pub assets: Vec<BundledAsset>,
+
+    /// Android plugin artifacts discovered in the binary
+    pub android_artifacts: Vec<AndroidArtifactMetadata>,
+
+    /// Swift packages discovered in the binary
+    pub swift_packages: Vec<SwiftPackageMetadata>,
+}
+
 /// Find all assets in the given file, hash them, and write them back to the file.
-/// Then return an `AssetManifest` containing all the assets found in the file.
-pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+/// Also extracts Android/Swift plugin metadata for FFI bindings.
+pub(crate) async fn extract_symbols_from_file(
+    path: impl AsRef<Path>,
+) -> Result<SymbolExtractionResult> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,
@@ -588,23 +729,82 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
     let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
 
     let mut assets = Vec::new();
+    let mut android_artifacts = Vec::new();
+    let mut swift_packages = Vec::new();
+    let mut write_entries = Vec::new();
 
-    // Read each asset from the data section using the offsets
+    // Read each symbol from the data section using the offsets
     for symbol in offsets.iter().copied() {
         let version = symbol.version;
         let offset = symbol.offset;
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        let mut data_in_range = vec![0; version.size()];
-        file.read_exact(&mut data_in_range)?;
 
-        if let Some(bundled_asset) = version.deserialize(&data_in_range) {
-            tracing::debug!(
-                "Found asset at offset {offset}: {:?}",
-                bundled_asset.absolute_source_path()
-            );
-            assets.push(bundled_asset);
+        // Read data from file_contents (already loaded into memory)
+        // Use a large buffer for variable length data, but don't exceed file size
+        let buffer_size = version
+            .size()
+            .min(file_contents.len().saturating_sub(offset as usize));
+        if buffer_size == 0 {
+            tracing::warn!("Symbol at offset {offset} is beyond file size");
+            continue;
+        }
+
+        let data_in_range = if (offset as usize) + buffer_size <= file_contents.len() {
+            &file_contents[offset as usize..(offset as usize) + buffer_size]
         } else {
-            tracing::warn!("Found an asset at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions.");
+            &file_contents[offset as usize..]
+        };
+
+        // Try to deserialize - const-serialize will handle variable-length data correctly
+        // The deserialization should work even with padding (zeros) at the end
+        if let Some(result) = version.deserialize(data_in_range) {
+            match result {
+                SymbolDataOrAsset::SymbolData(symbol_data) => match *symbol_data {
+                    SymbolData::Asset(asset) => {
+                        tracing::debug!(
+                            "Found asset (via SymbolData) at offset {offset}: {:?}",
+                            asset.absolute_source_path()
+                        );
+                        let asset_index = assets.len();
+                        assets.push(asset);
+                        write_entries.push(AssetWriteEntry::new(
+                            symbol,
+                            asset_index,
+                            AssetRepresentation::SymbolData,
+                        ));
+                    }
+
+                    SymbolData::AndroidArtifact(meta) => {
+                        tracing::debug!(
+                            "Found Android artifact declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        android_artifacts.push(meta);
+                    }
+                    SymbolData::SwiftPackage(meta) => {
+                        tracing::debug!(
+                            "Found Swift package declaration for plugin {}",
+                            meta.plugin_name.as_str()
+                        );
+                        swift_packages.push(meta);
+                    }
+                    _ => {}
+                },
+                SymbolDataOrAsset::Asset(asset) => {
+                    tracing::debug!(
+                        "Found asset (old format) at offset {offset}: {:?}",
+                        asset.absolute_source_path()
+                    );
+                    let asset_index = assets.len();
+                    assets.push(asset);
+                    write_entries.push(AssetWriteEntry::new(
+                        symbol,
+                        asset_index,
+                        AssetRepresentation::RawBundled,
+                    ));
+                }
+            }
+        } else {
+            tracing::warn!("Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions, or the symbol may be in an unsupported format.");
         }
     }
 
@@ -613,14 +813,47 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         .par_iter_mut()
         .for_each(dioxus_cli_opt::add_hash_to_asset);
 
-    // Write back the assets to the binary file
-    for (symbol, asset) in offsets.into_iter().zip(&assets) {
-        let version = symbol.version;
-        let offset = symbol.offset;
-        let new_data = version.serialize(asset);
+    // Write back only assets to the binary file (permissions are not modified)
+    for entry in write_entries {
+        let version = entry.symbol.version;
+        let offset = entry.symbol.offset;
+        let asset = assets
+            .get(entry.asset_index)
+            .copied()
+            .expect("asset index collected from symbol scan");
 
-        file.seek(std::io::SeekFrom::Start(offset))?;
-        file.write_all(new_data.as_ref())?;
+        match entry.representation {
+            AssetRepresentation::RawBundled => {
+                tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
+                let new_data = version.serialize_asset(&asset);
+                if new_data.len() > version.size() {
+                    tracing::warn!(
+                        "Asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
+                        new_data.len(),
+                        version.size()
+                    );
+                }
+                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
+            }
+            AssetRepresentation::SymbolData => {
+                tracing::debug!("Writing asset (SymbolData) to offset {offset}: {:?}", asset);
+                let Some(new_data) = version.serialize_symbol_data(&SymbolData::Asset(asset))
+                else {
+                    tracing::warn!(
+                        "Symbol at offset {offset} was stored as SymbolData but the binary format only supports raw assets"
+                    );
+                    continue;
+                };
+                if new_data.len() > version.size() {
+                    tracing::warn!(
+                        "SymbolData asset at offset {offset} serialized to {} bytes, but buffer is only {} bytes. Truncating output.",
+                        new_data.len(),
+                        version.size()
+                    );
+                }
+                write_serialized_bytes(&mut file, offset, &new_data, version.size())?;
+            }
+        }
     }
 
     // Ensure the file is flushed to disk
@@ -645,12 +878,23 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
         }
     }
 
-    // Finally, create the asset manifest
+    Ok(SymbolExtractionResult {
+        assets,
+        android_artifacts,
+        swift_packages,
+    })
+}
+
+/// Find all assets in the given file, hash them, and write them back to the file.
+/// Then return an `AssetManifest` containing all the assets found in the file.
+///
+/// This is a convenience function that extracts symbols and returns only assets.
+pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+    let result = extract_symbols_from_file(path).await?;
     let mut manifest = AssetManifest::default();
-    for asset in assets {
+    for asset in result.assets {
         manifest.insert_asset(asset);
     }
-
     Ok(manifest)
 }
 
@@ -679,4 +923,26 @@ async fn open_file_for_writing_with_timeout(
             }
         }
     }
+}
+
+fn write_serialized_bytes(
+    file: &mut std::fs::File,
+    offset: u64,
+    data: &[u8],
+    buffer_size: usize,
+) -> Result<()> {
+    use std::io::SeekFrom;
+
+    file.seek(SeekFrom::Start(offset))?;
+    if data.len() <= buffer_size {
+        file.write_all(data)?;
+        if data.len() < buffer_size {
+            let padding = vec![0; buffer_size - data.len()];
+            file.write_all(&padding)?;
+        }
+    } else {
+        file.write_all(&data[..buffer_size])?;
+    }
+
+    Ok(())
 }

@@ -72,6 +72,7 @@ impl WebviewEdits {
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 self.handle_html_event(event)
             },
@@ -531,6 +532,7 @@ impl WebviewInstance {
 
             {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
@@ -542,6 +544,7 @@ impl WebviewInstance {
             }
 
             // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             self.edits.wry_queue.with_mutation_state_mut(|f| self.dom.render_immediate(f));

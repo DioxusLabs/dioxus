@@ -1,17 +1,20 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    {{#each gradle_plugins}}
+    id("{{ this }}")
+    {{/each}}
 }
 
 android {
     namespace="{{ application_id }}"
-    compileSdk = 33
+    compileSdk = {{ compile_sdk }}
     defaultConfig {
         applicationId = "{{ application_id }}"
-        minSdk = 24
-        targetSdk = 33
+        minSdk = {{ min_sdk }}
+        targetSdk = {{ target_sdk }}
         versionCode = 1
-        versionName = "1.0"
+        versionName = "{{ version }}"
     }
     {{#if android_bundle}}
     signingConfigs {
@@ -48,10 +51,19 @@ android {
         }
     }
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         buildConfig = true
+    }
+    sourceSets {
+        getByName("main") {
+            java.srcDirs("src/main/kotlin", "src/main/java")
+        }
     }
 }
 
@@ -59,4 +71,7 @@ dependencies {
     implementation("androidx.webkit:webkit:1.6.1")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.8.0")
+    {{#each gradle_dependencies}}
+    implementation("{{ this }}")
+    {{/each}}
 }

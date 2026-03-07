@@ -222,7 +222,7 @@ impl TailwindCli {
         let arch = match target_lexicon::HOST.architecture {
             target_lexicon::Architecture::X86_64 if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::X86_64 => "x64",
-            // you would think this would be arm64.exe, but tailwind doesnt distribute arm64 binaries
+            // you would think this would be arm64.exe, but tailwind doesn't distribute arm64 binaries
             target_lexicon::Architecture::Aarch64(_) if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::Aarch64(_) => "arm64",
             _ => return None,
