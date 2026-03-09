@@ -467,19 +467,18 @@ pub trait WritableResultExt<T, E>: Writable<Target = Result<T, E>> {
         T: 'static,
         E: 'static,
     {
-        let is_ok = self.read().is_ok();
-        if is_ok {
-            Ok(WriteLock::map(self.write(), |v| {
+        let write = self.write();
+        match write.as_ref() {
+            Ok(_) => Ok(WriteLock::map(write, |v| {
                 v.as_mut()
                     .ok()
                     .expect("Result variant changed between read and write")
-            }))
-        } else {
-            Err(WriteLock::map(self.write(), |v| {
+            })),
+            Err(_) => Err(WriteLock::map(write, |v| {
                 v.as_mut()
                     .err()
                     .expect("Result variant changed between read and write")
-            }))
+            })),
         }
     }
 }
