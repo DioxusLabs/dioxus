@@ -48,6 +48,11 @@ pub struct WebsysDom {
 
     #[cfg(feature = "hydrate")]
     pub(crate) suspense_hydration_ids: crate::hydration::SuspenseHydrationIds,
+
+    /// Hydration validator for debug mode - validates DOM matches vdom expectations
+    #[cfg(feature = "hydrate")]
+    #[cfg(debug_assertions)]
+    pub(crate) hydration_validator: Option<crate::hydration::HydrationValidator>,
 }
 
 impl WebsysDom {
@@ -129,6 +134,9 @@ impl WebsysDom {
             skip_mutations: false,
             #[cfg(feature = "hydrate")]
             suspense_hydration_ids: Default::default(),
+            #[cfg(feature = "hydrate")]
+            #[cfg(debug_assertions)]
+            hydration_validator: None,
         }
     }
 }
