@@ -671,7 +671,8 @@ impl AppServer {
         }
 
         // Skip opening native client if still building (web can open anytime)
-        if self.client.build.bundle != BundleFormat::Web && self.client.stage < BuildStage::Success {
+        if self.client.build.bundle != BundleFormat::Web && self.client.stage < BuildStage::Success
+        {
             tracing::trace!("Skipping client open: will open once build completes");
             return Ok(());
         }
