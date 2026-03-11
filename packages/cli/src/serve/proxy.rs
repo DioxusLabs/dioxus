@@ -150,11 +150,16 @@ pub(crate) fn proxy_to(
 
         let uri = req.uri().clone();
 
-        // Modify request URI for backend
-        let mut uri_parts = req.uri().clone().into_parts();
-        uri_parts.authority = url.authority().cloned();
-        uri_parts.scheme = url.scheme().cloned();
-        *req.uri_mut() = Uri::from_parts(uri_parts).unwrap();
+        // Set Host header for backend (send_with_retry handles TCP connection via url)
+        if let Some(authority) = url.authority() {
+            req.headers_mut().insert(
+                HOST,
+                authority
+                    .to_string()
+                    .parse()
+                    .expect("authority is valid header value"),
+            );
+        }
 
         // Send with retry - TCP connect retries, then reuses connection for HTTP
         let res = send_with_retry(&url, req, handle_error).await;
