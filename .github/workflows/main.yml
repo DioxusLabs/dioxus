@@ -198,6 +198,73 @@ jobs:
           cache-all-crates: "true"
       - run: cargo check --workspace --all-features --all-targets
 
+  bundle-appimage-smoke:
+    if: github.event.pull_request.draft == false
+    name: Bundle Smoke | AppImage
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev patchelf desktop-file-utils librsvg2-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Bundle hotdog as AppImage
+        working-directory: ./examples/01-app-demos/hotdog
+        run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage
+      - name: Verify AppImage output
+        working-directory: ./examples/01-app-demos/hotdog
+        run: |
+          find target -name '*.AppImage' -print
+          test -n "$(find target -name '*.AppImage' -print -quit)"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: hotdog-appimage
+          path: examples/01-app-demos/hotdog/target/**/*.AppImage
+          if-no-files-found: ignore
+
+  bundle-windows-smoke:
+    if: github.event.pull_request.draft == false
+    name: Bundle Smoke | Windows ${{ matrix.package_type }}
+    runs-on: blacksmith-4vcpu-windows-2025
+    timeout-minutes: 45
+    strategy:
+      matrix:
+        include:
+          - package_type: msi
+            artifact_glob: "*.msi"
+          - package_type: nsis
+            artifact_glob: "*-setup.exe"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Bundle hotdog as ${{ matrix.package_type }}
+        working-directory: .\examples\01-app-demos\hotdog
+        run: cargo run --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types ${{ matrix.package_type }}
+      - name: Verify ${{ matrix.package_type }} output
+        working-directory: .\examples\01-app-demos\hotdog
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path .\target -Recurse -File -Include "${{ matrix.artifact_glob }}"
+          $files | ForEach-Object { $_.FullName }
+          if (-not $files) { throw "Expected ${{ matrix.package_type }} artifact was not produced." }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: hotdog-${{ matrix.package_type }}
+          path: examples/01-app-demos/hotdog/target/**/${{ matrix.artifact_glob }}
+          if-no-files-found: ignore
+
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy

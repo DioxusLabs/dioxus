@@ -1,4 +1,4 @@
-use crate::bundler::{category::AppCategory, context::Arch, BundleContext};
+use crate::bundler::{AppCategory, BundleContext};
 use anyhow::{bail, Context, Result};
 use handlebars::Handlebars;
 use std::{
@@ -8,26 +8,34 @@ use std::{
 };
 use tokio::process::Command;
 
-/// Default .desktop file template (Handlebars).
-const DEFAULT_DESKTOP_TEMPLATE: &str = "[Desktop Entry]
-Categories={{categories}}
-{{#if comment}}
-Comment={{comment}}
-{{/if}}
-Exec={{exec}}
-Icon={{icon}}
-Name={{name}}
-Terminal=false
-Type=Application
-";
-
 impl BundleContext<'_> {
-    /// Bundle the project as an AppImage.
+    /// Build a self-contained Linux AppImage using `linuxdeploy`.
+    ///
+    /// AppImage bundling is implemented as a two-phase process:
+    /// 1. Construct an AppDir directory tree that looks like a normal Linux desktop
+    ///    installation rooted at `usr/`.
+    /// 2. Hand that AppDir to `linuxdeploy`, which turns it into a runnable
+    ///    `.AppImage` executable.
+    ///
+    /// Concretely, this method:
+    /// 1. Creates `project_out_directory()/bundle/appimage/<name>.AppDir`.
+    /// 2. Reuses the shared Linux payload generator so the AppDir contains the same
+    ///    executable, resources, `.desktop` file, icons, sidecar binaries, and custom
+    ///    files used by other Linux package formats.
+    /// 3. Adds the top-level `AppRun`, desktop file, and icon symlinks expected by
+    ///    AppImage tooling.
+    /// 4. Invokes the pre-resolved `linuxdeploy` binary with `OUTPUT=<target>` so the
+    ///    final artifact lands at a deterministic path.
+    /// 5. Renames the output if `linuxdeploy` used its own filename convention.
+    /// 6. Removes the temporary AppDir after the final image has been created.
+    ///
+    /// The result is a single `.AppImage` file in
+    /// `project_out_directory()/bundle/appimage`.
     pub(crate) async fn bundle_linux_appimage(&self) -> Result<Vec<PathBuf>> {
         let name = self.main_binary_name().to_string();
         let version = self.version_string();
         let arch = self.binary_arch();
-        let arch_str = appimage_arch(arch);
+        let arch_str = arch.appimage_arch();
 
         let output_dir = self.project_out_directory().join("bundle").join("appimage");
         fs::create_dir_all(&output_dir)?;
@@ -54,22 +62,29 @@ impl BundleContext<'_> {
 
         tracing::info!("Running linuxdeploy...");
 
-        let status = Command::new(linuxdeploy)
+        let output = Command::new(linuxdeploy)
             .arg("--appdir")
             .arg(&appdir)
             .arg("--output")
             .arg("appimage")
             .env("OUTPUT", &appimage_path)
+            // Run the linuxdeploy AppImage in extract-and-run mode to avoid host
+            // runtime/FUSE differences on distros and CI runners.
+            .env("APPIMAGE_EXTRACT_AND_RUN", "1")
             .env("NO_STRIP", "true")
             .current_dir(&output_dir)
-            .status()
+            .output()
             .await
             .with_context(|| format!("Failed to run linuxdeploy: {}", linuxdeploy.display()))?;
 
-        if !status.success() {
+        if !output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
             bail!(
-                "linuxdeploy failed with exit code: {}",
-                status.code().unwrap_or(-1)
+                "linuxdeploy failed with exit code {:?}\nstdout:\n{}\nstderr:\n{}",
+                output.status.code(),
+                stdout.trim(),
+                stderr.trim()
             );
         }
 
@@ -86,9 +101,13 @@ impl BundleContext<'_> {
                     })?;
                 }
             } else {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
                 bail!(
-                    "AppImage was not created. Expected at: {}",
-                    appimage_path.display()
+                    "AppImage was not created. Expected at: {}\nlinuxdeploy stdout:\n{}\nlinuxdeploy stderr:\n{}",
+                    appimage_path.display(),
+                    stdout.trim(),
+                    stderr.trim()
                 );
             }
         }
@@ -99,9 +118,29 @@ impl BundleContext<'_> {
         Ok(vec![appimage_path])
     }
 
-    /// Bundle the project as a .deb package.
+    /// Build a Debian `.deb` package entirely in Rust.
+    ///
+    /// The Debian bundler does not shell out to `dpkg-deb`. Instead it assembles the
+    /// archive directly from its three standard members:
+    /// - `debian-binary`
+    /// - `control.tar.gz`
+    /// - `data.tar.gz`
+    ///
+    /// The bundling pipeline is:
+    /// 1. Create a temporary `_data` directory containing the Linux install payload.
+    ///    This payload places the main executable in `/usr/bin`, resources in
+    ///    `/usr/lib/<name>`, freedesktop metadata under `/usr/share`, sidecar
+    ///    binaries, custom files, and an optional compressed changelog.
+    /// 2. Compute the installed size from that payload tree.
+    /// 3. Build `control.tar.gz`, including the `control` metadata file, `md5sums`,
+    ///    and any maintainer scripts configured in the Debian settings.
+    /// 4. Build `data.tar.gz` from the staged payload tree.
+    /// 5. Write the final `.deb` as an `ar` archive in the correct member order.
+    /// 6. Remove the temporary `_data` directory after assembly completes.
+    ///
+    /// The final package is emitted to `project_out_directory()/bundle/deb`.
     pub(crate) async fn bundle_linux_deb(&self) -> Result<Vec<PathBuf>> {
-        let arch = deb_arch(self.binary_arch());
+        let arch = self.binary_arch().deb_arch();
         let package_name = self.deb_package_name();
         let version = self.version_string();
 
@@ -122,13 +161,8 @@ impl BundleContext<'_> {
         self.generate_linux_data(&data_dir)?;
 
         let installed_size = dir_size_kb(&data_dir)?;
-        let control_tar = self.build_linux_control_tar(
-            &package_name,
-            &version,
-            arch,
-            installed_size,
-            &data_dir,
-        )?;
+        let control_tar =
+            self.build_linux_control_tar(&package_name, &version, arch, installed_size, &data_dir)?;
         let data_tar = build_data_tar(&data_dir)?;
 
         let deb_file = File::create(&deb_path)
@@ -163,11 +197,30 @@ impl BundleContext<'_> {
         Ok(vec![deb_path])
     }
 
-    /// Bundle the project as an RPM package.
+    /// Build an RPM package using the `rpm` crate.
+    ///
+    /// RPM bundling mirrors the Linux desktop payload used by the Debian flow, but it
+    /// expresses the package through `rpm::PackageBuilder` instead of manually
+    /// constructing archive members.
+    ///
+    /// The method performs these steps:
+    /// 1. Initialize the RPM builder with package identity, version, architecture,
+    ///    description, and license metadata.
+    /// 2. Add the main executable at `/usr/bin/<name>`.
+    /// 3. Generate a freedesktop `.desktop` file and add it under
+    ///    `/usr/share/applications`.
+    /// 4. Add configured icons under the appropriate `hicolor` directories.
+    /// 5. Copy resources into a temporary directory, enumerate them, and add each file
+    ///    under `/usr/lib/<name>/...`.
+    /// 6. Reuse Debian-style custom files and maintainer scripts where applicable.
+    /// 7. Attach runtime dependency declarations from the Debian settings.
+    /// 8. Serialize the final package to disk and remove the temporary staging area.
+    ///
+    /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
     pub(crate) async fn bundle_linux_rpm(&self) -> Result<Vec<PathBuf>> {
         let name = self.main_binary_name().to_string();
         let version = self.version_string();
-        let arch = rpm_arch(self.binary_arch());
+        let arch = self.binary_arch().rpm_arch();
         let license = self.license().unwrap_or("Unknown").to_string();
         let description = self.short_description();
 
@@ -282,14 +335,16 @@ impl BundleContext<'_> {
 
         if let Some(script_path) = &deb_settings.pre_install_script {
             let path = resolve_path(&crate_dir, script_path);
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read pre-install script: {}", path.display()))?;
+            let content = fs::read_to_string(&path).with_context(|| {
+                format!("Failed to read pre-install script: {}", path.display())
+            })?;
             builder = builder.pre_install_script(content);
         }
         if let Some(script_path) = &deb_settings.post_install_script {
             let path = resolve_path(&crate_dir, script_path);
-            let content = fs::read_to_string(&path)
-                .with_context(|| format!("Failed to read post-install script: {}", path.display()))?;
+            let content = fs::read_to_string(&path).with_context(|| {
+                format!("Failed to read post-install script: {}", path.display())
+            })?;
             builder = builder.post_install_script(content);
         }
         if let Some(script_path) = &deb_settings.pre_remove_script {
@@ -406,11 +461,25 @@ impl BundleContext<'_> {
         let mut handlebars = Handlebars::new();
         handlebars.set_strict_mode(false);
 
-        let template = if let Some(path) = desktop_template {
-            fs::read_to_string(path)
-                .with_context(|| format!("Failed to read desktop template: {}", path.display()))?
-        } else {
-            DEFAULT_DESKTOP_TEMPLATE.to_string()
+        let template = match desktop_template {
+            // Path to template
+            Some(path) => fs::read_to_string(path)
+                .with_context(|| format!("Failed to read desktop template: {}", path.display()))?,
+
+            // Default .desktop file template (Handlebars).
+            None => String::from(
+                "[Desktop Entry]
+Categories={{categories}}
+{{#if comment}}
+Comment={{comment}}
+{{/if}}
+Exec={{exec}}
+Icon={{icon}}
+Name={{name}}
+Terminal=false
+Type=Application
+",
+            ),
         };
 
         handlebars
@@ -430,8 +499,14 @@ impl BundleContext<'_> {
 
         let mut json_data = serde_json::Map::new();
         json_data.insert("categories".into(), serde_json::Value::String(categories));
-        json_data.insert("exec".into(), serde_json::Value::String(bin_name.to_string()));
-        json_data.insert("icon".into(), serde_json::Value::String(bin_name.to_string()));
+        json_data.insert(
+            "exec".into(),
+            serde_json::Value::String(bin_name.to_string()),
+        );
+        json_data.insert(
+            "icon".into(),
+            serde_json::Value::String(bin_name.to_string()),
+        );
         json_data.insert("name".into(), serde_json::Value::String(product_name));
         if has_comment {
             json_data.insert("comment".into(), serde_json::Value::String(description));
@@ -459,8 +534,9 @@ impl BundleContext<'_> {
 
             match ext.as_str() {
                 "png" => {
-                    let file = fs::File::open(icon_path)
-                        .with_context(|| format!("Failed to open PNG icon: {}", icon_path.display()))?;
+                    let file = fs::File::open(icon_path).with_context(|| {
+                        format!("Failed to open PNG icon: {}", icon_path.display())
+                    })?;
                     let decoder = png::Decoder::new(BufReader::new(file));
                     let reader = decoder.read_info().with_context(|| {
                         format!("Failed to decode PNG dimensions: {}", icon_path.display())
@@ -533,10 +609,7 @@ impl BundleContext<'_> {
                         let info = reader.info();
                         let (w, h) = (info.width, info.height);
                         let size = w.max(h);
-                        if best
-                            .as_ref()
-                            .is_none_or(|(best_size, _)| size > *best_size)
-                        {
+                        if best.as_ref().is_none_or(|(best_size, _)| size > *best_size) {
                             best = Some((size, icon_path));
                         }
                     }
@@ -621,11 +694,6 @@ impl BundleContext<'_> {
         }
 
         Ok(())
-    }
-
-    /// Generate a Debian-friendly package name.
-    fn deb_package_name(&self) -> String {
-        self.main_binary_name().to_lowercase().replace('_', "-")
     }
 
     /// Build the control.tar.gz containing the control file, md5sums, and maintainer scripts.
@@ -759,6 +827,11 @@ impl BundleContext<'_> {
 
         Ok(control)
     }
+
+    /// Generate a Debian-friendly package name.
+    fn deb_package_name(&self) -> String {
+        self.main_binary_name().to_lowercase().replace('_', "-")
+    }
 }
 
 /// Find the icon file within the AppDir's hicolor directory.
@@ -779,10 +852,7 @@ fn find_icon_in_appdir(appdir: &Path, name: &str) -> Option<PathBuf> {
                 let dir_name = entry.file_name().to_string_lossy().to_string();
                 if let Some(size_str) = dir_name.split('x').next() {
                     if let Ok(size) = size_str.parse::<u32>() {
-                        if best
-                            .as_ref()
-                            .is_none_or(|(best_size, _)| size > *best_size)
-                        {
+                        if best.as_ref().is_none_or(|(best_size, _)| size > *best_size) {
                             best = Some((size, icon_path));
                         }
                     }
@@ -887,45 +957,6 @@ fn collect_files(dir: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
         files.push((abs, rel));
     }
     Ok(files)
-}
-
-/// Map Arch enum to Debian architecture string.
-fn deb_arch(arch: Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "amd64",
-        Arch::X86 => "i386",
-        Arch::AArch64 => "arm64",
-        Arch::Armhf => "armhf",
-        Arch::Armel => "armel",
-        Arch::Riscv64 => "riscv64",
-        Arch::Universal => "all",
-    }
-}
-
-/// Map Arch to RPM architecture string.
-fn rpm_arch(arch: Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "x86_64",
-        Arch::X86 => "i686",
-        Arch::AArch64 => "aarch64",
-        Arch::Armhf => "armv7hl",
-        Arch::Armel => "armv6l",
-        Arch::Riscv64 => "riscv64",
-        Arch::Universal => "noarch",
-    }
-}
-
-/// Map Arch to the architecture string used in AppImage filenames.
-fn appimage_arch(arch: Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "x86_64",
-        Arch::X86 => "i386",
-        Arch::AArch64 => "aarch64",
-        Arch::Armhf => "armhf",
-        Arch::Armel => "armel",
-        Arch::Riscv64 => "riscv64",
-        Arch::Universal => "x86_64",
-    }
 }
 
 /// Calculate total size of a directory tree in kilobytes.

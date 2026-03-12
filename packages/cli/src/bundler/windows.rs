@@ -1,4 +1,3 @@
-use crate::bundler::context::Arch;
 use crate::bundler::BundleContext;
 use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings};
 use anyhow::{bail, Context, Result};
@@ -10,7 +9,30 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 impl BundleContext<'_> {
-    /// Bundle the project as a WiX MSI installer.
+    /// Build a Windows MSI installer using the WiX toolset.
+    ///
+    /// This method stages the application into a temporary installer layout, renders a
+    /// WiX source file, compiles that source into `.wixobj` files with `candle.exe`,
+    /// and links the final `.msi` with `light.exe`.
+    ///
+    /// The bundling pipeline is:
+    /// 1. Resolve the WiX toolchain path that was pre-fetched during context setup.
+    /// 2. Normalize the application version into WiX's constrained version format.
+    /// 3. Compute installer metadata such as the upgrade code, publisher, icons,
+    ///    license files, banner images, and optional fragment references.
+    /// 4. Populate a `_staging` directory containing the main executable, copied
+    ///    resources, and external binaries.
+    /// 5. Render the `.wxs` source from either the built-in template or a user
+    ///    supplied template.
+    /// 6. Compile the main `.wxs` and any configured fragment files with
+    ///    `candle.exe`.
+    /// 7. Link all generated `.wixobj` files into the final `.msi` with `light.exe`.
+    /// 8. Optionally sign the resulting installer with the configured Windows signing
+    ///    settings.
+    ///
+    /// The final artifact is written to `project_out_directory()/bundle/msi`.
+    /// Intermediate `.wxs`, `.wixobj`, and `_staging` files are intentionally left in
+    /// place because they are useful when diagnosing packaging failures.
     pub(crate) async fn bundle_windows_msi(&self) -> Result<Vec<PathBuf>> {
         let output_dir = self.project_out_directory().join("bundle").join("msi");
         std::fs::create_dir_all(&output_dir).context("Failed to create MSI output directory")?;
@@ -27,13 +49,8 @@ impl BundleContext<'_> {
         let light = wix_dir.join("light.exe");
 
         let arch = self.binary_arch();
-        let arch_str = arch_to_windows_string(&arch);
-        let wix_arch = match arch {
-            Arch::X86_64 => "x64",
-            Arch::X86 => "x86",
-            Arch::AArch64 => "arm64",
-            _ => "x64",
-        };
+        let arch_str = arch.windows_arch();
+        let wix_arch = arch.wix_arch();
 
         let product_name = self.product_name();
         let version = wix_version(
@@ -72,6 +89,8 @@ impl BundleContext<'_> {
         std::fs::create_dir_all(&resources_dir)?;
         self.copy_resources(&resources_dir)?;
         self.copy_external_binaries(&staging_dir)?;
+        let staged_files = collect_staged_files(&staging_dir, Some(&main_binary_dest))?;
+        let (install_tree, component_refs_xml) = render_wix_install_tree(&staged_files);
 
         let mut data = BTreeMap::new();
         data.insert(
@@ -181,8 +200,12 @@ impl BundleContext<'_> {
             to_json_array(&wix_settings.merge_refs),
         );
         data.insert(
-            "resource_components".to_string(),
-            serde_json::Value::Array(Vec::new()),
+            "install_tree".to_string(),
+            serde_json::Value::String(install_tree),
+        );
+        data.insert(
+            "component_refs_xml".to_string(),
+            serde_json::Value::String(component_refs_xml),
         );
 
         let mut hbs = Handlebars::new();
@@ -325,7 +348,28 @@ impl BundleContext<'_> {
         Ok(vec![output_path])
     }
 
-    /// Bundle the project as an NSIS installer.
+    /// Build a Windows installer executable using NSIS.
+    ///
+    /// NSIS packaging follows the same broad staging pattern as MSI bundling, but the
+    /// installer behavior is expressed through a generated `.nsi` script rather than
+    /// WiX XML.
+    ///
+    /// The method performs these steps:
+    /// 1. Resolve the `makensis` binary prepared during tool resolution.
+    /// 2. Create an `_staging` directory containing the main executable, copied
+    ///    resources, and external binaries.
+    /// 3. Translate bundle settings into template values, including install mode,
+    ///    installer imagery, licensing, language selection, and publisher metadata.
+    /// 4. Generate the WebView2 installation snippet when the selected webview mode
+    ///    requires bootstrapping or bundling the Microsoft runtime installer.
+    /// 5. Render the `.nsi` script from either the built-in template or a custom
+    ///    template file.
+    /// 6. Invoke `makensis` to compile the script into the final installer `.exe`.
+    /// 7. Optionally sign the generated installer.
+    ///
+    /// The resulting installer is written to `project_out_directory()/bundle/nsis`.
+    /// As with the MSI flow, the script and staging directory are preserved for
+    /// debugging rather than treated as disposable hidden state.
     pub(crate) async fn bundle_windows_nsis(&self) -> Result<Vec<PathBuf>> {
         let output_dir = self.project_out_directory().join("bundle").join("nsis");
         std::fs::create_dir_all(&output_dir).context("Failed to create NSIS output directory")?;
@@ -345,7 +389,7 @@ impl BundleContext<'_> {
         };
 
         let arch = self.binary_arch();
-        let arch_str = arch_to_windows_string(&arch);
+        let arch_str = arch.windows_arch();
 
         let product_name = self.product_name();
         let version = self.version_string();
@@ -377,6 +421,7 @@ impl BundleContext<'_> {
         std::fs::create_dir_all(&resources_dir)?;
         self.copy_resources(&resources_dir)?;
         self.copy_external_binaries(&staging_dir)?;
+        let staged_files = collect_staged_files(&staging_dir, Some(&main_binary_dest))?;
 
         let (install_webview, webview_install_code) =
             self.generate_windows_webview_install_code(&windows_settings.webview_install_mode)?;
@@ -501,7 +546,20 @@ impl BundleContext<'_> {
             "webview_install_code".to_string(),
             JsonValue::String(webview_install_code),
         );
-        data.insert("resources".to_string(), JsonValue::Array(Vec::new()));
+        data.insert(
+            "staged_files".to_string(),
+            JsonValue::Array(
+                staged_files
+                    .iter()
+                    .map(|file| {
+                        serde_json::json!({
+                            "source": windows_path_string(&file.source),
+                            "target_dir": windows_rel_dir(&file.relative_path),
+                        })
+                    })
+                    .collect(),
+            ),
+        );
 
         let nsi_content = if let Some(custom_template) = &nsis_settings.template {
             let template_path = self.crate_dir().join(custom_template);
@@ -632,20 +690,142 @@ impl BundleContext<'_> {
     }
 }
 
-/// Convert a BundleContext's Arch to a Windows architecture string
-/// suitable for installer file names and WebView2 downloads.
-pub(crate) fn arch_to_windows_string(arch: &Arch) -> &'static str {
-    match arch {
-        Arch::X86_64 => "x64",
-        Arch::X86 => "x86",
-        Arch::AArch64 => "arm64",
-        _ => "x64",
+#[derive(Clone, Debug)]
+struct StagedFile {
+    source: PathBuf,
+    relative_path: PathBuf,
+}
+
+#[derive(Default)]
+struct WixDirTree {
+    files: Vec<StagedFile>,
+    dirs: BTreeMap<String, WixDirTree>,
+}
+
+impl WixDirTree {
+    fn insert(&mut self, file: StagedFile) {
+        let mut cursor = self;
+        if let Some(parent) = file.relative_path.parent() {
+            for component in parent.components() {
+                let name = component.as_os_str().to_string_lossy().to_string();
+                if name.is_empty() {
+                    continue;
+                }
+                cursor = cursor.dirs.entry(name).or_default();
+            }
+        }
+        cursor.files.push(file);
     }
 }
 
 /// Returns `true` if the Windows settings have signing configured.
 fn can_sign_windows(settings: &WindowsSettings) -> bool {
     settings.certificate_thumbprint.is_some() || settings.sign_command.is_some()
+}
+
+/// Collect all files in the staging directory except the explicitly skipped file.
+fn collect_staged_files(staging_dir: &Path, skip_file: Option<&Path>) -> Result<Vec<StagedFile>> {
+    let mut files = Vec::new();
+
+    for entry in walkdir::WalkDir::new(staging_dir) {
+        let entry = entry?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let path = entry.path().to_path_buf();
+        if skip_file.is_some_and(|skip| skip == path) {
+            continue;
+        }
+
+        files.push(StagedFile {
+            relative_path: path
+                .strip_prefix(staging_dir)
+                .unwrap_or(entry.path())
+                .to_path_buf(),
+            source: path,
+        });
+    }
+
+    files.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+    Ok(files)
+}
+
+/// Render the staged file tree into WiX `<Directory>` / `<Component>` XML fragments.
+fn render_wix_install_tree(staged_files: &[StagedFile]) -> (String, String) {
+    let mut tree = WixDirTree::default();
+    for file in staged_files {
+        tree.insert(file.clone());
+    }
+
+    let mut next_id = 0usize;
+    let mut component_refs = String::new();
+    let install_tree = render_wix_dir_contents(&tree, 20, &mut next_id, &mut component_refs);
+    (install_tree, component_refs)
+}
+
+fn render_wix_dir_contents(
+    tree: &WixDirTree,
+    indent: usize,
+    next_id: &mut usize,
+    component_refs: &mut String,
+) -> String {
+    let mut xml = String::new();
+    let pad = " ".repeat(indent);
+    let file_pad = " ".repeat(indent + 4);
+
+    for file in &tree.files {
+        let component_id = format!("Component_{}", *next_id);
+        *next_id += 1;
+        let file_id = format!("File_{}", *next_id);
+        *next_id += 1;
+
+        component_refs.push_str(&format!("\n            <ComponentRef Id=\"{component_id}\" />"));
+
+        let file_name = file
+            .relative_path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy();
+        let source = windows_path_string(&file.source);
+        xml.push_str(&format!(
+            "\n{pad}<Component Id=\"{component_id}\" Guid=\"*\">\n{file_pad}<File Id=\"{file_id}\" Name=\"{}\" Source=\"{}\" KeyPath=\"yes\" />\n{pad}</Component>",
+            xml_attr_escape(&file_name),
+            xml_attr_escape(&source),
+        ));
+    }
+
+    for (name, child) in &tree.dirs {
+        let dir_id = format!("Directory_{}", *next_id);
+        *next_id += 1;
+        let child_xml = render_wix_dir_contents(child, indent + 4, next_id, component_refs);
+        xml.push_str(&format!(
+            "\n{pad}<Directory Id=\"{dir_id}\" Name=\"{}\">{child_xml}\n{pad}</Directory>",
+            xml_attr_escape(name),
+        ));
+    }
+
+    xml
+}
+
+fn windows_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('/', "\\")
+}
+
+fn windows_rel_dir(relative_path: &Path) -> String {
+    relative_path
+        .parent()
+        .map(|p| p.to_string_lossy().replace('/', "\\"))
+        .unwrap_or_default()
+}
+
+fn xml_attr_escape(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 /// Run a custom signing command. The `%1` placeholder in args is replaced
@@ -839,15 +1019,7 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
                             Source="{{main_binary_path}}"
                             KeyPath="yes" />
                     </Component>
-                    {{#each resource_components}}
-                    <Component Id="Resource_{{this.id}}" Guid="*">
-                        <File
-                            Id="ResourceFile_{{this.id}}"
-                            Name="{{this.name}}"
-                            Source="{{this.source}}"
-                            KeyPath="yes" />
-                    </Component>
-                    {{/each}}
+{{{install_tree}}}
                 </Directory>
             </Directory>
 
@@ -895,9 +1067,7 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
             <ComponentRef Id="MainExecutable" />
             <ComponentRef Id="StartMenuShortcut" />
             <ComponentRef Id="DesktopShortcut" />
-            {{#each resource_components}}
-            <ComponentRef Id="Resource_{{this.id}}" />
-            {{/each}}
+{{{component_refs_xml}}}
             {{#each component_group_refs}}
             <ComponentGroupRef Id="{{this}}" />
             {{/each}}
@@ -994,8 +1164,8 @@ Section "Install"
     File "{{main_binary_path}}"
 
     ; Install resources
-    {{#each resources}}
-    SetOutPath "$INSTDIR\{{this.target_dir}}"
+    {{#each staged_files}}
+    SetOutPath "$INSTDIR{{#if this.target_dir}}\{{this.target_dir}}{{/if}}"
     File "{{this.source}}"
     {{/each}}
 

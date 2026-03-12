@@ -11,16 +11,25 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Bundle updater artifacts from the already-built bundles.
-///
-/// Updater archive mapping:
-/// - macOS `.app` -> `.app.tar.gz`
-/// - Windows MSI/NSIS installers -> `.zip`
-/// - Linux AppImage/Deb artifacts -> `.tar.gz`
-///
-/// Archives are emitted into `bundle/updater/` and are intended for distribution
-/// through an update server or release channel.
 impl BundleContext<'_> {
+    /// Repackage previously-built bundle artifacts into updater-friendly archives.
+    ///
+    /// This step never builds the application itself. Instead, it consumes the
+    /// [`Bundle`] records produced earlier in the main bundling pass and wraps those
+    /// artifacts into archive formats that are convenient for update distribution.
+    ///
+    /// Archive mapping:
+    /// - macOS `.app` bundles become `.app.tar.gz` archives so the bundle directory
+    ///   layout is preserved exactly.
+    /// - Windows installers (`.msi` and NSIS `.exe`) become single-file `.zip`
+    ///   archives.
+    /// - Linux artifacts (`.AppImage` and `.deb`) become single-file `.tar.gz`
+    ///   archives.
+    ///
+    /// All outputs are written to `project_out_directory()/bundle/updater`. This
+    /// method assumes the input bundles are already finalized and signed as needed; it
+    /// performs no platform-specific mutation beyond wrapping them in the selected
+    /// archive container.
     pub(crate) async fn bundle_updater(&self, bundles: &[Bundle]) -> Result<Vec<PathBuf>> {
         let mut updater_paths = Vec::new();
         let output_dir = self.project_out_directory().join("bundle").join("updater");

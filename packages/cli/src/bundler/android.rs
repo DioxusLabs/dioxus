@@ -9,12 +9,24 @@ use crate::PackageType;
 use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 
-/// Bundle Android package artifacts for the requested package type.
-///
-/// Supported package types:
-/// - `PackageType::Apk`
-/// - `PackageType::Aab`
 impl BundleContext<'_> {
+    /// Resolve or produce the final Android distributable for the requested package type.
+    ///
+    /// Android is different from the desktop bundlers in this module: most of the
+    /// packaging work already happens during the build pipeline when the Gradle
+    /// project, Android resources, manifests, and native libraries are assembled.
+    /// By the time this method runs, bundling is mostly about surfacing the final
+    /// artifact that should be handed back to the CLI.
+    ///
+    /// Supported package types:
+    /// - [`PackageType::Apk`]: validate that the APK produced by the normal Android
+    ///   assemble flow exists and return its path.
+    /// - [`PackageType::Aab`]: invoke the dedicated Gradle bundle path through
+    ///   `BuildRequest::android_gradle_bundle` and return the generated `.aab`.
+    ///
+    /// This method intentionally does not restage files or rewrite Android metadata.
+    /// It is the bridge from the Android build pipeline to the CLI's common bundle
+    /// reporting interface.
     pub(crate) async fn bundle_android(&self, package_type: PackageType) -> Result<Vec<PathBuf>> {
         match package_type {
             PackageType::Apk => {

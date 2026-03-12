@@ -1,5 +1,4 @@
-use crate::bundler::category::AppCategory;
-use crate::bundler::{copy_dir_recursive, Bundle, BundleContext};
+use crate::bundler::{copy_dir_recursive, AppCategory, Bundle, BundleContext};
 use crate::{MacOsSettings, PackageType};
 use anyhow::{bail, Context, Result};
 use image::{DynamicImage, ImageReader};
@@ -11,7 +10,37 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 impl BundleContext<'_> {
-    /// Create/enrich a macOS `.app` bundle.
+    /// Create the final macOS `.app` bundle and apply Apple-specific metadata.
+    ///
+    /// This is the primary macOS bundling routine. It takes the executable produced by
+    /// the Dioxus build pipeline and assembles the canonical app bundle structure in
+    /// `project_out_directory()/macos/<BundleName>.app`.
+    ///
+    /// The method performs the following steps:
+    /// 1. Resolve macOS settings and choose the bundle/display name.
+    /// 2. Remove any existing output bundle to keep the result deterministic.
+    /// 3. Create the `Contents/`, `Contents/MacOS`, `Contents/Resources`, and
+    ///    optionally `Contents/Frameworks` directories.
+    /// 4. Copy the main executable into `Contents/MacOS/` and mark it executable.
+    /// 5. Build or copy an `.icns` file into `Contents/Resources/`.
+    /// 6. Copy configured resources and sidecar binaries into the bundle.
+    /// 7. Copy configured frameworks and arbitrary extra files from
+    ///    `MacOsSettings::files`.
+    /// 8. Generate an `Info.plist` from bundle metadata, unless a custom plist path
+    ///    was configured and exists.
+    /// 9. Write the legacy `PkgInfo` file.
+    /// 10. If signing is configured, sign frameworks first, then the main binary, and
+    ///     finally the enclosing `.app`.
+    /// 11. If notarization credentials are available, zip the `.app`, submit it to
+    ///     Apple's notary service, staple the result, and delete the temporary zip.
+    ///
+    /// Contributor notes:
+    /// - The build system guarantees the executable exists, but this method is
+    ///   responsible for the final `.app` on-disk shape.
+    /// - Framework paths may be absolute or relative to the crate directory. Missing
+    ///   paths are tolerated because some entries may refer to system frameworks.
+    /// - Lack of signing or notarization credentials is not fatal; an unsigned `.app`
+    ///   is still returned as a valid bundle artifact.
     pub(crate) async fn bundle_macos_app(&self) -> Result<Vec<PathBuf>> {
         let product_name = self.product_name();
         let macos_settings = self.macos();
@@ -209,7 +238,25 @@ impl BundleContext<'_> {
         Ok(vec![app_dir])
     }
 
-    /// Bundle the project as a `.dmg` disk image.
+    /// Package the macOS application bundle into a distributable `.dmg` disk image.
+    ///
+    /// DMG generation depends on having a complete `.app` bundle first. If the
+    /// current bundling pass already produced one, this method reuses it. Otherwise it
+    /// calls [`BundleContext::bundle_macos_app`] internally and returns both the
+    /// resulting `.dmg` and the intermediate `.app` paths so the higher-level
+    /// orchestrator can decide whether the `.app` should be preserved or cleaned up.
+    ///
+    /// The process is:
+    /// 1. Resolve the `.app` input, either from `bundles` or by building it now.
+    /// 2. Create a temporary staging directory containing the `.app` and an
+    ///    `Applications` symlink for drag-and-drop installation.
+    /// 3. Invoke `hdiutil create -format UDZO` to build a compressed, read-only disk
+    ///    image in `project_out_directory()/macos`.
+    /// 4. Optionally sign the generated `.dmg`.
+    /// 5. Optionally notarize and staple the `.dmg` if Apple credentials are present.
+    ///
+    /// Only the final `.dmg` and, when synthesized as a prerequisite, the `.app` are
+    /// considered outputs. The temporary DMG staging directory is always discarded.
     pub(crate) async fn bundle_macos_dmg(&self, bundles: &[Bundle]) -> Result<DmgBundled> {
         let product_name = self.product_name();
         let macos_settings = self.macos();

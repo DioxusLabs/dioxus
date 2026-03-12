@@ -3,8 +3,7 @@
 //! All downloads happen upfront via `resolve_tools()` before any bundling starts.
 //! This keeps blocking HTTP calls out of the bundle format modules.
 
-use super::context::Arch;
-use super::windows::arch_to_windows_string;
+use super::Arch;
 use crate::{PackageType, WebviewInstallMode, WindowsSettings};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -71,13 +70,7 @@ pub(crate) fn resolve_tools(
                 resolved.wix_dir = Some(ensure_wix(tools_dir)?);
             }
             PackageType::AppImage => {
-                let linuxdeploy_arch = match arch {
-                    Arch::X86_64 => "x86_64",
-                    Arch::X86 => "i386",
-                    Arch::AArch64 => "aarch64",
-                    Arch::Armhf | Arch::Armel => "armhf",
-                    Arch::Riscv64 | Arch::Universal => "x86_64",
-                };
+                let linuxdeploy_arch = arch.linuxdeploy_arch();
                 resolved.linuxdeploy = Some(ensure_linuxdeploy(tools_dir, linuxdeploy_arch)?);
             }
             _ => {}
@@ -103,7 +96,7 @@ fn resolve_webview2(
             Ok(Some(download_webview2_bootstrapper(tools_dir)?))
         }
         WebviewInstallMode::OfflineInstaller { .. } => {
-            let arch_str = arch_to_windows_string(&arch);
+            let arch_str = arch.windows_arch();
             Ok(Some(download_webview2_offline_installer(
                 tools_dir, arch_str,
             )?))
