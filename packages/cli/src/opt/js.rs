@@ -1,30 +1,22 @@
-use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::path::Path;
 
 use anyhow::Context;
 use manganis_core::JsAssetOptions;
 
-use crate::hash::hash_file_contents;
-
-/// The path to the esbuild binary, set by the CLI before asset processing begins.
-static ESBUILD_BINARY: OnceLock<PathBuf> = OnceLock::new();
-
-/// Set the esbuild binary path. Called once by the CLI at startup.
-pub fn set_esbuild_binary_path(path: PathBuf) {
-    let _ = ESBUILD_BINARY.set(path);
-}
+use crate::opt::hash::hash_file_contents;
 
 pub(crate) fn process_js(
     js_options: &JsAssetOptions,
     source: &Path,
     output_path: &Path,
     bundle: bool,
+    esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
     let minify = js_options.minified();
     let needs_esbuild = minify || bundle;
 
     if needs_esbuild {
-        if let Some(esbuild) = ESBUILD_BINARY.get() {
+        if let Some(esbuild) = esbuild_path {
             match run_esbuild(esbuild, source, output_path, bundle, minify) {
                 Ok(()) => return Ok(()),
                 Err(err) => {

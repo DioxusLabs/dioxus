@@ -5,7 +5,6 @@ members = [
     "packages/core",
     "packages/core-types",
     "packages/cli",
-    "packages/cli-opt",
     "packages/cli-config",
     "packages/cli-telemetry",
     "packages/core-macro",
@@ -164,7 +163,6 @@ generational-box = { path = "packages/generational-box", version = "0.7.3" }
 lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.3" }
 
 # cli
-dioxus-cli-opt = { path = "packages/cli-opt", version = "0.7.3" }
 dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.3" }
 dioxus-cli-config = { path = "packages/cli-config", version = "0.7.3" }
 

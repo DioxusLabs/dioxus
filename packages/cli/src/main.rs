@@ -13,6 +13,7 @@ mod devcfg;
 mod dx_build_info;
 mod esbuild;
 mod error;
+mod opt;
 mod fastfs;
 mod logging;
 mod platform;

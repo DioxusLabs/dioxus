@@ -5029,6 +5029,7 @@ dependencies = [
  "cargo_toml",
  "chrono",
  "clap",
+ "codemap",
  "console 0.16.2",
  "console-subscriber",
  "const-serialize 0.7.2",
@@ -5040,7 +5041,6 @@ dependencies = [
  "dioxus-autofmt",
  "dioxus-check",
  "dioxus-cli-config",
- "dioxus-cli-opt",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
  "dioxus-core",
@@ -5060,6 +5060,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "git2",
+ "grass",
  "handlebars",
  "home",
  "html_parser",
@@ -5069,14 +5070,17 @@ dependencies = [
  "icns",
  "ignore",
  "image",
+ "imagequant",
  "include_dir",
  "itertools 0.14.0",
  "krates",
+ "lightningcss",
  "log",
  "manganis",
  "manganis-core",
  "manganis-core-07",
  "md5",
+ "mozjpeg",
  "notify",
  "nucleo",
  "object",
@@ -5084,6 +5088,7 @@ dependencies = [
  "path-absolutize",
  "pdb",
  "plist",
+ "png 0.17.16",
  "prettyplease",
  "proc-macro2",
  "ratatui",
@@ -5134,29 +5139,6 @@ name = "dioxus-cli-config"
 version = "0.7.3"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "dioxus-cli-opt"
-version = "0.7.3"
-dependencies = [
- "anyhow",
- "built 0.8.0",
- "codemap",
- "const-serialize 0.8.0-alpha.0",
- "grass",
- "image",
- "imagequant",
- "lightningcss",
- "manganis",
- "manganis-core",
- "mozjpeg",
- "object",
- "png 0.17.16",
- "rayon",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]

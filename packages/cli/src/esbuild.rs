@@ -29,6 +29,17 @@ impl Esbuild {
         }
     }
 
+    /// Return the esbuild binary path if it's already been installed or is on PATH.
+    /// This is a sync check intended for use after `verify_tooling` has been called.
+    pub(crate) fn path_if_installed() -> Option<PathBuf> {
+        let path = Self::installed_bin_path();
+        if path.exists() {
+            Some(path)
+        } else {
+            which::which("esbuild").ok()
+        }
+    }
+
     /// The path where we cache the esbuild binary.
     fn installed_bin_path() -> PathBuf {
         let dir = Workspace::dioxus_data_dir().join("esbuild");

@@ -649,7 +649,7 @@ impl TraceController {
         reset_cursor();
 
         // re-emit any remaining messages in case they're useful.
-        while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
+        while let Ok(msg) = self.tui_rx.lock().await.try_recv() {
             let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),

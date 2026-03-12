@@ -36,7 +36,7 @@ use std::{
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
-use dioxus_cli_opt::AssetManifest;
+use crate::opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
@@ -811,7 +811,7 @@ pub(crate) async fn extract_symbols_from_file(
     // Add the hash to each asset in parallel
     assets
         .par_iter_mut()
-        .for_each(dioxus_cli_opt::add_hash_to_asset);
+        .for_each(crate::opt::add_hash_to_asset);
 
     // Write back only assets to the binary file (permissions are not modified)
     for entry in write_entries {

@@ -331,7 +331,7 @@ use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::{process_file_to, AssetManifest};
+use crate::opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
@@ -2280,6 +2280,7 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
@@ -2292,7 +2293,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to);
+                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
@@ -5684,8 +5685,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.verify_toolchain_installed().await?;
 
         // esbuild is used for JS asset processing on all platforms
-        let esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
-        dioxus_cli_opt::set_esbuild_binary_path(esbuild_path);
+        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
 
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,

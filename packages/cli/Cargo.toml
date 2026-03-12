@@ -20,7 +20,6 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
-dioxus-cli-opt = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
@@ -91,6 +90,12 @@ toml_edit = "0.22.27"
 prettyplease = { workspace = true }
 
 # Assets
+lightningcss = { version = "1.0.0-alpha.67", features = ["browserslist", "into_owned"] }
+grass = "0.13.4"
+codemap = "0.1.3"
+mozjpeg = { version = "0.10.13", default-features = false, features = ["parallel"] }
+imagequant = "4.4.0"
+png = "0.17.16"
 brotli = "8.0.1"
 ignore = "0.4.23"
 const-serialize = { workspace = true, features = ["serde"] }

@@ -1,13 +1,8 @@
-use anyhow::Context;
-use manganis::AssetOptions;
 use manganis_core::BundledAsset;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
 
-mod build_info;
 mod css;
 mod file;
 mod folder;
@@ -16,15 +11,14 @@ mod image;
 mod js;
 mod json;
 
-pub use file::process_file_to;
-pub use hash::add_hash_to_asset;
-pub use js::set_esbuild_binary_path;
+pub(crate) use file::process_file_to;
+pub(crate) use hash::add_hash_to_asset;
 
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
-pub struct AssetManifest {
+pub(crate) struct AssetManifest {
     /// Map of bundled asset name to the asset itself
     assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
 }
@@ -89,41 +83,4 @@ impl AssetManifest {
             .flat_map(|assets| assets.iter())
             .filter(move |asset| seen.insert(asset.bundled_path()))
     }
-
-    pub fn load_from_file(path: &Path) -> anyhow::Result<Self> {
-        let src = std::fs::read_to_string(path)?;
-
-        serde_json::from_str(&src)
-            .with_context(|| format!("Failed to parse asset manifest from {path:?}\n{src}"))
-    }
-}
-
-/// Optimize a list of assets in parallel
-pub fn optimize_all_assets(
-    assets_to_transfer: Vec<(PathBuf, PathBuf, AssetOptions)>,
-    on_optimization_start: impl FnMut(&Path, &Path, &AssetOptions) + Sync + Send,
-    on_optimization_end: impl FnMut(&Path, &Path, &AssetOptions) + Sync + Send,
-) -> anyhow::Result<()> {
-    let on_optimization_start = Arc::new(RwLock::new(on_optimization_start));
-    let on_optimization_end = Arc::new(RwLock::new(on_optimization_end));
-    assets_to_transfer
-        .par_iter()
-        .try_for_each(|(from, to, options)| {
-            {
-                let mut on_optimization_start = on_optimization_start.write().unwrap();
-                on_optimization_start(from, to, options);
-            }
-
-            let res = process_file_to(options, from, to);
-            if let Err(err) = res.as_ref() {
-                tracing::error!("Failed to copy asset {from:?}: {err}");
-            }
-
-            {
-                let mut on_optimization_end = on_optimization_end.write().unwrap();
-                on_optimization_end(from, to, options);
-            }
-
-            res.map(|_| ())
-        })
 }
