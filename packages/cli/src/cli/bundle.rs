@@ -187,7 +187,7 @@ impl Bundle {
 
         tracing::debug!("Bundling project for {:?}", ctx.package_types());
 
-        let bundles = crate::bundler::bundle_project(&ctx).await.inspect_err(|err| {
+        let bundles = ctx.bundle_project().await.inspect_err(|err| {
             tracing::error!("Failed to bundle project: {:#?}", err);
             if cfg!(target_os = "macos") {
                 tracing::error!("Make sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)");

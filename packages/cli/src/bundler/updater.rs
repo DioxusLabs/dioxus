@@ -20,64 +20,63 @@ use std::{
 ///
 /// Archives are emitted into `bundle/updater/` and are intended for distribution
 /// through an update server or release channel.
-pub(crate) async fn bundle_project(
-    ctx: &BundleContext<'_>,
-    bundles: &[Bundle],
-) -> Result<Vec<PathBuf>> {
-    let mut updater_paths = Vec::new();
-    let output_dir = ctx.project_out_directory().join("bundle").join("updater");
-    std::fs::create_dir_all(&output_dir)?;
+impl BundleContext<'_> {
+    pub(crate) async fn bundle_updater(&self, bundles: &[Bundle]) -> Result<Vec<PathBuf>> {
+        let mut updater_paths = Vec::new();
+        let output_dir = self.project_out_directory().join("bundle").join("updater");
+        std::fs::create_dir_all(&output_dir)?;
 
-    for bundle in bundles {
-        match bundle.package_type {
-            PackageType::MacOsBundle => {
-                // Create .tar.gz of the .app bundle
-                for app_path in &bundle.bundle_paths {
-                    let tar_path = output_dir.join(format!(
-                        "{}_{}.app.tar.gz",
-                        ctx.product_name(),
-                        ctx.version_string()
-                    ));
-                    create_tar_gz(app_path, &tar_path)?;
-                    tracing::info!("Created updater archive: {}", tar_path.display());
-                    updater_paths.push(tar_path);
+        for bundle in bundles {
+            match bundle.package_type {
+                PackageType::MacOsBundle => {
+                    // Create .tar.gz of the .app bundle
+                    for app_path in &bundle.bundle_paths {
+                        let tar_path = output_dir.join(format!(
+                            "{}_{}.app.tar.gz",
+                            self.product_name(),
+                            self.version_string()
+                        ));
+                        create_tar_gz(app_path, &tar_path)?;
+                        tracing::info!("Created updater archive: {}", tar_path.display());
+                        updater_paths.push(tar_path);
+                    }
                 }
-            }
-            PackageType::Nsis | PackageType::WindowsMsi => {
-                // Create .zip of the installer
-                for installer_path in &bundle.bundle_paths {
-                    let zip_path = output_dir.join(format!(
-                        "{}.zip",
-                        installer_path
-                            .file_stem()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                    ));
-                    create_zip(installer_path, &zip_path)?;
-                    tracing::info!("Created updater archive: {}", zip_path.display());
-                    updater_paths.push(zip_path);
+                PackageType::Nsis | PackageType::WindowsMsi => {
+                    // Create .zip of the installer
+                    for installer_path in &bundle.bundle_paths {
+                        let zip_path = output_dir.join(format!(
+                            "{}.zip",
+                            installer_path
+                                .file_stem()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        ));
+                        create_zip(installer_path, &zip_path)?;
+                        tracing::info!("Created updater archive: {}", zip_path.display());
+                        updater_paths.push(zip_path);
+                    }
                 }
-            }
-            PackageType::AppImage | PackageType::Deb => {
-                // Create .tar.gz of the artifact
-                for artifact_path in &bundle.bundle_paths {
-                    let tar_path = output_dir.join(format!(
-                        "{}.tar.gz",
-                        artifact_path
-                            .file_name()
-                            .unwrap_or_default()
-                            .to_string_lossy()
-                    ));
-                    create_tar_gz_single_file(artifact_path, &tar_path)?;
-                    tracing::info!("Created updater archive: {}", tar_path.display());
-                    updater_paths.push(tar_path);
+                PackageType::AppImage | PackageType::Deb => {
+                    // Create .tar.gz of the artifact
+                    for artifact_path in &bundle.bundle_paths {
+                        let tar_path = output_dir.join(format!(
+                            "{}.tar.gz",
+                            artifact_path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                        ));
+                        create_tar_gz_single_file(artifact_path, &tar_path)?;
+                        tracing::info!("Created updater archive: {}", tar_path.display());
+                        updater_paths.push(tar_path);
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
-    }
 
-    Ok(updater_paths)
+        Ok(updater_paths)
+    }
 }
 
 /// Create a .tar.gz of a directory (e.g., a .app bundle).

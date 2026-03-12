@@ -1,12 +1,11 @@
-pub(crate) mod android;
+mod android;
 mod category;
 mod context;
-pub(crate) mod linux;
-#[cfg(target_os = "macos")]
-pub(crate) mod macos;
+mod linux;
+mod macos;
 mod tools;
 mod updater;
-pub(crate) mod windows;
+mod windows;
 
 pub(crate) use context::BundleContext;
 
@@ -21,81 +20,80 @@ pub(crate) struct Bundle {
     pub bundle_paths: Vec<PathBuf>,
 }
 
-/// Bundles the project for the given package types.
-/// Returns the list of bundles with their output paths.
-pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<Bundle>> {
-    let mut package_types = ctx.package_types();
-    if package_types.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    // Sort so dependencies come first (e.g. .app before .dmg)
-    package_types.sort_by_key(|a| a.priority());
-
-    let mut bundles = Vec::<Bundle>::new();
-
-    for package_type in &package_types {
-        // Skip if already built (e.g. DMG already built .app)
-        if bundles.iter().any(|b| b.package_type == *package_type) {
-            continue;
+impl BundleContext<'_> {
+    /// Bundles the project for the configured package types.
+    pub(crate) async fn bundle_project(&self) -> Result<Vec<Bundle>> {
+        let mut package_types = self.package_types();
+        if package_types.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let bundle_paths = match package_type {
-            PackageType::MacOsBundle => macos::app::bundle_project(ctx).await?,
-            PackageType::Dmg => {
-                let bundled = macos::dmg::bundle_project(ctx, &bundles).await?;
-                if !bundled.app.is_empty() {
-                    bundles.push(Bundle {
-                        package_type: PackageType::MacOsBundle,
-                        bundle_paths: bundled.app,
-                    });
+        // Sort so dependencies come first (e.g. .app before .dmg)
+        package_types.sort_by_key(|a| a.priority());
+
+        let mut bundles = Vec::<Bundle>::new();
+
+        for package_type in &package_types {
+            // Skip if already built (e.g. DMG already built .app)
+            if bundles.iter().any(|b| b.package_type == *package_type) {
+                continue;
+            }
+
+            let bundle_paths = match package_type {
+                PackageType::MacOsBundle => self.bundle_macos_app().await?,
+                PackageType::Dmg => {
+                    let bundled = self.bundle_macos_dmg(&bundles).await?;
+                    if !bundled.app.is_empty() {
+                        bundles.push(Bundle {
+                            package_type: PackageType::MacOsBundle,
+                            bundle_paths: bundled.app,
+                        });
+                    }
+                    bundled.dmg
                 }
-                bundled.dmg
-            }
-            PackageType::Deb => linux::debian::bundle_project(ctx).await?,
-            PackageType::Rpm => linux::rpm::bundle_project(ctx).await?,
-            PackageType::AppImage => linux::appimage::bundle_project(ctx).await?,
-            PackageType::WindowsMsi => windows::msi::bundle_project(ctx).await?,
-            PackageType::Nsis => windows::nsis::bundle_project(ctx).await?,
-            PackageType::Updater => updater::bundle_project(ctx, &bundles).await?,
-            PackageType::Apk | PackageType::Aab => {
-                android::bundle_project(ctx, *package_type).await?
-            }
-            PackageType::IosBundle => todo!(),
-        };
+                PackageType::Deb => self.bundle_linux_deb().await?,
+                PackageType::Rpm => self.bundle_linux_rpm().await?,
+                PackageType::AppImage => self.bundle_linux_appimage().await?,
+                PackageType::WindowsMsi => self.bundle_windows_msi().await?,
+                PackageType::Nsis => self.bundle_windows_nsis().await?,
+                PackageType::Updater => self.bundle_updater(&bundles).await?,
+                PackageType::Apk | PackageType::Aab => self.bundle_android(*package_type).await?,
+                PackageType::IosBundle => todo!(),
+            };
 
-        bundles.push(Bundle {
-            package_type: *package_type,
-            bundle_paths,
-        });
-    }
+            bundles.push(Bundle {
+                package_type: *package_type,
+                bundle_paths,
+            });
+        }
 
-    // On macOS, clean up .app if only building dmg or updater
-    #[cfg(target_os = "macos")]
-    if !package_types.contains(&PackageType::MacOsBundle) {
-        if let Some(idx) = bundles
-            .iter()
-            .position(|b| b.package_type == PackageType::MacOsBundle)
-        {
-            let app_bundle = bundles.remove(idx);
-            for path in &app_bundle.bundle_paths {
-                tracing::info!("Cleaning up intermediate .app: {}", path.display());
-                if path.is_dir() {
-                    let _ = std::fs::remove_dir_all(path);
-                } else {
-                    let _ = std::fs::remove_file(path);
+        // On macOS, clean up .app if only building dmg or updater
+        #[cfg(target_os = "macos")]
+        if !package_types.contains(&PackageType::MacOsBundle) {
+            if let Some(idx) = bundles
+                .iter()
+                .position(|b| b.package_type == PackageType::MacOsBundle)
+            {
+                let app_bundle = bundles.remove(idx);
+                for path in &app_bundle.bundle_paths {
+                    tracing::info!("Cleaning up intermediate .app: {}", path.display());
+                    if path.is_dir() {
+                        let _ = std::fs::remove_dir_all(path);
+                    } else {
+                        let _ = std::fs::remove_file(path);
+                    }
                 }
             }
         }
-    }
 
-    for bundle in &bundles {
-        for path in &bundle.bundle_paths {
-            tracing::info!("Bundled: {}", path.display());
+        for bundle in &bundles {
+            for path in &bundle.bundle_paths {
+                tracing::info!("Bundled: {}", path.display());
+            }
         }
-    }
 
-    Ok(bundles)
+        Ok(bundles)
+    }
 }
 
 impl PackageType {

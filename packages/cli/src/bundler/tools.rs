@@ -4,7 +4,7 @@
 //! This keeps blocking HTTP calls out of the bundle format modules.
 
 use super::context::Arch;
-use super::windows::util::arch_to_windows_string;
+use super::windows::arch_to_windows_string;
 use crate::{PackageType, WebviewInstallMode, WindowsSettings};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
