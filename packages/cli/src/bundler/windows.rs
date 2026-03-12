@@ -780,7 +780,9 @@ fn render_wix_dir_contents(
         let file_id = format!("File_{}", *next_id);
         *next_id += 1;
 
-        component_refs.push_str(&format!("\n            <ComponentRef Id=\"{component_id}\" />"));
+        component_refs.push_str(&format!(
+            "\n            <ComponentRef Id=\"{component_id}\" />"
+        ));
 
         let file_name = file
             .relative_path
