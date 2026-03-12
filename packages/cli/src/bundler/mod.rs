@@ -37,7 +37,7 @@ pub(crate) struct BundleContext<'a> {
 
 impl<'a> BundleContext<'a> {
     /// Create a new BundleContext from a BuildRequest and optional package types.
-    pub(crate) fn new(
+    pub(crate) async fn new(
         build: &'a BuildRequest,
         package_types: &Option<Vec<PackageType>>,
     ) -> Result<Self> {
@@ -100,7 +100,8 @@ impl<'a> BundleContext<'a> {
         };
 
         let windows_settings = build.config.bundle.windows.clone().unwrap_or_default();
-        let tools = tools::resolve_tools(&tools_dir, &package_types, &windows_settings, arch)?;
+        let tools =
+            tools::resolve_tools(&tools_dir, &package_types, &windows_settings, arch).await?;
 
         Ok(Self {
             build,

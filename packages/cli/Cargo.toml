@@ -73,7 +73,7 @@ dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json", "blocking"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json"] }
 tower = { workspace = true }
 git2 = "0.20.2"
 

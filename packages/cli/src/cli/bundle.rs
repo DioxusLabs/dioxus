@@ -183,7 +183,7 @@ impl Bundle {
             }
         }
 
-        let ctx = crate::bundler::BundleContext::new(build, package_types)?;
+        let ctx = crate::bundler::BundleContext::new(build, package_types).await?;
 
         tracing::debug!("Bundling project for {:?}", ctx.package_types());
 

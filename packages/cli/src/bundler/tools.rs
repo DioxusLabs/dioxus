@@ -1,7 +1,7 @@
 //! Tool downloading and caching for external bundling tools.
 //!
 //! All downloads happen upfront via `resolve_tools()` before any bundling starts.
-//! This keeps blocking HTTP calls out of the bundle format modules.
+//! This keeps tool downloads out of the bundle format modules.
 
 use super::Arch;
 use crate::{PackageType, WebviewInstallMode, WindowsSettings};
@@ -45,9 +45,9 @@ pub(crate) struct ResolvedTools {
 
 /// Resolve and download all tools needed for the given package types.
 ///
-/// This must be called before `bundle_project()` so that no blocking HTTP
-/// calls happen during the actual bundling phase.
-pub(crate) fn resolve_tools(
+/// This must be called before `bundle_project()` so that no HTTP calls happen
+/// during the actual bundling phase.
+pub(crate) async fn resolve_tools(
     tools_dir: &Path,
     package_types: &[PackageType],
     windows_settings: &WindowsSettings,
@@ -63,15 +63,16 @@ pub(crate) fn resolve_tools(
     for pt in package_types {
         match pt {
             PackageType::Nsis => {
-                resolved.nsis_dir = Some(ensure_nsis(tools_dir)?);
-                resolved.webview2_installer = resolve_webview2(tools_dir, windows_settings, arch)?;
+                resolved.nsis_dir = Some(ensure_nsis(tools_dir).await?);
+                resolved.webview2_installer =
+                    resolve_webview2(tools_dir, windows_settings, arch).await?;
             }
             PackageType::WindowsMsi => {
-                resolved.wix_dir = Some(ensure_wix(tools_dir)?);
+                resolved.wix_dir = Some(ensure_wix(tools_dir).await?);
             }
             PackageType::AppImage => {
                 let linuxdeploy_arch = arch.linuxdeploy_arch();
-                resolved.linuxdeploy = Some(ensure_linuxdeploy(tools_dir, linuxdeploy_arch)?);
+                resolved.linuxdeploy = Some(ensure_linuxdeploy(tools_dir, linuxdeploy_arch).await?);
             }
             _ => {}
         }
@@ -82,7 +83,7 @@ pub(crate) fn resolve_tools(
 
 /// Determine if a WebView2 installer needs to be downloaded based on NSIS settings,
 /// and download it if so.
-fn resolve_webview2(
+async fn resolve_webview2(
     tools_dir: &Path,
     settings: &WindowsSettings,
     arch: Arch,
@@ -93,18 +94,18 @@ fn resolve_webview2(
         WebviewInstallMode::Skip | WebviewInstallMode::FixedRuntime { .. } => Ok(None),
         WebviewInstallMode::DownloadBootstrapper { .. }
         | WebviewInstallMode::EmbedBootstrapper { .. } => {
-            Ok(Some(download_webview2_bootstrapper(tools_dir)?))
+            Ok(Some(download_webview2_bootstrapper(tools_dir).await?))
         }
         WebviewInstallMode::OfflineInstaller { .. } => {
             let arch_str = arch.windows_arch();
-            Ok(Some(download_webview2_offline_installer(
-                tools_dir, arch_str,
-            )?))
+            Ok(Some(
+                download_webview2_offline_installer(tools_dir, arch_str).await?,
+            ))
         }
     }
 }
 
-fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
+async fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
     let nsis_dir = tools_dir.join("nsis-3.11");
     let makensis = if cfg!(target_os = "windows") {
         nsis_dir.join("makensis.exe")
@@ -122,7 +123,7 @@ fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
 
     tracing::info!("Downloading NSIS...");
 
-    let data = download_and_verify(NSIS_URL, NSIS_SHA1, HashAlgo::Sha1)?;
+    let data = download_and_verify(NSIS_URL, NSIS_SHA1, HashAlgo::Sha1).await?;
     extract_zip(&data, tools_dir)?;
 
     if !makensis.exists() {
@@ -138,7 +139,7 @@ fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
     Ok(nsis_dir)
 }
 
-fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
+async fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     let wix_dir = tools_dir.join("wix314");
     let candle = wix_dir.join("candle.exe");
 
@@ -151,7 +152,7 @@ fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     }
 
     tracing::info!("Downloading WiX toolset...");
-    let data = download_and_verify(WIX_URL, WIX_SHA256, HashAlgo::Sha256)?;
+    let data = download_and_verify(WIX_URL, WIX_SHA256, HashAlgo::Sha256).await?;
 
     std::fs::create_dir_all(&wix_dir)?;
     extract_zip(&data, &wix_dir)?;
@@ -166,7 +167,7 @@ fn ensure_wix(tools_dir: &Path) -> Result<PathBuf> {
     Ok(wix_dir)
 }
 
-fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
+async fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     let linuxdeploy_name = format!("linuxdeploy-{arch}.AppImage");
     let linuxdeploy_path = tools_dir.join(&linuxdeploy_name);
 
@@ -183,7 +184,7 @@ fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     let url = format!("{LINUXDEPLOY_URL_BASE}/{linuxdeploy_name}");
     tracing::info!("Downloading linuxdeploy from {url}...");
 
-    let data = download_bytes(&url)?;
+    let data = download_bytes(&url).await?;
     std::fs::create_dir_all(tools_dir)?;
     std::fs::write(&linuxdeploy_path, &data)?;
 
@@ -193,19 +194,19 @@ fn ensure_linuxdeploy(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     Ok(linuxdeploy_path)
 }
 
-fn download_webview2_bootstrapper(tools_dir: &Path) -> Result<PathBuf> {
+async fn download_webview2_bootstrapper(tools_dir: &Path) -> Result<PathBuf> {
     let path = tools_dir.join("MicrosoftEdgeWebview2Setup.exe");
     if path.exists() {
         return Ok(path);
     }
     tracing::info!("Downloading WebView2 bootstrapper...");
-    let data = download_bytes(WEBVIEW2_BOOTSTRAPPER_URL)?;
+    let data = download_bytes(WEBVIEW2_BOOTSTRAPPER_URL).await?;
     std::fs::create_dir_all(tools_dir)?;
     std::fs::write(&path, &data).context("Failed to write WebView2 bootstrapper")?;
     Ok(path)
 }
 
-fn download_webview2_offline_installer(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
+async fn download_webview2_offline_installer(tools_dir: &Path, arch: &str) -> Result<PathBuf> {
     let name = format!("MicrosoftEdgeWebView2RuntimeInstaller_{arch}.exe");
     let path = tools_dir.join(&name);
     if path.exists() {
@@ -218,23 +219,19 @@ fn download_webview2_offline_installer(tools_dir: &Path, arch: &str) -> Result<P
         _ => bail!("Unsupported architecture for WebView2 offline installer: {arch}"),
     };
     tracing::info!("Downloading WebView2 offline installer for {arch}...");
-    let data = download_bytes(url)?;
+    let data = download_bytes(url).await?;
     std::fs::create_dir_all(tools_dir)?;
     std::fs::write(&path, &data).context("Failed to write WebView2 offline installer")?;
     Ok(path)
 }
-
-// ---------------------------------------------------------------------------
-// Download helpers
-// ---------------------------------------------------------------------------
 
 enum HashAlgo {
     Sha1,
     Sha256,
 }
 
-fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result<Vec<u8>> {
-    let data = download_bytes(url)?;
+async fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result<Vec<u8>> {
+    let data = download_bytes(url).await?;
 
     let computed = match algo {
         HashAlgo::Sha1 => {
@@ -258,10 +255,11 @@ fn download_and_verify(url: &str, expected_hash: &str, algo: HashAlgo) -> Result
     Ok(data)
 }
 
-/// Download bytes from a URL using a blocking reqwest client.
-pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>> {
-    let response =
-        reqwest::blocking::get(url).with_context(|| format!("Failed to download {url}"))?;
+/// Download bytes from a URL using the async reqwest client.
+pub(crate) async fn download_bytes(url: &str) -> Result<Vec<u8>> {
+    let response = reqwest::get(url)
+        .await
+        .with_context(|| format!("Failed to download {url}"))?;
 
     if !response.status().is_success() {
         bail!("Download failed with status {}: {url}", response.status());
@@ -269,6 +267,7 @@ pub(crate) fn download_bytes(url: &str) -> Result<Vec<u8>> {
 
     response
         .bytes()
+        .await
         .map(|b| b.to_vec())
         .with_context(|| format!("Failed to read response body from {url}"))
 }
