@@ -306,7 +306,7 @@ pub(crate) enum PackageType {
     #[clap(name = "macos")]
     MacOsBundle,
 
-    /// The iOS app bundle.
+    /// The iOS app bundle, zipped (.ipa)
     #[clap(name = "ios")]
     IosBundle,
 
@@ -337,6 +337,14 @@ pub(crate) enum PackageType {
     /// The Updater bundle (a patch of an existing app)
     #[clap(name = "updater")]
     Updater,
+
+    /// Android application package (.apk).
+    #[clap(name = "apk")]
+    Apk,
+
+    /// Android App Bundle (.aab).
+    #[clap(name = "aab")]
+    Aab,
 }
 
 impl FromStr for PackageType {
@@ -353,6 +361,8 @@ impl FromStr for PackageType {
             "appimage" => Ok(PackageType::AppImage),
             "dmg" => Ok(PackageType::Dmg),
             "updater" => Ok(PackageType::Updater),
+            "apk" => Ok(PackageType::Apk),
+            "aab" => Ok(PackageType::Aab),
             _ => Err(format!("{s} is not a valid package type")),
         }
     }

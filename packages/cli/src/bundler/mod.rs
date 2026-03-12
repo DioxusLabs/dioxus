@@ -1,3 +1,4 @@
+pub(crate) mod android;
 mod category;
 mod context;
 pub(crate) mod linux;
@@ -40,9 +41,7 @@ pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<Bundle
         }
 
         let bundle_paths = match package_type {
-            #[cfg(target_os = "macos")]
             PackageType::MacOsBundle => macos::app::bundle_project(ctx).await?,
-            #[cfg(target_os = "macos")]
             PackageType::Dmg => {
                 let bundled = macos::dmg::bundle_project(ctx, &bundles).await?;
                 if !bundled.app.is_empty() {
@@ -59,10 +58,10 @@ pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<Bundle
             PackageType::WindowsMsi => windows::msi::bundle_project(ctx).await?,
             PackageType::Nsis => windows::nsis::bundle_project(ctx).await?,
             PackageType::Updater => updater::bundle_project(ctx, &bundles).await?,
-            _ => {
-                tracing::warn!("Ignoring unsupported package type: {:?}", package_type);
-                continue;
+            PackageType::Apk | PackageType::Aab => {
+                android::bundle_project(ctx, *package_type).await?
             }
+            PackageType::IosBundle => todo!(),
         };
 
         bundles.push(Bundle {
@@ -110,7 +109,9 @@ impl PackageType {
             | PackageType::Nsis
             | PackageType::Deb
             | PackageType::Rpm
-            | PackageType::AppImage => 0,
+            | PackageType::AppImage
+            | PackageType::Apk
+            | PackageType::Aab => 0,
             PackageType::Dmg => 1,
             PackageType::Updater => 2,
         }

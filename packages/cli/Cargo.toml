@@ -73,7 +73,7 @@ dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json", "blocking"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json", "blocking"] }
 tower = { workspace = true }
 git2 = "0.20.2"
 
@@ -154,7 +154,7 @@ plist = "1.7.4"
 backtrace = "0.3.74"
 ar = "0.9.0"
 pdb = "0.8.0"
-self_update = { version = "0.42.0", features = [
+self_update = { version = "0.42.0", default-features = false, features = [
     "archive-tar",
     "archive-zip",
     "compression-flate2",
@@ -172,9 +172,6 @@ home = "=0.5.11"
 
 [target.'cfg(target_env = "musl")'.dependencies]
 git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
-
-[build-dependencies]
-built = { version = "0.8.0", features = ["git2"] }
 
 [features]
 default = []

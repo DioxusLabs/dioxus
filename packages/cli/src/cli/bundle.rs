@@ -1,4 +1,4 @@
-use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat};
+use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat, PackageType};
 use anyhow::Context;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ use super::*;
 pub struct Bundle {
     /// The package types to bundle
     #[clap(long)]
-    pub package_types: Option<Vec<crate::PackageType>>,
+    pub package_types: Option<Vec<PackageType>>,
 
     /// The directory in which the final bundle will be placed.
     ///
@@ -36,13 +36,11 @@ impl Bundle {
 
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        let mut server_artifacts = None;
         let client_artifacts =
             AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
                 .finish_build()
                 .await?;
-
-        tracing::info!(path = ?client.root_dir(), "Client build completed successfully! 🚀");
+        let mut server_artifacts = None;
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
@@ -55,10 +53,20 @@ impl Bundle {
             tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
         }
 
-        // If we're building for iOS, we need to bundle the iOS bundle
-        if client.bundle == BundleFormat::Ios && self.package_types.is_none() {
-            self.package_types = Some(vec![crate::PackageType::IosBundle]);
+        // Fill platform-specific defaults for package types when omitted.
+        if self.package_types.is_none() {
+            match client.bundle {
+                BundleFormat::Ios => {
+                    self.package_types = Some(vec![crate::PackageType::IosBundle]);
+                }
+                BundleFormat::Android => {
+                    self.package_types = Some(vec![crate::PackageType::Aab]);
+                }
+                _ => {}
+            }
         }
+
+        Self::validate_package_types_for_bundle(client.bundle, self.package_types.as_deref())?;
 
         let mut bundles = vec![];
 
@@ -67,12 +75,16 @@ impl Bundle {
             bundles.push(server.main_exe());
         }
 
-        // Create a list of bundles that we might need to copy
+        // Create a list of bundles that we might need to copy.
+        // Package-type based bundling is handled by the bundler module.
         match client.bundle {
-            // Desktop platforms use our built-in bundler
-            BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows => {
-                tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&client, &self.package_types).await? {
+            // Desktop and Android platforms use package-type dispatch in the bundler module.
+            BundleFormat::MacOS
+            | BundleFormat::Linux
+            | BundleFormat::Windows
+            | BundleFormat::Android => {
+                tracing::info!("Running package bundler...");
+                for bundle in Self::bundle_with_package_types(&client, &self.package_types).await? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
@@ -84,14 +96,6 @@ impl Bundle {
                 bundles.push(client.root_dir())
             }
             BundleFormat::Server => bundles.push(client.root_dir()),
-
-            BundleFormat::Android => {
-                let aab = client
-                    .android_gradle_bundle()
-                    .await
-                    .context("Failed to run gradle bundleRelease")?;
-                bundles.push(aab);
-            }
         };
 
         // Copy the bundles to the output directory if one was specified
@@ -145,32 +149,38 @@ impl Bundle {
         })
     }
 
-    async fn bundle_desktop(
+    async fn bundle_with_package_types(
         build: &BuildRequest,
-        package_types: &Option<Vec<crate::PackageType>>,
+        package_types: &Option<Vec<PackageType>>,
     ) -> Result<Vec<crate::bundler::Bundle>, Error> {
         use anyhow::bail;
 
-        let krate = &build;
-        let exe = build.main_exe();
+        if matches!(
+            build.bundle,
+            BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows
+        ) {
+            let krate = &build;
+            let exe = build.main_exe();
 
-        _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
+            _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
 
-        let mut name: PathBuf = krate.executable_name().into();
-        if cfg!(windows) {
-            name.set_extension("exe");
-        }
-        std::fs::create_dir_all(krate.bundle_dir(build.bundle))
-            .context("Failed to create bundle directory")?;
-        std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name))
-            .with_context(|| "Failed to copy the output executable into the bundle directory")?;
+            let mut name: PathBuf = krate.executable_name().into();
+            if cfg!(windows) {
+                name.set_extension("exe");
+            }
+            std::fs::create_dir_all(krate.bundle_dir(build.bundle))
+                .context("Failed to create bundle directory")?;
+            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(|| {
+                "Failed to copy the output executable into the bundle directory"
+            })?;
 
-        // Check if required fields are provided instead of failing silently.
-        if build.config.bundle.identifier.is_none() {
-            bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
-        }
-        if build.config.bundle.publisher.is_none() {
-            bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
+            // Check if required fields are provided instead of failing silently.
+            if build.config.bundle.identifier.is_none() {
+                bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
+            }
+            if build.config.bundle.publisher.is_none() {
+                bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
+            }
         }
 
         let ctx = crate::bundler::BundleContext::new(build, package_types)?;
@@ -185,5 +195,49 @@ impl Bundle {
         })?;
 
         Ok(bundles)
+    }
+
+    fn validate_package_types_for_bundle(
+        bundle: BundleFormat,
+        package_types: Option<&[PackageType]>,
+    ) -> Result<(), Error> {
+        let Some(package_types) = package_types else {
+            return Ok(());
+        };
+
+        let is_package_supported = |package_type: &PackageType| -> bool {
+            match bundle {
+                BundleFormat::MacOS => matches!(
+                    package_type,
+                    PackageType::MacOsBundle | PackageType::Dmg | PackageType::Updater
+                ),
+                BundleFormat::Linux => matches!(
+                    package_type,
+                    PackageType::Deb
+                        | PackageType::Rpm
+                        | PackageType::AppImage
+                        | PackageType::Updater
+                ),
+                BundleFormat::Windows => {
+                    matches!(
+                        package_type,
+                        PackageType::WindowsMsi | PackageType::Nsis | PackageType::Updater
+                    )
+                }
+                BundleFormat::Android => {
+                    matches!(package_type, PackageType::Apk | PackageType::Aab)
+                }
+                BundleFormat::Ios => matches!(package_type, PackageType::IosBundle),
+                BundleFormat::Web | BundleFormat::Server => false,
+            }
+        };
+
+        if let Some(invalid) = package_types.iter().find(|pt| !is_package_supported(pt)) {
+            anyhow::bail!(
+                "Package type '{invalid:?}' is not supported for bundle format '{bundle}'."
+            );
+        }
+
+        Ok(())
     }
 }

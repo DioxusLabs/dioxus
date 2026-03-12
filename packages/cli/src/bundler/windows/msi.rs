@@ -221,18 +221,30 @@ pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBu
     );
 
     // Render the WiX source
-    let wxs_content = if let Some(custom_template) = &wix_settings.template {
-        let template_path = ctx.crate_dir().join(custom_template);
-        let template_str = std::fs::read_to_string(&template_path).with_context(|| {
-            format!(
-                "Failed to read custom WiX template: {}",
-                template_path.display()
-            )
-        })?;
-        render_template(&template_str, &data)?
-    } else {
-        render_template(WIX_TEMPLATE, &data)?
-    };
+    let mut hbs = Handlebars::new();
+    hbs.set_strict_mode(false);
+
+    // Disable HTML escaping since we're generating XML, not HTML
+    hbs.register_escape_fn(|s: &str| s.to_string());
+    hbs.register_template_string(
+        "wix",
+        if let Some(custom_template) = &wix_settings.template {
+            let template_path = ctx.crate_dir().join(custom_template);
+            std::fs::read_to_string(&template_path).with_context(|| {
+                format!(
+                    "Failed to read custom WiX template: {}",
+                    template_path.display()
+                )
+            })?
+        } else {
+            WIX_TEMPLATE.to_string()
+        },
+    )
+    .context("Failed to parse WiX template")?;
+
+    let wxs_content = hbs
+        .render("wix", &data)
+        .context("Failed to render WiX template")?;
 
     // Write the .wxs file
     let wxs_path = output_dir.join(format!("{product_name}.wxs"));
@@ -359,18 +371,6 @@ pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBu
 
     tracing::info!("MSI installer created: {}", output_path.display());
     Ok(vec![output_path])
-}
-
-/// Render a Handlebars template with the given data.
-fn render_template(template: &str, data: &BTreeMap<String, serde_json::Value>) -> Result<String> {
-    let mut hbs = Handlebars::new();
-    hbs.set_strict_mode(false);
-    // Disable HTML escaping since we're generating XML, not HTML
-    hbs.register_escape_fn(|s: &str| s.to_string());
-    hbs.register_template_string("wix", template)
-        .context("Failed to parse WiX template")?;
-    hbs.render("wix", data)
-        .context("Failed to render WiX template")
 }
 
 /// Convert a semver version string to a WiX-compatible version.

@@ -5525,6 +5525,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .join("app-debug.apk")
     }
 
+    pub(crate) fn release_apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("release")
+            .join("app-release.apk")
+    }
+
+    pub(crate) fn android_apk_path(&self) -> PathBuf {
+        let assembled_release = self.release && self.config.bundle.android.is_some();
+        if assembled_release {
+            self.release_apk_path()
+        } else {
+            self.debug_apk_path()
+        }
+    }
+
     /// We only really currently care about:
     ///
     /// - app dir (.app, .exe, .apk, etc)
