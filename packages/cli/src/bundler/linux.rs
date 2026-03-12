@@ -1,5 +1,5 @@
 use crate::bundler::{AppCategory, BundleContext};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use std::{
     fs::{self, File},
@@ -20,8 +20,8 @@ impl BundleContext<'_> {
     /// Concretely, this method:
     /// 1. Creates `project_out_directory()/bundle/appimage/<name>.AppDir`.
     /// 2. Reuses the shared Linux payload generator so the AppDir contains the same
-    ///    executable, resources, `.desktop` file, icons, sidecar binaries, and custom
-    ///    files used by other Linux package formats.
+    ///    executable, resources, `.desktop` file, icons, and sidecar binaries used by
+    ///    other Linux package formats.
     /// 3. Adds the top-level `AppRun`, desktop file, and icon symlinks expected by
     ///    AppImage tooling.
     /// 4. Invokes the pre-resolved `linuxdeploy` binary with `OUTPUT=<target>` so the
@@ -51,7 +51,7 @@ impl BundleContext<'_> {
         }
         fs::create_dir_all(&appdir)?;
 
-        self.generate_linux_data(&appdir)?;
+        self.generate_linux_common_data(&appdir)?;
         self.create_linux_appdir_symlinks(&appdir, &name)?;
 
         let linuxdeploy = self
@@ -129,7 +129,7 @@ impl BundleContext<'_> {
     /// The bundling pipeline is:
     /// 1. Create a temporary `_data` directory containing the Linux install payload.
     ///    This payload places the main executable in `/usr/bin`, resources in
-    ///    `/usr/lib/<name>`, freedesktop metadata under `/usr/share`, sidecar
+    ///    `/usr/lib/<product-name>`, freedesktop metadata under `/usr/share`, sidecar
     ///    binaries, custom files, and an optional compressed changelog.
     /// 2. Compute the installed size from that payload tree.
     /// 3. Build `control.tar.gz`, including the `control` metadata file, `md5sums`,
@@ -158,7 +158,8 @@ impl BundleContext<'_> {
         }
         fs::create_dir_all(&data_dir)?;
 
-        self.generate_linux_data(&data_dir)?;
+        self.generate_linux_common_data(&data_dir)?;
+        self.add_linux_deb_data(&data_dir)?;
 
         let installed_size = dir_size_kb(&data_dir)?;
         let control_tar =
@@ -211,10 +212,12 @@ impl BundleContext<'_> {
     ///    `/usr/share/applications`.
     /// 4. Add configured icons under the appropriate `hicolor` directories.
     /// 5. Copy resources into a temporary directory, enumerate them, and add each file
-    ///    under `/usr/lib/<name>/...`.
-    /// 6. Reuse Debian-style custom files and maintainer scripts where applicable.
-    /// 7. Attach runtime dependency declarations from the Debian settings.
-    /// 8. Serialize the final package to disk and remove the temporary staging area.
+    ///    under `/usr/lib/<product-name>/...`.
+    /// 6. Copy configured sidecar binaries into `/usr/bin` so RPM payloads match the
+    ///    other Linux formats.
+    /// 7. Reuse Debian-style custom files and maintainer scripts where applicable.
+    /// 8. Attach runtime dependency declarations from the Debian settings.
+    /// 9. Serialize the final package to disk and remove the temporary staging area.
     ///
     /// The resulting artifact is written to `project_out_directory()/bundle/rpm`.
     pub(crate) async fn bundle_linux_rpm(&self) -> Result<Vec<PathBuf>> {
@@ -223,6 +226,7 @@ impl BundleContext<'_> {
         let arch = self.binary_arch().rpm_arch();
         let license = self.license().unwrap_or("Unknown").to_string();
         let description = self.short_description();
+        let resource_dir_name = self.linux_resource_dir_name();
 
         let output_dir = self.project_out_directory().join("bundle").join("rpm");
         fs::create_dir_all(&output_dir)?;
@@ -305,12 +309,26 @@ impl BundleContext<'_> {
         let resource_files = collect_files(&resource_temp)?;
         for (src, relative) in &resource_files {
             let dest = format!(
-                "/usr/lib/{name}/{}",
+                "/usr/lib/{resource_dir_name}/{}",
                 relative.to_string_lossy().replace('\\', "/")
             );
             builder = builder
                 .with_file(src, rpm::FileOptions::new(&dest).mode(0o644))
                 .with_context(|| format!("Failed to add resource {} to RPM", relative.display()))?;
+        }
+
+        let ext_bin_temp = temp_dir.join("external_bin");
+        fs::create_dir_all(&ext_bin_temp)?;
+        let external_bins = self.copy_external_binaries(&ext_bin_temp)?;
+        for src in &external_bins {
+            let dest_name = src
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("External binary is missing a file name")?;
+            let dest = format!("/usr/bin/{dest_name}");
+            builder = builder
+                .with_file(src, rpm::FileOptions::new(&dest).mode(0o755))
+                .with_context(|| format!("Failed to add external binary {dest_name} to RPM"))?;
         }
 
         let crate_dir = self.crate_dir();
@@ -382,9 +400,10 @@ impl BundleContext<'_> {
         Ok(vec![rpm_path])
     }
 
-    /// Generate the data directory tree for the Linux package payload.
-    fn generate_linux_data(&self, data_dir: &Path) -> Result<()> {
+    /// Generate the Linux payload shared across bundle formats.
+    fn generate_linux_common_data(&self, data_dir: &Path) -> Result<()> {
         let bin_name = self.main_binary_name();
+        let resource_dir_name = self.linux_resource_dir_name();
 
         let bin_dir = data_dir.join("usr/bin");
         fs::create_dir_all(&bin_dir)?;
@@ -409,13 +428,20 @@ impl BundleContext<'_> {
 
         self.copy_linux_icons(data_dir)?;
 
-        let resource_dir = data_dir.join(format!("usr/lib/{bin_name}"));
+        let resource_dir = data_dir.join(format!("usr/lib/{resource_dir_name}"));
         fs::create_dir_all(&resource_dir)?;
         self.copy_resources(&resource_dir)?;
 
         let ext_bin_dir = data_dir.join("usr/bin");
         self.copy_external_binaries(&ext_bin_dir)?;
 
+        Ok(())
+    }
+
+    /// Add Debian-specific payload extras to a staged Linux tree.
+    fn add_linux_deb_data(&self, data_dir: &Path) -> Result<()> {
+        let deb_settings = self.deb();
+        let package_name = self.deb_package_name();
         for (deb_path, src_path) in &deb_settings.files {
             let dest = data_dir.join(deb_path.strip_prefix("/").unwrap_or(deb_path));
             if let Some(parent) = dest.parent() {
@@ -442,7 +468,7 @@ impl BundleContext<'_> {
                 self.crate_dir().join(changelog_path)
             };
             if changelog_src.exists() {
-                let doc_dir = data_dir.join(format!("usr/share/doc/{bin_name}"));
+                let doc_dir = data_dir.join(format!("usr/share/doc/{package_name}"));
                 fs::create_dir_all(&doc_dir)?;
                 let changelog_content = fs::read(&changelog_src)?;
                 let mut encoder =
@@ -454,6 +480,11 @@ impl BundleContext<'_> {
         }
 
         Ok(())
+    }
+
+    /// Directory name used for bundled Linux resources.
+    fn linux_resource_dir_name(&self) -> String {
+        self.product_name()
     }
 
     /// Generate the contents of a .desktop file for the given bundle context.
@@ -590,36 +621,6 @@ Type=Application
         Ok(paths)
     }
 
-    /// Find the path to the largest PNG icon from the configured icon files.
-    fn find_linux_largest_icon(&self) -> Result<Option<PathBuf>> {
-        let icon_files = self.icon_files()?;
-        let mut best: Option<(u32, PathBuf)> = None;
-
-        for icon_path in icon_files {
-            let ext = icon_path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .to_lowercase();
-
-            if ext == "png" {
-                if let Ok(file) = fs::File::open(&icon_path) {
-                    let decoder = png::Decoder::new(BufReader::new(file));
-                    if let Ok(reader) = decoder.read_info() {
-                        let info = reader.info();
-                        let (w, h) = (info.width, info.height);
-                        let size = w.max(h);
-                        if best.as_ref().is_none_or(|(best_size, _)| size > *best_size) {
-                            best = Some((size, icon_path));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(best.map(|(_, path)| path))
-    }
-
     /// Create the top-level symlinks in the AppDir that AppImage/linuxdeploy expects.
     fn create_linux_appdir_symlinks(&self, appdir: &Path, name: &str) -> Result<()> {
         let apprun = appdir.join("AppRun");
@@ -666,31 +667,8 @@ Type=Application
             }
         }
 
-        if let Some(largest_icon) = self.find_linux_largest_icon()? {
-            let icon_link = appdir.join(format!("{name}.png"));
-
-            if let Some(icon_in_appdir) = find_icon_in_appdir(appdir, name) {
-                let relative = icon_in_appdir
-                    .strip_prefix(appdir)
-                    .unwrap_or(&icon_in_appdir);
-                let relative_str = relative.to_string_lossy().to_string();
-
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(&relative_str, &icon_link).with_context(|| {
-                    format!(
-                        "Failed to create icon symlink: {} -> {}",
-                        icon_link.display(),
-                        relative_str
-                    )
-                })?;
-
-                #[cfg(not(unix))]
-                fs::copy(&icon_in_appdir, &icon_link)?;
-            } else {
-                fs::copy(&largest_icon, &icon_link).with_context(|| {
-                    format!("Failed to copy icon {} to AppDir", largest_icon.display())
-                })?;
-            }
+        if let Some(icon_in_appdir) = find_icon_in_appdir(appdir, name) {
+            create_appdir_icon_links(appdir, &icon_in_appdir, name)?;
         }
 
         Ok(())
@@ -834,34 +812,94 @@ Type=Application
     }
 }
 
-/// Find the icon file within the AppDir's hicolor directory.
+/// Find the best icon file within the AppDir's hicolor directory.
 fn find_icon_in_appdir(appdir: &Path, name: &str) -> Option<PathBuf> {
     let icons_dir = appdir.join("usr/share/icons/hicolor");
     if !icons_dir.exists() {
         return None;
     }
 
-    let mut best: Option<(u32, PathBuf)> = None;
-    let target_name = format!("{name}.png");
+    let mut best_png: Option<(u32, PathBuf)> = None;
+    let mut svg_icon: Option<PathBuf> = None;
+    let png_name = format!("{name}.png");
+    let svg_name = format!("{name}.svg");
 
     if let Ok(entries) = fs::read_dir(&icons_dir) {
         for entry in entries.flatten() {
             let size_dir = entry.path();
-            let icon_path = size_dir.join("apps").join(&target_name);
-            if icon_path.exists() {
+            let png_icon = size_dir.join("apps").join(&png_name);
+            if png_icon.exists() {
                 let dir_name = entry.file_name().to_string_lossy().to_string();
                 if let Some(size_str) = dir_name.split('x').next() {
                     if let Ok(size) = size_str.parse::<u32>() {
-                        if best.as_ref().is_none_or(|(best_size, _)| size > *best_size) {
-                            best = Some((size, icon_path));
+                        if best_png
+                            .as_ref()
+                            .is_none_or(|(best_size, _)| size > *best_size)
+                        {
+                            best_png = Some((size, png_icon));
                         }
                     }
                 }
             }
+
+            let svg_path = size_dir.join("apps").join(&svg_name);
+            if svg_icon.is_none() && svg_path.exists() {
+                svg_icon = Some(svg_path);
+            }
         }
     }
 
-    best.map(|(_, path)| path)
+    best_png.map(|(_, path)| path).or(svg_icon)
+}
+
+/// Create the AppDir root icon links that linuxdeploy expects.
+fn create_appdir_icon_links(appdir: &Path, icon_path: &Path, name: &str) -> Result<()> {
+    let ext = icon_path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("png");
+    let relative = icon_path.strip_prefix(appdir).unwrap_or(icon_path);
+    let relative_str = relative.to_string_lossy().to_string();
+    let named_icon = appdir.join(format!("{name}.{ext}"));
+    let dir_icon = appdir.join(".DirIcon");
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&relative_str, &named_icon).with_context(|| {
+            format!(
+                "Failed to create icon symlink: {} -> {}",
+                named_icon.display(),
+                relative_str
+            )
+        })?;
+        std::os::unix::fs::symlink(&relative_str, &dir_icon).with_context(|| {
+            format!(
+                "Failed to create .DirIcon symlink: {} -> {}",
+                dir_icon.display(),
+                relative_str
+            )
+        })?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        fs::copy(icon_path, &named_icon).with_context(|| {
+            format!(
+                "Failed to copy icon {} to {}",
+                icon_path.display(),
+                named_icon.display()
+            )
+        })?;
+        fs::copy(icon_path, &dir_icon).with_context(|| {
+            format!(
+                "Failed to copy icon {} to {}",
+                icon_path.display(),
+                dir_icon.display()
+            )
+        })?;
+    }
+
+    Ok(())
 }
 
 /// Search for an .AppImage file in the output directory.
