@@ -11,9 +11,12 @@ use std::{
 /// Dioxus build infrastructure and the individual bundler implementations.
 pub(crate) struct BundleContext<'a> {
     pub(crate) build: &'a BuildRequest,
+
     pub(crate) package_types: Vec<PackageType>,
+
     /// Pre-computed resource map: source path -> target path in bundle
     pub(crate) resources_map: HashMap<String, String>,
+
     /// Pre-resolved tool paths (NSIS, WiX, linuxdeploy, WebView2).
     pub(crate) tools: ResolvedTools,
 }

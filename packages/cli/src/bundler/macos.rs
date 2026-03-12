@@ -359,7 +359,11 @@ impl BundleContext<'_> {
                 continue;
             }
 
-            let img = load_png(icon_path)?;
+            let img = ImageReader::open(icon_path)
+                .with_context(|| format!("Failed to open icon image: {}", icon_path.display()))?
+                .decode()
+                .with_context(|| format!("Failed to decode icon image: {}", icon_path.display()))?;
+
             add_image_to_family(&mut family, &img)?;
         }
 
@@ -504,15 +508,6 @@ impl BundleContext<'_> {
     }
 }
 
-/// Load a PNG image from disk.
-fn load_png(path: &Path) -> Result<DynamicImage> {
-    let reader = ImageReader::open(path)
-        .with_context(|| format!("Failed to open icon image: {}", path.display()))?;
-    reader
-        .decode()
-        .with_context(|| format!("Failed to decode icon image: {}", path.display()))
-}
-
 /// Add all appropriate size variants of an image to the ICNS family.
 fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Result<()> {
     for &(width, height, density) in ICON_SIZES {
@@ -556,11 +551,9 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
 
 /// Write a plist dictionary to a file.
 fn write_plist(dict: &plist::Dictionary, path: &Path) -> Result<()> {
-    let value = plist::Value::Dictionary(dict.clone());
-    value
+    Ok(plist::Value::Dictionary(dict.clone())
         .to_file_xml(path)
-        .with_context(|| format!("Failed to write Info.plist to {}", path.display()))?;
-    Ok(())
+        .with_context(|| format!("Failed to write Info.plist to {}", path.display()))?)
 }
 
 /// Copy a framework (directory or .dylib) to the Frameworks directory.

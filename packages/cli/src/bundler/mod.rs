@@ -24,12 +24,21 @@ impl BundleContext<'_> {
     /// Bundles the project for the configured package types.
     pub(crate) async fn bundle_project(&self) -> Result<Vec<Bundle>> {
         let mut package_types = self.package_types();
-        if package_types.is_empty() {
-            return Ok(Vec::new());
-        }
 
         // Sort so dependencies come first (e.g. .app before .dmg)
-        package_types.sort_by_key(|a| a.priority());
+        package_types.sort_by_key(|ptype| match ptype {
+            PackageType::MacOsBundle
+            | PackageType::IosBundle
+            | PackageType::WindowsMsi
+            | PackageType::Nsis
+            | PackageType::Deb
+            | PackageType::Rpm
+            | PackageType::AppImage
+            | PackageType::Apk
+            | PackageType::Aab => 0,
+            PackageType::Dmg => 1,
+            PackageType::Updater => 2,
+        });
 
         let mut bundles = Vec::<Bundle>::new();
 
@@ -68,7 +77,6 @@ impl BundleContext<'_> {
         }
 
         // On macOS, clean up .app if only building dmg or updater
-        #[cfg(target_os = "macos")]
         if !package_types.contains(&PackageType::MacOsBundle) {
             if let Some(idx) = bundles
                 .iter()
@@ -93,26 +101,6 @@ impl BundleContext<'_> {
         }
 
         Ok(bundles)
-    }
-}
-
-impl PackageType {
-    /// Priority for build ordering. Lower = built first.
-    /// .app must be built before .dmg, updater comes last.
-    pub(crate) fn priority(&self) -> u32 {
-        match self {
-            PackageType::MacOsBundle
-            | PackageType::IosBundle
-            | PackageType::WindowsMsi
-            | PackageType::Nsis
-            | PackageType::Deb
-            | PackageType::Rpm
-            | PackageType::AppImage
-            | PackageType::Apk
-            | PackageType::Aab => 0,
-            PackageType::Dmg => 1,
-            PackageType::Updater => 2,
-        }
     }
 }
 
