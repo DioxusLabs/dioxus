@@ -729,7 +729,7 @@ impl TraceController {
             true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                let request_body = std::iter::from_fn(|| msgs.try_recv().ok())
                     .filter_map(|msg| serde_json::to_value(msg).ok())
                     .collect::<Vec<_>>();
 
@@ -740,8 +740,7 @@ impl TraceController {
             false => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let msg_list =
-                    std::iter::from_fn(|| msgs.try_next().ok().flatten()).collect::<Vec<_>>();
+                let msg_list = std::iter::from_fn(|| msgs.try_recv().ok()).collect::<Vec<_>>();
 
                 if !msg_list.is_empty() {
                     let dest = Workspace::dioxus_data_dir()
