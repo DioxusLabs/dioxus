@@ -557,6 +557,23 @@ impl BundleContext<'_> {
 
 /// Add all appropriate size variants of an image to the ICNS family.
 fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Result<()> {
+    // The icon sizes (in points) we generate for the .icns file, along with their
+    // densities. macOS expects both 1x and 2x variants.
+    const ICON_SIZES: &[(u32, u32, u32)] = &[
+        (16, 16, 1),
+        (16, 16, 2),
+        (32, 32, 1),
+        (32, 32, 2),
+        (64, 64, 1),
+        (64, 64, 2),
+        (128, 128, 1),
+        (128, 128, 2),
+        (256, 256, 1),
+        (256, 256, 2),
+        (512, 512, 1),
+        (512, 512, 2),
+    ];
+
     for &(width, height, density) in ICON_SIZES {
         let pixel_width = width * density;
         let pixel_height = height * density;
@@ -924,29 +941,17 @@ async fn base64_decode(input: &str) -> Result<Vec<u8>> {
     Ok(output.stdout)
 }
 
-/// The icon sizes (in points) we generate for the .icns file, along with their
-/// densities. macOS expects both 1x and 2x variants.
-const ICON_SIZES: &[(u32, u32, u32)] = &[
-    (16, 16, 1),
-    (16, 16, 2),
-    (32, 32, 1),
-    (32, 32, 2),
-    (64, 64, 1),
-    (64, 64, 2),
-    (128, 128, 1),
-    (128, 128, 2),
-    (256, 256, 1),
-    (256, 256, 2),
-    (512, 512, 1),
-    (512, 512, 2),
-];
-
 /// The result of DMG bundling, which may include both the `.dmg` and `.app` outputs.
 pub(crate) struct DmgBundled {
     /// Paths to the generated `.dmg` file(s).
     pub dmg: Vec<PathBuf>,
     /// Paths to the generated `.app` bundle(s) (if the `.app` was built as a dependency).
     pub app: Vec<PathBuf>,
+}
+
+/// A target to be code-signed.
+struct SignTarget {
+    path: PathBuf,
 }
 
 /// A code signing identity, optionally backed by a temporary keychain.
@@ -973,9 +978,4 @@ impl Drop for TempKeychain {
             .args(["delete-keychain", &self.path.display().to_string()])
             .status();
     }
-}
-
-/// A target to be code-signed.
-struct SignTarget {
-    path: PathBuf,
 }

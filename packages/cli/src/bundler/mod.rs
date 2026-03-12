@@ -1,4 +1,3 @@
-mod android;
 mod linux;
 mod macos;
 mod tools;
