@@ -7,6 +7,7 @@ use crate::bundler::BundleContext;
 use crate::WindowsSettings;
 use anyhow::{bail, Context, Result};
 use std::path::Path;
+use tokio::process::Command;
 
 /// Returns `true` if the Windows settings have signing configured.
 pub(crate) fn can_sign(settings: &WindowsSettings) -> bool {
@@ -17,7 +18,7 @@ pub(crate) fn can_sign(settings: &WindowsSettings) -> bool {
 /// from the BundleContext's Windows settings.
 ///
 /// If no signing configuration is present, this is a no-op.
-pub(crate) fn try_sign(path: &Path, ctx: &BundleContext) -> Result<()> {
+pub(crate) async fn try_sign(path: &Path, ctx: &BundleContext<'_>) -> Result<()> {
     let settings = ctx.windows();
 
     if !can_sign(&settings) {
@@ -28,12 +29,12 @@ pub(crate) fn try_sign(path: &Path, ctx: &BundleContext) -> Result<()> {
 
     // Custom sign command takes priority
     if let Some(sign_cmd) = &settings.sign_command {
-        return run_custom_sign_command(path, &sign_cmd.cmd, &sign_cmd.args);
+        return run_custom_sign_command(path, &sign_cmd.cmd, &sign_cmd.args).await;
     }
 
     // Otherwise use signtool with certificate thumbprint
     if let Some(thumbprint) = &settings.certificate_thumbprint {
-        return run_signtool_sign(path, thumbprint, &settings);
+        return run_signtool_sign(path, thumbprint, &settings).await;
     }
 
     Ok(())
@@ -41,7 +42,7 @@ pub(crate) fn try_sign(path: &Path, ctx: &BundleContext) -> Result<()> {
 
 /// Run a custom signing command. The `%1` placeholder in args is replaced
 /// with the path to the binary to sign.
-fn run_custom_sign_command(path: &Path, cmd: &str, args: &[String]) -> Result<()> {
+async fn run_custom_sign_command(path: &Path, cmd: &str, args: &[String]) -> Result<()> {
     let path_str = path.to_string_lossy();
     let resolved_args: Vec<String> = args
         .iter()
@@ -50,9 +51,10 @@ fn run_custom_sign_command(path: &Path, cmd: &str, args: &[String]) -> Result<()
 
     tracing::debug!("Running custom sign command: {} {:?}", cmd, resolved_args);
 
-    let status = std::process::Command::new(cmd)
+    let status = Command::new(cmd)
         .args(&resolved_args)
         .status()
+        .await
         .with_context(|| format!("Failed to run custom sign command: {cmd}"))?;
 
     if !status.success() {
@@ -68,8 +70,7 @@ fn run_custom_sign_command(path: &Path, cmd: &str, args: &[String]) -> Result<()
 /// Run signtool.exe to sign a binary with a certificate thumbprint.
 ///
 /// This only works on Windows where signtool.exe is available.
-#[cfg(target_os = "windows")]
-fn run_signtool_sign(
+async fn run_signtool_sign(
     path: &Path,
     thumbprint: &str,
     settings: &WindowsSettings,
@@ -106,28 +107,15 @@ fn run_signtool_sign(
 
     tracing::debug!("Running signtool with args: {:?}", args);
 
-    let status = std::process::Command::new("signtool.exe")
+    let status = Command::new("signtool.exe")
         .args(&args)
         .status()
+        .await
         .context("Failed to run signtool.exe. Is the Windows SDK installed?")?;
 
     if !status.success() {
-        bail!(
-            "signtool.exe failed with exit code: {:?}",
-            status.code()
-        );
+        bail!("signtool.exe failed with exit code: {:?}", status.code());
     }
 
     Ok(())
 }
-
-#[cfg(not(target_os = "windows"))]
-fn run_signtool_sign(
-    _path: &Path,
-    _thumbprint: &str,
-    _settings: &WindowsSettings,
-) -> Result<()> {
-    tracing::warn!("signtool.exe signing is only available on Windows. Skipping signing.");
-    Ok(())
-}
-

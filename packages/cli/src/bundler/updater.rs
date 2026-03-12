@@ -12,7 +12,18 @@ use std::{
 };
 
 /// Bundle updater artifacts from the already-built bundles.
-pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<Vec<PathBuf>> {
+///
+/// Updater archive mapping:
+/// - macOS `.app` -> `.app.tar.gz`
+/// - Windows MSI/NSIS installers -> `.zip`
+/// - Linux AppImage/Deb artifacts -> `.tar.gz`
+///
+/// Archives are emitted into `bundle/updater/` and are intended for distribution
+/// through an update server or release channel.
+pub(crate) async fn bundle_project(
+    ctx: &BundleContext<'_>,
+    bundles: &[Bundle],
+) -> Result<Vec<PathBuf>> {
     let mut updater_paths = Vec::new();
     let output_dir = ctx.project_out_directory().join("bundle").join("updater");
     std::fs::create_dir_all(&output_dir)?;
@@ -71,7 +82,8 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
 
 /// Create a .tar.gz of a directory (e.g., a .app bundle).
 fn create_tar_gz(src_dir: &Path, dest: &Path) -> Result<()> {
-    let file = File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    let file =
+        File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
     let enc = flate2::write::GzEncoder::new(file, flate2::Compression::default());
     let mut tar = tar::Builder::new(enc);
 
@@ -90,7 +102,8 @@ fn create_tar_gz(src_dir: &Path, dest: &Path) -> Result<()> {
 
 /// Create a .tar.gz containing a single file.
 fn create_tar_gz_single_file(src_file: &Path, dest: &Path) -> Result<()> {
-    let file = File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    let file =
+        File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
     let enc = flate2::write::GzEncoder::new(file, flate2::Compression::default());
     let mut tar = tar::Builder::new(enc);
 
@@ -109,7 +122,8 @@ fn create_tar_gz_single_file(src_file: &Path, dest: &Path) -> Result<()> {
 
 /// Create a .zip containing a single file.
 fn create_zip(src_file: &Path, dest: &Path) -> Result<()> {
-    let file = File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    let file =
+        File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
     let mut zip = zip::ZipWriter::new(file);
 
     let file_name = src_file

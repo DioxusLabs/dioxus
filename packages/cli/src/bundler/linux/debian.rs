@@ -17,16 +17,24 @@ use std::{
 
 /// Bundle the project as a .deb package.
 ///
-/// Returns the list of created .deb file paths.
-pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
+/// Debian package structure produced by this bundler:
+/// - `debian-binary` (format marker, currently `2.0`)
+/// - `control.tar.gz` with metadata, checksums, and maintainer scripts
+/// - `data.tar.gz` with install payload rooted at standard FHS paths
+///
+/// Install payload layout includes:
+/// - `/usr/bin/<binary>` executable
+/// - `/usr/lib/<binary>/...` resources
+/// - `/usr/share/applications/<binary>.desktop`
+/// - `/usr/share/icons/hicolor/...` icon set
+///
+/// Returns the list of created `.deb` file paths.
+pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBuf>> {
     let arch = deb_arch(ctx.binary_arch());
     let package_name = deb_package_name(ctx);
     let version = ctx.version_string();
 
-    let output_dir = ctx
-        .project_out_directory()
-        .join("bundle")
-        .join("deb");
+    let output_dir = ctx.project_out_directory().join("bundle").join("deb");
     fs::create_dir_all(&output_dir)?;
 
     let deb_filename = format!("{package_name}_{version}_{arch}.deb");
@@ -47,7 +55,14 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     let installed_size = dir_size_kb(&data_dir)?;
 
     // Build control.tar.gz
-    let control_tar = build_control_tar(ctx, &package_name, &version, arch, installed_size, &data_dir)?;
+    let control_tar = build_control_tar(
+        ctx,
+        &package_name,
+        &version,
+        arch,
+        installed_size,
+        &data_dir,
+    )?;
 
     // Build data.tar.gz
     let data_tar = build_data_tar(&data_dir)?;
@@ -113,10 +128,8 @@ pub(crate) fn generate_data(data_dir: &Path, ctx: &BundleContext) -> Result<()> 
     fs::create_dir_all(&desktop_dir)?;
 
     let deb_settings = ctx.deb();
-    let desktop_content = freedesktop::generate_desktop_file(
-        ctx,
-        deb_settings.desktop_template.as_deref(),
-    )?;
+    let desktop_content =
+        freedesktop::generate_desktop_file(ctx, deb_settings.desktop_template.as_deref())?;
     let desktop_path = desktop_dir.join(format!("{bin_name}.desktop"));
     fs::write(&desktop_path, &desktop_content)?;
 
@@ -394,9 +407,7 @@ fn deb_arch(arch: Arch) -> &'static str {
 
 /// Generate a Debian-friendly package name (lowercase, hyphens instead of underscores).
 fn deb_package_name(ctx: &BundleContext) -> String {
-    ctx.main_binary_name()
-        .to_lowercase()
-        .replace('_', "-")
+    ctx.main_binary_name().to_lowercase().replace('_', "-")
 }
 
 /// Calculate total size of a directory tree in kilobytes.

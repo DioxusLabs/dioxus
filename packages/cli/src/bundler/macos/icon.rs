@@ -111,14 +111,11 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
         let pixel_width = width * density;
         let pixel_height = height * density;
 
-        let icon_type = match icns::IconType::from_pixel_size_and_density(
-            pixel_width,
-            pixel_height,
-            density,
-        ) {
-            Some(t) => t,
-            None => continue,
-        };
+        let icon_type =
+            match icns::IconType::from_pixel_size_and_density(pixel_width, pixel_height, density) {
+                Some(t) => t,
+                None => continue,
+            };
 
         // Skip if we already have this icon type (e.g. from multiple source PNGs).
         if family.has_icon_with_type(icon_type) {
@@ -144,9 +141,7 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
 
         family
             .add_icon_with_type(&icns_image, icon_type)
-            .with_context(|| {
-                format!("Failed to add icon type {icon_type:?} to ICNS family")
-            })?;
+            .with_context(|| format!("Failed to add icon type {icon_type:?} to ICNS family"))?;
     }
 
     Ok(())

@@ -10,22 +10,32 @@ use anyhow::{bail, Context, Result};
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
+use tokio::process::Command;
 
 /// Bundle the project as an AppImage.
 ///
-/// Returns the list of created .AppImage file paths.
-pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
+/// AppImage output is a single ELF executable that mounts an embedded SquashFS at runtime.
+/// This bundler builds an AppDir with the expected AppImage layout and then delegates final
+/// image creation to `linuxdeploy`.
+///
+/// Required external tooling:
+/// - `linuxdeploy` (resolved ahead of time in `BundleContext::tools`)
+///
+/// AppDir layout created by this function:
+/// - `usr/bin/<binary>` main executable
+/// - `usr/share/applications/<name>.desktop` freedesktop desktop entry
+/// - `usr/share/icons/hicolor/...` icon set
+/// - top-level `AppRun` symlink and convenience `<name>.desktop`/`<name>.png` links
+///
+/// Returns the list of created `.AppImage` output paths.
+pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBuf>> {
     let name = ctx.main_binary_name().to_string();
     let version = ctx.version_string();
     let arch = ctx.binary_arch();
     let arch_str = appimage_arch(arch);
 
-    let output_dir = ctx
-        .project_out_directory()
-        .join("bundle")
-        .join("appimage");
+    let output_dir = ctx.project_out_directory().join("bundle").join("appimage");
     fs::create_dir_all(&output_dir)?;
 
     let appimage_filename = format!("{name}_{version}_{arch_str}.AppImage");
@@ -67,12 +77,8 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
         .env("NO_STRIP", "true")
         .current_dir(&output_dir)
         .status()
-        .with_context(|| {
-            format!(
-                "Failed to run linuxdeploy: {}",
-                linuxdeploy.display()
-            )
-        })?;
+        .await
+        .with_context(|| format!("Failed to run linuxdeploy: {}", linuxdeploy.display()))?;
 
     if !status.success() {
         bail!(
@@ -187,10 +193,7 @@ fn create_appdir_symlinks(appdir: &Path, name: &str, ctx: &BundleContext) -> Res
         } else {
             // No icon was found in the AppDir, copy the source icon directly
             fs::copy(&largest_icon, &icon_link).with_context(|| {
-                format!(
-                    "Failed to copy icon {} to AppDir",
-                    largest_icon.display()
-                )
+                format!("Failed to copy icon {} to AppDir", largest_icon.display())
             })?;
         }
     }
@@ -218,7 +221,10 @@ fn find_icon_in_appdir(appdir: &Path, name: &str) -> Option<PathBuf> {
                 let dir_name = entry.file_name().to_string_lossy().to_string();
                 if let Some(size_str) = dir_name.split('x').next() {
                     if let Ok(size) = size_str.parse::<u32>() {
-                        if best.as_ref().map_or(true, |(best_size, _)| size > *best_size) {
+                        if best
+                            .as_ref()
+                            .map_or(true, |(best_size, _)| size > *best_size)
+                        {
                             best = Some((size, icon_path));
                         }
                     }
@@ -257,4 +263,3 @@ fn appimage_arch(arch: Arch) -> &'static str {
         Arch::Universal => "x86_64",
     }
 }
-

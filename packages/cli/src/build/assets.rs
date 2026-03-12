@@ -33,10 +33,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::opt::AssetManifest;
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
-use crate::opt::AssetManifest;
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};

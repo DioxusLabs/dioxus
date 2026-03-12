@@ -11,7 +11,7 @@ pub(crate) use context::BundleContext;
 
 use crate::PackageType;
 use anyhow::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// A completed bundle with its output paths.
 #[derive(Debug)]
@@ -22,7 +22,7 @@ pub(crate) struct Bundle {
 
 /// Bundles the project for the given package types.
 /// Returns the list of bundles with their output paths.
-pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<Bundle>> {
+pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<Bundle>> {
     let mut package_types = ctx.package_types();
     if package_types.is_empty() {
         return Ok(Vec::new());
@@ -41,10 +41,10 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<Bundle>> {
 
         let bundle_paths = match package_type {
             #[cfg(target_os = "macos")]
-            PackageType::MacOsBundle => macos::app::bundle_project(ctx)?,
+            PackageType::MacOsBundle => macos::app::bundle_project(ctx).await?,
             #[cfg(target_os = "macos")]
             PackageType::Dmg => {
-                let bundled = macos::dmg::bundle_project(ctx, &bundles)?;
+                let bundled = macos::dmg::bundle_project(ctx, &bundles).await?;
                 if !bundled.app.is_empty() {
                     bundles.push(Bundle {
                         package_type: PackageType::MacOsBundle,
@@ -53,12 +53,12 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<Bundle>> {
                 }
                 bundled.dmg
             }
-            PackageType::Deb => linux::debian::bundle_project(ctx)?,
-            PackageType::Rpm => linux::rpm::bundle_project(ctx)?,
-            PackageType::AppImage => linux::appimage::bundle_project(ctx)?,
-            PackageType::WindowsMsi => windows::msi::bundle_project(ctx)?,
-            PackageType::Nsis => windows::nsis::bundle_project(ctx)?,
-            PackageType::Updater => updater::bundle_project(ctx, &bundles)?,
+            PackageType::Deb => linux::debian::bundle_project(ctx).await?,
+            PackageType::Rpm => linux::rpm::bundle_project(ctx).await?,
+            PackageType::AppImage => linux::appimage::bundle_project(ctx).await?,
+            PackageType::WindowsMsi => windows::msi::bundle_project(ctx).await?,
+            PackageType::Nsis => windows::nsis::bundle_project(ctx).await?,
+            PackageType::Updater => updater::bundle_project(ctx, &bundles).await?,
             _ => {
                 tracing::warn!("Ignoring unsupported package type: {:?}", package_type);
                 continue;
@@ -115,4 +115,36 @@ impl PackageType {
             PackageType::Updater => 2,
         }
     }
+}
+
+/// Recursively copy a directory tree.
+///
+/// Preserves symlinks on unix targets and falls back to copying link targets on non-unix.
+pub(crate) fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
+    std::fs::create_dir_all(dest)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let source_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            copy_dir_recursive(&source_path, &dest_path)?;
+        } else if file_type.is_symlink() {
+            #[cfg(unix)]
+            {
+                let target = std::fs::read_link(&source_path)?;
+                std::os::unix::fs::symlink(&target, &dest_path)?;
+            }
+
+            #[cfg(not(unix))]
+            {
+                std::fs::copy(&source_path, &dest_path)?;
+            }
+        } else {
+            std::fs::copy(&source_path, &dest_path)?;
+        }
+    }
+
+    Ok(())
 }

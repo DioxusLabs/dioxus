@@ -1,7 +1,9 @@
 use crate::MacOsSettings;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command as StdCommand, Stdio};
+use tokio::io::AsyncWriteExt;
+use tokio::process::Command;
 
 /// A code signing identity, optionally backed by a temporary keychain.
 pub(crate) struct SigningIdentity {
@@ -24,7 +26,7 @@ pub(crate) struct TempKeychain {
 impl Drop for TempKeychain {
     fn drop(&mut self) {
         tracing::debug!("Cleaning up temporary keychain: {}", self.path.display());
-        let _ = Command::new("security")
+        let _ = StdCommand::new("security")
             .args(["delete-keychain", &self.path.display().to_string()])
             .status();
     }
@@ -45,7 +47,7 @@ pub(crate) struct SignTarget {
 /// (typically from `MacOsSettings::signing_identity`).
 ///
 /// Returns `None` if no signing identity is available.
-pub(crate) fn setup_keychain(identity: Option<&str>) -> Result<Option<SigningIdentity>> {
+pub(crate) async fn setup_keychain(identity: Option<&str>) -> Result<Option<SigningIdentity>> {
     let certificate_encoded = std::env::var("APPLE_CERTIFICATE").ok();
     let certificate_password = std::env::var("APPLE_CERTIFICATE_PASSWORD")
         .ok()
@@ -53,11 +55,11 @@ pub(crate) fn setup_keychain(identity: Option<&str>) -> Result<Option<SigningIde
 
     if let Some(cert_base64) = certificate_encoded {
         tracing::info!("Setting up temporary keychain for code signing (CI mode)");
-        let keychain = setup_temp_keychain(&cert_base64, &certificate_password)?;
+        let keychain = setup_temp_keychain(&cert_base64, &certificate_password).await?;
         // The signing identity to use when we imported a certificate.
         // We need to find the identity from the imported cert.
         // Use `security find-identity` to extract it.
-        let identity_name = find_identity_in_keychain(&keychain.path)?;
+        let identity_name = find_identity_in_keychain(&keychain.path).await?;
         return Ok(Some(SigningIdentity {
             identity: identity_name,
             temp_keychain: Some(keychain),
@@ -77,7 +79,7 @@ pub(crate) fn setup_keychain(identity: Option<&str>) -> Result<Option<SigningIde
 }
 
 /// Set up a temporary keychain and import the certificate into it.
-fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain> {
+async fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain> {
     use std::io::Write;
 
     let keychain_password = "dioxus-bundle-keychain";
@@ -85,6 +87,7 @@ fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain
 
     // Decode the certificate
     let cert_data = base64_decode(cert_base64)
+        .await
         .context("Failed to decode APPLE_CERTIFICATE from base64")?;
 
     // Write the certificate to a temp file
@@ -96,41 +99,41 @@ fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain
     // Delete any old keychain with the same name
     let _ = Command::new("security")
         .args(["delete-keychain", &keychain_path.display().to_string()])
-        .output();
+        .output()
+        .await;
 
     // Create the keychain
-    run_command(
-        Command::new("security").args([
-            "create-keychain",
-            "-p",
-            keychain_password,
-            &keychain_path.display().to_string(),
-        ]),
+    let mut create_keychain_cmd = Command::new("security");
+    create_keychain_cmd.args([
         "create-keychain",
-    )?;
+        "-p",
+        keychain_password,
+        &keychain_path.display().to_string(),
+    ]);
+    run_command(&mut create_keychain_cmd, "create-keychain").await?;
 
     // Import the certificate
-    run_command(
-        Command::new("security").args([
-            "import",
-            &cert_file.display().to_string(),
-            "-k",
-            &keychain_path.display().to_string(),
-            "-P",
-            password,
-            "-T",
-            "/usr/bin/codesign",
-            "-T",
-            "/usr/bin/security",
-        ]),
-        "import certificate",
-    )?;
+    let mut import_cmd = Command::new("security");
+    import_cmd.args([
+        "import",
+        &cert_file.display().to_string(),
+        "-k",
+        &keychain_path.display().to_string(),
+        "-P",
+        password,
+        "-T",
+        "/usr/bin/codesign",
+        "-T",
+        "/usr/bin/security",
+    ]);
+    run_command(&mut import_cmd, "import certificate").await?;
 
     // Add the keychain to the search list
     // First, get the current list to preserve it
     let output = Command::new("security")
         .args(["list-keychains", "-d", "user"])
         .output()
+        .await
         .context("Failed to list keychains")?;
     let current_keychains = String::from_utf8_lossy(&output.stdout);
     let mut keychains: Vec<String> = current_keychains
@@ -145,32 +148,30 @@ fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain
     for kc in &keychains {
         cmd.arg(kc);
     }
-    run_command(&mut cmd, "list-keychains -s")?;
+    run_command(&mut cmd, "list-keychains -s").await?;
 
     // Unlock the keychain
-    run_command(
-        Command::new("security").args([
-            "unlock-keychain",
-            "-p",
-            keychain_password,
-            &keychain_path.display().to_string(),
-        ]),
+    let mut unlock_cmd = Command::new("security");
+    unlock_cmd.args([
         "unlock-keychain",
-    )?;
+        "-p",
+        keychain_password,
+        &keychain_path.display().to_string(),
+    ]);
+    run_command(&mut unlock_cmd, "unlock-keychain").await?;
 
     // Set the key partition list to allow codesign access without UI prompt
-    run_command(
-        Command::new("security").args([
-            "set-key-partition-list",
-            "-S",
-            "apple-tool:,apple:",
-            "-s",
-            "-k",
-            keychain_password,
-            &keychain_path.display().to_string(),
-        ]),
+    let mut set_partition_cmd = Command::new("security");
+    set_partition_cmd.args([
         "set-key-partition-list",
-    )?;
+        "-S",
+        "apple-tool:,apple:",
+        "-s",
+        "-k",
+        keychain_password,
+        &keychain_path.display().to_string(),
+    ]);
+    run_command(&mut set_partition_cmd, "set-key-partition-list").await?;
 
     // Clean up temp cert file
     let _ = std::fs::remove_file(&cert_file);
@@ -182,7 +183,7 @@ fn setup_temp_keychain(cert_base64: &str, password: &str) -> Result<TempKeychain
 }
 
 /// Find the signing identity in a keychain using `security find-identity`.
-fn find_identity_in_keychain(keychain_path: &Path) -> Result<String> {
+async fn find_identity_in_keychain(keychain_path: &Path) -> Result<String> {
     let output = Command::new("security")
         .args([
             "find-identity",
@@ -192,6 +193,7 @@ fn find_identity_in_keychain(keychain_path: &Path) -> Result<String> {
             &keychain_path.display().to_string(),
         ])
         .output()
+        .await
         .context("Failed to run `security find-identity`")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -200,7 +202,10 @@ fn find_identity_in_keychain(keychain_path: &Path) -> Result<String> {
     //   1) ABCDEF1234... "Developer ID Application: Name (TEAMID)"
     for line in stdout.lines() {
         let line = line.trim();
-        if line.starts_with("1)") || line.contains("Developer ID") || line.contains("Apple Development") {
+        if line.starts_with("1)")
+            || line.contains("Developer ID")
+            || line.contains("Apple Development")
+        {
             // Extract the quoted identity string
             if let Some(start) = line.find('"') {
                 if let Some(end) = line.rfind('"') {
@@ -225,19 +230,19 @@ fn find_identity_in_keychain(keychain_path: &Path) -> Result<String> {
 }
 
 /// Sign a list of paths with the given identity.
-pub(crate) fn sign_paths(
+pub(crate) async fn sign_paths(
     identity: &SigningIdentity,
     targets: Vec<SignTarget>,
     settings: &MacOsSettings,
 ) -> Result<()> {
     for target in &targets {
-        sign_path(identity, target, settings)?;
+        sign_path(identity, target, settings).await?;
     }
     Ok(())
 }
 
 /// Sign a single path with `codesign`.
-fn sign_path(
+async fn sign_path(
     identity: &SigningIdentity,
     target: &SignTarget,
     settings: &MacOsSettings,
@@ -254,7 +259,12 @@ fn sign_path(
     }
 
     // --deep for .app bundles and frameworks
-    if target.path.extension().map(|e| e == "app" || e == "framework").unwrap_or(false) {
+    if target
+        .path
+        .extension()
+        .map(|e| e == "app" || e == "framework")
+        .unwrap_or(false)
+    {
         cmd.arg("--deep");
     }
 
@@ -270,7 +280,7 @@ fn sign_path(
 
     cmd.arg(&target.path);
 
-    run_command(&mut cmd, &format!("codesign {}", target.path.display()))?;
+    run_command(&mut cmd, &format!("codesign {}", target.path.display())).await?;
     Ok(())
 }
 
@@ -285,11 +295,10 @@ fn sign_path(
 /// - `APPLE_API_KEY`: API key ID
 /// - `APPLE_API_ISSUER`: API key issuer ID
 /// - `APPLE_API_KEY_PATH`: Path to the .p8 key file
-pub(crate) fn notarize(app_path: &Path) -> Result<()> {
+pub(crate) async fn notarize(app_path: &Path) -> Result<()> {
     let apple_id = std::env::var("APPLE_ID").ok();
     let apple_password = std::env::var("APPLE_PASSWORD").ok();
     let apple_team_id = std::env::var("APPLE_TEAM_ID").ok();
-
     let api_key = std::env::var("APPLE_API_KEY").ok();
     let api_issuer = std::env::var("APPLE_API_ISSUER").ok();
     let api_key_path = std::env::var("APPLE_API_KEY_PATH").ok();
@@ -303,8 +312,7 @@ pub(crate) fn notarize(app_path: &Path) -> Result<()> {
         cmd.args(["--key", key_path]);
         cmd.args(["--key-id", key]);
         cmd.args(["--issuer", issuer]);
-    } else if let (Some(id), Some(pwd), Some(team)) = (&apple_id, &apple_password, &apple_team_id)
-    {
+    } else if let (Some(id), Some(pwd), Some(team)) = (&apple_id, &apple_password, &apple_team_id) {
         // Apple ID-based notarization
         cmd.args(["--apple-id", id]);
         cmd.args(["--password", pwd]);
@@ -320,24 +328,24 @@ pub(crate) fn notarize(app_path: &Path) -> Result<()> {
     cmd.arg("--wait");
 
     tracing::info!("Submitting {} for notarization...", app_path.display());
-    run_command(&mut cmd, "xcrun notarytool submit")?;
+    run_command(&mut cmd, "xcrun notarytool submit").await?;
 
     // Staple the notarization ticket to the app
     tracing::info!("Stapling notarization ticket...");
-    run_command(
-        Command::new("xcrun").args(["stapler", "staple"]).arg(app_path),
-        "xcrun stapler staple",
-    )?;
+    let mut staple_cmd = Command::new("xcrun");
+    staple_cmd.args(["stapler", "staple"]).arg(app_path);
+    run_command(&mut staple_cmd, "xcrun stapler staple").await?;
 
     tracing::info!("Notarization complete for {}", app_path.display());
     Ok(())
 }
 
 /// Helper to run a command and return a nice error on failure.
-fn run_command(cmd: &mut Command, description: &str) -> Result<()> {
+async fn run_command(cmd: &mut Command, description: &str) -> Result<()> {
     tracing::debug!("Running: {:?}", cmd);
     let status = cmd
         .status()
+        .await
         .with_context(|| format!("Failed to execute `{description}`"))?;
 
     if !status.success() {
@@ -347,22 +355,27 @@ fn run_command(cmd: &mut Command, description: &str) -> Result<()> {
 }
 
 /// Decode base64 (standard or URL-safe).
-fn base64_decode(input: &str) -> Result<Vec<u8>> {
+async fn base64_decode(input: &str) -> Result<Vec<u8>> {
     // Simple base64 decode without pulling in a base64 crate.
     // We shell out to `base64` which is available on macOS.
-    let output = Command::new("base64")
+    let mut child = Command::new("base64")
         .args(["--decode"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
-        .and_then(|mut child| {
-            use std::io::Write;
-            if let Some(mut stdin) = child.stdin.take() {
-                stdin.write_all(input.as_bytes())?;
-            }
-            child.wait_with_output()
-        })
+        .context("Failed to decode base64 certificate")?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin
+            .write_all(input.as_bytes())
+            .await
+            .context("Failed writing base64 certificate to decoder stdin")?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .await
         .context("Failed to decode base64 certificate")?;
 
     if !output.status.success() {

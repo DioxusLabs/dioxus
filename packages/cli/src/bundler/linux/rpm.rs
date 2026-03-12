@@ -7,23 +7,30 @@ use crate::bundler::{context::Arch, BundleContext};
 use anyhow::{Context, Result};
 use std::{
     fs,
+    io::BufReader,
     path::{Path, PathBuf},
 };
 
 /// Bundle the project as an RPM package.
 ///
-/// Returns the list of created .rpm file paths.
-pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
+/// RPM payload layout mirrors the Linux desktop package conventions:
+/// - `/usr/bin/<binary>` main executable
+/// - `/usr/lib/<binary>/...` application resources
+/// - `/usr/share/applications/<binary>.desktop`
+/// - `/usr/share/icons/hicolor/...` icons
+///
+/// Additional metadata and lifecycle scripts are populated from bundle settings
+/// (license, dependencies, pre/post install/remove scripts).
+///
+/// Returns the list of created `.rpm` file paths.
+pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBuf>> {
     let name = ctx.main_binary_name().to_string();
     let version = ctx.version_string();
     let arch = rpm_arch(ctx.binary_arch());
     let license = ctx.license().unwrap_or("Unknown").to_string();
     let description = ctx.short_description();
 
-    let output_dir = ctx
-        .project_out_directory()
-        .join("bundle")
-        .join("rpm");
+    let output_dir = ctx.project_out_directory().join("bundle").join("rpm");
     fs::create_dir_all(&output_dir)?;
 
     let rpm_filename = format!("{name}-{version}-1.{arch}.rpm");
@@ -39,18 +46,13 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     let binary_path = ctx.main_binary_path();
     let dest_bin = format!("/usr/bin/{name}");
     builder = builder
-        .with_file(
-            &binary_path,
-            rpm::FileOptions::new(dest_bin).mode(0o755),
-        )
+        .with_file(&binary_path, rpm::FileOptions::new(dest_bin).mode(0o755))
         .context("Failed to add binary to RPM")?;
 
     // Generate and add the .desktop file
     let deb_settings = ctx.deb();
-    let desktop_content = freedesktop::generate_desktop_file(
-        ctx,
-        deb_settings.desktop_template.as_deref(),
-    )?;
+    let desktop_content =
+        freedesktop::generate_desktop_file(ctx, deb_settings.desktop_template.as_deref())?;
     let desktop_dest = format!("/usr/share/applications/{name}.desktop");
 
     // Write desktop file to a temporary location so we can add it
@@ -77,20 +79,22 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
         match ext.as_str() {
             "png" => {
-                if let Ok((w, h)) = png_dimensions(icon_path) {
-                    let size = w.max(h);
-                    let dest = format!(
-                        "/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png"
-                    );
-                    builder = builder
-                        .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
-                        .context("Failed to add icon to RPM")?;
+                if let Ok(file) = fs::File::open(icon_path) {
+                    let decoder = png::Decoder::new(BufReader::new(file));
+                    if let Ok(reader) = decoder.read_info() {
+                        let info = reader.info();
+                        let (w, h) = (info.width, info.height);
+                        let size = w.max(h);
+                        let dest =
+                            format!("/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png");
+                        builder = builder
+                            .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
+                            .context("Failed to add icon to RPM")?;
+                    }
                 }
             }
             "svg" => {
-                let dest = format!(
-                    "/usr/share/icons/hicolor/scalable/apps/{name}.svg"
-                );
+                let dest = format!("/usr/share/icons/hicolor/scalable/apps/{name}.svg");
                 builder = builder
                     .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
                     .context("Failed to add SVG icon to RPM")?;
@@ -112,7 +116,10 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     let resource_files = collect_files(&resource_temp)?;
     for (src, relative) in &resource_files {
-        let dest = format!("/usr/lib/{name}/{}", relative.to_string_lossy().replace('\\', "/"));
+        let dest = format!(
+            "/usr/lib/{name}/{}",
+            relative.to_string_lossy().replace('\\', "/")
+        );
         builder = builder
             .with_file(src, rpm::FileOptions::new(&dest).mode(0o644))
             .with_context(|| format!("Failed to add resource {} to RPM", relative.display()))?;
@@ -173,9 +180,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     }
 
     // Build the RPM
-    let package = builder
-        .build()
-        .context("Failed to build RPM package")?;
+    let package = builder.build().context("Failed to build RPM package")?;
 
     // Write to file
     let mut rpm_file = fs::File::create(&rpm_path)
@@ -211,26 +216,6 @@ fn collect_files(dir: &Path) -> Result<Vec<(PathBuf, PathBuf)>> {
         files.push((abs, rel));
     }
     Ok(files)
-}
-
-/// Read PNG dimensions from the IHDR chunk.
-fn png_dimensions(path: &Path) -> Result<(u32, u32)> {
-    use std::io::Read;
-
-    let mut file = fs::File::open(path)?;
-    let mut header = [0u8; 24];
-    file.read_exact(&mut header)
-        .context("PNG file too small to contain IHDR")?;
-
-    const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
-    if header[..8] != PNG_SIGNATURE {
-        anyhow::bail!("Not a valid PNG file: {}", path.display());
-    }
-
-    let width = u32::from_be_bytes([header[16], header[17], header[18], header[19]]);
-    let height = u32::from_be_bytes([header[20], header[21], header[22], header[23]]);
-
-    Ok((width, height))
 }
 
 /// Map Arch to RPM architecture string.

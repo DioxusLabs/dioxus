@@ -72,7 +72,7 @@ impl Bundle {
             // Desktop platforms use our built-in bundler
             BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows => {
                 tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&client, &self.package_types)? {
+                for bundle in Self::bundle_desktop(&client, &self.package_types).await? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
@@ -145,7 +145,7 @@ impl Bundle {
         })
     }
 
-    fn bundle_desktop(
+    async fn bundle_desktop(
         build: &BuildRequest,
         package_types: &Option<Vec<crate::PackageType>>,
     ) -> Result<Vec<crate::bundler::Bundle>, Error> {
@@ -177,7 +177,7 @@ impl Bundle {
 
         tracing::debug!("Bundling project for {:?}", ctx.package_types());
 
-        let bundles = crate::bundler::bundle_project(&ctx).inspect_err(|err| {
+        let bundles = crate::bundler::bundle_project(&ctx).await.inspect_err(|err| {
             tracing::error!("Failed to bundle project: {:#?}", err);
             if cfg!(target_os = "macos") {
                 tracing::error!("Make sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)");

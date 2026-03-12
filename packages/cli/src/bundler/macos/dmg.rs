@@ -1,15 +1,16 @@
 use crate::bundler::macos::{app, sign};
-use crate::bundler::{Bundle, BundleContext};
+use crate::bundler::{copy_dir_recursive, Bundle, BundleContext};
 use crate::PackageType;
 use anyhow::{bail, Context, Result};
 use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::PathBuf;
+use tokio::process::Command;
 
 /// The result of DMG bundling, which may include both the `.dmg` and `.app` outputs.
 pub(crate) struct DmgBundled {
     /// Paths to the generated `.dmg` file(s).
     pub dmg: Vec<PathBuf>,
+
     /// Paths to the generated `.app` bundle(s) (if the `.app` was built as a dependency).
     pub app: Vec<PathBuf>,
 }
@@ -18,7 +19,19 @@ pub(crate) struct DmgBundled {
 ///
 /// If the `.app` bundle has not already been created (not present in `bundles`),
 /// it will be built first. The `.app` is then packaged into a `.dmg` using `hdiutil`.
-pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<DmgBundled> {
+///
+/// DMG layout and behavior:
+/// - creates a staging directory containing exactly the `.app` and an `Applications` symlink
+/// - invokes `hdiutil create -format UDZO` for a compressed read-only image
+/// - optionally signs and notarizes the resulting `.dmg`
+///
+/// Required external tooling:
+/// - `hdiutil` (macOS)
+/// - signing/notarization tools (`codesign`, `xcrun`) when enabled
+pub(crate) async fn bundle_project(
+    ctx: &BundleContext<'_>,
+    bundles: &[Bundle],
+) -> Result<DmgBundled> {
     let product_name = ctx.product_name();
     let macos_settings = ctx.macos();
 
@@ -35,7 +48,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
         (app_bundle.bundle_paths.clone(), Vec::new())
     } else {
         // Build the .app bundle first
-        let paths = app::bundle_project(ctx)?;
+        let paths = app::bundle_project(ctx).await?;
         (paths.clone(), paths)
     };
 
@@ -98,6 +111,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
             &dmg_path.display().to_string(),
         ])
         .status()
+        .await
         .context("Failed to execute `hdiutil create`")?;
 
     if !status.success() {
@@ -107,7 +121,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
     tracing::info!("DMG created at {}", dmg_path.display());
 
     // Sign the DMG if a signing identity is available
-    let signing_identity = sign::setup_keychain(macos_settings.signing_identity.as_deref())?;
+    let signing_identity = sign::setup_keychain(macos_settings.signing_identity.as_deref()).await?;
     if let Some(identity) = &signing_identity {
         tracing::info!("Signing DMG with identity: {}", identity.identity);
         sign::sign_paths(
@@ -116,14 +130,15 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
                 path: dmg_path.clone(),
             }],
             &macos_settings,
-        )?;
+        )
+        .await?;
 
         // Notarize the DMG if credentials are available
         let should_notarize =
             std::env::var("APPLE_ID").is_ok() || std::env::var("APPLE_API_KEY").is_ok();
 
         if should_notarize {
-            sign::notarize(&dmg_path)?;
+            sign::notarize(&dmg_path).await?;
         }
     }
 
@@ -131,27 +146,4 @@ pub(crate) fn bundle_project(ctx: &BundleContext, bundles: &[Bundle]) -> Result<
         dmg: vec![dmg_path],
         app: app_bundle_paths,
     })
-}
-
-/// Recursively copy a directory.
-fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
-    fs::create_dir_all(dest)?;
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let entry_dest = dest.join(entry.file_name());
-        let file_type = entry.file_type()?;
-
-        if file_type.is_dir() {
-            copy_dir_recursive(&entry.path(), &entry_dest)?;
-        } else if file_type.is_symlink() {
-            #[cfg(unix)]
-            {
-                let target = fs::read_link(entry.path())?;
-                std::os::unix::fs::symlink(&target, &entry_dest)?;
-            }
-        } else {
-            fs::copy(entry.path(), &entry_dest)?;
-        }
-    }
-    Ok(())
 }

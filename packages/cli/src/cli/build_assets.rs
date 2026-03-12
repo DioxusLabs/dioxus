@@ -1,8 +1,8 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
+use crate::opt::process_file_to;
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
-use crate::opt::process_file_to;
 use tracing::debug;
 
 #[derive(Clone, Debug, Parser)]

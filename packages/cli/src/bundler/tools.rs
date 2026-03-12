@@ -65,8 +65,7 @@ pub(crate) fn resolve_tools(
         match pt {
             PackageType::Nsis => {
                 resolved.nsis_dir = Some(ensure_nsis(tools_dir)?);
-                resolved.webview2_installer =
-                    resolve_webview2(tools_dir, windows_settings, arch)?;
+                resolved.webview2_installer = resolve_webview2(tools_dir, windows_settings, arch)?;
             }
             PackageType::WindowsMsi => {
                 resolved.wix_dir = Some(ensure_wix(tools_dir)?);
@@ -111,10 +110,6 @@ fn resolve_webview2(
         }
     }
 }
-
-// ---------------------------------------------------------------------------
-// Individual tool ensure functions
-// ---------------------------------------------------------------------------
 
 fn ensure_nsis(tools_dir: &Path) -> Result<PathBuf> {
     let nsis_dir = tools_dir.join("nsis-3.11");

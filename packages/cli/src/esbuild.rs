@@ -124,9 +124,7 @@ impl Esbuild {
             }
         }
 
-        anyhow::bail!(
-            "esbuild binary not found in archive (expected {expected_path})"
-        );
+        anyhow::bail!("esbuild binary not found in archive (expected {expected_path})");
     }
 
     /// Map the host platform to the npm package name for esbuild.

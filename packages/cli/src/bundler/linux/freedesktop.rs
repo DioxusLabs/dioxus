@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use handlebars::Handlebars;
 use std::{
     fs,
-    io::Read,
+    io::BufReader,
     path::{Path, PathBuf},
 };
 
@@ -65,10 +65,7 @@ pub(crate) fn generate_desktop_file(
 
     // Use serde_json::Value so handlebars can handle the optional `comment` with {{#if}}.
     let mut json_data = serde_json::Map::new();
-    json_data.insert(
-        "categories".into(),
-        serde_json::Value::String(categories),
-    );
+    json_data.insert("categories".into(), serde_json::Value::String(categories));
     json_data.insert(
         "exec".into(),
         serde_json::Value::String(bin_name.to_string()),
@@ -77,15 +74,9 @@ pub(crate) fn generate_desktop_file(
         "icon".into(),
         serde_json::Value::String(bin_name.to_string()),
     );
-    json_data.insert(
-        "name".into(),
-        serde_json::Value::String(product_name),
-    );
+    json_data.insert("name".into(), serde_json::Value::String(product_name));
     if has_comment {
-        json_data.insert(
-            "comment".into(),
-            serde_json::Value::String(description),
-        );
+        json_data.insert("comment".into(), serde_json::Value::String(description));
     }
 
     let rendered = handlebars
@@ -115,17 +106,20 @@ pub(crate) fn copy_icons(ctx: &BundleContext, data_dir: &Path) -> Result<Vec<Pat
 
         match ext.as_str() {
             "png" => {
-                let (width, height) = png_dimensions(icon_path).with_context(|| {
-                    format!("Failed to read PNG dimensions: {}", icon_path.display())
+                let file = fs::File::open(icon_path)
+                    .with_context(|| format!("Failed to open PNG icon: {}", icon_path.display()))?;
+                let decoder = png::Decoder::new(BufReader::new(file));
+                let reader = decoder.read_info().with_context(|| {
+                    format!("Failed to decode PNG dimensions: {}", icon_path.display())
                 })?;
+                let info = reader.info();
+                let (width, height) = (info.width, info.height);
 
                 // Use the larger dimension as the icon size (icons should be square, but
                 // we handle non-square gracefully).
                 let size = width.max(height);
 
-                let dest_dir = data_dir.join(format!(
-                    "usr/share/icons/hicolor/{size}x{size}/apps"
-                ));
+                let dest_dir = data_dir.join(format!("usr/share/icons/hicolor/{size}x{size}/apps"));
                 fs::create_dir_all(&dest_dir)?;
 
                 let dest = dest_dir.join(format!("{bin_name}.png"));
@@ -137,12 +131,7 @@ pub(crate) fn copy_icons(ctx: &BundleContext, data_dir: &Path) -> Result<Vec<Pat
                     )
                 })?;
 
-                tracing::debug!(
-                    "Copied icon {}x{}: {}",
-                    size,
-                    size,
-                    dest.display()
-                );
+                tracing::debug!("Copied icon {}x{}: {}", size, size, dest.display());
                 paths.push(dest);
             }
             "svg" => {
@@ -189,37 +178,22 @@ pub(crate) fn find_largest_icon(ctx: &BundleContext) -> Result<Option<PathBuf>> 
             .to_lowercase();
 
         if ext == "png" {
-            if let Ok((w, h)) = png_dimensions(&icon_path) {
-                let size = w.max(h);
-                if best.as_ref().map_or(true, |(best_size, _)| size > *best_size) {
-                    best = Some((size, icon_path));
+            if let Ok(file) = fs::File::open(&icon_path) {
+                let decoder = png::Decoder::new(BufReader::new(file));
+                if let Ok(reader) = decoder.read_info() {
+                    let info = reader.info();
+                    let (w, h) = (info.width, info.height);
+                    let size = w.max(h);
+                    if best
+                        .as_ref()
+                        .map_or(true, |(best_size, _)| size > *best_size)
+                    {
+                        best = Some((size, icon_path));
+                    }
                 }
             }
         }
     }
 
     Ok(best.map(|(_, path)| path))
-}
-
-/// Read the dimensions of a PNG file by parsing the IHDR chunk.
-///
-/// PNG format: 8-byte signature, then chunks. The first chunk is always IHDR,
-/// which contains width (4 bytes BE) and height (4 bytes BE) at offsets 16 and 20.
-fn png_dimensions(path: &Path) -> Result<(u32, u32)> {
-    let mut file = fs::File::open(path)?;
-    let mut header = [0u8; 24];
-    file.read_exact(&mut header)
-        .context("PNG file too small to contain IHDR")?;
-
-    // Verify PNG signature
-    const PNG_SIGNATURE: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
-    if header[..8] != PNG_SIGNATURE {
-        anyhow::bail!("Not a valid PNG file: {}", path.display());
-    }
-
-    // Width and height are at bytes 16..20 and 20..24 (big-endian u32)
-    let width = u32::from_be_bytes([header[16], header[17], header[18], header[19]]);
-    let height = u32::from_be_bytes([header[20], header[21], header[22], header[23]]);
-
-    Ok((width, height))
 }

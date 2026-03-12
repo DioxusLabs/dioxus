@@ -6,32 +6,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// The architecture of the target binary.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Arch {
-    X86_64,
-    X86,
-    AArch64,
-    Armhf,
-    Armel,
-    Riscv64,
-    Universal,
-}
-
-impl std::fmt::Display for Arch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Arch::X86_64 => write!(f, "x86_64"),
-            Arch::X86 => write!(f, "x86"),
-            Arch::AArch64 => write!(f, "aarch64"),
-            Arch::Armhf => write!(f, "armhf"),
-            Arch::Armel => write!(f, "armel"),
-            Arch::Riscv64 => write!(f, "riscv64"),
-            Arch::Universal => write!(f, "universal"),
-        }
-    }
-}
-
 /// BundleContext wraps a BuildRequest and provides the settings API
 /// that bundle format modules need. This is the adapter between
 /// Dioxus build infrastructure and the individual bundler implementations.
@@ -64,8 +38,8 @@ impl<'a> BundleContext<'a> {
                     let old = path
                         .canonicalize()
                         .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-                    let new = PathBuf::from("assets")
-                        .join(path.strip_prefix(&asset_dir).unwrap_or(path));
+                    let new =
+                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
                     resources_map.insert(old.display().to_string(), new.display().to_string());
                 }
             }
@@ -282,8 +256,9 @@ impl<'a> BundleContext<'a> {
             if let Some(parent) = dest_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::copy(&src_path, &dest_path)
-                .with_context(|| format!("Failed to copy resource {src} -> {}", dest_path.display()))?;
+            std::fs::copy(&src_path, &dest_path).with_context(|| {
+                format!("Failed to copy resource {src} -> {}", dest_path.display())
+            })?;
         }
         Ok(())
     }
@@ -329,5 +304,30 @@ impl<'a> BundleContext<'a> {
     pub(crate) fn windows(&self) -> WindowsSettings {
         self.build.config.bundle.windows.clone().unwrap_or_default()
     }
+}
 
+/// The architecture of the target binary.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Arch {
+    X86_64,
+    X86,
+    AArch64,
+    Armhf,
+    Armel,
+    Riscv64,
+    Universal,
+}
+
+impl std::fmt::Display for Arch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Arch::X86_64 => write!(f, "x86_64"),
+            Arch::X86 => write!(f, "x86"),
+            Arch::AArch64 => write!(f, "aarch64"),
+            Arch::Armhf => write!(f, "armhf"),
+            Arch::Armel => write!(f, "armel"),
+            Arch::Riscv64 => write!(f, "riscv64"),
+            Arch::Universal => write!(f, "universal"),
+        }
+    }
 }

@@ -12,156 +12,25 @@ use anyhow::{bail, Context, Result};
 use handlebars::Handlebars;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use tokio::process::Command;
 use uuid::Uuid;
-
-/// The embedded WiX template.
-///
-/// This is a simplified WiX XML source that handles core MSI installation.
-/// For advanced use cases, users can provide a custom template via WixSettings.
-const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
-<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product
-        Id="*"
-        Name="{{product_name}}"
-        UpgradeCode="{{upgrade_code}}"
-        Language="1033"
-        Codepage="1252"
-        Version="{{version}}"
-        Manufacturer="{{publisher}}">
-
-        <Package
-            Id="*"
-            Keywords="Installer"
-            Description="{{short_description}}"
-            Manufacturer="{{publisher}}"
-            InstalledScope="perMachine"
-            Languages="1033"
-            Compressed="yes"
-            SummaryCodepage="1252" />
-
-        <MajorUpgrade
-            Schedule="afterInstallInitialize"
-            {{#if allow_downgrades}}
-            AllowDowngrades="yes"
-            {{else}}
-            DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit."
-            AllowSameVersionUpgrades="yes"
-            {{/if}} />
-
-        <MediaTemplate EmbedCab="yes" {{#if fips_compliant}}CompressionLevel="none"{{/if}} />
-
-        {{#if icon_path}}
-        <Icon Id="ProductIcon" SourceFile="{{icon_path}}" />
-        <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
-        {{/if}}
-
-        {{#if license}}
-        <WixVariable Id="WixUILicenseRtf" Value="{{license}}" />
-        {{/if}}
-
-        {{#if banner_path}}
-        <WixVariable Id="WixUIBannerBmp" Value="{{banner_path}}" />
-        {{/if}}
-        {{#if dialog_image_path}}
-        <WixVariable Id="WixUIDialogBmp" Value="{{dialog_image_path}}" />
-        {{/if}}
-
-        <UIRef Id="WixUI_InstallDir" />
-        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
-
-        <Directory Id="TARGETDIR" Name="SourceDir">
-            <Directory Id="ProgramFilesFolder">
-                <Directory Id="INSTALLDIR" Name="{{product_name}}">
-                    <Component Id="MainExecutable" Guid="*">
-                        <File
-                            Id="MainExe"
-                            Name="{{main_binary_name}}"
-                            Source="{{main_binary_path}}"
-                            KeyPath="yes" />
-                    </Component>
-                    {{#each resource_components}}
-                    <Component Id="Resource_{{this.id}}" Guid="*">
-                        <File
-                            Id="ResourceFile_{{this.id}}"
-                            Name="{{this.name}}"
-                            Source="{{this.source}}"
-                            KeyPath="yes" />
-                    </Component>
-                    {{/each}}
-                </Directory>
-            </Directory>
-
-            <Directory Id="ProgramMenuFolder">
-                <Directory Id="ProgramMenuSubfolder" Name="{{product_name}}">
-                    <Component Id="StartMenuShortcut" Guid="*">
-                        <Shortcut
-                            Id="ApplicationShortcut"
-                            Name="{{product_name}}"
-                            Description="{{short_description}}"
-                            Target="[INSTALLDIR]{{main_binary_name}}"
-                            WorkingDirectory="INSTALLDIR" />
-                        <RemoveFolder Id="RemoveProgramMenuSubfolder" On="uninstall" />
-                        <RegistryValue
-                            Root="HKCU"
-                            Key="Software\{{publisher}}\{{product_name}}"
-                            Name="installed"
-                            Type="integer"
-                            Value="1"
-                            KeyPath="yes" />
-                    </Component>
-                </Directory>
-            </Directory>
-
-            <Directory Id="DesktopFolder">
-                <Component Id="DesktopShortcut" Guid="*">
-                    <Shortcut
-                        Id="DesktopShortcut"
-                        Name="{{product_name}}"
-                        Description="{{short_description}}"
-                        Target="[INSTALLDIR]{{main_binary_name}}"
-                        WorkingDirectory="INSTALLDIR" />
-                    <RegistryValue
-                        Root="HKCU"
-                        Key="Software\{{publisher}}\{{product_name}}"
-                        Name="desktop_shortcut"
-                        Type="integer"
-                        Value="1"
-                        KeyPath="yes" />
-                </Component>
-            </Directory>
-        </Directory>
-
-        <Feature Id="MainFeature" Title="{{product_name}}" Level="1">
-            <ComponentRef Id="MainExecutable" />
-            <ComponentRef Id="StartMenuShortcut" />
-            <ComponentRef Id="DesktopShortcut" />
-            {{#each resource_components}}
-            <ComponentRef Id="Resource_{{this.id}}" />
-            {{/each}}
-            {{#each component_group_refs}}
-            <ComponentGroupRef Id="{{this}}" />
-            {{/each}}
-            {{#each component_refs}}
-            <ComponentRef Id="{{this}}" />
-            {{/each}}
-            {{#each feature_group_refs}}
-            <FeatureGroupRef Id="{{this}}" />
-            {{/each}}
-            {{#each feature_refs}}
-            <FeatureRef Id="{{this}}" />
-            {{/each}}
-            {{#each merge_refs}}
-            <MergeRef Id="{{this}}" />
-            {{/each}}
-        </Feature>
-    </Product>
-</Wix>
-"#;
 
 /// Bundle the project as a WiX MSI installer.
 ///
-/// Returns the path(s) to the generated MSI file(s).
-pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
+/// WiX packaging is a two-stage pipeline:
+/// 1) compile `.wxs` sources into `.wixobj` object files with `candle.exe`
+/// 2) link all objects into a final `.msi` with `light.exe`
+///
+/// Required external tooling:
+/// - WiX Toolset binaries (`candle.exe`, `light.exe`) resolved by bundler tools setup
+///
+/// Bundle staging and output layout:
+/// - `_staging/` contains the main executable, resources, and external binaries
+/// - `<product>.wxs` and intermediate `.wixobj` files are created in the output directory
+/// - final installer is written as `<product>_<version>_<arch>.msi`
+///
+/// Returns the path(s) to generated MSI artifacts.
+pub(crate) async fn bundle_project(ctx: &BundleContext<'_>) -> Result<Vec<PathBuf>> {
     let output_dir = ctx.project_out_directory().join("bundle").join("msi");
     std::fs::create_dir_all(&output_dir).context("Failed to create MSI output directory")?;
 
@@ -383,7 +252,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     tracing::info!("Running candle.exe to compile WiX source...");
     let wixobj_path = output_dir.join(format!("{product_name}.wixobj"));
 
-    let mut candle_cmd = std::process::Command::new(&candle);
+    let mut candle_cmd = Command::new(&candle);
     candle_cmd
         .arg("-arch")
         .arg(wix_arch)
@@ -398,6 +267,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     let candle_output = candle_cmd
         .output()
+        .await
         .with_context(|| format!("Failed to run candle.exe at {}", candle.display()))?;
 
     if !candle_output.status.success() {
@@ -417,7 +287,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
         let frag_name = frag_wxs.file_stem().unwrap_or_default().to_string_lossy();
         let frag_wixobj = output_dir.join(format!("{frag_name}.wixobj"));
 
-        let mut frag_candle = std::process::Command::new(&candle);
+        let mut frag_candle = Command::new(&candle);
         frag_candle
             .arg("-arch")
             .arg(wix_arch)
@@ -427,6 +297,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
         let frag_output = frag_candle
             .output()
+            .await
             .with_context(|| format!("Failed to compile WiX fragment: {}", frag_wxs.display()))?;
 
         if !frag_output.status.success() {
@@ -444,7 +315,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
     // Step 2: Run light.exe to link .wixobj to .msi
     tracing::info!("Running light.exe to link MSI...");
 
-    let mut light_cmd = std::process::Command::new(&light);
+    let mut light_cmd = Command::new(&light);
     light_cmd
         .arg("-o")
         .arg(&output_path)
@@ -460,6 +331,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     let light_output = light_cmd
         .output()
+        .await
         .with_context(|| format!("Failed to run light.exe at {}", light.display()))?;
 
     if !light_output.status.success() {
@@ -475,7 +347,7 @@ pub(crate) fn bundle_project(ctx: &BundleContext) -> Result<Vec<PathBuf>> {
 
     // Sign the MSI if configured
     if sign::can_sign(&windows_settings) {
-        sign::try_sign(&output_path, ctx)?;
+        sign::try_sign(&output_path, ctx).await?;
     }
 
     if !output_path.exists() {
@@ -547,3 +419,147 @@ fn wix_version(version: &str) -> Result<String> {
 
     Ok(version_str)
 }
+
+/// The embedded WiX template.
+///
+/// This is a simplified WiX XML source that handles core MSI installation.
+/// For advanced use cases, users can provide a custom template via WixSettings.
+const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product
+        Id="*"
+        Name="{{product_name}}"
+        UpgradeCode="{{upgrade_code}}"
+        Language="1033"
+        Codepage="1252"
+        Version="{{version}}"
+        Manufacturer="{{publisher}}">
+
+        <Package
+            Id="*"
+            Keywords="Installer"
+            Description="{{short_description}}"
+            Manufacturer="{{publisher}}"
+            InstalledScope="perMachine"
+            Languages="1033"
+            Compressed="yes"
+            SummaryCodepage="1252" />
+
+        <MajorUpgrade
+            Schedule="afterInstallInitialize"
+            {{#if allow_downgrades}}
+            AllowDowngrades="yes"
+            {{else}}
+            DowngradeErrorMessage="A newer version of [ProductName] is already installed. Setup will now exit."
+            AllowSameVersionUpgrades="yes"
+            {{/if}} />
+
+        <MediaTemplate EmbedCab="yes" {{#if fips_compliant}}CompressionLevel="none"{{/if}} />
+
+        {{#if icon_path}}
+        <Icon Id="ProductIcon" SourceFile="{{icon_path}}" />
+        <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+        {{/if}}
+
+        {{#if license}}
+        <WixVariable Id="WixUILicenseRtf" Value="{{license}}" />
+        {{/if}}
+
+        {{#if banner_path}}
+        <WixVariable Id="WixUIBannerBmp" Value="{{banner_path}}" />
+        {{/if}}
+        {{#if dialog_image_path}}
+        <WixVariable Id="WixUIDialogBmp" Value="{{dialog_image_path}}" />
+        {{/if}}
+
+        <UIRef Id="WixUI_InstallDir" />
+        <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLDIR" Name="{{product_name}}">
+                    <Component Id="MainExecutable" Guid="*">
+                        <File
+                            Id="MainExe"
+                            Name="{{main_binary_name}}"
+                            Source="{{main_binary_path}}"
+                            KeyPath="yes" />
+                    </Component>
+                    {{#each resource_components}}
+                    <Component Id="Resource_{{this.id}}" Guid="*">
+                        <File
+                            Id="ResourceFile_{{this.id}}"
+                            Name="{{this.name}}"
+                            Source="{{this.source}}"
+                            KeyPath="yes" />
+                    </Component>
+                    {{/each}}
+                </Directory>
+            </Directory>
+
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ProgramMenuSubfolder" Name="{{product_name}}">
+                    <Component Id="StartMenuShortcut" Guid="*">
+                        <Shortcut
+                            Id="ApplicationShortcut"
+                            Name="{{product_name}}"
+                            Description="{{short_description}}"
+                            Target="[INSTALLDIR]{{main_binary_name}}"
+                            WorkingDirectory="INSTALLDIR" />
+                        <RemoveFolder Id="RemoveProgramMenuSubfolder" On="uninstall" />
+                        <RegistryValue
+                            Root="HKCU"
+                            Key="Software\{{publisher}}\{{product_name}}"
+                            Name="installed"
+                            Type="integer"
+                            Value="1"
+                            KeyPath="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+
+            <Directory Id="DesktopFolder">
+                <Component Id="DesktopShortcut" Guid="*">
+                    <Shortcut
+                        Id="DesktopShortcut"
+                        Name="{{product_name}}"
+                        Description="{{short_description}}"
+                        Target="[INSTALLDIR]{{main_binary_name}}"
+                        WorkingDirectory="INSTALLDIR" />
+                    <RegistryValue
+                        Root="HKCU"
+                        Key="Software\{{publisher}}\{{product_name}}"
+                        Name="desktop_shortcut"
+                        Type="integer"
+                        Value="1"
+                        KeyPath="yes" />
+                </Component>
+            </Directory>
+        </Directory>
+
+        <Feature Id="MainFeature" Title="{{product_name}}" Level="1">
+            <ComponentRef Id="MainExecutable" />
+            <ComponentRef Id="StartMenuShortcut" />
+            <ComponentRef Id="DesktopShortcut" />
+            {{#each resource_components}}
+            <ComponentRef Id="Resource_{{this.id}}" />
+            {{/each}}
+            {{#each component_group_refs}}
+            <ComponentGroupRef Id="{{this}}" />
+            {{/each}}
+            {{#each component_refs}}
+            <ComponentRef Id="{{this}}" />
+            {{/each}}
+            {{#each feature_group_refs}}
+            <FeatureGroupRef Id="{{this}}" />
+            {{/each}}
+            {{#each feature_refs}}
+            <FeatureRef Id="{{this}}" />
+            {{/each}}
+            {{#each merge_refs}}
+            <MergeRef Id="{{this}}" />
+            {{/each}}
+        </Feature>
+    </Product>
+</Wix>
+"#;

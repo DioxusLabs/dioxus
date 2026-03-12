@@ -145,28 +145,39 @@ pub(crate) struct WixSettings {
 pub(crate) struct MacOsSettings {
     #[serde(default)]
     pub(crate) bundle_version: Option<String>,
+
     #[serde(default)]
     pub(crate) frameworks: Option<Vec<String>>,
+
     #[serde(default)]
     pub(crate) minimum_system_version: Option<String>,
+
     #[serde(default)]
     pub(crate) license: Option<String>,
+
     #[serde(default)]
     pub(crate) exception_domain: Option<String>,
+
     #[serde(default)]
     pub(crate) signing_identity: Option<String>,
+
     #[serde(default)]
     pub(crate) provider_short_name: Option<String>,
+
     #[serde(default)]
     pub(crate) entitlements: Option<String>,
+
     #[serde(default)]
     pub(crate) info_plist_path: Option<PathBuf>,
+
     #[serde(default)]
     pub(crate) bundle_name: Option<String>,
+
     /// List of custom files to add to the application bundle.
     /// Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
+
     /// Preserve the hardened runtime version flag, see <https://developer.apple.com/documentation/security/hardened_runtime>
     ///
     /// Settings this to `false` is useful when using an ad-hoc signature, making it less strict.
