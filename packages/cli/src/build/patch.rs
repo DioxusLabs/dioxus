@@ -1420,8 +1420,25 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
-        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
-        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || (name.contains("wasm_bindgen..closure..WasmClosure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
+}
+
+// Test for bindgen symbols.
+#[test]
+fn matches_modern_wasm_bindgen_closure_describe_invoke_symbols() {
+    let symbol = "_ZN12wasm_bindgen7convert8closures1_142_$LT$impl$u20$wasm_bindgen..closure..WasmClosure$u20$for$u20$dyn$u20$core..ops..function..FnMut$LT$$LP$$RP$$GT$$u2b$Output$u20$$u3d$$u20$R$GT$15describe_invoke17h4373f8b6570333dcE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // matches_legacy_wasm_bindgen_closure_describe_symbols
+    let symbol = "_ZN12wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe17h1234567890abcdefE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // does_not_match_saved_runtime_exports
+    assert!(!name_is_bindgen_symbol("__wbindgen_malloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_realloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_free"));
 }
 
 /// Manually parse the data section from a wasm module
