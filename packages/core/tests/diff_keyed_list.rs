@@ -263,6 +263,7 @@ fn controlled_keyed_diffing_out_of_order() {
         [
             // remove 7
             Remove { id: ElementId(4,) },
+            FreeId { id: ElementId(4,) },
             // move 4 to after 6
             PushRoot { id: ElementId(1) },
             InsertAfter { id: ElementId(3,), m: 1 },
@@ -295,6 +296,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
         dom.render_immediate_to_vec().edits,
         [
             Remove { id: ElementId(5,) },
+            FreeId { id: ElementId(5,) },
             LoadTemplate { index: 0, id: ElementId(5) },
             InsertBefore { id: ElementId(3,), m: 1 },
             PushRoot { id: ElementId(4) },
@@ -324,8 +326,11 @@ fn remove_list() {
         dom.render_immediate_to_vec().edits,
         [
             Remove { id: ElementId(5) },
+            FreeId { id: ElementId(5) },
             Remove { id: ElementId(4) },
+            FreeId { id: ElementId(4) },
             Remove { id: ElementId(3) },
+            FreeId { id: ElementId(3) },
         ]
     );
 }
@@ -352,8 +357,11 @@ fn no_common_keys() {
             LoadTemplate { index: 0, id: ElementId(5) },
             LoadTemplate { index: 0, id: ElementId(6) },
             Remove { id: ElementId(3) },
+            FreeId { id: ElementId(3) },
             Remove { id: ElementId(2) },
-            ReplaceWith { id: ElementId(1), m: 3 }
+            FreeId { id: ElementId(2) },
+            ReplaceWith { id: ElementId(1), m: 3 },
+            FreeId { id: ElementId(1) },
         ]
     );
 }

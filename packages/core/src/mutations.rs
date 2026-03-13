@@ -115,6 +115,17 @@ pub trait WriteMutations {
     ///
     /// Id: The ID of the root node to push.
     fn push_root(&mut self, id: ElementId);
+
+    /// Signal that an element ID has been freed and can be reused.
+    ///
+    /// Renderers should invoke any cleanup callbacks associated with this element
+    /// and release any resources (e.g., garbage collect DOM nodes).
+    ///
+    /// Id: The ID of the element being freed.
+    ///
+    /// Default implementation is a no-op for backward compatibility with existing
+    /// custom renderers. Override this method to support cleanup callbacks.
+    fn free_id(&mut self, _id: ElementId) {}
 }
 
 /// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
@@ -122,6 +133,7 @@ pub trait WriteMutations {
 ///
 /// These edits can be serialized and sent over the network or through any interface
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub enum Mutation {
     /// Add these m children to the target element
     AppendChildren {
@@ -279,6 +291,14 @@ pub enum Mutation {
         /// The ID of the root node to push.
         id: ElementId,
     },
+
+    /// Signal that an element ID has been freed and can be reused.
+    ///
+    /// Renderers should invoke any cleanup callbacks and release resources.
+    FreeId {
+        /// The ID of the element being freed.
+        id: ElementId,
+    },
 }
 
 /// A static list of mutations that can be applied to the DOM. Note: this list does not contain any `Any` attribute values
@@ -378,6 +398,10 @@ impl WriteMutations for Mutations {
     fn push_root(&mut self, id: ElementId) {
         self.edits.push(Mutation::PushRoot { id })
     }
+
+    fn free_id(&mut self, id: ElementId) {
+        self.edits.push(Mutation::FreeId { id })
+    }
 }
 
 /// A struct that ignores all mutations
@@ -420,4 +444,6 @@ impl WriteMutations for NoOpMutations {
     fn remove_node(&mut self, _: ElementId) {}
 
     fn push_root(&mut self, _: ElementId) {}
+
+    fn free_id(&mut self, _: ElementId) {}
 }
