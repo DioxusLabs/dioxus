@@ -4,12 +4,15 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use handlebars::Handlebars;
+use image::{GenericImageView, ImageFormat};
 use std::{
     fs::{self, File},
     io::{BufReader, Cursor, Write},
     path::{Path, PathBuf},
 };
 use tokio::process::Command;
+
+const DEFAULT_LINUX_ICON_PNG: &[u8] = include_bytes!("../../assets/default_icon.png");
 
 impl BundleContext<'_> {
     /// Build a self-contained Linux AppImage using `linuxdeploy`.
@@ -265,7 +268,7 @@ impl BundleContext<'_> {
             )
             .context("Failed to add desktop file to RPM")?;
 
-        let icon_files = self.icon_files()?;
+        let icon_files = self.linux_icon_files_or_default(&temp_dir)?;
         for icon_path in &icon_files {
             let ext = icon_path
                 .extension()
@@ -294,6 +297,28 @@ impl BundleContext<'_> {
                     builder = builder
                         .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
                         .context("Failed to add SVG icon to RPM")?;
+                }
+                "ico" => {
+                    let img = image::open(icon_path).with_context(|| {
+                        format!("Failed to decode ICO icon: {}", icon_path.display())
+                    })?;
+                    let (width, height) = img.dimensions();
+                    let size = width.max(height);
+
+                    let converted_icon = temp_dir.join(format!("{name}-{size}.png"));
+                    img.save_with_format(&converted_icon, ImageFormat::Png)
+                        .with_context(|| {
+                            format!(
+                                "Failed to convert ICO icon {} -> {}",
+                                icon_path.display(),
+                                converted_icon.display()
+                            )
+                        })?;
+
+                    let dest = format!("/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png");
+                    builder = builder
+                        .with_file(&converted_icon, rpm::FileOptions::new(dest).mode(0o644))
+                        .context("Failed to add converted ICO icon to RPM")?;
                 }
                 _ => {
                     tracing::warn!(
@@ -597,7 +622,7 @@ Type=Application
 
     /// Copy icon files into the freedesktop hicolor icon theme hierarchy.
     fn copy_linux_icons(&self, data_dir: &Path) -> Result<Vec<PathBuf>> {
-        let icon_files = self.icon_files()?;
+        let icon_files = self.linux_icon_files_or_default(data_dir)?;
         let bin_name = self.main_binary_name();
         let mut paths = Vec::new();
 
@@ -653,6 +678,35 @@ Type=Application
                     tracing::debug!("Copied SVG icon: {}", dest.display());
                     paths.push(dest);
                 }
+                "ico" => {
+                    let img = image::open(icon_path).with_context(|| {
+                        format!("Failed to decode ICO icon: {}", icon_path.display())
+                    })?;
+                    let (width, height) = img.dimensions();
+                    let size = width.max(height);
+
+                    let dest_dir =
+                        data_dir.join(format!("usr/share/icons/hicolor/{size}x{size}/apps"));
+                    fs::create_dir_all(&dest_dir)?;
+
+                    let dest = dest_dir.join(format!("{bin_name}.png"));
+                    img.save_with_format(&dest, ImageFormat::Png)
+                        .with_context(|| {
+                            format!(
+                                "Failed to convert ICO icon {} -> {}",
+                                icon_path.display(),
+                                dest.display()
+                            )
+                        })?;
+
+                    tracing::debug!(
+                        "Converted ICO icon {}x{} to PNG: {}",
+                        width,
+                        height,
+                        dest.display()
+                    );
+                    paths.push(dest);
+                }
                 _ => {
                     tracing::warn!(
                         "Skipping icon with unsupported extension '{}': {}",
@@ -664,6 +718,27 @@ Type=Application
         }
 
         Ok(paths)
+    }
+
+    fn linux_icon_files_or_default(&self, scratch_dir: &Path) -> Result<Vec<PathBuf>> {
+        let icon_files = self.icon_files()?;
+        if !icon_files.is_empty() {
+            return Ok(icon_files);
+        }
+
+        fs::create_dir_all(scratch_dir)?;
+        let default_icon = scratch_dir.join(".dx-default-icon.png");
+        if !default_icon.exists() {
+            fs::write(&default_icon, DEFAULT_LINUX_ICON_PNG).with_context(|| {
+                format!(
+                    "Failed to write default Linux icon to {}",
+                    default_icon.display()
+                )
+            })?;
+        }
+
+        tracing::info!("No bundle icons configured; using the default Dioxus icon");
+        Ok(vec![default_icon])
     }
 
     /// Create the top-level symlinks in the AppDir that AppImage/linuxdeploy expects.
