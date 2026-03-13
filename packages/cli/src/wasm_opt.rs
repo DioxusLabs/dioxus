@@ -135,15 +135,15 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // Find the platform identifier based on the current OS and architecture
     // hardcoded for now to get around github api rate limits
     if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-windows.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_125/binaryen-version_125-x86_64-windows.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_125/binaryen-version_125-x86_64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-aarch64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_125/binaryen-version_125-aarch64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_125/binaryen-version_125-x86_64-macos.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-arm64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_125/binaryen-version_125-arm64-macos.tar.gz".to_string());
     };
 
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";

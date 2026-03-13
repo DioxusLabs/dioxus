@@ -974,9 +974,11 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
         <Package
             Id="*"
             Keywords="Installer"
+            {{#if short_description}}
             Description="{{short_description}}"
+            {{/if}}
             Manufacturer="{{publisher}}"
-            InstalledScope="perMachine"
+            InstallScope="perMachine"
             Languages="1033"
             Compressed="yes"
             SummaryCodepage="1252" />
@@ -1031,7 +1033,9 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
                         <Shortcut
                             Id="ApplicationShortcut"
                             Name="{{product_name}}"
+                            {{#if short_description}}
                             Description="{{short_description}}"
+                            {{/if}}
                             Target="[INSTALLDIR]{{main_binary_name}}"
                             WorkingDirectory="INSTALLDIR" />
                         <RemoveFolder Id="RemoveProgramMenuSubfolder" On="uninstall" />
@@ -1051,7 +1055,9 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
                     <Shortcut
                         Id="DesktopShortcut"
                         Name="{{product_name}}"
+                        {{#if short_description}}
                         Description="{{short_description}}"
+                        {{/if}}
                         Target="[INSTALLDIR]{{main_binary_name}}"
                         WorkingDirectory="INSTALLDIR" />
                     <RegistryValue
