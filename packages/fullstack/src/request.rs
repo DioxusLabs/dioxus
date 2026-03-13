@@ -83,6 +83,22 @@ where
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
+            let status = res.status();
+
+            if !status.is_success() {
+                let ErrorPayload::<serde_json::Value> {
+                    message,
+                    code,
+                    data,
+                } = res.json().await?;
+
+                return Err(ServerFnError::ServerError {
+                    message,
+                    code,
+                    details: data,
+                });
+            }
+
             let mut parts = res.make_parts();
             let a = A::from_response_parts(&mut parts)?;
             let b = B::from_response(res).await?;
@@ -99,6 +115,22 @@ where
 {
     fn from_response(res: ClientResponse) -> impl Future<Output = Result<Self, ServerFnError>> {
         async move {
+            let status = res.status();
+
+            if !status.is_success() {
+                let ErrorPayload::<serde_json::Value> {
+                    message,
+                    code,
+                    data,
+                } = res.json().await?;
+
+                return Err(ServerFnError::ServerError {
+                    message,
+                    code,
+                    details: data,
+                });
+            }
+
             let mut parts = res.make_parts();
             let a = A::from_response_parts(&mut parts)?;
             let b = B::from_response_parts(&mut parts)?;
