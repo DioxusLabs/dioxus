@@ -10,8 +10,7 @@ dioxus = { workspace = true,  features = ["fullstack", "router"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-# Bundle SQLite so Windows/MSVC builds do not require an external sqlite3.lib.
-rusqlite = { version = "0.32.0", optional = true, features = ["bundled"] }
+rusqlite = { version = "0.32.0", optional = true, features = ["bundled"] } # Bundle SQLite so Windows/MSVC builds do not require an external sqlite3.lib.
 anyhow = { workspace = true }
 
 [features]
