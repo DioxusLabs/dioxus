@@ -219,7 +219,6 @@ jobs:
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage
       - name: Verify AppImage output
-        working-directory: ./examples/01-app-demos/hotdog
         run: |
           find target -name '*.AppImage' -print
           test -n "$(find target -name '*.AppImage' -print -quit)"
@@ -227,7 +226,7 @@ jobs:
         if: always()
         with:
           name: hotdog-appimage
-          path: examples/01-app-demos/hotdog/target/**/*.AppImage
+          path: target/**/*.AppImage
           if-no-files-found: ignore
 
   bundle-windows-smoke:
@@ -252,7 +251,6 @@ jobs:
         working-directory: .\examples\01-app-demos\hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types ${{ matrix.package_type }}
       - name: Verify ${{ matrix.package_type }} output
-        working-directory: .\examples\01-app-demos\hotdog
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path .\target -Recurse -File -Include "${{ matrix.artifact_glob }}"
@@ -262,7 +260,7 @@ jobs:
         if: always()
         with:
           name: hotdog-${{ matrix.package_type }}
-          path: examples/01-app-demos/hotdog/target/**/${{ matrix.artifact_glob }}
+          path: target/**/${{ matrix.artifact_glob }}
           if-no-files-found: ignore
 
   clippy:
