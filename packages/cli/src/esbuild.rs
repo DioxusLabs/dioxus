@@ -124,10 +124,7 @@ impl Esbuild {
             let path = entry.path().context("Failed to read entry path")?;
             let path_string = path.to_string_lossy().replace('\\', "/");
 
-            if expected_paths
-                .iter()
-                .any(|expected| path_string == *expected)
-            {
+            if expected_paths.contains(&path_string) {
                 let mut data = Vec::new();
                 entry
                     .read_to_end(&mut data)
