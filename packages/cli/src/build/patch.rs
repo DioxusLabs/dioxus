@@ -1425,9 +1425,9 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
 }
 
-// Test for bindgen symbols.
+// Test for bindgen symbols. As we find more bad symbols, add them here
 #[test]
-fn matches_modern_wasm_bindgen_closure_describe_invoke_symbols() {
+fn bindgen_symbol_catch() {
     let symbol = "_ZN12wasm_bindgen7convert8closures1_142_$LT$impl$u20$wasm_bindgen..closure..WasmClosure$u20$for$u20$dyn$u20$core..ops..function..FnMut$LT$$LP$$RP$$GT$$u2b$Output$u20$$u3d$$u20$R$GT$15describe_invoke17h4373f8b6570333dcE";
     assert!(name_is_bindgen_symbol(symbol));
 
