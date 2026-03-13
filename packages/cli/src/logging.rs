@@ -177,6 +177,7 @@ impl TraceController {
 
         // We complete filter out a few fields that are not relevant to the user, like `dx_src` and `json`
         let fmt_layer = tracing_subscriber::fmt::layer()
+            .with_target(false)
             .fmt_fields(
                 format::debug_fn(move |writer, field, value| {
                     if field.name() == "json" && !args.verbosity.json_output {
@@ -1339,7 +1340,12 @@ impl FormatTime for PrettyUptime {
 
 impl PrettyUptime {
     fn write_elapsed(elapsed: Duration, mut w: impl std::fmt::Write) -> std::fmt::Result {
-        write!(w, "{:3}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis())
+        write!(
+            w,
+            "{:3}.{:02}s",
+            elapsed.as_secs(),
+            elapsed.subsec_millis() / 10
+        )
     }
 }
 
@@ -1349,12 +1355,12 @@ mod pretty_uptime_tests {
     use std::time::Duration;
 
     #[test]
-    fn pretty_uptime_zero_pads_millis_to_keep_a_stable_width() {
+    fn pretty_uptime_pads_centiseconds_to_keep_a_stable_width() {
         let cases = [
-            (Duration::from_millis(92_993), " 92.993s"),
-            (Duration::from_millis(93_085), " 93.085s"),
-            (Duration::from_millis(93_130), " 93.130s"),
-            (Duration::from_millis(999_999), "999.999s"),
+            (Duration::from_millis(92_993), " 92.99s"),
+            (Duration::from_millis(93_085), " 93.08s"),
+            (Duration::from_millis(93_130), " 93.13s"),
+            (Duration::from_millis(999_999), "999.99s"),
         ];
 
         for (elapsed, expected) in cases {
