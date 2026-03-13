@@ -1302,7 +1302,7 @@ impl AppServer {
                     let depth = relative.components().count();
                     let is_better = best_match
                         .as_ref()
-                        .map_or(true, |(_, best_depth)| depth < *best_depth);
+                        .is_none_or(|(_, best_depth)| depth < *best_depth);
                     if is_better {
                         best_match = Some((krate.name.replace('-', "_"), depth));
                     }

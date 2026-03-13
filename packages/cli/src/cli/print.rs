@@ -202,15 +202,15 @@ impl Print {
 
             match chars.next() {
                 Some('"') => {
-                    es.extend(repeat('\\').take(nslashes * 2 + 1));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2 + 1));
                     es.push('"');
                 }
                 Some(c) => {
-                    es.extend(repeat('\\').take(nslashes));
+                    es.extend(std::iter::repeat_n('\\', nslashes));
                     es.push(c);
                 }
                 None => {
-                    es.extend(repeat('\\').take(nslashes * 2));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2));
                     break;
                 }
             }

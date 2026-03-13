@@ -5993,7 +5993,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with(&prefix) && name.ends_with(".rlib") {
                     let mtime = entry.metadata().ok()?.modified().ok()?;
-                    if best.as_ref().map_or(true, |(_, t)| mtime > *t) {
+                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
                         best = Some((entry.path(), mtime));
                     }
                 }
