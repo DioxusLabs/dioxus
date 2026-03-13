@@ -1101,63 +1101,6 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </Wix>
 "#;
 
-#[cfg(test)]
-mod tests {
-    use super::WIX_TEMPLATE;
-    use crate::bundler::Arch;
-    use handlebars::Handlebars;
-    use serde_json::json;
-
-    #[test]
-    fn wix_program_files_folder_matches_architecture() {
-        assert_eq!(Arch::X86.wix_program_files_folder(), "ProgramFilesFolder");
-        assert_eq!(
-            Arch::X86_64.wix_program_files_folder(),
-            "ProgramFiles64Folder"
-        );
-        assert_eq!(
-            Arch::AArch64.wix_program_files_folder(),
-            "ProgramFiles64Folder"
-        );
-    }
-
-    #[test]
-    fn wix_template_uses_arch_specific_program_files_folder() {
-        let mut hbs = Handlebars::new();
-        hbs.set_strict_mode(false);
-        hbs.register_escape_fn(|s: &str| s.to_string());
-        hbs.register_template_string("wix", WIX_TEMPLATE).unwrap();
-
-        let rendered = hbs
-            .render(
-                "wix",
-                &json!({
-                    "product_name": "Hotdog",
-                    "upgrade_code": "00000000-0000-0000-0000-000000000000",
-                    "version": "0.1.0",
-                    "publisher": "Dioxus Labs",
-                    "main_binary_name": "hotdog.exe",
-                    "main_binary_path": "C:\\staging\\hotdog.exe",
-                    "short_description": "Hotdog app",
-                    "allow_downgrades": false,
-                    "fips_compliant": false,
-                    "install_tree": "",
-                    "component_refs_xml": "",
-                    "component_group_refs": [],
-                    "component_refs": [],
-                    "feature_group_refs": [],
-                    "feature_refs": [],
-                    "merge_refs": [],
-                    "wix_program_files_folder": "ProgramFiles64Folder"
-                }),
-            )
-            .unwrap();
-
-        assert!(rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
-        assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
-    }
-}
-
 /// The embedded NSIS template script.
 const NSIS_TEMPLATE: &str = r#"!include "MUI2.nsh"
 !include "FileFunc.nsh"
@@ -1298,3 +1241,60 @@ Section "Uninstall"
     DeleteRegKey SHCTX "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{bundle_id}}"
 SectionEnd
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::WIX_TEMPLATE;
+    use crate::bundler::Arch;
+    use handlebars::Handlebars;
+    use serde_json::json;
+
+    #[test]
+    fn wix_program_files_folder_matches_architecture() {
+        assert_eq!(Arch::X86.wix_program_files_folder(), "ProgramFilesFolder");
+        assert_eq!(
+            Arch::X86_64.wix_program_files_folder(),
+            "ProgramFiles64Folder"
+        );
+        assert_eq!(
+            Arch::AArch64.wix_program_files_folder(),
+            "ProgramFiles64Folder"
+        );
+    }
+
+    #[test]
+    fn wix_template_uses_arch_specific_program_files_folder() {
+        let mut hbs = Handlebars::new();
+        hbs.set_strict_mode(false);
+        hbs.register_escape_fn(|s: &str| s.to_string());
+        hbs.register_template_string("wix", WIX_TEMPLATE).unwrap();
+
+        let rendered = hbs
+            .render(
+                "wix",
+                &json!({
+                    "product_name": "Hotdog",
+                    "upgrade_code": "00000000-0000-0000-0000-000000000000",
+                    "version": "0.1.0",
+                    "publisher": "Dioxus Labs",
+                    "main_binary_name": "hotdog.exe",
+                    "main_binary_path": "C:\\staging\\hotdog.exe",
+                    "short_description": "Hotdog app",
+                    "allow_downgrades": false,
+                    "fips_compliant": false,
+                    "install_tree": "",
+                    "component_refs_xml": "",
+                    "component_group_refs": [],
+                    "component_refs": [],
+                    "feature_group_refs": [],
+                    "feature_refs": [],
+                    "merge_refs": [],
+                    "wix_program_files_folder": "ProgramFiles64Folder"
+                }),
+            )
+            .unwrap();
+
+        assert!(rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
+        assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
+    }
+}

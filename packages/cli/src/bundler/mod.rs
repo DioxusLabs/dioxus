@@ -812,7 +812,8 @@ pub(crate) fn zip_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     use std::fs::File;
     use std::io::{Read, Write};
 
-    let file = File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    let file =
+        File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
     let mut zip = zip::ZipWriter::new(file);
 
     for entry in walkdir::WalkDir::new(src) {
@@ -883,6 +884,9 @@ mod tests {
 
         let entry = archive.by_name("Payload/Test.app/runner").unwrap();
         let expected_mode = if cfg!(unix) { 0o755 } else { 0o644 };
-        assert_eq!(entry.unix_mode().map(|mode| mode & 0o777), Some(expected_mode));
+        assert_eq!(
+            entry.unix_mode().map(|mode| mode & 0o777),
+            Some(expected_mode)
+        );
     }
 }
