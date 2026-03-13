@@ -178,8 +178,6 @@ impl Print {
     ///
     /// This function comes from shell-escape
     fn escape_windows(s: Cow<str>) -> Cow<str> {
-        use std::iter::repeat;
-
         let mut needs_escape = s.is_empty();
         for ch in s.chars() {
             match ch {

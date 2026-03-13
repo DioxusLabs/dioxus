@@ -97,6 +97,15 @@ impl Esbuild {
     ///
     /// The binary is at `package/bin/esbuild` (or `package/bin/esbuild.exe` on Windows).
     fn extract_binary_from_tgz(tgz_bytes: &[u8]) -> anyhow::Result<Vec<u8>> {
+        let bin_name = if cfg!(windows) {
+            "esbuild.exe"
+        } else {
+            "esbuild"
+        };
+        Self::extract_binary_named_from_tgz(tgz_bytes, bin_name)
+    }
+
+    fn extract_binary_named_from_tgz(tgz_bytes: &[u8], bin_name: &str) -> anyhow::Result<Vec<u8>> {
         use flate2::read::GzDecoder;
         use std::io::Read;
         use tar::Archive;
@@ -104,27 +113,39 @@ impl Esbuild {
         let decoder = GzDecoder::new(tgz_bytes);
         let mut archive = Archive::new(decoder);
 
-        let bin_name = if cfg!(windows) {
-            "esbuild.exe"
-        } else {
-            "esbuild"
-        };
-        let expected_path = format!("package/bin/{bin_name}");
+        let expected_paths = [
+            format!("package/bin/{bin_name}"),
+            format!("package/{bin_name}"),
+        ];
+        let mut archive_entries = Vec::new();
 
         for entry in archive.entries().context("Failed to read tar entries")? {
             let mut entry = entry.context("Failed to read tar entry")?;
             let path = entry.path().context("Failed to read entry path")?;
+            let path_string = path.to_string_lossy().replace('\\', "/");
 
-            if path.to_string_lossy() == expected_path {
+            if expected_paths
+                .iter()
+                .any(|expected| path_string == *expected)
+            {
                 let mut data = Vec::new();
                 entry
                     .read_to_end(&mut data)
                     .context("Failed to read esbuild binary from archive")?;
                 return Ok(data);
             }
+
+            archive_entries.push(path_string);
         }
 
-        anyhow::bail!("esbuild binary not found in archive (expected {expected_path})");
+        archive_entries.sort();
+        archive_entries.truncate(10);
+
+        anyhow::bail!(
+            "esbuild binary not found in archive (expected one of {}). Found entries: {}",
+            expected_paths.join(", "),
+            archive_entries.join(", ")
+        );
     }
 
     /// Map the host platform to the npm package name for esbuild.
@@ -149,5 +170,41 @@ impl Esbuild {
         } else {
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Esbuild;
+    use flate2::{write::GzEncoder, Compression};
+
+    fn tgz_with_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+        {
+            let mut tar = tar::Builder::new(&mut encoder);
+            for (path, contents) in entries {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(contents.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                tar.append_data(&mut header, *path, *contents).unwrap();
+            }
+            tar.finish().unwrap();
+        }
+        encoder.finish().unwrap()
+    }
+
+    #[test]
+    fn extracts_binary_from_bin_layout() {
+        let tgz = tgz_with_entries(&[("package/bin/esbuild.exe", b"windows-binary")]);
+        let extracted = Esbuild::extract_binary_named_from_tgz(&tgz, "esbuild.exe").unwrap();
+        assert_eq!(extracted, b"windows-binary");
+    }
+
+    #[test]
+    fn extracts_binary_from_package_root_layout() {
+        let tgz = tgz_with_entries(&[("package/esbuild.exe", b"windows-binary")]);
+        let extracted = Esbuild::extract_binary_named_from_tgz(&tgz, "esbuild.exe").unwrap();
+        assert_eq!(extracted, b"windows-binary");
     }
 }

@@ -198,9 +198,9 @@ jobs:
           cache-all-crates: "true"
       - run: cargo check --workspace --all-features --all-targets
 
-  bundle-appimage-smoke:
+  bundle-linux-smoke:
     if: github.event.pull_request.draft == false
-    name: Bundle Smoke | AppImage
+    name: Bundle Smoke | Linux
     runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     steps:
@@ -215,52 +215,57 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - name: Bundle hotdog as AppImage
+      - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
-        run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage
-      - name: Verify AppImage output
+        run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
+      - name: Verify Linux bundle outputs
         run: |
           find target -name '*.AppImage' -print
+          find target -name '*.deb' -print
+          find target -name '*.rpm' -print
           test -n "$(find target -name '*.AppImage' -print -quit)"
+          test -n "$(find target -name '*.deb' -print -quit)"
+          test -n "$(find target -name '*.rpm' -print -quit)"
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: hotdog-appimage
-          path: target/**/*.AppImage
+          name: hotdog-linux-bundles
+          path: |
+            target/**/*.AppImage
+            target/**/*.deb
+            target/**/*.rpm
           if-no-files-found: ignore
 
   bundle-windows-smoke:
     if: github.event.pull_request.draft == false
-    name: Bundle Smoke | Windows ${{ matrix.package_type }}
+    name: Bundle Smoke | Windows
     runs-on: blacksmith-4vcpu-windows-2025
     timeout-minutes: 45
-    strategy:
-      matrix:
-        include:
-          - package_type: msi
-            artifact_glob: "*.msi"
-          - package_type: nsis
-            artifact_glob: "*-setup.exe"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-      - name: Bundle hotdog as ${{ matrix.package_type }}
+      - name: Bundle hotdog as Windows packages
         working-directory: .\examples\01-app-demos\hotdog
-        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types ${{ matrix.package_type }}
-      - name: Verify ${{ matrix.package_type }} output
+        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
+      - name: Verify Windows bundle outputs
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path .\target -Recurse -File -Include "${{ matrix.artifact_glob }}"
-          $files | ForEach-Object { $_.FullName }
-          if (-not $files) { throw "Expected ${{ matrix.package_type }} artifact was not produced." }
+          $msi = Get-ChildItem -Path .\target -Recurse -File -Include "*.msi"
+          $nsis = Get-ChildItem -Path .\target -Recurse -File -Include "*-setup.exe"
+          $msi | ForEach-Object { $_.FullName }
+          $nsis | ForEach-Object { $_.FullName }
+          if (-not $msi) { throw "Expected MSI artifact was not produced." }
+          if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: hotdog-${{ matrix.package_type }}
-          path: target/**/${{ matrix.artifact_glob }}
+          name: hotdog-windows-bundles
+          path: |
+            target/**/*.msi
+            target/**/*-setup.exe
           if-no-files-found: ignore
 
   clippy:
