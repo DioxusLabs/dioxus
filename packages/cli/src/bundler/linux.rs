@@ -1126,7 +1126,8 @@ fn dir_size_kb(path: &Path) -> Result<u64> {
             total += entry.metadata()?.len();
         }
     }
-    Ok((total + 1023) / 1024)
+
+    Ok(total.div_ceil(1024))
 }
 
 /// Resolve a path that may be relative to the crate directory.

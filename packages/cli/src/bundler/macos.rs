@@ -615,9 +615,9 @@ fn add_image_to_family(family: &mut icns::IconFamily, img: &DynamicImage) -> Res
 
 /// Write a plist dictionary to a file.
 fn write_plist(dict: &plist::Dictionary, path: &Path) -> Result<()> {
-    Ok(plist::Value::Dictionary(dict.clone())
+    plist::Value::Dictionary(dict.clone())
         .to_file_xml(path)
-        .with_context(|| format!("Failed to write Info.plist to {}", path.display()))?)
+        .with_context(|| format!("Failed to write Info.plist to {}", path.display()))
 }
 
 /// Copy a framework (directory or .dylib) to the Frameworks directory.
