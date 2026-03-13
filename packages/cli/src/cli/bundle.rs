@@ -1,7 +1,10 @@
-use crate::{AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat, PackageType};
+use crate::{
+    AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat, PackageType, Platform,
+};
 use anyhow::Context;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
+use target_lexicon::Triple;
 
 use super::*;
 
@@ -34,6 +37,7 @@ impl Bundle {
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
+        self.force_ios_bundle_device_target_if_needed()?;
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
         let client_artifacts =
@@ -55,15 +59,7 @@ impl Bundle {
 
         // Fill platform-specific defaults for package types when omitted.
         if self.package_types.is_none() {
-            match client.bundle {
-                BundleFormat::Ios => {
-                    self.package_types = Some(vec![crate::PackageType::IosBundle]);
-                }
-                BundleFormat::Android => {
-                    self.package_types = Some(vec![crate::PackageType::Aab]);
-                }
-                _ => {}
-            }
+            self.package_types = Self::default_package_types(client.bundle);
         }
 
         Self::validate_package_types_for_bundle(client.bundle, self.package_types.as_deref())?;
@@ -80,6 +76,7 @@ impl Bundle {
         match client.bundle {
             // Desktop and Android platforms use package-type dispatch in the bundler module.
             BundleFormat::MacOS
+            | BundleFormat::Ios
             | BundleFormat::Linux
             | BundleFormat::Windows
             | BundleFormat::Android => {
@@ -89,12 +86,8 @@ impl Bundle {
                 }
             }
 
-            // Web/ios can just use their root_dir
+            // Web can use its root_dir directly.
             BundleFormat::Web => bundles.push(client.root_dir()),
-            BundleFormat::Ios => {
-                tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
-                bundles.push(client.root_dir())
-            }
             BundleFormat::Server => bundles.push(client.root_dir()),
         };
 
@@ -197,6 +190,29 @@ impl Bundle {
         Ok(bundles)
     }
 
+    fn default_package_types(bundle: BundleFormat) -> Option<Vec<PackageType>> {
+        match bundle {
+            BundleFormat::Ios => Some(vec![crate::PackageType::Ipa]),
+            BundleFormat::Android => Some(vec![crate::PackageType::Aab]),
+            _ => None,
+        }
+    }
+
+    fn force_ios_bundle_device_target_if_needed(&mut self) -> Result<()> {
+        let client_args = self
+            .args
+            .client
+            .as_mut()
+            .map(|args| &mut args.build_arguments)
+            .unwrap_or(&mut self.args.shared.build_arguments);
+
+        if client_args.platform == Platform::Ios && client_args.target.is_none() {
+            client_args.target = Some("aarch64-apple-ios".parse::<Triple>()?);
+        }
+
+        Ok(())
+    }
+
     fn validate_package_types_for_bundle(
         bundle: BundleFormat,
         package_types: Option<&[PackageType]>,
@@ -227,7 +243,7 @@ impl Bundle {
                 BundleFormat::Android => {
                     matches!(package_type, PackageType::Apk | PackageType::Aab)
                 }
-                BundleFormat::Ios => matches!(package_type, PackageType::IosBundle),
+                BundleFormat::Ios => matches!(package_type, PackageType::IosApp | PackageType::Ipa),
                 BundleFormat::Web | BundleFormat::Server => false,
             }
         };
@@ -239,5 +255,61 @@ impl Bundle {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Bundle;
+    use crate::{
+        cli::CommandWithPlatformOverrides, BuildArgs, BundleFormat, PackageType, Platform,
+    };
+
+    #[test]
+    fn ios_bundle_defaults_to_ipa() {
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Ios),
+            Some(vec![PackageType::Ipa])
+        );
+    }
+
+    #[test]
+    fn validates_ios_package_types() {
+        assert!(Bundle::validate_package_types_for_bundle(
+            BundleFormat::Ios,
+            Some(&[PackageType::IosApp, PackageType::Ipa]),
+        )
+        .is_ok());
+
+        assert!(Bundle::validate_package_types_for_bundle(
+            BundleFormat::Ios,
+            Some(&[PackageType::Dmg]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn bundle_ios_defaults_to_device_target() {
+        let mut bundle = Bundle {
+            package_types: None,
+            out_dir: None,
+            args: CommandWithPlatformOverrides {
+                shared: BuildArgs {
+                    build_arguments: crate::TargetArgs {
+                        platform: Platform::Ios,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        };
+
+        bundle.force_ios_bundle_device_target_if_needed().unwrap();
+
+        assert_eq!(
+            bundle.args.shared.build_arguments.target,
+            Some("aarch64-apple-ios".parse().unwrap())
+        );
     }
 }

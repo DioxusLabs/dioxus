@@ -49,7 +49,7 @@ use std::{
     env,
     fmt::{Debug, Display, Write as _},
     sync::atomic::{AtomicBool, Ordering},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use std::{future::Future, panic::AssertUnwindSafe};
 use tracing::{field::Visit, Level, Subscriber};
@@ -177,7 +177,6 @@ impl TraceController {
 
         // We complete filter out a few fields that are not relevant to the user, like `dx_src` and `json`
         let fmt_layer = tracing_subscriber::fmt::layer()
-            .with_target(args.verbosity.verbose)
             .fmt_fields(
                 format::debug_fn(move |writer, field, value| {
                     if field.name() == "json" && !args.verbosity.json_output {
@@ -1334,10 +1333,38 @@ impl Default for PrettyUptime {
 
 impl FormatTime for PrettyUptime {
     fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        let e = self.epoch.elapsed();
-        write!(w, "{:4}.{:2}s", e.as_secs(), e.subsec_millis())
+        Self::write_elapsed(self.epoch.elapsed(), w)
     }
 }
+
+impl PrettyUptime {
+    fn write_elapsed(elapsed: Duration, mut w: impl std::fmt::Write) -> std::fmt::Result {
+        write!(w, "{:3}.{:03}s", elapsed.as_secs(), elapsed.subsec_millis())
+    }
+}
+
+#[cfg(test)]
+mod pretty_uptime_tests {
+    use super::PrettyUptime;
+    use std::time::Duration;
+
+    #[test]
+    fn pretty_uptime_zero_pads_millis_to_keep_a_stable_width() {
+        let cases = [
+            (Duration::from_millis(92_993), " 92.993s"),
+            (Duration::from_millis(93_085), " 93.085s"),
+            (Duration::from_millis(93_130), " 93.130s"),
+            (Duration::from_millis(999_999), "999.999s"),
+        ];
+
+        for (elapsed, expected) in cases {
+            let mut rendered = String::new();
+            PrettyUptime::write_elapsed(elapsed, &mut rendered).unwrap();
+            assert_eq!(rendered, expected);
+        }
+    }
+}
+
 /// Run the provided future and wait for it to complete, handling Ctrl-C gracefully.
 ///
 /// If ctrl-c is pressed twice, it exits immediately, skipping our telemetry flush.

@@ -306,9 +306,13 @@ pub(crate) enum PackageType {
     #[clap(name = "macos")]
     MacOsBundle,
 
-    /// The iOS app bundle, zipped (.ipa)
+    /// The raw iOS application bundle (.app).
     #[clap(name = "ios")]
-    IosBundle,
+    IosApp,
+
+    /// The distributable iOS application archive (.ipa).
+    #[clap(name = "ipa")]
+    Ipa,
 
     /// The Windows bundle (.msi).
     #[clap(name = "msi")]
@@ -353,7 +357,8 @@ impl FromStr for PackageType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "macos" => Ok(PackageType::MacOsBundle),
-            "ios" => Ok(PackageType::IosBundle),
+            "ios" => Ok(PackageType::IosApp),
+            "ipa" => Ok(PackageType::Ipa),
             "msi" => Ok(PackageType::WindowsMsi),
             "nsis" => Ok(PackageType::Nsis),
             "deb" => Ok(PackageType::Deb),

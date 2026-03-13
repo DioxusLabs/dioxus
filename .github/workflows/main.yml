@@ -268,6 +268,35 @@ jobs:
             target/**/*-setup.exe
           if-no-files-found: ignore
 
+  bundle-macos-smoke:
+    if: github.event.pull_request.draft == false
+    name: Bundle Smoke | macOS
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+      - name: Bundle hotdog as macOS packages
+        working-directory: ./examples/01-app-demos/hotdog
+        run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
+      - name: Verify macOS bundle outputs
+        run: |
+          find target -type d -name '*.app' -print
+          find target -type f -name '*.dmg' -print
+          test -n "$(find target -type d -name '*.app' -print -quit)"
+          test -n "$(find target -type f -name '*.dmg' -print -quit)"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: hotdog-macos-bundles
+          path: |
+            target/**/*.app
+            target/**/*.dmg
+          if-no-files-found: ignore
+
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy

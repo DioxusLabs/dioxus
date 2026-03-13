@@ -1,3 +1,4 @@
+mod ios;
 mod linux;
 mod macos;
 mod tools;
@@ -121,7 +122,7 @@ impl<'a> BundleContext<'a> {
     /// 2. Sort them so prerequisite artifacts are built before dependents.
     ///    In practice, this means raw distributable formats such as `.app`, `.deb`,
     ///    `.rpm`, `.AppImage`, `.msi`, `.exe`, `.apk`, and `.aab` run before
-    ///    `Dmg`, and `Updater` always runs last.
+    ///    dependent archive formats like `.ipa`/`.dmg`, and `Updater` always runs last.
     /// 3. Dispatch to the top-level format-specific bundling method for each package
     ///    type and collect the artifact paths it returns.
     /// 4. Reuse outputs where formats depend on each other. For example, DMG creation
@@ -138,7 +139,7 @@ impl<'a> BundleContext<'a> {
         // Sort so dependencies come first (e.g. .app before .dmg)
         package_types.sort_by_key(|ptype| match ptype {
             PackageType::MacOsBundle
-            | PackageType::IosBundle
+            | PackageType::IosApp
             | PackageType::WindowsMsi
             | PackageType::Nsis
             | PackageType::Deb
@@ -146,7 +147,7 @@ impl<'a> BundleContext<'a> {
             | PackageType::AppImage
             | PackageType::Apk
             | PackageType::Aab => 0,
-            PackageType::Dmg => 1,
+            PackageType::Ipa | PackageType::Dmg => 1,
             PackageType::Updater => 2,
         });
 
@@ -160,6 +161,8 @@ impl<'a> BundleContext<'a> {
 
             let bundle_paths = match package_type {
                 PackageType::MacOsBundle => self.bundle_macos_app().await?,
+                PackageType::IosApp => self.bundle_ios_app().await?,
+                PackageType::Ipa => self.bundle_ios_ipa(&bundles).await?.ipa,
                 PackageType::Dmg => {
                     let bundled = self.bundle_macos_dmg(&bundles).await?;
                     if !bundled.app.is_empty() {
@@ -177,7 +180,6 @@ impl<'a> BundleContext<'a> {
                 PackageType::Nsis => self.bundle_windows_nsis().await?,
                 PackageType::Updater => self.bundle_updater(&bundles).await?,
                 PackageType::Apk | PackageType::Aab => self.bundle_android(*package_type).await?,
-                PackageType::IosBundle => todo!(),
             };
 
             bundles.push(Bundle {
@@ -505,6 +507,14 @@ impl Arch {
         }
     }
 
+    pub(crate) fn wix_program_files_folder(&self) -> &'static str {
+        match self {
+            Arch::X86 => "ProgramFilesFolder",
+            Arch::X86_64 | Arch::AArch64 => "ProgramFiles64Folder",
+            _ => "ProgramFiles64Folder",
+        }
+    }
+
     pub(crate) fn linuxdeploy_arch(&self) -> &'static str {
         match self {
             Arch::X86_64 => "x86_64",
@@ -795,4 +805,84 @@ pub(crate) fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Recursively zip a directory tree while preserving relative paths and Unix modes.
+pub(crate) fn zip_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
+    use std::fs::File;
+    use std::io::{Read, Write};
+
+    let file = File::create(dest).with_context(|| format!("Failed to create {}", dest.display()))?;
+    let mut zip = zip::ZipWriter::new(file);
+
+    for entry in walkdir::WalkDir::new(src) {
+        let entry = entry?;
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(src)
+            .with_context(|| format!("Failed to strip prefix for {}", path.display()))?;
+
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
+
+        let archive_path = relative.to_string_lossy().replace('\\', "/");
+        let metadata = entry.metadata()?;
+        #[cfg(unix)]
+        let mode = {
+            use std::os::unix::fs::PermissionsExt;
+            metadata.permissions().mode()
+        };
+        #[cfg(not(unix))]
+        let mode = if metadata.is_dir() { 0o755 } else { 0o644 };
+
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated)
+            .unix_permissions(mode);
+
+        if metadata.is_dir() {
+            zip.add_directory(format!("{archive_path}/"), options)?;
+            continue;
+        }
+
+        zip.start_file(&archive_path, options)?;
+        let mut src_file = File::open(path)?;
+        let mut buffer = Vec::new();
+        src_file.read_to_end(&mut buffer)?;
+        zip.write_all(&buffer)?;
+    }
+
+    zip.finish()?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::zip_dir_recursive;
+
+    #[test]
+    fn zip_dir_preserves_layout_and_permissions() {
+        let temp = tempfile::tempdir().unwrap();
+        let src = temp.path().join("src");
+        let payload = src.join("Payload/Test.app");
+        std::fs::create_dir_all(&payload).unwrap();
+
+        let exec = payload.join("runner");
+        std::fs::write(&exec, "hello").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&exec, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let zip_path = temp.path().join("bundle.zip");
+        zip_dir_recursive(&src, &zip_path).unwrap();
+
+        let file = std::fs::File::open(&zip_path).unwrap();
+        let mut archive = zip::ZipArchive::new(file).unwrap();
+
+        let entry = archive.by_name("Payload/Test.app/runner").unwrap();
+        let expected_mode = if cfg!(unix) { 0o755 } else { 0o644 };
+        assert_eq!(entry.unix_mode().map(|mode| mode & 0o777), Some(expected_mode));
+    }
 }
