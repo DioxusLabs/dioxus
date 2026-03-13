@@ -42,7 +42,7 @@ use futures_util::FutureExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{any::Any, io::Read, str::FromStr, sync::Arc, time::SystemTime};
+use std::{any::Any, io::Read, pin::Pin, str::FromStr, sync::Arc, time::SystemTime};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
@@ -139,10 +139,9 @@ impl TraceController {
     ///
     /// We pass the TraceController around the CLI in a few places, namely the serve command so the TUI
     /// can access things like the logs.
-    pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> StructuredOutput
-    where
-        F: Future<Output = Result<StructuredOutput>>,
-    {
+    pub async fn main(
+        run_app: impl FnOnce(Commands, Self) -> Pin<Box<dyn Future<Output = Result<StructuredOutput>>>>,
+    ) -> StructuredOutput {
         let args = Cli::parse();
         let tui_active = Arc::new(AtomicBool::new(false));
         let is_serve_cmd = matches!(args.action, Commands::Serve(_));

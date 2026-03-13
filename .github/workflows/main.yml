@@ -250,7 +250,7 @@ jobs:
           cache-all-crates: "true"
       - name: Bundle hotdog as ${{ matrix.package_type }}
         working-directory: .\examples\01-app-demos\hotdog
-        run: cargo run --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types ${{ matrix.package_type }}
+        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types ${{ matrix.package_type }}
       - name: Verify ${{ matrix.package_type }} output
         working-directory: .\examples\01-app-demos\hotdog
         shell: pwsh
