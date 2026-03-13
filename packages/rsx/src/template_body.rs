@@ -207,11 +207,11 @@ impl ToTokens for TemplateBody {
                 #[cfg(not(debug_assertions))]
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
-                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        roots: __TEMPLATE_ROOTS,
-                        node_paths: &[ #( #node_paths ),* ],
-                        attr_paths: &[ #( #attr_paths ),* ],
-                    };
+                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template::new(
+                        __TEMPLATE_ROOTS,
+                        &[ #( #node_paths ),* ],
+                        &[ #( #attr_paths ),* ],
+                    );
 
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]

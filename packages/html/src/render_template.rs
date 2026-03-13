@@ -7,7 +7,7 @@ use std::fmt::Write;
 pub fn render_template_to_html(template: &Template) -> String {
     let mut out = String::new();
 
-    for root in template.roots {
+    for root in template.roots() {
         render_template_node(root, &mut out).unwrap();
     }
 

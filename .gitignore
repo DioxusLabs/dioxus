@@ -42,3 +42,6 @@ bundle/
 
 # in debugging we frequently dump wasm to wat with `wasm-tools print`
 *.wat
+
+# External macos drives have extra ._ files
+._*
