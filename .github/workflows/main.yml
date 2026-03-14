@@ -44,7 +44,7 @@ env:
 jobs:
   lint:
     if: github.event.pull_request.draft == false
-    name: Lint
+    name: Lint | MSRV, Fmt, Clippy, CLI Schema
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -58,7 +58,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.90.0
         with:
           components: rustfmt, clippy
-      - uses: taiki-e/install-action@cargo-msrv
+      - name: Install cargo-msrv
+        run: cargo install cargo-msrv
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -427,7 +428,7 @@ jobs:
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.toolchain }}
+          toolchain: ${{ matrix.platform.toolchain }}
           targets: ${{ matrix.platform.target }}
           components: rustfmt
 
