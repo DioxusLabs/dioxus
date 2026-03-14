@@ -44,14 +44,18 @@ pub(crate) fn init(config: &crate::Config) -> UnboundedReceiver<HotReloadMsg> {
 fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) {
     // Get the location of the devserver, using the current location plus the /_dioxus path
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
-    let location = web_sys::window().unwrap().location();
+    let mut location =
+        web_sys::Url::new(&web_sys::window().unwrap().location().href().unwrap()).unwrap();
+    if location.protocol() == "chrome-extension:" || location.protocol() == "moz-extension:" {
+        location = web_sys::Url::new("http://localhost:8080").unwrap();
+    }
     let url = format!(
         "{protocol}//{host}/_dioxus?build_id={build_id}",
-        protocol = match location.protocol().unwrap() {
+        protocol = match location.protocol() {
             prot if prot == "https:" => "wss:",
             _ => "ws:",
         },
-        host = location.host().unwrap(),
+        host = location.host(),
         build_id = dioxus_cli_config::build_id(),
     );
 
