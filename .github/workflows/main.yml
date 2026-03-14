@@ -147,7 +147,6 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          cache-on-failure: "true"
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
@@ -181,7 +180,6 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          cache-on-failure: "true"
       - name: Bundle hotdog as Windows packages
         working-directory: .\examples\01-app-demos\hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
@@ -215,7 +213,6 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          cache-on-failure: "true"
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
@@ -291,7 +288,6 @@ jobs:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          cache-on-failure: "true"
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |
