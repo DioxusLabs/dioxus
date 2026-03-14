@@ -478,7 +478,7 @@ impl ComponentRegistry {
     async fn read_components(&self) -> Result<Vec<ResolvedComponent>> {
         let path = self.resolve().await?;
 
-        let root = read_component(&path).await?;
+        let root = read_component(&path, &path).await?;
         let mut components = discover_components(root).await?;
 
         // Filter out any virtual components with members
@@ -496,6 +496,8 @@ impl ComponentRegistry {
 /// A component that has been downloaded and resolved at a specific path
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct ResolvedComponent {
+    /// The root of the registry that this component belongs to
+    registry_root: PathBuf,
     path: PathBuf,
     component: Component,
 }
@@ -599,7 +601,9 @@ async fn add_component(
 
     // Copy any global assets
     let assets_root = global_assets_root(assets_path, config).await?;
-    copy_global_assets(registry_root, &assets_root, component).await?;
+    // Copy any global assets
+    let assets_root = global_assets_root(assets_path, config).await?;
+    copy_global_assets(&assets_root, component).await?;
 
     // Add the module to the components mod.rs
     let mod_rs_path = components_root.join("mod.rs");
@@ -743,7 +747,7 @@ async fn ensure_components_module_exists(components_dir: &Path) -> Result<bool> 
 }
 
 /// Read a component from the given path
-async fn read_component(path: &Path) -> Result<ResolvedComponent> {
+async fn read_component(path: &Path, registry_root: &Path) -> Result<ResolvedComponent> {
     let json_path = path.join("component.json");
     let bytes = tokio::fs::read(&json_path).await.with_context(|| {
         format!(
@@ -755,6 +759,7 @@ async fn read_component(path: &Path) -> Result<ResolvedComponent> {
     let component = serde_json::from_slice(&bytes)?;
     let absolute_path = dunce::canonicalize(path)?;
     Ok(ResolvedComponent {
+        registry_root: registry_root.to_path_buf(),
         path: absolute_path,
         component,
     })
@@ -763,15 +768,19 @@ async fn read_component(path: &Path) -> Result<ResolvedComponent> {
 /// Recursively discover all components starting from the root component
 async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComponent>> {
     // Create a queue of members to read
-    let mut queue = root.member_paths();
+    let mut queue = root
+        .member_paths()
+        .into_iter()
+        .map(|path| (path, root.registry_root.clone()))
+        .collect::<Vec<_>>();
     // The list of discovered components
     let mut components = vec![root];
     // The set of pending read tasks
     let mut pending = JoinSet::new();
     loop {
         // First, spawn tasks for all queued paths
-        while let Some(root_path) = queue.pop() {
-            pending.spawn(async move { read_component(&root_path).await });
+        while let Some((root_path, registry_root)) = queue.pop() {
+            pending.spawn(async move { read_component(&root_path, &registry_root).await });
         }
         // Then try to join the next task
         let Some(component) = pending.join_next().await else {
@@ -779,7 +788,12 @@ async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComp
         };
         let component = component??;
         // And add the result to the queue and list
-        queue.extend(component.member_paths());
+        queue.extend(
+            component
+                .member_paths()
+                .into_iter()
+                .map(|path| (path, component.registry_root.clone())),
+        );
         components.push(component);
     }
     Ok(components)
@@ -787,10 +801,10 @@ async fn discover_components(root: ResolvedComponent) -> Result<Vec<ResolvedComp
 
 /// Copy any global assets for the component
 async fn copy_global_assets(
-    registry_root: &Path,
     assets_root: &Path,
     component: &ResolvedComponent,
 ) -> Result<()> {
+    let registry_root = &component.registry_root;
     let canonical_registry_root = dunce::canonicalize(registry_root)?;
     for path in &component.global_assets {
         let src = component.path.join(path);
