@@ -236,7 +236,8 @@ impl StoreSubscriptions {
                 return;
             };
             let mut paths = Vec::new();
-            node.paths_under(key, &mut paths);
+            node.paths_under(key, &mut paths); // only its children
+            paths.push(Box::new([])); // the node
             paths
         };
         for path in paths {
