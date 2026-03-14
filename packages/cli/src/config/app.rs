@@ -6,7 +6,13 @@ use std::path::PathBuf;
 pub(crate) struct ApplicationConfig {
     /// The path where global assets will be added when components are added with `dx components add`
     #[serde(default)]
+    pub(crate) name: Option<String>,
+
+    #[serde(default)]
     pub(crate) asset_dir: Option<PathBuf>,
+
+    #[serde(default)]
+    pub(crate) sub_package: Option<String>,
 
     #[serde(default)]
     pub(crate) out_dir: Option<PathBuf>,
