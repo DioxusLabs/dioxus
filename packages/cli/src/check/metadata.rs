@@ -168,6 +168,7 @@ pub struct Span {
 }
 
 impl Span {
+    #[cfg(test)]
     pub fn new_from_str(source_text: &str, start: LineColumn) -> Self {
         let mut lines = source_text.lines();
         let first_line = lines.next().unwrap_or_default();

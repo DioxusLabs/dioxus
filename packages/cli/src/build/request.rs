@@ -320,6 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
+use crate::opt::{process_file_to, AssetManifest};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -331,7 +332,6 @@ use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
@@ -2280,6 +2280,7 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
@@ -2292,7 +2293,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to);
+                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
@@ -5524,6 +5525,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .join("app-debug.apk")
     }
 
+    pub(crate) fn release_apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("release")
+            .join("app-release.apk")
+    }
+
+    pub(crate) fn android_apk_path(&self) -> PathBuf {
+        let assembled_release = self.release && self.config.bundle.android.is_some();
+        if assembled_release {
+            self.release_apk_path()
+        } else {
+            self.debug_apk_path()
+        }
+    }
+
     /// We only really currently care about:
     ///
     /// - app dir (.app, .exe, .apk, etc)
@@ -5682,6 +5702,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         ctx.status_installing_tooling();
 
         self.verify_toolchain_installed().await?;
+
+        // esbuild is used for JS asset processing on all platforms
+        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
 
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
@@ -5970,7 +5993,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with(&prefix) && name.ends_with(".rlib") {
                     let mtime = entry.metadata().ok()?.modified().ok()?;
-                    if best.as_ref().map_or(true, |(_, t)| mtime > *t) {
+                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
                         best = Some((entry.path(), mtime));
                     }
                 }

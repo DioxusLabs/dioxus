@@ -145,15 +145,15 @@ pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
 /// - [x] iOS
 /// - [x] Windows
 /// - [x] Linux (appimage)
-/// - [ ] Linux (rpm)
+/// - [x] Linux (rpm)
 /// - [x] Linux (deb)
 /// - [ ] Android
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
     let cur_exe = std::env::current_exe().unwrap();
 
-    #[cfg(target_os = "macos")]
-    {
+    // In macOS bundles, the assets are in the `Resources` directory
+    if cfg!(target_os = "macos") {
         return cur_exe
             .parent()
             .unwrap()
@@ -162,20 +162,19 @@ fn get_asset_root() -> PathBuf {
             .join("Resources");
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        // In linux bundles, the assets are placed in the lib/$product_name directory
-        // bin/
-        //   main
-        // lib/
-        //   $product_name/
-        //     assets/
+    // In linux bundles, the assets are placed in the lib/$product_name directory
+    // bin/
+    //   main
+    // lib/
+    //   $product_name/
+    //     assets/
+    if cfg!(target_os = "linux") {
         if let Some(product_name) = dioxus_cli_config::product_name() {
-            let lib_asset_path = || {
-                let path = cur_exe.parent()?.parent()?.join("lib").join(product_name);
-                path.exists().then_some(path)
-            };
-            if let Some(asset_dir) = lib_asset_path() {
+            let path = cur_exe
+                .parent()
+                .and_then(|parent| parent.parent())
+                .map(|root| root.join("lib").join(product_name));
+            if let Some(asset_dir) = path.filter(|path| path.exists()) {
                 return asset_dir;
             }
         }

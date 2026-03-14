@@ -17,9 +17,9 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
     let visibility = args
         .visibility
         .unwrap_or_else(|| syn::Visibility::Inherited);
-    if input.trait_.is_some() {
+    if let Some(input_trait) = input.trait_.as_ref() {
         return Err(syn::Error::new_spanned(
-            input.trait_.unwrap().1,
+            input_trait.1.clone(),
             "The `store` attribute can only be used on `impl Store<T> { ... }` blocks, not trait implementations.",
         ));
     }
@@ -86,7 +86,8 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
     let trait_definition = impl_to_trait_body(&extension_name, &input, &visibility)?;
 
     // Reformat the type to be generic over the lens
-    input.self_ty = Box::new(parse_quote!(#store_path<#item, #lens_generic>));
+    input.self_ty = parse_quote!(#store_path<#item, #lens_generic>);
+
     // Change the standalone impl block to a trait impl block
     let (_, trait_generics, _) = input.generics.split_for_impl();
     input.trait_ = Some((
