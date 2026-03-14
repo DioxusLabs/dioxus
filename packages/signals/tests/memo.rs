@@ -1,8 +1,8 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 use dioxus::html::p;
 use dioxus::prelude::*;
-use dioxus_core::NoOpMutations;
 use dioxus_core::{generation, ElementId};
+use dioxus_core::{NoOpMutations, ScopeState};
 use dioxus_signals::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -141,6 +141,10 @@ fn memos_prevents_component_rerun() {
         assert_eq!(current_counter.component, 2);
         assert_eq!(current_counter.memo, 3);
     }
+
+    dom.in_runtime(|| {
+        ScopeId(3).in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+    });
 }
 
 // Regression test for https://github.com/DioxusLabs/dioxus/issues/2990

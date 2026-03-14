@@ -1,7 +1,8 @@
 use dioxus::prelude::*;
 
 /// Make sure that rsx! handles conditional attributes with one formatted branch correctly
-/// Regression test for https://github.com/DioxusLabs/dioxus/issues/2997
+/// Regression test for https://github.com/DioxusLabs/dioxus/issues/2997. There are no assertions in
+/// this test as it primarily checks that the RSX can be compiled correctly.
 #[test]
 fn partially_formatted_conditional_attribute() {
     let width = "1px";
