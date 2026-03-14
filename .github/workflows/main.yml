@@ -44,7 +44,7 @@ env:
 jobs:
   lint:
     if: github.event.pull_request.draft == false
-    name: Lint | MSRV, Fmt, Clippy, CLI Schema
+    name: Lint | msrv, fmt, clippy, schema
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
