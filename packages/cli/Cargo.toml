@@ -11,7 +11,6 @@ rust-version = "1.82.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
-dioxus-check = { workspace = true }
 dioxus-rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true }
 dioxus-rsx-hotreload = { workspace = true }
@@ -60,6 +59,7 @@ axum = { workspace = true, default-features = true, features = ["ws"] }
 axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
+owo-colors = { workspace = true, features = ["supports-colors"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 syn = { workspace = true, features = [
     "full",
@@ -185,6 +185,8 @@ name = "dx"
 
 [dev-dependencies]
 escargot = "0.5"
+indoc = "2.0.6"
+pretty_assertions = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"

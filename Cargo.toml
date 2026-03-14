@@ -21,7 +21,6 @@ members = [
     "packages/interpreter",
     "packages/liveview",
     "packages/autofmt",
-    "packages/check",
     "packages/devtools-types",
     "packages/devtools",
     "packages/document",
@@ -139,7 +138,6 @@ dioxus-desktop = { path = "packages/desktop", version = "0.7.3", default-feature
 dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.3" }
 dioxus-liveview = { path = "packages/liveview", version = "0.7.3" }
 dioxus-autofmt = { path = "packages/autofmt", version = "0.7.3" }
-dioxus-check = { path = "packages/check", version = "0.7.3" }
 dioxus-rsx = { path = "packages/rsx", version = "0.7.3" }
 dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.3" }
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.3" }

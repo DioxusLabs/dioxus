@@ -4836,18 +4836,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dioxus-check"
-version = "0.7.3"
-dependencies = [
- "indoc",
- "owo-colors",
- "pretty_assertions",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "dioxus-cli"
 version = "0.7.3"
 dependencies = [
@@ -4877,7 +4865,6 @@ dependencies = [
  "ctrlc",
  "depinfo",
  "dioxus-autofmt",
- "dioxus-check",
  "dioxus-cli-config",
  "dioxus-cli-telemetry",
  "dioxus-component-manifest",
@@ -4910,6 +4897,7 @@ dependencies = [
  "image",
  "imagequant",
  "include_dir",
+ "indoc",
  "itertools 0.14.0",
  "krates",
  "lightningcss",
@@ -4923,10 +4911,12 @@ dependencies = [
  "nucleo",
  "object",
  "open",
+ "owo-colors",
  "path-absolutize",
  "pdb",
  "plist",
  "png 0.17.16",
+ "pretty_assertions",
  "prettyplease",
  "proc-macro2",
  "ratatui",

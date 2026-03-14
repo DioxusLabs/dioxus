@@ -7,6 +7,7 @@
 mod build;
 mod bundler;
 mod cargo_toml;
+mod check;
 mod cli;
 mod config;
 mod devcfg;
