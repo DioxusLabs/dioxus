@@ -61,6 +61,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Rustfmt
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -97,6 +98,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
@@ -121,6 +123,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
           cargo test --doc --workspace --all-features
@@ -144,6 +147,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
@@ -177,6 +181,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Windows packages
         working-directory: .\examples\01-app-demos\hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
@@ -210,6 +215,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
@@ -285,6 +291,7 @@ jobs:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |
@@ -394,6 +401,7 @@ jobs:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: test
         run: |
@@ -403,7 +411,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Cargo Test | Linux
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -419,13 +427,14 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
     if: github.event.pull_request.draft == false
     name: Cargo Test | Linux (Release)
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -441,6 +450,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
@@ -461,6 +471,7 @@ jobs:
           workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
           cache-provider: "warpbuild"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: "Install Rust toolchain"
         working-directory: ${{ env.UV_WORKSPACE }}
