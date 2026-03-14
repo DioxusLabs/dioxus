@@ -82,50 +82,6 @@ jobs:
             exit 1
           fi
 
-  test:
-    if: github.event.pull_request.draft == false
-    name: Cargo Test | Linux
-    runs-on: warp-ubuntu-latest-x64-4x
-    steps:
-      - uses: actions/checkout@v5
-      - name: Free Disk Space
-        uses: ./.github/actions/free-disk-space
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-provider: "warpbuild"
-      - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
-
-  release-test:
-    if: github.event.pull_request.draft == false
-    name: Cargo Test | Linux (Release)
-    runs-on: warp-ubuntu-latest-x64-4x
-    steps:
-      - uses: actions/checkout@v5
-      - name: Free Disk Space
-        uses: ./.github/actions/free-disk-space
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-provider: "warpbuild"
-      - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
-
   docs:
     if: github.event.pull_request.draft == false
     name: Docs | Build
@@ -449,6 +405,51 @@ jobs:
       - name: test
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
+
+
+  test:
+    if: github.event.pull_request.draft == false
+    name: Cargo Test | Linux
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-provider: "warpbuild"
+      - uses: browser-actions/setup-firefox@latest
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
+
+  release-test:
+    if: github.event.pull_request.draft == false
+    name: Cargo Test | Linux (Release)
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-provider: "warpbuild"
+      - uses: browser-actions/setup-firefox@latest
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   # borrowed from uv
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
