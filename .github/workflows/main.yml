@@ -52,10 +52,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt
-      - uses: dtolnay/rust-toolchain@1.90.0
+      - uses: dtolnay/rust-toolchain@1.94.0
         with:
           components: rustfmt, clippy
       - name: Install cargo-msrv
@@ -65,16 +62,16 @@ jobs:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
       - name: Rustfmt
-        run: cargo +1.88.0 fmt --all -- --check
+        run: cargo fmt --all -- --check
       - name: Verify MSRV
         run: cargo msrv --output-format json verify -- cargo check
       - name: Find MSRV on verify failure
         if: ${{ failure() }}
         run: cargo msrv --output-format json -- cargo check
       - name: Clippy
-        run: cargo +1.90.0 clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+        run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
       - name: Check schema
-        run: cargo +1.88.0 run -p dioxus-cli -- config schema --out packages/cli/schema.json
+        run: cargo run -p dioxus-cli -- config schema --out packages/cli/schema.json
       - name: Verify schema is up to date
         run: |
           if ! git diff --exit-code packages/cli/schema.json; then
