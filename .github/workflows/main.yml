@@ -360,7 +360,6 @@ jobs:
         os: [warp-windows-2025-x64-4x, warp-ubuntu-latest-x64-8x]
         platform:
           - { toolchain: beta }
-          # - { toolchain: 1.86.0 }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
@@ -451,15 +450,16 @@ jobs:
               args: "--package dioxus-desktop",
               platform: "android",
             }
-          - {
-              target: x86_64-unknown-linux-gnu,
-              os: ubuntu-24.04,
-              toolchain: "1.88.0",
-              cross: false,
-              command: "build",
-              args: "--all --tests",
-              platform: "desktop",
-            }
+            # commented out because it's having issues with space on the device, but we already test it above
+          # - {
+          #     target: x86_64-unknown-linux-gnu,
+          #     os: ubuntu-24.04,
+          #     toolchain: "1.88.0",
+          #     cross: false,
+          #     command: "build",
+          #     args: "--all --tests",
+          #     platform: "desktop",
+          #   }
 
     steps:
       - uses: actions/checkout@v5
