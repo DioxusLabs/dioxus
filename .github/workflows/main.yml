@@ -45,13 +45,14 @@ jobs:
   check-msrv:
     if: github.event.pull_request.draft == false
     name: Check MSRV
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
       - name: install_cargo_msrv
         run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
@@ -66,7 +67,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Test Suite
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -81,13 +82,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
     if: github.event.pull_request.draft == false
     name: Test Suite with Optimizations
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -102,13 +104,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   fmt:
     if: github.event.pull_request.draft == false
     name: Rustfmt
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.88.0
@@ -117,18 +120,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - run: cargo fmt --all -- --check
 
   schema:
     if: github.event.pull_request.draft == false
     name: Check Schema
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - name: Generate schema
         run: cargo run -p dioxus-cli -- config schema --out packages/cli/schema.json
       - name: Check for uncommitted changes
@@ -141,7 +146,7 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -155,6 +160,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
@@ -164,7 +170,7 @@ jobs:
   test-docs:
     if: github.event.pull_request.draft == false
     name: Test Docs
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -178,6 +184,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - name: "doc --lib --all-features"
         run: |
           cargo test --doc --workspace --all-features
@@ -185,7 +192,7 @@ jobs:
   check:
     if: github.event.pull_request.draft == false
     name: Check
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -196,12 +203,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - run: cargo check --workspace --all-features --all-targets
 
   bundle-linux-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | Linux
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -215,6 +223,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
+          cache-on-failure: "true"
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
@@ -239,7 +249,7 @@ jobs:
   bundle-windows-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | Windows
-    runs-on: blacksmith-4vcpu-windows-2025
+    runs-on: warp-windows-2025-x64-4x
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -247,6 +257,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
+          cache-on-failure: "true"
       - name: Bundle hotdog as Windows packages
         working-directory: .\examples\01-app-demos\hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
@@ -271,7 +283,7 @@ jobs:
   bundle-macos-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | macOS
-    runs-on: macos-latest
+    runs-on: warp-macos-latest-arm64-6x
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -279,6 +291,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
+          cache-on-failure: "true"
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
@@ -300,7 +314,7 @@ jobs:
   clippy:
     if: github.event.pull_request.draft == false
     name: Clippy
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -313,6 +327,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
       - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
 
   nix:
@@ -320,7 +335,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [blacksmith-4vcpu-ubuntu-2404, macos-latest]
+        os: [warp-ubuntu-latest-x64-4x, warp-macos-latest-arm64-6x]
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
@@ -342,7 +357,7 @@ jobs:
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [blacksmith-4vcpu-windows-2025, blacksmith-8vcpu-ubuntu-2404]
+        os: [warp-windows-2025-x64-4x, warp-ubuntu-latest-x64-8x]
         platform:
           - { toolchain: beta }
           # - { toolchain: 1.86.0 }
@@ -350,10 +365,10 @@ jobs:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
       - name: Free Disk Space
-        if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404-arm' || matrix.os == 'blacksmith-8vcpu-ubuntu-2404' }}
+        if: runner.os == 'Linux'
         uses: ./.github/actions/free-disk-space
       - uses: awalsh128/cache-apt-pkgs-action@latest
-        if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404-arm' || matrix.os == 'blacksmith-8vcpu-ubuntu-2404' }}
+        if: runner.os == 'Linux'
         with:
           packages: glib-networking glib-networking-common glib-networking-services libaa1 libabsl20220623t64 libass9 libasyncns0 libavc1394-0 libavcodec60 libavfilter9 libavformat60 libavtp0 libavutil58 libblas3 libbluray2 libbs2b0 libcaca0 libcairo-script-interpreter2 libcdparanoia0 libchromaprint1 libcjson1 libcodec2-1.2 libdav1d7 libdc1394-25 libdca0 libdecor-0-0 libdirectfb-1.7-7t64 libdv4t64 libdvdnav4 libdvdread8t64 libfaad2 libflac12t64 libfluidsynth3 libfreeaptx0 libgav1-1 libgme0 libgraphene-1.0-0 libgsm1 libgssdp-1.6-0 libgstreamer-plugins-good1.0-0 libgtk-4-common libgupnp-1.6-0 libgupnp-igd-1.6-0 libhwy1t64 libiec61883-0 libimath-3-1-29t64 libinstpatch-1.0-2 libjack-jackd2-0 libjxl0.7 liblapack3 liblc3-1 libldacbt-enc2 liblilv-0-0 liblrdf0 libltc11 libmbedcrypto7t64 libmfx1 libmjpegutils-2.1-0t64 libmodplug1 libmp3lame0 libmpcdec6 libmpeg2encpp-2.1-0t64 libmpg123-0t64 libmplex2-2.1-0t64 libmysofa1 libneon27t64 libnice10 libogg0 libopenal-data libopenal1 libopenexr-3-1-30 libopenh264-7 libopenmpt0t64 libopenni2-0 liborc-0.4-0t64 libpipewire-0.3-0t64 libplacebo338 libpocketsphinx3 libpostproc57 libproxy1v5 libpulse0 libqrencode4 libraptor2-0 librav1e0 libraw1394-11 librist4 librubberband2 libsamplerate0 libsbc1 libsdl2-2.0-0 libsecret-common libserd-0-0 libshine3 libshout3 libsndfile1 libsndio7.0 libsord-0-0 libsoundtouch1 libsoup-3.0-0 libsoup-3.0-common libsoxr0 libspa-0.2-modules libspandsp2t64 libspeex1 libsphinxbase3t64 libsratom-0-0 libsrt1.5-gnutls libsrtp2-1 libssh-gcrypt-4 libsvtav1enc1d1 libswresample4 libswscale7 libtag1v5 libtag1v5-vanilla libtheora0 libtwolame0 libudfread0 libunibreak5 libv4l-0t64 libv4lconvert0t64 libva-drm2 libva-x11-2 libva2 libvdpau1 libvidstab1.1 libvisual-0.4-0 libvo-aacenc0 libvo-amrwbenc0 libvorbis0a libvorbisenc2 libvorbisfile3 libvpl2 libwavpack1 libwebrtc-audio-processing1 libwildmidi2 libx265-199 libxcb-xkb1 libxkbcommon-x11-0 libcups2t64 libxml2 libxml2-dev libxvidcore4 libyuv0 libzbar0t64 libzimg2 libzix-0-0 libzvbi-common libzvbi0t64 libzxing3 ocl-icd-libopencl1 timgm6mb-soundfont xfonts-encodings xfonts-utils binutils lld binutils-devel binutils-gold fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont fonts-wqy-zenhei gstreamer1.0-libav gstreamer1.0-plugins-bad gstreamer1.0-plugins-good libavif16 libevent-2.1-7t64 libgstreamer-plugins-bad1.0-0 libharfbuzz-icu0 libhyphen0 libmanette-0.2-0 libsecret-1-0 libwoff1 xfonts-cyrillic xfonts-scalable fonts-ipafont-mincho fonts-tlwg-loma gstreamer1.0-x
           version: 1.0
@@ -369,9 +384,10 @@ jobs:
         with:
           key: "playwright-${{ matrix.platform.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
           cache-on-failure: "true"
       - name: Wipe dx cache
-        if: ${{ matrix.os == 'ubuntu-24.04' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.os == 'blacksmith-4vcpu-ubuntu-2404-arm' || matrix.os == 'blacksmith-8vcpu-ubuntu-2404' }}
+        if: runner.os == 'Linux'
         run: |
           rm -rf ./target/dx
       - name: Playwright
@@ -401,7 +417,7 @@ jobs:
         platform:
           - {
               target: aarch64-apple-darwin,
-              os: macos-latest,
+              os: warp-macos-latest-arm64-6x,
               toolchain: "1.88.0",
               cross: false,
               command: "test",
@@ -410,7 +426,7 @@ jobs:
             }
           - {
               target: aarch64-apple-ios,
-              os: macos-latest,
+              os: warp-macos-latest-arm64-6x,
               toolchain: "1.88.0",
               cross: false,
               command: "build",
@@ -419,7 +435,7 @@ jobs:
             }
           - {
               target: aarch64-unknown-linux-gnu,
-              os: ubuntu-24.04-arm,
+              os: warp-ubuntu-latest-arm64-4x,
               toolchain: "1.88.0",
               cross: false,
               command: "build",
@@ -428,32 +444,31 @@ jobs:
             }
           - {
               target: aarch64-linux-android,
-              os: blacksmith-4vcpu-ubuntu-2404,
+              os: warp-ubuntu-latest-x64-4x,
               toolchain: "1.88.0",
               cross: true,
               command: "build",
               args: "--package dioxus-desktop",
               platform: "android",
             }
-            # commented out because it's having issues with space on the device, but we already test it above
-          # - {
-          #     target: x86_64-unknown-linux-gnu,
-          #     os: ubuntu-24.04,
-          #     toolchain: "1.88.0",
-          #     cross: false,
-          #     command: "build",
-          #     args: "--all --tests",
-          #     platform: "desktop",
-          #   }
+          - {
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-24.04,
+              toolchain: "1.88.0",
+              cross: false,
+              command: "build",
+              args: "--all --tests",
+              platform: "desktop",
+            }
 
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' }}
+        if: runner.os == 'Linux'
         uses: ./.github/actions/free-disk-space
 
       - uses: awalsh128/cache-apt-pkgs-action@latest
-        if: ${{ matrix.platform.os == 'ubuntu-24.04' || matrix.platform.os == 'ubuntu-24.04-arm' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404' || matrix.platform.os == 'blacksmith-4vcpu-ubuntu-2404-arm' }}
+        if: runner.os == 'Linux'
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: ${{ matrix.platform.target }}-${{ matrix.platform.os }} # disambiguate since we're in a matrix and this caching action doesn't factor in these variables
@@ -477,6 +492,7 @@ jobs:
         with:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
 
       - name: test
         run: |
@@ -487,7 +503,7 @@ jobs:
   cargo-test-windows:
     if: github.event.pull_request.draft == false
     runs-on:
-      labels: "blacksmith-4vcpu-windows-2025"
+      labels: "warp-windows-2025-x64-4x"
     name: "cargo test | windows"
     steps:
       - uses: actions/checkout@v5
@@ -498,6 +514,7 @@ jobs:
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
+          cache-provider: "warpbuild"
 
       - name: "Install Rust toolchain"
         working-directory: ${{ env.UV_WORKSPACE }}
