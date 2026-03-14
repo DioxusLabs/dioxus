@@ -42,31 +42,48 @@ env:
   rust_nightly: nightly-2025-10-05
 
 jobs:
-  check-msrv:
+  lint:
     if: github.event.pull_request.draft == false
-    name: Check MSRV
+    name: Lint
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
       - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: rustfmt, clippy
+      - uses: taiki-e/install-action@cargo-msrv
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-      # https://github.com/foresterre/cargo-msrv/blob/4345edfe3f4fc91cc8ae6c7d6804c0748fae92ae/.github/workflows/msrv.yml
-      - name: install_cargo_msrv
-        run: cargo install cargo-msrv --all-features --version 0.16.3 --locked
-      - name: version_of_cargo_msrv
-        run: cargo msrv --version
-      - name: run_cargo_msrv
+      - name: Rustfmt
+        run: cargo +1.88.0 fmt --all -- --check
+      - name: Verify MSRV
         run: cargo msrv --output-format json verify -- cargo check
-      - name: run_cargo_msrv_on_verify_failure
+      - name: Find MSRV on verify failure
         if: ${{ failure() }}
         run: cargo msrv --output-format json -- cargo check
+      - name: Clippy
+        run: cargo +1.90.0 clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
+      - name: Check schema
+        run: cargo +1.88.0 run -p dioxus-cli -- config schema --out packages/cli/schema.json
+      - name: Verify schema is up to date
+        run: |
+          if ! git diff --exit-code packages/cli/schema.json; then
+            echo "::error::Schema is out of date. Run 'dx config schema --out packages/cli/schema.json' and commit the changes."
+            exit 1
+          fi
 
   test:
     if: github.event.pull_request.draft == false
-    name: Test Suite
+    name: Cargo Test | Linux
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -88,7 +105,7 @@ jobs:
 
   release-test:
     if: github.event.pull_request.draft == false
-    name: Test Suite with Optimizations
+    name: Cargo Test | Linux (Release)
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -108,44 +125,9 @@ jobs:
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
-  fmt:
-    if: github.event.pull_request.draft == false
-    name: Rustfmt
-    runs-on: warp-ubuntu-latest-x64-4x
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-provider: "warpbuild"
-      - run: cargo fmt --all -- --check
-
-  schema:
-    if: github.event.pull_request.draft == false
-    name: Check Schema
-    runs-on: warp-ubuntu-latest-x64-4x
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.88.0
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-provider: "warpbuild"
-      - name: Generate schema
-        run: cargo run -p dioxus-cli -- config schema --out packages/cli/schema.json
-      - name: Check for uncommitted changes
-        run: |
-          if ! git diff --exit-code packages/cli/schema.json; then
-            echo "::error::Schema is out of date. Run 'dx config schema --out packages/cli/schema.json' and commit the changes."
-            exit 1
-          fi
-
   docs:
     if: github.event.pull_request.draft == false
-    name: Docs
+    name: Docs | Build
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -169,7 +151,7 @@ jobs:
 
   test-docs:
     if: github.event.pull_request.draft == false
-    name: Test Docs
+    name: Docs | Test
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -295,27 +277,9 @@ jobs:
             target/**/*.dmg
           if-no-files-found: ignore
 
-  clippy:
-    if: github.event.pull_request.draft == false
-    name: Clippy
-    runs-on: warp-ubuntu-latest-x64-4x
-    steps:
-      - uses: actions/checkout@v5
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: 1.0
-      - uses: dtolnay/rust-toolchain@1.90.0
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-provider: "warpbuild"
-      - run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
-
   nix:
     if: github.event.pull_request.draft == false
+    name: "Nix | ${{ runner.os }}"
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -336,7 +300,7 @@ jobs:
 
   playwright:
     if: github.event.pull_request.draft == false
-    name: Playwright Tests
+    name: "Playwright | ${{ runner.os }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -393,6 +357,7 @@ jobs:
   matrix_test:
     runs-on: ${{ matrix.platform.os }}
     if: github.event.pull_request.draft == false
+    name: "Cross | ${{ matrix.platform.target }}"
     env:
       RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
     strategy:
@@ -488,7 +453,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on:
       labels: "warp-windows-2025-x64-4x"
-    name: "cargo test | windows"
+    name: "Cargo Test | Windows"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@1.88.0
