@@ -1,5 +1,5 @@
 use crate::innerlude::MountId;
-use crate::{Attribute, AttributeValue, DynamicNode::*};
+use crate::{Attribute, AttributeValue, DynamicNode::*, TemplateAttribute};
 use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
@@ -413,6 +413,104 @@ impl VNode {
         }
     }
 
+    fn merge_dynamic_attributes(&self) -> Box<[Box<[Attribute]>]> {
+        let dynamic_style_strings = self
+            .dynamic_attrs
+            .iter()
+            .map(|attributes| {
+                let mut style_string = String::from("");
+                attributes.iter().for_each(|attribute| {
+                    if let AttributeValue::Text(attribute_value) = &attribute.value {
+                        if attribute.name == "style" {
+                            style_string = format!("{style_string} {attribute_value}");
+                        } else if attribute.namespace == Some("style") {
+                            style_string = format!(
+                                "{} {}: {};",
+                                style_string, attribute.name, attribute_value
+                            );
+                        }
+                    }
+                });
+                style_string.trim().to_string()
+            })
+            .collect::<Vec<String>>();
+
+        // Merge style static attributes with style dynamic attributes
+        self.dynamic_attrs
+            .iter()
+            .enumerate()
+            .map(|(idx, attributes)| {
+                let path = self.template.attr_paths[idx];
+                attributes
+                    .iter()
+                    .map(|attribute| {
+                        // Only merge if the current attribute is a style attribute
+                        if attribute.name == "style" || attribute.namespace == Some("style") {
+                            // Get the static styles for the corresponding element
+                            let mut path_iterator = path.iter();
+                            path_iterator.next();
+                            let mut element = self.template.roots[path[0] as usize];
+                            for next_index in path_iterator {
+                                if let TemplateNode::Element { children, .. } = element {
+                                    element = children[*next_index as usize]
+                                } else {
+                                    unreachable!("All nodes in the attr_paths should be TemplateNode::Element");
+                                }
+                            }
+
+                            let mut static_styles = String::from("");
+                            if let TemplateNode::Element { attrs, .. } = element {
+                                attrs.iter().for_each(|attribute| {
+                                    if let TemplateAttribute::Static {
+                                        name,
+                                        value,
+                                        namespace,
+                                    } = attribute
+                                    {
+                                        if *name == "style" {
+                                            static_styles = format!("{static_styles} {value}");
+                                        } else if *namespace == Some("style") {
+                                            static_styles =
+                                                format!("{static_styles} {name}: {value};");
+                                        }
+                                    }
+                                });
+                            }
+                            static_styles = static_styles.trim().to_string();
+
+                            // There might be more than one dynamic style for the same element
+                            let dynamic_styles = dynamic_style_strings
+                                .iter()
+                                .enumerate()
+                                .filter_map(|(current_idx, style_string)| {
+                                    if path == self.template.attr_paths[current_idx] {
+                                        Some(String::from(style_string))
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<String>>()
+                                .join(" ");
+
+                            Attribute {
+                                name: "style",
+                                value: AttributeValue::Text(
+                                    format!("{static_styles} {dynamic_styles}")
+                                        .trim()
+                                        .to_string(),
+                                ),
+                                namespace: None,
+                                volatile: attribute.volatile,
+                            }
+                        } else {
+                            attribute.clone() // If this is not a style attribute, just pass it along
+                        }
+                    })
+                    .collect::<Box<[Attribute]>>()
+            })
+            .collect::<Box<[Box<[Attribute]>]>>()
+    }
+
     pub(super) fn diff_attributes(
         &self,
         new: &VNode,
@@ -421,9 +519,9 @@ impl VNode {
     ) {
         let mount_id = new.mount.get();
         for (idx, (old_attrs, new_attrs)) in self
-            .dynamic_attrs
+            .merge_dynamic_attributes()
             .iter()
-            .zip(new.dynamic_attrs.iter())
+            .zip(new.merge_dynamic_attributes().iter())
             .enumerate()
         {
             let mut old_attributes_iter = old_attrs.iter().peekable();
@@ -803,10 +901,11 @@ impl VNode {
         let mut last_path = None;
         // Only take nodes that are under this root node
         let from_root_node = |(_, path): &(usize, &[u8])| path.first() == Some(&root_idx);
+        let merged_dynamic_attributes = &self.merge_dynamic_attributes();
         while let Some((attribute_idx, attribute_path)) =
             dynamic_attributes_iter.next_if(from_root_node)
         {
-            let attribute = &self.dynamic_attrs[attribute_idx];
+            let attribute = &merged_dynamic_attributes[attribute_idx];
 
             let id = match last_path {
                 // If the last path was exactly the same, we can reuse the id
