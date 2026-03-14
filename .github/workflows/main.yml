@@ -63,11 +63,6 @@ jobs:
           cache-provider: "warpbuild"
       - name: Rustfmt
         run: cargo fmt --all -- --check
-      - name: Verify MSRV
-        run: cargo msrv --output-format json verify -- cargo check
-      - name: Find MSRV on verify failure
-        if: ${{ failure() }}
-        run: cargo msrv --output-format json -- cargo check
       - name: Clippy
         run: cargo clippy --workspace --examples --tests --all-features --all-targets -- -D warnings
       - name: Check schema
@@ -78,6 +73,11 @@ jobs:
             echo "::error::Schema is out of date. Run 'dx config schema --out packages/cli/schema.json' and commit the changes."
             exit 1
           fi
+      - name: Verify MSRV
+        run: cargo msrv --output-format json verify -- cargo check
+      - name: Find MSRV on verify failure
+        if: ${{ failure() }}
+        run: cargo msrv --output-format json -- cargo check
 
   docs:
     if: github.event.pull_request.draft == false
@@ -168,7 +168,7 @@ jobs:
   bundle-windows-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | Windows
-    runs-on: warp-windows-2025-x64-4x
+    runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -259,7 +259,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-windows-2025-x64-4x, name: Windows, toolchain: beta }
+          - { os: warp-windows-2025-x64-8x, name: Windows, toolchain: beta }
           - { os: warp-ubuntu-latest-x64-8x, name: Linux, toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -449,7 +449,7 @@ jobs:
   cargo-test-windows:
     if: github.event.pull_request.draft == false
     runs-on:
-      labels: "warp-windows-2025-x64-4x"
+      labels: "warp-windows-2025-x64-8x"
     name: "Cargo Test | Windows"
     steps:
       - uses: actions/checkout@v5
