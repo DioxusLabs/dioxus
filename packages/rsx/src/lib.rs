@@ -78,10 +78,10 @@ pub use partial_closure::PartialClosure;
 pub use rsx_call::*;
 pub use template_body::TemplateBody;
 
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
-    parse::{Parse, ParseStream},
     Result, Token,
+    parse::{Parse, ParseStream},
 };
 
 pub use innerlude::*;
