@@ -279,11 +279,13 @@ jobs:
 
   nix:
     if: github.event.pull_request.draft == false
-    name: "Nix | ${{ runner.os }}"
+    name: "Nix | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [warp-ubuntu-latest-x64-4x, warp-macos-latest-arm64-6x]
+        include:
+          - { os: warp-ubuntu-latest-x64-4x, name: Linux }
+          - { os: warp-macos-latest-arm64-6x, name: macOS }
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
@@ -300,14 +302,14 @@ jobs:
 
   playwright:
     if: github.event.pull_request.draft == false
-    name: "Playwright | ${{ runner.os }}"
+    name: "Playwright | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       matrix:
-        os: [warp-windows-2025-x64-4x, warp-ubuntu-latest-x64-8x]
-        platform:
-          - { toolchain: beta }
+        include:
+          - { os: warp-windows-2025-x64-4x, name: Windows, toolchain: beta }
+          - { os: warp-ubuntu-latest-x64-8x, name: Linux, toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
@@ -325,11 +327,11 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.platform.toolchain }}
+          toolchain: ${{ matrix.toolchain }}
           targets: x86_64-unknown-linux-gnu,wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
-          key: "playwright-${{ matrix.platform.toolchain }}-${{ runner.os }}"
+          key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
           cache-on-failure: "true"
@@ -350,7 +352,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: always()
         with:
-          name: playwright-report-${{ matrix.platform.toolchain }}-${{ runner.os }}
+          name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 30
 
@@ -425,7 +427,7 @@ jobs:
       - name: install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: ${{ matrix.platform.toolchain }}
+          toolchain: ${{ matrix.toolchain }}
           targets: ${{ matrix.platform.target }}
           components: rustfmt
 
