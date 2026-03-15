@@ -349,6 +349,7 @@ impl WebviewInstance {
             }
         };
 
+        let navigation_handler = cfg.navigation_handler.take();
         let page_loaded = AtomicBool::new(false);
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
@@ -365,6 +366,9 @@ impl WebviewInstance {
             .with_navigation_handler(move |var| {
                 // We don't want to allow any navigation
                 // We only want to serve the index file and assets
+                if let Some(handler) = navigation_handler.as_ref() {
+                    return handler(&var);
+                }
                 if var.starts_with("dioxus://")
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")

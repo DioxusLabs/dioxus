@@ -20,6 +20,8 @@ type CustomEventHandler = Box<
         ),
 >;
 
+type NavigationHandler = Box<dyn Fn(&str) -> bool + 'static>;
+
 /// The closing behaviour of specific application window.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
@@ -70,6 +72,7 @@ pub struct Config {
     pub(crate) disable_dma_buf_on_wayland: bool,
     pub(crate) additional_windows_args: Option<String>,
     pub(crate) tray_icon_show_window_on_click: bool,
+    pub(crate) navigation_handler: Option<NavigationHandler>,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
@@ -124,6 +127,7 @@ impl Config {
             on_window: None,
             additional_windows_args: None,
             tray_icon_show_window_on_click: true,
+            navigation_handler: None,
         }
     }
 
@@ -348,6 +352,13 @@ impl Config {
     /// activating the main window.
     pub fn with_tray_icon_show_window_on_click(mut self, show: bool) -> Self {
         self.tray_icon_show_window_on_click = show;
+        self
+    }
+
+    /// Set a custom navigation handler for non-dioxus URLs.
+    /// Return true to allow navigation inside the webview, false to block.
+    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
+        self.navigation_handler = Some(Box::new(f));
         self
     }
 }
