@@ -147,7 +147,7 @@ pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
 /// - [x] Linux (appimage)
 /// - [x] Linux (rpm)
 /// - [x] Linux (deb)
-/// - [x] Android (returns current exe)
+/// - [x] Android (returns current exe.)
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
     let cur_exe = std::env::current_exe().unwrap();
