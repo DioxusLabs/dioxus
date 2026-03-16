@@ -13,7 +13,7 @@ pub use crate::renderer::Renderer;
 
 /// A convenience function to render an `rsx!` call to a string
 ///
-/// For advanced rendering, create a new `SsrRender`.
+/// For advanced rendering, create a new [`Renderer`].
 pub fn render_element(element: Element) -> String {
     Renderer::new().render_element(element)
 }
