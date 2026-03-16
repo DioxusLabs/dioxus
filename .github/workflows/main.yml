@@ -45,7 +45,7 @@ jobs:
   lint:
     if: github.event.pull_request.draft == false
     name: Lint | msrv, fmt, clippy, schema
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: depot-ubuntu-24.04-4
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -60,7 +60,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Rustfmt
         run: cargo fmt --all -- --check
@@ -83,7 +83,7 @@ jobs:
   docs:
     if: github.event.pull_request.draft == false
     name: Docs | Build
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: depot-ubuntu-24.04-4
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -97,7 +97,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
@@ -108,7 +108,7 @@ jobs:
   test-docs:
     if: github.event.pull_request.draft == false
     name: Docs | Test
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: depot-ubuntu-24.04-4
     steps:
       - uses: actions/checkout@v5
       - uses: awalsh128/cache-apt-pkgs-action@latest
@@ -122,7 +122,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
@@ -132,7 +132,7 @@ jobs:
   bundle-linux-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | Linux
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: depot-ubuntu-24.04-4
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -146,7 +146,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
@@ -172,7 +172,7 @@ jobs:
   bundle-windows-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | Windows
-    runs-on: warp-windows-2025-x64-8x
+    runs-on: depot-windows-2025-8
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -180,7 +180,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Windows packages
         working-directory: .\examples\01-app-demos\hotdog
@@ -206,7 +206,7 @@ jobs:
   bundle-macos-smoke:
     if: github.event.pull_request.draft == false
     name: Bundle Smoke | macOS
-    runs-on: warp-macos-latest-arm64-6x
+    runs-on: depot-macos-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
@@ -214,7 +214,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
@@ -241,8 +241,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-4x, name: Linux }
-          - { os: warp-macos-latest-arm64-6x, name: macOS }
+          - { os: depot-ubuntu-24.04-4, name: Linux }
+          - { os: depot-macos-latest, name: macOS }
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
@@ -265,8 +265,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-windows-2025-x64-8x, name: Windows, toolchain: beta }
-          - { os: warp-ubuntu-latest-x64-8x, name: Linux, toolchain: beta }
+          - { os: depot-windows-2025-8, name: Windows, toolchain: beta }
+          - { os: depot-ubuntu-24.04-8, name: Linux, toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
@@ -290,7 +290,7 @@ jobs:
         with:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Wipe dx cache
         if: runner.os == 'Linux'
@@ -324,7 +324,7 @@ jobs:
         platform:
           - {
               target: aarch64-apple-darwin,
-              os: warp-macos-latest-arm64-6x,
+              os: depot-macos-latest,
               toolchain: "1.88.0",
               cross: false,
               command: "test",
@@ -333,7 +333,7 @@ jobs:
             }
           - {
               target: aarch64-apple-ios,
-              os: warp-macos-latest-arm64-6x,
+              os: depot-macos-latest,
               toolchain: "1.88.0",
               cross: false,
               command: "build",
@@ -342,7 +342,7 @@ jobs:
             }
           - {
               target: aarch64-unknown-linux-gnu,
-              os: warp-ubuntu-latest-arm64-4x,
+              os: depot-ubuntu-24.04-arm-4,
               toolchain: "1.88.0",
               cross: false,
               command: "build",
@@ -351,7 +351,7 @@ jobs:
             }
           - {
               target: aarch64-linux-android,
-              os: warp-ubuntu-latest-x64-4x,
+              os: depot-ubuntu-24.04-4,
               toolchain: "1.88.0",
               cross: true,
               command: "build",
@@ -400,7 +400,7 @@ jobs:
         with:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: test
@@ -411,7 +411,7 @@ jobs:
   test:
     if: github.event.pull_request.draft == false
     name: Cargo Test | Linux
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: depot-ubuntu-24.04-8
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -426,7 +426,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
@@ -434,7 +434,7 @@ jobs:
   release-test:
     if: github.event.pull_request.draft == false
     name: Cargo Test | Linux (Release)
-    runs-on: warp-ubuntu-latest-x64-8x
+    runs-on: depot-ubuntu-24.04-8
     steps:
       - uses: actions/checkout@v5
       - name: Free Disk Space
@@ -449,7 +449,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
@@ -458,8 +458,7 @@ jobs:
   # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
   cargo-test-windows:
     if: github.event.pull_request.draft == false
-    runs-on:
-      labels: "warp-windows-2025-x64-8x"
+    runs-on: depot-windows-2025-8
     name: "Cargo Test | Windows"
     steps:
       - uses: actions/checkout@v5
@@ -470,7 +469,7 @@ jobs:
         with:
           workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
-          cache-provider: "warpbuild"
+
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: "Install Rust toolchain"

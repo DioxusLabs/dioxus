@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   promote:
-    runs-on: warp-ubuntu-latest-x64-4x
+    runs-on: depot-ubuntu-24.04-4
     steps:
       - uses: actions/checkout@v5
       - name: Publish the next pre-release
