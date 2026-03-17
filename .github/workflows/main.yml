@@ -270,6 +270,45 @@ jobs:
             target/**/*-setup.exe
           if-no-files-found: ignore
 
+  windows-bundle-smoke:
+    if: github.event.pull_request.draft == false
+    name: "Windows | Bundle Smoke"
+    runs-on: warp-windows-2025-x64-8x
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: beta
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: "windows-bundle-${{ runner.os }}"
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+          cache-provider: "warpbuild"
+      - name: Bundle hotdog as Windows packages
+        working-directory: .\examples\01-app-demos\hotdog
+        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
+      - name: Verify Windows bundle outputs
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path .\target\dx -Recurse -File -Include "*.msi"
+          $nsis = Get-ChildItem -Path .\target\dx -Recurse -File -Include "*-setup.exe"
+          $msi | ForEach-Object { $_.FullName }
+          $nsis | ForEach-Object { $_.FullName }
+          if (-not $msi) { throw "Expected MSI artifact was not produced." }
+          if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: hotdog-windows-bundles-smoke
+          path: |
+            target/**/*.msi
+            target/**/*-setup.exe
+          if-no-files-found: ignore
+
   nix:
     if: github.event.pull_request.draft == false
     name: "Nix | ${{ matrix.name }}"
