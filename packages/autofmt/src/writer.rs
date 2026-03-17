@@ -156,7 +156,7 @@ impl<'a> Writer<'a> {
         write!(
             self.out,
             "for {} in ",
-            forloop.pat.clone().into_token_stream(),
+            self.unparse_pat(&forloop.pat),
         )?;
 
         self.write_inline_expr(&forloop.expr)?;
