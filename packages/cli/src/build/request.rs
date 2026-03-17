@@ -1306,7 +1306,12 @@ impl BuildRequest {
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
-                    ctx.status_build_progress(units_compiled, crate_count, artifact.target.name);
+                    ctx.status_build_progress(
+                        units_compiled,
+                        crate_count,
+                        artifact.target.name,
+                        artifact.fresh,
+                    );
                     output_location = artifact.executable.map(Into::into);
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
