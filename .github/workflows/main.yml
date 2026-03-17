@@ -320,19 +320,11 @@ jobs:
           - { os: warp-macos-latest-arm64-6x, name: macOS }
     steps:
       - uses: actions/checkout@v5
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: nixbuild/nix-quick-install-action@master
       - uses: nix-community/cache-nix-action@main
         with:
           primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
-          restore-prefixes-first-match: |
-            nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
-            nix-${{ runner.os }}-${{ runner.arch }}
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: "nix-devshell-${{ runner.os }}"
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
       - name: Build dioxus-cli from the flake
         run: nix build .#dioxus-cli
       - name: Smoke test devShell
