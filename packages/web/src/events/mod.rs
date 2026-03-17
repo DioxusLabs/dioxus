@@ -45,38 +45,6 @@ impl<T: 'static> Synthetic<T> {
 
 pub(crate) struct WebEventConverter;
 
-/// Fallback for when a "keydown"/"keyup" event is not actually a KeyboardEvent
-/// (e.g. datalist autocomplete dispatches a plain Event with type "keydown").
-/// Wraps the raw web_sys::Event so it remains accessible via `as_any`/downcast.
-struct GenericKeyboardEvent(web_sys::Event);
-
-impl dioxus_html::HasKeyboardData for GenericKeyboardEvent {
-    fn key(&self) -> dioxus_html::Key {
-        dioxus_html::Key::Unidentified
-    }
-    fn code(&self) -> dioxus_html::Code {
-        dioxus_html::Code::Unidentified
-    }
-    fn location(&self) -> dioxus_html::Location {
-        dioxus_html::Location::Standard
-    }
-    fn is_auto_repeating(&self) -> bool {
-        false
-    }
-    fn is_composing(&self) -> bool {
-        false
-    }
-    fn as_any(&self) -> &dyn std::any::Any {
-        &self.0
-    }
-}
-
-impl dioxus_html::ModifiersInteraction for GenericKeyboardEvent {
-    fn modifiers(&self) -> dioxus_html::Modifiers {
-        dioxus_html::Modifiers::empty()
-    }
-}
-
 #[inline(always)]
 fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent {
     event
@@ -148,13 +116,7 @@ impl HtmlEventConverter for WebEventConverter {
         &self,
         event: &dioxus_html::PlatformEventData,
     ) -> dioxus_html::KeyboardData {
-        let raw = &downcast_event(event).raw;
-        // Datalist autocomplete can dispatch a plain Event with type "keydown"
-        // that isn't actually a KeyboardEvent. Fall back to defaults.
-        match raw.dyn_ref::<web_sys::KeyboardEvent>() {
-            Some(kb) => Synthetic::new(kb.clone()).into(),
-            None => dioxus_html::KeyboardData::new(GenericKeyboardEvent(raw.clone())),
-        }
+        Synthetic::<web_sys::KeyboardEvent>::from(downcast_event(event).raw.clone()).into()
     }
 
     #[inline(always)]

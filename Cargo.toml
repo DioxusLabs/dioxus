@@ -938,6 +938,11 @@ path = "examples/08-apis/on_visible.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "datalist_autocomplete"
+path = "examples/09-reference/datalist_autocomplete.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "all_events"
 path = "examples/09-reference/all_events.rs"
 doc-scrape-examples = true

@@ -94,6 +94,18 @@ impl WebsysDom {
                     return;
                 };
 
+                // Datalist autocomplete can dispatch a plain Event with type
+                // "keydown" that isn't actually a KeyboardEvent. Silently drop
+                // it — the event lacks keyboard properties and will fail to
+                // deserialize on other platforms too.
+                if matches!(name.as_str(), "keydown" | "keyup" | "keypress")
+                    && web_sys_event
+                        .dyn_ref::<web_sys::KeyboardEvent>()
+                        .is_none()
+                {
+                    return;
+                }
+
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 
                 let event = dioxus_core::Event::new(Rc::new(data) as Rc<dyn Any>, bubbles);
