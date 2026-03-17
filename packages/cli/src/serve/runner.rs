@@ -1173,6 +1173,30 @@ impl AppServer {
             krates.extend(server_krates);
         }
 
+        // Also add all workspace members that are local (not from registry/git)
+        // This ensures that sub-modules (workspace members not directly depended on) are watched
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                // Skip if the crate is from the registry or git - we only want local path dependencies
+                // and workspace members
+                if krate
+                    .manifest_path
+                    .components()
+                    .any(|c| c.as_str() == ".cargo" || c.as_str() == "registry" || c.as_str() == "git")
+                {
+                    continue;
+                }
+
+                let crate_root = krate
+                    .manifest_path
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
+                    .into_std_path_buf();
+                krates.push(crate_root);
+            }
+        }
+
         krates.dedup();
 
         krates
