@@ -60,6 +60,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Rustfmt
@@ -97,6 +98,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
@@ -122,6 +124,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
@@ -145,6 +148,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Linux packages
@@ -179,6 +183,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as macOS packages
@@ -221,6 +226,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -318,6 +324,7 @@ jobs:
         with:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Wipe dx cache
@@ -444,6 +451,7 @@ jobs:
         with:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
 
@@ -470,6 +478,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
@@ -493,6 +502,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
+          cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
