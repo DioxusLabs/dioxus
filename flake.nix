@@ -15,14 +15,18 @@
 
       perSystem =
         {
-          config,
           self',
-          pkgs,
-          lib,
           system,
           ...
         }:
         let
+          pkgs = import inputs.nixpkgs {
+            inherit system;
+            overlays = [
+              inputs.rust-overlay.overlays.default
+            ];
+          };
+          lib = pkgs.lib;
           rustToolchain = pkgs.rust-bin.stable.latest.default.override {
             extensions = [
               "rust-src"
@@ -94,13 +98,6 @@
             );
         in
         {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [
-              inputs.rust-overlay.overlays.default
-            ];
-          };
-
           packages.dioxus-cli = (
             rustPackage "dioxus-cli" {
               binary = "dx";
