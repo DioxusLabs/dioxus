@@ -313,18 +313,18 @@ jobs:
     if: github.event.pull_request.draft == false
     name: "Nix | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-4x, name: Linux }
+          - { os: warp-ubuntu-latest-x64-8x, name: Linux }
           - { os: warp-macos-latest-arm64-6x, name: macOS }
     steps:
       - uses: actions/checkout@v5
-      - uses: nixbuild/nix-quick-install-action@master
-      - uses: nix-community/cache-nix-action@main
-        with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}
+      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
