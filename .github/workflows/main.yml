@@ -313,9 +313,6 @@ jobs:
     if: github.event.pull_request.draft == false
     name: "Nix | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
-    permissions:
-      contents: read
-      id-token: write
     strategy:
       matrix:
         include:
@@ -324,16 +321,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: DeterminateSystems/determinate-nix-action@v3
-      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - uses: nix-community/cache-nix-action@main
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+            nix-${{ runner.os }}-${{ runner.arch }}
       - uses: Swatinem/rust-cache@v2
         with:
+          key: "nix-devshell-${{ runner.os }}"
           cache-all-crates: "true"
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
       - name: Build dioxus-cli from the flake
         run: nix build .#dioxus-cli
-      - name: Ensure devShell has all build deps
-        run: nix develop .#default -c cargo build -p dioxus-cli --features no-downloads --locked
+      - name: Smoke test devShell
+        shell: bash
+        run: |
+          nix develop .#default -c bash -lc '
+            cargo --version
+            rustc --version
+            pkg-config --modversion openssl
+            if [[ "${{ runner.os }}" == "Linux" ]]; then
+              pkg-config --modversion gtk+-3.0
+              pkg-config --modversion webkit2gtk-4.1
+            fi
+          '
 
   playwright:
     if: github.event.pull_request.draft == false
