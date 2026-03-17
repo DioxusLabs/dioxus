@@ -366,6 +366,11 @@ shell-words = "1.1.0"
 keyboard-types = { version = "0.7", default-features = false }
 winit = { version = "0.30.11", features = ["rwh_06"] }
 
+# reduce debug symbols to line tables only - speeds up compiles and shrinks artifacts
+# backtraces still show file:line, but debugger can't inspect variables
+[profile.dev]
+debug = "line-tables-only"
+
 # our release profile should be fast to compile and fast to run
 # when we ship our CI builds, we turn on LTO which improves perf leftover by turning on incremental
 [profile.release]
