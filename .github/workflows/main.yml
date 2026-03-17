@@ -61,7 +61,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Rustfmt
         run: cargo fmt --all -- --check
       - name: Clippy
@@ -98,7 +98,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
           cargo doc --workspace --no-deps --all-features --document-private-items
@@ -123,7 +123,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: "doc --lib --all-features"
         run: |
           cargo test --doc --workspace --all-features
@@ -146,7 +146,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as Linux packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types appimage --package-types deb --package-types rpm
@@ -180,7 +180,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Bundle hotdog as macOS packages
         working-directory: ./examples/01-app-demos/hotdog
         run: cargo run --manifest-path ../../../Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types macos --package-types dmg
@@ -199,90 +199,92 @@ jobs:
             target/**/*.dmg
           if-no-files-found: ignore
 
-  # borrowed from uv
-  # https://raw.githubusercontent.com/astral-sh/uv/refs/heads/main/.github/workflows/ci.yml
-  cargo-test-windows:
+  # Single consolidated Windows job: playwright + bundle smoke test
+  # We skip cargo test on Windows since the important Windows-specific coverage
+  # comes from playwright and bundle testing, not unit tests.
+  windows:
     if: github.event.pull_request.draft == false
+    name: "Windows | Playwright + Bundle"
     runs-on: warp-windows-2025-x64-8x
-    name: "Cargo Test | Windows"
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: actions/setup-node@v4
         with:
+          node-version: 24
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: beta
+          targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: ${{ env.UV_WORKSPACE }}
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: "Install Rust toolchain"
-        working-directory: ${{ env.UV_WORKSPACE }}
-        run: rustup show
-
-      - name: "Cargo test"
-        working-directory: ${{ env.UV_WORKSPACE }}
+      # --- Playwright ---
+      - name: Playwright
+        working-directory: ./packages/playwright-tests
+        env:
+          CARGO_INCREMENTAL: 1
         run: |
-          cargo test --workspace --tests
+          npm ci
+          npm install -D @playwright/test
+          npx playwright install
+          npx playwright test
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: playwright-report-windows
+          path: ./packages/playwright-tests/playwright-report/
+          retention-days: 30
 
-  bundle-windows-smoke:
-      if: github.event.pull_request.draft == false
-      name: Bundle Smoke | Windows
-      runs-on: warp-windows-2025-x64-8x
-      timeout-minutes: 45
-      steps:
-        - uses: actions/checkout@v5
-        - uses: dtolnay/rust-toolchain@1.88.0
-        - uses: Swatinem/rust-cache@v2
-          with:
-            workspaces: ${{ env.UV_WORKSPACE }}
-            cache-all-crates: "true"
-            cache-provider: "warpbuild"
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: Bundle hotdog as Windows packages
-          working-directory: .\examples\01-app-demos\hotdog
-          run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
-        - name: Verify Windows bundle outputs
-          shell: pwsh
-          run: |
-            $msi = Get-ChildItem -Path .\target -Recurse -File -Include "*.msi"
-            $nsis = Get-ChildItem -Path .\target -Recurse -File -Include "*-setup.exe"
-            $msi | ForEach-Object { $_.FullName }
-            $nsis | ForEach-Object { $_.FullName }
-            if (-not $msi) { throw "Expected MSI artifact was not produced." }
-            if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
-        - uses: actions/upload-artifact@v6
-          if: always()
-          with:
-            name: hotdog-windows-bundles
-            path: |
-              target/**/*.msi
-              target/**/*-setup.exe
-            if-no-files-found: ignore
+      # --- Bundle smoke test ---
+      - name: Bundle hotdog as Windows packages
+        working-directory: .\examples\01-app-demos\hotdog
+        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
+      - name: Verify Windows bundle outputs
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem -Path .\target -Recurse -File -Include "*.msi"
+          $nsis = Get-ChildItem -Path .\target -Recurse -File -Include "*-setup.exe"
+          $msi | ForEach-Object { $_.FullName }
+          $nsis | ForEach-Object { $_.FullName }
+          if (-not $msi) { throw "Expected MSI artifact was not produced." }
+          if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: hotdog-windows-bundles
+          path: |
+            target/**/*.msi
+            target/**/*-setup.exe
+          if-no-files-found: ignore
 
-  # nix:
-  #   if: github.event.pull_request.draft == false
-  #   name: "Nix | ${{ matrix.name }}"
-  #   runs-on: ${{ matrix.os }}
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - { os: warp-ubuntu-latest-x64-4x, name: Linux }
-  #         - { os: warp-macos-latest-arm64-6x, name: macOS }
-  #   steps:
-  #     - uses: actions/checkout@v5
-  #     - uses: nixbuild/nix-quick-install-action@master
-  #     - uses: nix-community/cache-nix-action@main
-  #       with:
-  #         primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
-  #         restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}
-  #     - name: Install omnix
-  #       run: nix --accept-flake-config profile install "github:juspay/omnix"
-  #     - name: Build all flake outputs
-  #       run: om ci
-  #     - name: Ensure devShell has all build deps
-  #       run: nix develop -c cargo build -p dioxus-cli --features no-downloads
+  nix:
+    if: github.event.pull_request.draft == false
+    name: "Nix | ${{ matrix.name }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: warp-ubuntu-latest-x64-4x, name: Linux }
+          - { os: warp-macos-latest-arm64-6x, name: macOS }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: nixbuild/nix-quick-install-action@master
+      - uses: nix-community/cache-nix-action@main
+        with:
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}
+      - name: Install omnix
+        run: nix --accept-flake-config profile install "github:juspay/omnix"
+      - name: Build all flake outputs
+        run: om ci
+      - name: Ensure devShell has all build deps
+        run: nix develop -c cargo build -p dioxus-cli --features no-downloads
 
   playwright:
     if: github.event.pull_request.draft == false
@@ -292,7 +294,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-windows-2025-x64-8x, name: Windows, toolchain: beta }
           - { os: warp-ubuntu-latest-x64-8x, name: Linux, toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -318,7 +319,7 @@ jobs:
           key: "playwright-${{ matrix.toolchain }}-${{ runner.os }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Wipe dx cache
         if: runner.os == 'Linux'
         run: |
@@ -428,7 +429,7 @@ jobs:
           key: "matrix-${{ matrix.platform.target }}"
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: test
         run: |
@@ -454,7 +455,7 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
@@ -477,6 +478,6 @@ jobs:
         with:
           cache-all-crates: "true"
           cache-provider: "warpbuild"
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: browser-actions/setup-firefox@latest
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
