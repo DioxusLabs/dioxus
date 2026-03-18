@@ -70,6 +70,7 @@ members = [
     "packages/playwright-tests/default-features-disabled",
     "packages/playwright-tests/fullstack-error-codes",
     "packages/playwright-tests/windows-headless",
+    "packages/playwright-tests/windows-hotpatch-fullstack",
 
     # manganis
     "packages/manganis/manganis",

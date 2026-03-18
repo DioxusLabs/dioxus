@@ -7,6 +7,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 const dx = path.join(repoRoot, "target", "release", process.platform === "win32" ? "dx.exe" : "dx");
 
 // Build dx once: main process builds and sets env var; workers inherit it and skip.
+// todo: implement proper fixtures https://www.youtube.com/watch?v=3i6cJUFO_m4
 if (!process.env._DX_BUILT) {
   execSync("cargo build --package dioxus-cli --release", {
     cwd: repoRoot,
@@ -44,13 +45,20 @@ const ALL_SERVERS = [
 
 if (process.platform === "win32") {
   ALL_SERVERS.push({ specs: ["windows.spec.js"], port: 8787, cwd: "windows-headless", command: `${dx} run --force-sequential` });
+  ALL_SERVERS.push({ specs: ["windows-hotpatch-fullstack.spec.js"], port: 8788, command: `if exist windows-hotpatch-fullstack-temp (rmdir /s /q windows-hotpatch-fullstack-temp) && xcopy /E /I /H /Q windows-hotpatch-fullstack windows-hotpatch-fullstack-temp && cd windows-hotpatch-fullstack-temp && ${dx} serve --verbose --force-sequential --hot-patch --exit-on-error` });
 }
 
-// Determine which servers to start based on spec files in argv
+// Determine which servers to start based on spec files in argv and platform.
+// On Windows only windows.spec.js runs (grep filter below), so don't bother
+// starting servers for tests that will never execute — they just crash and
+// pollute the logs.
 const specArgs = process.argv.filter((a) => a.endsWith(".spec.js")).map((a) => path.basename(a));
+const isWindows = process.platform === "win32";
 const activeServers = specArgs.length > 0
   ? ALL_SERVERS.filter((s) => s.specs.some((spec) => specArgs.includes(spec)))
-  : ALL_SERVERS;
+  : isWindows
+    ? ALL_SERVERS.filter((s) => s.specs.some((spec) => spec.includes("windows")))
+    : ALL_SERVERS.filter((s) => !s.specs.some((spec) => spec.includes("windows")));
 
 module.exports = defineConfig({
   testDir: ".",

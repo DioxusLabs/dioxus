@@ -259,6 +259,10 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+      - name: Setup Dev Drive
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      - name: Copy Repo to Dev Drive
+        run: Copy-Item -Path "${{ github.workspace }}" -Destination "$env:DIOXUS_WORKSPACE" -Recurse
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -270,10 +274,12 @@ jobs:
           cache-all-crates: "true"
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
+          workspaces: ${{ env.DIOXUS_WORKSPACE }}
       - name: Bundle hotdog as Windows packages
-        working-directory: .\examples\01-app-demos\hotdog
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/examples/01-app-demos/hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
       - name: Verify Windows bundle outputs
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}
         shell: pwsh
         run: |
           $msi = Get-ChildItem -Path .\target\dx -Recurse -File -Include "*.msi"
@@ -287,8 +293,8 @@ jobs:
         with:
           name: hotdog-windows-bundles-smoke
           path: |
-            target/**/*.msi
-            target/**/*-setup.exe
+            ${{ env.DIOXUS_WORKSPACE }}/target/**/*.msi
+            ${{ env.DIOXUS_WORKSPACE }}/target/**/*-setup.exe
           if-no-files-found: ignore
 
   windows:
@@ -299,6 +305,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+      - name: Setup Dev Drive
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+      - name: Copy Repo to Dev Drive
+        run: Copy-Item -Path "${{ github.workspace }}" -Destination "$env:DIOXUS_WORKSPACE" -Recurse
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -313,9 +323,10 @@ jobs:
           cache-all-crates: "true"
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
+          workspaces: ${{ env.DIOXUS_WORKSPACE }}
           # save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Playwright
-        working-directory: ./packages/playwright-tests
+        working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
         env:
           CARGO_INCREMENTAL: 1
         run: |
@@ -327,7 +338,7 @@ jobs:
         if: always()
         with:
           name: playwright-report-windows
-          path: ./packages/playwright-tests/playwright-report/
+          path: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests/playwright-report/
           retention-days: 30
 
 
