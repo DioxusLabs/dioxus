@@ -32,7 +32,7 @@ jobs:
   # ---------------------------------------------------------------------------
   typos:
     if: github.event.pull_request.draft == false
-    name: Check for typos
+    name: "Lint | Typos"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -41,7 +41,7 @@ jobs:
 
   link-check:
     if: github.event.pull_request.draft == false
-    name: Check For Invalid Links
+    name: "Lint | Links"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -86,7 +86,7 @@ jobs:
   lint:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Lint | msrv, fmt, clippy, schema
+    name: "Lint | Clippy, fmt, schema, msrv"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -127,7 +127,7 @@ jobs:
   docs:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Docs | Build
+    name: "Docs | Build"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -154,7 +154,7 @@ jobs:
   test-docs:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Docs | Test
+    name: "Docs | Test"
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
       - uses: actions/checkout@v5
@@ -179,7 +179,7 @@ jobs:
   bundle-linux-smoke:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Bundle Smoke | Linux
+    name: "Bundle | Linux"
     runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 45
     steps:
@@ -221,7 +221,7 @@ jobs:
   bundle-macos-smoke:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Bundle Smoke | macOS
+    name: "Bundle | macOS"
     runs-on: warp-macos-latest-arm64-6x
     timeout-minutes: 45
     steps:
@@ -254,7 +254,7 @@ jobs:
   windows:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Windows | Playwright"
+    name: "Playwright | Windows"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 60
     steps:
@@ -293,7 +293,7 @@ jobs:
   windows-bundle-smoke:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Windows | Bundle Smoke"
+    name: "Bundle | Windows"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 45
     steps:
@@ -536,7 +536,7 @@ jobs:
   test:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Cargo Test | Linux
+    name: "Test | Linux"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v5
@@ -561,7 +561,7 @@ jobs:
   release-test:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: Cargo Test | Linux (Release)
+    name: "Test | Linux (Release)"
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
       - uses: actions/checkout@v5
