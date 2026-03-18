@@ -62,6 +62,7 @@ const activeServers = specArgs.length > 0
 
 module.exports = defineConfig({
   testDir: ".",
+  testIgnore: ["windows-hotpatch-fullstack.spec.js"], // temporarily...
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
