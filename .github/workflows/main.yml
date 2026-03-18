@@ -28,6 +28,29 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Path gate — determines whether Rust jobs should run
+  # ---------------------------------------------------------------------------
+  check-paths:
+    runs-on: warp-ubuntu-latest-x64-4x
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'packages/**'
+              - 'examples/**'
+              - 'docs/guide/**'
+              - 'src/**'
+              - '.github/**'
+              - 'lib.rs'
+              - 'Cargo.toml'
+              - 'Makefile.toml'
+
+  # ---------------------------------------------------------------------------
   # Language linting — runs on every push
   # ---------------------------------------------------------------------------
   typos:
@@ -56,29 +79,6 @@ jobs:
         with:
           args: --config ./lychee.toml './**/*.md'
           fail: true
-
-  # ---------------------------------------------------------------------------
-  # Path gate — determines whether Rust jobs should run
-  # ---------------------------------------------------------------------------
-  check-paths:
-    runs-on: warp-ubuntu-latest-x64-4x
-    outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            rust:
-              - 'packages/**'
-              - 'examples/**'
-              - 'docs/guide/**'
-              - 'src/**'
-              - '.github/**'
-              - 'lib.rs'
-              - 'Cargo.toml'
-              - 'Makefile.toml'
 
   # ---------------------------------------------------------------------------
   # Rust jobs — only run when relevant paths change
