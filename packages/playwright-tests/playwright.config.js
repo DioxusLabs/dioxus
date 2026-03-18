@@ -17,17 +17,6 @@ function copyToTemp(src, dest) {
 const repoRoot = path.resolve(__dirname, "..", "..");
 const dx = path.join(repoRoot, "target", "release", process.platform === "win32" ? "dx.exe" : "dx");
 
-// Build dx once: main process builds and sets env var; workers inherit it and skip.
-// todo: implement proper fixtures https://www.youtube.com/watch?v=3i6cJUFO_m4
-if (!process.env._DX_BUILT) {
-  execSync("cargo build --package dioxus-cli --release", {
-    cwd: repoRoot,
-    env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: "never" },
-    stdio: "inherit",
-  });
-  process.env._DX_BUILT = "1";
-}
-
 const ALL_SERVERS = [
   {
     specs: ["liveview.spec.js"], port: 3030,
@@ -73,10 +62,21 @@ const activeServers = specArgs.length > 0
 
 // Run any setup functions (e.g. copying source to temp dirs for hot-patch tests)
 // Only happens on initialize
+//
+// Build dx once: main process builds and sets env var; workers inherit it and skip.
+// todo: implement proper fixtures https://www.youtube.com/watch?v=3i6cJUFO_m4
 if (!process.env._DX_BUILT) {
   for (const s of activeServers) {
     if (s.setup) s.setup();
   }
+
+  execSync("cargo build --package dioxus-cli --release", {
+    cwd: repoRoot,
+    env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: "never" },
+    stdio: "inherit",
+  });
+
+  process.env._DX_BUILT = "1";
 }
 
 module.exports = defineConfig({
