@@ -706,8 +706,45 @@ fn format_rsx_nodes(nodes: Vec<BodyNode>) -> String {
 
     let body = CallBody::new(TemplateBody::new(nodes));
     write_block_out(&body)
-        .map(|formatted| formatted.trim().to_string())
+        .map(normalize_formatted_rsx)
         .expect("hydration validation should always emit valid RSX")
+}
+
+fn normalize_formatted_rsx(formatted: String) -> String {
+    if formatted.trim().is_empty() {
+        return String::new();
+    }
+
+    let shared_indent = formatted
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(leading_whitespace)
+        .reduce(shared_whitespace_prefix)
+        .unwrap_or_default();
+
+    let dedented = if shared_indent.is_empty() {
+        formatted
+    } else {
+        formatted
+            .lines()
+            .map(|line| line.strip_prefix(&shared_indent).unwrap_or(line))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+
+    dedented.trim().to_string()
+}
+
+fn leading_whitespace(line: &str) -> String {
+    line.chars().take_while(|ch| ch.is_whitespace()).collect()
+}
+
+fn shared_whitespace_prefix(left: String, right: String) -> String {
+    left.chars()
+        .zip(right.chars())
+        .take_while(|(left, right)| left == right)
+        .map(|(ch, _)| ch)
+        .collect()
 }
 
 fn rsx_element_node(
@@ -799,7 +836,7 @@ pub(crate) fn normalize_rsx_block(raw: &str) -> String {
     CallBody::parse_strict
         .parse_str(trimmed)
         .ok()
-        .and_then(|body| write_block_out(&body).map(|formatted| formatted.trim().to_string()))
+        .and_then(|body| write_block_out(&body).map(normalize_formatted_rsx))
         .unwrap_or_else(|| trimmed.to_string())
 }
 
@@ -1234,8 +1271,18 @@ mod tests {
             )],
         )]);
 
-        assert!(rendered.contains("\n        p {"));
-        assert!(rendered.contains("\n    }"));
+        assert!(rendered.contains("\n    p {"));
+        assert!(rendered.ends_with("\n}"));
+    }
+
+    #[test]
+    fn test_format_rsx_nodes_dedents_top_level_siblings() {
+        let rendered = format_rsx_nodes(vec![
+            rsx_element_node("div", Vec::new(), Vec::new()),
+            rsx_element_node("span", Vec::new(), Vec::new()),
+        ]);
+
+        assert_eq!(rendered, "div {}\nspan {}");
     }
 
     #[test]
