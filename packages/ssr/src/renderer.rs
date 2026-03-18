@@ -434,35 +434,7 @@ fn empty_render_works() {
     assert_eq!(out, "");
 }
 
-pub(crate) const BOOL_ATTRS: &[&str] = &[
-    "allowfullscreen",
-    "allowpaymentrequest",
-    "async",
-    "autofocus",
-    "autoplay",
-    "checked",
-    "controls",
-    "default",
-    "defer",
-    "disabled",
-    "formnovalidate",
-    "hidden",
-    "ismap",
-    "itemscope",
-    "loop",
-    "multiple",
-    "muted",
-    "nomodule",
-    "novalidate",
-    "open",
-    "playsinline",
-    "readonly",
-    "required",
-    "reversed",
-    "selected",
-    "truespeed",
-    "webkitdirectory",
-];
+pub(crate) use dioxus_html::BOOL_ATTRS;
 
 pub(crate) fn str_truthy(value: &str) -> bool {
     !value.is_empty() && value != "0" && value.to_lowercase() != "false"

@@ -143,6 +143,15 @@ if (process.platform === "win32") {
       stdout: "pipe",
     },
     {
+      cwd: path.join(process.cwd(), "fullstack-hydration-recovery"),
+      command:
+        'cargo run --package dioxus-cli -- run --force-sequential --web --addr "127.0.0.1" --port 7978',
+      port: 7978,
+      timeout: 50 * 60 * 1000,
+      reuseExistingServer: !process.env.CI,
+      stdout: "pipe",
+    },
+    {
       cwd: path.join(process.cwd(), "cli-optimization"),
       command:
         'cargo run --package dioxus-cli --release -- run --addr "127.0.0.1" --port 8989',

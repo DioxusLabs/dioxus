@@ -10,6 +10,10 @@ use std::{
 };
 use syn::{spanned::Spanned, token::Brace, Expr};
 
+fn source_prefix_before_column(line: &str, column: usize) -> &str {
+    line.get(..column.saturating_sub(1)).unwrap_or("")
+}
+
 #[derive(Debug)]
 pub struct Writer<'a> {
     pub raw_src: &'a str,
@@ -599,10 +603,14 @@ impl<'a> Writer<'a> {
 
         if brace_line != attr_line {
             // Get the raw line of the attribute
-            let line = self.src.get(attr_line - 1).unwrap_or(&"");
+            let line = attr_line
+                .checked_sub(1)
+                .and_then(|index| self.src.get(index))
+                .copied()
+                .unwrap_or("");
 
             // Only write comments if the line is empty before the attribute start
-            let row_start = line.get(..attr_span.start().column - 1).unwrap_or("");
+            let row_start = source_prefix_before_column(line, attr_span.start().column);
             if !row_start.trim().is_empty() {
                 return Ok(());
             }
@@ -1168,15 +1176,13 @@ impl<'a> Writer<'a> {
     }
 
     fn leading_row_is_empty(&self, location: LineColumn) -> bool {
-        let Some(line) = self.src.get(location.line - 1) else {
+        let Some(line) = location.line.checked_sub(1).and_then(|index| self.src.get(index)) else {
             return false;
         };
 
-        let Some(sub) = line.get(..location.column - 1) else {
-            return false;
-        };
-
-        sub.trim().is_empty()
+        source_prefix_before_column(line, location.column)
+            .trim()
+            .is_empty()
     }
 
     #[allow(clippy::map_entry)]
@@ -1279,5 +1285,42 @@ impl<'a> Writer<'a> {
         }
 
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quote::quote_spanned;
+    use syn::parse::Parser;
+
+    #[test]
+    fn source_prefix_before_column_handles_zero_column() {
+        assert_eq!(source_prefix_before_column("class: \"value\"", 0), "");
+    }
+
+    #[test]
+    fn source_prefix_before_column_matches_existing_prefix_behavior() {
+        assert_eq!(source_prefix_before_column("class: \"value\"", 3), "cl");
+    }
+
+    #[test]
+    fn leading_row_is_empty_handles_zero_column() {
+        let writer = Writer::new("class: \"value\"", IndentOptions::default());
+        assert!(writer.leading_row_is_empty(LineColumn { line: 1, column: 0 }));
+    }
+
+    #[test]
+    fn write_rsx_call_handles_generated_call_site_spans() {
+        let body = CallBody::parse_strict
+            .parse2(quote_spanned!(Span::call_site()=> div {
+                class: "value",
+                p { "child" }
+            }))
+            .unwrap();
+
+        let mut writer = Writer::new("", IndentOptions::default());
+        writer.write_rsx_call(&body).unwrap();
+        assert!(writer.consume().is_some());
     }
 }

@@ -52,7 +52,7 @@ pub struct WebsysDom {
     /// Hydration validator for debug mode - validates DOM matches vdom expectations
     #[cfg(feature = "hydrate")]
     #[cfg(debug_assertions)]
-    pub(crate) hydration_validator: Option<crate::hydration::HydrationValidator>,
+    pub(crate) hydration_validator: Option<crate::hydration::validation::HydrationValidator>,
 }
 
 impl WebsysDom {

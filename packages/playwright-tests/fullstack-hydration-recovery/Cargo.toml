@@ -1,0 +1,13 @@
+[package]
+name = "dioxus-playwright-fullstack-hydration-recovery-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+
+[features]
+default = []
+server = ["dioxus/server"]
+web = ["dioxus/web"]
