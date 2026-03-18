@@ -108,8 +108,141 @@ impl DomTraverser {
 /// producing cascading noise. Capping the count keeps output actionable.
 const MAX_MISMATCHES: usize = 5;
 
+pub(crate) struct HydrationValidationSession {
+    validator: HydrationValidator,
+}
+
+impl HydrationValidationSession {
+    pub fn root() -> Self {
+        Self {
+            validator: HydrationValidator::new(),
+        }
+    }
+
+    pub fn streaming(suspense_path: Vec<u32>) -> Self {
+        Self {
+            validator: HydrationValidator::with_suspense_path(suspense_path),
+        }
+    }
+
+    pub fn run_scope<E, F>(&mut self, roots: Vec<web_sys::Node>, hydrate: F) -> Result<bool, E>
+    where
+        F: FnOnce(&mut Self) -> Result<(), E>,
+    {
+        self.validator.init_traversal(roots);
+        hydrate(self)?;
+
+        let has_mismatches = self.validator.has_mismatches();
+        if has_mismatches {
+            self.validator.report_mismatches();
+            self.validator.take_mismatches();
+        }
+
+        Ok(has_mismatches)
+    }
+
+    pub fn element<E, F>(
+        &mut self,
+        dom: &VirtualDom,
+        vnode: &VNode,
+        node: &TemplateNode,
+        hydrate: F,
+    ) -> Result<(), E>
+    where
+        F: FnOnce(&mut Self) -> Result<(), E>,
+    {
+        let TemplateNode::Element {
+            tag,
+            namespace,
+            children,
+            attrs,
+            ..
+        } = node
+        else {
+            unreachable!("element validation requires an element template node");
+        };
+
+        let current_node = self.validator.current_dom_node().cloned();
+        let expected_rsx = serialize_template_subtree(dom, vnode, node);
+        let dynamic_attrs = attrs
+            .iter()
+            .filter_map(|attr| {
+                let TemplateAttribute::Dynamic { id } = attr else {
+                    return None;
+                };
+                Some(&*vnode.dynamic_attrs[*id])
+            })
+            .collect::<Vec<_>>();
+
+        self.validator.validate_element(
+            current_node.as_ref(),
+            tag,
+            *namespace,
+            attrs,
+            &dynamic_attrs,
+            &expected_rsx,
+        );
+        self.validator
+            .push_element_context(expected_rsx, current_node);
+
+        let has_children = !children.is_empty();
+        if has_children {
+            self.validator.push_children();
+        }
+
+        let result = hydrate(self);
+
+        if has_children {
+            self.validator.pop_children();
+        }
+        self.validator.pop_element_context();
+        self.validator.advance();
+
+        result
+    }
+
+    pub fn text<E, F>(&mut self, expected_content: &str, hydrate: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut Self) -> Result<(), E>,
+    {
+        let current_node = self.validator.current_dom_node().cloned();
+        self.validator.validate_text(
+            current_node.as_ref(),
+            expected_content,
+            &rsx_string_literal(expected_content),
+        );
+
+        let result = hydrate(self);
+        self.validator.advance();
+        result
+    }
+
+    pub fn placeholder<E, F>(&mut self, hydrate: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut Self) -> Result<(), E>,
+    {
+        let current_node = self.validator.current_dom_node().cloned();
+        self.validator
+            .validate_placeholder(current_node.as_ref(), &placeholder_rsx());
+
+        let result = hydrate(self);
+        self.validator.advance();
+        result
+    }
+
+    pub fn component<E, F>(&mut self, name: &'static str, hydrate: F) -> Result<(), E>
+    where
+        F: FnOnce(&mut Self) -> Result<(), E>,
+    {
+        self.validator.push_component(name);
+        let result = hydrate(self);
+        self.validator.pop_component();
+        result
+    }
+}
+
 /// Validator that tracks component path and collects hydration mismatches
-pub(crate) struct HydrationValidator {
+struct HydrationValidator {
     /// Stack of component names for path tracking
     component_stack: Vec<&'static str>,
     /// Current suspense path (if any)
@@ -1180,6 +1313,38 @@ mod tests {
         let mismatches = validator.take_mismatches();
         assert_eq!(mismatches.len(), 1);
         assert!(!validator.has_mismatches());
+    }
+
+    #[test]
+    fn test_validation_session_run_scope_drains_mismatches() {
+        let mut session = HydrationValidationSession::root();
+
+        let has_mismatches = session
+            .run_scope(Vec::new(), |session| {
+                session.text("Hello", |_| Ok::<(), ()>(()))
+            })
+            .unwrap();
+
+        assert!(has_mismatches);
+        assert!(!session.validator.has_mismatches());
+    }
+
+    #[test]
+    fn test_validation_session_component_scope_restores_path() {
+        let mut session = HydrationValidationSession::streaming(vec![1, 2, 3]);
+
+        session
+            .component("App", |session| {
+                assert_eq!(session.validator.component_path(), "App");
+                session.placeholder(|_| Ok::<(), ()>(()))
+            })
+            .unwrap();
+
+        assert_eq!(session.validator.component_path(), "<root>");
+        assert_eq!(
+            session.validator.mismatches[0].suspense_path,
+            Some(vec![1, 2, 3])
+        );
     }
 
     #[test]

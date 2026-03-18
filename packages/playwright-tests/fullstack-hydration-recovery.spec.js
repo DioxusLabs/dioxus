@@ -30,6 +30,8 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
 
   const serverHtml = await serverResponse.text();
   expect(serverHtml).toContain('id="recovery-button"');
+  expect(serverHtml).toMatch(/<div\b[^>]*id="recovery-button"/);
+  expect(serverHtml).not.toMatch(/<button\b[^>]*id="recovery-button"/);
   expect(serverHtml).toContain("Server text content");
   expect(serverHtml).toContain("Server placeholder content");
   expect(serverHtml).not.toContain('role="status"');
@@ -61,13 +63,14 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
       fragments.every((fragment) => message.includes(fragment)),
     );
 
-  // One mismatch per category: NestedMismatch (tag), TextMismatch (text),
-  // AttributeMismatch (missing attrs), PlaceholderMismatch (placeholder vs element).
+  // One mismatch per targeted branch: recovery button (tag), NestedMismatch (tag),
+  // TextMismatch (text), AttributeMismatch (missing attrs),
+  // PlaceholderMismatch (placeholder vs element).
   await expect
     .poll(() => mismatchMessages().length, {
-      message: "expected one warning for each mismatch class",
+      message: "expected one warning for each mismatched branch",
     })
-    .toBe(4);
+    .toBe(5);
   await expect
     .poll(
       () =>
@@ -88,6 +91,13 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
     ),
   ).toBeTruthy();
 
+  expect(
+    hasMismatch(
+      "Reason: Expected <button>, found <div>.",
+      "-button {",
+      "+div {",
+    ),
+  ).toBeTruthy();
   expect(
     hasMismatch(
       "Reason: Expected <strong>, found <span>.",
@@ -119,6 +129,7 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
 
   const recoveryButton = page.locator("#recovery-button");
   await expect(recoveryButton).toHaveCount(1);
+  await expect(recoveryButton).toHaveJSProperty("tagName", "BUTTON");
   await expect(recoveryButton).toHaveText("Recovered 0");
 
   const nestedLeaf = page.locator("#nested-leaf");

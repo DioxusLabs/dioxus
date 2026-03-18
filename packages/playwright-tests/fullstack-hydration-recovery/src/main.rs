@@ -8,21 +8,37 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let mut count = use_signal(|| 0);
+    let count = use_signal(|| 0);
 
     rsx! {
         div {
             id: "app-root",
             h1 { "Hydration recovery regression" }
+            RecoveryButton { count }
+            NestedMismatch {}
+            TextMismatch {}
+            AttributeMismatch {}
+            PlaceholderMismatch {}
+        }
+    }
+}
+
+#[component]
+fn RecoveryButton(mut count: Signal<i32>) -> Element {
+    if cfg!(target_arch = "wasm32") {
+        rsx! {
             button {
                 id: "recovery-button",
                 onclick: move |_| count += 1,
                 "Recovered {count}"
             }
-            NestedMismatch {}
-            TextMismatch {}
-            AttributeMismatch {}
-            PlaceholderMismatch {}
+        }
+    } else {
+        rsx! {
+            div {
+                id: "recovery-button",
+                "Recovered 0"
+            }
         }
     }
 }

@@ -11,6 +11,23 @@ use crate::{map_global_attributes, map_svg_attributes};
 
 pub type AttributeDescription = (&'static str, Option<&'static str>, bool);
 
+/// Helper macro: for a Bool-typed HTML attribute, expands to `Some(name)`.
+/// For non-Bool types or non-HTML namespaces, expands to `None`.
+macro_rules! bool_attr_option {
+    (None $fil:ident Bool DEFAULT) => {
+        Some(stringify!($fil))
+    };
+    (None $fil:ident Bool $name:literal) => {
+        Some($name)
+    };
+    (None $fil:ident Bool volatile) => {
+        Some(stringify!($fil))
+    };
+    ($namespace:tt $fil:ident $vil:ident $extra:tt) => {
+        None
+    };
+}
+
 macro_rules! impl_attribute {
     (
         $element:ident {
@@ -569,6 +586,59 @@ macro_rules! builder_constructors {
                 }
             );
         )*
+
+        /// All per-element Bool-typed attribute options (Some for Bool-typed HTML attrs, None otherwise).
+        const ELEMENT_ATTR_BOOL_OPTIONS: &[Option<&str>] = &[
+            $( $( bool_attr_option!($namespace $fil $vil $extra), )* )*
+        ];
+
+        /// Boolean attributes that are not captured by the element-specific Bool type.
+        /// This includes global attributes (hidden, itemscope) and attributes from
+        /// non-HTML namespaces that should still be treated as boolean (truespeed).
+        const EXTRA_BOOL_ATTRS: &[&str] = &[
+            "hidden",
+            "itemscope",
+            "truespeed",
+        ];
+
+        /// HTML boolean attributes. These attributes are rendered without a value when
+        /// truthy (e.g. `<input disabled>` rather than `<input disabled="true">`).
+        pub const BOOL_ATTRS: &[&str] = {
+            const ELEMENT_COUNT: usize = {
+                let mut count = 0;
+                let mut i = 0;
+                while i < ELEMENT_ATTR_BOOL_OPTIONS.len() {
+                    if ELEMENT_ATTR_BOOL_OPTIONS[i].is_some() {
+                        count += 1;
+                    }
+                    i += 1;
+                }
+                count
+            };
+            const TOTAL: usize = ELEMENT_COUNT + EXTRA_BOOL_ATTRS.len();
+            const fn collect() -> [&'static str; TOTAL] {
+                let mut result = [""; TOTAL];
+                let mut i = 0;
+                let mut j = 0;
+                // Add element-specific Bool attrs
+                while i < ELEMENT_ATTR_BOOL_OPTIONS.len() {
+                    if let Some(name) = ELEMENT_ATTR_BOOL_OPTIONS[i] {
+                        result[j] = name;
+                        j += 1;
+                    }
+                    i += 1;
+                }
+                // Add extra Bool attrs (global attrs, non-HTML namespace attrs)
+                i = 0;
+                while i < EXTRA_BOOL_ATTRS.len() {
+                    result[j] = EXTRA_BOOL_ATTRS[i];
+                    j += 1;
+                    i += 1;
+                }
+                result
+            }
+            &{collect()}
+        };
 
         /// This module contains helpers for rust analyzer autocompletion
         #[doc(hidden)]

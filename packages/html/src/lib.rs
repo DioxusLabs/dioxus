@@ -59,35 +59,3 @@ pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
     pub use crate::elements::extensions::*;
 }
-
-/// HTML boolean attributes. These attributes are rendered without a value when
-/// truthy (e.g. `<input disabled>` rather than `<input disabled="true">`).
-pub const BOOL_ATTRS: &[&str] = &[
-    "allowfullscreen",
-    "allowpaymentrequest",
-    "async",
-    "autofocus",
-    "autoplay",
-    "checked",
-    "controls",
-    "default",
-    "defer",
-    "disabled",
-    "formnovalidate",
-    "hidden",
-    "ismap",
-    "itemscope",
-    "loop",
-    "multiple",
-    "muted",
-    "nomodule",
-    "novalidate",
-    "open",
-    "playsinline",
-    "readonly",
-    "required",
-    "reversed",
-    "selected",
-    "truespeed",
-    "webkitdirectory",
-];
