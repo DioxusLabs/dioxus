@@ -205,12 +205,9 @@ jobs:
             target/**/*.dmg
           if-no-files-found: ignore
 
-  # Single consolidated Windows job: playwright + bundle smoke test
-  # We skip cargo test on Windows since the important Windows-specific coverage
-  # comes from playwright and bundle testing, not unit tests.
   windows:
     if: github.event.pull_request.draft == false
-    name: "Windows | Playwright + Bundle"
+    name: "Windows | Playwright"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 60
     steps:
@@ -230,8 +227,6 @@ jobs:
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           # save-if: ${{ github.ref == 'refs/heads/main' }}
-
-      # --- Playwright ---
       - name: Playwright
         working-directory: ./packages/playwright-tests
         env:
@@ -247,28 +242,6 @@ jobs:
           name: playwright-report-windows
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 30
-
-      # --- Bundle smoke test ---
-      - name: Bundle hotdog as Windows packages
-        working-directory: .\examples\01-app-demos\hotdog
-        run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
-      - name: Verify Windows bundle outputs
-        shell: pwsh
-        run: |
-          $msi = Get-ChildItem -Path .\target\dx -Recurse -File -Include "*.msi"
-          $nsis = Get-ChildItem -Path .\target\dx -Recurse -File -Include "*-setup.exe"
-          $msi | ForEach-Object { $_.FullName }
-          $nsis | ForEach-Object { $_.FullName }
-          if (-not $msi) { throw "Expected MSI artifact was not produced." }
-          if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
-      - uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: hotdog-windows-bundles
-          path: |
-            target/**/*.msi
-            target/**/*-setup.exe
-          if-no-files-found: ignore
 
   windows-bundle-smoke:
     if: github.event.pull_request.draft == false
