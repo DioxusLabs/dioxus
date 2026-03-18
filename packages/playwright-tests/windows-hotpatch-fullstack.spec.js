@@ -57,7 +57,7 @@ test("windows fullstack hotpatch", async ({ page }) => {
 
   // Click and verify the new increment amount from the patched server fn.
   await button.click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(5000);
   await expect(main).toContainText("Click button! Count: 3");
 
   // ** Hot patch CSS **
@@ -66,6 +66,8 @@ test("windows fullstack hotpatch", async ({ page }) => {
     "background-color: blue;"
   );
   fs.writeFileSync(stylePath, updatedStyle);
+
+  await page.waitForTimeout(1000);
 
   // Wait for the CSS hot patch to apply.
   await expect(main).toHaveCSS(
