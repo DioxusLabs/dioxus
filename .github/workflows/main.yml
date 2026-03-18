@@ -1,34 +1,19 @@
 # Whenever an open PR is updated, the workflow will be triggered
 #
 # This can get expensive, so we do a lot of caching and checks to prevent unnecessary runs
+# Language linting (typos, link-check) runs on every push; Rust jobs are gated behind path checks
 
-name: Rust CI
+name: CI
 
 on:
   push:
     branches:
       - main
-    paths:
-      - packages/**
-      - examples/**
-      - docs/guide/**
-      - src/**
-      - .github/**
-      - lib.rs
-      - Cargo.toml
-      - Makefile.toml
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
     branches:
       - main
-    paths:
-      - packages/**
-      - examples/**
-      - src/**
-      - .github/**
-      - lib.rs
-      - Cargo.toml
 
 # workflow_dispatch:
 concurrency:
@@ -42,8 +27,65 @@ env:
   rust_nightly: nightly-2025-10-05
 
 jobs:
-  lint:
+  # ---------------------------------------------------------------------------
+  # Language linting — runs on every push
+  # ---------------------------------------------------------------------------
+  typos:
     if: github.event.pull_request.draft == false
+    name: Check for typos
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check for typos
+        uses: crate-ci/typos@master
+
+  link-check:
+    if: github.event.pull_request.draft == false
+    name: Check For Invalid Links
+    runs-on: warp-ubuntu-latest-x64-4x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Restore lychee cache
+        uses: actions/cache@v5
+        with:
+          path: .lycheecache
+          key: cache-lychee-${{ github.sha }}
+          restore-keys: cache-lychee-
+      - name: Run lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --config ./lychee.toml './**/*.md'
+          fail: true
+
+  # ---------------------------------------------------------------------------
+  # Path gate — determines whether Rust jobs should run
+  # ---------------------------------------------------------------------------
+  check-paths:
+    runs-on: warp-ubuntu-latest-x64-4x
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'packages/**'
+              - 'examples/**'
+              - 'docs/guide/**'
+              - 'src/**'
+              - '.github/**'
+              - 'lib.rs'
+              - 'Cargo.toml'
+              - 'Makefile.toml'
+
+  # ---------------------------------------------------------------------------
+  # Rust jobs — only run when relevant paths change
+  # ---------------------------------------------------------------------------
+  lint:
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Lint | msrv, fmt, clippy, schema
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -83,7 +125,8 @@ jobs:
         run: cargo msrv --output-format json -- cargo check
 
   docs:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Docs | Build
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -109,7 +152,8 @@ jobs:
           RUSTDOCFLAGS: -Dwarnings --document-private-items
 
   test-docs:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Docs | Test
     runs-on: warp-ubuntu-latest-x64-4x
     steps:
@@ -133,7 +177,8 @@ jobs:
           cargo test --doc --workspace --all-features
 
   bundle-linux-smoke:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Bundle Smoke | Linux
     runs-on: warp-ubuntu-latest-x64-4x
     timeout-minutes: 45
@@ -174,7 +219,8 @@ jobs:
           if-no-files-found: ignore
 
   bundle-macos-smoke:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Bundle Smoke | macOS
     runs-on: warp-macos-latest-arm64-6x
     timeout-minutes: 45
@@ -206,7 +252,8 @@ jobs:
           if-no-files-found: ignore
 
   windows:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: "Windows | Playwright"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 60
@@ -244,7 +291,8 @@ jobs:
           retention-days: 30
 
   windows-bundle-smoke:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: "Windows | Bundle Smoke"
     runs-on: warp-windows-2025-x64-8x
     timeout-minutes: 45
@@ -283,7 +331,8 @@ jobs:
           if-no-files-found: ignore
 
   nix:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: "Nix | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     strategy:
@@ -315,7 +364,8 @@ jobs:
           '
 
   playwright:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: "Playwright | ${{ matrix.name }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
@@ -371,8 +421,9 @@ jobs:
           retention-days: 30
 
   matrix_test:
+    needs: check-paths
     runs-on: ${{ matrix.platform.os }}
-    if: github.event.pull_request.draft == false
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: "Cross | ${{ matrix.platform.target }}"
     env:
       RUST_CARGO_COMMAND: ${{ matrix.platform.cross == true && 'cross' || 'cargo' }}
@@ -483,7 +534,8 @@ jobs:
 
 
   test:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Cargo Test | Linux
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
@@ -507,7 +559,8 @@ jobs:
       - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
 
   release-test:
-    if: github.event.pull_request.draft == false
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
     name: Cargo Test | Linux (Release)
     runs-on: warp-ubuntu-latest-x64-8x
     steps:
