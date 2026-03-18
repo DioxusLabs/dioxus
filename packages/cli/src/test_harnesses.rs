@@ -100,16 +100,27 @@ async fn test_harnesses() {
                 assert_eq!(t.client.bundle, BundleFormat::host());
             })
             .asrt(r#"dx build --ios"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    // iOS builds require Xcode toolchain, only available on macOS
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
                 assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
             })
             .asrt(r#"dx build --ios --device"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    return;
+                }
                 let targets = targets.unwrap();
                 assert_eq!(targets.client.bundle, BundleFormat::Ios);
                 assert_eq!(targets.client.triple, "aarch64-apple-ios".parse().unwrap());
             })
             .asrt(r#"dx build --android --device"#, |targets| async move {
+                if crate::get_android_tools().is_none() {
+                    // Skip when Android NDK/SDK is not installed
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Android);
                 assert_eq!(t.client.triple, "aarch64-linux-android".parse().unwrap());
@@ -131,6 +142,10 @@ async fn test_harnesses() {
                 assert_eq!(server.triple, Triple::host());
             })
             .asrt(r#"dx build --ios"#, |targets| async move {
+                if cfg!(not(target_os = "macos")) {
+                    // iOS builds require Xcode toolchain, only available on macOS
+                    return;
+                }
                 let t = targets.unwrap();
                 assert_eq!(t.client.bundle, BundleFormat::Ios);
                 assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
@@ -231,6 +246,10 @@ async fn test_harnesses() {
             .asrt(
                 r#"dx build --ios"#,
                 |targets| async move {
+                    if cfg!(not(target_os = "macos")) {
+                        // iOS builds require Xcode toolchain, only available on macOS
+                        return;
+                    }
                     let t = targets.unwrap();
                     assert!(t.server.is_none());
                     assert_eq!(t.client.bundle, BundleFormat::Ios);
