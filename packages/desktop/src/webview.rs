@@ -268,15 +268,12 @@ impl WebviewInstance {
             // On Windows, WebView2 defaults to storing its data next to the executable.
             // This fails on certain drives (e.g. ReFS dev drives, Program Files) where the
             // directory may not be writable. Fall back to %LOCALAPPDATA%/<exe_name> automatically.
-            #[cfg(windows)]
-            {
+            if cfg!(windows) {
                 let exe = std::env::current_exe().ok()?;
                 let name = exe.file_stem()?.to_str()?;
                 let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
-                Some(PathBuf::from(local_app_data).join(name))
-            }
-            #[cfg(not(windows))]
-            {
+                Some(std::path::PathBuf::from(local_app_data).join(name))
+            } else {
                 None
             }
         }));
