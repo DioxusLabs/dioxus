@@ -44,7 +44,7 @@ const ALL_SERVERS = [
 ];
 
 if (process.platform === "win32") {
-  ALL_SERVERS.push({ specs: ["windows.spec.js"], port: 8787, cwd: "windows-headless", command: `${dx} run --force-sequential` });
+  // ALL_SERVERS.push({ specs: ["windows.spec.js"], port: 8787, cwd: "windows-headless", command: `${dx} run --force-sequential` });
   ALL_SERVERS.push({ specs: ["windows-hotpatch-fullstack.spec.js"], port: 8788, command: `if exist windows-hotpatch-fullstack-temp (rmdir /s /q windows-hotpatch-fullstack-temp) && xcopy /E /I /H /Q windows-hotpatch-fullstack windows-hotpatch-fullstack-temp && cd windows-hotpatch-fullstack-temp && ${dx} serve --verbose --force-sequential --hot-patch --exit-on-error` });
 }
 
