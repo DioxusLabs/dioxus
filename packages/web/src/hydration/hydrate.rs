@@ -188,7 +188,6 @@ impl WebsysDom {
         // First convert the dom id into a scope id based on the discovery order of the suspense boundaries.
         // This may fail if the id is not parsable, or if the suspense boundary was removed after partial hydration on the client.
         let id = self
-            .hydration_state()
             .suspense_hydration_ids
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
@@ -220,11 +219,11 @@ impl WebsysDom {
                 self,
                 |to| {
                     // Switch to only writing templates
-                    to.set_skip_mutations(true);
+                    to.skip_mutations = true;
                 },
                 children.len(),
             );
-            self.set_skip_mutations(false);
+            self.skip_mutations = false;
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -240,8 +239,7 @@ impl WebsysDom {
         let root_scope_id = root_scope.id();
 
         // As we hydrate the suspense boundary, set the current path to the path of the suspense boundary
-        self.hydration_state_mut()
-            .suspense_hydration_ids
+        self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
         self.start_hydration_at_scope(root_scope_id, dom, children, &mut validation)?;
@@ -261,12 +259,7 @@ impl WebsysDom {
         let suspense_path = if scope_id == dom.base_scope().id() {
             None
         } else {
-            Some(
-                self.hydration_state()
-                    .suspense_hydration_ids
-                    .current_path
-                    .clone(),
-            )
+            Some(self.suspense_hydration_ids.current_path.clone())
         };
         let has_mismatches = validation.run_scope(
             validation_roots(scope_id, dom, &under),
@@ -280,7 +273,7 @@ impl WebsysDom {
         )?;
 
         if has_mismatches {
-            self.set_skip_mutations(false);
+            self.skip_mutations = false;
 
             tracing::warn!(
                 "Hydration mismatches detected in scope {scope_id:?}. Rebuilding subtree."
@@ -402,9 +395,7 @@ impl WebsysDom {
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
         {
             if suspense.has_suspended_tasks() {
-                self.hydration_state_mut()
-                    .suspense_hydration_ids
-                    .add_suspense_boundary(scope.id());
+                self.suspense_hydration_ids.add_suspense_boundary(scope.id());
             }
         }
 
