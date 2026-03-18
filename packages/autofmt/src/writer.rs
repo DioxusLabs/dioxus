@@ -153,11 +153,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
-        write!(
-            self.out,
-            "for {} in ",
-            self.unparse_pat(&forloop.pat),
-        )?;
+        write!(self.out, "for {} in ", self.unparse_pat(&forloop.pat),)?;
 
         self.write_inline_expr(&forloop.expr)?;
 
