@@ -577,8 +577,10 @@ jobs:
       - uses: nixbuild/nix-quick-install-action@master
       - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
         with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}-${{ hashFiles('Cargo.lock') }}
+          restore-prefixes-first-match: |
+            nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}-
+            nix-${{ runner.os }}-${{ runner.arch }}-
           backend: warpbuild
       - name: Build dioxus-cli from the flake
         run: nix build .#dioxus-cli
