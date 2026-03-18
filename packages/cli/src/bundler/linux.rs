@@ -978,12 +978,12 @@ fn create_appdir_icon_links(appdir: &Path, icon_path: &Path, name: &str) -> Resu
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("png");
-    let relative = icon_path.strip_prefix(appdir).unwrap_or(icon_path);
     let named_icon = appdir.join(format!("{name}.{ext}"));
     let dir_icon = appdir.join(".DirIcon");
 
     #[cfg(unix)]
     {
+        let relative = icon_path.strip_prefix(appdir).unwrap_or(icon_path);
         let relative_str = relative.to_string_lossy().to_string();
         std::os::unix::fs::symlink(&relative_str, &named_icon).with_context(|| {
             format!(
