@@ -72,8 +72,11 @@ const activeServers = specArgs.length > 0
     : ALL_SERVERS.filter((s) => !s.specs.some((spec) => spec.includes("windows")));
 
 // Run any setup functions (e.g. copying source to temp dirs for hot-patch tests)
-for (const s of activeServers) {
-  if (s.setup) s.setup();
+// Only happens on initialize
+if (!process.env._DX_BUILT) {
+  for (const s of activeServers) {
+    if (s.setup) s.setup();
+  }
 }
 
 module.exports = defineConfig({
