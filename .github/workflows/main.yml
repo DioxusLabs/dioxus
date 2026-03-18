@@ -321,10 +321,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: nixbuild/nix-quick-install-action@master
-      - uses: nix-community/cache-nix-action@main
+      - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
         with:
           primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          backend: warpbuild
       - name: Build dioxus-cli from the flake
         run: nix build .#dioxus-cli
       - name: Smoke test devShell
@@ -487,7 +488,7 @@ jobs:
           targets: ${{ matrix.platform.target }}
           components: rustfmt
 
-      - name: Install nasm for windows (tls)
+      - name: Install nasm for windows (tls)1
         if: ${{ matrix.platform.target == 'x86_64-pc-windows-msvc' }}
         uses: ilammy/setup-nasm@v1
 
