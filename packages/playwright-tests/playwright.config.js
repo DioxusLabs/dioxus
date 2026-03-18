@@ -80,7 +80,6 @@ module.exports = defineConfig({
     timeout: 50 * 60 * 1000,
     reuseExistingServer: !process.env.CI,
     stdout: "pipe",
-    // stdout: "ignore",
     stderr: "pipe",
     env: s.env,
   })),
