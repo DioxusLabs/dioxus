@@ -264,9 +264,8 @@ jobs:
       - name: Copy Repo to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}" -Destination "$env:DIOXUS_WORKSPACE" -Recurse
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
-          toolchain: beta
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
@@ -313,9 +312,8 @@ jobs:
         with:
           node-version: 24
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
-          toolchain: beta
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -351,7 +349,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-8x, name: Linux, toolchain: beta }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "1.88.0" }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
       - uses: actions/checkout@v5
