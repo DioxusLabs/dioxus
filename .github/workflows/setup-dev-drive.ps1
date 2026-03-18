@@ -4,14 +4,16 @@
 # on the build drive — AV scanning every .o, .rlib, .rmeta, and .exe during
 # a Rust build is extremely expensive.
 #
-# When a D: drive already exists (common on standard GitHub/Warp runners),
-# we use it directly. Otherwise we create a Dev Drive VHD on C:.
+# Three code paths:
+#   1. D: drive exists (some runners) — use it directly
+#   2. Hyper-V available — create a Dev Drive VHD (best perf, supports fsutil devdrv)
+#   3. No Hyper-V (Warp/EC2 runners) — use diskpart + ReFS format
 
 if (Test-Path "D:\") {
     Write-Output "Using existing drive at D:"
     $Drive = "D:"
-} else {
-    # 25 GB is enough for a full workspace build with dependencies
+} elseif (Get-Command New-VHD -ErrorAction SilentlyContinue) {
+    # Hyper-V is available — create a proper Dev Drive
     $Volume = New-VHD -Path C:/dev_drive.vhdx -SizeBytes 25GB |
                       Mount-VHD -Passthru |
                       Initialize-Disk -Passthru |
@@ -20,7 +22,7 @@ if (Test-Path "D:\") {
 
     $Drive = "$($Volume.DriveLetter):"
 
-    # Mark as trusted and disable antivirus filtering for dev drives
+    # Mark as trusted and disable antivirus filtering
     fsutil devdrv trust $Drive
     fsutil devdrv enable /disallowAv
 
@@ -31,6 +33,23 @@ if (Test-Path "D:\") {
     Write-Output $Volume
     fsutil devdrv query $Drive
     Write-Output "Created Dev Drive at $Drive"
+} else {
+    # No Hyper-V — fall back to diskpart + ReFS
+    Write-Output "No Hyper-V detected, creating ReFS drive via diskpart..."
+
+    $vhdPath = "C:\dev_drive.vhdx"
+    @"
+create vdisk file="$vhdPath" maximum=25600 type=expandable
+attach vdisk
+create partition primary
+active
+assign letter=V
+"@ | diskpart
+
+    format V: /fs:ReFS /q /y
+    $Drive = "V:"
+
+    Write-Output "Created ReFS drive at $Drive"
 }
 
 $Tmp = "$($Drive)\tmp"
