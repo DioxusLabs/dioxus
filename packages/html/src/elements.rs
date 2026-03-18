@@ -592,18 +592,10 @@ macro_rules! builder_constructors {
             $( $( bool_attr_option!($namespace $fil $vil $extra), )* )*
         ];
 
-        /// Boolean attributes that are not captured by the element-specific Bool type.
-        /// This includes global attributes (hidden, itemscope) and attributes from
-        /// non-HTML namespaces that should still be treated as boolean (truespeed).
-        const EXTRA_BOOL_ATTRS: &[&str] = &[
-            "hidden",
-            "itemscope",
-            "truespeed",
-        ];
-
         /// HTML boolean attributes. These attributes are rendered without a value when
         /// truthy (e.g. `<input disabled>` rather than `<input disabled="true">`).
         pub const BOOL_ATTRS: &[&str] = {
+            const GLOBAL: &[&str] = crate::attribute_groups::global_attributes::BOOL_ATTRS;
             const ELEMENT_COUNT: usize = {
                 let mut count = 0;
                 let mut i = 0;
@@ -615,7 +607,7 @@ macro_rules! builder_constructors {
                 }
                 count
             };
-            const TOTAL: usize = ELEMENT_COUNT + EXTRA_BOOL_ATTRS.len();
+            const TOTAL: usize = ELEMENT_COUNT + GLOBAL.len();
             const fn collect() -> [&'static str; TOTAL] {
                 let mut result = [""; TOTAL];
                 let mut i = 0;
@@ -628,10 +620,10 @@ macro_rules! builder_constructors {
                     }
                     i += 1;
                 }
-                // Add extra Bool attrs (global attrs, non-HTML namespace attrs)
+                // Add global Bool attrs
                 i = 0;
-                while i < EXTRA_BOOL_ATTRS.len() {
-                    result[j] = EXTRA_BOOL_ATTRS[i];
+                while i < GLOBAL.len() {
+                    result[j] = GLOBAL[i];
                     j += 1;
                     i += 1;
                 }

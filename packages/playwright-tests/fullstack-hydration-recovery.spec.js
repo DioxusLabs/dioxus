@@ -4,7 +4,7 @@ const { test, expect } = require("@playwright/test");
 const SERVER_URL = "http://localhost:7978";
 const HYDRATION_MISMATCH_MESSAGE = "[HYDRATION MISMATCH]";
 const HYDRATION_RECOVERY_MESSAGE =
-  "Hydration mismatches detected. Falling back to a full client rebuild.";
+  "Rebuilding subtree.";
 
 async function waitForBuild(request) {
   for (let i = 0; i < 30; i++) {
@@ -65,21 +65,24 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
 
   // One mismatch per targeted branch: recovery button (tag), NestedMismatch (tag),
   // TextMismatch (text), AttributeMismatch (missing attrs),
-  // PlaceholderMismatch (placeholder vs element).
+  // PlaceholderMismatch (placeholder vs element),
+  // StreamingMismatch (tag, inside a suspense boundary).
   await expect
     .poll(() => mismatchMessages().length, {
       message: "expected one warning for each mismatched branch",
     })
-    .toBe(5);
+    .toBe(6);
+  // Two recovery messages: one for the root hydration mismatches and one
+  // for the streaming suspense boundary mismatch.
   await expect
     .poll(
       () =>
         consoleMessages.filter((message) =>
           message.includes(HYDRATION_RECOVERY_MESSAGE),
         ).length,
-      { message: "expected the hydration fallback warning to be logged once" },
+      { message: "expected the hydration fallback warning to be logged twice" },
     )
-    .toBe(1);
+    .toBe(2);
 
   expect(
     mismatchMessages().every(
@@ -126,6 +129,14 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
       "+    p {",
     ),
   ).toBeTruthy();
+  expect(
+    hasMismatch(
+      "Reason: Expected <button>, found <div>.",
+      "-button {",
+      "+div {",
+      "StreamingMismatch",
+    ),
+  ).toBeTruthy();
 
   const recoveryButton = page.locator("#recovery-button");
   await expect(recoveryButton).toHaveCount(1);
@@ -157,6 +168,13 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
   await expect(recoveryButton).toHaveText("Recovered 1");
   await recoveryButton.click();
   await expect(recoveryButton).toHaveText("Recovered 2");
+
+  // Streaming mismatch recovery: the suspense boundary resolved from the
+  // server, the client detected a tag mismatch, and rebuilt the subtree.
+  const streamingMismatch = page.locator("#streaming-mismatch");
+  await expect(streamingMismatch).toHaveCount(1);
+  await expect(streamingMismatch).toHaveJSProperty("tagName", "BUTTON");
+  await expect(streamingMismatch).toContainText("Streaming client: streamed data");
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

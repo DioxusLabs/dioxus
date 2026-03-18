@@ -6226,6 +6226,7 @@ dependencies = [
 name = "dioxus-playwright-fullstack-hydration-recovery-test"
 version = "0.1.0"
 dependencies = [
+ "async-std",
  "dioxus",
 ]
 

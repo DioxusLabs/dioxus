@@ -119,23 +119,30 @@ impl HydrationValidationSession {
         }
     }
 
-    pub fn streaming(suspense_path: Vec<u32>) -> Self {
+    pub fn streaming() -> Self {
         Self {
-            validator: HydrationValidator::with_suspense_path(suspense_path),
+            validator: HydrationValidator::new(),
         }
     }
 
-    pub fn run_scope<E, F>(&mut self, roots: Vec<web_sys::Node>, hydrate: F) -> Result<bool, E>
+    pub fn run_scope<E, F, P>(
+        &mut self,
+        roots: Vec<web_sys::Node>,
+        suspense_path: P,
+        hydrate: F,
+    ) -> Result<bool, E>
     where
         F: FnOnce(&mut Self) -> Result<(), E>,
+        P: FnOnce() -> Option<Vec<u32>>,
     {
         self.validator.init_traversal(roots);
         hydrate(self)?;
 
         let has_mismatches = self.validator.has_mismatches();
         if has_mismatches {
-            self.validator.report_mismatches();
-            self.validator.take_mismatches();
+            let suspense_path = suspense_path();
+            self.validator.report_mismatches(suspense_path.as_deref());
+            self.validator.take_mismatches(suspense_path.as_deref());
         }
 
         Ok(has_mismatches)
@@ -245,8 +252,6 @@ impl HydrationValidationSession {
 struct HydrationValidator {
     /// Stack of component names for path tracking
     component_stack: Vec<&'static str>,
-    /// Current suspense path (if any)
-    suspense_path: Option<Vec<u32>>,
     /// Collected mismatches
     mismatches: Vec<HydrationMismatch>,
     /// Stack of DOM traversers - one per level of recursion
@@ -259,17 +264,6 @@ impl HydrationValidator {
     pub fn new() -> Self {
         Self {
             component_stack: Vec::new(),
-            suspense_path: None,
-            mismatches: Vec::new(),
-            traverser_stack: Vec::new(),
-            element_stack: Vec::new(),
-        }
-    }
-
-    pub fn with_suspense_path(suspense_path: Vec<u32>) -> Self {
-        Self {
-            component_stack: Vec::new(),
-            suspense_path: Some(suspense_path),
             mismatches: Vec::new(),
             traverser_stack: Vec::new(),
             element_stack: Vec::new(),
@@ -516,11 +510,9 @@ impl HydrationValidator {
     }
 
     /// Report all collected mismatches via tracing::warn!
-    pub fn report_mismatches(&self) {
+    pub fn report_mismatches(&self, suspense_path: Option<&[u32]>) {
         for mismatch in &self.mismatches {
-            let suspense_info = mismatch
-                .suspense_path
-                .as_ref()
+            let suspense_info = suspense_path
                 .map(|p| format!("\n  Suspense Path: {:?}", p))
                 .unwrap_or_default();
             let diff = indent_block(
@@ -544,8 +536,13 @@ impl HydrationValidator {
     }
 
     /// Take the collected mismatches
-    pub fn take_mismatches(&mut self) -> Vec<HydrationMismatch> {
-        std::mem::take(&mut self.mismatches)
+    pub fn take_mismatches(&mut self, suspense_path: Option<&[u32]>) -> Vec<HydrationMismatch> {
+        let mut mismatches = std::mem::take(&mut self.mismatches);
+        let suspense_path = suspense_path.map(<[u32]>::to_vec);
+        for mismatch in &mut mismatches {
+            mismatch.suspense_path = suspense_path.clone();
+        }
+        mismatches
     }
 
     // -- private helpers ----------------------------------------------------
@@ -611,7 +608,7 @@ impl HydrationValidator {
             expected_rsx: normalize_rsx_block(&expected_rsx),
             actual_rsx: normalize_rsx_block(&actual_rsx),
             component_path: self.component_path(),
-            suspense_path: self.suspense_path.clone(),
+            suspense_path: None,
         });
     }
 }
@@ -1216,14 +1213,6 @@ mod tests {
         let validator = HydrationValidator::new();
         assert!(!validator.has_mismatches());
         assert!(validator.component_stack.is_empty());
-        assert!(validator.suspense_path.is_none());
-    }
-
-    #[test]
-    fn test_validator_with_suspense_path() {
-        let validator = HydrationValidator::with_suspense_path(vec![0, 1, 2]);
-        assert!(!validator.has_mismatches());
-        assert_eq!(validator.suspense_path, Some(vec![0, 1, 2]));
     }
 
     #[test]
@@ -1310,7 +1299,7 @@ mod tests {
 
         assert!(validator.has_mismatches());
 
-        let mismatches = validator.take_mismatches();
+        let mismatches = validator.take_mismatches(None);
         assert_eq!(mismatches.len(), 1);
         assert!(!validator.has_mismatches());
     }
@@ -1320,9 +1309,11 @@ mod tests {
         let mut session = HydrationValidationSession::root();
 
         let has_mismatches = session
-            .run_scope(Vec::new(), |session| {
-                session.text("Hello", |_| Ok::<(), ()>(()))
-            })
+            .run_scope(
+                Vec::new(),
+                || None,
+                |session| session.text("Hello", |_| Ok::<(), ()>(())),
+            )
             .unwrap();
 
         assert!(has_mismatches);
@@ -1331,7 +1322,7 @@ mod tests {
 
     #[test]
     fn test_validation_session_component_scope_restores_path() {
-        let mut session = HydrationValidationSession::streaming(vec![1, 2, 3]);
+        let mut session = HydrationValidationSession::streaming();
 
         session
             .component("App", |session| {
@@ -1341,10 +1332,8 @@ mod tests {
             .unwrap();
 
         assert_eq!(session.validator.component_path(), "<root>");
-        assert_eq!(
-            session.validator.mismatches[0].suspense_path,
-            Some(vec![1, 2, 3])
-        );
+        let mismatches = session.validator.take_mismatches(Some(&[1, 2, 3]));
+        assert_eq!(mismatches[0].suspense_path, Some(vec![1, 2, 3]));
     }
 
     #[test]
@@ -1389,11 +1378,12 @@ mod tests {
 
     #[test]
     fn test_mismatch_includes_suspense_path() {
-        let mut validator = HydrationValidator::with_suspense_path(vec![1, 2, 3]);
+        let mut validator = HydrationValidator::new();
 
         validator.validate_element(None, "div", None, &[], &[], "div {}");
 
-        assert_eq!(validator.mismatches[0].suspense_path, Some(vec![1, 2, 3]));
+        let mismatches = validator.take_mismatches(Some(&[1, 2, 3]));
+        assert_eq!(mismatches[0].suspense_path, Some(vec![1, 2, 3]));
     }
 
     #[test]

@@ -8,7 +8,7 @@ use super::validation::HydrationValidationSession;
 use crate::dom::WebsysDom;
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
-    SuspenseContext, TemplateNode, VNode, VirtualDom,
+    SuspenseContext, TemplateNode, VNode, VirtualDom, WriteMutations,
 };
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
@@ -26,13 +26,14 @@ impl HydrationValidationSession {
         Self
     }
 
-    fn streaming(_: Vec<u32>) -> Self {
+    fn streaming() -> Self {
         Self
     }
 
-    fn run_scope<E, F>(&mut self, _: Vec<web_sys::Node>, hydrate: F) -> Result<bool, E>
+    fn run_scope<E, F, P>(&mut self, _: Vec<web_sys::Node>, _: P, hydrate: F) -> Result<bool, E>
     where
         F: FnOnce(&mut Self) -> Result<(), E>,
+        P: FnOnce() -> Option<Vec<u32>>,
     {
         hydrate(self)?;
         Ok(false)
@@ -175,7 +176,7 @@ impl WebsysDom {
             #[cfg(debug_assertions)]
             debug_locations,
         } = message;
-        let mut validation = HydrationValidationSession::streaming(suspense_path.clone());
+        let mut validation = HydrationValidationSession::streaming();
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
@@ -187,6 +188,7 @@ impl WebsysDom {
         // First convert the dom id into a scope id based on the discovery order of the suspense boundaries.
         // This may fail if the id is not parsable, or if the suspense boundary was removed after partial hydration on the client.
         let id = self
+            .hydration_state()
             .suspense_hydration_ids
             .get_suspense_boundary(&suspense_path)
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
@@ -218,11 +220,11 @@ impl WebsysDom {
                 self,
                 |to| {
                     // Switch to only writing templates
-                    to.skip_mutations = true;
+                    to.set_skip_mutations(true);
                 },
                 children.len(),
             );
-            self.skip_mutations = false;
+            self.set_skip_mutations(false);
         });
 
         // Flush the mutations that will swap the placeholder nodes with the resolved nodes
@@ -238,18 +240,13 @@ impl WebsysDom {
         let root_scope_id = root_scope.id();
 
         // As we hydrate the suspense boundary, set the current path to the path of the suspense boundary
-        self.suspense_hydration_ids
+        self.hydration_state_mut()
+            .suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
         self.start_hydration_at_scope(root_scope_id, dom, children, &mut validation)?;
 
         Ok(())
-    }
-
-    fn clear_root_container(&mut self) {
-        while let Some(child) = self.root.first_child() {
-            let _ = self.root.remove_child(&child);
-        }
     }
 
     fn start_hydration_at_scope(
@@ -261,28 +258,83 @@ impl WebsysDom {
     ) -> Result<(), RehydrationError> {
         let mut ids = Vec::new();
         let mut to_mount = Vec::new();
-        let has_mismatches =
-            validation.run_scope(validation_roots(scope_id, dom, &under), |validation| {
+        let suspense_path = if scope_id == dom.base_scope().id() {
+            None
+        } else {
+            Some(
+                self.hydration_state()
+                    .suspense_hydration_ids
+                    .current_path
+                    .clone(),
+            )
+        };
+        let has_mismatches = validation.run_scope(
+            validation_roots(scope_id, dom, &under),
+            || suspense_path.clone(),
+            |validation| {
                 let scope = dom
                     .get_scope(scope_id)
                     .expect("scope should exist during hydration");
                 self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount, validation)
-            })?;
+            },
+        )?;
 
         if has_mismatches {
-            // Switch back to normal rendering and do a fresh client rebuild from the app root.
-            // This is heavier than subtree recovery, but it guarantees we recover to an interactive UI.
-            self.skip_mutations = false;
-            self.clear_root_container();
+            self.set_skip_mutations(false);
 
-            tracing::warn!("Hydration mismatches detected. Falling back to a full client rebuild.");
+            tracing::warn!(
+                "Hydration mismatches detected in scope {scope_id:?}. Rebuilding subtree."
+            );
 
-            dom.rebuild(self);
-            self.flush_edits();
+            let is_root = scope_id == dom.base_scope().id();
 
-            // Reset suspense state — the full rebuild invalidates all
-            // previously recorded scope-ID mappings.
-            self.suspense_hydration_ids = Default::default();
+            if is_root {
+                // Root scope: `under` is [root_element]. Clear its children
+                // and rebuild directly into the root (ElementId(0)).
+                if let Some(root) = under.first() {
+                    while let Some(child) = root.first_child() {
+                        let _ = root.remove_child(&child);
+                    }
+                }
+
+                let m = dom.create_scope_dom(self, scope_id);
+                self.append_children(ElementId(0), m);
+                self.flush_edits();
+            } else {
+                // Streaming scope: `under` is the child nodes themselves.
+                // Save a reference sibling so we can insert in the right
+                // spot, then remove the old nodes.
+                let first_node = under.first().cloned();
+                let parent = first_node.as_ref().and_then(|n| n.parent_node());
+                let next_sibling = under.last().and_then(|n| n.next_sibling());
+                for node in &under {
+                    if let Some(p) = node.parent_node() {
+                        let _ = p.remove_child(node);
+                    }
+                }
+
+                // Build the new nodes into a detached element so they
+                // don't end up inside the live root element.
+                let document = web_sys::window().unwrap().document().unwrap();
+                let staging: web_sys::Node = document.create_element("div").unwrap().into();
+                let real_root = std::mem::replace(&mut self.root, staging.clone());
+                let m = dom.create_scope_dom(self, scope_id);
+                self.append_children(ElementId(0), m);
+                self.flush_edits();
+                // Restore the real root.
+                self.root = real_root;
+
+                // Move the staging div's children into the correct parent.
+                if let Some(parent) = parent {
+                    while let Some(child) = staging.first_child() {
+                        if let Some(ref sibling) = next_sibling {
+                            let _ = parent.insert_before(&child, Some(sibling));
+                        } else {
+                            let _ = parent.append_child(&child);
+                        }
+                    }
+                }
+            }
 
             return Ok(());
         }
@@ -350,7 +402,8 @@ impl WebsysDom {
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
         {
             if suspense.has_suspended_tasks() {
-                self.suspense_hydration_ids
+                self.hydration_state_mut()
+                    .suspense_hydration_ids
                     .add_suspense_boundary(scope.id());
             }
         }

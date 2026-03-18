@@ -9,6 +9,13 @@ pub(crate) mod validation;
 #[allow(unused)]
 pub use hydrate::*;
 
+#[cfg(feature = "hydrate")]
+#[derive(Default, Debug)]
+pub(crate) struct HydrationState {
+    pub(crate) skip_mutations: bool,
+    pub(crate) suspense_hydration_ids: SuspenseHydrationIds,
+}
+
 /// The message sent from the server to the client to hydrate a suspense boundary
 #[derive(Debug)]
 pub(crate) struct SuspenseMessage {

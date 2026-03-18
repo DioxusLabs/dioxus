@@ -98,6 +98,8 @@ macro_rules! mod_methods {
             $(#[$attr:meta])*
             $name:ident $(: $(no-$alias:ident)? $js_name:literal)? $(in $ns:literal)?;
         )+
+        @bool
+        $($bool_name:ident),* $(,)?
     ) => {
         $(#[$mod_attr])*
         pub mod $mod {
@@ -109,6 +111,11 @@ macro_rules! mod_methods {
                     $name $(: $(no-$alias)? $js_name)? $(in $ns)?;
                 }
             )+
+
+            /// Boolean attribute names from this attribute group.
+            pub const BOOL_ATTRS: &[&str] = &[
+                $( stringify!($bool_name), )*
+            ];
         }
 
         #[cfg(feature = "hot-reload-context")]
@@ -1738,6 +1745,10 @@ mod_methods! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Attributes/aria-setsize>
     aria_setsize: "aria-setsize";
+
+    @bool
+    hidden,
+    itemscope,
 }
 
 mod_methods! {
@@ -2510,4 +2521,5 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
     zoom_and_pan: "zoomAndPan";
 
+    @bool
 }

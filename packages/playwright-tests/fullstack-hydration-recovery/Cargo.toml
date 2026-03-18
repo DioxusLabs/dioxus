@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
+async-std = "1"
 
 [features]
 default = []

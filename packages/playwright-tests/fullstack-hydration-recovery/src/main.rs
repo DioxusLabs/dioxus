@@ -1,13 +1,18 @@
 //! Regression test for graceful hydration mismatch recovery.
 
-use dioxus::prelude::*;
+use dioxus::{fullstack::commit_initial_chunk, prelude::*};
 
 fn main() {
-    dioxus::launch(App);
+    LaunchBuilder::new()
+        .with_cfg(server_only! {
+            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
+        })
+        .launch(App);
 }
 
 #[component]
 fn App() -> Element {
+    use_hook(commit_initial_chunk);
     let count = use_signal(|| 0);
 
     rsx! {
@@ -19,6 +24,10 @@ fn App() -> Element {
             TextMismatch {}
             AttributeMismatch {}
             PlaceholderMismatch {}
+            SuspenseBoundary {
+                fallback: |_| rsx! { div { id: "streaming-fallback", "Loading streaming…" } },
+                StreamingMismatch {}
+            }
         }
     }
 }
@@ -151,6 +160,43 @@ fn PlaceholderSlot() -> Element {
             p {
                 id: "server-placeholder-content",
                 "Server placeholder content"
+            }
+        }
+    }
+}
+
+/// A component that lives inside a SuspenseBoundary and introduces a tag
+/// mismatch after the suspense boundary streams in from the server.
+#[component]
+fn StreamingMismatch() -> Element {
+    // use_server_future suspends until the server resolves.
+    let value = use_server_future(|| async {
+        async_std::task::sleep(std::time::Duration::from_millis(200)).await;
+        "streamed data".to_string()
+    })?()
+    .unwrap();
+
+    // After resolution the client and server disagree on the tag.
+    if cfg!(target_arch = "wasm32") {
+        rsx! {
+            section {
+                id: "streaming-mismatch-shell",
+                h2 { "Streaming mismatch" }
+                button {
+                    id: "streaming-mismatch",
+                    "Streaming client: {value}"
+                }
+            }
+        }
+    } else {
+        rsx! {
+            section {
+                id: "streaming-mismatch-shell",
+                h2 { "Streaming mismatch" }
+                div {
+                    id: "streaming-mismatch",
+                    "Streaming server: {value}"
+                }
             }
         }
     }

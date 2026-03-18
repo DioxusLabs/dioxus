@@ -97,7 +97,8 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         {
             use dioxus_fullstack_core::HydrationContext;
 
-            websys_dom.skip_mutations = true;
+            websys_dom.enable_hydration();
+            websys_dom.set_skip_mutations(true);
             // Get the initial hydration data from the client
             #[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
                 export function get_initial_hydration_data() {
@@ -145,7 +146,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 });
                 virtual_dom.rebuild(&mut websys_dom);
             });
-            websys_dom.skip_mutations = false;
+            websys_dom.set_skip_mutations(false);
 
             let rx = websys_dom.rehydrate(&mut virtual_dom).unwrap();
             hydration_receiver = Some(rx);
