@@ -5,7 +5,7 @@ version = "0.0.1"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
+dioxus = { path = "../../dioxus", features = ["fullstack"] }
 
 [features]
 desktop = ["dioxus/desktop"]
