@@ -31,8 +31,7 @@ fn main() {
 
     #[cfg(feature = "desktop")]
     let builder = builder.with_cfg(
-        dioxus::desktop::Config::new()
-            .with_windows_browser_args("--remote-debugging-port=8788"),
+        dioxus::desktop::Config::new().with_windows_browser_args("--remote-debugging-port=8788"),
     );
 
     builder.launch(app);
