@@ -9,8 +9,13 @@ use dioxus_autofmt::write_block_out;
 use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, TemplateAttribute, TemplateNode, VNode, VirtualDom,
 };
-use dioxus_rsx::CallBody;
-use syn::parse::Parser;
+use dioxus_rsx::{
+    Attribute as RsxAttribute, AttributeName as RsxAttributeName,
+    AttributeValue as RsxAttributeValue, BodyNode, CallBody, Component as RsxComponent,
+    Diagnostics, Element as RsxElement, ElementName as RsxElementName, ExprNode, HotLiteral,
+    PartialExpr, TemplateBody, TextNode,
+};
+use syn::{parse::Parser, parse_quote};
 use wasm_bindgen::JsCast;
 
 // ---------------------------------------------------------------------------
@@ -97,6 +102,11 @@ impl DomTraverser {
 // ---------------------------------------------------------------------------
 // HydrationValidator
 // ---------------------------------------------------------------------------
+
+/// Maximum number of mismatches to collect before stopping.
+/// After a tag-level mismatch the traverser descends into the wrong subtree,
+/// producing cascading noise. Capping the count keeps output actionable.
+const MAX_MISMATCHES: usize = 5;
 
 /// Validator that tracks component path and collects hydration mismatches
 pub(crate) struct HydrationValidator {
@@ -393,6 +403,11 @@ impl HydrationValidator {
                 suspense_info
             );
         }
+        if self.mismatches.len() >= MAX_MISMATCHES {
+            tracing::warn!(
+                "[HYDRATION MISMATCH] ... and potentially more. Only the first {MAX_MISMATCHES} mismatches are shown."
+            );
+        }
     }
 
     /// Take the collected mismatches
@@ -455,6 +470,9 @@ impl HydrationValidator {
     }
 
     fn push_mismatch(&mut self, reason: String, expected_rsx: String, actual_rsx: String) {
+        if self.mismatches.len() >= MAX_MISMATCHES {
+            return;
+        }
         self.mismatches.push(HydrationMismatch {
             reason,
             expected_rsx: normalize_rsx_block(&expected_rsx),
@@ -469,15 +487,19 @@ impl HydrationValidator {
 // VNode → RSX serialization
 // ===========================================================================
 
-pub(crate) fn serialize_template_subtree(dom: &VirtualDom, vnode: &VNode, node: &TemplateNode) -> String {
-    serialize_items_as_block(&serialize_template_node_items(dom, vnode, node))
+pub(crate) fn serialize_template_subtree(
+    dom: &VirtualDom,
+    vnode: &VNode,
+    node: &TemplateNode,
+) -> String {
+    format_rsx_nodes(serialize_template_node_items(dom, vnode, node))
 }
 
 fn serialize_template_node_items(
     dom: &VirtualDom,
     vnode: &VNode,
     node: &TemplateNode,
-) -> Vec<String> {
+) -> Vec<BodyNode> {
     match node {
         TemplateNode::Element {
             tag,
@@ -490,18 +512,22 @@ fn serialize_template_node_items(
             for child in *children {
                 child_items.extend(serialize_template_node_items(dom, vnode, child));
             }
-            attributes.sort();
-            vec![render_element_rsx(tag, attributes, child_items)]
+            attributes.sort_by_key(attribute_sort_key);
+            vec![rsx_element_node(tag, attributes, child_items)]
         }
-        TemplateNode::Text { text } => vec![rsx_string_literal(text)],
+        TemplateNode::Text { text } => vec![rsx_text_node(text)],
         TemplateNode::Dynamic { id } => serialize_dynamic_node_items(dom, vnode, *id),
     }
 }
 
-fn serialize_dynamic_node_items(dom: &VirtualDom, vnode: &VNode, dynamic_id: usize) -> Vec<String> {
+fn serialize_dynamic_node_items(
+    dom: &VirtualDom,
+    vnode: &VNode,
+    dynamic_id: usize,
+) -> Vec<BodyNode> {
     match &vnode.dynamic_nodes[dynamic_id] {
-        DynamicNode::Text(text) => vec![rsx_string_literal(&text.value)],
-        DynamicNode::Placeholder(_) => vec![placeholder_rsx()],
+        DynamicNode::Text(text) => vec![rsx_text_node(&text.value)],
+        DynamicNode::Placeholder(_) => vec![placeholder_node()],
         DynamicNode::Fragment(fragment) => fragment
             .iter()
             .flat_map(|fragment_vnode| serialize_vnode_items(dom, fragment_vnode))
@@ -509,11 +535,11 @@ fn serialize_dynamic_node_items(dom: &VirtualDom, vnode: &VNode, dynamic_id: usi
         DynamicNode::Component(comp) => comp
             .mounted_scope(dynamic_id, vnode, dom)
             .map(|scope| serialize_vnode_items(dom, scope.root_node()))
-            .unwrap_or_else(|| vec![format!("{} {{}}", rsx_name(comp.name))]),
+            .unwrap_or_else(|| vec![unmounted_component_node(comp.name)]),
     }
 }
 
-fn serialize_vnode_items(dom: &VirtualDom, vnode: &VNode) -> Vec<String> {
+fn serialize_vnode_items(dom: &VirtualDom, vnode: &VNode) -> Vec<BodyNode> {
     vnode
         .template
         .roots
@@ -525,7 +551,7 @@ fn serialize_vnode_items(dom: &VirtualDom, vnode: &VNode) -> Vec<String> {
 fn serialize_template_attributes(
     attrs: &'static [TemplateAttribute],
     vnode: &VNode,
-) -> Vec<String> {
+) -> Vec<RsxAttribute> {
     let mut rendered = Vec::new();
 
     for attr in attrs {
@@ -540,7 +566,7 @@ fn serialize_template_attributes(
                     .iter()
                     .filter_map(render_dynamic_template_attribute)
                     .collect();
-                dynamic_attrs.sort();
+                dynamic_attrs.sort_by_key(attribute_sort_key);
                 rendered.extend(dynamic_attrs);
             }
         }
@@ -549,22 +575,22 @@ fn serialize_template_attributes(
     rendered
 }
 
-fn render_static_template_attribute(name: &str, value: &str) -> Option<String> {
+fn render_static_template_attribute(name: &str, value: &str) -> Option<RsxAttribute> {
     if is_internal_attribute_name(name) {
         return None;
     }
 
-    let rendered_value = if is_boolean_html_attribute(name) && (value.is_empty() || value == "true")
-    {
-        "true".to_string()
+    let value = if is_boolean_html_attribute(name) && (value.is_empty() || value == "true") {
+        let value = true;
+        rsx_expr_attribute(name, parse_quote!(#value))
     } else {
-        rsx_string_literal(value)
+        rsx_string_attribute(name, value)
     };
 
-    Some(render_attribute(name, rendered_value))
+    Some(value)
 }
 
-fn render_dynamic_template_attribute(attr: &Attribute) -> Option<String> {
+fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
     if is_internal_attribute_name(attr.name)
         || matches!(
             attr.value,
@@ -575,16 +601,25 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<String> {
     }
 
     let rendered_value = match &attr.value {
-        AttributeValue::Text(value) => rsx_string_literal(value),
-        AttributeValue::Float(value) if value.is_finite() => value.to_string(),
-        AttributeValue::Float(_) => rsx_string_literal("<non-finite-float>"),
-        AttributeValue::Int(value) => value.to_string(),
-        AttributeValue::Bool(value) => value.to_string(),
-        AttributeValue::Any(_) => rsx_string_literal("<any>"),
+        AttributeValue::Text(value) => rsx_string_attribute(attr.name, value),
+        AttributeValue::Float(value) if value.is_finite() => {
+            let value = *value;
+            rsx_expr_attribute(attr.name, parse_quote!(#value))
+        }
+        AttributeValue::Float(_) => rsx_string_attribute(attr.name, "<non-finite-float>"),
+        AttributeValue::Int(value) => {
+            let value = *value;
+            rsx_expr_attribute(attr.name, parse_quote!(#value))
+        }
+        AttributeValue::Bool(value) => {
+            let value = *value;
+            rsx_expr_attribute(attr.name, parse_quote!(#value))
+        }
+        AttributeValue::Any(_) => rsx_string_attribute(attr.name, "<any>"),
         AttributeValue::Listener(_) | AttributeValue::None => return None,
     };
 
-    Some(render_attribute(attr.name, rendered_value))
+    Some(rendered_value)
 }
 
 // ===========================================================================
@@ -592,10 +627,10 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<String> {
 // ===========================================================================
 
 fn serialize_dom_subtree(node: &web_sys::Node) -> String {
-    serialize_items_as_block(&serialize_dom_node_items(node))
+    format_rsx_nodes(serialize_dom_node_items(node))
 }
 
-fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<String> {
+fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<BodyNode> {
     if should_skip_validation_node(node) {
         return Vec::new();
     }
@@ -603,7 +638,7 @@ fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<String> {
     match node.node_type() {
         web_sys::Node::ELEMENT_NODE => {
             let Some(element) = node.dyn_ref::<web_sys::Element>() else {
-                return vec![missing_node_rsx()];
+                return vec![missing_node_node()];
             };
 
             let mut attrs = serialize_dom_attributes(element);
@@ -614,32 +649,27 @@ fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<String> {
                 child = current.next_sibling();
             }
 
-            attrs.sort();
-            vec![render_element_rsx(
+            attrs.sort_by_key(attribute_sort_key);
+            vec![rsx_element_node(
                 &element.tag_name().to_lowercase(),
                 attrs,
                 children,
             )]
         }
-        web_sys::Node::TEXT_NODE => {
-            vec![rsx_string_literal(&node.text_content().unwrap_or_default())]
-        }
+        web_sys::Node::TEXT_NODE => vec![rsx_text_node(&node.text_content().unwrap_or_default())],
         web_sys::Node::COMMENT_NODE => {
             let comment = node.text_content().unwrap_or_default();
             if is_placeholder_comment(&comment) {
-                vec![placeholder_rsx()]
+                vec![placeholder_node()]
             } else {
-                vec![rsx_string_literal(&format!("<!--{}-->", comment.trim()))]
+                vec![rsx_text_node(&format!("<!--{}-->", comment.trim()))]
             }
         }
-        _ => vec![rsx_string_literal(&format!(
-            "<node type {}>",
-            node.node_type()
-        ))],
+        _ => vec![rsx_text_node(&format!("<node type {}>", node.node_type()))],
     }
 }
 
-fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<String> {
+fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<RsxAttribute> {
     let mut rendered = Vec::new();
     let names = element.get_attribute_names();
 
@@ -651,12 +681,13 @@ fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<String> {
             continue;
         }
         let value = element.get_attribute(&name).unwrap_or_default();
-        let rendered_value = if is_boolean_html_attribute(&name) && value.is_empty() {
-            "true".to_string()
+        let attr = if is_boolean_html_attribute(&name) && (value.is_empty() || value == "true") {
+            let value = true;
+            rsx_expr_attribute(&name, parse_quote!(#value))
         } else {
-            rsx_string_literal(&value)
+            rsx_string_attribute(&name, &value)
         };
-        rendered.push(render_attribute(&name, rendered_value));
+        rendered.push(attr);
     }
 
     rendered
@@ -666,34 +697,92 @@ fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<String> {
 // RSX rendering helpers
 // ===========================================================================
 
-fn render_element_rsx(tag: &str, attributes: Vec<String>, children: Vec<String>) -> String {
-    if attributes.is_empty() && children.is_empty() {
-        return format!("{} {{}}", rsx_name(tag));
-    }
+fn format_rsx_nodes(nodes: Vec<BodyNode>) -> String {
+    let nodes = if nodes.is_empty() {
+        vec![missing_node_node()]
+    } else {
+        nodes
+    };
 
-    let mut out = format!("{} {{", rsx_name(tag));
-    for attribute in attributes {
-        out.push('\n');
-        out.push_str(&attribute);
-        out.push(',');
-    }
-    for child in children {
-        out.push('\n');
-        out.push_str(&child);
-    }
-    out.push('\n');
-    out.push('}');
-    out
+    let body = CallBody::new(TemplateBody::new(nodes));
+    write_block_out(&body)
+        .map(|formatted| formatted.trim().to_string())
+        .expect("hydration validation should always emit valid RSX")
 }
 
-fn render_attribute(name: &str, value: String) -> String {
-    format!("{}: {}", rsx_name(name), value)
+fn rsx_element_node(
+    tag: &str,
+    mut attributes: Vec<RsxAttribute>,
+    children: Vec<BodyNode>,
+) -> BodyNode {
+    attributes.sort_by_key(attribute_sort_key);
+    BodyNode::Element(RsxElement {
+        name: rsx_element_name(tag),
+        raw_attributes: attributes.clone(),
+        merged_attributes: attributes,
+        spreads: Vec::new(),
+        children,
+        brace: Some(Default::default()),
+        diagnostics: Diagnostics::new(),
+    })
 }
 
-fn serialize_items_as_block(items: &[String]) -> String {
-    match items {
-        [] => missing_node_rsx(),
-        _ => items.join("\n"),
+fn rsx_text_node(value: &str) -> BodyNode {
+    BodyNode::Text(TextNode::from_text(value))
+}
+
+fn unmounted_component_node(name: &str) -> BodyNode {
+    match syn::parse_str::<syn::Path>(name) {
+        Ok(path) => BodyNode::Component(RsxComponent {
+            name: path,
+            generics: None,
+            fields: Vec::new(),
+            component_literal_dyn_idx: Vec::new(),
+            spreads: Vec::new(),
+            brace: Some(Default::default()),
+            children: TemplateBody::new(Vec::new()),
+            dyn_idx: Default::default(),
+            diagnostics: Diagnostics::new(),
+        }),
+        Err(_) => rsx_text_node(&format!("<component {name}>")),
+    }
+}
+
+fn missing_node_node() -> BodyNode {
+    unmounted_component_node("missing_node")
+}
+
+fn attribute_sort_key(attr: &RsxAttribute) -> String {
+    attr.name.to_string()
+}
+
+fn rsx_string_attribute(name: &str, value: &str) -> RsxAttribute {
+    RsxAttribute::from_raw(
+        rsx_attribute_name(name),
+        RsxAttributeValue::AttrLiteral(HotLiteral::from_raw_text(value)),
+    )
+}
+
+fn rsx_expr_attribute(name: &str, value: syn::Expr) -> RsxAttribute {
+    RsxAttribute::from_raw(
+        rsx_attribute_name(name),
+        RsxAttributeValue::AttrExpr(PartialExpr::from_expr(&value)),
+    )
+}
+
+fn rsx_attribute_name(name: &str) -> RsxAttributeName {
+    if is_simple_rsx_ident(name) {
+        RsxAttributeName::BuiltIn(syn::parse_str(name).expect("validated RSX attribute ident"))
+    } else {
+        RsxAttributeName::Custom(parse_quote!(#name))
+    }
+}
+
+fn rsx_element_name(name: &str) -> RsxElementName {
+    if is_simple_rsx_ident(name) {
+        RsxElementName::Ident(syn::parse_str(name).expect("validated RSX element ident"))
+    } else {
+        RsxElementName::Custom(parse_quote!(#name))
     }
 }
 
@@ -710,7 +799,7 @@ pub(crate) fn normalize_rsx_block(raw: &str) -> String {
     CallBody::parse_strict
         .parse_str(trimmed)
         .ok()
-        .and_then(|body| write_block_out(&body))
+        .and_then(|body| write_block_out(&body).map(|formatted| formatted.trim().to_string()))
         .unwrap_or_else(|| trimmed.to_string())
 }
 
@@ -773,23 +862,23 @@ fn indent_block(block: &str, prefix: &str) -> String {
 // ===========================================================================
 
 pub(crate) fn missing_node_rsx() -> String {
-    "missing_node {}".to_string()
+    format_rsx_nodes(vec![missing_node_node()])
 }
 
 pub(crate) fn placeholder_rsx() -> String {
-    "{ VNode::placeholder() }".to_string()
+    format_rsx_nodes(vec![placeholder_node()])
 }
 
 pub(crate) fn rsx_string_literal(value: &str) -> String {
     format!("{value:?}")
 }
 
-fn rsx_name(name: &str) -> String {
-    if is_simple_rsx_ident(name) {
-        name.to_string()
-    } else {
-        rsx_string_literal(name)
-    }
+fn placeholder_node() -> BodyNode {
+    BodyNode::RawExpr(ExprNode {
+        expr: syn::parse_str("{ VNode::placeholder() }")
+            .expect("placeholder expression should always parse"),
+        dyn_idx: Default::default(),
+    })
 }
 
 // ===========================================================================
@@ -898,7 +987,7 @@ fn find_missing_attrs(
 
     for attr in static_attrs {
         if let TemplateAttribute::Static { name, .. } = attr {
-            if name.starts_with("data-node") || name.starts_with("on") {
+            if is_internal_attribute_name(name) {
                 continue;
             }
             if !element.has_attribute(name) {
@@ -909,7 +998,7 @@ fn find_missing_attrs(
 
     for attrs in dynamic_attrs {
         for attr in attrs.iter() {
-            if attr.name.starts_with("on") || attr.name.starts_with("data-node") {
+            if is_internal_attribute_name(attr.name) {
                 continue;
             }
             if matches!(attr.value, AttributeValue::None) {
@@ -927,10 +1016,9 @@ fn find_missing_attrs(
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len])
+    match s.char_indices().nth(max_len) {
+        None => s.to_string(),
+        Some((byte_idx, _)) => format!("{}...", &s[..byte_idx]),
     }
 }
 
@@ -1136,16 +1224,15 @@ mod tests {
 
     #[test]
     fn test_autofmt_indents_multiline_children() {
-        let raw = render_element_rsx(
+        let rendered = format_rsx_nodes(vec![rsx_element_node(
             "section",
-            vec!["id: \"placeholder-mismatch-shell\"".to_string()],
-            vec![render_element_rsx(
+            vec![rsx_string_attribute("id", "placeholder-mismatch-shell")],
+            vec![rsx_element_node(
                 "p",
-                vec!["id: \"server-placeholder-content\"".to_string()],
-                vec![rsx_string_literal("Server placeholder content")],
+                vec![rsx_string_attribute("id", "server-placeholder-content")],
+                vec![rsx_text_node("Server placeholder content")],
             )],
-        );
-        let rendered = normalize_rsx_block(&raw);
+        )]);
 
         assert!(rendered.contains("\n        p {"));
         assert!(rendered.contains("\n    }"));

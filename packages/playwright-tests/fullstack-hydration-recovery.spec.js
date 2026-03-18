@@ -61,6 +61,8 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
       fragments.every((fragment) => message.includes(fragment)),
     );
 
+  // One mismatch per category: NestedMismatch (tag), TextMismatch (text),
+  // AttributeMismatch (missing attrs), PlaceholderMismatch (placeholder vs element).
   await expect
     .poll(() => mismatchMessages().length, {
       message: "expected one warning for each mismatch class",

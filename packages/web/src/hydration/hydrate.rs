@@ -3,11 +3,11 @@
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
-use crate::dom::WebsysDom;
 #[cfg(debug_assertions)]
 use super::validation::{
-    serialize_template_subtree, placeholder_rsx, rsx_string_literal, HydrationValidator,
+    placeholder_rsx, rsx_string_literal, serialize_template_subtree, HydrationValidator,
 };
+use crate::dom::WebsysDom;
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
     SuspenseContext, TemplateNode, VNode, VirtualDom,
@@ -269,12 +269,23 @@ impl WebsysDom {
                 dom.rebuild(self);
                 self.flush_edits();
 
+                // Reset suspense state — the full rebuild invalidates all
+                // previously recorded scope-ID mappings.
+                self.suspense_hydration_ids = Default::default();
+
                 if let Some(validator) = &mut self.hydration_validator {
                     validator.take_mismatches();
                 }
 
                 return Ok(());
             }
+        }
+
+        // Validation is done — drop the validator so it does not persist
+        // across the lifetime of WebsysDom.
+        #[cfg(debug_assertions)]
+        {
+            self.hydration_validator = None;
         }
 
         self.interpreter.base().hydrate(ids, under);

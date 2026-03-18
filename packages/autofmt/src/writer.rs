@@ -1176,7 +1176,11 @@ impl<'a> Writer<'a> {
     }
 
     fn leading_row_is_empty(&self, location: LineColumn) -> bool {
-        let Some(line) = location.line.checked_sub(1).and_then(|index| self.src.get(index)) else {
+        let Some(line) = location
+            .line
+            .checked_sub(1)
+            .and_then(|index| self.src.get(index))
+        else {
             return false;
         };
 

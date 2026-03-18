@@ -12,8 +12,8 @@ keywords = ["dom", "ui", "gui", "web", "wasm"]
 [dependencies]
 dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
-dioxus-autofmt = { workspace = true }
-dioxus-rsx = { workspace = true }
+dioxus-autofmt = { workspace = true, optional = true }
+dioxus-rsx = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
@@ -37,7 +37,7 @@ futures-channel = { workspace = true }
 serde_json = { version = "1.0", optional = true }
 serde = { version = "1.0", optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
-syn = { workspace = true }
+syn = { workspace = true, optional = true }
 
 ciborium = { workspace = true, optional = true }
 gloo-timers = { workspace = true, optional = true, features = ["futures"] }
@@ -97,7 +97,7 @@ lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["mounted", "devtools", "document"]
-hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core", "dep:dioxus-autofmt", "dep:dioxus-rsx", "dep:syn"]
 mounted = [
     "web-sys/Element",
     "web-sys/Element",
