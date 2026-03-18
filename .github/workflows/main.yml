@@ -251,45 +251,6 @@ jobs:
             target/**/*.dmg
           if-no-files-found: ignore
 
-  windows:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Playwright | Windows"
-    runs-on: warp-windows-2025-x64-8x
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: beta
-          targets: wasm32-unknown-unknown
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          # save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Playwright
-        working-directory: ./packages/playwright-tests
-        env:
-          CARGO_INCREMENTAL: 1
-        run: |
-          npm ci
-          npm install -D @playwright/test
-          npx playwright install
-          npx playwright test
-      - uses: actions/upload-artifact@v6
-        if: always()
-        with:
-          name: playwright-report-windows
-          path: ./packages/playwright-tests/playwright-report/
-          retention-days: 30
-
   windows-bundle-smoke:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
@@ -330,38 +291,45 @@ jobs:
             target/**/*-setup.exe
           if-no-files-found: ignore
 
-  nix:
+  windows:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Nix | ${{ matrix.name }}"
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - { os: warp-ubuntu-latest-x64-8x, name: Linux }
-          - { os: warp-macos-latest-arm64-6x, name: macOS }
+    name: "Playwright | Windows"
+    runs-on: warp-windows-2025-x64-8x
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
-      - uses: nixbuild/nix-quick-install-action@master
-      - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
+      - uses: actions/setup-node@v4
         with:
-          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
-          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
-          backend: warpbuild
-      - name: Build dioxus-cli from the flake
-        run: nix build .#dioxus-cli
-      - name: Smoke test devShell
-        shell: bash
+          node-version: 24
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: beta
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+          cache-provider: "warpbuild"
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Playwright
+        working-directory: ./packages/playwright-tests
+        env:
+          CARGO_INCREMENTAL: 1
         run: |
-          nix develop .#default -c bash -lc '
-            cargo --version
-            rustc --version
-            pkg-config --modversion openssl
-            if [[ "${{ runner.os }}" == "Linux" ]]; then
-              pkg-config --modversion gtk+-3.0
-              pkg-config --modversion webkit2gtk-4.1
-            fi
-          '
+          npm ci
+          npm install -D @playwright/test
+          npx playwright install
+          npx playwright test
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: playwright-report-windows
+          path: ./packages/playwright-tests/playwright-report/
+          retention-days: 30
+
 
   playwright:
     needs: check-paths
@@ -419,6 +387,58 @@ jobs:
           name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
           retention-days: 30
+
+
+
+  test:
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    name: "Test | Linux"
+    runs-on: warp-ubuntu-latest-x64-8x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+          cache-provider: "warpbuild"
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: browser-actions/setup-firefox@latest
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
+
+  release-test:
+    needs: check-paths
+    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
+    name: "Test | Linux (Release)"
+    runs-on: warp-ubuntu-latest-x64-8x
+    steps:
+      - uses: actions/checkout@v5
+      - name: Free Disk Space
+        uses: ./.github/actions/free-disk-space
+      - uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
+          version: 1.0
+      - uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+          cache-provider: "warpbuild"
+          # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: browser-actions/setup-firefox@latest
+      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
 
   matrix_test:
     needs: check-paths
@@ -532,53 +552,35 @@ jobs:
         run: |
           ${{ env.RUST_CARGO_COMMAND }} ${{ matrix.platform.command }} ${{ matrix.platform.args }} --target ${{ matrix.platform.target }}
 
-
-  test:
+  nix:
     needs: check-paths
     if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Test | Linux"
-    runs-on: warp-ubuntu-latest-x64-8x
+    name: "Nix | ${{ matrix.name }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: warp-ubuntu-latest-x64-8x, name: Linux }
+          - { os: warp-macos-latest-arm64-6x, name: macOS }
     steps:
       - uses: actions/checkout@v5
-      - name: Free Disk Space
-        uses: ./.github/actions/free-disk-space
-      - uses: awalsh128/cache-apt-pkgs-action@latest
+      - uses: nixbuild/nix-quick-install-action@master
+      - uses: jkelleyrtp/cache-nix-action@jk/use-warpbuild
         with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          # save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop
-
-  release-test:
-    needs: check-paths
-    if: github.event.pull_request.draft == false && needs.check-paths.outputs.rust == 'true'
-    name: "Test | Linux (Release)"
-    runs-on: warp-ubuntu-latest-x64-8x
-    steps:
-      - uses: actions/checkout@v5
-      - name: Free Disk Space
-        uses: ./.github/actions/free-disk-space
-      - uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
-          version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-all-crates: "true"
-          cache-workspace-crates: "true"
-          cache-provider: "warpbuild"
-          # save-if: ${{ github.ref == 'refs/heads/main' }}
-      - uses: browser-actions/setup-firefox@latest
-      - run: cargo test --lib --bins --tests --examples --workspace --exclude dioxus-desktop --profile release-unoptimized
+          primary-key: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock', 'Cargo.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+          backend: warpbuild
+      - name: Build dioxus-cli from the flake
+        run: nix build .#dioxus-cli
+      - name: Smoke test devShell
+        shell: bash
+        run: |
+          nix develop .#default -c bash -lc '
+            cargo --version
+            rustc --version
+            pkg-config --modversion openssl
+            if [[ "${{ runner.os }}" == "Linux" ]]; then
+              pkg-config --modversion gtk+-3.0
+              pkg-config --modversion webkit2gtk-4.1
+            fi
+          '
