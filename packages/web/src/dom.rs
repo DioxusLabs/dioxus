@@ -15,7 +15,9 @@ use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Event, Node};
 
-use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
+use crate::{
+    event_type_matches, load_document, virtual_event_from_websys_event, Config, WebEventConverter,
+};
 
 pub struct WebsysDom {
     #[allow(dead_code)]
@@ -180,52 +182,5 @@ fn walk_element_for_id(target: &Node) -> Option<(ElementId, web_sys::Element)> {
             // This node is an element with an invalid dioxus id, give up
             _ => return None,
         }
-    }
-}
-
-/// Check that the JS event object actually inherits from the interface the
-/// converters will `unchecked_into`. Events that just wrap the raw `Event`
-/// (cancel, clipboard, form, media, scroll, selection, toggle, image) don't
-/// need checking because no typed cast is performed.
-fn event_type_matches(name: &str, event: &web_sys::Event) -> bool {
-    match name {
-        "keydown" | "keyup" | "keypress" => event.is_instance_of::<web_sys::KeyboardEvent>(),
-
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            event.is_instance_of::<web_sys::MouseEvent>()
-        }
-
-        "compositionend" | "compositionstart" | "compositionupdate" => {
-            event.is_instance_of::<web_sys::CompositionEvent>()
-        }
-
-        "blur" | "focus" | "focusin" | "focusout" => {
-            event.is_instance_of::<web_sys::FocusEvent>()
-        }
-
-        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover"
-        | "dragstart" | "drop" => event.is_instance_of::<web_sys::DragEvent>(),
-
-        "pointerdown" | "pointermove" | "pointerup" | "pointerover" | "pointerout"
-        | "pointerenter" | "pointerleave" | "gotpointercapture" | "lostpointercapture"
-        | "pointerlockchange" | "pointerlockerror" | "auxclick" => {
-            event.is_instance_of::<web_sys::PointerEvent>()
-        }
-
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            event.is_instance_of::<web_sys::TouchEvent>()
-        }
-
-        "wheel" => event.is_instance_of::<web_sys::WheelEvent>(),
-
-        "animationstart" | "animationend" | "animationiteration" => {
-            event.is_instance_of::<web_sys::AnimationEvent>()
-        }
-
-        "transitionend" => event.is_instance_of::<web_sys::TransitionEvent>(),
-
-        // All other events use the raw Event — no typed cast, no check needed.
-        _ => true,
     }
 }

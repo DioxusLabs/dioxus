@@ -47,12 +47,6 @@ fn app() -> Element {
                 onkeyup: move |e: KeyboardEvent| {
                     log(format!("keyup: key={:?} code={:?}", e.key(), e.code()));
                 },
-                oninput: move |e: FormEvent| {
-                    log(format!("input: value={:?}", e.value()));
-                },
-                onchange: move |e: FormEvent| {
-                    log(format!("change: value={:?}", e.value()));
-                },
 
                 label { r#for: "fruit", "Pick a fruit: " }
                 input {
@@ -60,6 +54,12 @@ fn app() -> Element {
                     list: "fruit-list",
                     placeholder: "Start typing...",
                     style: "padding: 8px; font-size: 16px; width: 100%;",
+                    oninput: move |e: FormEvent| {
+                        log(format!("input: value={:?}", e.value()));
+                    },
+                    onchange: move |e: FormEvent| {
+                        log(format!("change: value={:?}", e.value()));
+                    },
                 }
                 datalist { id: "fruit-list",
                     option { value: "apple" }
