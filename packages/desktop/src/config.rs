@@ -63,6 +63,8 @@ pub struct Config {
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
+    pub(crate) disable_file_drop_handler: bool,
+    pub(crate) navigation_handler: Option<Box<dyn Fn(String) -> bool + 'static>>,
 }
 
 impl LaunchConfig for Config {}
@@ -108,6 +110,8 @@ impl Config {
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
             custom_event_handler: None,
+            disable_file_drop_handler: false,
+            navigation_handler: None,
         }
     }
 
@@ -274,6 +278,37 @@ impl Config {
                 self.menu = MenuBuilderState::Set(menu.into())
             }
         }
+        self
+    }
+
+    /// Set a custom navigation handler to control which URLs the WebView is allowed to navigate to.
+    ///
+    /// The handler receives the target URL as a `String` and must return `true` to allow navigation
+    /// or `false` to block it.
+    ///
+    /// When not set, the default behavior applies: internal `dioxus://` URLs are allowed, and
+    /// external `http://` or `https://` URLs are opened in the system browser via
+    /// [`webbrowser::open`](https://docs.rs/webbrowser) and blocked in the WebView.
+    ///
+    /// This is useful for applications that embed web content (e.g. via `<iframe>`) and need
+    /// fine-grained control over navigation, or that want to suppress the automatic
+    /// system-browser-open behavior.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dioxus_desktop::Config;
+    /// let cfg = Config::new()
+    ///     .with_navigation_handler(|url| {
+    ///         // Allow dioxus internal URLs and a specific external domain
+    ///         url.starts_with("dioxus://") || url.starts_with("https://trusted.example.com")
+    ///     });
+    /// ```
+    pub fn with_navigation_handler(
+        mut self,
+        handler: impl Fn(String) -> bool + 'static,
+    ) -> Self {
+        self.navigation_handler = Some(Box::new(handler));
         self
     }
 }
