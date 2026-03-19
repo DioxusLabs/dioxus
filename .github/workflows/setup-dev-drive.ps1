@@ -63,6 +63,16 @@ if (Test-Path "C:/Users/runneradmin/.cargo") {
     Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
 }
 
+# Build a fast tar wrapper to replace Git's slow MSYS2 tar.exe.
+# The actions/cache tar extraction uses Git's tar which does POSIX I/O emulation —
+# the native Windows bsdtar (C:\Windows\System32\tar.exe) is ~10x faster.
+# The only incompatibility is --force-local (GNU-only), which we strip.
+$FastTar = "$($Drive)\fast-tar"
+New-Item $FastTar -ItemType Directory -Force
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+go build -o "$FastTar\tar.exe" "$ScriptDir\fast-tar.go"
+Write-Output "Built fast tar wrapper at $FastTar\tar.exe"
+
 Write-Output `
     "DEV_DRIVE=$($Drive)" `
     "TMP=$($Tmp)" `
@@ -70,5 +80,5 @@ Write-Output `
     "RUSTUP_HOME=$($Drive)/.rustup" `
     "CARGO_HOME=$($Drive)/.cargo" `
     "DIOXUS_WORKSPACE=$($Drive)/dioxus" `
-    "PATH=$($Drive)/.cargo/bin;$env:PATH" `
+    "PATH=$($Drive)\fast-tar;$($Drive)/.cargo/bin;$env:PATH" `
     >> $env:GITHUB_ENV
