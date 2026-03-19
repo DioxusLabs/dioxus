@@ -288,6 +288,14 @@ jobs:
           $nsis | ForEach-Object { $_.FullName }
           if (-not $msi) { throw "Expected MSI artifact was not produced." }
           if (-not $nsis) { throw "Expected NSIS artifact was not produced." }
+      - name: Target dir size by extension
+        shell: pwsh
+        run: |
+          Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -File |
+            Group-Object Extension |
+            Sort-Object { ($_.Group | Measure-Object Length -Sum).Sum } -Descending |
+            Select-Object -First 20 @{N='Ext';E={$_.Name}}, Count, @{N='SizeMB';E={[math]::Round(($_.Group | Measure-Object Length -Sum).Sum / 1MB, 1)}} |
+            Format-Table -AutoSize
       - name: Clean PDB files before cache save
         shell: pwsh
         run: Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb" | Remove-Item -Force
