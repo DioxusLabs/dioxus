@@ -14,6 +14,21 @@ import (
 	"strings"
 )
 
+// isZstd checks the magic bytes of a file to see if it's zstd-compressed.
+// Zstd magic number: 0x28 0xB5 0x2F 0xFD
+func isZstd(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	magic := make([]byte, 4)
+	if _, err := f.Read(magic); err != nil {
+		return false
+	}
+	return magic[0] == 0x28 && magic[1] == 0xB5 && magic[2] == 0x2F && magic[3] == 0xFD
+}
+
 func main() {
 	var tarArgs []string
 	archive := ""
@@ -45,7 +60,7 @@ func main() {
 		}
 	}
 
-	if hasCompress && archive != "" {
+	if hasCompress && archive != "" && isZstd(archive) {
 		// Pipe: zstd -d -c archive.tzst | bsdtar -xf - [other flags]
 		tarArgs = append([]string{"-xf", "-"}, tarArgs...)
 		fmt.Fprintf(os.Stderr, "fast-tar: zstd -d -c %s | tar.exe %s\n", archive, strings.Join(tarArgs, " "))
@@ -79,7 +94,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else {
-		// No compression — just forward to bsdtar directly
+		// No zstd compression (or not actually zstd) — let bsdtar auto-detect format
 		if archive != "" {
 			tarArgs = append([]string{"-xf", archive}, tarArgs...)
 		}
