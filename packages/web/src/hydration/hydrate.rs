@@ -337,7 +337,8 @@ impl WebsysDom {
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
         {
             if suspense.has_suspended_tasks() {
-                self.suspense_hydration_ids.add_suspense_boundary(scope.id());
+                self.suspense_hydration_ids
+                    .add_suspense_boundary(scope.id());
             }
         }
 

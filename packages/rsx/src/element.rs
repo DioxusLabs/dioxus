@@ -454,6 +454,19 @@ mod tests {
     }
 
     #[test]
+    fn parses_string_tag_name() {
+        assert!(matches!(
+            syn::parse_str::<ElementName>("div"),
+            Ok(ElementName::Ident(_))
+        ));
+        assert!(matches!(
+            syn::parse_str::<ElementName>("some-cool-element"),
+            Ok(ElementName::Custom(_))
+        ));
+        assert!(syn::parse_str::<ElementName>("my-1st-element").is_err());
+    }
+
+    #[test]
     fn parses_variety() {
         let input = quote::quote! {
             div {
