@@ -84,11 +84,6 @@ impl DomTraverser {
     }
 }
 
-/// Maximum number of mismatches to collect before stopping.
-/// After a tag-level mismatch the traverser descends into the wrong subtree,
-/// producing cascading noise. Capping the count keeps output actionable.
-const MAX_MISMATCHES: usize = 5;
-
 #[derive(Default)]
 pub(crate) struct HydrationValidationSession {
     validator: HydrationValidator,
@@ -471,11 +466,6 @@ impl HydrationValidator {
                 suspense_info,
             );
         }
-        if self.mismatches.len() >= MAX_MISMATCHES {
-            tracing::warn!(
-                "[HYDRATION MISMATCH] ... and potentially more. Only the first {MAX_MISMATCHES} mismatches are shown."
-            );
-        }
     }
 
     /// Take the collected mismatches
@@ -541,9 +531,6 @@ impl HydrationValidator {
     }
 
     fn push_mismatch(&mut self, reason: String, expected_rsx: String, actual_rsx: String) {
-        if self.mismatches.len() >= MAX_MISMATCHES {
-            return;
-        }
         self.mismatches.push(HydrationMismatch {
             reason,
             expected_rsx: normalize_debug_rsx(&expected_rsx),
