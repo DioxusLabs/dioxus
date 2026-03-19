@@ -1,11 +1,10 @@
 // Wrapper that delegates to Windows native bsdtar (C:\Windows\System32\tar.exe)
 // instead of the slow MSYS2 tar from Git for Windows.
 //
-// Two transformations:
-//   - Strips --force-local (GNU tar flag that bsdtar doesn't recognize)
-//   - Handles --use-compress-program by decompressing with zstd ourselves,
-//     then passing the plain .tar to bsdtar (bsdtar's CreateProcess-based
-//     --use-compress-program doesn't work reliably on Windows)
+// Handles two GNU tar flags that bsdtar doesn't support well on Windows:
+//   - --force-local: stripped (bsdtar doesn't need it)
+//   - --use-compress-program "zstd -d": we pipe zstd stdout into bsdtar stdin
+//     instead of letting bsdtar spawn the program (which hangs on Windows)
 package main
 
 import (
@@ -16,71 +15,84 @@ import (
 )
 
 func main() {
-	var args []string
+	var tarArgs []string
 	archive := ""
-	decompress := ""
+	hasCompress := false
 	skipNext := false
+	nextIsArchive := false
 
 	for i, a := range os.Args[1:] {
 		if skipNext {
 			skipNext = false
 			continue
 		}
-		switch a {
-		case "--force-local":
-			// bsdtar doesn't need this; drop it
-		case "--use-compress-program":
-			// Grab the program (e.g. "zstd -d") and handle it ourselves
-			if i+1 < len(os.Args[1:]) {
-				decompress = os.Args[1:][i+1]
-			}
-			skipNext = true
-		case "-xf":
-			// Next positional arg is the archive path
-			args = append(args, a)
+		switch {
+		case a == "--force-local":
+			// drop it
+		case a == "--use-compress-program":
+			hasCompress = true
+			skipNext = true // skip "zstd -d"
+		case a == "-xf":
+			nextIsArchive = true
+			// don't append yet — we may rewrite to "-xf" "-"
+		case nextIsArchive:
+			archive = a
+			nextIsArchive = false
+			// don't append — handled below
 		default:
-			// Track the archive filename (first bare arg after -xf)
-			if len(args) > 0 && args[len(args)-1] == "-xf" && archive == "" {
-				archive = a
-				args = append(args, a)
-			} else {
-				args = append(args, a)
-			}
+			tarArgs = append(tarArgs, a)
+			_ = i
 		}
 	}
 
-	// If we have a compress program and a .tzst/.zst archive, decompress first
-	if decompress != "" && archive != "" && (strings.HasSuffix(archive, ".tzst") || strings.HasSuffix(archive, ".zst")) {
-		tarFile := strings.TrimSuffix(strings.TrimSuffix(archive, ".tzst"), ".zst") + ".tar"
+	if hasCompress && archive != "" {
+		// Pipe: zstd -d -c archive.tzst | bsdtar -xf - [other flags]
+		tarArgs = append([]string{"-xf", "-"}, tarArgs...)
+		fmt.Fprintf(os.Stderr, "fast-tar: zstd -d -c %s | tar.exe %s\n", archive, strings.Join(tarArgs, " "))
 
-		fmt.Fprintf(os.Stderr, "fast-tar: decompressing %s -> %s\n", archive, tarFile)
-		zstd := exec.Command("zstd", "-d", archive, "-o", tarFile, "--force")
-		zstd.Stdout = os.Stdout
+		zstd := exec.Command("zstd", "-d", "-c", archive)
 		zstd.Stderr = os.Stderr
+
+		tar := exec.Command(`C:\Windows\System32\tar.exe`, tarArgs...)
+		tar.Stdout = os.Stdout
+		tar.Stderr = os.Stderr
+
+		pipe, err := zstd.StdoutPipe()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "fast-tar: pipe failed: %v\n", err)
+			os.Exit(1)
+		}
+		tar.Stdin = pipe
+
+		if err := tar.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "fast-tar: tar start failed: %v\n", err)
+			os.Exit(1)
+		}
 		if err := zstd.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "fast-tar: zstd failed: %v\n", err)
 			os.Exit(1)
 		}
-		defer os.Remove(tarFile)
-
-		// Rewrite -xf to point at the decompressed .tar
-		for i, a := range args {
-			if a == archive {
-				args[i] = tarFile
-				break
+		if err := tar.Wait(); err != nil {
+			if e, ok := err.(*exec.ExitError); ok {
+				os.Exit(e.ExitCode())
 			}
+			os.Exit(1)
 		}
-	}
-
-	fmt.Fprintf(os.Stderr, "fast-tar: C:\\Windows\\System32\\tar.exe %s\n", strings.Join(args, " "))
-	cmd := exec.Command(`C:\Windows\System32\tar.exe`, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	if err := cmd.Run(); err != nil {
-		if e, ok := err.(*exec.ExitError); ok {
-			os.Exit(e.ExitCode())
+	} else {
+		// No compression — just forward to bsdtar directly
+		if archive != "" {
+			tarArgs = append([]string{"-xf", archive}, tarArgs...)
 		}
-		os.Exit(1)
+		fmt.Fprintf(os.Stderr, "fast-tar: tar.exe %s\n", strings.Join(tarArgs, " "))
+		cmd := exec.Command(`C:\Windows\System32\tar.exe`, tarArgs...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			if e, ok := err.(*exec.ExitError); ok {
+				os.Exit(e.ExitCode())
+			}
+			os.Exit(1)
+		}
 	}
 }
