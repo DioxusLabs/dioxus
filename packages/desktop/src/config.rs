@@ -63,6 +63,7 @@ pub struct Config {
     pub(crate) background_color: Option<(u8, u8, u8, u8)>,
     pub(crate) last_window_close_behavior: WindowCloseBehaviour,
     pub(crate) custom_event_handler: Option<CustomEventHandler>,
+    pub(crate) disable_file_drop_handler: bool,
     pub(crate) navigation_handler: Option<Box<dyn Fn(String) -> bool + 'static>>,
 }
 
@@ -109,6 +110,7 @@ impl Config {
             background_color: None,
             last_window_close_behavior: WindowCloseBehaviour::LastWindowExitsApp,
             custom_event_handler: None,
+            disable_file_drop_handler: false,
             navigation_handler: None,
         }
     }
