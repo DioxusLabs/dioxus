@@ -3,7 +3,6 @@
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
-#[cfg(debug_assertions)]
 use super::validation::HydrationValidationSession;
 use crate::dom::WebsysDom;
 use dioxus_core::{
@@ -16,56 +15,6 @@ use std::fmt::Write;
 use RehydrationError::*;
 
 use super::SuspenseMessage;
-
-#[cfg(not(debug_assertions))]
-#[derive(Default)]
-struct HydrationValidationSession;
-
-#[cfg(not(debug_assertions))]
-impl HydrationValidationSession {
-    fn run_scope<E, F, P>(&mut self, _: Vec<web_sys::Node>, _: P, hydrate: F) -> Result<bool, E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-        P: FnOnce() -> Option<Vec<u32>>,
-    {
-        hydrate(self)?;
-        Ok(false)
-    }
-
-    fn element<E, F>(
-        &mut self,
-        _: &VirtualDom,
-        _: &VNode,
-        _: &TemplateNode,
-        hydrate: F,
-    ) -> Result<(), E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-    {
-        hydrate(self)
-    }
-
-    fn text<E, F>(&mut self, _: &str, hydrate: F) -> Result<(), E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-    {
-        hydrate(self)
-    }
-
-    fn placeholder<E, F>(&mut self, hydrate: F) -> Result<(), E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-    {
-        hydrate(self)
-    }
-
-    fn component<E, F>(&mut self, _: &'static str, hydrate: F) -> Result<(), E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-    {
-        hydrate(self)
-    }
-}
 
 #[derive(Debug)]
 #[non_exhaustive]
