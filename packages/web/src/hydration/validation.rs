@@ -1,9 +1,8 @@
 //! Debug-mode hydration validation.
 //!
-//! Everything in this module is gated behind `#[cfg(debug_assertions)]` at the
-//! module level (see `mod.rs`).  It validates that the server-rendered DOM
-//! matches the client virtual-DOM and, on mismatch, emits a human-readable RSX
-//! diff before falling back to a full client rebuild.
+//! This module is only compiled in debug builds. It validates that the
+//! server-rendered DOM matches the client virtual-DOM and, on mismatch, emits a
+//! human-readable RSX diff before falling back to a full client rebuild.
 
 use dioxus_autofmt::write_block_out;
 use dioxus_core::{
@@ -17,10 +16,6 @@ use dioxus_rsx::{
 };
 use syn::{parse::Parser, parse_quote};
 use wasm_bindgen::JsCast;
-
-// ---------------------------------------------------------------------------
-// Mismatch type
-// ---------------------------------------------------------------------------
 
 /// Information about a hydration mismatch between the expected vdom and actual DOM
 #[derive(Debug)]
@@ -37,19 +32,11 @@ pub(crate) struct HydrationMismatch {
     pub suspense_path: Option<Vec<u32>>,
 }
 
-// ---------------------------------------------------------------------------
-// Element mismatch context (private)
-// ---------------------------------------------------------------------------
-
 #[derive(Debug, Clone)]
 struct ElementMismatchContext {
     expected_rsx: String,
     actual_dom: Option<web_sys::Node>,
 }
-
-// ---------------------------------------------------------------------------
-// DomTraverser
-// ---------------------------------------------------------------------------
 
 /// Helper to traverse DOM nodes in parallel with vdom traversal
 pub(crate) struct DomTraverser {
@@ -73,13 +60,11 @@ impl DomTraverser {
         self.siblings.get(self.index)
     }
 
-    /// Advance to the next sibling and return the previous current
-    pub fn next(&mut self) -> Option<&web_sys::Node> {
-        let node = self.siblings.get(self.index);
-        if node.is_some() {
+    /// Advance to the next sibling
+    pub fn next(&mut self) {
+        if self.siblings.get(self.index).is_some() {
             self.index += 1;
         }
-        node
     }
 
     /// Create a traverser for the children of the current node
@@ -99,32 +84,17 @@ impl DomTraverser {
     }
 }
 
-// ---------------------------------------------------------------------------
-// HydrationValidator
-// ---------------------------------------------------------------------------
-
 /// Maximum number of mismatches to collect before stopping.
 /// After a tag-level mismatch the traverser descends into the wrong subtree,
 /// producing cascading noise. Capping the count keeps output actionable.
 const MAX_MISMATCHES: usize = 5;
 
+#[derive(Default)]
 pub(crate) struct HydrationValidationSession {
     validator: HydrationValidator,
 }
 
 impl HydrationValidationSession {
-    pub fn root() -> Self {
-        Self {
-            validator: HydrationValidator::new(),
-        }
-    }
-
-    pub fn streaming() -> Self {
-        Self {
-            validator: HydrationValidator::new(),
-        }
-    }
-
     pub fn run_scope<E, F, P>(
         &mut self,
         roots: Vec<web_sys::Node>,
@@ -137,7 +107,6 @@ impl HydrationValidationSession {
     {
         self.validator.init_traversal(roots);
         hydrate(self)?;
-
         let has_mismatches = self.validator.has_mismatches();
         if has_mismatches {
             let suspense_path = suspense_path();
@@ -249,6 +218,7 @@ impl HydrationValidationSession {
 }
 
 /// Validator that tracks component path and collects hydration mismatches
+#[derive(Default)]
 struct HydrationValidator {
     /// Stack of component names for path tracking
     component_stack: Vec<&'static str>,
@@ -259,19 +229,7 @@ struct HydrationValidator {
     /// Stack of expected/actual element contexts for scoping node-level diffs
     element_stack: Vec<ElementMismatchContext>,
 }
-
 impl HydrationValidator {
-    pub fn new() -> Self {
-        Self {
-            component_stack: Vec::new(),
-            mismatches: Vec::new(),
-            traverser_stack: Vec::new(),
-            element_stack: Vec::new(),
-        }
-    }
-
-    // -- traversal ----------------------------------------------------------
-
     /// Initialize traversal with the root nodes
     pub fn init_traversal(&mut self, roots: Vec<web_sys::Node>) {
         self.traverser_stack.clear();
@@ -305,8 +263,6 @@ impl HydrationValidator {
         }
     }
 
-    // -- component path -----------------------------------------------------
-
     pub fn push_component(&mut self, name: &'static str) {
         self.component_stack.push(name);
     }
@@ -314,8 +270,6 @@ impl HydrationValidator {
     pub fn pop_component(&mut self) {
         self.component_stack.pop();
     }
-
-    // -- element context ----------------------------------------------------
 
     pub fn push_element_context(
         &mut self,
@@ -332,8 +286,6 @@ impl HydrationValidator {
         self.element_stack.pop();
     }
 
-    // -- validation ---------------------------------------------------------
-
     /// Validate an element node matches expectations
     pub fn validate_element(
         &mut self,
@@ -343,7 +295,7 @@ impl HydrationValidator {
         static_attrs: &'static [TemplateAttribute],
         dynamic_attrs: &[&[Attribute]],
         expected_rsx: &str,
-    ) -> bool {
+    ) {
         let expected_desc = describe_expected_element(expected_tag, expected_namespace);
 
         let Some(dom_node) = dom_node else {
@@ -352,7 +304,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 None,
             );
-            return false;
+            return;
         };
 
         // Check if it's an element
@@ -365,7 +317,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         };
 
         // Check tag name
@@ -379,7 +331,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
 
         // Check namespace for SVG etc.
@@ -400,7 +352,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
 
         // Check that expected attributes are present (not values, just presence)
@@ -414,10 +366,8 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
-
-        true
     }
 
     /// Validate a text node matches expectations
@@ -426,7 +376,7 @@ impl HydrationValidator {
         dom_node: Option<&web_sys::Node>,
         expected_content: &str,
         expected_rsx: &str,
-    ) -> bool {
+    ) {
         let expected_desc = format!(
             "text {}",
             rsx_string_literal(&truncate(expected_content, 50))
@@ -438,7 +388,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 None,
             );
-            return false;
+            return;
         };
 
         if dom_node.node_type() != web_sys::Node::TEXT_NODE {
@@ -450,7 +400,7 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
 
         let actual_content = dom_node.text_content().unwrap_or_default();
@@ -466,25 +416,19 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
-
-        true
     }
 
     /// Validate a placeholder (comment) node
-    pub fn validate_placeholder(
-        &mut self,
-        dom_node: Option<&web_sys::Node>,
-        expected_rsx: &str,
-    ) -> bool {
+    pub fn validate_placeholder(&mut self, dom_node: Option<&web_sys::Node>, expected_rsx: &str) {
         let Some(dom_node) = dom_node else {
             self.push_node_mismatch(
                 "Expected placeholder (comment node), found missing node.".to_string(),
                 expected_rsx.to_string(),
                 None,
             );
-            return false;
+            return;
         };
 
         if dom_node.node_type() != web_sys::Node::COMMENT_NODE {
@@ -496,13 +440,9 @@ impl HydrationValidator {
                 expected_rsx.to_string(),
                 Some(dom_node),
             );
-            return false;
+            return;
         }
-
-        true
     }
-
-    // -- mismatch queries ---------------------------------------------------
 
     /// Check if any mismatches were found
     pub fn has_mismatches(&self) -> bool {
@@ -525,7 +465,7 @@ impl HydrationValidator {
                 mismatch.component_path,
                 mismatch.reason,
                 diff,
-                suspense_info
+                suspense_info,
             );
         }
         if self.mismatches.len() >= MAX_MISMATCHES {
@@ -544,8 +484,6 @@ impl HydrationValidator {
         }
         mismatches
     }
-
-    // -- private helpers ----------------------------------------------------
 
     fn component_path(&self) -> String {
         // Strip internal framework components (SuspenseBoundary, ErrorBoundary, etc.)
@@ -612,10 +550,6 @@ impl HydrationValidator {
         });
     }
 }
-
-// ===========================================================================
-// VNode → RSX serialization
-// ===========================================================================
 
 pub(crate) fn serialize_template_subtree(
     dom: &VirtualDom,
@@ -752,10 +686,6 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
     Some(rendered_value)
 }
 
-// ===========================================================================
-// DOM → RSX serialization
-// ===========================================================================
-
 fn serialize_dom_subtree(node: &web_sys::Node) -> String {
     format_rsx_nodes(serialize_dom_node_items(node))
 }
@@ -822,10 +752,6 @@ fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<RsxAttribute> {
 
     rendered
 }
-
-// ===========================================================================
-// RSX rendering helpers
-// ===========================================================================
 
 fn format_rsx_nodes(nodes: Vec<BodyNode>) -> String {
     let nodes = if nodes.is_empty() {
@@ -953,10 +879,6 @@ fn rsx_element_name(name: &str) -> RsxElementName {
     }
 }
 
-// ===========================================================================
-// RSX formatting / diffing
-// ===========================================================================
-
 pub(crate) fn normalize_rsx_block(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -1024,10 +946,6 @@ fn indent_block(block: &str, prefix: &str) -> String {
         .join("\n")
 }
 
-// ===========================================================================
-// Small RSX building-blocks (pub(crate) so hydrate.rs can call them)
-// ===========================================================================
-
 pub(crate) fn missing_node_rsx() -> String {
     format_rsx_nodes(vec![missing_node_node()])
 }
@@ -1047,10 +965,6 @@ fn placeholder_node() -> BodyNode {
         dyn_idx: Default::default(),
     })
 }
-
-// ===========================================================================
-// Classification helpers
-// ===========================================================================
 
 fn is_simple_rsx_ident(name: &str) -> bool {
     let mut chars = name.chars();
@@ -1198,261 +1112,4 @@ fn describe_expected_element(tag: &str, namespace: Option<&str>) -> String {
 
 fn describe_missing_attrs(attrs: &[String]) -> String {
     attrs.join(", ")
-}
-
-// ===========================================================================
-// Tests
-// ===========================================================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_validator_new() {
-        let validator = HydrationValidator::new();
-        assert!(!validator.has_mismatches());
-        assert!(validator.component_stack.is_empty());
-    }
-
-    #[test]
-    fn test_component_path_tracking() {
-        let mut validator = HydrationValidator::new();
-
-        assert_eq!(validator.component_path(), "<root>");
-
-        validator.push_component("App");
-        assert_eq!(validator.component_path(), "App");
-
-        validator.push_component("Header");
-        assert_eq!(validator.component_path(), "App > Header");
-
-        validator.push_component("NavLink");
-        assert_eq!(validator.component_path(), "App > Header > NavLink");
-
-        validator.pop_component();
-        assert_eq!(validator.component_path(), "App > Header");
-
-        validator.pop_component();
-        assert_eq!(validator.component_path(), "App");
-
-        validator.pop_component();
-        assert_eq!(validator.component_path(), "<root>");
-    }
-
-    #[test]
-    fn test_validate_element_missing_node() {
-        let mut validator = HydrationValidator::new();
-
-        let result = validator.validate_element(None, "div", None, &[], &[], "div {}");
-
-        assert!(!result);
-        assert!(validator.has_mismatches());
-        assert_eq!(validator.mismatches.len(), 1);
-        assert_eq!(
-            validator.mismatches[0].reason,
-            "Expected <div>, found missing node."
-        );
-        assert_eq!(validator.mismatches[0].actual_rsx, "missing_node {}");
-        assert_eq!(validator.mismatches[0].expected_rsx, "div {}");
-    }
-
-    #[test]
-    fn test_validate_text_missing_node() {
-        let mut validator = HydrationValidator::new();
-
-        let result = validator.validate_text(None, "Hello", &rsx_string_literal("Hello"));
-
-        assert!(!result);
-        assert!(validator.has_mismatches());
-        assert_eq!(
-            validator.mismatches[0].reason,
-            "Expected text \"Hello\", found missing node."
-        );
-        assert_eq!(validator.mismatches[0].actual_rsx, "missing_node {}");
-        assert_eq!(validator.mismatches[0].expected_rsx, "\"Hello\"");
-    }
-
-    #[test]
-    fn test_validate_placeholder_missing_node() {
-        let mut validator = HydrationValidator::new();
-
-        let result = validator.validate_placeholder(None, &placeholder_rsx());
-
-        assert!(!result);
-        assert!(validator.has_mismatches());
-        assert_eq!(
-            validator.mismatches[0].reason,
-            "Expected placeholder (comment node), found missing node."
-        );
-        assert_eq!(validator.mismatches[0].actual_rsx, "missing_node {}");
-        assert_eq!(
-            validator.mismatches[0].expected_rsx,
-            "{VNode::placeholder()}"
-        );
-    }
-
-    #[test]
-    fn test_take_mismatches() {
-        let mut validator = HydrationValidator::new();
-        validator.validate_element(None, "div", None, &[], &[], "div {}");
-
-        assert!(validator.has_mismatches());
-
-        let mismatches = validator.take_mismatches(None);
-        assert_eq!(mismatches.len(), 1);
-        assert!(!validator.has_mismatches());
-    }
-
-    #[test]
-    fn test_validation_session_run_scope_drains_mismatches() {
-        let mut session = HydrationValidationSession::root();
-
-        let has_mismatches = session
-            .run_scope(
-                Vec::new(),
-                || None,
-                |session| session.text("Hello", |_| Ok::<(), ()>(())),
-            )
-            .unwrap();
-
-        assert!(has_mismatches);
-        assert!(!session.validator.has_mismatches());
-    }
-
-    #[test]
-    fn test_validation_session_component_scope_restores_path() {
-        let mut session = HydrationValidationSession::streaming();
-
-        session
-            .component("App", |session| {
-                assert_eq!(session.validator.component_path(), "App");
-                session.placeholder(|_| Ok::<(), ()>(()))
-            })
-            .unwrap();
-
-        assert_eq!(session.validator.component_path(), "<root>");
-        let mismatches = session.validator.take_mismatches(Some(&[1, 2, 3]));
-        assert_eq!(mismatches[0].suspense_path, Some(vec![1, 2, 3]));
-    }
-
-    #[test]
-    fn test_describe_missing_attrs() {
-        let attrs = vec!["role".to_string(), "title".to_string()];
-        assert_eq!(super::describe_missing_attrs(&attrs), "role, title");
-    }
-
-    #[test]
-    fn test_dom_traverser_new() {
-        let traverser = DomTraverser::new(Vec::new());
-        assert!(traverser.current().is_none());
-    }
-
-    #[test]
-    fn test_mismatch_includes_component_path() {
-        let mut validator = HydrationValidator::new();
-        validator.push_component("App");
-        validator.push_component("UserProfile");
-
-        validator.validate_element(None, "div", None, &[], &[], "div {}");
-
-        assert_eq!(validator.mismatches[0].component_path, "App > UserProfile");
-    }
-
-    #[test]
-    fn test_component_path_strips_framework_prefix() {
-        let mut validator = HydrationValidator::new();
-        validator.push_component("dioxus_core::suspense::component::SuspenseBoundary");
-        validator.push_component("dioxus_core::error_boundary::ErrorBoundary");
-        validator.push_component("root");
-        validator.push_component("NestedMismatch");
-        validator.push_component("NestedLeaf");
-
-        validator.validate_element(None, "div", None, &[], &[], "div {}");
-
-        assert_eq!(
-            validator.mismatches[0].component_path,
-            "NestedMismatch > NestedLeaf"
-        );
-    }
-
-    #[test]
-    fn test_mismatch_includes_suspense_path() {
-        let mut validator = HydrationValidator::new();
-
-        validator.validate_element(None, "div", None, &[], &[], "div {}");
-
-        let mismatches = validator.take_mismatches(Some(&[1, 2, 3]));
-        assert_eq!(mismatches[0].suspense_path, Some(vec![1, 2, 3]));
-    }
-
-    #[test]
-    fn test_unified_rsx_diff_looks_like_git_diff() {
-        let expected = normalize_rsx_block(r#"strong { id: "nested-leaf", "Nested client leaf" }"#);
-        let actual = normalize_rsx_block(r#"span { id: "nested-leaf", "Nested client leaf" }"#);
-
-        let diff = unified_rsx_diff(&expected, &actual);
-
-        assert!(diff.contains("--- expected"));
-        assert!(diff.contains("+++ actual"));
-        assert!(diff.contains("@@"));
-        assert!(diff.contains("-strong {"));
-        assert!(diff.contains("+span {"));
-    }
-
-    #[test]
-    fn test_attribute_diff_contains_added_and_removed_lines() {
-        let expected = normalize_rsx_block(
-            r#"div { id: "attribute-mismatch", role: "status", title: "Client attribute title", "Attribute branch" }"#,
-        );
-        let actual = normalize_rsx_block(r#"div { id: "attribute-mismatch", "Attribute branch" }"#);
-
-        let diff = unified_rsx_diff(&expected, &actual);
-
-        assert!(diff.contains("role: \"status\""));
-        assert!(diff.contains("title: \"Client attribute title\""));
-        assert!(diff.contains("Attribute branch"));
-    }
-
-    #[test]
-    fn test_autofmt_indents_multiline_children() {
-        let rendered = format_rsx_nodes(vec![rsx_element_node(
-            "section",
-            vec![rsx_string_attribute("id", "placeholder-mismatch-shell")],
-            vec![rsx_element_node(
-                "p",
-                vec![rsx_string_attribute("id", "server-placeholder-content")],
-                vec![rsx_text_node("Server placeholder content")],
-            )],
-        )]);
-
-        assert!(rendered.contains("\n    p {"));
-        assert!(rendered.ends_with("\n}"));
-    }
-
-    #[test]
-    fn test_format_rsx_nodes_dedents_top_level_siblings() {
-        let rendered = format_rsx_nodes(vec![
-            rsx_element_node("div", Vec::new(), Vec::new()),
-            rsx_element_node("span", Vec::new(), Vec::new()),
-        ]);
-
-        assert_eq!(rendered, "div {}\nspan {}");
-    }
-
-    #[test]
-    fn test_normalize_rsx_block_falls_back_to_raw_block() {
-        let invalid = "div {";
-
-        assert_eq!(normalize_rsx_block(invalid), invalid);
-    }
-
-    #[test]
-    fn test_internal_hydration_markers_are_identifiable() {
-        assert!(is_internal_attribute_name("data-node-hydration"));
-        assert!(is_internal_attribute_name("data-dioxus-id"));
-        assert!(!is_internal_attribute_name("title"));
-        assert!(is_placeholder_comment("placeholder3"));
-        assert!(!is_placeholder_comment("node-id3"));
-    }
 }

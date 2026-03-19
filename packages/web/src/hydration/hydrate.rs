@@ -18,18 +18,11 @@ use RehydrationError::*;
 use super::SuspenseMessage;
 
 #[cfg(not(debug_assertions))]
+#[derive(Default)]
 struct HydrationValidationSession;
 
 #[cfg(not(debug_assertions))]
 impl HydrationValidationSession {
-    fn root() -> Self {
-        Self
-    }
-
-    fn streaming() -> Self {
-        Self
-    }
-
     fn run_scope<E, F, P>(&mut self, _: Vec<web_sys::Node>, _: P, hydrate: F) -> Result<bool, E>
     where
         F: FnOnce(&mut Self) -> Result<(), E>,
@@ -176,7 +169,7 @@ impl WebsysDom {
             #[cfg(debug_assertions)]
             debug_locations,
         } = message;
-        let mut validation = HydrationValidationSession::streaming();
+        let mut validation = HydrationValidationSession::default();
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
@@ -346,7 +339,7 @@ impl WebsysDom {
         &mut self,
         vdom: &mut VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
-        let mut validation = HydrationValidationSession::root();
+        let mut validation = HydrationValidationSession::default();
 
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
         let closure =
