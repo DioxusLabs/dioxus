@@ -63,16 +63,6 @@ if (Test-Path "C:/Users/runneradmin/.cargo") {
     Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
 }
 
-# Replace Git's slow MSYS2 tar.exe with a wrapper that delegates to native bsdtar.
-# actions/cache hardcodes "C:\Program Files\Git\usr\bin\tar.exe", so PATH tricks
-# won't work — we have to swap the actual binary.
-# Native bsdtar (C:\Windows\System32\tar.exe) uses Win32 I/O and is ~10x faster.
-$GitTar = "C:\Program Files\Git\usr\bin\tar.exe"
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Rename-Item $GitTar "$($GitTar).bak"
-go build -o $GitTar "$ScriptDir\fast-tar.go"
-Write-Output "Replaced Git tar with fast native wrapper"
-
 Write-Output `
     "DEV_DRIVE=$($Drive)" `
     "TMP=$($Tmp)" `
