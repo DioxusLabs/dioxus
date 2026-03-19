@@ -23,6 +23,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
+  CARGO_PROFILE_DEV_PACKAGE_STAR_STRIP: debuginfo # strip debug info from deps to shrink cache
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2025-10-05
 
