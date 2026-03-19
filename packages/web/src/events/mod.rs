@@ -52,24 +52,8 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
         .expect("event should be a GenericWebSysEvent")
 }
 
-/// Single source of truth for event-name → web_sys type mappings. Generates
+/// Single source of truth for event-name -> web_sys type mappings. Generates
 /// `event_type_matches()` and the `HtmlEventConverter` impl for `WebEventConverter`.
-///
-/// Each event entry takes one of two forms:
-///
-/// Default conversion:
-/// ```ignore
-/// #[events = name, ...]
-/// #[event_type = web_sys::Type]
-/// fn converter(event: &PlatformEventData) -> ReturnType;
-/// ```
-///
-/// Custom conversion:
-/// ```ignore
-/// #[events = name, ...]
-/// #[event_type = web_sys::Type]
-/// fn converter(event: &PlatformEventData) -> ReturnType { body }
-/// ```
 macro_rules! web_events {
     (
         $(
@@ -94,7 +78,6 @@ macro_rules! web_events {
         }
     };
 
-    // Default conversion: construct Synthetic directly via unchecked_into
     (@method $ws:ty, $conv:ident, $evt:ident -> $ret:ty) => {
         #[inline(always)]
         fn $conv(&self, $evt: &PlatformEventData) -> $ret {
@@ -102,7 +85,6 @@ macro_rules! web_events {
         }
     };
 
-    // Custom conversion body
     (@method $ws:ty, $conv:ident, $evt:ident -> $ret:ty, $body:block) => {
         #[inline(always)]
         fn $conv(&self, $evt: &PlatformEventData) -> $ret $body

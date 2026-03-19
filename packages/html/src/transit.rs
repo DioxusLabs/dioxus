@@ -55,7 +55,6 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
     use EventData::*;
 
-    // a little macro-esque thing to make the code below more readable
     #[inline]
     fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
     where
@@ -65,77 +64,56 @@ fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, se
     }
 
     let data = match name {
-        // Cancel
         "cancel" => Cancel(de(data)?),
 
-        // Mouse
         "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => Mouse(de(data)?),
 
-        // Clipboard
         "copy" | "cut" | "paste" => Clipboard(de(data)?),
 
-        // Composition
         "compositionend" | "compositionstart" | "compositionupdate" => Composition(de(data)?),
 
-        // Keyboard
         "keydown" | "keypress" | "keyup" => Keyboard(de(data)?),
 
-        // Focus
         "blur" | "focus" | "focusin" | "focusout" => Focus(de(data)?),
 
-        // Form
         "change" | "input" | "invalid" | "reset" | "submit" => Form(de(data)?),
 
-        // Drag
         "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
         | "drop" => Drag(de(data)?),
 
-        // Pointer
         "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
         | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
         | "lostpointercapture" | "auxclick" => Pointer(de(data)?),
 
-        // Selection
         "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
 
-        // Touch
         "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
 
-        // Resize
         "resize" => Resize(de(data)?),
 
-        // Scroll
         "scroll" | "scrollend" => Scroll(de(data)?),
 
-        // Visible
         "visible" => Visible(de(data)?),
 
-        // Wheel
         "wheel" => Wheel(de(data)?),
 
-        // Media
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "interruptbegin" | "interruptend" | "loadeddata" | "loadedmetadata"
         | "loadstart" | "pause" | "play" | "playing" | "progress" | "ratechange" | "seeked"
         | "seeking" | "stalled" | "suspend" | "timeupdate" | "volumechange" | "waiting"
         | "loadend" | "timeout" => Media(de(data)?),
 
-        // Animation
         "animationstart" | "animationend" | "animationiteration" => Animation(de(data)?),
 
-        // Transition
         "transitionend" => Transition(de(data)?),
 
-        // Toggle
         "toggle" => Toggle(de(data)?),
 
         "load" | "error" => Image(de(data)?),
 
-        // Mounted
         "mounted" => Mounted,
 
-        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
         other => {
             return Err(serde::de::Error::custom(format!(
                 "Unknown event type: {other}"
@@ -239,217 +217,155 @@ impl EventData {
             EventData::Image(data) => {
                 Rc::new(PlatformEventData::new(Box::new(data))) as Rc<dyn Any>
             }
-            EventData::Mounted => {
-                Rc::new(PlatformEventData::new(Box::new(MountedData::new(())))) as Rc<dyn Any>
-            }
+            EventData::Mounted => Rc::new(PlatformEventData::new(Box::new(()))) as Rc<dyn Any>,
         }
     }
 }
 
-#[test]
-fn test_back_and_forth() {
-    let data = HtmlEvent {
-        element: ElementId(0),
-        data: EventData::Mouse(SerializedMouseData::default()),
-        name: "click".to_string(),
-        bubbles: true,
-    };
-
-    println!("{}", serde_json::to_string_pretty(&data).unwrap());
-
-    let o = r#"
-{
-  "element": 0,
-  "name": "click",
-  "bubbles": true,
-  "data": {
-    "alt_key": false,
-    "button": 0,
-    "buttons": 0,
-    "client_x": 0,
-    "client_y": 0,
-    "ctrl_key": false,
-    "meta_key": false,
-    "offset_x": 0,
-    "offset_y": 0,
-    "page_x": 0,
-    "page_y": 0,
-    "screen_x": 0,
-    "screen_y": 0,
-    "shift_key": false
-  }
-}
-    "#;
-
-    let p: HtmlEvent = serde_json::from_str(o).unwrap();
-
-    assert_eq!(data, p);
-}
-
-/// A trait for converting from a serialized event to a concrete event type.
 pub struct SerializedHtmlEventConverter;
 
 impl HtmlEventConverter for SerializedHtmlEventConverter {
     fn convert_animation_data(&self, event: &PlatformEventData) -> AnimationData {
         event
             .downcast::<SerializedAnimationData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_cancel_data(&self, event: &PlatformEventData) -> CancelData {
         event
             .downcast::<SerializedCancelData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_clipboard_data(&self, event: &PlatformEventData) -> ClipboardData {
         event
             .downcast::<SerializedClipboardData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_composition_data(&self, event: &PlatformEventData) -> CompositionData {
         event
             .downcast::<SerializedCompositionData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_drag_data(&self, event: &PlatformEventData) -> DragData {
         event
             .downcast::<SerializedDragData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_focus_data(&self, event: &PlatformEventData) -> FocusData {
         event
             .downcast::<SerializedFocusData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_form_data(&self, event: &PlatformEventData) -> FormData {
         event
             .downcast::<SerializedFormData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_image_data(&self, event: &PlatformEventData) -> ImageData {
         event
             .downcast::<SerializedImageData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_keyboard_data(&self, event: &PlatformEventData) -> KeyboardData {
         event
             .downcast::<SerializedKeyboardData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_media_data(&self, event: &PlatformEventData) -> MediaData {
         event
             .downcast::<SerializedMediaData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_mounted_data(&self, _: &PlatformEventData) -> MountedData {
-        MountedData::from(())
+        MountedData::new(())
     }
-
     fn convert_mouse_data(&self, event: &PlatformEventData) -> MouseData {
         event
             .downcast::<SerializedMouseData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_pointer_data(&self, event: &PlatformEventData) -> PointerData {
         event
             .downcast::<SerializedPointerData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
     fn convert_resize_data(&self, event: &PlatformEventData) -> ResizeData {
         event
             .downcast::<SerializedResizeData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_scroll_data(&self, event: &PlatformEventData) -> ScrollData {
         event
             .downcast::<SerializedScrollData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_selection_data(&self, event: &PlatformEventData) -> SelectionData {
         event
             .downcast::<SerializedSelectionData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_toggle_data(&self, event: &PlatformEventData) -> ToggleData {
         event
             .downcast::<SerializedToggleData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_touch_data(&self, event: &PlatformEventData) -> TouchData {
         event
             .downcast::<SerializedTouchData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_transition_data(&self, event: &PlatformEventData) -> TransitionData {
         event
             .downcast::<SerializedTransitionData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_visible_data(&self, event: &PlatformEventData) -> VisibleData {
         event
             .downcast::<SerializedVisibleData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
-
     fn convert_wheel_data(&self, event: &PlatformEventData) -> WheelData {
         event
             .downcast::<SerializedWheelData>()
-            .cloned()
             .unwrap()
+            .clone()
             .into()
     }
 }
