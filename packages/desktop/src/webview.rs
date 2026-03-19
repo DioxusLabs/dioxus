@@ -321,6 +321,7 @@ impl WebviewInstance {
             webview = webview.with_browser_accelerator_keys(false);
         }
 
+        let navigation_handler = cfg.navigation_handler.take();
         webview = webview
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
@@ -332,9 +333,13 @@ impl WebviewInstance {
             .with_transparent(cfg.window.window.transparent)
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
-            .with_navigation_handler(|var| {
-                // We don't want to allow any navigation
-                // We only want to serve the index file and assets
+            .with_navigation_handler(move |var| {
+                // If the app supplied a custom handler, delegate entirely to it.
+                if let Some(handler) = &navigation_handler {
+                    return handler(var);
+                }
+                // Default behaviour: allow internal dioxus URLs; open external http(s) URLs
+                // in the system browser and block them inside the WebView.
                 if var.starts_with("dioxus://") || var.starts_with("http://dioxus.") {
                     true
                 } else {
