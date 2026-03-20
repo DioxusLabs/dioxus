@@ -4,10 +4,17 @@ use dioxus_core::{TemplateNode, VNode, VirtualDom};
 pub(crate) struct HydrationValidationSession;
 
 impl HydrationValidationSession {
-    pub fn run_scope<E, F, P>(&mut self, _: Vec<web_sys::Node>, _: P, hydrate: F) -> Result<bool, E>
+    pub fn run_scope<E, F, P, R>(
+        &mut self,
+        _: Vec<web_sys::Node>,
+        _: P,
+        _: R,
+        hydrate: F,
+    ) -> Result<bool, E>
     where
         F: FnOnce(&mut Self) -> Result<(), E>,
         P: FnOnce() -> Option<Vec<u32>>,
+        R: FnOnce() -> String,
     {
         hydrate(self)?;
         Ok(false)
@@ -46,4 +53,8 @@ impl HydrationValidationSession {
     {
         hydrate(self)
     }
+}
+
+pub(crate) fn serialize_vnode_subtree(_: &VirtualDom, _: &VNode) -> String {
+    String::new()
 }

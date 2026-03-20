@@ -67,6 +67,10 @@ impl DomTraverser {
         }
     }
 
+    pub fn remaining(&self) -> Vec<web_sys::Node> {
+        self.siblings[self.index..].to_vec()
+    }
+
     /// Create a traverser for the children of the current node
     pub fn children(&self) -> Self {
         let Some(current) = self.current() else {
@@ -94,6 +98,7 @@ impl HydrationValidationSession {
         &mut self,
         roots: Vec<web_sys::Node>,
         suspense_path: P,
+        expected_rsx: impl FnOnce() -> String,
         hydrate: F,
     ) -> Result<bool, E>
     where
@@ -102,6 +107,8 @@ impl HydrationValidationSession {
     {
         self.validator.init_traversal(roots);
         hydrate(self)?;
+        self.validator
+            .report_extra_scope_nodes(expected_rsx);
         let has_mismatches = self.validator.has_mismatches();
         if has_mismatches {
             let suspense_path = suspense_path();
@@ -259,6 +266,7 @@ impl HydrationValidator {
     /// Pop back to the parent level
     pub fn pop_children(&mut self) {
         if self.traverser_stack.len() > 1 {
+            self.report_extra_child_nodes();
             self.traverser_stack.pop();
         }
     }
@@ -284,6 +292,44 @@ impl HydrationValidator {
 
     pub fn pop_element_context(&mut self) {
         self.element_stack.pop();
+    }
+
+    fn report_extra_child_nodes(&mut self) {
+        let remaining = self
+            .traverser_stack
+            .last()
+            .map(DomTraverser::remaining)
+            .unwrap_or_default();
+
+        if let Some(first) = remaining.first() {
+            self.push_node_mismatch(
+                format!(
+                    "Expected no additional child nodes, found {} extra DOM node(s).",
+                    remaining.len()
+                ),
+                "<extra child nodes>".to_string(),
+                Some(first),
+            );
+        }
+    }
+
+    fn report_extra_scope_nodes(&mut self, expected_rsx: impl FnOnce() -> String) {
+        let remaining = self
+            .traverser_stack
+            .last()
+            .map(DomTraverser::remaining)
+            .unwrap_or_default();
+
+        if !remaining.is_empty() {
+            self.push_mismatch(
+                format!(
+                    "Expected no additional root nodes, found {} extra DOM node(s).",
+                    remaining.len()
+                ),
+                expected_rsx(),
+                serialize_dom_nodes(&remaining),
+            );
+        }
     }
 
     /// Validate an element node matches expectations
@@ -355,13 +401,12 @@ impl HydrationValidator {
             return;
         }
 
-        // Check that expected attributes are present (not values, just presence)
-        let missing_attrs = find_missing_attrs(element, static_attrs, dynamic_attrs);
-        if !missing_attrs.is_empty() {
-            let missing_attrs = describe_missing_attrs(&missing_attrs);
+        let attr_mismatches = find_attribute_mismatches(element, static_attrs, dynamic_attrs);
+        if attr_mismatches.has_mismatches() {
             self.push_element_mismatch(
                 format!(
-                    "Expected {expected_desc} with attributes [{missing_attrs}], but the DOM node is missing them."
+                    "Expected {expected_desc} attributes to match, but {}.",
+                    attr_mismatches.describe()
                 ),
                 expected_rsx.to_string(),
                 Some(dom_node),
@@ -401,10 +446,8 @@ impl HydrationValidator {
         }
 
         let actual_content = dom_node.text_content().unwrap_or_default();
-        let expected_trimmed = expected_content.trim();
-        let actual_trimmed = actual_content.trim();
 
-        if expected_trimmed != actual_trimmed {
+        if expected_content != actual_content {
             self.push_node_mismatch(
                 format!(
                     "Expected {expected_desc}, found text {}.",
@@ -617,6 +660,10 @@ pub(crate) fn serialize_template_subtree(
     format_rsx_nodes(serialize_template_node_items(dom, vnode, node))
 }
 
+pub(crate) fn serialize_vnode_subtree(dom: &VirtualDom, vnode: &VNode) -> String {
+    format_rsx_nodes(serialize_vnode_items(dom, vnode))
+}
+
 fn serialize_template_node_items(
     dom: &VirtualDom,
     vnode: &VNode,
@@ -740,6 +787,14 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
 
 fn serialize_dom_subtree(node: &web_sys::Node) -> String {
     format_rsx_nodes(serialize_dom_node_items(node))
+}
+
+fn serialize_dom_nodes(nodes: &[web_sys::Node]) -> String {
+    format_rsx_nodes(
+        nodes.iter()
+            .flat_map(serialize_dom_node_items)
+            .collect::<Vec<_>>(),
+    )
 }
 
 fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<BodyNode> {
@@ -951,41 +1006,211 @@ fn should_skip_validation_node(node: &web_sys::Node) -> bool {
         || script.starts_with("window.initial_dioxus_hydration_debug_locations=")
 }
 
-fn find_missing_attrs(
+#[derive(Default)]
+struct AttributeMismatches {
+    missing: Vec<String>,
+    unexpected: Vec<String>,
+    mismatched: Vec<String>,
+}
+
+impl AttributeMismatches {
+    fn has_mismatches(&self) -> bool {
+        !self.missing.is_empty() || !self.unexpected.is_empty() || !self.mismatched.is_empty()
+    }
+
+    fn describe(&self) -> String {
+        let mut parts = Vec::new();
+
+        if !self.missing.is_empty() {
+            parts.push(format!(
+                "the DOM is missing [{}]",
+                describe_missing_attrs(&self.missing)
+            ));
+        }
+
+        if !self.unexpected.is_empty() {
+            parts.push(format!(
+                "the DOM has unexpected [{}]",
+                describe_missing_attrs(&self.unexpected)
+            ));
+        }
+
+        if !self.mismatched.is_empty() {
+            parts.push(format!(
+                "these values differ [{}]",
+                self.mismatched.join(", ")
+            ));
+        }
+
+        parts.join("; ")
+    }
+}
+
+#[derive(Clone)]
+enum ExpectedAttributeValue {
+    Absent,
+    Present,
+    Exact(String),
+    PresenceOnly,
+}
+
+fn find_attribute_mismatches(
     element: &web_sys::Element,
     static_attrs: &'static [TemplateAttribute],
     dynamic_attrs: &[&[Attribute]],
-) -> Vec<String> {
-    let mut missing = Vec::new();
+) -> AttributeMismatches {
+    let mut mismatches = AttributeMismatches::default();
+    let mut expected = std::collections::BTreeMap::<String, ExpectedAttributeValue>::new();
 
     for attr in static_attrs {
-        if let TemplateAttribute::Static { name, .. } = attr {
-            if is_internal_attribute_name(name) {
+        if let TemplateAttribute::Static {
+            name,
+            value,
+            namespace,
+        } = attr
+        {
+            if should_skip_attribute(name, *namespace) {
                 continue;
             }
-            if !element.has_attribute(name) {
-                missing.push((*name).to_string());
-            }
+            expected.insert(
+                (*name).to_string(),
+                expected_static_attribute_value(name, value),
+            );
         }
     }
 
     for attrs in dynamic_attrs {
         for attr in attrs.iter() {
-            if is_internal_attribute_name(attr.name) {
+            if should_skip_attribute(attr.name, attr.namespace) {
                 continue;
             }
-            if matches!(attr.value, AttributeValue::None) {
-                continue;
-            }
-            if !element.has_attribute(attr.name) {
-                missing.push(attr.name.to_string());
-            }
+            expected.insert(
+                attr.name.to_string(),
+                expected_dynamic_attribute_value(attr.name, &attr.value),
+            );
         }
     }
 
-    missing.sort();
-    missing.dedup();
-    missing
+    let mut actual = std::collections::BTreeMap::<String, String>::new();
+    let names = element.get_attribute_names();
+    for idx in 0..names.length() {
+        let Some(name) = names.get(idx).as_string() else {
+            continue;
+        };
+        if should_skip_attribute(&name, None) {
+            continue;
+        }
+        actual.insert(name.clone(), element.get_attribute(&name).unwrap_or_default());
+    }
+
+    for (name, expected_value) in &expected {
+        match expected_value {
+            ExpectedAttributeValue::Absent => {
+                if actual.contains_key(name) {
+                    mismatches.unexpected.push(name.clone());
+                }
+            }
+            ExpectedAttributeValue::Present | ExpectedAttributeValue::PresenceOnly => {
+                if !actual.contains_key(name) {
+                    mismatches.missing.push(name.clone());
+                }
+            }
+            ExpectedAttributeValue::Exact(expected_value) => match actual.get(name) {
+                None => mismatches.missing.push(name.clone()),
+                Some(actual_value) if actual_value != expected_value => mismatches.mismatched.push(
+                    format!(
+                        "{}: expected {:?}, found {:?}",
+                        name, expected_value, actual_value
+                    ),
+                ),
+                Some(_) => {}
+            },
+        }
+    }
+
+    for name in actual.keys() {
+        if !expected.contains_key(name) {
+            mismatches.unexpected.push(name.clone());
+        }
+    }
+
+    mismatches.missing.sort();
+    mismatches.missing.dedup();
+    mismatches.unexpected.sort();
+    mismatches.unexpected.dedup();
+    mismatches
+}
+
+fn expected_static_attribute_value(name: &str, value: &str) -> ExpectedAttributeValue {
+    if is_boolean_html_attribute(name) {
+        if str_truthy(value) {
+            ExpectedAttributeValue::Present
+        } else {
+            ExpectedAttributeValue::Absent
+        }
+    } else {
+        ExpectedAttributeValue::Exact(value.to_string())
+    }
+}
+
+fn expected_dynamic_attribute_value(name: &str, value: &AttributeValue) -> ExpectedAttributeValue {
+    match value {
+        AttributeValue::None => ExpectedAttributeValue::Absent,
+        AttributeValue::Text(value) => {
+            if is_boolean_html_attribute(name) {
+                if str_truthy(value) {
+                    ExpectedAttributeValue::Present
+                } else {
+                    ExpectedAttributeValue::Absent
+                }
+            } else {
+                ExpectedAttributeValue::Exact(value.clone())
+            }
+        }
+        AttributeValue::Float(value) => {
+            if is_boolean_html_attribute(name) {
+                if *value != 0.0 {
+                    ExpectedAttributeValue::Present
+                } else {
+                    ExpectedAttributeValue::Absent
+                }
+            } else {
+                ExpectedAttributeValue::Exact(value.to_string())
+            }
+        }
+        AttributeValue::Int(value) => {
+            if is_boolean_html_attribute(name) {
+                if *value != 0 {
+                    ExpectedAttributeValue::Present
+                } else {
+                    ExpectedAttributeValue::Absent
+                }
+            } else {
+                ExpectedAttributeValue::Exact(value.to_string())
+            }
+        }
+        AttributeValue::Bool(value) => {
+            if is_boolean_html_attribute(name) {
+                if *value {
+                    ExpectedAttributeValue::Present
+                } else {
+                    ExpectedAttributeValue::Absent
+                }
+            } else {
+                ExpectedAttributeValue::Exact(value.to_string())
+            }
+        }
+        AttributeValue::Any(_) => ExpectedAttributeValue::PresenceOnly,
+        AttributeValue::Listener(_) => ExpectedAttributeValue::Absent,
+    }
+}
+
+fn str_truthy(value: &str) -> bool {
+    !value.is_empty() && value != "0" && !value.eq_ignore_ascii_case("false")
+}
+
+fn should_skip_attribute(name: &str, namespace: Option<&str>) -> bool {
+    namespace.is_some() || is_internal_attribute_name(name)
 }
 
 fn truncate(s: &str, max_len: usize) -> String {

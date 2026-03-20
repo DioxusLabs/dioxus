@@ -206,6 +206,12 @@ impl WebsysDom {
         let has_mismatches = validation.run_scope(
             validation_roots(scope_id, dom, &under),
             || suspense_path.clone(),
+            || {
+                let scope = dom
+                    .get_scope(scope_id)
+                    .expect("scope should exist during hydration");
+                super::validation::serialize_vnode_subtree(dom, scope.root_node())
+            },
             |validation| {
                 let scope = dom
                     .get_scope(scope_id)
@@ -248,20 +254,13 @@ impl WebsysDom {
                     }
                 }
 
-                // Build the new nodes into a detached element so they
-                // don't end up inside the live root element.
-                let document = web_sys::window().unwrap().document().unwrap();
-                let staging: web_sys::Node = document.create_element("div").unwrap().into();
-                let real_root = std::mem::replace(&mut self.root, staging.clone());
                 let m = dom.create_scope_dom(self, scope_id);
                 self.append_children(ElementId(0), m);
-                self.flush_edits();
-                // Restore the real root.
-                self.root = real_root;
+                self.interpreter.flush();
 
-                // Move the staging div's children into the correct parent.
+                let rebuilt_nodes = take_last_child_nodes(&self.root, m);
                 if let Some(parent) = parent {
-                    while let Some(child) = staging.first_child() {
+                    for child in rebuilt_nodes {
                         if let Some(ref sibling) = next_sibling {
                             let _ = parent.insert_before(&child, Some(sibling));
                         } else {
@@ -269,6 +268,9 @@ impl WebsysDom {
                         }
                     }
                 }
+
+                #[cfg(feature = "mounted")]
+                self.flush_queued_mounted_events();
             }
 
             return Ok(());
@@ -496,6 +498,22 @@ fn validation_roots(
     } else {
         under.to_vec()
     }
+}
+
+fn take_last_child_nodes(root: &web_sys::Node, count: usize) -> Vec<web_sys::Node> {
+    let mut nodes = Vec::with_capacity(count);
+    let mut current = root.last_child();
+
+    while nodes.len() < count {
+        let Some(node) = current else {
+            break;
+        };
+        current = node.previous_sibling();
+        nodes.push(node);
+    }
+
+    nodes.reverse();
+    nodes
 }
 
 fn write_comma_separated(id: &[u32], into: &mut String) {

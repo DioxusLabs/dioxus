@@ -23,6 +23,9 @@ fn App() -> Element {
             NestedMismatch {}
             TextMismatch {}
             AttributeMismatch {}
+            AttributeValueMismatch {}
+            WhitespaceMismatch {}
+            ExtraNodeMismatch {}
             PlaceholderMismatch {}
             SuspenseBoundary {
                 fallback: |_| rsx! { div { id: "streaming-fallback", "Loading streaming…" } },
@@ -141,6 +144,73 @@ fn AttributeMismatch() -> Element {
 }
 
 #[component]
+fn AttributeValueMismatch() -> Element {
+    let title = if cfg!(target_arch = "wasm32") {
+        "Client value title"
+    } else {
+        "Server value title"
+    };
+    let data_side = if cfg!(target_arch = "wasm32") {
+        "client"
+    } else {
+        "server"
+    };
+
+    rsx! {
+        section {
+            id: "attribute-value-mismatch-shell",
+            h2 { "Attribute value mismatch" }
+            div {
+                id: "attribute-value-mismatch",
+                title,
+                "data-side": data_side,
+                "Attribute value branch"
+            }
+        }
+    }
+}
+
+#[component]
+fn WhitespaceMismatch() -> Element {
+    let text = if cfg!(target_arch = "wasm32") {
+        "  Client whitespace content  "
+    } else {
+        "Client whitespace content"
+    };
+
+    rsx! {
+        section {
+            id: "whitespace-mismatch-shell",
+            h2 { "Whitespace mismatch" }
+            pre {
+                id: "whitespace-mismatch",
+                "{text}"
+            }
+        }
+    }
+}
+
+#[component]
+fn ExtraNodeMismatch() -> Element {
+    rsx! {
+        section {
+            id: "extra-node-mismatch-shell",
+            h2 { "Extra node mismatch" }
+            div {
+                id: "extra-node-stable",
+                "Shared child"
+            }
+            if !cfg!(target_arch = "wasm32") {
+                p {
+                    id: "server-extra-node",
+                    "Server extra node"
+                }
+            }
+        }
+    }
+}
+
+#[component]
 fn PlaceholderMismatch() -> Element {
     rsx! {
         section {
@@ -171,7 +241,7 @@ fn PlaceholderSlot() -> Element {
 fn StreamingMismatch() -> Element {
     // use_server_future suspends until the server resolves.
     let value = use_server_future(|| async {
-        async_std::task::sleep(std::time::Duration::from_millis(200)).await;
+        async_std::task::sleep(std::time::Duration::from_millis(600)).await;
         "streamed data".to_string()
     })?()
     .unwrap();

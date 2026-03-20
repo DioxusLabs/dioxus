@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-dioxus = { workspace = true, features = ["fullstack"] }
+dioxus = { workspace = true, features = ["fullstack", "debug-hydration-validation"] }
 async-std = "1"
 
 [features]

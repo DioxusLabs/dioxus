@@ -97,7 +97,8 @@ lazy-js-bundle = { workspace = true }
 
 [features]
 default = ["mounted", "devtools", "document"]
-hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core", "dep:dioxus-autofmt", "dep:dioxus-rsx", "dep:syn"]
+hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
+debug-hydration-validation = ["dep:dioxus-autofmt", "dep:dioxus-rsx", "dep:syn"]
 mounted = [
     "web-sys/Element",
     "web-sys/Element",
