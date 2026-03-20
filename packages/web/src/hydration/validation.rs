@@ -701,12 +701,7 @@ fn render_static_template_attribute(name: &str, value: &str) -> Option<RsxAttrib
         return None;
     }
 
-    let value = if is_boolean_html_attribute(name) && (value.is_empty() || value == "true") {
-        let value = true;
-        expr_attribute(name, parse_quote!(#value))
-    } else {
-        text_attribute(name, value)
-    };
+    let value = text_attribute(name, value);
 
     Some(value)
 }

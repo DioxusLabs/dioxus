@@ -99,10 +99,7 @@ pub fn try_fmt_file(
         // Writing *should* not fail but it's possible that it does
         if writer.write_rsx_call(&body).is_err() {
             let span = writer.invalid_exprs.pop().unwrap_or_else(Span::call_site);
-            return Err(syn::Error::new(
-                span,
-                "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro",
-            ));
+            return Err(syn::Error::new(span, "Failed emit valid rsx - likely due to partially complete expressions in the rsx! macro"));
         }
 
         // writing idents leaves the final line ended at the end of the last ident
