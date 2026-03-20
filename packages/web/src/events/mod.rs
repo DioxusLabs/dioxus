@@ -139,9 +139,7 @@ impl HtmlEventConverter for WebEventConverter {
         }
         #[cfg(not(feature = "mounted"))]
         {
-            panic!(
-                "mounted events are not supported without the mounted feature on the dioxus-web crate enabled"
-            )
+            panic!("mounted events are not supported without the mounted feature on the dioxus-web crate enabled")
         }
     }
 
