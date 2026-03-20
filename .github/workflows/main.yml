@@ -209,7 +209,7 @@ jobs:
           test -n "$(find target -name '*.AppImage' -print -quit)"
           test -n "$(find target -name '*.deb' -print -quit)"
           test -n "$(find target -name '*.rpm' -print -quit)"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hotdog-linux-bundles
@@ -243,7 +243,7 @@ jobs:
           find target -type f -name '*.dmg' -print
           test -n "$(find target -type d -name '*.app' -print -quit)"
           test -n "$(find target -type f -name '*.dmg' -print -quit)"
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hotdog-macos-bundles
@@ -300,7 +300,7 @@ jobs:
       #   shell: pwsh
       #   run: |
       #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hotdog-windows-bundles-smoke
@@ -350,7 +350,7 @@ jobs:
       #   shell: pwsh
       #   run: |
       #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report-windows
@@ -409,7 +409,7 @@ jobs:
           npm install -D @playwright/test
           npx playwright install
           npx playwright test
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
