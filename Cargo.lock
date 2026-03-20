@@ -6484,7 +6484,6 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
- "dioxus-html",
  "rustc-hash 2.1.1",
 ]
 

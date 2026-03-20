@@ -1066,7 +1066,7 @@ builder_constructors! {
     area None {
         alt: String DEFAULT,
         coords: String DEFAULT, // TODO could perhaps be validated
-        download: String DEFAULT,
+        download: Bool DEFAULT,
         href: Uri DEFAULT,
         hreflang: LanguageTag DEFAULT,
         shape: AreaShape DEFAULT,
@@ -1450,7 +1450,7 @@ builder_constructors! {
         readonly: Bool DEFAULT,
         required: Bool DEFAULT,
         size: usize DEFAULT,
-        spellcheck: BoolOrDefault DEFAULT,
+        spellcheck: Bool DEFAULT,
         src: Uri DEFAULT,
         step: String DEFAULT,
         tabindex: usize DEFAULT,
