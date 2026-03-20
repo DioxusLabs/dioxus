@@ -3,10 +3,11 @@
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
+use super::validation::HydrationValidationSession;
 use crate::dom::WebsysDom;
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
-    SuspenseContext, TemplateNode, VNode, VirtualDom,
+    SuspenseContext, TemplateNode, VNode, VirtualDom, WriteMutations,
 };
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
@@ -117,6 +118,7 @@ impl WebsysDom {
             #[cfg(debug_assertions)]
             debug_locations,
         } = message;
+        let mut validation = HydrationValidationSession::default();
 
         let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
@@ -176,27 +178,101 @@ impl WebsysDom {
             // If the scope was removed on the client, we may not be able to rehydrate it, but this shouldn't cause an error
             return Ok(());
         };
+        let root_scope_id = root_scope.id();
 
         // As we hydrate the suspense boundary, set the current path to the path of the suspense boundary
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        self.start_hydration_at_scope(root_scope, dom, children)?;
+        self.start_hydration_at_scope(root_scope_id, dom, children, &mut validation)?;
 
         Ok(())
     }
 
     fn start_hydration_at_scope(
         &mut self,
-        scope: &ScopeState,
-        dom: &VirtualDom,
+        scope_id: ScopeId,
+        dom: &mut VirtualDom,
         under: Vec<web_sys::Node>,
+        validation: &mut HydrationValidationSession,
     ) -> Result<(), RehydrationError> {
         let mut ids = Vec::new();
         let mut to_mount = Vec::new();
+        let suspense_path = if scope_id == dom.base_scope().id() {
+            None
+        } else {
+            Some(self.suspense_hydration_ids.current_path.clone())
+        };
+        let has_mismatches = validation.run_scope(
+            validation_roots(scope_id, dom, &under),
+            || suspense_path.clone(),
+            |validation| {
+                let scope = dom
+                    .get_scope(scope_id)
+                    .expect("scope should exist during hydration");
+                self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount, validation)
+            },
+        )?;
 
-        // Recursively rehydrate the nodes under the scope
-        self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount)?;
+        if has_mismatches {
+            self.skip_mutations = false;
+
+            tracing::warn!(
+                "Hydration mismatches detected in scope {scope_id:?}. Rebuilding subtree."
+            );
+
+            let is_root = scope_id == dom.base_scope().id();
+
+            if is_root {
+                // Root scope: `under` is [root_element]. Clear its children
+                // and rebuild directly into the root (ElementId(0)).
+                if let Some(root) = under.first() {
+                    while let Some(child) = root.first_child() {
+                        let _ = root.remove_child(&child);
+                    }
+                }
+
+                let m = dom.create_scope_dom(self, scope_id);
+                self.append_children(ElementId(0), m);
+                self.flush_edits();
+            } else {
+                // Streaming scope: `under` is the child nodes themselves.
+                // Save a reference sibling so we can insert in the right
+                // spot, then remove the old nodes.
+                let first_node = under.first().cloned();
+                let parent = first_node.as_ref().and_then(|n| n.parent_node());
+                let next_sibling = under.last().and_then(|n| n.next_sibling());
+                for node in &under {
+                    if let Some(p) = node.parent_node() {
+                        let _ = p.remove_child(node);
+                    }
+                }
+
+                // Build the new nodes into a detached element so they
+                // don't end up inside the live root element.
+                let document = web_sys::window().unwrap().document().unwrap();
+                let staging: web_sys::Node = document.create_element("div").unwrap().into();
+                let real_root = std::mem::replace(&mut self.root, staging.clone());
+                let m = dom.create_scope_dom(self, scope_id);
+                self.append_children(ElementId(0), m);
+                self.flush_edits();
+                // Restore the real root.
+                self.root = real_root;
+
+                // Move the staging div's children into the correct parent.
+                if let Some(parent) = parent {
+                    while let Some(child) = staging.first_child() {
+                        if let Some(ref sibling) = next_sibling {
+                            let _ = parent.insert_before(&child, Some(sibling));
+                        } else {
+                            let _ = parent.append_child(&child);
+                        }
+                    }
+                }
+            }
+
+            return Ok(());
+        }
 
         self.interpreter.base().hydrate(ids, under);
 
@@ -210,8 +286,10 @@ impl WebsysDom {
 
     pub fn rehydrate(
         &mut self,
-        vdom: &VirtualDom,
+        vdom: &mut VirtualDom,
     ) -> Result<UnboundedReceiver<SuspenseMessage>, RehydrationError> {
+        let mut validation = HydrationValidationSession::default();
+
         let (mut tx, rx) = futures_channel::mpsc::unbounded();
         let closure =
             move |path: Vec<u32>,
@@ -236,7 +314,12 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        self.start_hydration_at_scope(vdom.base_scope(), vdom, vec![self.root.clone()])?;
+        self.start_hydration_at_scope(
+            vdom.base_scope().id(),
+            vdom,
+            vec![self.root.clone()],
+            &mut validation,
+        )?;
 
         Ok(rx)
     }
@@ -247,6 +330,7 @@ impl WebsysDom {
         dom: &VirtualDom,
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
+        validation: &mut HydrationValidationSession,
     ) -> Result<(), RehydrationError> {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
         if let Some(suspense) =
@@ -258,7 +342,7 @@ impl WebsysDom {
             }
         }
 
-        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
+        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount, validation)
     }
 
     fn rehydrate_vnode(
@@ -267,6 +351,7 @@ impl WebsysDom {
         vnode: &VNode,
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
+        validation: &mut HydrationValidationSession,
     ) -> Result<(), RehydrationError> {
         for (i, root) in vnode.template.roots.iter().enumerate() {
             self.rehydrate_template_node(
@@ -276,6 +361,7 @@ impl WebsysDom {
                 ids,
                 to_mount,
                 Some(vnode.mounted_root(i, dom).ok_or(VNodeNotInitialized)?),
+                validation,
             )?;
         }
         Ok(())
@@ -289,11 +375,12 @@ impl WebsysDom {
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
         root_id: Option<ElementId>,
+        validation: &mut HydrationValidationSession,
     ) -> Result<(), RehydrationError> {
         match node {
             TemplateNode::Element {
-                children, attrs, ..
-            } => {
+                attrs, children, ..
+            } => validation.element(dom, vnode, node, |validation| {
                 let mut mounted_id = root_id;
                 for attr in *attrs {
                     if let dioxus_core::TemplateAttribute::Dynamic { id } = attr {
@@ -318,12 +405,13 @@ impl WebsysDom {
                 if let Some(id) = mounted_id {
                     ids.push(id.0 as u32);
                 }
-                if !children.is_empty() {
-                    for child in *children {
-                        self.rehydrate_template_node(dom, vnode, child, ids, to_mount, None)?;
-                    }
+                for child in *children {
+                    self.rehydrate_template_node(
+                        dom, vnode, child, ids, to_mount, None, validation,
+                    )?;
                 }
-            }
+                Ok(())
+            })?,
             TemplateNode::Dynamic { id } => self.rehydrate_dynamic_node(
                 dom,
                 &vnode.dynamic_nodes[*id],
@@ -331,12 +419,14 @@ impl WebsysDom {
                 vnode,
                 ids,
                 to_mount,
+                validation,
             )?,
-            TemplateNode::Text { .. } => {
+            TemplateNode::Text { text } => validation.text(text, |_| {
                 if let Some(id) = root_id {
                     ids.push(id.0 as u32);
                 }
-            }
+                Ok(())
+            })?,
         }
         Ok(())
     }
@@ -349,29 +439,62 @@ impl WebsysDom {
         vnode: &VNode,
         ids: &mut Vec<u32>,
         to_mount: &mut Vec<ElementId>,
+        validation: &mut HydrationValidationSession,
     ) -> Result<(), RehydrationError> {
         match dynamic {
-            dioxus_core::DynamicNode::Text(_) | dioxus_core::DynamicNode::Placeholder(_) => {
+            dioxus_core::DynamicNode::Text(text) => validation.text(&text.value, |_| {
                 ids.push(
                     vnode
                         .mounted_dynamic_node(dynamic_node_index, dom)
                         .ok_or(VNodeNotInitialized)?
                         .0 as u32,
                 );
-            }
+                Ok(())
+            })?,
+            dioxus_core::DynamicNode::Placeholder(_) => validation.placeholder(|_| {
+                ids.push(
+                    vnode
+                        .mounted_dynamic_node(dynamic_node_index, dom)
+                        .ok_or(VNodeNotInitialized)?
+                        .0 as u32,
+                );
+                Ok(())
+            })?,
             dioxus_core::DynamicNode::Component(comp) => {
-                let scope = comp
-                    .mounted_scope(dynamic_node_index, vnode, dom)
-                    .ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(scope, dom, ids, to_mount)?;
+                validation.component(comp.name, |validation| {
+                    let scope = comp
+                        .mounted_scope(dynamic_node_index, vnode, dom)
+                        .ok_or(VNodeNotInitialized)?;
+                    self.rehydrate_scope(scope, dom, ids, to_mount, validation)
+                })?
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
                 for vnode in fragment {
-                    self.rehydrate_vnode(dom, vnode, ids, to_mount)?;
+                    self.rehydrate_vnode(dom, vnode, ids, to_mount, validation)?;
                 }
             }
         }
         Ok(())
+    }
+}
+
+fn validation_roots(
+    scope_id: ScopeId,
+    dom: &VirtualDom,
+    under: &[web_sys::Node],
+) -> Vec<web_sys::Node> {
+    if scope_id == dom.base_scope().id() {
+        let mut roots = Vec::new();
+        if let Some(root) = under.first() {
+            let mut child = root.first_child();
+            while let Some(node) = child {
+                roots.push(node.clone());
+                child = node.next_sibling();
+            }
+        }
+        roots
+    } else {
+        under.to_vec()
     }
 }
 

@@ -6223,6 +6223,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-fullstack-hydration-recovery-test"
+version = "0.1.0"
+dependencies = [
+ "async-std",
+ "dioxus",
+]
+
+[[package]]
 name = "dioxus-playwright-fullstack-mounted-test"
 version = "0.1.0"
 dependencies = [
@@ -6476,6 +6484,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-core-types",
+ "dioxus-html",
  "rustc-hash 2.1.1",
 ]
 
@@ -6516,6 +6525,7 @@ version = "0.7.3"
 dependencies = [
  "ciborium",
  "dioxus",
+ "dioxus-autofmt",
  "dioxus-cli-config",
  "dioxus-core",
  "dioxus-core-types",
@@ -6525,6 +6535,7 @@ dependencies = [
  "dioxus-history",
  "dioxus-html",
  "dioxus-interpreter-js",
+ "dioxus-rsx",
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-web",
@@ -6540,6 +6551,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "syn 2.0.114",
  "tracing",
  "tracing-wasm",
  "wasm-bindgen",

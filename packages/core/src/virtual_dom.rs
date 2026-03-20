@@ -593,6 +593,26 @@ impl VirtualDom {
         to.append_children(ElementId(0), m);
     }
 
+    /// Emit creation mutations for a scope's existing vdom tree without
+    /// re-running the component.
+    ///
+    /// This is used for hydration mismatch recovery: the vdom tree is already
+    /// built, but the DOM nodes were never created because hydration failed.
+    /// This walks the existing `last_rendered_node` and emits the mutations
+    /// needed to create real DOM nodes for it.
+    ///
+    /// Returns the number of nodes created on the stack (for use with
+    /// [`WriteMutations::append_children`]).
+    pub fn create_scope_dom(&mut self, to: &mut impl WriteMutations, scope_id: ScopeId) -> usize {
+        let _runtime = RuntimeGuard::new(self.runtime.clone());
+        let existing_nodes = self.scopes[scope_id.0]
+            .last_rendered_node
+            .clone()
+            .expect("scope should have rendered nodes during hydration");
+
+        self.create_scope(Some(to), scope_id, existing_nodes, None)
+    }
+
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
     #[instrument(skip(self, to), level = "trace", name = "VirtualDom::render_immediate")]

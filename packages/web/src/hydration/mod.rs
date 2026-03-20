@@ -2,6 +2,18 @@
 mod hydrate;
 
 #[cfg(feature = "hydrate")]
+#[cfg(debug_assertions)]
+pub(crate) mod validation;
+
+#[cfg(feature = "hydrate")]
+#[cfg(not(debug_assertions))]
+pub(crate) mod validation_stub;
+
+#[cfg(feature = "hydrate")]
+#[cfg(not(debug_assertions))]
+pub(crate) use validation_stub as validation;
+
+#[cfg(feature = "hydrate")]
 #[allow(unused)]
 pub use hydrate::*;
 

@@ -147,7 +147,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             });
             websys_dom.skip_mutations = false;
 
-            let rx = websys_dom.rehydrate(&virtual_dom).unwrap();
+            let rx = websys_dom.rehydrate(&mut virtual_dom).unwrap();
             hydration_receiver = Some(rx);
 
             #[cfg(feature = "mounted")]
