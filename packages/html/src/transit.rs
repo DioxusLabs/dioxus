@@ -53,75 +53,12 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
 #[cfg(feature = "serialize")]
 fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
-    use EventData::*;
-
-    #[inline]
-    fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
-    where
-        F: Deserialize<'de>,
-    {
-        F::deserialize(f)
+    match deserialize_raw_event(name, data)? {
+        Some(result) => Ok(result),
+        None => Err(serde::de::Error::custom(format!(
+            "Unknown event type: {name}"
+        ))),
     }
-
-    let data = match name {
-        "cancel" => Cancel(de(data)?),
-
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => Mouse(de(data)?),
-
-        "copy" | "cut" | "paste" => Clipboard(de(data)?),
-
-        "compositionend" | "compositionstart" | "compositionupdate" => Composition(de(data)?),
-
-        "keydown" | "keypress" | "keyup" => Keyboard(de(data)?),
-
-        "blur" | "focus" | "focusin" | "focusout" => Focus(de(data)?),
-
-        "change" | "input" | "invalid" | "reset" | "submit" => Form(de(data)?),
-
-        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => Drag(de(data)?),
-
-        "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
-        | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
-        | "lostpointercapture" | "auxclick" => Pointer(de(data)?),
-
-        "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
-
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
-
-        "resize" => Resize(de(data)?),
-
-        "scroll" | "scrollend" => Scroll(de(data)?),
-
-        "visible" => Visible(de(data)?),
-
-        "wheel" => Wheel(de(data)?),
-
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "interruptbegin" | "interruptend" | "loadeddata" | "loadedmetadata"
-        | "loadstart" | "pause" | "play" | "playing" | "progress" | "ratechange" | "seeked"
-        | "seeking" | "stalled" | "suspend" | "timeupdate" | "volumechange" | "waiting"
-        | "loadend" | "timeout" => Media(de(data)?),
-
-        "animationstart" | "animationend" | "animationiteration" => Animation(de(data)?),
-
-        "transitionend" => Transition(de(data)?),
-
-        "toggle" => Toggle(de(data)?),
-
-        "load" | "error" => Image(de(data)?),
-
-        "mounted" => Mounted,
-
-        other => {
-            return Err(serde::de::Error::custom(format!(
-                "Unknown event type: {other}"
-            )))
-        }
-    };
-
-    Ok(data)
 }
 
 #[cfg(feature = "serialize")]

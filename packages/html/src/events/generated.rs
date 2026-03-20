@@ -3,7 +3,7 @@ use super::*;
 macro_rules! event_groups {
     (
         $(
-            $data:ident => $converter:ident {
+            $group:ident => $data:ident => $converter:ident {
                 $(
                     $( #[$attr:meta] )*
                     $name:ident : $raw:ident,
@@ -27,6 +27,29 @@ macro_rules! event_groups {
             }
         )*
 
+        #[cfg(feature = "serialize")]
+        pub(crate) fn deserialize_raw_event(
+            name: &str,
+            data: &serde_json::Value,
+        ) -> Result<Option<crate::transit::EventData>, serde_json::Error> {
+            #[inline]
+            fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
+            where
+                F: serde::Deserialize<'de>,
+            {
+                F::deserialize(f)
+            }
+
+            Ok(match name {
+                $(
+                    $( stringify!($raw) )|* $(| stringify!($raw_only))* => {
+                        Some(event_groups!(@deserialize $group, data))
+                    }
+                )*
+                _ => None,
+            })
+        }
+
         $(
             impl_event! {
                 $data;
@@ -37,10 +60,16 @@ macro_rules! event_groups {
             }
         )*
     };
+    (@deserialize Mounted, $data:ident) => {
+        crate::transit::EventData::Mounted
+    };
+    (@deserialize $group:ident, $data:ident) => {
+        crate::transit::EventData::$group(de($data)?)
+    };
 }
 
 event_groups! {
-    AnimationData => convert_animation_data {
+    Animation => AnimationData => convert_animation_data {
         /// onanimationstart
         onanimationstart: animationstart,
         /// onanimationend
@@ -49,12 +78,12 @@ event_groups! {
         onanimationiteration: animationiteration,
     }
 
-    CancelData => convert_cancel_data {
+    Cancel => CancelData => convert_cancel_data {
         /// oncancel
         oncancel: cancel,
     }
 
-    ClipboardData => convert_clipboard_data {
+    Clipboard => ClipboardData => convert_clipboard_data {
         /// oncopy
         oncopy: copy,
         /// oncut
@@ -63,7 +92,7 @@ event_groups! {
         onpaste: paste,
     }
 
-    CompositionData => convert_composition_data {
+    Composition => CompositionData => convert_composition_data {
         /// oncompositionstart
         oncompositionstart: compositionstart,
         /// oncompositionend
@@ -72,7 +101,7 @@ event_groups! {
         oncompositionupdate: compositionupdate,
     }
 
-    DragData => convert_drag_data {
+    Drag => DragData => convert_drag_data {
         /// ondrag
         ondrag: drag,
         /// ondragend
@@ -91,7 +120,7 @@ event_groups! {
         ondrop: drop,
     }
 
-    FocusData => convert_focus_data {
+    Focus => FocusData => convert_focus_data {
         /// onfocus
         onfocus: focus,
         onfocusout: focusout,
@@ -100,7 +129,7 @@ event_groups! {
         onblur: blur,
     }
 
-    FormData => convert_form_data {
+    Form => FormData => convert_form_data {
         /// onchange
         onchange: change,
         /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
@@ -149,14 +178,14 @@ event_groups! {
         onsubmit: submit,
     }
 
-    ImageData => convert_image_data {
+    Image => ImageData => convert_image_data {
         /// onerror
         onerror: error,
         /// onload
         onload: load,
     }
 
-    KeyboardData => convert_keyboard_data {
+    Keyboard => KeyboardData => convert_keyboard_data {
         /// onkeydown
         onkeydown: keydown,
         /// onkeypress
@@ -165,7 +194,7 @@ event_groups! {
         onkeyup: keyup,
     }
 
-    MediaData => convert_media_data {
+    Media => MediaData => convert_media_data {
         ///abort
         onabort: abort,
         ///canplay
@@ -216,7 +245,7 @@ event_groups! {
         @raw timeout,
     }
 
-    MountedData => convert_mounted_data {
+    Mounted => MountedData => convert_mounted_data {
         #[doc(alias = "ref")]
         #[doc(alias = "createRef")]
         #[doc(alias = "useRef")]
@@ -224,7 +253,7 @@ event_groups! {
         onmounted: mounted,
     }
 
-    MouseData => convert_mouse_data {
+    Mouse => MouseData => convert_mouse_data {
         /// Execute a callback when a button is clicked.
         onclick: click,
         /// oncontextmenu
@@ -249,7 +278,7 @@ event_groups! {
         @raw doubleclick,
     }
 
-    PointerData => convert_pointer_data {
+    Pointer => PointerData => convert_pointer_data {
         /// pointerdown
         onpointerdown: pointerdown,
         /// pointermove
@@ -276,19 +305,19 @@ event_groups! {
         @raw pointerlockerror,
     }
 
-    ResizeData => convert_resize_data {
+    Resize => ResizeData => convert_resize_data {
         /// onresize
         onresize: resize,
     }
 
-    ScrollData => convert_scroll_data {
+    Scroll => ScrollData => convert_scroll_data {
         /// onscroll
         onscroll: scroll,
         /// onscrollend
         onscrollend: scrollend,
     }
 
-    SelectionData => convert_selection_data {
+    Selection => SelectionData => convert_selection_data {
         /// select
         onselect: select,
         /// selectstart
@@ -297,14 +326,14 @@ event_groups! {
         onselectionchange: selectionchange,
     }
 
-    ToggleData => convert_toggle_data {
+    Toggle => ToggleData => convert_toggle_data {
         /// ontoggle
         ontoggle: toggle,
         /// onbeforetoggle
         onbeforetoggle: beforetoggle,
     }
 
-    TouchData => convert_touch_data {
+    Touch => TouchData => convert_touch_data {
         /// touchstart
         ontouchstart: touchstart,
         /// touchmove
@@ -315,17 +344,17 @@ event_groups! {
         ontouchcancel: touchcancel,
     }
 
-    TransitionData => convert_transition_data {
+    Transition => TransitionData => convert_transition_data {
         /// transitionend
         ontransitionend: transitionend,
     }
 
-    VisibleData => convert_visible_data {
+    Visible => VisibleData => convert_visible_data {
         /// onvisible
         onvisible: visible,
     }
 
-    WheelData => convert_wheel_data {
+    Wheel => WheelData => convert_wheel_data {
         /// Called when the mouse wheel is rotated over an element.
         onwheel: wheel,
     }
