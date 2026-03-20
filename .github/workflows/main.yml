@@ -23,7 +23,7 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: 0 # todo(jon): cargo-cache wipes incremental artifacts, but we eventually want to cache them
-  CARGO_PROFILE_DEV_PACKAGE_STAR_STRIP: debuginfo # strip debug info from deps to shrink cache
+  # CARGO_PROFILE_DEV_PACKAGE_STAR_STRIP: debuginfo # strip debug info from deps to shrink cache
   RUST_BACKTRACE: 1
   rust_nightly: nightly-2025-10-05
 
@@ -296,10 +296,10 @@ jobs:
             Sort-Object { ($_.Group | Measure-Object Length -Sum).Sum } -Descending |
             Select-Object -First 20 @{N='Ext';E={$_.Name}}, Count, @{N='SizeMB';E={[math]::Round(($_.Group | Measure-Object Length -Sum).Sum / 1MB, 1)}} |
             Format-Table -AutoSize
-      - name: Clean Windows artifacts before cache save
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
+      # - name: Clean Windows artifacts before cache save
+      #   shell: pwsh
+      #   run: |
+      #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
       - uses: actions/upload-artifact@v6
         if: always()
         with:
@@ -345,11 +345,11 @@ jobs:
           npm install -D @playwright/test
           npx playwright install
           npx playwright test
-      - name: Clean Windows artifacts before cache save
-        if: always()
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
+      # - name: Clean Windows artifacts before cache save
+      #   if: always()
+      #   shell: pwsh
+      #   run: |
+      #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
       - uses: actions/upload-artifact@v6
         if: always()
         with:
