@@ -300,7 +300,7 @@ impl AppServer {
                 let mut changes: Vec<_> = event.into_iter().collect();
 
                 // Dequeue in bulk if we can, we might've received a lot of events in one go
-                while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                while let Ok(event) = self.watcher_rx.try_recv() {
                     changes.push(event);
                 }
 
@@ -1313,7 +1313,7 @@ impl AppServer {
                     let depth = relative.components().count();
                     let is_better = best_match
                         .as_ref()
-                        .map_or(true, |(_, best_depth)| depth < *best_depth);
+                        .is_none_or(|(_, best_depth)| depth < *best_depth);
                     if is_better {
                         best_match = Some((krate.name.replace('-', "_"), depth));
                     }

@@ -439,6 +439,7 @@ impl Output {
     /// Render the current state of everything to the console screen
     pub fn render(&mut self, runner: &AppServer, server: &WebServer) {
         if !self.interactive {
+            self.emit_logs_to_tracing();
             return;
         }
 
@@ -1094,11 +1095,31 @@ impl Output {
 
         lines
     }
+
+    /// Drains the current log queue to tracing so they still get printed even if the output is non-interactive
+    fn emit_logs_to_tracing(&mut self) {
+        // In non-interactive mode (CI, piped output), drain pending logs to tracing
+        // so they still appear in stdout/stderr instead of being silently dropped.
+        while let Some(log) = self.pending_logs.pop_back() {
+            let msg = match &log.content {
+                TraceContent::Text(s) => s.as_str(),
+                TraceContent::Cargo(d) => d.message.as_str(),
+            };
+            match log.level {
+                Level::ERROR => tracing::error!("{msg}"),
+                Level::WARN => tracing::warn!("{msg}"),
+                Level::INFO => tracing::info!("{msg}"),
+                Level::DEBUG => tracing::debug!("{msg}"),
+                Level::TRACE => tracing::trace!("{msg}"),
+            }
+        }
+    }
 }
 
 impl std::ops::Drop for Output {
     fn drop(&mut self) {
         if !self.interactive {
+            self.emit_logs_to_tracing();
             return;
         }
 

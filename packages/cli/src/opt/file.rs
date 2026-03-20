@@ -3,7 +3,7 @@ use manganis::{AssetOptions, CssModuleAssetOptions, FolderAssetOptions};
 use manganis_core::{AssetVariant, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
-use crate::css::{process_css_module, process_scss};
+use crate::opt::css::{process_css_module, process_scss};
 
 use super::{
     css::process_css, folder::process_folder, image::process_image, js::process_js,
@@ -11,12 +11,13 @@ use super::{
 };
 
 /// Process a specific file asset with the given options reading from the source and writing to the output path
-pub fn process_file_to(
+pub(crate) fn process_file_to(
     options: &AssetOptions,
     source: &Path,
     output_path: &Path,
+    esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    process_file_to_with_options(options, source, output_path, false)
+    process_file_to_with_options(options, source, output_path, false, esbuild_path)
 }
 
 /// Process a specific file asset with additional options
@@ -25,6 +26,7 @@ pub(crate) fn process_file_to_with_options(
     source: &Path,
     output_path: &Path,
     in_folder: bool,
+    esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
     // If the file already exists and this is a hashed asset, then we must have a file
     // with the same hash already. The hash has the file contents and options, so if we
@@ -61,7 +63,7 @@ pub(crate) fn process_file_to_with_options(
             process_scss(options, source, &temp_path)?;
         }
         ResolvedAssetType::Js(options) => {
-            process_js(options, source, &temp_path, !in_folder)?;
+            process_js(options, source, &temp_path, !in_folder, esbuild_path)?;
         }
         ResolvedAssetType::Image(options) => {
             process_image(options, source, &temp_path)?;
@@ -70,7 +72,7 @@ pub(crate) fn process_file_to_with_options(
             process_json(source, &temp_path)?;
         }
         ResolvedAssetType::Folder(_) => {
-            process_folder(source, &temp_path)?;
+            process_folder(source, &temp_path, esbuild_path)?;
         }
         ResolvedAssetType::File => {
             let source_file = std::fs::File::open(source)?;
