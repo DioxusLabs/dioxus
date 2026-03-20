@@ -26,10 +26,17 @@ mod waker;
 mod webview;
 
 // mobile shortcut is only supported on mobile platforms
-#[cfg(any(target_os = "ios", target_os = "android"))]
+#[cfg(any(target_os = "ios", target_os = "android", target_env = "ohos"))]
 mod mobile_shortcut;
 
 /// The main entrypoint for this crate
+#[cfg(not(target_env = "ohos"))]
+#[path = "launch.rs"]
+pub mod launch;
+
+/// The main entrypoint for this crate on OHOS
+#[cfg(target_env = "ohos")]
+#[path = "launch_ohos.rs"]
 pub mod launch;
 
 // Reexport tao and wry, might want to re-export other important things
@@ -39,11 +46,14 @@ pub use tao::event::WindowEvent;
 pub use tao::window::WindowBuilder;
 pub use wry;
 // Reexport muda only if we are on desktop platforms that support menus
-#[cfg(not(any(target_os = "ios", target_os = "android")))]
+#[cfg(not(any(target_os = "ios", target_os = "android", target_env = "ohos")))]
 pub use muda;
 
 // Tray icon
-#[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+#[cfg(all(
+    any(target_os = "windows", target_os = "linux", target_os = "macos"),
+    not(target_env = "ohos")
+))]
 pub mod trayicon;
 
 // Public exports
@@ -54,5 +64,6 @@ pub use desktop_context::{
 };
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;
+pub use ipc::UserWindowEvent;
 pub use shortcut::{HotKeyState, ShortcutHandle, ShortcutRegistryError};
 pub use wry::RequestAsyncResponder;

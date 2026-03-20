@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use serde::{Deserialize, Serialize};
 use tao::window::WindowId;
 
@@ -5,16 +7,28 @@ use tao::window::WindowId;
 #[derive(Debug, Clone)]
 pub enum UserWindowEvent {
     /// A global hotkey event
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     GlobalHotKeyEvent(global_hotkey::GlobalHotKeyEvent),
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     MudaMenuEvent(muda::MenuEvent),
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     TrayIconEvent(tray_icon::TrayIconEvent),
 
-    #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
+    #[cfg(all(
+        any(target_os = "windows", target_os = "linux", target_os = "macos"),
+        not(target_env = "ohos")
+    ))]
     TrayMenuEvent(tray_icon::menu::MenuEvent),
 
     /// Poll the virtualdom
