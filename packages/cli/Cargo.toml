@@ -148,7 +148,7 @@ md5 = { workspace = true }
 rpm = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
-tar = "0.4.44"
+tar = "0.4.45"
 dircpy = "0.3.19"
 plist = "1.7.4"
 backtrace = "0.3.74"
