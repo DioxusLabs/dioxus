@@ -276,6 +276,19 @@ jobs:
           cache-workspace-crates: "true"
           cache-provider: "warpbuild"
           workspaces: ${{ env.DIOXUS_WORKSPACE }}
+      - name: Move cached target to dev drive
+        shell: pwsh
+        run: |
+          # rust-cache may restore target/ under the checkout dir instead of the dev drive
+          $src = "${{ github.workspace }}\target"
+          $dst = "$env:DIOXUS_WORKSPACE\target"
+          Write-Output "Checkout target exists: $(Test-Path $src)"
+          Write-Output "Dev drive target exists: $(Test-Path $dst)"
+          if ((Test-Path $src) -and $src -ne $dst) {
+            if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
+            Move-Item $src $dst
+            Write-Output "Moved cached target from $src to $dst"
+          }
       - name: Bundle hotdog as Windows packages
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/examples/01-app-demos/hotdog
         run: cargo run --release --manifest-path ..\..\..\Cargo.toml -p dioxus-cli -- bundle --platform desktop --package-types msi --package-types nsis
@@ -337,6 +350,18 @@ jobs:
           cache-provider: "warpbuild"
           workspaces: ${{ env.DIOXUS_WORKSPACE }}
           # save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Move cached target to dev drive
+        shell: pwsh
+        run: |
+          $src = "${{ github.workspace }}\target"
+          $dst = "$env:DIOXUS_WORKSPACE\target"
+          Write-Output "Checkout target exists: $(Test-Path $src)"
+          Write-Output "Dev drive target exists: $(Test-Path $dst)"
+          if ((Test-Path $src) -and $src -ne $dst) {
+            if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
+            Move-Item $src $dst
+            Write-Output "Moved cached target from $src to $dst"
+          }
       - name: Playwright
         working-directory: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests
         env:
