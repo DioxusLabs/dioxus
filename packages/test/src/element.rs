@@ -1,3 +1,4 @@
+use blitz_dom::Node;
 use dioxus_core::{ElementId, Event};
 use dioxus_html::{
     Modifiers, PlatformEventData,
@@ -10,17 +11,12 @@ use std::rc::Rc;
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.
-pub struct TestElement<'doc> {
+pub struct ResolvedElement<'doc> {
     pub(crate) document: &'doc DioxusDocument,
-    pub(crate) node: &'doc blitz_dom::Node,
+    pub(crate) node: &'doc Node,
 }
 
-impl<'vdom> TestElement<'vdom> {
-    /// Synonym of [TestElement::click].
-    pub fn tap(&self) {
-        self.click()
-    }
-
+impl<'doc> ResolvedElement<'doc> {
     /// Dispatches a `click` event on this element.
     ///
     /// The exact location of the click is unspecified.
@@ -37,7 +33,7 @@ impl<'vdom> TestElement<'vdom> {
                 ))),
                 true,
             ),
-        )
+        );
     }
 
     /// Sends an event with the given `name` to this element.
@@ -168,9 +164,9 @@ impl<'vdom> TestElement<'vdom> {
     }
 }
 
-impl<'doc> std::fmt::Debug for TestElement<'doc> {
+impl<'doc> std::fmt::Debug for ResolvedElement<'doc> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("TestElement")
+        f.debug_struct("ResolvedElement")
             .field("node", &self.node)
             .finish()
     }

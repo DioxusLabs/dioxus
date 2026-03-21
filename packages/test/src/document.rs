@@ -1,4 +1,4 @@
-use crate::TestElement;
+use crate::{Matcher, element::ResolvedElement, result::TesterError};
 use blitz_dom::Document as _;
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
@@ -6,20 +6,21 @@ use std::time::Duration;
 use tokio::time::{error::Elapsed, timeout};
 
 const PUMP_TIMEOUT: Duration = Duration::from_millis(1000);
+const MAX_TRIES: usize = 5;
 
 /// Returns a new [Tester] resulting from rendering the given [Element].
-pub fn render(element: fn() -> Element) -> Tester {
-    Tester::from_element(element)
+pub fn render(element: fn() -> Element) -> DocumentTester {
+    DocumentTester::from_element(element)
 }
 
 /// A wrapper which allows querying and interacting with a DOM in Dioxus tests.
-pub struct Tester {
+pub struct DocumentTester {
     document: DioxusDocument,
     now: f64,
     window_size: Option<(u32, u32)>,
 }
 
-impl Tester {
+impl DocumentTester {
     /// Constructs a new instance by rendering the given `element`.
     pub fn from_element(element: fn() -> Element) -> Self {
         let virtual_dom = VirtualDom::new(element);
@@ -118,116 +119,161 @@ impl Tester {
     }
 
     /// Returns a [TestElement] referencing the root DOM node managed by this tester.
-    pub fn root<'vdom>(&'vdom self) -> TestElement<'vdom> {
-        TestElement {
+    pub fn root<'vdom>(&'vdom self) -> ResolvedElement<'vdom> {
+        ResolvedElement {
             document: &self.document,
             node: self.document.root_element(),
         }
     }
 
-    /// Returns a [TestElement] referencing the first DOM node with the given test ID.
-    ///
-    /// By convention, the custom HTML attribute `data-testid` specifies a test ID which can be used
-    /// to find elements used in tests. This is supported by multiple testing frameworks. See
-    /// [testing library documentation](https://testing-library.com/docs/queries/bytestid/) for more
-    /// information.
-    ///
-    /// Returns an error if the CSS seelctor itself is invalid or if no node has the test ID.
-    pub fn find_by_test_id<'vdom>(
+    pub fn get_element<'vdom>(
         &'vdom self,
-        test_id: &str,
-    ) -> Result<TestElement<'vdom>, TesterError> {
-        let node_id = self
+        query: Query,
+    ) -> Result<ResolvedElement<'vdom>, TesterError> {
+        let node_id = self.query_element(&query)?.ok_or(query.into_error())?;
+        Ok(self.node_id_to_element(node_id))
+    }
+
+    pub async fn wait_for_element(
+        &'_ mut self,
+        query: Query,
+    ) -> crate::Result<ResolvedElement<'_>> {
+        let mut tries = 0;
+        let node_id = loop {
+            if let Some(node_id) = self.query_element(&query)? {
+                break Ok(node_id);
+            }
+            tries += 1;
+            if tries > MAX_TRIES {
+                break Err(query.into_error());
+            }
+            let _ = self.pump().await;
+        }?;
+        Ok(self.node_id_to_element(node_id))
+    }
+
+    fn query_element(&self, query: &Query) -> Result<Option<usize>, TesterError> {
+        Ok(self
             .document
-            .query_selector(&format!("[data-testid=\"{test_id}\"]"))
-            .expect("Error parsing selector")
-            .ok_or_else(|| TesterError::NoSuchElementWithTestId(test_id.into()))?;
+            .query_selector(query.as_css())
+            .map_err(|_| TesterError::InvalidCssSelector(query.as_css().to_string()))?)
+    }
+
+    fn node_id_to_element(&'_ self, node_id: usize) -> ResolvedElement<'_> {
         let node = self
             .document
             .get_node(node_id)
             .expect("Element must be attached");
-        Ok(TestElement {
+        ResolvedElement {
             document: &self.document,
             node,
-        })
+        }
     }
 
-    /// Returns a `Vec` of  [TestElement] referencing each DOM node matching the given CSS selector.
-    ///
-    /// Returns an error if the CSS itself is invalid.
-    pub fn find_by_css_selector<'vdom>(
+    pub fn get_elements<'vdom>(
         &'vdom self,
-        selector: &str,
-    ) -> Result<Vec<TestElement<'vdom>>, TesterError> {
-        let node_ids = self
-            .document
-            .query_selector_all(selector)
-            .map_err(|_| TesterError::InvalidCssSelector(selector.into()))?;
+        query: &Query,
+    ) -> Result<Vec<ResolvedElement<'vdom>>, TesterError> {
+        let node_ids = self.query_elements(&query)?;
         Ok(node_ids
             .into_iter()
-            .map(|node_id| {
-                let node = self
-                    .document
-                    .get_node(node_id)
-                    .expect("Element must be attached");
-                TestElement {
-                    document: &self.document,
-                    node,
-                }
-            })
+            .map(|node_id| self.node_id_to_element(node_id))
             .collect())
     }
 
-    /// Returns a [TestElement] referencing the first DOM node matching the given CSS selector.
-    ///
-    /// Returns an error if the CSS seelctor itself is invalid or if no node matches the selector.
-    pub fn find_first_by_css_selector<'vdom>(
-        &'vdom self,
-        selector: &str,
-    ) -> Result<TestElement<'vdom>, TesterError> {
-        let node_id = self
-            .document
-            .query_selector(selector)
-            .map_err(|_| TesterError::InvalidCssSelector(selector.into()))?
-            .ok_or_else(|| TesterError::NoSuchElementWithCssSelector(selector.into()))?;
-        let node = self
-            .document
-            .get_node(node_id)
-            .expect("Element must be attached");
-        Ok(TestElement {
-            document: &self.document,
-            node,
-        })
+    pub async fn wait_for_elements<'vdom>(
+        &'vdom mut self,
+        query: Query,
+    ) -> crate::Result<Vec<ResolvedElement<'vdom>>> {
+        let mut tries = 0;
+        let node_ids = loop {
+            let node_ids = self.query_elements(&query)?;
+            if node_ids.is_empty() {
+                tries += 1;
+                if tries > MAX_TRIES {
+                    break Ok(vec![]);
+                }
+            } else {
+                break Ok(node_ids);
+            }
+            let _ = self.pump().await;
+        }?;
+        Ok(node_ids
+            .into_iter()
+            .map(|node_id| self.node_id_to_element(node_id))
+            .collect())
     }
-}
 
-#[derive(Debug)]
-pub enum TesterError {
-    /// The given CSS selector had invalid syntax.
-    InvalidCssSelector(String),
+    fn query_elements(&self, query: &Query) -> Result<Vec<usize>, TesterError> {
+        Ok(self
+            .document
+            .query_selector_all(query.as_css())
+            .map_err(|_| TesterError::InvalidCssSelector(query.as_css().to_string()))?
+            .to_vec())
+    }
 
-    /// No element with the test ID, as given by the HTML attribute `data-testid`, was found in the
-    /// DOM.
-    NoSuchElementWithTestId(String),
+    pub async fn click(&mut self, query: Query) -> crate::Result<()> {
+        Ok(self.wait_for_element(query).await?.click())
+    }
 
-    /// No element matching the given CSS selector was found in the DOM.
-    NoSuchElementWithCssSelector(String),
-}
+    pub async fn tap(&mut self, query: Query) -> crate::Result<()> {
+        self.click(query).await
+    }
 
-impl std::fmt::Display for TesterError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TesterError::InvalidCssSelector(selector) => {
-                write!(f, "Invalid CSS selector {selector}")
+    pub async fn expect_eventually(
+        &mut self,
+        query: Query,
+        expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
+    ) -> crate::Result<()> {
+        let mut tries = 0;
+        loop {
+            if let Some(node_id) = self.query_element(&query)? {
+                let element = self.node_id_to_element(node_id);
+                if expectation.matches(&element) {
+                    break Ok(());
+                } else {
+                    tries += 1;
+                    if tries > MAX_TRIES {
+                        break Err(TesterError::AssertionFailure("TODO".into()));
+                    }
+                }
+                drop(element);
+            } else {
+                tries += 1;
+                if tries > MAX_TRIES {
+                    break Err(query.into_error());
+                }
             }
-            TesterError::NoSuchElementWithTestId(id) => {
-                write!(f, "No such element with test ID {id}")
-            }
-            TesterError::NoSuchElementWithCssSelector(selector) => {
-                write!(f, "No such element with CSS selector {selector}")
-            }
+            let _ = self.pump().await;
         }
     }
 }
 
-impl std::error::Error for TesterError {}
+pub enum Query {
+    ByCss(String),
+    ByTestId(String),
+}
+
+impl Query {
+    pub fn by_css(selector: impl AsRef<str>) -> Self {
+        Self::ByCss(selector.as_ref().into())
+    }
+
+    pub fn by_test_id(test_id: impl AsRef<str>) -> Self {
+        Self::ByTestId(format!("[data-testid=\"{}\"]", test_id.as_ref()))
+    }
+
+    fn as_css(&self) -> &str {
+        match self {
+            Query::ByCss(s) => &s,
+            Query::ByTestId(s) => &s,
+        }
+    }
+
+    fn into_error(self) -> TesterError {
+        match self {
+            Query::ByCss(s) => TesterError::NoSuchElementWithCssSelector(s),
+            Query::ByTestId(s) => TesterError::NoSuchElementWithTestId(s), // TODO
+        }
+    }
+}

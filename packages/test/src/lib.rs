@@ -16,10 +16,10 @@
 //!
 //! ## Usage
 //!
-//! Tests can construct a [Tester] instance to render and interact with the DOM. To construct a
-//! [Tester], the test can invoke the [render] function on a Dioxus component. They must invoke the
-//! `build` to trigger the initial layout. The tester provides methods for querying elements by
-//! CSS selector or by test ID.
+//! Tests can construct a [DocumentTester] instance to render and interact with the DOM. To
+//! construct a [DocumentTester], the test can invoke the [render] function on a Dioxus component.
+//! They must invoke the `build` to trigger the initial layout. The tester provides methods for
+//! querying elements by CSS selector or by test ID.
 //!
 //! ```
 //! use dioxus::prelude::*;
@@ -45,9 +45,9 @@
 //! }
 //! ```
 //!
-//! [Tester] also provides methods for interacting with elements and driving the runtime. After
-//! interacting with an element, the test must call [Tester::pump] to cause the event handler to be
-//! invoked.
+//! [DocumentTester] also provides methods for interacting with elements and driving the runtime.
+//! After interacting with an element, the test must call [DocumentTester::pump] to cause the event
+//! handler to be invoked.
 //!
 //! ```
 //! use dioxus::prelude::*;
@@ -81,9 +81,9 @@
 //!
 //! ## Asynchronous operations
 //!
-//! The method [Tester::pump] returns control to the async runtime and thus drives any asynchronous
-//! operations such as requests to the backend. If any rendering depends on the result of a request,
-//! then the test must invoke [Tester::pump] to resolve that.
+//! The method [DocumentTester::pump] returns control to the async runtime and thus drives any
+//! asynchronous operations such as requests to the backend. If any rendering depends on the result
+//! of a request, then the test must invoke [DocumentTester::pump] to resolve that.
 //!
 //! The test can also assert on the state of the DOM while backend requests are in flight.
 //!
@@ -96,8 +96,11 @@
 //! The layout system is limited by what the Blitz layout system can support. Since Blitz is not
 //! complete as of the time of writing, computed layouts will often not be as in reality.
 
+mod document;
 mod element;
-mod tester;
+mod matcher;
+mod result;
 
-pub use element::TestElement;
-pub use tester::{Tester, TesterError, render};
+pub use document::{DocumentTester, Query, render};
+pub use matcher::{Matcher, contains_string, inner_html};
+pub use result::{Result, TesterError};
