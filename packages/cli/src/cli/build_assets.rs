@@ -1,8 +1,8 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
+use crate::opt::process_file_to;
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
-use dioxus_cli_opt::process_file_to;
 use tracing::debug;
 
 #[derive(Clone, Debug, Parser)]
@@ -28,7 +28,7 @@ impl BuildAssets {
                 destination_path.display(),
                 asset
             );
-            process_file_to(asset.options(), &source_path, &destination_path)?;
+            process_file_to(asset.options(), &source_path, &destination_path, None)?;
         }
 
         Ok(StructuredOutput::Success)

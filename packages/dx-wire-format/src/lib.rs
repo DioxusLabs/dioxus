@@ -94,6 +94,7 @@ pub enum BuildStage {
         current: usize,
         total: usize,
         krate: String,
+        fresh: bool,
     },
     RunningBindgen,
     SplittingBundle,

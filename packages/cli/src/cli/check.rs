@@ -84,7 +84,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             let res = tokio::spawn(async move {
                 tokio::fs::read_to_string(&_path)
                     .await
-                    .map(|contents| dioxus_check::check_file(_path, &contents))
+                    .map(|contents| crate::check::check_file(_path, &contents))
             })
             .await;
 

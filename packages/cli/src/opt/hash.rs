@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
+use crate::opt::{
     css::hash_scss,
     file::{resolve_asset_options, ResolvedAssetType},
     js::hash_js,
@@ -48,8 +48,8 @@ fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash>
     let mut hash = std::collections::hash_map::DefaultHasher::new();
     options.hash(&mut hash);
 
-    // Hash the version of CLI opt
-    hash.write(crate::build_info::version().as_bytes());
+    // Hash the version of the CLI
+    hash.write(crate::dx_build_info::PKG_VERSION.as_bytes());
     hash_file_with_options(options, source, &mut hash, false)?;
 
     let hash = hash.finish();
@@ -128,7 +128,7 @@ pub(crate) fn hash_file_contents(source: &Path, hasher: &mut impl Hasher) -> any
 }
 
 /// Add a hash to the asset, or log an error if it fails
-pub fn add_hash_to_asset(asset: &mut BundledAsset) {
+pub(crate) fn add_hash_to_asset(asset: &mut BundledAsset) {
     let source = asset.absolute_source_path();
     match AssetHash::hash_file_contents(asset.options(), source) {
         Ok(hash) => {

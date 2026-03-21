@@ -26,7 +26,7 @@ use futures_util::{
     StreamExt,
 };
 use hyper::HeaderMap;
-use rustls::crypto::{aws_lc_rs::default_provider, CryptoProvider};
+use rustls::crypto::{ring::default_provider, CryptoProvider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,

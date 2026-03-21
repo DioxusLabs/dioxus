@@ -1,8 +1,10 @@
-use std::path::PathBuf;
+mod issues;
+mod metadata;
 
+use std::path::PathBuf;
 use syn::{spanned::Spanned, visit::Visit, Pat};
 
-use crate::{
+use {
     issues::{Issue, IssueReport},
     metadata::{
         AnyLoopInfo, AsyncInfo, ClosureInfo, ComponentInfo, ConditionalInfo, FnInfo, ForInfo,
@@ -289,7 +291,7 @@ impl<'ast> syn::visit::Visit<'ast> for VisitHooks {
 
 #[cfg(test)]
 mod tests {
-    use crate::metadata::{
+    use crate::check::metadata::{
         AnyLoopInfo, ClosureInfo, ConditionalInfo, ForInfo, HookInfo, IfInfo, LineColumn, LoopInfo,
         MatchInfo, Span, WhileInfo,
     };
