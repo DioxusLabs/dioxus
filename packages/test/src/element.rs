@@ -7,7 +7,7 @@ use dioxus_html::{
 use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
 use std::rc::Rc;
 
-/// A reference to DOM node managed by a [crate::Tester].
+/// A reference to DOM node managed by a [crate::DocumentTester].
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.

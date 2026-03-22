@@ -1,9 +1,12 @@
 use crate::element::ResolvedElement;
 
+/// A representation of a condition to be expected on the DOM.
 pub trait Matcher<T> {
     fn matches(&self, actual: &T) -> bool;
 }
 
+/// Returns a [Matcher] which matches an element whose inner HTML is matched by the [Matcher]
+/// `inner`.
 pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<ResolvedElement<'vdom>> {
     struct InnerHtmlMatcher<InnerMatcher: Matcher<String>>(InnerMatcher);
 
@@ -18,6 +21,7 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
     InnerHtmlMatcher(inner)
 }
 
+/// Returns a [Matcher] which matches a `String` containing the given `substring`.
 pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<String> + 'a {
     struct ContainingStringMatcher<Expected: AsRef<str>>(Expected);
 

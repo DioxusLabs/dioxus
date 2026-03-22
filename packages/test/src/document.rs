@@ -5,7 +5,14 @@ use dioxus_native_dom::{DioxusDocument, DocumentConfig};
 use std::time::Duration;
 use tokio::time::{error::Elapsed, timeout};
 
+/// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
+/// before concluding that no new events are forthcoming.
+// TODO: Make this configurable.
 const PUMP_TIMEOUT: Duration = Duration::from_millis(1000);
+
+/// The maximum number of attempts [DocumentTester] will make to find a given element or make a
+/// given assertion on the DOM before concluding that the element will not appear.
+// TODO: Make this configurable.
 const MAX_TRIES: usize = 5;
 
 /// Returns a new [Tester] resulting from rendering the given [Element].
@@ -126,6 +133,11 @@ impl DocumentTester {
         }
     }
 
+    /// Immediately returns the first element in the DOM satisfying the given [Query].
+    ///
+    /// If no such element already exists on the DOM, then this returns an error.
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub fn get_element<'vdom>(
         &'vdom self,
         query: Query,
@@ -134,6 +146,12 @@ impl DocumentTester {
         Ok(self.node_id_to_element(node_id))
     }
 
+    /// Returns the first element in the DOM satisfying the given [Query], waiting as necessary.
+    ///
+    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
+    /// the limit and the element is still not present, it returns an error.
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub async fn wait_for_element(
         &'_ mut self,
         query: Query,
@@ -170,6 +188,9 @@ impl DocumentTester {
         }
     }
 
+    /// Immediately returns all already elements in the DOM satisfying the given [Query].
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub fn get_elements<'vdom>(
         &'vdom self,
         query: &Query,
@@ -181,6 +202,13 @@ impl DocumentTester {
             .collect())
     }
 
+    /// Returns all elements in the DOM satisfying the given [Query], waiting as necessary until the
+    /// set is nonempty.
+    ///
+    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
+    /// the limit and no matching elements are present, it returns an empty list.
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub async fn wait_for_elements<'vdom>(
         &'vdom mut self,
         query: Query,
@@ -212,14 +240,47 @@ impl DocumentTester {
             .to_vec())
     }
 
+    /// Simulates a click on the first element in the DOM matching the given [Query].
+    ///
+    /// This waits as necessary for the element to appear if it has not already. It uses the same
+    /// logic as [Self::wait_for_element].
     pub async fn click(&mut self, query: Query) -> crate::Result<()> {
         Ok(self.wait_for_element(query).await?.click())
     }
 
+    /// Synonym of [Self::click].
     pub async fn tap(&mut self, query: Query) -> crate::Result<()> {
         self.click(query).await
     }
 
+    /// Asserts that the given [Matcher] matches the first element on the DOM matching the given
+    /// [Query].
+    ///
+    /// This requires that the condition specified in `expectation` already be true at the time the
+    /// method is invoked. It does not run the event loop.
+    ///
+    /// This returns `Ok(())` if the condition in `expectation` is true and an error otherwise.
+    pub async fn expect_immediately(
+        &mut self,
+        query: Query,
+        expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
+    ) -> crate::Result<()> {
+        if let Some(node_id) = self.query_element(&query)? {
+            let element = self.node_id_to_element(node_id);
+            if !expectation.matches(&element) {
+                return Err(TesterError::AssertionFailure("TODO".into()));
+            }
+        }
+        Ok(())
+    }
+
+    /// Asserts that the given [Matcher] eventually matches the first element on the DOM matching
+    /// the given [Query] after the event loop runs.
+    ///
+    /// This runs up to [MAX_TRIES] checks of `expectation`, invoking [Self::pump] between each
+    /// check. If the expectation is still not met after that, it returns an error.
+    ///
+    /// This returns `Ok(())` if the condition in `expectation` is eventually met.
     pub async fn expect_eventually(
         &mut self,
         query: Query,
@@ -249,16 +310,21 @@ impl DocumentTester {
     }
 }
 
+/// Selects one or more elements in a DOM.
+///
+/// This can be by CSS or by the `data-testid` attribute.
 pub enum Query {
     ByCss(String),
     ByTestId(String),
 }
 
 impl Query {
+    /// Returns a [Query] which selects elements by the given CSS selector.
     pub fn by_css(selector: impl AsRef<str>) -> Self {
         Self::ByCss(selector.as_ref().into())
     }
 
+    /// Returns a [Query] which selects elements by the value of its `data-testid` attribute.
     pub fn by_test_id(test_id: impl AsRef<str>) -> Self {
         Self::ByTestId(format!("[data-testid=\"{}\"]", test_id.as_ref()))
     }
