@@ -103,6 +103,40 @@ pub fn router(app: fn() -> Element) -> Router {
     )
 }
 
+/// Create a [`Router<S>`] that serves the dioxus application, allowing you to attach custom axum state.
+///
+/// Unlike [`router`], this function returns a `Router<S>` with the dioxus state already merged in,
+/// so you can chain `.with_state(your_state)` to attach your own state type.
+///
+/// # Example
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// # fn App() -> Element { rsx! {} }
+/// # #[derive(Clone)] struct MyState;
+/// #[cfg(feature = "server")]
+/// dioxus::server::serve(|| async move {
+///     let store = MyState;
+///     Ok(
+///         dioxus::server::router_with_state::<MyState>(App)
+///             .with_state(store)
+///     )
+/// });
+/// ```
+pub fn router_with_state<S>(app: fn() -> Element) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    let cfg = ServeConfig::new();
+    let dioxus_router = Router::new().serve_dioxus_application(cfg.clone(), app);
+    let base = apply_base_path(
+        dioxus_router,
+        app,
+        cfg,
+        base_path().map(|s| s.to_string()),
+    );
+    Router::new().merge(base)
+}
+
 /// Serve a fullstack dioxus application with a custom axum router.
 ///
 /// This function sets up an async runtime, enables the default dioxus logger, runs the provided initializer,
@@ -259,6 +293,36 @@ fn block_on<T>(app_future: impl Future<Output = T>) {
             .build()
             .unwrap()
             .block_on(app_future);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::Element;
+
+    fn dummy_app() -> Element {
+        unimplemented!()
+    }
+
+    /// Verify router_with_state returns Router<S> and can have .with_state() chained
+    #[test]
+    fn router_with_state_compiles_with_custom_state() {
+        #[derive(Clone)]
+        struct MyState {
+            value: u32,
+        }
+
+        // This must compile: router_with_state returns Router<MyState>
+        // and .with_state() resolves it to Router<()>
+        let _: Router<()> =
+            router_with_state::<MyState>(dummy_app).with_state(MyState { value: 42 });
+    }
+
+    /// Verify the original router() still returns Router<()> unchanged
+    #[test]
+    fn original_router_still_returns_unit_state() {
+        let _: Router<()> = router(dummy_app);
     }
 }
 

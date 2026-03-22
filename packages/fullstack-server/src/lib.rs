@@ -38,6 +38,7 @@ pub(crate) mod ssr;
 pub(crate) mod streaming;
 
 pub use launch::router;
+pub use launch::router_with_state;
 pub use launch::serve;
 
 pub mod serverfn;
