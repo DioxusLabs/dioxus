@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use crate::element::ResolvedElement;
 
 /// A representation of a condition to be expected on the DOM.
@@ -32,4 +34,17 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
     }
 
     ContainingStringMatcher(substring)
+}
+
+/// Returns a [Matcher] which matches any data not matched by the given [Matcher] `inner`.
+pub fn not<T>(inner: impl Matcher<T>) -> impl Matcher<T> {
+    struct NotMatcher<T, InnerMatcher: Matcher<T>>(InnerMatcher, PhantomData<T>);
+
+    impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<T, InnerMatcher> {
+        fn matches(&self, actual: &T) -> bool {
+            !self.0.matches(actual)
+        }
+    }
+
+    NotMatcher(inner, Default::default())
 }

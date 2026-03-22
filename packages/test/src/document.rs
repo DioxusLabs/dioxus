@@ -260,7 +260,7 @@ impl DocumentTester {
     /// method is invoked. It does not run the event loop.
     ///
     /// This returns `Ok(())` if the condition in `expectation` is true and an error otherwise.
-    pub async fn expect_immediately(
+    pub fn expect_immediately(
         &mut self,
         query: Query,
         expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
