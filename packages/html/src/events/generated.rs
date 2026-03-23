@@ -61,43 +61,43 @@ macro_rules! with_html_event_groups {
                 #[convert = convert_form_data]
                 #[events = [
                     onchange => change,
-                    #[doc = r#"The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
-
-There are two main approaches to updating your input element:
-1) Controlled inputs directly update the value of the input element as the user interacts with the element
-
-```rust
-use dioxus::prelude::*;
-
-fn App() -> Element {
-    let mut value = use_signal(|| "hello world".to_string());
-
-    rsx! {
-        input {
-            value: "{value}",
-            oninput: move |event| value.set(event.value())
-        }
-        button {
-            onclick: move |_| value.write().clear(),
-            "Clear"
-        }
-    }
-}
-```
-
-2) Uncontrolled inputs just read the value of the input element as it changes
-
-```rust
-use dioxus::prelude::*;
-
-fn App() -> Element {
-    rsx! {
-        input {
-            oninput: move |event| println!("{}", event.value()),
-        }
-    }
-}
-```"#]
+                    /// The `oninput` event is fired when the value of a `<input>`, `<select>`, or `<textarea>` element is changed.
+                    ///
+                    /// There are two main approaches to updating your input element:
+                    /// 1) Controlled inputs directly update the value of the input element as the user interacts with the element
+                    ///
+                    /// ```rust
+                    /// use dioxus::prelude::*;
+                    ///
+                    /// fn App() -> Element {
+                    ///     let mut value = use_signal(|| "hello world".to_string());
+                    ///
+                    ///     rsx! {
+                    ///         input {
+                    ///             value: "{value}",
+                    ///             oninput: move |event| value.set(event.value())
+                    ///         }
+                    ///         button {
+                    ///             onclick: move |_| value.write().clear(),
+                    ///             "Clear"
+                    ///         }
+                    ///     }
+                    /// }
+                    /// ```
+                    ///
+                    /// 2) Uncontrolled inputs just read the value of the input element as it changes
+                    ///
+                    /// ```rust
+                    /// use dioxus::prelude::*;
+                    ///
+                    /// fn App() -> Element {
+                    ///     rsx! {
+                    ///         input {
+                    ///             oninput: move |event| println!("{}", event.value()),
+                    ///         }
+                    ///     }
+                    /// }
+                    /// ```
                     oninput => input,
                     oninvalid => invalid,
                     onreset => reset,
