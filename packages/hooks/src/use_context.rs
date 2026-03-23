@@ -7,7 +7,7 @@ use dioxus_core::{consume_context, provide_context, try_consume_context, use_hoo
 /// meaning it must be called unconditionally at the top level of a component.
 ///
 /// If you need to read context from outside a component body (e.g., inside an event handler,
-/// async task, or spawned future), use [`try_consume_context`](dioxus_core::try_consume_context) instead,
+/// async task, or spawned future), use [`try_consume_context`] instead,
 /// which can be called anywhere the Dioxus runtime is active.
 #[doc = include_str!("../docs/rules_of_hooks.md")]
 #[doc = include_str!("../docs/moving_state_around.md")]
@@ -23,7 +23,7 @@ pub fn try_use_context<T: 'static + Clone>() -> Option<T> {
 /// meaning it must be called unconditionally at the top level of a component.
 ///
 /// If you need to read context from outside a component body (e.g., inside an event handler,
-/// async task, or spawned future), use [`consume_context`](dioxus_core::consume_context) instead,
+/// async task, or spawned future), use [`consume_context`] instead,
 /// which can be called anywhere the Dioxus runtime is active.
 ///
 /// ```rust
