@@ -153,14 +153,14 @@ macro_rules! with_html_event_groups {
                     #[doc(alias = "ref")]
                     #[doc(alias = "createRef")]
                     #[doc(alias = "useRef")]
-                    #[doc = "The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element."]
+                    /// The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element.
                     onmounted => mounted,
                 ]]
                 Mounted(MountedData),
 
                 #[convert = convert_mouse_data]
                 #[events = [
-                    #[doc = "Execute a callback when a button is clicked."]
+                    /// Execute a callback when a button is clicked.
                     onclick => click,
                     oncontextmenu => contextmenu,
                     #[deprecated(since = "0.5.0", note = "use ondoubleclick instead")]
@@ -246,7 +246,7 @@ macro_rules! with_html_event_groups {
 
                 #[convert = convert_wheel_data]
                 #[events = [
-                    #[doc = "Called when the mouse wheel is rotated over an element."]
+                    /// Called when the mouse wheel is rotated over an element.
                     onwheel => wheel,
                 ]]
                 Wheel(WheelData),
