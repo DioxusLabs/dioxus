@@ -165,6 +165,7 @@ macro_rules! with_html_event_groups {
                     oncontextmenu => contextmenu,
                     #[deprecated(since = "0.5.0", note = "use ondoubleclick instead")]
                     ondblclick => dblclick,
+                    #[doc(alias = "ondblclick")]
                     ondoubleclick => dblclick,
                     onmousedown => mousedown,
                     onmouseenter => mouseenter,
