@@ -30,12 +30,22 @@ pub fn throw_error(error: impl Into<CapturedError> + 'static) {
     Runtime::with(|rt| rt.throw_error(rt.current_scope_id(), error))
 }
 
-/// Consume context from the current scope
+/// Try to consume context from the current scope, returning `None` if not found.
+///
+/// Unlike [`use_context`](dioxus_hooks::use_context), this is **not** a hook. It reads the context
+/// value directly from the runtime each time it is called, rather than caching it on first render.
+/// This means it can be called from anywhere the Dioxus runtime is active — inside event handlers,
+/// async tasks, spawned futures, or other non-hook contexts — without following the rules of hooks.
 pub fn try_consume_context<T: 'static + Clone>() -> Option<T> {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
 }
 
-/// Consume context from the current scope
+/// Consume context from the current scope, panicking if not found.
+///
+/// Unlike [`use_context`](dioxus_hooks::use_context), this is **not** a hook. It reads the context
+/// value directly from the runtime each time it is called, rather than caching it on first render.
+/// This means it can be called from anywhere the Dioxus runtime is active — inside event handlers,
+/// async tasks, spawned futures, or other non-hook contexts — without following the rules of hooks.
 pub fn consume_context<T: 'static + Clone>() -> T {
     Runtime::with_current_scope(|cx| cx.consume_context::<T>())
         .unwrap_or_else(|| panic!("Could not find context {}", std::any::type_name::<T>()))
