@@ -1,6 +1,4 @@
-use dioxus_html::{
-    DragData, FormData, HtmlEventConverter, ImageData, MountedData, PlatformEventData,
-};
+use dioxus_html::{DragData, FormData, HtmlEventConverter, ImageData, PlatformEventData};
 use form::WebFormData;
 use load::WebImageEvent;
 use wasm_bindgen::JsCast;
@@ -52,19 +50,123 @@ fn downcast_event(event: &dioxus_html::PlatformEventData) -> &GenericWebSysEvent
         .expect("event should be a GenericWebSysEvent")
 }
 
-/// Single source of truth for event-name -> web_sys type mappings. Generates
-/// `event_type_matches()` and the `HtmlEventConverter` impl for `WebEventConverter`.
-macro_rules! web_events {
+macro_rules! with_web_event_converters {
+    ($macro:ident) => {
+        $macro! {
+            convert_animation_data(AnimationData) => web_sys::AnimationEvent;
+            convert_cancel_data(CancelData) => web_sys::Event;
+            convert_clipboard_data(ClipboardData) => web_sys::Event;
+            convert_composition_data(CompositionData) => web_sys::CompositionEvent;
+            convert_drag_data(DragData) => web_sys::DragEvent => |event| {
+                let event = downcast_event(event);
+                DragData::new(Synthetic::new(
+                    event.raw.clone().unchecked_into::<web_sys::DragEvent>(),
+                ))
+            };
+            convert_focus_data(FocusData) => web_sys::FocusEvent;
+            convert_form_data(FormData) => web_sys::Event => |event| {
+                let event = downcast_event(event);
+                FormData::new(WebFormData::new(event.element.clone(), event.raw.clone()))
+            };
+            convert_image_data(ImageData) => web_sys::Event => |event| {
+                let event = downcast_event(event);
+                ImageData::new(WebImageEvent::new(
+                    event.raw.clone(),
+                    event.raw.type_() == "error",
+                ))
+            };
+            convert_keyboard_data(KeyboardData) => web_sys::KeyboardEvent;
+            convert_media_data(MediaData) => web_sys::Event;
+            convert_mounted_data(MountedData) => web_sys::Element => |event| {
+                #[cfg(feature = "mounted")]
+                {
+                    Synthetic::new(
+                        event
+                            .downcast::<web_sys::Element>()
+                            .expect("event should be a web_sys::Element")
+                            .clone(),
+                    )
+                    .into()
+                }
+                #[cfg(not(feature = "mounted"))]
+                {
+                    let _ = event;
+                    panic!("mounted events require the `mounted` feature on dioxus-web")
+                }
+            };
+            convert_mouse_data(MouseData) => web_sys::MouseEvent;
+            convert_pointer_data(PointerData) => web_sys::PointerEvent;
+            convert_resize_data(ResizeData) => web_sys::ResizeObserverEntry;
+            convert_scroll_data(ScrollData) => web_sys::Event;
+            convert_selection_data(SelectionData) => web_sys::Event;
+            convert_toggle_data(ToggleData) => web_sys::Event;
+            convert_touch_data(TouchData) => web_sys::TouchEvent;
+            convert_transition_data(TransitionData) => web_sys::TransitionEvent;
+            convert_visible_data(VisibleData) => web_sys::IntersectionObserverEntry;
+            convert_wheel_data(WheelData) => web_sys::WheelEvent;
+        }
+    };
+}
+
+macro_rules! expand_web_event_converter {
     (
         $(
-            #[events = $($name:ident),+]
-            #[event_type = $ws:ty]
-            fn $conv:ident ( $evt:ident : $evt_ty:ty ) -> $ret:ty $( $body:block )?;
-        )+
+            $converter:ident($data:ident) => $web_ty:ty $(=> |$event:ident| $body:block)?;
+        )*
+    ) => {
+        macro_rules! web_event_type_matches {
+            $(
+                ($event_name:ident, $converter) => {
+                    $event_name.is_instance_of::<$web_ty>()
+                };
+            )*
+        }
+
+        impl HtmlEventConverter for WebEventConverter {
+            $(
+                expand_web_event_converter!(@method $converter, $data, $web_ty $(, $event, $body)?);
+            )*
+        }
+    };
+
+    (@method $converter:ident, $data:ident, $web_ty:ty) => {
+        #[inline(always)]
+        fn $converter(&self, event: &PlatformEventData) -> dioxus_html::$data {
+            Synthetic::new(downcast_event(event).raw.clone().unchecked_into::<$web_ty>()).into()
+        }
+    };
+
+    (@method $converter:ident, $data:ident, $web_ty:ty, $event:ident, $body:block) => {
+        #[inline(always)]
+        fn $converter(&self, $event: &PlatformEventData) -> dioxus_html::$data $body
+    };
+}
+
+with_web_event_converters!(expand_web_event_converter);
+
+macro_rules! expand_web_event_changes {
+    (
+        enum Event {
+            $(
+                #[convert = $converter:ident]
+                #[events = [
+                    $(
+                        $( #[$attr:meta] )*
+                        $name:ident => $raw:ident,
+                    )*
+                ]]
+                $(#[raw = [$($raw_only:ident),* $(,)?]])?
+                $group:ident($data:ident),
+            )*
+        }
     ) => {
         pub(crate) fn event_type_matches(name: &str, event: &web_sys::Event) -> bool {
             let m = match name {
-                $( $(stringify!($name))|+ => event.is_instance_of::<$ws>(), )+
+                $(
+                    $( stringify!($raw) )|* $($(| stringify!($raw_only))*)? => {
+                        web_event_type_matches!(event, $converter)
+                    }
+                )*
                 _ => true,
             };
             if !m {
@@ -72,147 +174,10 @@ macro_rules! web_events {
             }
             m
         }
-
-        impl HtmlEventConverter for WebEventConverter {
-            $( web_events!(@method $ws, $conv, $evt -> $ret $(, $body)?); )+
-        }
-    };
-
-    (@method $ws:ty, $conv:ident, $evt:ident -> $ret:ty) => {
-        #[inline(always)]
-        fn $conv(&self, $evt: &PlatformEventData) -> $ret {
-            Synthetic::new(downcast_event($evt).raw.clone().unchecked_into::<$ws>()).into()
-        }
-    };
-
-    (@method $ws:ty, $conv:ident, $evt:ident -> $ret:ty, $body:block) => {
-        #[inline(always)]
-        fn $conv(&self, $evt: &PlatformEventData) -> $ret $body
     };
 }
 
-web_events! {
-    #[events = animationstart, animationend, animationiteration]
-    #[event_type = web_sys::AnimationEvent]
-    fn convert_animation_data(event: &PlatformEventData) -> dioxus_html::AnimationData;
-
-    #[events = cancel]
-    #[event_type = web_sys::Event]
-    fn convert_cancel_data(event: &PlatformEventData) -> dioxus_html::CancelData;
-
-    #[events = copy, cut, paste]
-    #[event_type = web_sys::Event]
-    fn convert_clipboard_data(event: &PlatformEventData) -> dioxus_html::ClipboardData;
-
-    #[events = compositionend, compositionstart, compositionupdate]
-    #[event_type = web_sys::CompositionEvent]
-    fn convert_composition_data(event: &PlatformEventData) -> dioxus_html::CompositionData;
-
-    #[events = drag, dragend, dragenter, dragexit, dragleave,
-               dragover, dragstart, drop]
-    #[event_type = web_sys::DragEvent]
-    fn convert_drag_data(event: &PlatformEventData) -> DragData {
-        let event = downcast_event(event);
-        DragData::new(Synthetic::new(
-            event.raw.clone().unchecked_into::<web_sys::DragEvent>(),
-        ))
-    };
-
-    #[events = blur, focus, focusin, focusout]
-    #[event_type = web_sys::FocusEvent]
-    fn convert_focus_data(event: &PlatformEventData) -> dioxus_html::FocusData;
-
-    #[events = change, input, invalid, reset, submit]
-    #[event_type = web_sys::Event]
-    fn convert_form_data(event: &PlatformEventData) -> FormData {
-        let event = downcast_event(event);
-        FormData::new(WebFormData::new(event.element.clone(), event.raw.clone()))
-    };
-
-    #[events = error, load]
-    #[event_type = web_sys::Event]
-    fn convert_image_data(event: &PlatformEventData) -> ImageData {
-        let event = downcast_event(event);
-        ImageData::new(WebImageEvent::new(event.raw.clone(), event.raw.type_() == "error"))
-    };
-
-    #[events = keydown, keyup, keypress]
-    #[event_type = web_sys::KeyboardEvent]
-    fn convert_keyboard_data(event: &PlatformEventData) -> dioxus_html::KeyboardData;
-
-    #[events = abort, canplay, canplaythrough, durationchange, emptied,
-               encrypted, ended, loadeddata, loadedmetadata, loadstart,
-               pause, play, playing, progress, ratechange, seeked,
-               seeking, stalled, suspend, timeupdate, volumechange,
-               waiting]
-    #[event_type = web_sys::Event]
-    fn convert_media_data(event: &PlatformEventData) -> dioxus_html::MediaData;
-
-    #[events = mounted]
-    #[event_type = web_sys::Element]
-    fn convert_mounted_data(event: &PlatformEventData) -> MountedData {
-        #[cfg(feature = "mounted")]
-        {
-            Synthetic::new(
-                event
-                    .downcast::<web_sys::Element>()
-                    .expect("event should be a web_sys::Element")
-                    .clone(),
-            )
-            .into()
-        }
-        #[cfg(not(feature = "mounted"))]
-        {
-            let _ = event;
-            panic!("mounted events require the `mounted` feature on dioxus-web")
-        }
-    };
-
-    #[events = click, contextmenu, dblclick, doubleclick,
-               mousedown, mouseenter, mouseleave, mousemove,
-               mouseout, mouseover, mouseup]
-    #[event_type = web_sys::MouseEvent]
-    fn convert_mouse_data(event: &PlatformEventData) -> dioxus_html::MouseData;
-
-    #[events = pointerdown, pointermove, pointerup, pointerover,
-               pointerout, pointerenter, pointerleave,
-               gotpointercapture, lostpointercapture,
-               pointerlockchange, pointerlockerror, auxclick]
-    #[event_type = web_sys::PointerEvent]
-    fn convert_pointer_data(event: &PlatformEventData) -> dioxus_html::PointerData;
-
-    #[events = resize]
-    #[event_type = web_sys::ResizeObserverEntry]
-    fn convert_resize_data(event: &PlatformEventData) -> dioxus_html::ResizeData;
-
-    #[events = scroll, scrollend]
-    #[event_type = web_sys::Event]
-    fn convert_scroll_data(event: &PlatformEventData) -> dioxus_html::ScrollData;
-
-    #[events = select, selectstart, selectionchange]
-    #[event_type = web_sys::Event]
-    fn convert_selection_data(event: &PlatformEventData) -> dioxus_html::SelectionData;
-
-    #[events = toggle, beforetoggle]
-    #[event_type = web_sys::Event]
-    fn convert_toggle_data(event: &PlatformEventData) -> dioxus_html::ToggleData;
-
-    #[events = touchcancel, touchend, touchmove, touchstart]
-    #[event_type = web_sys::TouchEvent]
-    fn convert_touch_data(event: &PlatformEventData) -> dioxus_html::TouchData;
-
-    #[events = transitionend]
-    #[event_type = web_sys::TransitionEvent]
-    fn convert_transition_data(event: &PlatformEventData) -> dioxus_html::TransitionData;
-
-    #[events = visible]
-    #[event_type = web_sys::IntersectionObserverEntry]
-    fn convert_visible_data(event: &PlatformEventData) -> dioxus_html::VisibleData;
-
-    #[events = wheel]
-    #[event_type = web_sys::WheelEvent]
-    fn convert_wheel_data(event: &PlatformEventData) -> dioxus_html::WheelData;
-}
+dioxus_html::with_html_event_groups!(expand_web_event_changes);
 
 /// A extension trait for web-sys events that provides a way to get the event as a web-sys event.
 pub trait WebEventExt {
