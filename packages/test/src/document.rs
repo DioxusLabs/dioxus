@@ -1,19 +1,19 @@
-use crate::{Matcher, element::ResolvedElement, result::TesterError};
-use blitz_dom::Document as _;
+use crate::{
+    Matcher,
+    element::ResolvedElement,
+    matcher::{query_selector, query_selector_all},
+    result::TesterError,
+};
+use blitz_dom::{Document as _, SelectorList};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
-use std::time::Duration;
+use std::{ops::ControlFlow, time::Duration};
 use tokio::time::{error::Elapsed, timeout};
 
 /// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
 /// before concluding that no new events are forthcoming.
 // TODO: Make this configurable.
 const PUMP_TIMEOUT: Duration = Duration::from_millis(1000);
-
-/// The maximum number of attempts [DocumentTester] will make to find a given element or make a
-/// given assertion on the DOM before concluding that the element will not appear.
-// TODO: Make this configurable.
-const MAX_TRIES: usize = 5;
 
 /// Returns a new [Tester] resulting from rendering the given [Element].
 pub fn render(element: fn() -> Element) -> DocumentTester {
@@ -138,12 +138,21 @@ impl DocumentTester {
     /// If no such element already exists on the DOM, then this returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub fn get_element<'vdom>(
-        &'vdom self,
-        query: Query,
-    ) -> Result<ResolvedElement<'vdom>, TesterError> {
-        let node_id = self.query_element(&query)?.ok_or(query.into_error())?;
-        Ok(self.node_id_to_element(node_id))
+    pub(crate) fn get_element<'vdom>(&'vdom self, query: &Query) -> Option<ResolvedElement<'vdom>> {
+        self.document
+            .query_selector_raw(query.list())
+            .map(|node_id| self.node_id_to_element(node_id))
+    }
+
+    /// Immediately returns all already elements in the DOM satisfying the given [Query].
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
+    pub(crate) fn get_elements<'vdom>(&'vdom self, query: &Query) -> Vec<ResolvedElement<'vdom>> {
+        self.document
+            .query_selector_all_raw(query.list())
+            .into_iter()
+            .map(|node_id| self.node_id_to_element(node_id))
+            .collect()
     }
 
     /// Returns the first element in the DOM satisfying the given [Query], waiting as necessary.
@@ -152,29 +161,45 @@ impl DocumentTester {
     /// the limit and the element is still not present, it returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub async fn wait_for_element(
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_test::*;
+    /// #[component]
+    /// fn AComponent() -> Element {
+    ///    let mut click_count = use_signal(|| 0);
+    ///    rsx! {
+    ///        button {
+    ///            onclick: move |_| click_count += 1,
+    ///            "Click me!"
+    ///        }
+    ///        div {
+    ///            id: "click-count",
+    ///            "Click count: {click_count}"
+    ///        }
+    ///    }
+    /// }
+    /// async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut tester = dioxus_test::render(AComponent).build();
+    /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 0"))).await?;
+    /// tester.query("button").click().await?;
+    /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 1"))).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn query(
         &'_ mut self,
-        query: Query,
-    ) -> crate::Result<ResolvedElement<'_>> {
-        let mut tries = 0;
-        let node_id = loop {
-            if let Some(node_id) = self.query_element(&query)? {
-                break Ok(node_id);
-            }
-            tries += 1;
-            if tries > MAX_TRIES {
-                break Err(query.into_error());
-            }
-            let _ = self.pump().await;
-        }?;
-        Ok(self.node_id_to_element(node_id))
-    }
-
-    fn query_element(&self, query: &Query) -> Result<Option<usize>, TesterError> {
-        Ok(self
-            .document
-            .query_selector(query.as_css())
-            .map_err(|_| TesterError::InvalidCssSelector(query.as_css().to_string()))?)
+        query: impl TryIntoSelector,
+    ) -> QueryPollFuture<'_, impl for<'a> Matcher<&'a DocumentTester, Output = ResolvedElement<'a>>>
+    {
+        let selector = query
+            .try_into_selector(&self.document)
+            .expect("Invalid CSS selector");
+        let query = Query { list: selector };
+        QueryPollFuture {
+            data: self,
+            query: query_selector(query),
+        }
     }
 
     fn node_id_to_element(&'_ self, node_id: usize) -> ResolvedElement<'_> {
@@ -188,20 +213,6 @@ impl DocumentTester {
         }
     }
 
-    /// Immediately returns all already elements in the DOM satisfying the given [Query].
-    ///
-    /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub fn get_elements<'vdom>(
-        &'vdom self,
-        query: &Query,
-    ) -> Result<Vec<ResolvedElement<'vdom>>, TesterError> {
-        let node_ids = self.query_elements(&query)?;
-        Ok(node_ids
-            .into_iter()
-            .map(|node_id| self.node_id_to_element(node_id))
-            .collect())
-    }
-
     /// Returns all elements in the DOM satisfying the given [Query], waiting as necessary until the
     /// set is nonempty.
     ///
@@ -209,137 +220,128 @@ impl DocumentTester {
     /// the limit and no matching elements are present, it returns an empty list.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub async fn wait_for_elements<'vdom>(
+    pub fn query_all<'vdom>(
         &'vdom mut self,
-        query: Query,
-    ) -> crate::Result<Vec<ResolvedElement<'vdom>>> {
-        let mut tries = 0;
-        let node_ids = loop {
-            let node_ids = self.query_elements(&query)?;
-            if node_ids.is_empty() {
-                tries += 1;
-                if tries > MAX_TRIES {
-                    break Ok(vec![]);
-                }
-            } else {
-                break Ok(node_ids);
-            }
-            let _ = self.pump().await;
-        }?;
-        Ok(node_ids
-            .into_iter()
-            .map(|node_id| self.node_id_to_element(node_id))
-            .collect())
-    }
-
-    fn query_elements(&self, query: &Query) -> Result<Vec<usize>, TesterError> {
-        Ok(self
-            .document
-            .query_selector_all(query.as_css())
-            .map_err(|_| TesterError::InvalidCssSelector(query.as_css().to_string()))?
-            .to_vec())
-    }
-
-    /// Simulates a click on the first element in the DOM matching the given [Query].
-    ///
-    /// This waits as necessary for the element to appear if it has not already. It uses the same
-    /// logic as [Self::wait_for_element].
-    pub async fn click(&mut self, query: Query) -> crate::Result<()> {
-        Ok(self.wait_for_element(query).await?.click())
-    }
-
-    /// Synonym of [Self::click].
-    pub async fn tap(&mut self, query: Query) -> crate::Result<()> {
-        self.click(query).await
-    }
-
-    /// Asserts that the given [Matcher] matches the first element on the DOM matching the given
-    /// [Query].
-    ///
-    /// This requires that the condition specified in `expectation` already be true at the time the
-    /// method is invoked. It does not run the event loop.
-    ///
-    /// This returns `Ok(())` if the condition in `expectation` is true and an error otherwise.
-    pub fn expect_immediately(
-        &mut self,
-        query: Query,
-        expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
-    ) -> crate::Result<()> {
-        if let Some(node_id) = self.query_element(&query)? {
-            let element = self.node_id_to_element(node_id);
-            if !expectation.matches(&element) {
-                return Err(TesterError::AssertionFailure("TODO".into()));
-            }
+        query: impl TryIntoSelector,
+    ) -> QueryPollFuture<
+        'vdom,
+        impl for<'a> Matcher<&'a DocumentTester, Output = Vec<ResolvedElement<'a>>>,
+    > {
+        let selector = query
+            .try_into_selector(&self.document)
+            .expect("Invalid CSS selector");
+        let query = Query { list: selector };
+        QueryPollFuture {
+            data: self,
+            query: query_selector_all(query),
         }
-        Ok(())
     }
+}
 
-    /// Asserts that the given [Matcher] eventually matches the first element on the DOM matching
-    /// the given [Query] after the event loop runs.
-    ///
-    /// This runs up to [MAX_TRIES] checks of `expectation`, invoking [Self::pump] between each
-    /// check. If the expectation is still not met after that, it returns an error.
-    ///
-    /// This returns `Ok(())` if the condition in `expectation` is eventually met.
-    pub async fn expect_eventually(
-        &mut self,
-        query: Query,
-        expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
-    ) -> crate::Result<()> {
-        let mut tries = 0;
-        loop {
-            if let Some(node_id) = self.query_element(&query)? {
-                let element = self.node_id_to_element(node_id);
-                if expectation.matches(&element) {
-                    break Ok(());
-                } else {
-                    tries += 1;
-                    if tries > MAX_TRIES {
-                        break Err(TesterError::AssertionFailure("TODO".into()));
-                    }
-                }
-                drop(element);
-            } else {
-                tries += 1;
-                if tries > MAX_TRIES {
-                    break Err(query.into_error());
-                }
-            }
-            let _ = self.pump().await;
-        }
+pub trait TryIntoSelector {
+    fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError>;
+}
+
+impl TryIntoSelector for &str {
+    fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
+        document.try_parse_selector_list(self).map_err(|err| {
+            TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self))
+        })
     }
 }
 
 /// Selects one or more elements in a DOM.
 ///
 /// This can be by CSS or by the `data-testid` attribute.
-pub enum Query {
-    ByCss(String),
-    ByTestId(String),
+pub struct Query {
+    list: SelectorList,
 }
 
 impl Query {
-    /// Returns a [Query] which selects elements by the given CSS selector.
-    pub fn by_css(selector: impl AsRef<str>) -> Self {
-        Self::ByCss(selector.as_ref().into())
+    fn list(&self) -> &SelectorList {
+        &self.list
     }
+}
 
-    /// Returns a [Query] which selects elements by the value of its `data-testid` attribute.
-    pub fn by_test_id(test_id: impl AsRef<str>) -> Self {
-        Self::ByTestId(format!("[data-testid=\"{}\"]", test_id.as_ref()))
+/// The maximum number of attempts [DocumentTester] will make to find a given element or make a
+/// given assertion on the DOM before concluding that the element will not appear.
+// TODO: Make this configurable.
+const MAX_TRIES: usize = 5;
+
+pub struct QueryPollFuture<'vdom, Q> {
+    data: &'vdom mut DocumentTester,
+    query: Q,
+}
+
+impl<'vdom, Q> QueryPollFuture<'vdom, Q>
+where
+    Q: for<'a> Matcher<&'a DocumentTester> + 'vdom,
+{
+    pub fn immediately(self) -> ControlFlow<<Q as Matcher<&'vdom DocumentTester>>::Output> {
+        self.query.matches(self.data)
     }
+}
 
-    fn as_css(&self) -> &str {
-        match self {
-            Query::ByCss(s) => &s,
-            Query::ByTestId(s) => &s,
+impl<'vdom, Q> IntoFuture for QueryPollFuture<'vdom, Q>
+where
+    Q: for<'a> Matcher<&'a DocumentTester> + 'vdom,
+{
+    type Output = Result<<Q as Matcher<&'vdom DocumentTester>>::Output, TesterError>;
+    type IntoFuture = std::pin::Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut tries = 0;
+            loop {
+                // this is weird because of lifetimes, could probably clean this up
+                if self.query.matches(self.data).is_break() {
+                    // Re-match to extract the value. We know it will match because nothing
+                    // has changed since the check above.
+                    break match self.query.matches(self.data) {
+                        ControlFlow::Break(node) => Ok(node),
+                        ControlFlow::Continue(_) => unreachable!(),
+                    };
+                }
+                tries += 1;
+                if tries >= MAX_TRIES {
+                    break Err(TesterError::NoSuchElementWithCssSelector(
+                        "TODO placeholder".to_string(),
+                    ));
+                }
+                let _ = self.data.pump().await;
+            }
+        })
+    }
+}
+
+impl<'vdom, Q> QueryPollFuture<'vdom, Q>
+where
+    Q: for<'a> Matcher<&'a DocumentTester, Output = ResolvedElement<'a>> + 'vdom,
+{
+    pub fn click(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+        async move {
+            let element = self.into_future().await?;
+            element.click();
+            Ok(())
         }
     }
 
-    fn into_error(self) -> TesterError {
-        match self {
-            Query::ByCss(s) => TesterError::NoSuchElementWithCssSelector(s),
-            Query::ByTestId(s) => TesterError::NoSuchElementWithTestId(s), // TODO
+    pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+        self.click()
+    }
+
+    pub fn expect(
+        self,
+        matcher: impl Matcher<ResolvedElement<'vdom>> + 'vdom,
+    ) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+        async move {
+            let element = self.into_future().await?;
+            match matcher.matches(element) {
+                ControlFlow::Continue(_) => Ok(()),
+                ControlFlow::Break(_) => Err(TesterError::AssertionFailure(
+                    "Expectation not met".to_string(),
+                )),
+            }
         }
     }
 }
