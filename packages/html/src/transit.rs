@@ -159,6 +159,46 @@ impl EventData {
     }
 }
 
+#[test]
+fn test_back_and_forth() {
+    let data = HtmlEvent {
+        element: ElementId(0),
+        data: EventData::Mouse(SerializedMouseData::default()),
+        name: "click".to_string(),
+        bubbles: true,
+    };
+
+    println!("{}", serde_json::to_string_pretty(&data).unwrap());
+
+    let o = r#"
+{
+  "element": 0,
+  "name": "click",
+  "bubbles": true,
+  "data": {
+    "alt_key": false,
+    "button": 0,
+    "buttons": 0,
+    "client_x": 0,
+    "client_y": 0,
+    "ctrl_key": false,
+    "meta_key": false,
+    "offset_x": 0,
+    "offset_y": 0,
+    "page_x": 0,
+    "page_y": 0,
+    "screen_x": 0,
+    "screen_y": 0,
+    "shift_key": false
+  }
+}
+    "#;
+
+    let p: HtmlEvent = serde_json::from_str(o).unwrap();
+
+    assert_eq!(data, p);
+}
+
 pub struct SerializedHtmlEventConverter;
 
 impl HtmlEventConverter for SerializedHtmlEventConverter {
