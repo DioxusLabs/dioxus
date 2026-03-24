@@ -613,6 +613,13 @@ impl Workspace {
             .to_path_buf()
     }
 
+    /// The directory where managed tool binaries are installed.
+    ///
+    /// Layout: `~/.dx/tools/{tool-name}-{version}/`
+    pub(crate) fn tools_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("tools")
+    }
+
     pub(crate) fn global_settings_file() -> PathBuf {
         Self::dioxus_data_dir().join("settings.toml")
     }

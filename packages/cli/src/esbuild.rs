@@ -42,11 +42,11 @@ impl Esbuild {
 
     /// The path where we cache the esbuild binary.
     fn installed_bin_path() -> PathBuf {
-        let dir = Workspace::dioxus_data_dir().join("esbuild");
+        let dir = Workspace::tools_dir().join(format!("esbuild-{ESBUILD_VERSION}"));
         let name = if cfg!(windows) {
-            format!("esbuild-{ESBUILD_VERSION}.exe")
+            "esbuild.exe"
         } else {
-            format!("esbuild-{ESBUILD_VERSION}")
+            "esbuild"
         };
         dir.join(name)
     }
