@@ -35,6 +35,14 @@ enum Route {
 
     #[route("/can-go-back")]
     HydrateCanGoBack,
+
+    #[nest("/class")]
+    #[layout(NavTestClass)]
+    #[route("/")]
+    HomeTestClass,
+
+    #[route("/other")]
+    OtherTestClass,
 }
 
 #[component]
@@ -111,5 +119,47 @@ pub fn HydrateCanGoBack() -> Element {
                 }
             }
         },
+    }
+}
+
+pub fn NavTestClass() -> Element {
+    rsx! {
+        div {
+            div {
+                Link {
+                    id: "link-home",
+                    to: Route::HomeTestClass,
+                    class: "base-class",
+                    active_class: "class-active",
+                    inactive_class: "class-inactive",
+                    "Home test page"
+                }
+                Link {
+                    id: "link-other",
+                    to: Route::OtherTestClass,
+                    class: "base-class",
+                    active_class: "class-active",
+                    inactive_class: "class-inactive",
+                    "Other test page"
+                }
+            }
+            div {
+                Outlet::<Route> {}
+            }
+        }
+    }
+}
+
+#[component]
+pub fn HomeTestClass() -> Element {
+    rsx! {
+        span { "home test class" }
+    }
+}
+
+#[component]
+pub fn OtherTestClass() -> Element {
+    rsx! {
+        span { "other test class" }
     }
 }
