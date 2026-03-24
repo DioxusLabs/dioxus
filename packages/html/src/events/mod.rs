@@ -21,6 +21,9 @@ macro_rules! impl_event {
             /// </details>
             ///
             #[doc = include_str!("../../docs/common_event_handler_errors.md")]
+            $(
+                #[doc(alias = $js_name)]
+            )?
             #[inline]
             pub fn $name<__Marker>(mut _f: impl ::dioxus_core::SuperInto<::dioxus_core::ListenerCallback<$data>, __Marker>) -> ::dioxus_core::Attribute {
                 let event_handler = _f.super_into();
