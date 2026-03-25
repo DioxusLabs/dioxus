@@ -223,8 +223,8 @@ impl BundleContext<'_> {
             WIX_TEMPLATE.to_string()
         };
 
-        let wxs_content = render_template(&wix_template, &data)
-            .context("Failed to render WiX template")?;
+        let wxs_content =
+            render_template(&wix_template, &data).context("Failed to render WiX template")?;
 
         let wxs_path = output_dir.join(format!("{product_name}.wxs"));
         std::fs::write(&wxs_path, &wxs_content).context("Failed to write WiX source file")?;
