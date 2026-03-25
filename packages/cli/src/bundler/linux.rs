@@ -43,7 +43,7 @@ impl BundleContext<'_> {
         let arch = self.binary_arch();
         let arch_str = arch.appimage_arch();
 
-        let output_dir = self.project_out_directory().join("bundle").join("appimage");
+        let output_dir = self.project_out_directory().join("appimage");
         fs::create_dir_all(&output_dir)?;
 
         let appimage_filename = format!("{name}_{version}_{arch_str}.AppImage");
@@ -150,7 +150,7 @@ impl BundleContext<'_> {
         let package_name = self.deb_package_name();
         let version = self.version_string();
 
-        let output_dir = self.project_out_directory().join("bundle").join("deb");
+        let output_dir = self.project_out_directory().join("deb");
         fs::create_dir_all(&output_dir)?;
 
         let deb_filename = format!("{package_name}_{version}_{arch}.deb");
@@ -234,7 +234,7 @@ impl BundleContext<'_> {
         let description = self.short_description();
         let resource_dir_name = self.linux_resource_dir_name();
 
-        let output_dir = self.project_out_directory().join("bundle").join("rpm");
+        let output_dir = self.project_out_directory().join("rpm");
         fs::create_dir_all(&output_dir)?;
 
         let rpm_filename = format!("{name}-{version}-1.{arch}.rpm");

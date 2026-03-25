@@ -34,7 +34,7 @@ impl BundleContext<'_> {
     /// Intermediate `.wxs`, `.wixobj`, and `_staging` files are intentionally left in
     /// place because they are useful when diagnosing packaging failures.
     pub(crate) async fn bundle_windows_msi(&self) -> Result<Vec<PathBuf>> {
-        let output_dir = self.project_out_directory().join("bundle").join("msi");
+        let output_dir = self.project_out_directory().join("msi");
         std::fs::create_dir_all(&output_dir).context("Failed to create MSI output directory")?;
 
         let wix_settings = self.windows().wix.unwrap_or_default();
@@ -86,9 +86,7 @@ impl BundleContext<'_> {
             )
         })?;
 
-        let resources_dir = staging_dir.join("resources");
-        std::fs::create_dir_all(&resources_dir)?;
-        self.copy_resources(&resources_dir)?;
+        self.copy_resources(&staging_dir)?;
         self.copy_external_binaries(&staging_dir)?;
         let staged_files = collect_staged_files(&staging_dir, Some(&main_binary_dest))?;
         let (install_tree, component_refs_xml) = render_wix_install_tree(&staged_files);
@@ -213,27 +211,19 @@ impl BundleContext<'_> {
             serde_json::Value::String(component_refs_xml),
         );
 
-        let mut hbs = Handlebars::new();
-        hbs.set_strict_mode(false);
-        hbs.register_escape_fn(|s: &str| s.to_string());
-        hbs.register_template_string(
-            "wix",
-            if let Some(custom_template) = &wix_settings.template {
-                let template_path = self.crate_dir().join(custom_template);
-                std::fs::read_to_string(&template_path).with_context(|| {
-                    format!(
-                        "Failed to read custom WiX template: {}",
-                        template_path.display()
-                    )
-                })?
-            } else {
-                WIX_TEMPLATE.to_string()
-            },
-        )
-        .context("Failed to parse WiX template")?;
+        let wix_template = if let Some(custom_template) = &wix_settings.template {
+            let template_path = self.crate_dir().join(custom_template);
+            std::fs::read_to_string(&template_path).with_context(|| {
+                format!(
+                    "Failed to read custom WiX template: {}",
+                    template_path.display()
+                )
+            })?
+        } else {
+            WIX_TEMPLATE.to_string()
+        };
 
-        let wxs_content = hbs
-            .render("wix", &data)
+        let wxs_content = render_template(&wix_template, &data)
             .context("Failed to render WiX template")?;
 
         let wxs_path = output_dir.join(format!("{product_name}.wxs"));
@@ -376,7 +366,7 @@ impl BundleContext<'_> {
     /// As with the MSI flow, the script and staging directory are preserved for
     /// debugging rather than treated as disposable hidden state.
     pub(crate) async fn bundle_windows_nsis(&self) -> Result<Vec<PathBuf>> {
-        let output_dir = self.project_out_directory().join("bundle").join("nsis");
+        let output_dir = self.project_out_directory().join("nsis");
         std::fs::create_dir_all(&output_dir).context("Failed to create NSIS output directory")?;
 
         let nsis_settings = self.windows().nsis.unwrap_or_default();
@@ -422,9 +412,7 @@ impl BundleContext<'_> {
             )
         })?;
 
-        let resources_dir = staging_dir.join("resources");
-        std::fs::create_dir_all(&resources_dir)?;
-        self.copy_resources(&resources_dir)?;
+        self.copy_resources(&staging_dir)?;
         self.copy_external_binaries(&staging_dir)?;
         let staged_files = collect_staged_files(&staging_dir, Some(&main_binary_dest))?;
 
@@ -914,14 +902,25 @@ async fn run_signtool_sign(
 }
 
 /// Render a Handlebars template with the given data.
+///
+/// Handlebars treats `\{{` as an escape sequence that outputs a literal `{{`.
+/// This is a problem for Windows paths like `$INSTDIR\{{product_name}}` where
+/// the backslash is a path separator, not an escape. We work around this by
+/// replacing `\{{` with a placeholder before Handlebars parses the template,
+/// then restoring the backslash in the rendered output.
 fn render_template(template: &str, data: &BTreeMap<String, JsonValue>) -> Result<String> {
+    const BACKSLASH_PLACEHOLDER: &str = "\x00BSEP\x00";
+    let replacement = String::from(BACKSLASH_PLACEHOLDER) + "{{";
+    let safe_template = template.replace("\\{{", &replacement);
     let mut hbs = Handlebars::new();
     hbs.set_strict_mode(false);
     hbs.register_escape_fn(|s: &str| s.to_string());
-    hbs.register_template_string("nsis", template)
-        .context("Failed to parse NSIS template")?;
-    hbs.render("nsis", data)
-        .context("Failed to render NSIS template")
+    hbs.register_template_string("template", &safe_template)
+        .context("Failed to parse template")?;
+    let rendered = hbs
+        .render("template", data)
+        .context("Failed to render template")?;
+    Ok(rendered.replace(BACKSLASH_PLACEHOLDER, "\\"))
 }
 
 /// Convert a semver version string to a WiX-compatible version.
@@ -1015,7 +1014,15 @@ const WIX_TEMPLATE: &str = r#"<?xml version="1.0" encoding="utf-8"?>
         <WixVariable Id="WixUIDialogBmp" Value="{{dialog_image_path}}" />
         {{/if}}
 
+        {{#if license}}
         <UIRef Id="WixUI_InstallDir" />
+        {{else}}
+        <UI>
+            <UIRef Id="WixUI_InstallDir" />
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="2">1</Publish>
+            <Publish Dialog="InstallDirDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg" Order="2">1</Publish>
+        </UI>
+        {{/if}}
         <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
 
         <Directory Id="TARGETDIR" Name="SourceDir">
@@ -1244,10 +1251,10 @@ SectionEnd
 
 #[cfg(test)]
 mod tests {
-    use super::WIX_TEMPLATE;
+    use super::{render_template, WIX_TEMPLATE};
     use crate::bundler::Arch;
-    use handlebars::Handlebars;
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     #[test]
     fn wix_program_files_folder_matches_architecture() {
@@ -1264,37 +1271,32 @@ mod tests {
 
     #[test]
     fn wix_template_uses_arch_specific_program_files_folder() {
-        let mut hbs = Handlebars::new();
-        hbs.set_strict_mode(false);
-        hbs.register_escape_fn(|s: &str| s.to_string());
-        hbs.register_template_string("wix", WIX_TEMPLATE).unwrap();
+        let data: BTreeMap<String, serde_json::Value> = serde_json::from_value(json!({
+            "product_name": "Hotdog",
+            "upgrade_code": "00000000-0000-0000-0000-000000000000",
+            "version": "0.1.0",
+            "publisher": "Dioxus Labs",
+            "main_binary_name": "hotdog.exe",
+            "main_binary_path": "C:\\staging\\hotdog.exe",
+            "short_description": "Hotdog app",
+            "allow_downgrades": false,
+            "fips_compliant": false,
+            "install_tree": "",
+            "component_refs_xml": "",
+            "component_group_refs": [],
+            "component_refs": [],
+            "feature_group_refs": [],
+            "feature_refs": [],
+            "merge_refs": [],
+            "wix_program_files_folder": "ProgramFiles64Folder"
+        }))
+        .unwrap();
 
-        let rendered = hbs
-            .render(
-                "wix",
-                &json!({
-                    "product_name": "Hotdog",
-                    "upgrade_code": "00000000-0000-0000-0000-000000000000",
-                    "version": "0.1.0",
-                    "publisher": "Dioxus Labs",
-                    "main_binary_name": "hotdog.exe",
-                    "main_binary_path": "C:\\staging\\hotdog.exe",
-                    "short_description": "Hotdog app",
-                    "allow_downgrades": false,
-                    "fips_compliant": false,
-                    "install_tree": "",
-                    "component_refs_xml": "",
-                    "component_group_refs": [],
-                    "component_refs": [],
-                    "feature_group_refs": [],
-                    "feature_refs": [],
-                    "merge_refs": [],
-                    "wix_program_files_folder": "ProgramFiles64Folder"
-                }),
-            )
-            .unwrap();
+        let rendered = render_template(WIX_TEMPLATE, &data).unwrap();
 
         assert!(rendered.contains("<Directory Id=\"ProgramFiles64Folder\">"));
         assert!(!rendered.contains("<Directory Id=\"ProgramFilesFolder\">"));
+        // Verify \{{ substitution works: registry key should contain actual values
+        assert!(rendered.contains("Software\\Dioxus Labs\\Hotdog"));
     }
 }
