@@ -1,6 +1,6 @@
-use dioxus_core::{prelude::*, Element, VNode};
+use dioxus_core::{Attribute, Element, VNode};
 use dioxus_core_macro::{rsx, Props};
-use dioxus_html::{self as dioxus_elements, prelude::GlobalAttributes};
+use dioxus_html as dioxus_elements;
 
 use tracing::error;
 
