@@ -30,6 +30,10 @@ pub enum ComponentCommand {
         /// Overwrite the component if it already exists
         #[clap(long)]
         force: bool,
+
+        /// The package to use for resolving the Dioxus config
+        #[clap(short, long)]
+        package: Option<String>,
     },
 
     /// Remove a component
@@ -40,6 +44,10 @@ pub enum ComponentCommand {
         /// The registry to use
         #[clap(flatten)]
         registry: ComponentRegistry,
+
+        /// The package to use for resolving the Dioxus config
+        #[clap(short, long)]
+        package: Option<String>,
     },
 
     /// Update a component registry
@@ -54,6 +62,10 @@ pub enum ComponentCommand {
         /// The registry to list components in
         #[clap(flatten)]
         registry: ComponentRegistry,
+
+        /// The package to use for resolving the Dioxus config
+        #[clap(short, long)]
+        package: Option<String>,
     },
 
     /// Clear the component registry cache
@@ -88,8 +100,8 @@ impl ComponentCommand {
     pub async fn run(self) -> Result<StructuredOutput> {
         match self {
             // List all components in the registry
-            Self::List { registry } => {
-                let config = Self::resolve_config().await?;
+            Self::List { registry, package } => {
+                let config = Self::resolve_config(package).await?;
                 let registry = Self::resolve_registry(registry, &config)?;
                 let mut components = registry.read_components().await?;
                 components.sort_by_key(|c| c.name.clone());
@@ -103,9 +115,10 @@ impl ComponentCommand {
                 component: component_args,
                 registry,
                 force,
+                package,
             } => {
                 // Resolve the config
-                let config = Self::resolve_config().await?;
+                let config = Self::resolve_config(package).await?;
 
                 // Resolve the registry
                 let registry = Self::resolve_registry(registry, &config)?;
@@ -213,7 +226,7 @@ impl ComponentCommand {
 
             // Update the remote component registry
             Self::Update { registry } => {
-                let config = Self::resolve_config().await?;
+                let config = Self::resolve_config(None).await?;
                 registry
                     .unwrap_or(config.components.registry.remote)
                     .update()
@@ -224,8 +237,9 @@ impl ComponentCommand {
             Self::Remove {
                 component,
                 registry,
+                package,
             } => {
-                Self::remove_component(&component, registry).await?;
+                Self::remove_component(&component, registry, package).await?;
             }
 
             // Clear the component registry cache
@@ -250,8 +264,9 @@ impl ComponentCommand {
     async fn remove_component(
         component_args: &ComponentArgs,
         registry: ComponentRegistry,
+        package: Option<String>,
     ) -> Result<()> {
-        let config = Self::resolve_config().await?;
+        let config = Self::resolve_config(package).await?;
         let registry = Self::resolve_registry(registry, &config)?;
 
         let components_root = components_root(component_args.module_path.as_deref(), &config)?;
@@ -287,10 +302,10 @@ impl ComponentCommand {
     }
 
     /// Load the config
-    async fn resolve_config() -> Result<DioxusConfig> {
+    async fn resolve_config(package: Option<String>) -> Result<DioxusConfig> {
         let workspace = Workspace::current().await?;
 
-        let crate_package = workspace.find_main_package(None)?;
+        let crate_package = workspace.find_main_package(package)?;
 
         Ok(workspace
             .load_dioxus_config(crate_package, None)?

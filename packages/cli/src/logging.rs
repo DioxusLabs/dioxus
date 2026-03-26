@@ -911,22 +911,26 @@ impl TraceController {
                     component,
                     registry,
                     force,
+                    package,
                 } => (
                     "components add".to_string(),
                     json!({
                         "component": component,
                         "registry": registry,
                         "force": force,
+                        "package": package,
                     }),
                 ),
                 ComponentCommand::Remove {
                     component,
                     registry,
+                    package,
                 } => (
                     "components remove".to_string(),
                     json!({
                         "component": component,
                         "registry": registry,
+                        "package": package,
                     }),
                 ),
                 ComponentCommand::Update { registry } => (
@@ -935,10 +939,11 @@ impl TraceController {
                         "registry": registry,
                     }),
                 ),
-                ComponentCommand::List { registry } => (
+                ComponentCommand::List { registry, package } => (
                     "components list".to_string(),
                     json!({
                         "registry": registry,
+                        "package": package,
                     }),
                 ),
                 ComponentCommand::Clean => ("components clean".to_string(), json!({})),
