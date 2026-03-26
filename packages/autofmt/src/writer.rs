@@ -153,11 +153,15 @@ impl<'a> Writer<'a> {
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
-        write!(
-            self.out,
-            "for {} in ",
-            forloop.pat.clone().into_token_stream(),
-        )?;
+        // Normalize whitespace around commas in patterns like (index, name, value)
+        // since into_token_stream() adds extra spaces before commas: (index , name , value)
+        let pat = forloop
+            .pat
+            .clone()
+            .into_token_stream()
+            .to_string()
+            .replace(" ,", ",");
+        write!(self.out, "for {pat} in ")?;
 
         self.write_inline_expr(&forloop.expr)?;
 

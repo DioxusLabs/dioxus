@@ -5,6 +5,11 @@ rsx! {
         div {}
     }
 
+    // Tuple destructuring should not add extra spaces before commas
+    for (index, name, value) in data {
+        div { "{index}: {name}, {value}" }
+    }
+
     // Some ifchain
     if a > 10 {
         //
