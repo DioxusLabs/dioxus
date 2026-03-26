@@ -609,8 +609,6 @@ impl VirtualDom {
             match work {
                 Work::PollTask(task) => {
                     _ = self.runtime.handle_task_wakeup(task);
-                    // Make sure we process any new events
-                    self.queue_events();
                 }
                 Work::RerunScope(scope) => {
                     // If the scope is dirty, run the scope and get the mutations
@@ -619,6 +617,10 @@ impl VirtualDom {
                     });
                 }
             }
+            // Make sure we process any new events after each work item.
+            // This matches render_suspense_immediate and ensures signal
+            // writes during scope re-runs are picked up in the same pass.
+            self.queue_events();
         }
 
         self.runtime.finish_render();
