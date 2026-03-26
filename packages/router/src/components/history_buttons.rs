@@ -1,6 +1,6 @@
-use dioxus_core::{Element, VNode};
+use dioxus_core::{prelude::*, Element, VNode};
 use dioxus_core_macro::{rsx, Props};
-use dioxus_html as dioxus_elements;
+use dioxus_html::{self as dioxus_elements, prelude::GlobalAttributes};
 
 use tracing::error;
 
@@ -11,6 +11,10 @@ use crate::utils::use_router_internal::use_router_internal;
 pub struct HistoryButtonProps {
     /// The children to render within the generated HTML button tag.
     pub children: Element,
+
+    /// Additional HTML attributes to apply to the button element.
+    #[props(extends = GlobalAttributes)]
+    attributes: Vec<Attribute>,
 }
 
 /// A button to go back through the navigation history. Similar to a browsers back button.
@@ -56,7 +60,10 @@ pub struct HistoryButtonProps {
 /// # );
 /// ```
 pub fn GoBackButton(props: HistoryButtonProps) -> Element {
-    let HistoryButtonProps { children } = props;
+    let HistoryButtonProps {
+        children,
+        attributes,
+    } = props;
 
     // hook up to router
     let router = match use_router_internal() {
@@ -80,6 +87,7 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
                 evt.prevent_default();
                 router.go_back()
             },
+            ..attributes,
             {children}
         }
     }
@@ -128,7 +136,10 @@ pub fn GoBackButton(props: HistoryButtonProps) -> Element {
 /// # );
 /// ```
 pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
-    let HistoryButtonProps { children } = props;
+    let HistoryButtonProps {
+        children,
+        attributes,
+    } = props;
 
     // hook up to router
     let router = match use_router_internal() {
@@ -152,6 +163,7 @@ pub fn GoForwardButton(props: HistoryButtonProps) -> Element {
                 evt.prevent_default();
                 router.go_forward()
             },
+            ..attributes,
             {children}
         }
     }
