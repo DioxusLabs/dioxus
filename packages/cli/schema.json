@@ -165,6 +165,13 @@
             "$ref": "#/definitions/AndroidIntentFilter"
           }
         },
+        "lib_name": {
+          "description": "Native library name loaded by NativeActivity (without `lib` prefix and `.so` extension). Defaults to `\"main\"` (i.e. `libmain.so`). Override if you need a custom library name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "long_description": {
           "description": "Long description. Overrides `bundle.long_description` for Android builds.",
           "type": [

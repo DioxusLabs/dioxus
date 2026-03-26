@@ -32,7 +32,7 @@ impl BundleContext<'_> {
     /// archive container.
     pub(crate) async fn bundle_updater(&self, bundles: &[Bundle]) -> Result<Vec<PathBuf>> {
         let mut updater_paths = Vec::new();
-        let output_dir = self.project_out_directory().join("bundle").join("updater");
+        let output_dir = self.project_out_directory().join("updater");
         std::fs::create_dir_all(&output_dir)?;
 
         for bundle in bundles {

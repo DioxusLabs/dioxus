@@ -428,6 +428,9 @@ impl WasmBindgen {
     fn git_install_url(&self) -> Option<String> {
         let platform = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
             "x86_64-pc-windows-msvc"
+        } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+            // No native ARM64 binary available; the x86_64 binary runs fine under emulation.
+            "x86_64-pc-windows-msvc"
         } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             "x86_64-unknown-linux-musl"
         } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
