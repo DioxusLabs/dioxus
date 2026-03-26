@@ -711,11 +711,15 @@ impl SsrRendererPool {
     ) -> Result<(), IncrementalRendererError> {
         to.write_str(&cfg.index.close_head)?;
 
-        // // #[cfg(feature = "document")]
-        // {
-        use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
-        write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
-        // }
+        // Only inject the hydration bootstrap script if it's not already present in the close_head section.
+        // This ensures custom index.html files with their own hydration setup aren't duplicated.
+        if !cfg.index.close_head.contains("dx_hydrate")
+            && !cfg.index.close_head.contains("INITIALIZE_STREAMING")
+            && !cfg.index.close_head.contains("hydrate_queue")
+        {
+            use dioxus_interpreter_js::INITIALIZE_STREAMING_JS;
+            write!(to, "<script>{INITIALIZE_STREAMING_JS}</script>")?;
+        }
 
         Ok(())
     }
@@ -726,30 +730,42 @@ impl SsrRendererPool {
         to: &mut R,
         virtual_dom: &VirtualDom,
     ) -> Result<(), IncrementalRendererError> {
-        // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
-        // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
-        let resolved_data = SsrRendererPool::serialize_server_data(virtual_dom, ScopeId::ROOT);
-        // We always send down the data required to hydrate components on the client
-        let raw_data = resolved_data.data;
-        write!(
-            to,
-            r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
-        )?;
-        #[cfg(debug_assertions)]
+        // Only inject the hydration data script if it's not already present in the post_main section.
+        // This ensures custom index.html files with their own hydration data setup aren't duplicated.
+        if !cfg
+            .index
+            .post_main
+            .contains("window.initial_dioxus_hydration_data")
+            && !cfg
+                .index
+                .post_main
+                .contains("initial_dioxus_hydration_data")
         {
-            // In debug mode, we also send down the type names and locations of the serialized data
-            let debug_types = &resolved_data.debug_types;
-            let debug_locations = &resolved_data.debug_locations;
+            // Collect the initial server data from the root node. For most apps, no use_server_futures will be resolved initially, so this will be full on `None`s.
+            // Sending down those Nones are still important to tell the client not to run the use_server_futures that are already running on the backend
+            let resolved_data = SsrRendererPool::serialize_server_data(virtual_dom, ScopeId::ROOT);
+            // We always send down the data required to hydrate components on the client
+            let raw_data = resolved_data.data;
             write!(
                 to,
-                r#"window.initial_dioxus_hydration_debug_types={debug_types};"#,
+                r#"<script>window.initial_dioxus_hydration_data="{raw_data}";"#,
             )?;
-            write!(
-                to,
-                r#"window.initial_dioxus_hydration_debug_locations={debug_locations};"#,
-            )?;
+            #[cfg(debug_assertions)]
+            {
+                // In debug mode, we also send down the type names and locations of the serialized data
+                let debug_types = &resolved_data.debug_types;
+                let debug_locations = &resolved_data.debug_locations;
+                write!(
+                    to,
+                    r#"window.initial_dioxus_hydration_debug_types={debug_types};"#,
+                )?;
+                write!(
+                    to,
+                    r#"window.initial_dioxus_hydration_debug_locations={debug_locations};"#,
+                )?;
+            }
+            write!(to, r#"</script>"#,)?;
         }
-        write!(to, r#"</script>"#,)?;
         to.write_str(&cfg.index.post_main)?;
 
         Ok(())
