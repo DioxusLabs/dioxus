@@ -933,7 +933,16 @@ impl BuildRequest {
             let sysroot_location = match triple.environment {
                 target_lexicon::Environment::Sim => xcode_path
                     .join("Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk"),
-                _ => xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"),
+                _ => {
+                    // If the target has been determined as the iOS x86 simulator above
+                    if triple.to_string() == "x86_64-apple-ios" {
+                        xcode_path.join(
+                            "Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk",
+                        )
+                    } else {
+                        xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk")
+                    }
+                }
             };
 
             if sysroot_location.exists() && !rustflags.flags.iter().any(|f| f == "-isysroot") {
