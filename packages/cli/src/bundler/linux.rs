@@ -864,16 +864,20 @@ Type=Application
         control.push_str(&format!("Installed-Size: {installed_size}\n"));
 
         let description = self.short_description();
-        if !description.is_empty() {
-            control.push_str(&format!("Description: {description}\n"));
+        // Description is a required field in Debian control files - use the product name as fallback
+        let description = if description.is_empty() {
+            self.product_name()
+        } else {
+            description
+        };
+        control.push_str(&format!("Description: {description}\n"));
 
-            if let Some(long_desc) = self.long_description() {
-                for line in long_desc.lines() {
-                    if line.is_empty() {
-                        control.push_str(" .\n");
-                    } else {
-                        control.push_str(&format!(" {line}\n"));
-                    }
+        if let Some(long_desc) = self.long_description() {
+            for line in long_desc.lines() {
+                if line.is_empty() {
+                    control.push_str(" .\n");
+                } else {
+                    control.push_str(&format!(" {line}\n"));
                 }
             }
         }

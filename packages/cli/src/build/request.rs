@@ -3611,6 +3611,10 @@ impl BuildRequest {
             env_vars.extend(self.android_env_vars()?);
         };
 
+        // Always bake the product name into the binary so bundled apps can find their assets
+        // at runtime regardless of build profile (the asset directory structure uses the product name).
+        env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
+
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
@@ -3621,7 +3625,6 @@ impl BuildRequest {
                 APP_TITLE_ENV.into(),
                 self.config.web.app.title.clone().into(),
             ));
-            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
