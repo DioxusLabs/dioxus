@@ -537,6 +537,7 @@ fn old_middle_empty_right_pivot() {
     );
 }
 
+/// Regression test for PR #5413
 #[test]
 fn keyed_list_with_dynamic_placeholder_and_text() {
     let mut dom = VirtualDom::new(|| {
