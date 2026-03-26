@@ -3,6 +3,7 @@ use crate::config::component::ComponentConfig;
 use super::*;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct DioxusConfig {
@@ -55,6 +56,72 @@ pub(crate) struct DioxusConfig {
     /// Linux-specific configuration.
     #[serde(default)]
     pub(crate) linux: LinuxConfig,
+
+    /// Custom renderer configuration for projects that use `dioxus-core` with their own renderer.
+    ///
+    /// When present, this overrides the default renderer autodetection and feature injection.
+    /// Existing Dioxus projects (without this section) are unaffected.
+    ///
+    /// ```toml
+    /// [renderer]
+    /// name = "my-renderer"
+    /// default_platform = "desktop"
+    ///
+    /// [renderer.features]
+    /// desktop = []
+    /// web = ["my-web"]
+    /// ios = ["my-mobile"]
+    /// android = ["my-mobile"]
+    /// ```
+    #[serde(default)]
+    pub(crate) renderer: RendererConfig,
+}
+
+/// Configuration for custom (non-dioxus) renderers.
+///
+/// Projects that use `dioxus-core` directly with their own renderer can use this section
+/// to declare platform-to-feature mappings so `dx serve`, `dx build`, and `dx bundle` work
+/// without pulling in dioxus's built-in renderers.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+pub(crate) struct RendererConfig {
+    /// Display name for the renderer (shown in TUI).
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+
+    /// Default platform when none is specified on the CLI.
+    ///
+    /// Must be one of: `"web"`, `"macos"`, `"windows"`, `"linux"`, `"ios"`, `"android"`,
+    /// `"server"`, `"liveview"`.
+    #[serde(default)]
+    pub(crate) default_platform: Option<String>,
+
+    /// Map from platform name to cargo features to enable.
+    ///
+    /// Keys are platform identifiers (e.g., `"desktop"`, `"web"`, `"ios"`).
+    /// Values are lists of cargo feature names to pass via `--features`.
+    /// An empty list means "build with default features, don't inject any extra".
+    #[serde(default)]
+    pub(crate) features: HashMap<String, Vec<String>>,
+}
+
+impl RendererConfig {
+    /// Returns `true` if a custom renderer is configured.
+    pub(crate) fn is_custom(&self) -> bool {
+        self.name.is_some() || !self.features.is_empty()
+    }
+
+    /// Look up custom features for a platform, trying each key in order.
+    ///
+    /// This allows fallback chains like `["macos", "desktop"]` so platform-specific
+    /// keys take priority over generic ones.
+    pub(crate) fn features_for_platform(&self, keys: &[&str]) -> Option<Vec<String>> {
+        for key in keys {
+            if let Some(feats) = self.features.get(*key) {
+                return Some(feats.clone());
+            }
+        }
+        None
+    }
 }
 
 /// Platform identifier for bundle resolution.
@@ -149,6 +216,7 @@ impl Default for DioxusConfig {
             macos: MacosConfig::default(),
             windows: WindowsConfig::default(),
             linux: LinuxConfig::default(),
+            renderer: RendererConfig::default(),
         }
     }
 }
@@ -189,5 +257,48 @@ mod tests {
 
         let config: DioxusConfig = toml::from_str(source).expect("parse config");
         assert_eq!(config.application.public_dir.as_deref(), None);
+    }
+
+    #[test]
+    fn renderer_config_absent_is_not_custom() {
+        let config = DioxusConfig::default();
+        assert!(!config.renderer.is_custom());
+        assert!(config.renderer.features.is_empty());
+    }
+
+    #[test]
+    fn renderer_config_parses_from_toml() {
+        let source = r#"
+            [renderer]
+            name = "tanzo"
+            default_platform = "desktop"
+
+            [renderer.features]
+            desktop = []
+            web = ["tanzo-web"]
+            ios = ["tanzo-mobile"]
+            android = ["tanzo-mobile"]
+        "#;
+
+        let config: DioxusConfig = toml::from_str(source).expect("parse config");
+        assert!(config.renderer.is_custom());
+        assert_eq!(config.renderer.name.as_deref(), Some("tanzo"));
+        assert_eq!(config.renderer.default_platform.as_deref(), Some("desktop"));
+        assert_eq!(
+            config.renderer.features_for_platform(&["desktop"]),
+            Some(vec![])
+        );
+        assert_eq!(
+            config.renderer.features_for_platform(&["web"]),
+            Some(vec!["tanzo-web".to_string()])
+        );
+        assert_eq!(
+            config.renderer.features_for_platform(&["macos", "desktop"]),
+            Some(vec![])
+        );
+        assert_eq!(
+            config.renderer.features_for_platform(&["nonexistent"]),
+            None
+        );
     }
 }

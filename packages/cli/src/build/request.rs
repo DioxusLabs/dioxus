@@ -717,13 +717,27 @@ impl BuildRequest {
             }
         }
 
+        // If no platform was specified on the CLI and a custom renderer declares a default, use it.
+        if matches!(platform, Platform::Unknown) {
+            if let Some(ref default) = config.renderer.default_platform {
+                if let Ok(p) = Platform::from_identifier(default) {
+                    platform = p;
+                }
+            }
+        }
+
+        // Helper closure: check if the custom renderer config has features for this platform.
+        let custom_features = |keys: &[&str]| config.renderer.features_for_platform(keys);
+
         // Set the super triple from the platform if it's provided.
         // Otherwise, we attempt to guess it from the rest of their inputs.
         match platform {
             Platform::Unknown => {}
 
             Platform::Web => {
-                if main_package.features.contains_key("web") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["web"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("web") && renderer.is_none() {
                     features.push("web".into());
                 }
                 renderer = renderer.or(Some(Renderer::Web));
@@ -731,7 +745,9 @@ impl BuildRequest {
                 triple = triple.or(Some("wasm32-unknown-unknown".parse()?));
             }
             Platform::MacOS => {
-                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["macos", "desktop"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("desktop") && renderer.is_none() {
                     features.push("desktop".into());
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
@@ -739,7 +755,9 @@ impl BuildRequest {
                 triple = triple.or(Some(Triple::host()));
             }
             Platform::Windows => {
-                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["windows", "desktop"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("desktop") && renderer.is_none() {
                     features.push("desktop".into());
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
@@ -747,7 +765,9 @@ impl BuildRequest {
                 triple = triple.or(Some(Triple::host()));
             }
             Platform::Linux => {
-                if main_package.features.contains_key("desktop") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["linux", "desktop"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("desktop") && renderer.is_none() {
                     features.push("desktop".into());
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
@@ -755,7 +775,9 @@ impl BuildRequest {
                 triple = triple.or(Some(Triple::host()));
             }
             Platform::Ios => {
-                if main_package.features.contains_key("mobile") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["ios", "mobile"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("mobile") && renderer.is_none() {
                     features.push("mobile".into());
                 }
                 renderer = renderer.or(Some(Renderer::Webview));
@@ -774,7 +796,9 @@ impl BuildRequest {
                 }
             }
             Platform::Android => {
-                if main_package.features.contains_key("mobile") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["android", "mobile"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("mobile") && renderer.is_none() {
                     features.push("mobile".into());
                 }
 
@@ -803,7 +827,9 @@ impl BuildRequest {
                 }
             }
             Platform::Server => {
-                if main_package.features.contains_key("server") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["server"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("server") && renderer.is_none() {
                     features.push("server".into());
                 }
                 renderer = renderer.or(Some(Renderer::Server));
@@ -811,7 +837,9 @@ impl BuildRequest {
                 triple = triple.or(Some(Triple::host()));
             }
             Platform::Liveview => {
-                if main_package.features.contains_key("liveview") && renderer.is_none() {
+                if let Some(feats) = custom_features(&["liveview"]) {
+                    features.extend(feats);
+                } else if main_package.features.contains_key("liveview") && renderer.is_none() {
                     features.push("liveview".into());
                 }
                 renderer = renderer.or(Some(Renderer::Liveview));
@@ -842,13 +870,17 @@ impl BuildRequest {
             bundle_format.unwrap_or(BundleFormat::host())
         };
 
-        // Add any features required to turn on the client
+        // Add any features required to turn on the client.
+        // When a custom renderer is configured, skip dioxus-specific feature injection since
+        // the custom features were already added in the platform match above.
         if let Some(renderer) = renderer {
-            if let Some(feature) =
-                Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
-            {
-                features.push(feature);
-                features.dedup();
+            if !config.renderer.is_custom() {
+                if let Some(feature) =
+                    Self::feature_for_platform_and_renderer(main_package, &triple, renderer)
+                {
+                    features.push(feature);
+                    features.dedup();
+                }
             }
         }
 

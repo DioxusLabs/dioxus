@@ -48,7 +48,8 @@ pub(crate) enum Platform {
 }
 
 impl Platform {
-    fn from_identifier(identifier: &str) -> std::result::Result<Self, clap::Error> {
+    /// Parse a platform from a string identifier (e.g., "web", "macos", "desktop").
+    pub(crate) fn from_identifier(identifier: &str) -> std::result::Result<Self, clap::Error> {
         match identifier {
             "web" => Ok(Self::Web),
             "macos" => Ok(Self::MacOS),

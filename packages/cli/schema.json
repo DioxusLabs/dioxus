@@ -40,6 +40,10 @@
       "description": "Unified permissions configuration. Permissions declared here are automatically mapped to platform-specific identifiers (AndroidManifest.xml, Info.plist, etc.)",
       "$ref": "#/definitions/PermissionsConfig"
     },
+    "renderer": {
+      "description": "Custom renderer configuration for projects that use `dioxus-core` with their own renderer.\n\nWhen present, this overrides the default renderer autodetection and feature injection. Existing Dioxus projects (without this section) are unaffected.\n\n```toml [renderer] name = \"my-renderer\" default_platform = \"desktop\"\n\n[renderer.features] desktop = [] web = [\"my-web\"] ios = [\"my-mobile\"] android = [\"my-mobile\"] ```",
+      "$ref": "#/definitions/RendererConfig"
+    },
     "web": {
       "$ref": "#/definitions/WebConfig"
     },
@@ -2186,6 +2190,36 @@
       "properties": {
         "description": {
           "type": "string"
+        }
+      }
+    },
+    "RendererConfig": {
+      "description": "Configuration for custom (non-dioxus) renderers.\n\nProjects that use `dioxus-core` directly with their own renderer can use this section to declare platform-to-feature mappings so `dx serve`, `dx build`, and `dx bundle` work without pulling in dioxus's built-in renderers.",
+      "type": "object",
+      "properties": {
+        "default_platform": {
+          "description": "Default platform when none is specified on the CLI.\n\nMust be one of: `\"web\"`, `\"macos\"`, `\"windows\"`, `\"linux\"`, `\"ios\"`, `\"android\"`, `\"server\"`, `\"liveview\"`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "features": {
+          "description": "Map from platform name to cargo features to enable.\n\nKeys are platform identifiers (e.g., `\"desktop\"`, `\"web\"`, `\"ios\"`). Values are lists of cargo feature names to pass via `--features`. An empty list means \"build with default features, don't inject any extra\".",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "name": {
+          "description": "Display name for the renderer (shown in TUI).",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
