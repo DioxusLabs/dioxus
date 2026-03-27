@@ -102,7 +102,7 @@ export function serializeEvent(
     extend({ files });
   }
 
-  if (event.type === "scroll") {
+  if (event.type === "scroll" || event.type === "scrollend") {
     extend(serializeScrollEvent(event));
   }
 

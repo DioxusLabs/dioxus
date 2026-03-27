@@ -29,7 +29,8 @@ pub(crate) async fn proxy_websocket(
         match handle_ws_connection(client_ws, proxied_request).await {
             Ok(()) => tracing::trace!(dx_src = ?TraceSrc::Dev, "Websocket connection closed"),
             Err(e) => {
-                tracing::error!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}")
+                // Connection resets during shutdown are expected and not worth logging as errors
+                tracing::debug!(dx_src = ?TraceSrc::Dev, "Error proxying websocket connection: {e}")
             }
         }
     }))

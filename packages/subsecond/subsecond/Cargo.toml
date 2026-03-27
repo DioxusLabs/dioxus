@@ -5,8 +5,9 @@ version.workspace = true
 authors = ["Jonathan Kelley"]
 description = "A runtime hotpatching engine for Rust hot-reloading."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/subsecond"
 keywords = ["hotpatch", "engine", "subsecond", "dioxus", "hot-reload"]
+readme = "../README.md"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

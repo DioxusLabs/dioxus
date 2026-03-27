@@ -51,15 +51,15 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/tr-tr"> Türkçe </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
@@ -166,12 +166,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Modular and Customizable
 
-Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev). Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
-
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
-</div>
+Build your own renderer. Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
 
 ## Community
 

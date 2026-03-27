@@ -18,3 +18,9 @@ pub use asset::*;
 
 mod css_module;
 pub use css_module::*;
+
+mod css_module_parser;
+pub use css_module_parser::*;
+
+mod ffi;
+pub use ffi::*;

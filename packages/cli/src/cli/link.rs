@@ -127,12 +127,12 @@ impl LinkAction {
     /// The file will be given by the dx-magic-link-arg env var itself, so we use
     /// it both for determining if we should act as a linker and the for the file name itself.
     fn run_link_inner(self) -> Result<()> {
-        let mut args: Vec<_> = std::env::args().collect();
+        let args: Vec<_> = std::env::args().collect();
         if args.is_empty() {
             return Ok(());
         }
 
-        handle_linker_command_file(&mut args);
+        let mut args = get_actual_linker_args_excluding_program_name(args);
 
         if self.triple.environment == target_lexicon::Environment::Android {
             args.retain(|arg| !arg.ends_with(".lib"));
@@ -149,7 +149,7 @@ impl LinkAction {
                 let mut cmd = std::process::Command::new(linker);
                 match cfg!(target_os = "windows") {
                     true => cmd.arg(format!("@{}", &self.link_args_file.display())),
-                    false => cmd.args(args.iter().skip(1)),
+                    false => cmd.args(args),
                 };
                 let res = cmd.output().expect("Failed to run linker");
 
@@ -240,14 +240,22 @@ impl LinkAction {
     }
 }
 
-pub fn handle_linker_command_file(args: &mut Vec<String>) {
-    // Handle command files, usually a windows thing.
-    if let Some(command) = args.iter().find(|arg| arg.starts_with('@')).cloned() {
-        let path = command.trim().trim_start_matches('@');
+pub fn get_actual_linker_args_excluding_program_name(args: Vec<String>) -> Vec<String> {
+    args.into_iter()
+        .skip(1) // the first arg is program name
+        .flat_map(|arg| handle_linker_arg_response_file(arg).into_iter())
+        .collect()
+}
+
+// handle Windows linker response file. It's designed to workaround Windows command length limit.
+// https://learn.microsoft.com/en-us/cpp/build/reference/at-specify-a-linker-response-file?view=msvc-170
+pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
+    if arg.starts_with('@') {
+        let path = arg.trim().trim_start_matches('@');
         let file_binary = std::fs::read(path).unwrap();
 
         // This may be a utf-16le file. Let's try utf-8 first.
-        let content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
+        let mut content = String::from_utf8(file_binary.clone()).unwrap_or_else(|_| {
             // Convert Vec<u8> to Vec<u16> to convert into a String
             let binary_u16le: Vec<u16> = file_binary
                 .chunks_exact(2)
@@ -257,8 +265,13 @@ pub fn handle_linker_command_file(args: &mut Vec<String>) {
             String::from_utf16_lossy(&binary_u16le)
         });
 
+        // Remove byte order mark in the beginning
+        if content.starts_with('\u{FEFF}') {
+            content.remove(0);
+        }
+
         // Gather linker args, and reset the args to be just the linker args
-        *args = content
+        content
             .lines()
             .map(|line| {
                 let line_parsed = line.trim().to_string();
@@ -266,6 +279,8 @@ pub fn handle_linker_command_file(args: &mut Vec<String>) {
                 let line_parsed = line_parsed.trim_start_matches('"').to_string();
                 line_parsed
             })
-            .collect();
+            .collect()
+    } else {
+        vec![arg]
     }
 }

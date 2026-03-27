@@ -3,7 +3,7 @@ use std::any::Any;
 use color::{palette::css::WHITE, parse_color};
 use color::{OpaqueColor, Srgb};
 use demo_renderer::{DemoMessage, DemoPaintSource};
-use dioxus::prelude::*;
+use dioxus_native::prelude::*;
 use dioxus_native::use_wgpu;
 use wgpu::Limits;
 

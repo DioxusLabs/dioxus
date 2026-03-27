@@ -508,17 +508,17 @@ pub fn get_server_url() -> &'static str {
 
 static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
 
-/// Delete the extra request headers for all servers functions.
+/// Delete the extra request headers for all server functions.
 pub fn clear_request_headers() {
     REQUEST_HEADERS.lock().unwrap().clear();
 }
 
-/// Set the extra request headers for all servers functions.
+/// Set the extra request headers for all server functions.
 pub fn set_request_headers(headers: HeaderMap) {
     *REQUEST_HEADERS.lock().unwrap() = headers;
 }
 
-/// Returns the extra request headers for all servers functions.
+/// Returns the extra request headers for all server functions.
 pub fn get_request_headers() -> HeaderMap {
     REQUEST_HEADERS.lock().unwrap().clone()
 }

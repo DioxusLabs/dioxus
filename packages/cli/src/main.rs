@@ -5,15 +5,18 @@
 #![allow(clippy::doc_overindented_list_items)]
 
 mod build;
-mod bundle_utils;
+mod bundler;
 mod cargo_toml;
+mod check;
 mod cli;
 mod config;
 mod devcfg;
 mod dx_build_info;
 mod error;
+mod esbuild;
 mod fastfs;
 mod logging;
+mod opt;
 mod platform;
 mod rustcwrapper;
 mod serve;
@@ -53,25 +56,27 @@ async fn main() -> ExitCode {
     }
 
     // Run under the tracing collector so we can capture errors/panics.
-    let result = TraceController::main(|args, tracer| async move {
-        match args {
-            Commands::Serve(opts) => opts.serve(&tracer).await,
-            Commands::Translate(opts) => opts.translate(),
-            Commands::New(opts) => opts.create().await,
-            Commands::Init(opts) => opts.init().await,
-            Commands::Config(opts) => opts.config().await,
-            Commands::Autoformat(opts) => opts.autoformat().await,
-            Commands::Check(opts) => opts.check().await,
-            Commands::Build(opts) => opts.build().await,
-            Commands::Bundle(opts) => opts.bundle().await,
-            Commands::Run(opts) => opts.run().await,
-            Commands::SelfUpdate(opts) => opts.self_update().await,
-            Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
-            Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
-            Commands::Doctor(opts) => opts.doctor().await,
-            Commands::Print(opts) => opts.print().await,
-            Commands::Components(opts) => opts.run().await,
-        }
+    let result = TraceController::main(|args, tracer| {
+        Box::pin(async move {
+            match args {
+                Commands::Serve(opts) => opts.serve(&tracer).await,
+                Commands::Translate(opts) => opts.translate(),
+                Commands::New(opts) => opts.create().await,
+                Commands::Init(opts) => opts.init().await,
+                Commands::Config(opts) => opts.config().await,
+                Commands::Autoformat(opts) => opts.autoformat().await,
+                Commands::Check(opts) => opts.check().await,
+                Commands::Build(opts) => opts.build().await,
+                Commands::Bundle(opts) => opts.bundle().await,
+                Commands::Run(opts) => opts.run().await,
+                Commands::SelfUpdate(opts) => opts.self_update().await,
+                Commands::Tools(BuildTools::BuildAssets(opts)) => opts.run().await,
+                Commands::Tools(BuildTools::HotpatchTip(opts)) => opts.run().await,
+                Commands::Doctor(opts) => opts.doctor().await,
+                Commands::Print(opts) => opts.print().await,
+                Commands::Components(opts) => opts.run().await,
+            }
+        })
     });
 
     // Print the structured output in JSON format for third-party tools to consume.

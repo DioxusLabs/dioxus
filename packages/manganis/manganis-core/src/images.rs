@@ -1,4 +1,5 @@
-use const_serialize::SerializeConst;
+use const_serialize_07 as const_serialize;
+use const_serialize_08::SerializeConst;
 
 use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
 
@@ -12,9 +13,11 @@ use crate::{AssetOptions, AssetOptionsBuilder, AssetVariant};
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 #[repr(u8)]
 pub enum ImageFormat {
     /// A png image. Png images cannot contain transparency and tend to compress worse than other formats
@@ -39,9 +42,11 @@ pub enum ImageFormat {
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 #[repr(C, u8)]
 pub enum ImageSize {
     /// A manual size in pixels
@@ -65,9 +70,11 @@ pub enum ImageSize {
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 pub struct ImageAssetOptions {
     ty: ImageFormat,
     low_quality_preview: bool,

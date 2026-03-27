@@ -2,7 +2,7 @@ use crate::config::WebProxyConfig;
 use crate::TraceSrc;
 use crate::{Error, Result};
 
-use anyhow::{bail, Context};
+use anyhow::bail;
 use axum::body::Body;
 use axum::http::request::Parts;
 use axum::{body::Body as MyBody, response::IntoResponse};
@@ -11,44 +11,65 @@ use axum::{
     routing::{any, MethodRouter},
     Router,
 };
+use hyper::client::conn::http1;
 use hyper::header::*;
 use hyper::{Request, Response, Uri};
-use hyper_util::{
-    client::legacy::{self, connect::HttpConnector},
-    rt::TokioExecutor,
-};
+use hyper_util::rt::TokioIo;
+use tokio::net::TcpStream;
 
-#[derive(Debug, Clone)]
-struct ProxyClient {
-    inner: legacy::Client<hyper_rustls::HttpsConnector<HttpConnector>, MyBody>,
-    url: Uri,
-}
+/// Establish a TCP connection to the backend with retry, then send the HTTP request.
+/// This reuses the same TCP connection for both health check and request,
+/// and supports streaming request bodies (no buffering).
+async fn send_with_retry(
+    url: &Uri,
+    req: Request<MyBody>,
+    handle_error: fn(Error) -> Response<Body>,
+) -> std::result::Result<Response<hyper::body::Incoming>, Response<Body>> {
+    let host = url.host().unwrap_or("127.0.0.1");
+    let port = url.port_u16().unwrap_or(80);
+    let addr = format!("{host}:{port}");
 
-impl ProxyClient {
-    fn new(url: Uri) -> Self {
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        let https = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .unwrap()
-            .https_or_http()
-            .enable_all_versions()
-            .build();
-        Self {
-            inner: legacy::Client::builder(TokioExecutor::new()).build(https),
-            url,
+    let mut backoff = std::time::Duration::from_millis(100);
+    let max_wait = std::time::Duration::from_secs(30);
+    let start = std::time::Instant::now();
+
+    // Retry TCP connect until backend is ready
+    let stream = loop {
+        match TcpStream::connect(&addr).await {
+            Ok(stream) => break stream,
+            Err(e) => {
+                if start.elapsed() >= max_wait {
+                    return Err(handle_error(anyhow::anyhow!(
+                        "Backend not ready after {max_wait:?}: {e}"
+                    )));
+                }
+                tracing::debug!("Backend not ready, retrying in {backoff:?}...");
+                tokio::time::sleep(backoff).await;
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(2));
+            }
         }
-    }
+    };
 
-    async fn send(&self, mut req: Request<MyBody>) -> Result<Response<hyper::body::Incoming>> {
-        let mut uri_parts = req.uri().clone().into_parts();
-        uri_parts.authority = self.url.authority().cloned();
-        uri_parts.scheme = self.url.scheme().cloned();
-        *req.uri_mut() = Uri::from_parts(uri_parts).context("Invalid URI parts")?;
-        self.inner
-            .request(req)
-            .await
-            .context("Failed to send proxy request")
-    }
+    // Wrap the TCP stream for hyper
+    let io = TokioIo::new(stream);
+
+    // Perform HTTP/1.1 handshake on the same connection
+    let (mut sender, conn) = http1::handshake(io)
+        .await
+        .map_err(|e| handle_error(anyhow::anyhow!("HTTP handshake failed: {e}")))?;
+
+    // Spawn connection driver to keep it alive
+    tokio::spawn(async move {
+        if let Err(e) = conn.await {
+            tracing::debug!("Connection closed: {e}");
+        }
+    });
+
+    // Send request through the established connection (streaming body)
+    sender
+        .send_request(req)
+        .await
+        .map_err(|e| handle_error(anyhow::anyhow!("Request failed: {e}")))
 }
 
 /// Add routes to the router handling the specified proxy config.
@@ -99,8 +120,6 @@ pub(crate) fn proxy_to(
     nocache: bool,
     handle_error: fn(Error) -> Response<Body>,
 ) -> MethodRouter {
-    let client = ProxyClient::new(url.clone());
-
     any(move |parts: Parts, mut req: Request<MyBody>| async move {
         // Prevent request loops
         if req.headers().get("x-proxied-by-dioxus").is_some() {
@@ -131,9 +150,19 @@ pub(crate) fn proxy_to(
 
         let uri = req.uri().clone();
 
-        // retry with backoff
+        // Set Host header for backend (send_with_retry handles TCP connection via url)
+        if let Some(authority) = url.authority() {
+            req.headers_mut().insert(
+                HOST,
+                authority
+                    .to_string()
+                    .parse()
+                    .expect("authority is valid header value"),
+            );
+        }
 
-        let res = client.send(req).await.map_err(handle_error);
+        // Send with retry - TCP connect retries, then reuses connection for HTTP
+        let res = send_with_retry(&url, req, handle_error).await;
 
         match res {
             Ok(res) => {

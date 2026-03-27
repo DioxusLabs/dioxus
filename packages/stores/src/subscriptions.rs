@@ -54,8 +54,10 @@ impl SelectorNode {
     /// This is used to mark nodes dirty recursively when a Store is written to.
     fn paths_under(&self, current_path: &[PathKey], paths: &mut Vec<Box<[PathKey]>>) {
         paths.push(current_path.into());
-        for child in self.root.values() {
-            child.paths_under(current_path, paths);
+        for (i, child) in self.root.iter() {
+            let mut child_path: Vec<PathKey> = current_path.into();
+            child_path.push(*i);
+            child.paths_under(&child_path, paths);
         }
     }
 
@@ -76,7 +78,9 @@ impl SelectorNode {
         // Mark the nodes before the index as dirty
         for (i, child) in node.root.iter() {
             if *i as usize >= index {
-                child.paths_under(path, paths);
+                let mut child_path: Vec<PathKey> = path.into();
+                child_path.push(*i);
+                child.paths_under(&child_path, paths);
             }
         }
     }
@@ -227,10 +231,13 @@ impl StoreSubscriptions {
     /// Mark the node and all its children as dirty
     pub(crate) fn mark_dirty(&self, key: &[PathKey]) {
         let paths = {
-            let read = self.inner.read();
-            let mut nodes = Vec::new();
-            read.root.paths_under(key, &mut nodes);
-            nodes
+            let read = &self.inner.read_unchecked();
+            let Some(node) = read.root.get(key) else {
+                return;
+            };
+            let mut paths = Vec::new();
+            node.paths_under(key, &mut paths);
+            paths
         };
         for path in paths {
             self.mark_dirty_shallow(&path);
