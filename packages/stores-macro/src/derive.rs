@@ -11,8 +11,6 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     let extension_trait_name = format_ident!("{}StoreExt", item_name);
     let transposed_name = format_ident!("{}StoreTransposed", item_name);
 
-    // Create generics for the extension trait and transposed struct. Both items need the original generics
-    // and bounds plus an extra __Lens type used in the store generics
     let generics = &input.generics;
     let mut extension_generics = generics.clone();
     extension_generics.params.insert(0, parse_quote!(__Lens));
@@ -39,145 +37,162 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-/// A field is considered "more private" than the struct when the struct has an
-/// explicit visibility (e.g. `pub`) but the field has inherited (no modifier) visibility.
+/// A field is "more private" than the struct when the struct has an explicit
+/// visibility (e.g. `pub`) but the field uses inherited (no modifier) visibility.
 fn field_is_more_private(struct_vis: &syn::Visibility, field_vis: &syn::Visibility) -> bool {
     !matches!(struct_vis, syn::Visibility::Inherited)
         && matches!(field_vis, syn::Visibility::Inherited)
 }
 
-// For structs, we derive up to three items:
-// - A public extension trait with methods to access the public fields of the struct as stores and a `transpose` method
-// - Optionally, a private extension trait with methods to access the private fields of the struct as stores
-// - A transposed version of the struct with all fields wrapped in stores (preserving field visibility)
-fn derive_store_struct(
-    input: &DeriveInput,
-    structure: &DataStruct,
-    extension_trait_name: Ident,
-    transposed_name: Ident,
-    extension_generics: Generics,
-) -> syn::Result<TokenStream2> {
-    let struct_name = &input.ident;
-    let fields = &structure.fields;
-    let visibility = &input.vis;
+/// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
+fn extension_trait(
+    visibility: &syn::Visibility,
+    trait_name: &Ident,
+    store_ty: &TokenStream2,
+    extension_impl_generics: &syn::ImplGenerics,
+    extension_ty_generics: &syn::TypeGenerics,
+    extension_where_clause: Option<&syn::WhereClause>,
+    definitions: &[TokenStream2],
+    implementations: &[TokenStream2],
+) -> TokenStream2 {
+    quote! {
+        #visibility trait #trait_name #extension_impl_generics #extension_where_clause {
+            #(#definitions)*
+        }
 
-    // We don't need to do anything if there are no fields
-    if fields.is_empty() {
-        return Ok(quote! {});
+        impl #extension_impl_generics #trait_name #extension_ty_generics for #store_ty #extension_where_clause {
+            #(#implementations)*
+        }
     }
+}
 
-    let generics = &input.generics;
-    let (_, ty_generics, _) = generics.split_for_impl();
-    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
-        extension_generics.split_for_impl();
-
-    // We collect the definitions and implementations for the extension trait methods along with
-    // the types of the fields in the transposed struct. Fields are partitioned into public and
-    // private based on their visibility relative to the struct.
-    let mut public_implementations = Vec::new();
-    let mut public_definitions = Vec::new();
-    let mut private_implementations = Vec::new();
-    let mut private_definitions = Vec::new();
-    let mut transposed_fields = Vec::new();
-
-    for (field_index, field) in fields.iter().enumerate() {
-        let (definitions, implementations) = if field_is_more_private(visibility, &field.vis) {
-            (&mut private_definitions, &mut private_implementations)
-        } else {
-            (&mut public_definitions, &mut public_implementations)
-        };
-        generate_field_methods(
-            field_index,
-            field,
-            struct_name,
-            &ty_generics,
-            &mut transposed_fields,
-            definitions,
-            implementations,
-        );
+/// Build a constructor expression: `prefix { a, b }`, `prefix(a, b)`, or just `prefix`.
+fn construct_from_fields(prefix: TokenStream2, fields: &Fields, names: &[Ident]) -> TokenStream2 {
+    match fields {
+        Fields::Named(_) => quote! { #prefix { #(#names),* } },
+        Fields::Unnamed(_) => quote! { #prefix(#(#names),*) },
+        Fields::Unit => quote! { #prefix },
     }
+}
 
-    let has_private_fields = !private_definitions.is_empty();
+/// Zip original fields with their transposed store types, preserving visibility and names.
+fn zip_transposed_fields(fields: &Fields, types: &[TokenStream2]) -> Vec<TokenStream2> {
+    match fields {
+        Fields::Named(f) => f
+            .named
+            .iter()
+            .zip(types)
+            .map(|(f, t)| {
+                let vis = &f.vis;
+                let ident = &f.ident;
+                let colon = f.colon_token.as_ref();
+                quote! { #vis #ident #colon #t }
+            })
+            .collect(),
+        Fields::Unnamed(f) => f
+            .unnamed
+            .iter()
+            .zip(types)
+            .map(|(f, t)| {
+                let vis = &f.vis;
+                quote! { #vis #t }
+            })
+            .collect(),
+        Fields::Unit => Vec::new(),
+    }
+}
 
-    // Add a transpose method to turn the stored struct into a struct with all fields as stores.
-    // This always goes on the public trait.
-    // We need the copy bound here because the store will be copied into the selector for each field
-    public_definitions.push(quote! {
-        fn transpose(
-            self,
-        ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
-    });
-    let field_names: Vec<_> = fields
-        .iter()
-        .enumerate()
-        .map(|(i, field)| function_name_from_field(i, field))
-        .collect();
-    // Construct the transposed struct with the fields as stores from the field variables in scope
-    let construct = match &structure.fields {
-        Fields::Named(_) => quote! { #transposed_name { #(#field_names),* } },
-        Fields::Unnamed(_) => quote! { #transposed_name(#(#field_names),*) },
-        Fields::Unit => quote! { #transposed_name },
-    };
-    // The transpose implementation calls field methods from both traits. Each method name is
-    // unique to one trait, so plain `self.method()` resolves unambiguously since both traits
-    // are in scope in the generated code.
-    public_implementations.push(quote! {
-        fn transpose(
-            self,
-        ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
-            #(
-                let #field_names = self.#field_names();
-            )*
-            #construct
-        }
-    });
-
-    // Generate the transposed struct definition
-    let transposed_struct = transposed_struct(
-        visibility,
-        struct_name,
-        &transposed_name,
-        structure,
-        generics,
-        &extension_generics,
-        &transposed_fields,
-    );
-
-    // Generate the private extension trait and its implementation if there are private fields
-    let private_trait = if has_private_fields {
-        let private_extension_trait_name = format_ident!("{}PrivateStoreExt", struct_name);
-        quote! {
-            trait #private_extension_trait_name #extension_impl_generics #extension_where_clause {
-                #(#private_definitions)*
-            }
-
-            impl #extension_impl_generics #private_extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
-                #(#private_implementations)*
-            }
-        }
-    } else {
-        quote! {}
-    };
-
-    Ok(quote! {
-        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
-            #(#public_definitions)*
-        }
-
-        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
-            #(#public_implementations)*
-        }
-
-        #private_trait
-
-        #transposed_struct
-    })
+/// True when a type alias can replace a full transposed struct/enum definition
+/// (all type params are unbound and every field is a bare generic type).
+fn can_use_type_alias<'a>(
+    generics: &syn::Generics,
+    mut fields: impl Iterator<Item = &'a Field>,
+) -> bool {
+    generics.type_params().all(|p| p.bounds.is_empty())
+        && fields.all(|f| field_type_generic(f, generics))
 }
 
 fn field_type_generic(field: &Field, generics: &syn::Generics) -> bool {
     generics.type_params().any(|param| {
         matches!(&field.ty, syn::Type::Path(type_path) if type_path.path.is_ident(&param.ident))
     })
+}
+
+fn function_name_from_field(index: usize, field: &syn::Field) -> Ident {
+    field
+        .ident
+        .as_ref()
+        .map_or_else(|| format_ident!("field_{index}"), |name| name.clone())
+}
+
+fn mapped_type(
+    item: &Ident,
+    ty_generics: &syn::TypeGenerics,
+    field_type: &syn::Type,
+) -> TokenStream2 {
+    let lens = quote! {
+        dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<
+            #field_type, __Lens,
+            fn(&#item #ty_generics) -> &#field_type,
+            fn(&mut #item #ty_generics) -> &mut #field_type,
+        >
+    };
+    quote! { dioxus_stores::Store<#field_type, #lens> }
+}
+
+/// Map the original generics into the transposed type's generic arguments.
+fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let args: Vec<_> = generics
+        .params
+        .iter()
+        .map(|gen| match gen {
+            syn::GenericParam::Type(p) => {
+                let ident = &p.ident;
+                mapped_type(name, &ty_generics, &parse_quote!(#ident))
+            }
+            syn::GenericParam::Const(p) => {
+                let ident = &p.ident;
+                quote! { #ident }
+            }
+            syn::GenericParam::Lifetime(p) => {
+                let lt = &p.lifetime;
+                quote! { #lt }
+            }
+        })
+        .collect();
+    quote!(<#(#args),*>)
+}
+
+/// Generate a single field accessor's trait definition, implementation, and transposed store type.
+fn generate_field_method(
+    field_index: usize,
+    field: &syn::Field,
+    struct_name: &Ident,
+    ty_generics: &syn::TypeGenerics,
+) -> (TokenStream2, TokenStream2, TokenStream2) {
+    let field_accessor = field.ident.as_ref().map_or_else(
+        || Index::from(field_index).to_token_stream(),
+        |name| name.to_token_stream(),
+    );
+    let function_name = function_name_from_field(field_index, field);
+    let field_type = &field.ty;
+    let store_type = mapped_type(struct_name, ty_generics, field_type);
+    let ordinal = LitInt::new(&field_index.to_string(), field.span());
+
+    let definition = quote! {
+        fn #function_name(self) -> #store_type;
+    };
+    let implementation = quote! {
+        fn #function_name(self) -> #store_type {
+            let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
+            let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
+            let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
+            ::std::convert::Into::into(scope)
+        }
+    };
+
+    (store_type, definition, implementation)
 }
 
 fn transposed_struct(
@@ -190,110 +205,202 @@ fn transposed_struct(
     transposed_fields: &[TokenStream2],
 ) -> TokenStream2 {
     let (extension_impl_generics, _, extension_where_clause) = extension_generics.split_for_impl();
-    // Only use a type alias if:
-    // - There are no bounds on the type generics
-    // - All fields are generic types
-    let use_type_alias = generics.type_params().all(|param| param.bounds.is_empty())
-        && structure
-            .fields
-            .iter()
-            .all(|field| field_type_generic(field, generics));
-    if use_type_alias {
+    if can_use_type_alias(generics, structure.fields.iter()) {
         let generics = transpose_generics(struct_name, generics);
-        return quote! {#visibility type #transposed_name #extension_impl_generics = #struct_name #generics;};
+        return quote! { #visibility type #transposed_name #extension_impl_generics = #struct_name #generics; };
     }
+    let fields = zip_transposed_fields(&structure.fields, transposed_fields);
     match &structure.fields {
-        Fields::Named(fields) => {
-            let fields = fields.named.iter();
-            let fields = fields.zip(transposed_fields.iter()).map(|(f, t)| {
-                let vis = &f.vis;
-                let ident = &f.ident;
-                let colon = f.colon_token.as_ref();
-                quote! { #vis #ident #colon #t }
-            });
-            quote! {
-                #visibility struct #transposed_name #extension_impl_generics #extension_where_clause {
-                    #(
-                        #fields
-                    ),*
-                }
+        Fields::Named(_) => quote! {
+            #visibility struct #transposed_name #extension_impl_generics #extension_where_clause {
+                #(#fields),*
             }
-        }
-        Fields::Unnamed(fields) => {
-            let fields = fields.unnamed.iter();
-            let fields = fields.zip(transposed_fields.iter()).map(|(f, t)| {
-                let vis = &f.vis;
-                quote! { #vis #t }
-            });
-            quote! {
-                #visibility struct #transposed_name #extension_impl_generics (
-                    #(
-                        #fields
-                    ),*
-                )
-                #extension_where_clause;
-            }
-        }
-        Fields::Unit => {
-            quote! {#visibility struct #transposed_name #extension_impl_generics #extension_where_clause}
-        }
+        },
+        Fields::Unnamed(_) => quote! {
+            #visibility struct #transposed_name #extension_impl_generics(#(#fields),*) #extension_where_clause;
+        },
+        Fields::Unit => quote! {
+            #visibility struct #transposed_name #extension_impl_generics #extension_where_clause;
+        },
     }
 }
 
-fn generate_field_methods(
-    field_index: usize,
-    field: &syn::Field,
-    struct_name: &Ident,
-    ty_generics: &syn::TypeGenerics,
-    transposed_fields: &mut Vec<TokenStream2>,
-    definitions: &mut Vec<TokenStream2>,
-    implementations: &mut Vec<TokenStream2>,
-) {
-    let field_name = &field.ident;
+fn derive_store_struct(
+    input: &DeriveInput,
+    structure: &DataStruct,
+    extension_trait_name: Ident,
+    transposed_name: Ident,
+    extension_generics: Generics,
+) -> syn::Result<TokenStream2> {
+    let struct_name = &input.ident;
+    let fields = &structure.fields;
+    let visibility = &input.vis;
 
-    // When we map the field, we need to use either the field name for named fields or the index for unnamed fields.
-    let field_accessor = field_name.as_ref().map_or_else(
-        || Index::from(field_index).to_token_stream(),
-        |name| name.to_token_stream(),
-    );
-    let function_name = function_name_from_field(field_index, field);
-    let field_type = &field.ty;
-    let store_type = mapped_type(struct_name, ty_generics, field_type);
+    if fields.is_empty() {
+        return Ok(quote! {});
+    }
 
-    transposed_fields.push(store_type.clone());
+    let generics = &input.generics;
+    let (_, ty_generics, _) = generics.split_for_impl();
+    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
+        extension_generics.split_for_impl();
+    let store_ty = quote! { dioxus_stores::Store<#struct_name #ty_generics, __Lens> };
 
-    // Each field gets its own reactive scope within the child based on the field's index
-    let ordinal = LitInt::new(&field_index.to_string(), field.span());
+    // Generate accessor methods for each field, partitioned by visibility.
+    let mut public_definitions = Vec::new();
+    let mut public_implementations = Vec::new();
+    let mut private_definitions = Vec::new();
+    let mut private_implementations = Vec::new();
+    let mut transposed_fields = Vec::new();
 
-    let definition = quote! {
-        fn #function_name(
-            self,
-        ) -> #store_type;
-    };
-    definitions.push(definition);
-    let implementation = quote! {
-        fn #function_name(
-            self,
-        ) -> #store_type {
-            let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
-            let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-            // Map the field into a child selector that tracks the field
-            let scope = self.into_selector().child(
-                #ordinal,
-                __map_field,
-                __map_mut_field,
-            );
-            // Convert the selector into a store
-            ::std::convert::Into::into(scope)
+    for (field_index, field) in fields.iter().enumerate() {
+        let (transposed, definition, implementation) =
+            generate_field_method(field_index, field, struct_name, &ty_generics);
+        transposed_fields.push(transposed);
+        if field_is_more_private(visibility, &field.vis) {
+            private_definitions.push(definition);
+            private_implementations.push(implementation);
+        } else {
+            public_definitions.push(definition);
+            public_implementations.push(implementation);
         }
+    }
+
+    // Transpose always goes on the public trait. Copy is required because the
+    // store is copied into the selector for each field.
+    let field_names: Vec<_> = fields
+        .iter()
+        .enumerate()
+        .map(|(i, field)| function_name_from_field(i, field))
+        .collect();
+    let construct = construct_from_fields(quote! { #transposed_name }, fields, &field_names);
+    public_definitions.push(quote! {
+        fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
+    });
+    // Each method name is unique to one trait, so `self.method()` resolves
+    // unambiguously since both traits are in scope in the generated code.
+    public_implementations.push(quote! {
+        fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
+            #( let #field_names = self.#field_names(); )*
+            #construct
+        }
+    });
+
+    let public_trait = extension_trait(
+        visibility,
+        &extension_trait_name,
+        &store_ty,
+        &extension_impl_generics,
+        &extension_ty_generics,
+        extension_where_clause,
+        &public_definitions,
+        &public_implementations,
+    );
+
+    let private_trait = if private_definitions.is_empty() {
+        quote! {}
+    } else {
+        let name = format_ident!("{}PrivateStoreExt", struct_name);
+        extension_trait(
+            &syn::Visibility::Inherited,
+            &name,
+            &store_ty,
+            &extension_impl_generics,
+            &extension_ty_generics,
+            extension_where_clause,
+            &private_definitions,
+            &private_implementations,
+        )
     };
-    implementations.push(implementation);
+
+    let transposed_struct = transposed_struct(
+        visibility,
+        struct_name,
+        &transposed_name,
+        structure,
+        generics,
+        &extension_generics,
+        &transposed_fields,
+    );
+
+    Ok(quote! {
+        #public_trait
+        #private_trait
+        #transposed_struct
+    })
 }
 
-// For enums, we derive two items:
-// - An extension trait with methods to check if the store is a specific variant and a method
-//   to access the field of that variant if there is only one field
-// - A transposed version of the enum with all fields wrapped in stores
+/// Generate `is_variant()`: returns `(definition, implementation)`.
+fn generate_is_variant_method(
+    is_fn: &Ident,
+    variant_name: &Ident,
+    enum_name: &Ident,
+    readable_bounds: &TokenStream2,
+) -> (TokenStream2, TokenStream2) {
+    let definition = quote! {
+        fn #is_fn(&self) -> bool where #readable_bounds;
+    };
+    let implementation = quote! {
+        fn #is_fn(&self) -> bool where #readable_bounds {
+            self.selector().track_shallow();
+            let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
+            matches!(&*ref_self, #enum_name::#variant_name { .. })
+        }
+    };
+    (definition, implementation)
+}
+
+/// Generate `variant() -> Option<Store<Field, W>>` for single-field variants.
+fn generate_as_variant_method(
+    is_fn: &Ident,
+    snake_case_variant: &Ident,
+    select_field: &TokenStream2,
+    store_type: &TokenStream2,
+    readable_bounds: &TokenStream2,
+) -> (TokenStream2, TokenStream2) {
+    let definition = quote! {
+        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds;
+    };
+    let implementation = quote! {
+        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds {
+            self.#is_fn().then(|| { #select_field })
+        }
+    };
+    (definition, implementation)
+}
+
+fn select_enum_variant_field(
+    enum_name: &Ident,
+    ty_generics: &syn::TypeGenerics,
+    variant_name: &Ident,
+    field: &Field,
+    field_index: usize,
+    field_count: usize,
+) -> TokenStream2 {
+    let binding = function_name_from_field(field_index, field);
+    let field_type = &field.ty;
+    let pattern = if field.ident.is_none() {
+        let before = (0..field_index).map(|_| quote!(_));
+        let after = (field_index + 1..field_count).map(|_| quote!(_));
+        quote!( ( #(#before,)* #binding, #(#after),* ) )
+    } else {
+        quote!( { #binding, .. })
+    };
+    let ordinal = LitInt::new(&field_index.to_string(), variant_name.span());
+    quote! {
+        let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
+            #enum_name::#variant_name #pattern => #binding,
+            _ => panic!("Selector that was created to match {} read after variant changed", stringify!(#variant_name)),
+        };
+        let __map_mut_field: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
+            #enum_name::#variant_name #pattern => #binding,
+            _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
+        };
+        let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
+        ::std::convert::Into::into(scope)
+    }
+}
+
 fn derive_store_enum(
     input: &DeriveInput,
     structure: &DataEnum,
@@ -309,42 +416,36 @@ fn derive_store_enum(
     let (_, ty_generics, _) = generics.split_for_impl();
     let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
         extension_generics.split_for_impl();
+    let store_ty = quote! { dioxus_stores::Store<#enum_name #ty_generics, __Lens> };
 
-    // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed enum
-    // and the match arms for the transposed enum.
-    let mut implementations = Vec::new();
     let mut definitions = Vec::new();
+    let mut implementations = Vec::new();
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
-    // The generated items that check the variant of the enum need to read the enum which requires these extra bounds
-    let readable_bounds = quote! { __Lens: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics>, #enum_name #ty_generics: 'static };
+    let readable_bounds = quote! {
+        __Lens: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics>,
+        #enum_name #ty_generics: 'static
+    };
 
     for variant in variants {
         let variant_name = &variant.ident;
         let snake_case_variant = format_ident!("{}", variant_name.to_string().to_case(Case::Snake));
         let is_fn = format_ident!("is_{}", snake_case_variant);
 
-        generate_is_variant_method(
-            &is_fn,
-            variant_name,
-            enum_name,
-            readable_bounds.clone(),
-            &mut definitions,
-            &mut implementations,
-        );
+        let (def, imp) =
+            generate_is_variant_method(&is_fn, variant_name, enum_name, &readable_bounds);
+        definitions.push(def);
+        implementations.push(imp);
 
-        let mut transposed_fields = Vec::new();
-        let mut transposed_field_selectors = Vec::new();
         let fields = &variant.fields;
-        for (i, field) in fields.iter().enumerate() {
-            let field_type = &field.ty;
-            let store_type = mapped_type(enum_name, &ty_generics, field_type);
+        let mut transposed_fields = Vec::new();
+        let mut field_selectors = Vec::new();
 
-            // Push the field for the transposed enum
+        for (i, field) in fields.iter().enumerate() {
+            let store_type = mapped_type(enum_name, &ty_generics, &field.ty);
             transposed_fields.push(store_type.clone());
 
-            // Generate the code to get Store<Field, W> from the enum
             let select_field = select_enum_variant_field(
                 enum_name,
                 &ty_generics,
@@ -354,290 +455,91 @@ fn derive_store_enum(
                 fields.len(),
             );
 
-            // If there is only one field, generate a field() -> Option<Store<O, W>> method
             if fields.len() == 1 {
-                generate_as_variant_method(
+                let (def, imp) = generate_as_variant_method(
                     &is_fn,
                     &snake_case_variant,
                     &select_field,
                     &store_type,
                     &readable_bounds,
-                    &mut definitions,
-                    &mut implementations,
                 );
+                definitions.push(def);
+                implementations.push(imp);
             }
 
-            transposed_field_selectors.push(select_field);
+            field_selectors.push(select_field);
         }
 
-        // Now that we have the types for the field selectors within the variant,
-        // we can construct the transposed variant and the logic to turn the normal
-        // version of that variant into the store version
-        let field_names = fields
+        // Build the match arm that transposes this variant
+        let field_names: Vec<_> = fields
             .iter()
             .enumerate()
             .map(|(i, field)| function_name_from_field(i, field))
-            .collect::<Vec<_>>();
-        // Turn each field into its store
+            .collect();
         let construct_fields = field_names
             .iter()
-            .zip(transposed_field_selectors.iter())
-            .map(|(name, selector)| {
-                quote! { let #name = { #selector }; }
-            });
-        // Merge the stores into the variant
-        let construct_variant = match &fields {
-            Fields::Named(_) => {
-                quote! { #transposed_name::#variant_name { #(#field_names),* } }
-            }
-            Fields::Unnamed(_) => {
-                quote! { #transposed_name::#variant_name(#(#field_names),*) }
-            }
-            Fields::Unit => {
-                quote! { #transposed_name::#variant_name }
-            }
-        };
-        let match_arm = quote! {
+            .zip(&field_selectors)
+            .map(|(name, selector)| quote! { let #name = { #selector }; });
+        let construct_variant = construct_from_fields(
+            quote! { #transposed_name::#variant_name },
+            fields,
+            &field_names,
+        );
+        transposed_match_arms.push(quote! {
             #enum_name::#variant_name { .. } => {
                 #(#construct_fields)*
                 #construct_variant
             },
-        };
-        transposed_match_arms.push(match_arm);
+        });
 
-        // Push the type definition of the variant to the transposed enum
-        let transposed_variant = match &fields {
-            Fields::Named(named) => {
-                let fields = named.named.iter();
-                let fields = fields.zip(transposed_fields.iter()).map(|(f, t)| {
-                    let vis = &f.vis;
-                    let ident = &f.ident;
-                    let colon = f.colon_token.as_ref();
-                    quote! { #vis #ident #colon #t }
-                });
-                quote! { #variant_name {
-                    #(
-                        #fields
-                    ),*
-                } }
-            }
-            Fields::Unnamed(unnamed) => {
-                let fields = unnamed.unnamed.iter();
-                let fields = fields.zip(transposed_fields.iter()).map(|(f, t)| {
-                    let vis = &f.vis;
-                    quote! { #vis #t }
-                });
-                quote! { #variant_name (
-                    #(
-                        #fields
-                    ),*
-                ) }
-            }
-            Fields::Unit => {
-                quote! { #variant_name }
-            }
+        // Build the transposed variant type definition
+        let zipped = zip_transposed_fields(fields, &transposed_fields);
+        let transposed_variant = match fields {
+            Fields::Named(_) => quote! { #variant_name { #(#zipped),* } },
+            Fields::Unnamed(_) => quote! { #variant_name(#(#zipped),*) },
+            Fields::Unit => quote! { #variant_name },
         };
         transposed_variants.push(transposed_variant);
     }
 
-    let definition = quote! {
-        fn transpose(
-            self,
-        ) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy;
-    };
-    definitions.push(definition);
-    let implementation = quote! {
-        fn transpose(
-            self,
-        ) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy {
-            // We only do a shallow read of the store to get the current variant. We only need to rerun
-            // this match when the variant changes, not when the fields change
+    // Transpose method
+    definitions.push(quote! {
+        fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy;
+    });
+    implementations.push(quote! {
+        fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy {
             self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {
                 #(#transposed_match_arms)*
-                // The enum may be #[non_exhaustive]
                 #[allow(unreachable)]
                 _ => unreachable!(),
             }
         }
-    };
-    implementations.push(implementation);
+    });
 
-    // Only use a type alias if:
-    // - There are no bounds on the type generics
-    // - All fields are generic types
-    let use_type_alias = generics.type_params().all(|param| param.bounds.is_empty())
-        && structure
-            .variants
-            .iter()
-            .flat_map(|variant| variant.fields.iter())
-            .all(|field| field_type_generic(field, generics));
-
-    let transposed_enum = if use_type_alias {
+    // Transposed enum definition
+    let all_fields = structure.variants.iter().flat_map(|v| v.fields.iter());
+    let transposed_enum = if can_use_type_alias(generics, all_fields) {
         let generics = transpose_generics(enum_name, generics);
-
-        quote! {#visibility type #transposed_name #extension_generics = #enum_name #generics;}
+        quote! { #visibility type #transposed_name #extension_generics = #enum_name #generics; }
     } else {
-        quote! { #visibility enum #transposed_name #extension_impl_generics #extension_where_clause {#(#transposed_variants),*} }
+        quote! { #visibility enum #transposed_name #extension_impl_generics #extension_where_clause { #(#transposed_variants),* } }
     };
 
-    // Expand to the extension trait and its implementation for the store alongside the transposed enum
+    let trait_tokens = extension_trait(
+        visibility,
+        &extension_trait_name,
+        &store_ty,
+        &extension_impl_generics,
+        &extension_ty_generics,
+        extension_where_clause,
+        &definitions,
+        &implementations,
+    );
+
     Ok(quote! {
-        #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
-            #(
-                #definitions
-            )*
-        }
-
-        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#enum_name #ty_generics, __Lens> #extension_where_clause {
-            #(
-                #implementations
-            )*
-        }
-
+        #trait_tokens
         #transposed_enum
     })
-}
-
-fn generate_is_variant_method(
-    is_fn: &Ident,
-    variant_name: &Ident,
-    enum_name: &Ident,
-    readable_bounds: TokenStream2,
-    definitions: &mut Vec<TokenStream2>,
-    implementations: &mut Vec<TokenStream2>,
-) {
-    // Generate a is_variant method that checks if the store is a specific variant
-    let definition = quote! {
-        fn #is_fn(
-            &self,
-        ) -> bool where #readable_bounds;
-    };
-    definitions.push(definition);
-    let implementation = quote! {
-        fn #is_fn(
-            &self,
-        ) -> bool where #readable_bounds {
-            // Reading the current variant only tracks the shallow value of the store. Writing to a specific
-            // variant will not cause the variant to change, so we don't need to subscribe deeply
-            self.selector().track_shallow();
-            let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
-            matches!(&*ref_self, #enum_name::#variant_name { .. })
-        }
-    };
-    implementations.push(implementation);
-}
-
-/// Generate a method to turn Store<Enum, W> into Option<Store<VariantField, W>> if the variant only has one field.
-fn generate_as_variant_method(
-    is_fn: &Ident,
-    snake_case_variant: &Ident,
-    select_field: &TokenStream2,
-    store_type: &TokenStream2,
-    readable_bounds: &TokenStream2,
-    definitions: &mut Vec<TokenStream2>,
-    implementations: &mut Vec<TokenStream2>,
-) {
-    let definition = quote! {
-        fn #snake_case_variant(
-            self,
-        ) -> Option<#store_type> where #readable_bounds;
-    };
-    definitions.push(definition);
-    let implementation = quote! {
-        fn #snake_case_variant(
-            self,
-        ) -> Option<#store_type> where #readable_bounds {
-            self.#is_fn().then(|| {
-                #select_field
-            })
-        }
-    };
-    implementations.push(implementation);
-}
-
-fn select_enum_variant_field(
-    enum_name: &Ident,
-    ty_generics: &syn::TypeGenerics,
-    variant_name: &Ident,
-    field: &Field,
-    field_index: usize,
-    field_count: usize,
-) -> TokenStream2 {
-    // Generate the match arm for the field
-    let function_name = function_name_from_field(field_index, field);
-    let field_type = &field.ty;
-    let match_field = if field.ident.is_none() {
-        let ignore_before = (0..field_index).map(|_| quote!(_));
-        let ignore_after = (field_index + 1..field_count).map(|_| quote!(_));
-        quote!( ( #(#ignore_before,)* #function_name, #(#ignore_after),* ) )
-    } else {
-        quote!( { #function_name, .. })
-    };
-    let ordinal = LitInt::new(&field_index.to_string(), variant_name.span());
-    quote! {
-        let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
-            #enum_name::#variant_name #match_field => #function_name,
-            _ => panic!("Selector that was created to match {} read after variant changed", stringify!(#variant_name)),
-        };
-        let __map_mut_field: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
-            #enum_name::#variant_name #match_field => #function_name,
-            _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
-        };
-        // Each field within the variant gets its own reactive scope. Writing to one field will not notify the enum or
-        // other fields
-        let scope = self.into_selector().child(
-            #ordinal,
-            __map_field,
-            __map_mut_field,
-        );
-        ::std::convert::Into::into(scope)
-    }
-}
-
-fn function_name_from_field(index: usize, field: &syn::Field) -> Ident {
-    // Generate a function name from the field's identifier or index
-    field
-        .ident
-        .as_ref()
-        .map_or_else(|| format_ident!("field_{index}"), |name| name.clone())
-}
-
-fn mapped_type(
-    item: &Ident,
-    ty_generics: &syn::TypeGenerics,
-    field_type: &syn::Type,
-) -> TokenStream2 {
-    // The zoomed in store type is a MappedMutSignal with function pointers to map the reference to the enum into a reference to the field
-    let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __Lens, fn(&#item #ty_generics) -> &#field_type, fn(&mut #item #ty_generics) -> &mut #field_type> };
-    quote! { dioxus_stores::Store<#field_type, #write_type> }
-}
-
-/// Take the generics from the original type with only generic fields into the generics for the transposed type
-fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
-    let (_, ty_generics, _) = generics.split_for_impl();
-    let mut transposed_generics = generics.clone();
-    let mut generics = Vec::new();
-    for gen in transposed_generics.params.iter_mut() {
-        match gen {
-            // Map type generics into Store<Type, MappedMutSignal<...>>
-            syn::GenericParam::Type(type_param) => {
-                let ident = &type_param.ident;
-                let ty = mapped_type(name, &ty_generics, &parse_quote!(#ident));
-                generics.push(ty);
-            }
-            // Forward const and lifetime generics as-is
-            syn::GenericParam::Const(const_param) => {
-                let ident = &const_param.ident;
-                generics.push(quote! { #ident });
-            }
-            syn::GenericParam::Lifetime(lt_param) => {
-                let ident = &lt_param.lifetime;
-                generics.push(quote! { #ident });
-            }
-        }
-    }
-
-    quote!(<#(#generics),*> )
 }
