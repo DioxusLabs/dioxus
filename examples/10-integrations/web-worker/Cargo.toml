@@ -1,0 +1,22 @@
+[package]
+name = "dioxus-web-worker-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["web"] }
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = { workspace = true }
+js-sys = { workspace = true }
+futures-channel = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "Blob",
+    "BlobPropertyBag",
+    "MessageEvent",
+    "Url",
+    "Worker",
+]

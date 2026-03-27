@@ -1,0 +1,12 @@
+[application]
+name = "dioxus-web-worker-example"
+default_platform = "web"
+out_dir = "dist"
+asset_dir = "assets"
+
+[web.app]
+title = "Dioxus Web Worker Example"
+
+[web.watcher]
+reload_html = true
+watch_path = ["src", "assets"]

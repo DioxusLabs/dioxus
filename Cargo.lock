@@ -5874,6 +5874,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-web-worker-example"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "futures-channel",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
 name = "dircpy"
 version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"

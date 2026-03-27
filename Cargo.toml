@@ -108,6 +108,7 @@ members = [
     # Integrations
     "examples/10-integrations/tailwind",
     "examples/10-integrations/pwa",
+    "examples/10-integrations/web-worker",
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
     "examples/10-integrations/native-headless-in-bevy",
