@@ -1,3 +1,5 @@
+#:schema https://raw.githubusercontent.com/DioxusLabs/dioxus/main/packages/cli/schema.json
+
 [application]
 
 # Web `build` & `serve` dist path
