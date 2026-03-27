@@ -101,7 +101,7 @@ impl ComponentCommand {
         match self {
             // List all components in the registry
             Self::List { registry, package } => {
-                let config = Self::resolve_config(package).await?;
+                let (config, _) = Self::resolve_config(package).await?;
                 let registry = Self::resolve_registry(registry, &config)?;
                 let mut components = registry.read_components().await?;
                 components.sort_by_key(|c| c.name.clone());
@@ -118,7 +118,7 @@ impl ComponentCommand {
                 package,
             } => {
                 // Resolve the config
-                let config = Self::resolve_config(package).await?;
+                let (config, package_root) = Self::resolve_config(package).await?;
 
                 // Resolve the registry
                 let registry = Self::resolve_registry(registry, &config)?;
@@ -147,7 +147,7 @@ impl ComponentCommand {
 
                 // Find and initialize the components module if it doesn't exist
                 let components_root =
-                    components_root(component_args.module_path.as_deref(), &config)?;
+                    components_root(component_args.module_path.as_deref(), &config, &package_root)?;
                 let new_components_module =
                     ensure_components_module_exists(&components_root).await?;
 
@@ -206,6 +206,7 @@ impl ComponentCommand {
                         &component,
                         mode,
                         &config,
+                        &package_root,
                     )
                     .await?;
                 }
@@ -226,7 +227,7 @@ impl ComponentCommand {
 
             // Update the remote component registry
             Self::Update { registry } => {
-                let config = Self::resolve_config(None).await?;
+                let (config, _) = Self::resolve_config(None).await?;
                 registry
                     .unwrap_or(config.components.registry.remote)
                     .update()
@@ -266,10 +267,10 @@ impl ComponentCommand {
         registry: ComponentRegistry,
         package: Option<String>,
     ) -> Result<()> {
-        let config = Self::resolve_config(package).await?;
+        let (config, package_root) = Self::resolve_config(package).await?;
         let registry = Self::resolve_registry(registry, &config)?;
 
-        let components_root = components_root(component_args.module_path.as_deref(), &config)?;
+        let components_root = components_root(component_args.module_path.as_deref(), &config, &package_root)?;
 
         // Find the requested components
         let components = if component_args.all {
@@ -301,15 +302,24 @@ impl ComponentCommand {
         Ok(())
     }
 
-    /// Load the config
-    async fn resolve_config(package: Option<String>) -> Result<DioxusConfig> {
+    /// Load the config and return the package root directory
+    async fn resolve_config(package: Option<String>) -> Result<(DioxusConfig, PathBuf)> {
         let workspace = Workspace::current().await?;
 
         let crate_package = workspace.find_main_package(package)?;
 
-        Ok(workspace
+        let package_root = workspace.krates[crate_package]
+            .manifest_path
+            .parent()
+            .unwrap()
+            .as_std_path()
+            .to_path_buf();
+
+        let config = workspace
             .load_dioxus_config(crate_package, None)?
-            .unwrap_or_default())
+            .unwrap_or_default();
+
+        Ok((config, package_root))
     }
 
     /// Resolve a registry from the config if none is provided
@@ -544,12 +554,10 @@ fn find_component(components: &[ResolvedComponent], component: &str) -> Result<R
 }
 
 /// Get the path to the components module, defaulting to src/components
-fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
+fn components_root(module_path: Option<&Path>, config: &DioxusConfig, root: &Path) -> Result<PathBuf> {
     if let Some(module_path) = module_path {
         return Ok(PathBuf::from(module_path));
     }
-
-    let root = Workspace::crate_root_from_path()?;
 
     if let Some(component_path) = &config.components.components_dir {
         return Ok(root.join(component_path));
@@ -559,7 +567,7 @@ fn components_root(module_path: Option<&Path>, config: &DioxusConfig) -> Result<
 }
 
 /// Get the path to the global assets directory, defaulting to assets
-async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -> Result<PathBuf> {
+async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig, root: &Path) -> Result<PathBuf> {
     if let Some(assets_path) = assets_path {
         return Ok(PathBuf::from(assets_path));
     }
@@ -567,8 +575,6 @@ async fn global_assets_root(assets_path: Option<&Path>, config: &DioxusConfig) -
     if let Some(asset_dir) = &config.application.asset_dir {
         return Ok(asset_dir.clone());
     }
-
-    let root = Workspace::crate_root_from_path()?;
 
     Ok(root.join("assets"))
 }
@@ -594,9 +600,10 @@ async fn add_component(
     component: &ResolvedComponent,
     behavior: ComponentExistsBehavior,
     config: &DioxusConfig,
+    package_root: &Path,
 ) -> Result<()> {
     // Copy the folder content to the components directory
-    let components_root = components_root(component_path, config)?;
+    let components_root = components_root(component_path, config, package_root)?;
     let copied = copy_component_files(
         &component.path,
         &components_root.join(&component.name),
@@ -613,7 +620,7 @@ async fn add_component(
     }
 
     // Copy any global assets
-    let assets_root = global_assets_root(assets_path, config).await?;
+    let assets_root = global_assets_root(assets_path, config, package_root).await?;
     copy_global_assets(registry_root, &assets_root, component).await?;
 
     // Add the module to the components mod.rs
