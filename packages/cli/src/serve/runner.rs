@@ -595,6 +595,12 @@ impl AppServer {
             _ => {}
         }
 
+        // Use depinfo files to watch all source files that cargo actually depends on.
+        // This ensures sub-modules and other nested files trigger rebuilds.
+        if self.watch_fs {
+            self.watch_depinfo_paths(&artifacts.depinfo);
+        }
+
         let should_open = self.client.stage == BuildStage::Success
             && (self.server.as_ref().map(|s| s.stage == BuildStage::Success)).unwrap_or(true);
 
@@ -1051,6 +1057,27 @@ impl AppServer {
             RecursiveMode::NonRecursive,
         ) {
             handle_notify_error(err);
+        }
+    }
+
+    /// Watch paths from cargo's depinfo files after a build completes.
+    ///
+    /// Cargo generates `.d` files that list every source file the compilation depends on.
+    /// By watching the parent directories of these files, we ensure that sub-modules and
+    /// other nested source files properly trigger rebuilds.
+    fn watch_depinfo_paths(&mut self, depinfo: &depinfo::RustcDepInfo) {
+        let mut watched_dirs = std::collections::HashSet::new();
+
+        for file in &depinfo.files {
+            if let Some(parent) = file.parent() {
+                // Only watch directories we haven't already registered
+                if watched_dirs.insert(parent.to_path_buf()) {
+                    tracing::trace!("Watching depinfo path {parent:?}");
+                    if let Err(err) = self.watcher.watch(parent, RecursiveMode::NonRecursive) {
+                        handle_notify_error(err);
+                    }
+                }
+            }
         }
     }
 
