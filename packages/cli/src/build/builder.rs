@@ -1,10 +1,10 @@
+use crate::opt::process_file_to;
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
     RustcArgs, StructuredOutput,
 };
 use anyhow::{bail, Context, Error};
-use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
 use std::{
@@ -475,9 +475,12 @@ impl AppBuilder {
                             current,
                             total,
                             krate,
+                            fresh,
                             ..
                         } => {
-                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
+                            if !fresh {
+                                tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
+                            }
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -509,7 +512,7 @@ impl AppBuilder {
                 }
                 BuilderUpdate::BuildFailed { err } => {
                     // Flush remaining compiler messages
-                    while let Ok(Some(msg)) = self.rx.try_next() {
+                    while let Ok(msg) = self.rx.try_recv() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
                             tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
@@ -760,7 +763,8 @@ impl AppBuilder {
             let to = asset_dir.join(bundled.bundled_path());
 
             tracing::debug!("Copying asset from patch: {}", from.display());
-            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
+            let esbuild = crate::esbuild::Esbuild::path_if_installed();
+            if let Err(e) = process_file_to(bundled.options(), &from, &to, esbuild.as_deref()) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
             }
@@ -869,7 +873,8 @@ impl AppBuilder {
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
-            let res = process_file_to(&options, &changed_file, &output_path);
+            let esbuild = crate::esbuild::Esbuild::path_if_installed();
+            let res = process_file_to(&options, &changed_file, &output_path, esbuild.as_deref());
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");

@@ -165,6 +165,13 @@
             "$ref": "#/definitions/AndroidIntentFilter"
           }
         },
+        "lib_name": {
+          "description": "Native library name loaded by NativeActivity (without `lib` prefix and `.so` extension). Defaults to `\"main\"` (i.e. `libmain.so`). Override if you need a custom library name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "long_description": {
           "description": "Long description. Overrides `bundle.long_description` for Android builds.",
           "type": [
@@ -3266,14 +3273,14 @@
           ]
         },
         "upgrade_code": {
-          "description": "A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**, otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.\n\nBy default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace. You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.\n\nIt is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code whenever you want to change your product name.",
+          "description": "A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**, otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.\n\nBy default, this code is generated as a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.\n\nIt is recommended that you set this value in your Dioxus.toml to avoid accidental changes in your upgrade code whenever you want to change your product name.",
           "type": [
             "string",
             "null"
           ]
         },
         "version": {
-          "description": "MSI installer version in the format `major.minor.patch.build` (build is optional).\n\nBecause a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.\n\nThe first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255. The third and fourth fields have a maximum value of 65,535.\n\nSee <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.",
+          "description": "MSI installer version in the format `major.minor.patch.build` (build is optional).\n\nBecause a valid version is required for MSI installer, it will be derived from the package version if this field is not set.\n\nThe first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255. The third and fourth fields have a maximum value of 65,535.\n\nSee <https://learn.microsoft.com/en-us/windows/win32/msi/productversion> for more info.",
           "type": [
             "string",
             "null"
