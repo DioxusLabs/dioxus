@@ -5725,9 +5725,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         self.verify_toolchain_installed().await?;
 
-        // esbuild is used for JS asset processing on all platforms
-        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
-
         match self.bundle {
             BundleFormat::Web => self.verify_web_tooling().await?,
             BundleFormat::Ios => self.verify_ios_tooling().await?,
@@ -5801,6 +5798,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 ))?;
 
         WasmBindgen::verify_install(&krate_bindgen_version).await?;
+
+        // esbuild is used for JS asset processing
+        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
 
         Ok(())
     }
