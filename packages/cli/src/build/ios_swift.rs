@@ -144,9 +144,9 @@ pub async fn create_framework_bundle(
         std::fs::write(resources_dir.join("Info.plist"), info_plist)?;
 
         // Create symbolic links (required for macOS framework structure)
-        let versions_dir = framework_dir.join("Versions");
         #[cfg(unix)]
         {
+            let versions_dir = framework_dir.join("Versions");
             std::os::unix::fs::symlink("A", versions_dir.join("Current"))?;
             std::os::unix::fs::symlink(
                 format!("Versions/Current/{}", framework_name),

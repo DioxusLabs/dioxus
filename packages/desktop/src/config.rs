@@ -133,9 +133,16 @@ impl Config {
         self
     }
 
-    /// set the directory where data will be stored in release mode.
+    /// Set the directory where WebView2 stores its user data (cookies, cache, IndexedDB, etc.).
     ///
-    /// > Note: This **must** be set when bundling on Windows.
+    /// If not set, Dioxus automatically chooses a sensible default:
+    /// - **Windows:** `%LOCALAPPDATA%/<exe_name>` — this avoids the WebView2 default of
+    ///   placing data next to the executable, which fails in read-only locations like
+    ///   `Program Files` or on certain drive types (e.g. ReFS dev drives).
+    /// - **macOS/Linux:** managed by WebKit automatically.
+    ///
+    /// You typically only need this if you want multiple apps to share a WebView2 profile
+    /// or need the data in a specific location for compliance/IT policy reasons.
     pub fn with_data_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.data_dir = Some(path.into());
         self

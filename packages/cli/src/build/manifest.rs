@@ -8,7 +8,7 @@
 //! Eventually, we might want to expand this to include more metadata about the build, including
 //! build time, target platform, etc.
 
-use dioxus_cli_opt::AssetManifest;
+use crate::opt::AssetManifest;
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize)]

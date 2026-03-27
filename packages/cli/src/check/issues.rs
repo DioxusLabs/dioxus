@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::metadata::{
+use super::metadata::{
     AnyLoopInfo, AsyncInfo, ClosureInfo, ConditionalInfo, ForInfo, HookInfo, IfInfo, MatchInfo,
     WhileInfo,
 };
@@ -229,7 +229,7 @@ impl std::fmt::Display for Issue {
 
 #[cfg(test)]
 mod tests {
-    use crate::check_file;
+    use crate::check::check_file;
     use indoc::indoc;
     use pretty_assertions::assert_eq;
 

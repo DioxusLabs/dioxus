@@ -300,7 +300,7 @@ impl AppServer {
                 let mut changes: Vec<_> = event.into_iter().collect();
 
                 // Dequeue in bulk if we can, we might've received a lot of events in one go
-                while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                while let Ok(event) = self.watcher_rx.try_recv() {
                     changes.push(event);
                 }
 
@@ -649,21 +649,32 @@ impl AppServer {
         let displayed_address = devserver.displayed_address();
 
         // Always open the server first after the client has been built
-        // Only open the server if it isn't prerendered
+        // Only open the server if it isn't prerendered and finished building
         if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
-            tracing::debug!("Opening server build");
-            server.soft_kill().await;
-            server
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    false,
-                    false,
-                    BuildId::SECONDARY,
-                    &self.server_args,
-                )
-                .await?;
+            if server.stage < BuildStage::Success {
+                tracing::trace!("Skipping server open: will open once build completes");
+            } else {
+                tracing::debug!("Opening server build");
+                server.soft_kill().await;
+                server
+                    .open(
+                        devserver_ip,
+                        displayed_address,
+                        fullstack_address,
+                        false,
+                        false,
+                        BuildId::SECONDARY,
+                        &self.server_args,
+                    )
+                    .await?;
+            }
+        }
+
+        // Skip opening native client if still building (web can open anytime)
+        if self.client.build.bundle != BundleFormat::Web && self.client.stage < BuildStage::Success
+        {
+            tracing::trace!("Skipping client open: will open once build completes");
+            return Ok(());
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
@@ -1302,7 +1313,7 @@ impl AppServer {
                     let depth = relative.components().count();
                     let is_better = best_match
                         .as_ref()
-                        .map_or(true, |(_, best_depth)| depth < *best_depth);
+                        .is_none_or(|(_, best_depth)| depth < *best_depth);
                     if is_better {
                         best_match = Some((krate.name.replace('-', "_"), depth));
                     }

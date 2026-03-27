@@ -602,6 +602,11 @@ pub struct AndroidConfig {
     #[serde(default)]
     pub compile_sdk: Option<u32>,
 
+    /// Native library name loaded by NativeActivity (without `lib` prefix and `.so` extension).
+    /// Defaults to `"main"` (i.e. `libmain.so`). Override if you need a custom library name.
+    #[serde(default)]
+    pub lib_name: Option<String>,
+
     /// Hardware/software features required.
     #[serde(default)]
     pub features: Vec<String>,
