@@ -39,9 +39,17 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-// For structs, we derive two items:
-// - An extension trait with methods to access the fields of the struct as stores and a `transpose` method
-// - A transposed version of the struct with all fields wrapped in stores
+/// A field is considered "more private" than the struct when the struct has an
+/// explicit visibility (e.g. `pub`) but the field has inherited (no modifier) visibility.
+fn field_is_more_private(struct_vis: &syn::Visibility, field_vis: &syn::Visibility) -> bool {
+    !matches!(struct_vis, syn::Visibility::Inherited)
+        && matches!(field_vis, syn::Visibility::Inherited)
+}
+
+// For structs, we derive up to three items:
+// - A public extension trait with methods to access the public fields of the struct as stores and a `transpose` method
+// - Optionally, a private extension trait with methods to access the private fields of the struct as stores
+// - A transposed version of the struct with all fields wrapped in stores (preserving field visibility)
 fn derive_store_struct(
     input: &DeriveInput,
     structure: &DataStruct,
@@ -63,60 +71,66 @@ fn derive_store_struct(
     let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
         extension_generics.split_for_impl();
 
-    // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed struct
-    let mut implementations = Vec::new();
-    let mut definitions = Vec::new();
+    // We collect the definitions and implementations for the extension trait methods along with
+    // the types of the fields in the transposed struct. Fields are partitioned into public and
+    // private based on their visibility relative to the struct.
+    let mut public_implementations = Vec::new();
+    let mut public_definitions = Vec::new();
+    let mut private_implementations = Vec::new();
+    let mut private_definitions = Vec::new();
     let mut transposed_fields = Vec::new();
 
     for (field_index, field) in fields.iter().enumerate() {
+        let (definitions, implementations) = if field_is_more_private(visibility, &field.vis) {
+            (&mut private_definitions, &mut private_implementations)
+        } else {
+            (&mut public_definitions, &mut public_implementations)
+        };
         generate_field_methods(
             field_index,
             field,
             struct_name,
             &ty_generics,
             &mut transposed_fields,
-            &mut definitions,
-            &mut implementations,
+            definitions,
+            implementations,
         );
     }
 
-    // Add a transpose method to turn the stored struct into a struct with all fields as stores
+    let has_private_fields = !private_definitions.is_empty();
+
+    // Add a transpose method to turn the stored struct into a struct with all fields as stores.
+    // This always goes on the public trait.
     // We need the copy bound here because the store will be copied into the selector for each field
-    let definition = quote! {
+    public_definitions.push(quote! {
         fn transpose(
             self,
         ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
-    };
-    definitions.push(definition);
-    let field_names = fields
+    });
+    let field_names: Vec<_> = fields
         .iter()
         .enumerate()
         .map(|(i, field)| function_name_from_field(i, field))
-        .collect::<Vec<_>>();
+        .collect();
     // Construct the transposed struct with the fields as stores from the field variables in scope
     let construct = match &structure.fields {
-        Fields::Named(_) => {
-            quote! { #transposed_name { #(#field_names),* } }
-        }
-        Fields::Unnamed(_) => {
-            quote! { #transposed_name(#(#field_names),*) }
-        }
-        Fields::Unit => {
-            quote! { #transposed_name }
-        }
+        Fields::Named(_) => quote! { #transposed_name { #(#field_names),* } },
+        Fields::Unnamed(_) => quote! { #transposed_name(#(#field_names),*) },
+        Fields::Unit => quote! { #transposed_name },
     };
-    let implementation = quote! {
+    // The transpose implementation calls field methods from both traits. Each method name is
+    // unique to one trait, so plain `self.method()` resolves unambiguously since both traits
+    // are in scope in the generated code.
+    public_implementations.push(quote! {
         fn transpose(
             self,
         ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
-            // Convert each field into the corresponding store
             #(
                 let #field_names = self.#field_names();
             )*
             #construct
         }
-    };
-    implementations.push(implementation);
+    });
 
     // Generate the transposed struct definition
     let transposed_struct = transposed_struct(
@@ -129,19 +143,32 @@ fn derive_store_struct(
         &transposed_fields,
     );
 
-    // Expand to the extension trait and its implementation for the store alongside the transposed struct
+    // Generate the private extension trait and its implementation if there are private fields
+    let private_trait = if has_private_fields {
+        let private_extension_trait_name = format_ident!("{}PrivateStoreExt", struct_name);
+        quote! {
+            trait #private_extension_trait_name #extension_impl_generics #extension_where_clause {
+                #(#private_definitions)*
+            }
+
+            impl #extension_impl_generics #private_extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
+                #(#private_implementations)*
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     Ok(quote! {
         #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
-            #(
-                #definitions
-            )*
+            #(#public_definitions)*
         }
 
         impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
-            #(
-                #implementations
-            )*
+            #(#public_implementations)*
         }
+
+        #private_trait
 
         #transposed_struct
     })

@@ -49,6 +49,49 @@ mod extend;
 /// let contents: String = contents();
 /// ```
 ///
+/// ### Field Visibility
+///
+/// The generated extension trait respects field visibility. When a struct has an explicit
+/// visibility (e.g. `pub`) and some fields are more restricted (e.g. no visibility modifier),
+/// the macro generates **two** extension traits:
+///
+/// - **`{Name}StoreExt`** — has the same visibility as the struct and contains accessor
+///   methods for public fields along with the `transpose` method.
+/// - **`{Name}PrivateStoreExt`** — is module-private and contains accessor methods for
+///   private fields. These methods are only usable within the module where the struct is defined.
+///
+/// The transposed struct also preserves the original field visibility, so private fields
+/// remain private in the transposed version.
+///
+/// When all fields share the same visibility as the struct, only a single trait is generated.
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+/// use dioxus_stores::*;
+///
+/// #[derive(Store)]
+/// pub struct Config {
+///     pub title: String,
+///     secret_key: String,  // private — accessor only available in this module
+/// }
+///
+/// let store = use_store(|| Config {
+///     title: "My App".to_string(),
+///     secret_key: "hunter2".to_string(),
+/// });
+///
+/// // `title()` is on the public ConfigStoreExt trait
+/// let title: Store<String, _> = store.title();
+///
+/// // `secret_key()` is on the private ConfigPrivateStoreExt trait —
+/// // accessible here (same module) but not from outside this module
+/// let secret: Store<String, _> = store.secret_key();
+///
+/// // `transpose()` is on the public trait; the transposed struct's
+/// // `secret_key` field is private, matching the original
+/// let transposed = store.transpose();
+/// let _title: Store<String, _> = transposed.title;
+/// ```
 ///
 /// ### Enums
 ///

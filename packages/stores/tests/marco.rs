@@ -357,6 +357,295 @@ mod macro_tests {
         }
     }
 
+    // Named struct with mixed visibility: pub field + private field
+    fn derive_struct_private_fields() {
+        #[derive(Store)]
+        pub struct Item {
+            pub name: String,
+            count: u32,
+        }
+
+        let store = use_store(|| Item {
+            name: "hello".to_string(),
+            count: 42,
+        });
+
+        // Public field is accessible through the public extension trait
+        let name: Store<String, _> = store.name();
+        let name: String = name();
+
+        // Private field is accessible through the private extension trait
+        // (within this module, both traits are in scope)
+        let count: Store<u32, _> = store.count();
+        let count: u32 = count();
+
+        // Transpose is on the public trait and returns a struct with the original field visibility
+        let transposed = store.transpose();
+        let _name: Store<String, _> = transposed.name;
+        // count is private in the transposed struct, but accessible within this module
+        let _count: Store<u32, _> = transposed.count;
+    }
+
+    // Tuple struct with mixed visibility
+    fn derive_tuple_private_fields() {
+        #[derive(Store, PartialEq, Clone, Debug)]
+        pub struct Item(pub bool, String);
+
+        let store = use_store(|| Item(true, "Hello".to_string()));
+
+        // Public field accessible through public trait
+        let first = store.field_0();
+        let first: bool = first();
+
+        // Private field accessible through private trait (within this module)
+        let second = store.field_1();
+        let second: String = second();
+
+        // Transpose works and preserves field visibility
+        let transposed = store.transpose();
+        let _first = transposed.0;
+        let _second = transposed.1;
+    }
+
+    // All fields private on a pub struct: public trait only has transpose,
+    // all field accessors go on the private trait
+    fn derive_struct_all_private_fields() {
+        #[derive(Store)]
+        pub struct Item {
+            name: String,
+            count: u32,
+        }
+
+        let store = use_store(|| Item {
+            name: "hello".to_string(),
+            count: 42,
+        });
+
+        // Both fields are on the private trait (accessible within this module)
+        let name: Store<String, _> = store.name();
+        let count: Store<u32, _> = store.count();
+        let name: String = name();
+        let count: u32 = count();
+
+        // Transpose is still on the public trait
+        let transposed = store.transpose();
+        let _name: Store<String, _> = transposed.name;
+        let _count: Store<u32, _> = transposed.count;
+    }
+
+    // Private struct with no explicit field visibility: all fields go on
+    // the single public-to-the-struct-level trait (no private trait generated)
+    fn derive_private_struct_no_split() {
+        #[derive(Store)]
+        struct Item {
+            name: String,
+            count: u32,
+        }
+
+        let store = use_store(|| Item {
+            name: "hello".to_string(),
+            count: 42,
+        });
+
+        // Both fields go on the single trait since the struct is private
+        let name: Store<String, _> = store.name();
+        let count: Store<u32, _> = store.count();
+        let name: String = name();
+        let count: u32 = count();
+
+        let transposed = store.transpose();
+        let _name: Store<String, _> = transposed.name;
+        let _count: Store<u32, _> = transposed.count;
+    }
+
+    // Generic struct with private fields: generics should work across both traits
+    fn derive_generic_struct_private_fields() {
+        #[derive(Store)]
+        pub struct Item<T> {
+            pub visible: T,
+            hidden: bool,
+        }
+
+        let store = use_store(|| Item {
+            visible: "hello".to_string(),
+            hidden: true,
+        });
+
+        let visible: Store<String, _> = store.visible();
+        let hidden: Store<bool, _> = store.hidden();
+        let visible: String = visible();
+        let hidden: bool = hidden();
+
+        let ItemStoreTransposed { visible, hidden } = store.transpose();
+        let visible: String = visible();
+        let hidden: bool = hidden();
+    }
+
+    // Generic struct with bounds and private fields
+    fn derive_generic_struct_with_bounds_private_fields() {
+        #[derive(Store)]
+        pub struct Item<T: ?Sized>
+        where
+            T: 'static,
+        {
+            pub visible: &'static T,
+            hidden: bool,
+        }
+
+        let store = use_store(|| Item {
+            visible: "hello",
+            hidden: true,
+        });
+
+        let visible: Store<&'static str, _> = store.visible();
+        let hidden: Store<bool, _> = store.hidden();
+        let visible: &'static str = visible();
+        let hidden: bool = hidden();
+
+        let ItemStoreTransposed { visible, hidden } = store.transpose();
+        let visible: &'static str = visible();
+        let hidden: bool = hidden();
+    }
+
+    // #[store] impl blocks work alongside private field splitting
+    fn derive_struct_private_fields_with_store_impl() {
+        #[derive(Store)]
+        pub struct Item {
+            pub name: String,
+            count: u32,
+        }
+
+        #[store]
+        impl Store<Item> {
+            fn name_len(&self) -> usize {
+                self.name().to_string().len()
+            }
+
+            fn increment_count(&mut self) {
+                let count = self.count().cloned();
+                self.count().set(count + 1);
+            }
+        }
+
+        let mut store = use_store(|| Item {
+            name: "hello".to_string(),
+            count: 42,
+        });
+
+        let _len = store.name_len();
+        store.increment_count();
+    }
+
+    // pub(crate) fields on a pub struct should be treated as public (both have explicit vis)
+    fn derive_struct_pub_crate_fields() {
+        #[derive(Store)]
+        pub struct Item {
+            pub(crate) name: String,
+            pub count: u32,
+        }
+
+        let store = use_store(|| Item {
+            name: "hello".to_string(),
+            count: 42,
+        });
+
+        // Both pub(crate) and pub fields are on the public trait
+        let name: Store<String, _> = store.name();
+        let count: Store<u32, _> = store.count();
+        let name: String = name();
+        let count: u32 = count();
+
+        let transposed = store.transpose();
+        let _name: Store<String, _> = transposed.name;
+        let _count: Store<u32, _> = transposed.count;
+    }
+
+    // Multiple private fields alongside multiple public fields
+    fn derive_struct_many_mixed_fields() {
+        #[derive(Store)]
+        pub struct Config {
+            pub title: String,
+            pub enabled: bool,
+            secret_key: String,
+            internal_count: u64,
+        }
+
+        let store = use_store(|| Config {
+            title: "App".to_string(),
+            enabled: true,
+            secret_key: "shhh".to_string(),
+            internal_count: 0,
+        });
+
+        // Public fields
+        let title: Store<String, _> = store.title();
+        let enabled: Store<bool, _> = store.enabled();
+
+        // Private fields
+        let secret: Store<String, _> = store.secret_key();
+        let count: Store<u64, _> = store.internal_count();
+
+        // Transpose includes all fields
+        let ConfigStoreTransposed {
+            title,
+            enabled,
+            secret_key,
+            internal_count,
+        } = store.transpose();
+        let _: String = title();
+        let _: bool = enabled();
+        let _: String = secret_key();
+        let _: u64 = internal_count();
+    }
+
+    // Cross-module test: public fields are accessible from outside the defining module
+    // via the public extension trait, while the private trait stays module-private
+    mod inner_module {
+        use dioxus_signals::*;
+        use dioxus_stores::*;
+
+        #[derive(Store)]
+        pub struct Config {
+            pub title: String,
+            pub enabled: bool,
+            secret: String,
+        }
+
+        impl Config {
+            pub fn new() -> Self {
+                Config {
+                    title: "App".to_string(),
+                    enabled: true,
+                    secret: "hidden".to_string(),
+                }
+            }
+        }
+
+        // The private trait is accessible within the defining module
+        fn _inner_access() {
+            let store = use_store(Config::new);
+            let _secret: Store<String, _> = store.secret();
+        }
+    }
+
+    fn derive_cross_module_public_access() {
+        use inner_module::*;
+
+        let store = use_store(inner_module::Config::new);
+
+        // Public fields are accessible from outside the module
+        let title: Store<String, _> = store.title();
+        let enabled: Store<bool, _> = store.enabled();
+        let _: String = title();
+        let _: bool = enabled();
+
+        // Transpose is accessible (it's on the public trait)
+        let transposed = store.transpose();
+        let _title: Store<String, _> = transposed.title;
+        let _enabled: Store<bool, _> = transposed.enabled;
+        // transposed.secret is private — cannot be accessed here
+    }
+
     fn derive_generic_enum_transpose_passthrough() {
         #[derive(Store, PartialEq, Clone, Debug)]
         #[non_exhaustive]
