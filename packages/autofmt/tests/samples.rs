@@ -64,4 +64,5 @@ twoway![
     expr_on_conditional,
     blank_lines,
     blank_lines_preserved,
+    forloop_tuple,
 ];
