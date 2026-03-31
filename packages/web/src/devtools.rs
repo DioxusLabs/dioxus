@@ -46,7 +46,7 @@ fn make_ws(tx: UnboundedSender<HotReloadMsg>, poll_interval: i32, reload: bool) 
     // The idea here being that the devserver is always located on the /_dioxus behind a proxy
     let mut location =
         web_sys::Url::new(&web_sys::window().unwrap().location().href().unwrap()).unwrap();
-    if location.protocol() == "chrome-extension:" || location.protocol() == "moz-extension:" {
+    if location.protocol().ends_with("-extension:") {
         location = web_sys::Url::new("http://localhost:8080").unwrap();
     }
     let url = format!(
