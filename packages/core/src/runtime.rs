@@ -18,6 +18,7 @@ use slab::Slab;
 use slotmap::DefaultKey;
 use std::any::Any;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
@@ -54,6 +55,12 @@ pub struct Runtime {
 
     pub(crate) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
+    /// Optional callback invoked when async tasks wake up or scopes are marked
+    /// dirty. Allows external event loops (winit, etc.) to schedule a repaint
+    /// without polling. The callback must be `Send + Sync` since task wakers
+    /// may fire from any thread.
+    pub(crate) wakeup_callback: RefCell<Option<Arc<dyn Fn() + Send + Sync>>>,
+
     // The effects that need to be run after the next render
     pub(crate) pending_effects: RefCell<BTreeSet<Effect>>,
 
@@ -87,6 +94,7 @@ impl Runtime {
             suspended_tasks: Default::default(),
             pending_effects: Default::default(),
             dirty_tasks: Default::default(),
+            wakeup_callback: RefCell::new(None),
             elements: RefCell::new(elements),
             mounts: Default::default(),
         })

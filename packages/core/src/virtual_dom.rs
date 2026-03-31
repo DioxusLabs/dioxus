@@ -16,6 +16,7 @@ use crate::{Task, VComponent};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 use std::{any::Any, rc::Rc};
 use tracing::instrument;
 
@@ -758,6 +759,28 @@ impl VirtualDom {
     /// Get the current runtime
     pub fn runtime(&self) -> Rc<Runtime> {
         self.runtime.clone()
+    }
+
+    /// Set a callback that is invoked whenever the VirtualDom has new async work
+    /// ready to be processed — for example, when a spawned future resolves or a
+    /// signal is written from outside the render cycle.
+    ///
+    /// This lets external event loops (winit, GTK, etc.) schedule a
+    /// [`render_immediate`](Self::render_immediate) call without polling. The
+    /// callback must be `Send + Sync` because Rust's async waker mechanism
+    /// requires it — task wakers may fire from any thread.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // In a winit-based shell:
+    /// let proxy = event_loop.create_proxy();
+    /// dom.set_wakeup_callback(move || {
+    ///     let _ = proxy.send_event(UserEvent::NewWork);
+    /// });
+    /// ```
+    pub fn set_wakeup_callback(&self, callback: impl Fn() + Send + Sync + 'static) {
+        *self.runtime.wakeup_callback.borrow_mut() = Some(Arc::new(callback));
     }
 
     /// Handle an event with the Virtual Dom. This method is deprecated in favor of [VirtualDom::runtime().handle_event] and will be removed in a future release.

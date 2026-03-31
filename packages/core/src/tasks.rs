@@ -187,6 +187,7 @@ impl Runtime {
                     waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
                         id: task_id.id,
                         tx: self.sender.clone(),
+                        wakeup: self.wakeup_callback.borrow().clone(),
                     })),
                     ty: RefCell::new(ty),
                 });
@@ -394,6 +395,7 @@ pub(crate) enum SchedulerMsg {
 struct LocalTaskHandle {
     id: slotmap::DefaultKey,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    wakeup: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl ArcWake for LocalTaskHandle {
@@ -401,5 +403,8 @@ impl ArcWake for LocalTaskHandle {
         _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));
+        if let Some(cb) = &arc_self.wakeup {
+            cb();
+        }
     }
 }
