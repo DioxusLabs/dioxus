@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::NamedTempFile;
 
+/// Pinned binaryen version (contains wasm-opt).
+const BINARYEN_VERSION: &str = "127";
+
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     std::fs::write(output_path, bytes)?;
@@ -245,7 +248,7 @@ pub fn installed_location() -> Option<PathBuf> {
 }
 
 fn install_dir() -> PathBuf {
-    Workspace::dioxus_data_dir().join("binaryen")
+    Workspace::tools_dir().join(format!("binaryen-{BINARYEN_VERSION}"))
 }
 
 fn installed_bin_name() -> &'static str {

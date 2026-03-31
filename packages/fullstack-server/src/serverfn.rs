@@ -113,9 +113,11 @@ impl ServerFunction {
                                 response.headers_mut().extend(headers);
                             }
 
-                            // if it accepts text/html (i.e., is a plain form post) and doesn't already have a
-                            // Location set, then redirect to Referer
-                            if accepts_html {
+                            // If the response is successful and accepts text/html (i.e., is a
+                            // plain form post) and doesn't already have a Location set, then
+                            // redirect to Referer. Only redirect on success so that error
+                            // responses (4xx, 5xx) propagate correctly to the client.
+                            if accepts_html && response.status().is_success() {
                                 if let Some(referrer) = referrer {
                                     let has_location = response.headers().get(LOCATION).is_some();
                                     if !has_location {

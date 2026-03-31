@@ -69,9 +69,7 @@ impl<'a> BundleContext<'a> {
             }
         }
 
-        let tools_dir = dirs::cache_dir()
-            .unwrap_or_else(|| PathBuf::from(".cache"))
-            .join("dioxus");
+        let tools_dir = crate::Workspace::tools_dir();
         let _ = std::fs::create_dir_all(&tools_dir);
 
         let arch = {

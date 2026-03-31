@@ -52,7 +52,7 @@ impl BundleContext<'_> {
 
         verify_codesigned_app(app_path).await?;
 
-        let output_dir = self.project_out_directory().join("bundle").join("ipa");
+        let output_dir = self.project_out_directory().join("ipa");
         std::fs::create_dir_all(&output_dir)?;
 
         let ipa_name = format!(
