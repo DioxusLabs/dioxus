@@ -233,7 +233,7 @@ html_parser = "0.7.0"
 thiserror = "2.0.12"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
-cargo_toml = { version = "0.22.1" }
+cargo_toml = { version = "0.22.3" }
 icns = "0.4.0"
 image = "0.25.6"
 zip = { version = "4", default-features = false, features = ["deflate"] }
