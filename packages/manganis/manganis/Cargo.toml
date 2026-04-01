@@ -20,7 +20,7 @@ thiserror = { workspace = true }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+jni = "0.21.1"
 ndk-context = "0.1.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]
