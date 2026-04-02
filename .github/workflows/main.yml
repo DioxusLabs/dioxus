@@ -598,6 +598,11 @@ jobs:
         with:
           toolchain: ${{ env.rust_nightly }}
       - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: "true"
+          cache-workspace-crates: "true"
+          cache-provider: "warpbuild"
       - name: Generate minimal-version lockfile
         run: cargo +${{ env.rust_nightly }} update -Zdirect-minimal-versions
       - name: Check workspace with minimum versions
