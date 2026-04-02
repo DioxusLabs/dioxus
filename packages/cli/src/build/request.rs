@@ -2704,8 +2704,12 @@ impl BuildRequest {
 
                 // Preserve the original args. We only preserve:
                 // -L <path>
-                // -arch
                 // -lxyz
+                // -m (arch/emulation)
+                // -B<path>  (gcc program search path — Rust 1.86+ injects -B/gcc-ld + -fuse-ld=lld
+                //            so that cc picks up the bundled lld; we must forward it for the patch
+                //            linker invocation too, otherwise cc falls back to the system `ld`)
+                // -fuse-ld  (linker selection)
                 // There might be more, but some flags might break our setup.
                 for (idx, arg) in original_args.iter().enumerate() {
                     if *arg == "-L" {
@@ -2718,6 +2722,7 @@ impl BuildRequest {
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
                         || arg.starts_with("-fuse-ld")
+                        || arg.starts_with("-B")
                         || arg.contains("-ld-path")
                     {
                         out_args.push(arg.to_string());
