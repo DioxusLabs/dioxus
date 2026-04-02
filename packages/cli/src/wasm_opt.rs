@@ -139,6 +139,8 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // hardcoded for now to get around github api rate limits
     if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-windows.tar.gz".to_string());
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-arm64-windows.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
@@ -169,6 +171,8 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // Find the platform identifier based on the current OS and architecture
     let platform = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         "x86_64-windows"
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        "arm64-windows"
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         "x86_64-linux"
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
