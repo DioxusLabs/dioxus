@@ -12,5 +12,5 @@ tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
 bevy = { workspace = true }
 dioxus-native = { workspace = true, features = ["prelude"] }
 wgpu = { workspace = true }
-color = "0.3"
+color = "0.3.2"
 tracing-subscriber = { workspace = true, optional = true }
