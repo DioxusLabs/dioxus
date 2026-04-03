@@ -248,6 +248,11 @@ impl BundleContext<'_> {
             .arg("-o")
             .arg(&wixobj_path)
             .arg(&wxs_path);
+
+        if wix_settings.fips_compliant {
+            candle_cmd.arg("-fips");
+        }
+
         candle_cmd.arg("-ext").arg("WixUIExtension");
 
         tracing::debug!("candle command: {:?}", candle_cmd);
