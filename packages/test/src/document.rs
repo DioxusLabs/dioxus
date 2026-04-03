@@ -249,7 +249,7 @@ pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {
 // TODO: Make this configurable.
 const MAX_TRIES: usize = 5;
 
-pub trait Waitable {
+trait Waitable {
     type Output;
     fn pump(&mut self) -> impl Future<Output = ()>;
     fn check(&self) -> ControlFlow<Self::Output>;
