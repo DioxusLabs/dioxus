@@ -2,13 +2,7 @@ use crate::{Matcher, element::ResolvedElement, result::TesterError};
 use blitz_dom::{Document as _, SelectorList};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
-use std::{
-    marker::PhantomData,
-    ops::ControlFlow,
-    pin::{Pin, pin},
-    task::{Context, Poll},
-    time::Duration,
-};
+use std::{ops::ControlFlow, pin::Pin, time::Duration};
 use tokio::time::{error::Elapsed, timeout};
 
 /// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
@@ -271,64 +265,27 @@ trait Waitable<'output> {
     type Output;
     async fn pump(&mut self);
     fn check(&'output self) -> ControlFlow<Self::Output>;
-}
 
-struct WaitableFuture<'output, W: Waitable<'output>> {
-    waitable: W,
-    state: WaitableFutureState,
-    phantom: PhantomData<&'output ()>,
-}
-
-impl<'output, W: Waitable<'output>> WaitableFuture<'output, W> {
-    fn new(waitable: W) -> Self {
-        Self {
-            waitable,
-            state: WaitableFutureState::Init,
-            phantom: Default::default(),
-        }
-    }
-}
-
-enum WaitableFutureState {
-    Init,
-    Pump(usize, Box<dyn Future<Output = ()>>),
-}
-
-impl<'output, W: Waitable<'output> + Unpin> Future for WaitableFuture<'output, W> {
-    type Output = Result<W::Output, TesterError>;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.state {
-            WaitableFutureState::Init => match self.waitable.check() {
-                ControlFlow::Break(data) => Poll::Ready(Ok(data)),
-                ControlFlow::Continue(_) => {
-                    self.state = WaitableFutureState::Pump(0, Box::new(self.waitable.pump()));
-                    Poll::Pending
-                }
-            },
-            WaitableFutureState::Pump(tries, mut pump_future) => {
-                let pump_future_pin = pin!(pump_future);
-                match pump_future_pin.poll(cx) {
-                    Poll::Ready(_) => match self.waitable.check() {
-                        ControlFlow::Break(data) => Poll::Ready(Ok(data)),
-                        ControlFlow::Continue(_) => {
-                            if tries >= MAX_TRIES {
-                                Poll::Ready(Err(TesterError::NoSuchElementWithCssSelector(
-                                    "TODO placeholder".to_string(),
-                                )))
-                            } else {
-                                self.state = WaitableFutureState::Pump(
-                                    tries + 1,
-                                    Box::new(self.waitable.pump()),
-                                );
-                                Poll::Pending
-                            }
+    fn into_waitable_future(
+        &'output mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, TesterError>> + 'output>> {
+        Box::pin(async move {
+            let mut tries = 0;
+            loop {
+                match self.check() {
+                    ControlFlow::Break(data) => break Ok(data),
+                    ControlFlow::Continue(_) => {
+                        tries += 1;
+                        if tries >= MAX_TRIES {
+                            break Err(TesterError::NoSuchElementWithCssSelector(
+                                "TODO placeholder".to_string(),
+                            ));
                         }
-                    },
-                    Poll::Pending => Poll::Pending,
+                    }
                 }
+                self.pump().await;
             }
-        }
+        })
     }
 }
 
@@ -369,25 +326,25 @@ impl<'vdom> Waitable<'vdom> for ElementCondition<'vdom> {
     }
 }
 
-impl<'vdom> IntoFuture for ElementCondition<'vdom> {
-    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
-    type IntoFuture = WaitableFuture<'vdom, Self>;
+impl<'vdom> IntoFuture for &'vdom mut ElementCondition<'vdom> {
+    type Output = Result<ResolvedElement<'vdom>, TesterError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        WaitableFuture::new(self)
+        self.into_waitable_future()
     }
 }
 
 impl<'vdom> ElementCondition<'vdom> {
-    pub fn click(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+    pub fn click(&'vdom mut self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         async move {
-            let element = self.await?;
+            let element = self.into_future().await?;
             element.click();
             Ok(())
         }
     }
 
-    pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+    pub fn tap(&'vdom mut self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         self.click()
     }
 
@@ -424,12 +381,12 @@ impl<'vdom> Waitable<'vdom> for AllElementsCondition<'vdom> {
     }
 }
 
-impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
-    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
-    type IntoFuture = WaitableFuture<'vdom, Self>;
+impl<'vdom> IntoFuture for &'vdom mut AllElementsCondition<'vdom> {
+    type Output = Result<Vec<ResolvedElement<'vdom>>, TesterError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        WaitableFuture::new(self)
+        self.into_waitable_future()
     }
 }
 
@@ -456,14 +413,14 @@ where
     }
 }
 
-impl<'vdom, M: Unpin> IntoFuture for MatcherCondition<'vdom, M>
+impl<'vdom, M: Unpin> IntoFuture for &'vdom mut MatcherCondition<'vdom, M>
 where
     M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
 {
-    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
-    type IntoFuture = WaitableFuture<'vdom, Self>;
+    type Output = Result<(), TesterError>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        WaitableFuture::new(self)
+        self.into_waitable_future()
     }
 }
