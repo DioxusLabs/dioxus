@@ -133,27 +133,15 @@ impl DocumentTester {
     /// If no such element already exists on the DOM, then this returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_element<'vdom>(
-        &'vdom self,
-        query: &SelectorList,
-    ) -> Option<ResolvedElement<'vdom>> {
-        self.document
-            .query_selector_raw(query)
-            .map(|node_id| self.node_id_to_element(node_id))
+    pub(crate) fn get_element<'vdom>(&'vdom self, query: &SelectorList) -> Option<usize> {
+        self.document.query_selector_raw(query)
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given [Query].
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_elements<'vdom>(
-        &'vdom self,
-        query: &SelectorList,
-    ) -> Vec<ResolvedElement<'vdom>> {
-        self.document
-            .query_selector_all_raw(query)
-            .into_iter()
-            .map(|node_id| self.node_id_to_element(node_id))
-            .collect()
+    pub(crate) fn get_elements<'vdom>(&'vdom self, query: &SelectorList) -> Vec<usize> {
+        self.document.query_selector_all_raw(query).to_vec()
     }
 
     /// Returns the first element in the DOM satisfying the given [Query], waiting as necessary.
@@ -188,7 +176,7 @@ impl DocumentTester {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query(&'_ mut self, query: impl TryIntoSelector) -> impl Waitable {
+    pub fn query(&'_ mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
         let selector = query
             .try_into_selector(&self.document)
             .expect("Invalid CSS selector");
@@ -198,7 +186,7 @@ impl DocumentTester {
         }
     }
 
-    fn node_id_to_element(&'_ self, node_id: usize) -> ResolvedElement<'_> {
+    fn node_id_to_element<'vdom>(&'vdom self, node_id: usize) -> ResolvedElement<'vdom> {
         let node = self
             .document
             .get_node(node_id)
@@ -261,14 +249,17 @@ pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {
 // TODO: Make this configurable.
 const MAX_TRIES: usize = 5;
 
-trait Waitable<'output> {
+pub trait Waitable {
     type Output;
-    async fn pump(&mut self);
-    fn check(&'output self) -> ControlFlow<Self::Output>;
+    fn pump(&mut self) -> impl Future<Output = ()>;
+    fn check(&self) -> ControlFlow<Self::Output>;
 
-    fn into_waitable_future(
-        &'output mut self,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, TesterError>> + 'output>> {
+    fn into_waitable_future<'vdom>(
+        &'vdom mut self,
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, TesterError>> + 'vdom>>
+    where
+        Self: Sized,
+    {
         Box::pin(async move {
             let mut tries = 0;
             loop {
@@ -294,31 +285,20 @@ pub trait ImmediateCondition<'output> {
     fn immediately(&'output self) -> Result<Self::Output, TesterError>;
 }
 
-impl<'output, T: Waitable<'output> + 'output> ImmediateCondition<'output> for T {
-    type Output = <Self as Waitable<'output>>::Output;
-
-    fn immediately(&'output self) -> Result<Self::Output, TesterError> {
-        match self.check() {
-            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
-            ControlFlow::Break(b) => Ok(b),
-        }
-    }
-}
-
 pub struct ElementCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
 }
 
-impl<'vdom> Waitable<'vdom> for ElementCondition<'vdom> {
-    type Output = ResolvedElement<'vdom>;
+impl<'vdom> Waitable for ElementCondition<'vdom> {
+    type Output = usize;
+
     async fn pump(&mut self) {
-        self.data.pump().await;
+        let _ = self.data.pump().await;
     }
 
-    fn check(&'vdom self) -> ControlFlow<Self::Output> {
-        let data: &'vdom DocumentTester = self.data;
-        if let Some(element) = data.get_element(&self.query) {
+    fn check(&self) -> ControlFlow<Self::Output> {
+        if let Some(element) = self.data.get_element(&self.query) {
             ControlFlow::Break(element)
         } else {
             ControlFlow::Continue(())
@@ -326,17 +306,20 @@ impl<'vdom> Waitable<'vdom> for ElementCondition<'vdom> {
     }
 }
 
-impl<'vdom> IntoFuture for &'vdom mut ElementCondition<'vdom> {
+impl<'vdom> IntoFuture for ElementCondition<'vdom> {
     type Output = Result<ResolvedElement<'vdom>, TesterError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
-    fn into_future(self) -> Self::IntoFuture {
-        self.into_waitable_future()
+    fn into_future(mut self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let node_id = self.into_waitable_future().await?;
+            Ok(self.data.node_id_to_element(node_id))
+        })
     }
 }
 
 impl<'vdom> ElementCondition<'vdom> {
-    pub fn click(&'vdom mut self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+    pub fn click(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         async move {
             let element = self.into_future().await?;
             element.click();
@@ -344,17 +327,35 @@ impl<'vdom> ElementCondition<'vdom> {
         }
     }
 
-    pub fn tap(&'vdom mut self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
+    pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         self.click()
     }
 
-    pub fn expect<M>(self, matcher: M) -> impl Waitable<'vdom>
+    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M>
     where
         M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
     {
         MatcherCondition {
             element: self,
             matcher,
+        }
+    }
+
+    fn resolve(&'vdom self, node_id: usize) -> ResolvedElement<'vdom> {
+        self.data.node_id_to_element(node_id)
+    }
+}
+
+impl<'vdom> ImmediateCondition<'vdom> for ElementCondition<'vdom> {
+    type Output = ResolvedElement<'vdom>;
+
+    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
+        match self.check() {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(b) => {
+                let node = self.data.node_id_to_element(b);
+                Ok(node)
+            }
         }
     }
 }
@@ -364,14 +365,14 @@ pub struct AllElementsCondition<'vdom> {
     query: SelectorList,
 }
 
-impl<'vdom> Waitable<'vdom> for AllElementsCondition<'vdom> {
-    type Output = Vec<ResolvedElement<'vdom>>;
+impl<'vdom> Waitable for AllElementsCondition<'vdom> {
+    type Output = Vec<usize>;
 
     async fn pump(&mut self) {
-        self.data.pump().await;
+        let _ = self.data.pump().await;
     }
 
-    fn check(&'vdom self) -> ControlFlow<Self::Output> {
+    fn check(&self) -> ControlFlow<Self::Output> {
         let elements = self.data.get_elements(&self.query);
         if elements.is_empty() {
             ControlFlow::Continue(())
@@ -381,21 +382,41 @@ impl<'vdom> Waitable<'vdom> for AllElementsCondition<'vdom> {
     }
 }
 
-impl<'vdom> IntoFuture for &'vdom mut AllElementsCondition<'vdom> {
+impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
     type Output = Result<Vec<ResolvedElement<'vdom>>, TesterError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
-    fn into_future(self) -> Self::IntoFuture {
-        self.into_waitable_future()
+    fn into_future(mut self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let node_ids = self.into_waitable_future().await?;
+            Ok(node_ids
+                .into_iter()
+                .map(|node_id| self.data.node_id_to_element(node_id))
+                .collect())
+        })
     }
 }
 
-struct MatcherCondition<'vdom, M> {
+impl<'vdom> ImmediateCondition<'vdom> for AllElementsCondition<'vdom> {
+    type Output = Vec<ResolvedElement<'vdom>>;
+
+    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
+        match self.check() {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(node_ids) => Ok(node_ids
+                .into_iter()
+                .map(|node_id| self.data.node_id_to_element(node_id))
+                .collect()),
+        }
+    }
+}
+
+pub struct MatcherCondition<'vdom, M> {
     element: ElementCondition<'vdom>,
     matcher: M,
 }
 
-impl<'vdom, M> Waitable<'vdom> for MatcherCondition<'vdom, M>
+impl<'vdom, M> Waitable for MatcherCondition<'vdom, M>
 where
     M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
 {
@@ -405,22 +426,39 @@ where
         self.element.pump().await;
     }
 
-    fn check(&'vdom self) -> ControlFlow<Self::Output> {
+    fn check(&self) -> ControlFlow<Self::Output> {
         match self.element.check() {
             ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(n) => self.matcher.matches(n),
+            ControlFlow::Break(n) => {
+                let node = self.element.resolve(n);
+                self.matcher.matches(node)
+            }
         }
     }
 }
 
-impl<'vdom, M: Unpin> IntoFuture for &'vdom mut MatcherCondition<'vdom, M>
+impl<'vdom, M: Unpin> IntoFuture for MatcherCondition<'vdom, M>
 where
     M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
 {
     type Output = Result<(), TesterError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
-    fn into_future(self) -> Self::IntoFuture {
-        self.into_waitable_future()
+    fn into_future(mut self) -> Self::IntoFuture {
+        Box::pin(async move { self.into_waitable_future().await })
+    }
+}
+
+impl<'vdom, M> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M>
+where
+    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+{
+    type Output = ();
+
+    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
+        match self.check() {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(_) => Ok(()),
+        }
     }
 }

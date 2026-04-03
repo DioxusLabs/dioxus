@@ -102,7 +102,8 @@ mod matcher;
 mod result;
 
 pub use document::{
-    AllElementsCondition, DocumentTester, ElementCondition, ImmediateCondition, by_testid, render,
+    AllElementsCondition, DocumentTester, ElementCondition, ImmediateCondition, Waitable,
+    by_testid, render,
 };
 pub use matcher::{Matcher, contains_string, inner_html, not};
 pub use result::{Result, TesterError};

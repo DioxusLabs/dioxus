@@ -7,8 +7,6 @@ use dioxus_html::{
 use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
 use std::rc::Rc;
 
-use crate::{Matcher, TesterError};
-
 /// A reference to DOM node managed by a [crate::DocumentTester].
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
@@ -164,17 +162,6 @@ impl<'doc> ResolvedElement<'doc> {
             .find(|attr| *attr.name.local == *"data-dioxus-id")
             .and_then(|attr| attr.value.parse::<usize>().ok())
             .map(ElementId)
-    }
-
-    fn expect(
-        self,
-        expectation: impl for<'a> Matcher<ResolvedElement<'a>>,
-    ) -> Result<(), TesterError> {
-        if expectation.matches(self).is_continue() {
-            Err(TesterError::AssertionFailure("TODO".into()))
-        } else {
-            Ok(())
-        }
     }
 }
 
