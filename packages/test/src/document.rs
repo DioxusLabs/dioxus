@@ -1,13 +1,14 @@
-use crate::{
-    Matcher,
-    element::ResolvedElement,
-    matcher::{query_selector, query_selector_all},
-    result::TesterError,
-};
+use crate::{Matcher, element::ResolvedElement, result::TesterError};
 use blitz_dom::{Document as _, SelectorList};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
-use std::{ops::ControlFlow, time::Duration};
+use std::{
+    marker::PhantomData,
+    ops::ControlFlow,
+    pin::{Pin, pin},
+    task::{Context, Poll},
+    time::Duration,
+};
 use tokio::time::{error::Elapsed, timeout};
 
 /// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
@@ -138,18 +139,24 @@ impl DocumentTester {
     /// If no such element already exists on the DOM, then this returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_element<'vdom>(&'vdom self, query: &Query) -> Option<ResolvedElement<'vdom>> {
+    pub(crate) fn get_element<'vdom>(
+        &'vdom self,
+        query: &SelectorList,
+    ) -> Option<ResolvedElement<'vdom>> {
         self.document
-            .query_selector_raw(query.list())
+            .query_selector_raw(query)
             .map(|node_id| self.node_id_to_element(node_id))
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given [Query].
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_elements<'vdom>(&'vdom self, query: &Query) -> Vec<ResolvedElement<'vdom>> {
+    pub(crate) fn get_elements<'vdom>(
+        &'vdom self,
+        query: &SelectorList,
+    ) -> Vec<ResolvedElement<'vdom>> {
         self.document
-            .query_selector_all_raw(query.list())
+            .query_selector_all_raw(query)
             .into_iter()
             .map(|node_id| self.node_id_to_element(node_id))
             .collect()
@@ -187,18 +194,13 @@ impl DocumentTester {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query(
-        &'_ mut self,
-        query: impl TryIntoSelector,
-    ) -> QueryPollFuture<'_, impl for<'a> Matcher<&'a DocumentTester, Output = ResolvedElement<'a>>>
-    {
+    pub fn query(&'_ mut self, query: impl TryIntoSelector) -> impl Waitable {
         let selector = query
             .try_into_selector(&self.document)
             .expect("Invalid CSS selector");
-        let query = Query { list: selector };
-        QueryPollFuture {
+        ElementCondition {
             data: self,
-            query: query_selector(query),
+            query: selector,
         }
     }
 
@@ -223,17 +225,13 @@ impl DocumentTester {
     pub fn query_all<'vdom>(
         &'vdom mut self,
         query: impl TryIntoSelector,
-    ) -> QueryPollFuture<
-        'vdom,
-        impl for<'a> Matcher<&'a DocumentTester, Output = Vec<ResolvedElement<'a>>>,
-    > {
+    ) -> AllElementsCondition<'vdom> {
         let selector = query
             .try_into_selector(&self.document)
             .expect("Invalid CSS selector");
-        let query = Query { list: selector };
-        QueryPollFuture {
+        AllElementsCondition {
             data: self,
-            query: query_selector_all(query),
+            query: selector,
         }
     }
 }
@@ -244,23 +242,24 @@ pub trait TryIntoSelector {
 
 impl TryIntoSelector for &str {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
-        document.try_parse_selector_list(self).map_err(|err| {
+        document.try_parse_selector_list(self).map_err(|_| {
             TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self))
         })
     }
 }
 
-/// Selects one or more elements in a DOM.
-///
-/// This can be by CSS or by the `data-testid` attribute.
-pub struct Query {
-    list: SelectorList,
+struct QueryByTestId(String);
+
+impl TryIntoSelector for QueryByTestId {
+    fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
+        Ok(document
+            .try_parse_selector_list(&format!(r#"[data-testid="{}"]"#, self.0))
+            .expect("Selector with testid should always parse"))
+    }
 }
 
-impl Query {
-    fn list(&self) -> &SelectorList {
-        &self.list
-    }
+pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {
+    QueryByTestId(testid.as_ref().to_string())
 }
 
 /// The maximum number of attempts [DocumentTester] will make to find a given element or make a
@@ -268,59 +267,121 @@ impl Query {
 // TODO: Make this configurable.
 const MAX_TRIES: usize = 5;
 
-pub struct QueryPollFuture<'vdom, Q> {
-    data: &'vdom mut DocumentTester,
-    query: Q,
+trait Waitable<'output> {
+    type Output;
+    async fn pump(&mut self);
+    fn check(&'output self) -> ControlFlow<Self::Output>;
 }
 
-impl<'vdom, Q> QueryPollFuture<'vdom, Q>
-where
-    Q: for<'a> Matcher<&'a DocumentTester> + 'vdom,
-{
-    pub fn immediately(self) -> ControlFlow<<Q as Matcher<&'vdom DocumentTester>>::Output> {
-        self.query.matches(self.data)
+struct WaitableFuture<'output, W: Waitable<'output>> {
+    waitable: W,
+    state: WaitableFutureState,
+    phantom: PhantomData<&'output ()>,
+}
+
+impl<'output, W: Waitable<'output>> WaitableFuture<'output, W> {
+    fn new(waitable: W) -> Self {
+        Self {
+            waitable,
+            state: WaitableFutureState::Init,
+            phantom: Default::default(),
+        }
     }
 }
 
-impl<'vdom, Q> IntoFuture for QueryPollFuture<'vdom, Q>
-where
-    Q: for<'a> Matcher<&'a DocumentTester> + 'vdom,
-{
-    type Output = Result<<Q as Matcher<&'vdom DocumentTester>>::Output, TesterError>;
-    type IntoFuture = std::pin::Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
+enum WaitableFutureState {
+    Init,
+    Pump(usize, Box<dyn Future<Output = ()>>),
+}
+
+impl<'output, W: Waitable<'output> + Unpin> Future for WaitableFuture<'output, W> {
+    type Output = Result<W::Output, TesterError>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.state {
+            WaitableFutureState::Init => match self.waitable.check() {
+                ControlFlow::Break(data) => Poll::Ready(Ok(data)),
+                ControlFlow::Continue(_) => {
+                    self.state = WaitableFutureState::Pump(0, Box::new(self.waitable.pump()));
+                    Poll::Pending
+                }
+            },
+            WaitableFutureState::Pump(tries, mut pump_future) => {
+                let pump_future_pin = pin!(pump_future);
+                match pump_future_pin.poll(cx) {
+                    Poll::Ready(_) => match self.waitable.check() {
+                        ControlFlow::Break(data) => Poll::Ready(Ok(data)),
+                        ControlFlow::Continue(_) => {
+                            if tries >= MAX_TRIES {
+                                Poll::Ready(Err(TesterError::NoSuchElementWithCssSelector(
+                                    "TODO placeholder".to_string(),
+                                )))
+                            } else {
+                                self.state = WaitableFutureState::Pump(
+                                    tries + 1,
+                                    Box::new(self.waitable.pump()),
+                                );
+                                Poll::Pending
+                            }
+                        }
+                    },
+                    Poll::Pending => Poll::Pending,
+                }
+            }
+        }
+    }
+}
+
+pub trait ImmediateCondition<'output> {
+    type Output: 'output;
+    fn immediately(&'output self) -> Result<Self::Output, TesterError>;
+}
+
+impl<'output, T: Waitable<'output> + 'output> ImmediateCondition<'output> for T {
+    type Output = <Self as Waitable<'output>>::Output;
+
+    fn immediately(&'output self) -> Result<Self::Output, TesterError> {
+        match self.check() {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(b) => Ok(b),
+        }
+    }
+}
+
+pub struct ElementCondition<'vdom> {
+    data: &'vdom mut DocumentTester,
+    query: SelectorList,
+}
+
+impl<'vdom> Waitable<'vdom> for ElementCondition<'vdom> {
+    type Output = ResolvedElement<'vdom>;
+    async fn pump(&mut self) {
+        self.data.pump().await;
+    }
+
+    fn check(&'vdom self) -> ControlFlow<Self::Output> {
+        let data: &'vdom DocumentTester = self.data;
+        if let Some(element) = data.get_element(&self.query) {
+            ControlFlow::Break(element)
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+}
+
+impl<'vdom> IntoFuture for ElementCondition<'vdom> {
+    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
+    type IntoFuture = WaitableFuture<'vdom, Self>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let mut tries = 0;
-            loop {
-                // this is weird because of lifetimes, could probably clean this up
-                if self.query.matches(self.data).is_break() {
-                    // Re-match to extract the value. We know it will match because nothing
-                    // has changed since the check above.
-                    break match self.query.matches(self.data) {
-                        ControlFlow::Break(node) => Ok(node),
-                        ControlFlow::Continue(_) => unreachable!(),
-                    };
-                }
-                tries += 1;
-                if tries >= MAX_TRIES {
-                    break Err(TesterError::NoSuchElementWithCssSelector(
-                        "TODO placeholder".to_string(),
-                    ));
-                }
-                let _ = self.data.pump().await;
-            }
-        })
+        WaitableFuture::new(self)
     }
 }
 
-impl<'vdom, Q> QueryPollFuture<'vdom, Q>
-where
-    Q: for<'a> Matcher<&'a DocumentTester, Output = ResolvedElement<'a>> + 'vdom,
-{
+impl<'vdom> ElementCondition<'vdom> {
     pub fn click(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         async move {
-            let element = self.into_future().await?;
+            let element = self.await?;
             element.click();
             Ok(())
         }
@@ -330,18 +391,79 @@ where
         self.click()
     }
 
-    pub fn expect(
-        self,
-        matcher: impl Matcher<ResolvedElement<'vdom>> + 'vdom,
-    ) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
-        async move {
-            let element = self.into_future().await?;
-            match matcher.matches(element) {
-                ControlFlow::Continue(_) => Ok(()),
-                ControlFlow::Break(_) => Err(TesterError::AssertionFailure(
-                    "Expectation not met".to_string(),
-                )),
-            }
+    pub fn expect<M>(self, matcher: M) -> impl Waitable<'vdom>
+    where
+        M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+    {
+        MatcherCondition {
+            element: self,
+            matcher,
         }
+    }
+}
+
+pub struct AllElementsCondition<'vdom> {
+    data: &'vdom mut DocumentTester,
+    query: SelectorList,
+}
+
+impl<'vdom> Waitable<'vdom> for AllElementsCondition<'vdom> {
+    type Output = Vec<ResolvedElement<'vdom>>;
+
+    async fn pump(&mut self) {
+        self.data.pump().await;
+    }
+
+    fn check(&'vdom self) -> ControlFlow<Self::Output> {
+        let elements = self.data.get_elements(&self.query);
+        if elements.is_empty() {
+            ControlFlow::Continue(())
+        } else {
+            ControlFlow::Break(elements)
+        }
+    }
+}
+
+impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
+    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
+    type IntoFuture = WaitableFuture<'vdom, Self>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        WaitableFuture::new(self)
+    }
+}
+
+struct MatcherCondition<'vdom, M> {
+    element: ElementCondition<'vdom>,
+    matcher: M,
+}
+
+impl<'vdom, M> Waitable<'vdom> for MatcherCondition<'vdom, M>
+where
+    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+{
+    type Output = ();
+
+    async fn pump(&mut self) {
+        self.element.pump().await;
+    }
+
+    fn check(&'vdom self) -> ControlFlow<Self::Output> {
+        match self.element.check() {
+            ControlFlow::Continue(_) => ControlFlow::Continue(()),
+            ControlFlow::Break(n) => self.matcher.matches(n),
+        }
+    }
+}
+
+impl<'vdom, M: Unpin> IntoFuture for MatcherCondition<'vdom, M>
+where
+    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+{
+    type Output = <WaitableFuture<'vdom, Self> as Future>::Output;
+    type IntoFuture = WaitableFuture<'vdom, Self>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        WaitableFuture::new(self)
     }
 }

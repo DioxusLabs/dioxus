@@ -101,6 +101,8 @@ mod element;
 mod matcher;
 mod result;
 
-pub use document::{DocumentTester, Query, render};
+pub use document::{
+    AllElementsCondition, DocumentTester, ElementCondition, ImmediateCondition, by_testid, render,
+};
 pub use matcher::{Matcher, contains_string, inner_html, not};
 pub use result::{Result, TesterError};
