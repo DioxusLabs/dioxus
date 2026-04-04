@@ -1123,6 +1123,12 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
+impl<T: IntoAttributeValue + Clone> IntoAttributeValue for &T {
+    fn into_value(self) -> AttributeValue {
+        self.clone().into_value()
+    }
+}
+
 pub struct AnyFmtMarker;
 impl<T> IntoAttributeValue<AnyFmtMarker> for T
 where
