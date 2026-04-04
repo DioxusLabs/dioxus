@@ -2,7 +2,7 @@ use crate::{Matcher, element::ResolvedElement, result::TesterError};
 use blitz_dom::{Document as _, SelectorList};
 use dioxus_core::{Element, VirtualDom};
 use dioxus_native_dom::{DioxusDocument, DocumentConfig};
-use std::{ops::ControlFlow, pin::Pin, time::Duration};
+use std::{marker::PhantomData, ops::ControlFlow, pin::Pin, time::Duration};
 use tokio::time::{error::Elapsed, timeout};
 
 /// The maximum time [DocumentTester] will wait for new events when running [DocumentTester::pump]
@@ -280,6 +280,12 @@ trait Waitable {
     }
 }
 
+trait Resolvable<'vdom> {
+    type RawOutput;
+    type ResolvedOutput: 'vdom;
+    fn resolve(&'vdom self, v: Self::RawOutput) -> Self::ResolvedOutput;
+}
+
 pub trait ImmediateCondition<'output> {
     type Output: 'output;
     fn immediately(&'output self) -> Result<Self::Output, TesterError>;
@@ -303,6 +309,15 @@ impl<'vdom> Waitable for ElementCondition<'vdom> {
         } else {
             ControlFlow::Continue(())
         }
+    }
+}
+
+impl<'vdom> Resolvable<'vdom> for ElementCondition<'vdom> {
+    type RawOutput = usize;
+    type ResolvedOutput = ResolvedElement<'vdom>;
+
+    fn resolve(&'vdom self, node_id: usize) -> Self::ResolvedOutput {
+        self.data.node_id_to_element(node_id)
     }
 }
 
@@ -331,18 +346,15 @@ impl<'vdom> ElementCondition<'vdom> {
         self.click()
     }
 
-    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M>
+    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
         M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
     {
         MatcherCondition {
             element: self,
             matcher,
+            phantom: Default::default(),
         }
-    }
-
-    fn resolve(&'vdom self, node_id: usize) -> ResolvedElement<'vdom> {
-        self.data.node_id_to_element(node_id)
     }
 }
 
@@ -365,6 +377,19 @@ pub struct AllElementsCondition<'vdom> {
     query: SelectorList,
 }
 
+impl<'vdom> AllElementsCondition<'vdom> {
+    pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
+    where
+        M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+    {
+        MatcherCondition {
+            element: self,
+            matcher,
+            phantom: Default::default(),
+        }
+    }
+}
+
 impl<'vdom> Waitable for AllElementsCondition<'vdom> {
     type Output = Vec<usize>;
 
@@ -379,6 +404,17 @@ impl<'vdom> Waitable for AllElementsCondition<'vdom> {
         } else {
             ControlFlow::Break(elements)
         }
+    }
+}
+
+impl<'vdom> Resolvable<'vdom> for AllElementsCondition<'vdom> {
+    type RawOutput = Vec<usize>;
+    type ResolvedOutput = Vec<ResolvedElement<'vdom>>;
+
+    fn resolve(&'vdom self, v: Self::RawOutput) -> Self::ResolvedOutput {
+        v.into_iter()
+            .map(|node_id| self.data.node_id_to_element(node_id))
+            .collect()
     }
 }
 
@@ -411,14 +447,16 @@ impl<'vdom> ImmediateCondition<'vdom> for AllElementsCondition<'vdom> {
     }
 }
 
-pub struct MatcherCondition<'vdom, M> {
-    element: ElementCondition<'vdom>,
+pub struct MatcherCondition<'vdom, M, W> {
+    element: W,
     matcher: M,
+    phantom: PhantomData<&'vdom ()>,
 }
 
-impl<'vdom, M> Waitable for MatcherCondition<'vdom, M>
+impl<'vdom, M, W, T> Waitable for MatcherCondition<'vdom, M, W>
 where
-    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+    M: Matcher<T>,
+    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T>,
 {
     type Output = ();
 
@@ -437,9 +475,10 @@ where
     }
 }
 
-impl<'vdom, M: Unpin> IntoFuture for MatcherCondition<'vdom, M>
+impl<'vdom, M, W, T> IntoFuture for MatcherCondition<'vdom, M, W>
 where
-    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+    M: Matcher<T> + 'vdom,
+    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T> + 'vdom,
 {
     type Output = Result<(), TesterError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
@@ -449,9 +488,10 @@ where
     }
 }
 
-impl<'vdom, M> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M>
+impl<'vdom, M, W, T> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M, W>
 where
-    M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+    M: Matcher<T> + 'vdom,
+    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T>,
 {
     type Output = ();
 
