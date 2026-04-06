@@ -413,11 +413,15 @@ mod tests {
             .unwrap();
 
         let canonical_img = dunce::canonicalize(&img_path).unwrap();
-        assert!(manifest.get_first_asset_for_source(&canonical_img).is_none());
+        assert!(manifest
+            .get_first_asset_for_source(&canonical_img)
+            .is_none());
 
         discover_css_references(&mut manifest).unwrap();
 
-        assert!(manifest.get_first_asset_for_source(&canonical_img).is_some());
+        assert!(manifest
+            .get_first_asset_for_source(&canonical_img)
+            .is_some());
     }
 
     #[test]
@@ -446,6 +450,9 @@ mod tests {
             h.finish()
         };
 
-        assert_ne!(hash1, hash2, "CSS hash should change when referenced asset changes");
+        assert_ne!(
+            hash1, hash2,
+            "CSS hash should change when referenced asset changes"
+        );
     }
 }

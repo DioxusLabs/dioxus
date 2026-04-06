@@ -1583,12 +1583,10 @@ impl BuildRequest {
             swift_packages,
         } = extract_symbols_from_file(exe).await?;
 
-        let asset_manifest = if skip_assets {
-            AssetManifest::default()
-        } else {
-            let mut manifest = AssetManifest::default();
+        let mut asset_manifest = AssetManifest::default();
+        if !skip_assets {
             for asset in extracted_assets {
-                manifest.insert_asset(asset);
+                asset_manifest.insert_asset(asset);
             }
 
             if matches!(self.bundle, BundleFormat::Web)
@@ -1603,7 +1601,7 @@ impl BuildRequest {
                         let from = entry.path().to_path_buf();
                         let relative_path = from.strip_prefix(&dir).unwrap();
                         let to = format!("../{}", relative_path.display());
-                        manifest.insert_asset(BundledAsset::new(
+                        asset_manifest.insert_asset(BundledAsset::new(
                             from.to_string_lossy().as_ref(),
                             to.as_str(),
                             manganis_core::AssetOptions::builder()
@@ -1613,9 +1611,7 @@ impl BuildRequest {
                     }
                 }
             }
-
-            manifest
-        };
+        }
 
         if !android_artifacts.is_empty() {
             tracing::debug!(
@@ -1648,15 +1644,10 @@ impl BuildRequest {
         }
 
         // Discover assets referenced from CSS files and register them in the manifest
-        let asset_manifest = if skip_assets {
-            asset_manifest
-        } else {
-            let mut manifest = asset_manifest;
-            if let Err(e) = discover_css_references(&mut manifest) {
-                tracing::warn!("Failed to discover CSS-referenced assets: {e}");
-            }
-            manifest
-        };
+        let mut manifest = asset_manifest;
+        if let Err(e) = discover_css_references(&mut manifest) {
+            tracing::warn!("Failed to discover CSS-referenced assets: {e}");
+        }
 
         Ok((asset_manifest, android_artifacts, swift_packages))
     }

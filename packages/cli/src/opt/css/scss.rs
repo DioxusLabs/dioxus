@@ -10,7 +10,10 @@ use manganis_core::CssAssetOptions;
 use super::minify_css;
 
 /// Compile scss with grass.
-pub(crate) fn compile_scss(scss_options: &CssAssetOptions, source: &Path) -> anyhow::Result<String> {
+pub(crate) fn compile_scss(
+    scss_options: &CssAssetOptions,
+    source: &Path,
+) -> anyhow::Result<String> {
     let style = match scss_options.minified() {
         true => OutputStyle::Compressed,
         false => OutputStyle::Expanded,
