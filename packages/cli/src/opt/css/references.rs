@@ -20,7 +20,7 @@ use super::parse_stylesheet;
 /// Resolve a URL to an absolute path on disk, if the file exists.
 fn resolve_css_url(url: &str, css_dir: &Path) -> Option<PathBuf> {
     let resolved = css_dir.join(url);
-    dunce::canonicalize(&resolved).ok().filter(|p| p.exists())
+    dunce::canonicalize(&resolved).ok()
 }
 
 struct UrlCollector<'a> {
@@ -59,6 +59,7 @@ fn extract_css_dep_paths(css: &str, css_dir: &Path) -> anyhow::Result<Vec<PathBu
         css_dir,
         paths: Vec::new(),
     };
+    // Error type is Infallible — cannot fail
     stylesheet.visit(&mut collector).unwrap();
     Ok(collector.paths)
 }
@@ -140,7 +141,7 @@ fn collect_css_referenced_paths(source: &Path, visited: &mut HashSet<PathBuf>) -
 /// Walks all CSS assets currently in `manifest`, parses them for `url()` and
 /// `@import` references, and registers any newly-discovered files as assets.
 /// Newly-discovered CSS files are themselves scanned (breadth-first).
-pub(crate) fn discover_css_references(manifest: &mut AssetManifest) -> anyhow::Result<()> {
+pub(crate) fn discover_css_references(manifest: &mut AssetManifest) {
     let mut visited: HashSet<PathBuf> = HashSet::new();
     let mut queue: VecDeque<PathBuf> = manifest.css_source_paths().into();
 
@@ -194,8 +195,6 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) -> anyhow::R
             }
         }
     }
-
-    Ok(())
 }
 
 /// Hash a CSS file's contents together with all assets it references.
@@ -416,7 +415,7 @@ mod tests {
             .get_first_asset_for_source(&canonical_img)
             .is_none());
 
-        discover_css_references(&mut manifest).unwrap();
+        discover_css_references(&mut manifest);
 
         assert!(manifest
             .get_first_asset_for_source(&canonical_img)

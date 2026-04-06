@@ -30,9 +30,7 @@ impl AssetProcessor<'_> {
 
         Ok(())
     }
-}
 
-impl AssetProcessor<'_> {
     /// Optimize a file without changing any of its contents significantly (e.g. by changing the extension)
     fn process_file_minimal(&self, input_path: &Path, output_path: &Path) -> anyhow::Result<()> {
         self.process_file_to_with_options(

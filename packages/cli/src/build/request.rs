@@ -1645,9 +1645,7 @@ impl BuildRequest {
 
         // Discover assets referenced from CSS files and register them in the manifest
         let mut manifest = asset_manifest;
-        if let Err(e) = discover_css_references(&mut manifest) {
-            tracing::warn!("Failed to discover CSS-referenced assets: {e}");
-        }
+        discover_css_references(&mut manifest);
 
         Ok((manifest, android_artifacts, swift_packages))
     }

@@ -18,7 +18,7 @@ use super::AssetProcessor;
 
 pub(crate) use references::discover_css_references;
 pub(crate) use references::hash_css;
-pub(crate) use scss::{hash_scss, process_scss};
+pub(crate) use scss::hash_scss;
 
 use references::AssetUrlRewriter;
 
@@ -68,6 +68,7 @@ impl AssetProcessor<'_> {
         let mut stylesheet = parse_stylesheet(&css)?;
 
         let mut rewriter = self.css_rewriter(css_dir);
+        // Error type is Infallible — cannot fail
         stylesheet.visit(&mut rewriter).unwrap();
 
         let printer = if css_options.minified() {
@@ -96,81 +97,92 @@ impl AssetProcessor<'_> {
             )
         })
     }
-}
 
-pub(crate) fn process_css_module(
-    css_options: &CssModuleAssetOptions,
-    source: &Path,
-    output_path: &Path,
-) -> anyhow::Result<()> {
-    let css = std::fs::read_to_string(source)?;
+    /// Process a CSS module: apply module scoping, rewrite asset references, optionally minify.
+    pub(crate) fn process_css_module(
+        &self,
+        css_options: &CssModuleAssetOptions,
+        source: &Path,
+        output_path: &Path,
+    ) -> anyhow::Result<()> {
+        let css = std::fs::read_to_string(source)?;
+        let css_dir = source.parent().unwrap_or(Path::new("."));
 
-    let mut src_name = source
-        .file_name()
-        .and_then(|x| x.to_str())
-        .ok_or_else(|| {
+        let hash = create_module_hash(source);
+        let css = transform_css(css.as_str(), hash.as_str()).map_err(|error| {
             anyhow!(
-                "Failed to read name of css module file `{}`.",
-                source.display()
-            )
-        })?
-        .strip_suffix(".css")
-        .ok_or_else(|| {
-            anyhow!(
-                "Css module file `{}` should end with a `.css` suffix.",
+                "Invalid css for file `{}`\nError:\n{}",
                 source.display(),
+                error
             )
-        })?
-        .to_string();
+        })?;
 
-    src_name.push('-');
+        let mut stylesheet = parse_stylesheet(&css)?;
 
-    let hash = create_module_hash(source);
-    let css = transform_css(css.as_str(), hash.as_str()).map_err(|error| {
-        anyhow!(
-            "Invalid css for file `{}`\nError:\n{}",
-            source.display(),
-            error
-        )
-    })?;
+        let mut rewriter = self.css_rewriter(css_dir);
+        // Error type is Infallible — cannot fail
+        stylesheet.visit(&mut rewriter).unwrap();
 
-    let css = if css_options.minified() {
-        match minify_css(&css) {
-            Ok(minified) => minified,
-            Err(err) => {
-                tracing::error!(
-                    "Failed to minify css module; Falling back to unminified css. Error: {}",
-                    err
-                );
-                css
+        let printer = if css_options.minified() {
+            let targets = browser_targets().unwrap_or_default();
+            if let Err(err) = stylesheet.minify(MinifyOptions {
+                targets,
+                ..Default::default()
+            }) {
+                tracing::error!("Failed to minify css module; falling back to unminified: {err}");
             }
+            PrinterOptions {
+                targets,
+                minify: true,
+                ..Default::default()
+            }
+        } else {
+            PrinterOptions::default()
+        };
+
+        let result = stylesheet.to_css(printer)?;
+
+        std::fs::write(output_path, result.code).with_context(|| {
+            format!(
+                "Failed to write css module to output location: {}",
+                output_path.display()
+            )
+        })
+    }
+
+    /// Process an SCSS/Sass file: compile to CSS, rewrite asset references, minify, then write.
+    pub(crate) fn process_scss(
+        &self,
+        scss_options: &CssAssetOptions,
+        source: &Path,
+        output_path: &Path,
+    ) -> anyhow::Result<()> {
+        let css = scss::compile_scss(scss_options, source)?;
+        let css_dir = source.parent().unwrap_or(Path::new("."));
+        let mut stylesheet = parse_stylesheet(&css)?;
+
+        let mut rewriter = self.css_rewriter(css_dir);
+        // Error type is Infallible — cannot fail
+        stylesheet.visit(&mut rewriter).unwrap();
+
+        let targets = browser_targets().unwrap_or_default();
+        if let Err(err) = stylesheet.minify(MinifyOptions {
+            targets,
+            ..Default::default()
+        }) {
+            tracing::error!("Failed to minify scss output; falling back to unminified: {err}");
         }
-    } else {
-        css
-    };
+        let result = stylesheet.to_css(PrinterOptions {
+            targets,
+            minify: true,
+            ..Default::default()
+        })?;
 
-    std::fs::write(output_path, css).with_context(|| {
-        format!(
-            "Failed to write css module to output location: {}",
-            output_path.display()
-        )
-    })?;
-
-    Ok(())
-}
-
-pub(crate) fn minify_css(css: &str) -> anyhow::Result<String> {
-    let mut stylesheet = parse_stylesheet(css)?;
-    let targets = browser_targets()?;
-
-    stylesheet.minify(MinifyOptions {
-        targets,
-        ..Default::default()
-    })?;
-    let res = stylesheet.to_css(PrinterOptions {
-        targets,
-        minify: true,
-        ..Default::default()
-    })?;
-    Ok(res.code)
+        std::fs::write(output_path, result.code).with_context(|| {
+            format!(
+                "Failed to write css to output location: {}",
+                output_path.display()
+            )
+        })
+    }
 }

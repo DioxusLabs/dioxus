@@ -3,8 +3,6 @@ use manganis::{AssetOptions, CssModuleAssetOptions, FolderAssetOptions};
 use manganis_core::{AssetVariant, CssAssetOptions, ImageAssetOptions, JsAssetOptions};
 use std::path::Path;
 
-use crate::opt::css::{process_css_module, process_scss};
-
 use super::{image::process_image, js::process_js, json::process_json, AssetProcessor};
 
 impl AssetProcessor<'_> {
@@ -55,10 +53,10 @@ impl AssetProcessor<'_> {
                 self.process_css(options, source, &temp_path)?;
             }
             ResolvedAssetType::CssModule(options) => {
-                process_css_module(options, source, &temp_path)?;
+                self.process_css_module(options, source, &temp_path)?;
             }
             ResolvedAssetType::Scss(options) => {
-                process_scss(options, source, &temp_path)?;
+                self.process_scss(options, source, &temp_path)?;
             }
             ResolvedAssetType::Js(options) => {
                 process_js(

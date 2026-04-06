@@ -7,8 +7,6 @@ use codemap::SpanLoc;
 use grass::OutputStyle;
 use manganis_core::CssAssetOptions;
 
-use super::minify_css;
-
 /// Compile scss with grass.
 pub(crate) fn compile_scss(
     scss_options: &CssAssetOptions,
@@ -27,25 +25,6 @@ pub(crate) fn compile_scss(
     let css = grass::from_path(source, &options)
         .with_context(|| format!("Failed to compile scss file: {}", source.display()))?;
     Ok(css)
-}
-
-/// Process an scss/sass file into css.
-pub(crate) fn process_scss(
-    scss_options: &CssAssetOptions,
-    source: &Path,
-    output_path: &Path,
-) -> anyhow::Result<()> {
-    let css = compile_scss(scss_options, source)?;
-    let minified = minify_css(&css)?;
-
-    std::fs::write(output_path, minified).with_context(|| {
-        format!(
-            "Failed to write css to output location: {}",
-            output_path.display()
-        )
-    })?;
-
-    Ok(())
 }
 
 /// Hash the inputs to the scss file.

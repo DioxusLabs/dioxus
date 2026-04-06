@@ -1,6 +1,6 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
-use crate::opt::AssetProcessor;
+use crate::opt::{discover_css_references, AssetProcessor};
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
 use tracing::debug;
@@ -16,7 +16,8 @@ pub struct BuildAssets {
 
 impl BuildAssets {
     pub async fn run(self) -> Result<StructuredOutput> {
-        let manifest = extract_assets_from_file(&self.executable).await?;
+        let mut manifest = extract_assets_from_file(&self.executable).await?;
+        discover_css_references(&mut manifest);
         let processor = AssetProcessor::new(&manifest, None, "/assets");
 
         create_dir_all(&self.destination)?;

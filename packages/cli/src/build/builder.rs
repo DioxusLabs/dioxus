@@ -861,21 +861,15 @@ impl AppBuilder {
             let mut newly_discovered_assets = Vec::new();
 
             if is_stylesheet_asset(&changed_file) {
-                if let Err(e) = crate::opt::discover_css_references(&mut assets) {
-                    tracing::warn!(
-                        "Failed to refresh CSS-referenced assets while hotreloading {}: {e}",
-                        changed_file.display()
-                    );
-                } else {
-                    newly_discovered_assets = assets
-                        .unique_assets()
-                        .filter(|asset| !artifacts.assets.contains(asset))
-                        .copied()
-                        .collect();
+                crate::opt::discover_css_references(&mut assets);
+                newly_discovered_assets = assets
+                    .unique_assets()
+                    .filter(|asset| !artifacts.assets.contains(asset))
+                    .copied()
+                    .collect();
 
-                    for asset in &newly_discovered_assets {
-                        artifacts.assets.insert_asset(*asset);
-                    }
+                for asset in &newly_discovered_assets {
+                    artifacts.assets.insert_asset(*asset);
                 }
             }
 
@@ -892,9 +886,13 @@ impl AppBuilder {
         let processor = self.build.asset_processor(&assets);
 
         for asset in &newly_discovered_assets {
-            let from = dunce::canonicalize(PathBuf::from(asset.absolute_source_path()))
-                .inspect_err(|e| tracing::debug!("Failed to canonicalize discovered asset: {e}"))
-                .ok()?;
+            let from = match dunce::canonicalize(PathBuf::from(asset.absolute_source_path())) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::debug!("Failed to canonicalize discovered asset: {e}");
+                    continue;
+                }
+            };
             let output_path = asset_dir.join(asset.bundled_path());
 
             tracing::debug!("Hotreloading newly discovered asset {from:?} in target {asset_dir:?}");
