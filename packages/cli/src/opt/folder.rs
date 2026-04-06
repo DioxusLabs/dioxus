@@ -2,13 +2,14 @@ use std::path::Path;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::opt::file::process_file_to_with_options;
+use crate::opt::{file::process_file_to_with_options, AssetManifest};
 
 /// Process a folder, optimizing and copying all assets into the output folder
 pub fn process_folder(
     source: &Path,
     output_folder: &Path,
     esbuild_path: Option<&Path>,
+    manifest: &AssetManifest,
 ) -> anyhow::Result<()> {
     // Create the folder
     std::fs::create_dir_all(output_folder)?;
@@ -25,9 +26,9 @@ pub fn process_folder(
         let metadata = file.metadata()?;
         let output_path = output_folder.join(file.strip_prefix(source)?);
         if metadata.is_dir() {
-            process_folder(&file, &output_path, esbuild_path)
+            process_folder(&file, &output_path, esbuild_path, manifest)
         } else {
-            process_file_minimal(&file, &output_path, esbuild_path)
+            process_file_minimal(&file, &output_path, esbuild_path, manifest)
         }
     })?;
 
@@ -39,6 +40,7 @@ fn process_file_minimal(
     input_path: &Path,
     output_path: &Path,
     esbuild_path: Option<&Path>,
+    manifest: &AssetManifest,
 ) -> anyhow::Result<()> {
     process_file_to_with_options(
         &manganis_core::AssetOptions::builder().into_asset_options(),
@@ -46,7 +48,7 @@ fn process_file_minimal(
         output_path,
         true,
         esbuild_path,
-        None,
+        manifest,
     )?;
     Ok(())
 }

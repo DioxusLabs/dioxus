@@ -60,16 +60,14 @@ pub(crate) fn process_css(
     css_options: &CssAssetOptions,
     source: &Path,
     output_path: &Path,
-    manifest: Option<&AssetManifest>,
+    manifest: &AssetManifest,
 ) -> anyhow::Result<()> {
     let css = std::fs::read_to_string(source)?;
     let css_dir = source.parent().unwrap_or(Path::new("."));
     let mut stylesheet = parse_stylesheet(&css)?;
 
-    if let Some(manifest) = manifest {
-        let mut rewriter = AssetUrlRewriter { css_dir, manifest };
-        stylesheet.visit(&mut rewriter).unwrap();
-    }
+    let mut rewriter = AssetUrlRewriter { css_dir, manifest };
+    stylesheet.visit(&mut rewriter).unwrap();
 
     let printer = if css_options.minified() {
         let targets = browser_targets().unwrap_or_default();

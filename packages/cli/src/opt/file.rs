@@ -16,7 +16,7 @@ pub(crate) fn process_file_to(
     source: &Path,
     output_path: &Path,
     esbuild_path: Option<&Path>,
-    manifest: Option<&super::AssetManifest>,
+    manifest: &super::AssetManifest,
 ) -> anyhow::Result<()> {
     process_file_to_with_options(options, source, output_path, false, esbuild_path, manifest)
 }
@@ -28,7 +28,7 @@ pub(crate) fn process_file_to_with_options(
     output_path: &Path,
     in_folder: bool,
     esbuild_path: Option<&Path>,
-    manifest: Option<&super::AssetManifest>,
+    manifest: &super::AssetManifest,
 ) -> anyhow::Result<()> {
     // If the file already exists and this is a hashed asset, then we must have a file
     // with the same hash already. The hash has the file contents and options, so if we
@@ -74,7 +74,7 @@ pub(crate) fn process_file_to_with_options(
             process_json(source, &temp_path)?;
         }
         ResolvedAssetType::Folder(_) => {
-            process_folder(source, &temp_path, esbuild_path)?;
+            process_folder(source, &temp_path, esbuild_path, manifest)?;
         }
         ResolvedAssetType::File => {
             let source_file = std::fs::File::open(source)?;

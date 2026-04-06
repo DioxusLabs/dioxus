@@ -2315,7 +2315,7 @@ impl BuildRequest {
                         from,
                         to,
                         esbuild_path.as_deref(),
-                        Some(&manifest),
+                        &manifest,
                     );
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");

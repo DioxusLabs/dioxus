@@ -363,7 +363,7 @@ mod tests {
             .unwrap();
 
         let opts = CssAssetOptions::default();
-        process_css(&opts, &css_path, &output_path, Some(&manifest)).unwrap();
+        process_css(&opts, &css_path, &output_path, &manifest).unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
         assert!(!result.contains("logo.png"), "original URL should be gone");
@@ -386,7 +386,7 @@ mod tests {
             &CssAssetOptions::default(),
             &css_path,
             &output_path,
-            Some(&manifest),
+            &manifest,
         )
         .unwrap();
 

@@ -764,7 +764,13 @@ impl AppBuilder {
 
             tracing::debug!("Copying asset from patch: {}", from.display());
             let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            if let Err(e) = process_file_to(bundled.options(), &from, &to, esbuild.as_deref(), None)
+            if let Err(e) = process_file_to(
+                bundled.options(),
+                &from,
+                &to,
+                esbuild.as_deref(),
+                &original_artifacts.assets,
+            )
             {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
@@ -880,7 +886,7 @@ impl AppBuilder {
                 &changed_file,
                 &output_path,
                 esbuild.as_deref(),
-                Some(&artifacts.assets),
+                &artifacts.assets,
             );
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
