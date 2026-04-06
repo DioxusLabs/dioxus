@@ -116,7 +116,7 @@ members = [
 
 
 [workspace.package]
-version = "0.7.4"
+version = "0.7.5"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
@@ -436,7 +436,7 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.85.0"
 publish = false
-version = "0.7.0"
+version = "0.7.5"
 
 [dependencies]
 reqwest = { workspace = true, features = ["json"] }
