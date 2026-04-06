@@ -14,7 +14,7 @@ use lightningcss::{
 };
 use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModuleAssetOptions};
 
-use super::AssetManifest;
+use super::AssetProcessor;
 
 pub(crate) use references::discover_css_references;
 pub(crate) use references::hash_css;
@@ -54,46 +54,55 @@ fn browser_targets() -> anyhow::Result<Targets> {
 // CSS processing
 // ---------------------------------------------------------------------------
 
-/// Process a CSS file: optionally rewrite asset references, optionally minify,
-/// then write the result. Single parse, single serialize.
-pub(crate) fn process_css(
-    css_options: &CssAssetOptions,
-    source: &Path,
-    output_path: &Path,
-    manifest: &AssetManifest,
-) -> anyhow::Result<()> {
-    let css = std::fs::read_to_string(source)?;
-    let css_dir = source.parent().unwrap_or(Path::new("."));
-    let mut stylesheet = parse_stylesheet(&css)?;
-
-    let mut rewriter = AssetUrlRewriter { css_dir, manifest };
-    stylesheet.visit(&mut rewriter).unwrap();
-
-    let printer = if css_options.minified() {
-        let targets = browser_targets().unwrap_or_default();
-        if let Err(err) = stylesheet.minify(MinifyOptions {
-            targets,
-            ..Default::default()
-        }) {
-            tracing::error!("Failed to minify css; falling back to unminified: {err}");
+impl AssetProcessor<'_> {
+    fn css_rewriter<'a>(&'a self, css_dir: &'a Path) -> AssetUrlRewriter<'a> {
+        AssetUrlRewriter {
+            css_dir,
+            manifest: self.manifest,
         }
-        PrinterOptions {
-            targets,
-            minify: true,
-            ..Default::default()
-        }
-    } else {
-        PrinterOptions::default()
-    };
+    }
 
-    let result = stylesheet.to_css(printer)?;
+    /// Process a CSS file: rewrite asset references, optionally minify, then write the result.
+    /// Single parse, single serialize.
+    pub(crate) fn process_css(
+        &self,
+        css_options: &CssAssetOptions,
+        source: &Path,
+        output_path: &Path,
+    ) -> anyhow::Result<()> {
+        let css = std::fs::read_to_string(source)?;
+        let css_dir = source.parent().unwrap_or(Path::new("."));
+        let mut stylesheet = parse_stylesheet(&css)?;
 
-    std::fs::write(output_path, result.code).with_context(|| {
-        format!(
-            "Failed to write css to output location: {}",
-            output_path.display()
-        )
-    })
+        let mut rewriter = self.css_rewriter(css_dir);
+        stylesheet.visit(&mut rewriter).unwrap();
+
+        let printer = if css_options.minified() {
+            let targets = browser_targets().unwrap_or_default();
+            if let Err(err) = stylesheet.minify(MinifyOptions {
+                targets,
+                ..Default::default()
+            }) {
+                tracing::error!("Failed to minify css; falling back to unminified: {err}");
+            }
+            PrinterOptions {
+                targets,
+                minify: true,
+                ..Default::default()
+            }
+        } else {
+            PrinterOptions::default()
+        };
+
+        let result = stylesheet.to_css(printer)?;
+
+        std::fs::write(output_path, result.code).with_context(|| {
+            format!(
+                "Failed to write css to output location: {}",
+                output_path.display()
+            )
+        })
+    }
 }
 
 pub(crate) fn process_css_module(

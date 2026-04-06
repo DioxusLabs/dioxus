@@ -6,105 +6,104 @@ use std::path::Path;
 use crate::opt::css::{process_css_module, process_scss};
 
 use super::{
-    css::process_css, folder::process_folder, image::process_image, js::process_js,
-    json::process_json,
+    image::process_image, js::process_js, json::process_json, AssetProcessor,
 };
 
-/// Process a specific file asset with the given options reading from the source and writing to the output path
-pub(crate) fn process_file_to(
-    options: &AssetOptions,
-    source: &Path,
-    output_path: &Path,
-    esbuild_path: Option<&Path>,
-    manifest: &super::AssetManifest,
-) -> anyhow::Result<()> {
-    process_file_to_with_options(options, source, output_path, false, esbuild_path, manifest)
-}
-
-/// Process a specific file asset with additional options
-pub(crate) fn process_file_to_with_options(
-    options: &AssetOptions,
-    source: &Path,
-    output_path: &Path,
-    in_folder: bool,
-    esbuild_path: Option<&Path>,
-    manifest: &super::AssetManifest,
-) -> anyhow::Result<()> {
-    // If the file already exists and this is a hashed asset, then we must have a file
-    // with the same hash already. The hash has the file contents and options, so if we
-    // find a file with the same hash, we probably already created this file in the past
-    if output_path.exists() && options.hash_suffix() {
-        return Ok(());
-    }
-    if let Some(parent) = output_path.parent() {
-        if !parent.exists() {
-            std::fs::create_dir_all(parent).context("Failed to create directory")?;
-        }
+impl AssetProcessor<'_> {
+    /// Process a specific file asset with the given options reading from the source and writing to the output path
+    pub(crate) fn process_file_to(
+        &self,
+        options: &AssetOptions,
+        source: &Path,
+        output_path: &Path,
+    ) -> anyhow::Result<()> {
+        self.process_file_to_with_options(options, source, output_path, false)
     }
 
-    // Processing can be slow. Write to a temporary file first and then rename it to the final output path. If everything
-    // goes well. Without this, the user could quit in the middle of processing and the file will look complete to the
-    // caching system even though it is empty.
-    let temp_path = output_path.with_file_name(format!(
-        "partial.{}",
-        output_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-    ));
-    let resolved_options = resolve_asset_options(source, options.variant());
+    /// Process a specific file asset with additional options
+    pub(crate) fn process_file_to_with_options(
+        &self,
+        options: &AssetOptions,
+        source: &Path,
+        output_path: &Path,
+        in_folder: bool,
+    ) -> anyhow::Result<()> {
+        // If the file already exists and this is a hashed asset, then we must have a file
+        // with the same hash already. The hash has the file contents and options, so if we
+        // find a file with the same hash, we probably already created this file in the past
+        if output_path.exists() && options.hash_suffix() {
+            return Ok(());
+        }
+        if let Some(parent) = output_path.parent() {
+            if !parent.exists() {
+                std::fs::create_dir_all(parent).context("Failed to create directory")?;
+            }
+        }
 
-    match &resolved_options {
-        ResolvedAssetType::Css(options) => {
-            process_css(options, source, &temp_path, manifest)?;
+        // Processing can be slow. Write to a temporary file first and then rename it to the final output path. If everything
+        // goes well. Without this, the user could quit in the middle of processing and the file will look complete to the
+        // caching system even though it is empty.
+        let temp_path = output_path.with_file_name(format!(
+            "partial.{}",
+            output_path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+        ));
+        let resolved_options = resolve_asset_options(source, options.variant());
+
+        match &resolved_options {
+            ResolvedAssetType::Css(options) => {
+                self.process_css(options, source, &temp_path)?;
+            }
+            ResolvedAssetType::CssModule(options) => {
+                process_css_module(options, source, &temp_path)?;
+            }
+            ResolvedAssetType::Scss(options) => {
+                process_scss(options, source, &temp_path)?;
+            }
+            ResolvedAssetType::Js(options) => {
+                process_js(options, source, &temp_path, !in_folder, self.esbuild_path)?;
+            }
+            ResolvedAssetType::Image(options) => {
+                process_image(options, source, &temp_path)?;
+            }
+            ResolvedAssetType::Json => {
+                process_json(source, &temp_path)?;
+            }
+            ResolvedAssetType::Folder(_) => {
+                self.process_folder(source, &temp_path)?;
+            }
+            ResolvedAssetType::File => {
+                let source_file = std::fs::File::open(source)?;
+                let mut reader = std::io::BufReader::new(source_file);
+                let output_file = std::fs::File::create(&temp_path)?;
+                let mut writer = std::io::BufWriter::new(output_file);
+                std::io::copy(&mut reader, &mut writer).with_context(|| {
+                    format!(
+                        "Failed to write file to output location: {}",
+                        temp_path.display()
+                    )
+                })?;
+            }
         }
-        ResolvedAssetType::CssModule(options) => {
-            process_css_module(options, source, &temp_path)?;
+
+        // Remove the existing output file if it exists
+        if output_path.exists() {
+            if output_path.is_file() {
+                std::fs::remove_file(output_path).context("Failed to remove previous output file")?;
+            } else if output_path.is_dir() {
+                std::fs::remove_dir_all(output_path)
+                    .context("Failed to remove previous output file")?;
+            }
         }
-        ResolvedAssetType::Scss(options) => {
-            process_scss(options, source, &temp_path)?;
-        }
-        ResolvedAssetType::Js(options) => {
-            process_js(options, source, &temp_path, !in_folder, esbuild_path)?;
-        }
-        ResolvedAssetType::Image(options) => {
-            process_image(options, source, &temp_path)?;
-        }
-        ResolvedAssetType::Json => {
-            process_json(source, &temp_path)?;
-        }
-        ResolvedAssetType::Folder(_) => {
-            process_folder(source, &temp_path, esbuild_path, manifest)?;
-        }
-        ResolvedAssetType::File => {
-            let source_file = std::fs::File::open(source)?;
-            let mut reader = std::io::BufReader::new(source_file);
-            let output_file = std::fs::File::create(&temp_path)?;
-            let mut writer = std::io::BufWriter::new(output_file);
-            std::io::copy(&mut reader, &mut writer).with_context(|| {
-                format!(
-                    "Failed to write file to output location: {}",
-                    temp_path.display()
-                )
-            })?;
-        }
+
+        // If everything was successful, rename the temp file to the final output path
+        std::fs::rename(temp_path, output_path)
+            .with_context(|| format!("Failed to rename output file to: {}", output_path.display()))?;
+
+        Ok(())
     }
-
-    // Remove the existing output file if it exists
-    if output_path.exists() {
-        if output_path.is_file() {
-            std::fs::remove_file(output_path).context("Failed to remove previous output file")?;
-        } else if output_path.is_dir() {
-            std::fs::remove_dir_all(output_path)
-                .context("Failed to remove previous output file")?;
-        }
-    }
-
-    // If everything was successful, rename the temp file to the final output path
-    std::fs::rename(temp_path, output_path)
-        .with_context(|| format!("Failed to rename output file to: {}", output_path.display()))?;
-
-    Ok(())
 }
 
 pub(crate) enum ResolvedAssetType {

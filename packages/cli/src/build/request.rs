@@ -320,7 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{discover_css_references, process_file_to, AssetManifest};
+use crate::opt::{discover_css_references, AssetManifest, AssetProcessor};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -1649,7 +1649,7 @@ impl BuildRequest {
             tracing::warn!("Failed to discover CSS-referenced assets: {e}");
         }
 
-        Ok((asset_manifest, android_artifacts, swift_packages))
+        Ok((manifest, android_artifacts, swift_packages))
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -2301,6 +2301,7 @@ impl BuildRequest {
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
+            let processor = AssetProcessor::new(&manifest, esbuild_path.as_deref());
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
@@ -2310,13 +2311,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(
-                        options,
-                        from,
-                        to,
-                        esbuild_path.as_deref(),
-                        &manifest,
-                    );
+                    let res = processor.process_file_to(options, from, to);
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }

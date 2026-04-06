@@ -263,7 +263,7 @@ fn infer_asset_options(source: &Path) -> manganis::AssetOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::opt::css::process_css;
+    use crate::opt::AssetProcessor;
     use manganis_core::CssAssetOptions;
     use std::io::Write;
     use tempfile::TempDir;
@@ -363,7 +363,8 @@ mod tests {
             .unwrap();
 
         let opts = CssAssetOptions::default();
-        process_css(&opts, &css_path, &output_path, &manifest).unwrap();
+        let processor = AssetProcessor::new(&manifest, None);
+        processor.process_css(&opts, &css_path, &output_path).unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
         assert!(!result.contains("logo.png"), "original URL should be gone");
@@ -382,13 +383,10 @@ mod tests {
         let output_path = dir.path().join("out.css");
 
         let manifest = AssetManifest::default();
-        process_css(
-            &CssAssetOptions::default(),
-            &css_path,
-            &output_path,
-            &manifest,
-        )
-        .unwrap();
+        let processor = AssetProcessor::new(&manifest, None);
+        processor
+            .process_css(&CssAssetOptions::default(), &css_path, &output_path)
+            .unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
         assert!(result.contains("missing.png"));

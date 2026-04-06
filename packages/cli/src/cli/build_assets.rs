@@ -1,6 +1,6 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
-use crate::opt::process_file_to;
+use crate::opt::AssetProcessor;
 use crate::{extract_assets_from_file, Result, StructuredOutput};
 use clap::Parser;
 use tracing::debug;
@@ -17,6 +17,7 @@ pub struct BuildAssets {
 impl BuildAssets {
     pub async fn run(self) -> Result<StructuredOutput> {
         let manifest = extract_assets_from_file(&self.executable).await?;
+        let processor = AssetProcessor::new(&manifest, None);
 
         create_dir_all(&self.destination)?;
         for asset in manifest.unique_assets() {
@@ -28,7 +29,7 @@ impl BuildAssets {
                 destination_path.display(),
                 asset
             );
-            process_file_to(asset.options(), &source_path, &destination_path, None, &manifest)?;
+            processor.process_file_to(asset.options(), &source_path, &destination_path)?;
         }
 
         Ok(StructuredOutput::Success)

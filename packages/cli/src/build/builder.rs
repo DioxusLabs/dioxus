@@ -1,4 +1,4 @@
-use crate::opt::process_file_to;
+use crate::opt::AssetProcessor;
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
@@ -764,14 +764,8 @@ impl AppBuilder {
 
             tracing::debug!("Copying asset from patch: {}", from.display());
             let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            if let Err(e) = process_file_to(
-                bundled.options(),
-                &from,
-                &to,
-                esbuild.as_deref(),
-                &original_artifacts.assets,
-            )
-            {
+            let processor = AssetProcessor::new(&original_artifacts.assets, esbuild.as_deref());
+            if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
             }
@@ -881,13 +875,8 @@ impl AppBuilder {
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
             let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            let res = process_file_to(
-                &options,
-                &changed_file,
-                &output_path,
-                esbuild.as_deref(),
-                &artifacts.assets,
-            );
+            let processor = AssetProcessor::new(&artifacts.assets, esbuild.as_deref());
+            let res = processor.process_file_to(&options, &changed_file, &output_path);
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
