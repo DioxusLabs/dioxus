@@ -27,17 +27,10 @@ impl<'a> AssetProcessor<'a> {
         esbuild_path: Option<PathBuf>,
         public_asset_root: impl Into<String>,
     ) -> Self {
-        let mut public_asset_root = public_asset_root.into();
-        if !public_asset_root.starts_with('/') {
-            public_asset_root.insert(0, '/');
-        }
-        while public_asset_root.ends_with('/') && public_asset_root.len() > 1 {
-            public_asset_root.pop();
-        }
         Self {
             manifest,
             esbuild_path,
-            public_asset_root,
+            public_asset_root: public_asset_root.into(),
         }
     }
 }
@@ -81,10 +74,7 @@ impl AssetManifest {
     /// Insert an existing bundled asset to the manifest
     pub fn insert_asset(&mut self, asset: BundledAsset) {
         let asset_path = Self::normalize_asset_path(Path::new(asset.absolute_source_path()));
-        self.assets
-            .entry(asset_path)
-            .or_default()
-            .insert(asset);
+        self.assets.entry(asset_path).or_default().insert(asset);
     }
 
     /// Get any assets that are tied to a specific source file
@@ -102,7 +92,9 @@ impl AssetManifest {
     /// Check if the manifest contains a specific asset
     pub fn contains(&self, asset: &BundledAsset) -> bool {
         self.assets
-            .get(&Self::normalize_asset_path(Path::new(asset.absolute_source_path())))
+            .get(&Self::normalize_asset_path(Path::new(
+                asset.absolute_source_path(),
+            )))
             .is_some_and(|assets| assets.contains(asset))
     }
 

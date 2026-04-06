@@ -744,47 +744,34 @@ impl AppBuilder {
         let new = self.build.patch_exe(res.time_start);
         let asset_dir = self.build.asset_dir();
 
-        // Hotpatch asset!() calls - first collect new assets, then process them in a batch
-        let mut new_assets = Vec::new();
-        {
+        // Hotpatch asset!() calls
+        let processor = self.build.asset_processor(&res.assets);
+        for bundled in res.assets.unique_assets() {
             let original_artifacts = self
                 .artifacts
                 .as_mut()
                 .context("No artifacts to hotpatch")?;
 
-            for bundled in res.assets.unique_assets() {
-                if original_artifacts.assets.contains(bundled) {
-                    continue;
-                }
-
-                // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
-                original_artifacts.assets.insert_asset(*bundled);
-                new_assets.push(*bundled);
+            if original_artifacts.assets.contains(bundled) {
+                continue;
             }
-        }
 
-        if !new_assets.is_empty() {
-            let original_artifacts = self
-                .artifacts
-                .as_ref()
-                .context("No artifacts to hotpatch")?;
-            let processor = self.build.asset_processor(&original_artifacts.assets);
+            // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
+            original_artifacts.assets.insert_asset(*bundled);
 
-            for bundled in &new_assets {
-                let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
-                let to = asset_dir.join(bundled.bundled_path());
+            let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
+            let to = asset_dir.join(bundled.bundled_path());
 
-                tracing::debug!("Copying asset from patch: {}", from.display());
-                if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
-                    tracing::error!("Failed to copy asset: {e}");
-                    continue;
-                }
+            tracing::debug!("Copying asset from patch: {}", from.display());
+            if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
+                tracing::error!("Failed to copy asset: {e}");
+                continue;
+            }
 
-                // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-                if self.build.bundle == BundleFormat::Android {
-                    let bundled_name = PathBuf::from(bundled.bundled_path());
-                    _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
-                }
+            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+            if self.build.bundle == BundleFormat::Android {
+                let bundled_name = PathBuf::from(bundled.bundled_path());
+                _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
             }
         }
 
@@ -910,9 +897,7 @@ impl AppBuilder {
                 .ok()?;
             let output_path = asset_dir.join(asset.bundled_path());
 
-            tracing::debug!(
-                "Hotreloading newly discovered asset {from:?} in target {asset_dir:?}"
-            );
+            tracing::debug!("Hotreloading newly discovered asset {from:?} in target {asset_dir:?}");
 
             if let Err(e) = processor.process_file_to(asset.options(), &from, &output_path) {
                 tracing::debug!("Failed to process newly discovered CSS asset {e}");

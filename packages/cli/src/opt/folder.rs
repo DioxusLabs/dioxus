@@ -6,11 +6,7 @@ use crate::opt::AssetProcessor;
 
 impl AssetProcessor<'_> {
     /// Process a folder, optimizing and copying all assets into the output folder
-    pub(crate) fn process_folder(
-        &self,
-        source: &Path,
-        output_folder: &Path,
-    ) -> anyhow::Result<()> {
+    pub(crate) fn process_folder(&self, source: &Path, output_folder: &Path) -> anyhow::Result<()> {
         // Create the folder
         std::fs::create_dir_all(output_folder)?;
 

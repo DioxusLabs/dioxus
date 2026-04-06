@@ -2276,16 +2276,6 @@ impl BuildRequest {
         for bundled in assets.unique_assets() {
             let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
-
-            // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
-            let from_ = from
-                .strip_prefix(self.workspace_dir())
-                .unwrap_or(from.as_path());
-            let to_ = from
-                .strip_prefix(self.workspace_dir())
-                .unwrap_or(to.as_path());
-
-            tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }
 
@@ -2296,14 +2286,13 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
-        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
         let manifest = Arc::new(assets.clone());
-        let public_asset_root = self.public_asset_root();
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
+        let base = self.base_path_or_default().to_string();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
-            let processor =
-                AssetProcessor::new(&manifest, esbuild_path, public_asset_root);
+            let processor = AssetProcessor::new(&manifest, esbuild_path, format!("/{base}/assets"));
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
@@ -6352,21 +6341,11 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         self.trimmed_base_path().unwrap_or(".")
     }
 
-    /// Get the public asset root for URLs emitted into bundled output.
-    pub(crate) fn public_asset_root(&self) -> String {
-        match self.trimmed_base_path() {
-            Some(base_path) => format!("/{base_path}/assets"),
-            None => "/assets".to_string(),
-        }
-    }
-
     /// Create an asset processor for the given manifest, resolving esbuild and the public asset root.
-    pub(crate) fn asset_processor<'a>(
-        &self,
-        manifest: &'a AssetManifest,
-    ) -> AssetProcessor<'a> {
+    pub(crate) fn asset_processor<'a>(&self, manifest: &'a AssetManifest) -> AssetProcessor<'a> {
         let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
-        AssetProcessor::new(manifest, esbuild_path, self.public_asset_root())
+        let base = self.base_path_or_default();
+        AssetProcessor::new(manifest, esbuild_path, format!("/{base}/assets"))
     }
 
     /// Get the path to the package manifest directory

@@ -17,20 +17,8 @@ use crate::opt::{is_stylesheet_asset, AssetManifest};
 
 use super::parse_stylesheet;
 
-/// Returns true if the URL is external and should not be rewritten.
-fn is_external_url(url: &str) -> bool {
-    url.starts_with("http://")
-        || url.starts_with("https://")
-        || url.starts_with("data:")
-        || url.starts_with('#')
-        || url.starts_with("blob:")
-}
-
 /// Resolve a URL to an absolute path on disk, if the file exists.
 fn resolve_css_url(url: &str, css_dir: &Path) -> Option<PathBuf> {
-    if is_external_url(url) {
-        return None;
-    }
     let resolved = css_dir.join(url);
     dunce::canonicalize(&resolved).ok().filter(|p| p.exists())
 }
@@ -83,13 +71,14 @@ pub(super) struct AssetUrlRewriter<'a> {
 
 impl AssetUrlRewriter<'_> {
     fn rewrite(&self, url: &str) -> Option<String> {
-        if is_external_url(url) {
-            return None;
-        }
         let resolved = self.css_dir.join(url);
         let canonical = dunce::canonicalize(&resolved).ok()?;
         let asset = self.manifest.get_first_asset_for_source(&canonical)?;
-        Some(format!("{}/{}", self.public_asset_root, asset.bundled_path()))
+        Some(format!(
+            "{}/{}",
+            self.public_asset_root,
+            asset.bundled_path()
+        ))
     }
 }
 
@@ -346,7 +335,9 @@ mod tests {
 
         let opts = CssAssetOptions::default();
         let processor = AssetProcessor::new(&manifest, None, "/assets");
-        processor.process_css(&opts, &css_path, &output_path).unwrap();
+        processor
+            .process_css(&opts, &css_path, &output_path)
+            .unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
         assert!(!result.contains("logo.png"), "original URL should be gone");

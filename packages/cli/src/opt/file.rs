@@ -5,9 +5,7 @@ use std::path::Path;
 
 use crate::opt::css::{process_css_module, process_scss};
 
-use super::{
-    image::process_image, js::process_js, json::process_json, AssetProcessor,
-};
+use super::{image::process_image, js::process_js, json::process_json, AssetProcessor};
 
 impl AssetProcessor<'_> {
     /// Process a specific file asset with the given options reading from the source and writing to the output path
@@ -63,7 +61,13 @@ impl AssetProcessor<'_> {
                 process_scss(options, source, &temp_path)?;
             }
             ResolvedAssetType::Js(options) => {
-                process_js(options, source, &temp_path, !in_folder, self.esbuild_path.as_deref())?;
+                process_js(
+                    options,
+                    source,
+                    &temp_path,
+                    !in_folder,
+                    self.esbuild_path.as_deref(),
+                )?;
             }
             ResolvedAssetType::Image(options) => {
                 process_image(options, source, &temp_path)?;
@@ -91,7 +95,8 @@ impl AssetProcessor<'_> {
         // Remove the existing output file if it exists
         if output_path.exists() {
             if output_path.is_file() {
-                std::fs::remove_file(output_path).context("Failed to remove previous output file")?;
+                std::fs::remove_file(output_path)
+                    .context("Failed to remove previous output file")?;
             } else if output_path.is_dir() {
                 std::fs::remove_dir_all(output_path)
                     .context("Failed to remove previous output file")?;
@@ -99,8 +104,9 @@ impl AssetProcessor<'_> {
         }
 
         // If everything was successful, rename the temp file to the final output path
-        std::fs::rename(temp_path, output_path)
-            .with_context(|| format!("Failed to rename output file to: {}", output_path.display()))?;
+        std::fs::rename(temp_path, output_path).with_context(|| {
+            format!("Failed to rename output file to: {}", output_path.display())
+        })?;
 
         Ok(())
     }
