@@ -320,7 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AssetManifest};
+use crate::opt::{discover_css_references, process_file_to, AssetManifest};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -1647,6 +1647,17 @@ impl BuildRequest {
             }
         }
 
+        // Discover assets referenced from CSS files and register them in the manifest
+        let asset_manifest = if skip_assets {
+            asset_manifest
+        } else {
+            let mut manifest = asset_manifest;
+            if let Err(e) = discover_css_references(&mut manifest) {
+                tracing::warn!("Failed to discover CSS-referenced assets: {e}");
+            }
+            manifest
+        };
+
         Ok((asset_manifest, android_artifacts, swift_packages))
     }
 
@@ -2295,6 +2306,7 @@ impl BuildRequest {
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
         let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
+        let manifest = Arc::new(assets.clone());
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
@@ -2307,7 +2319,13 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
+                    let res = process_file_to(
+                        options,
+                        from,
+                        to,
+                        esbuild_path.as_deref(),
+                        Some(&manifest),
+                    );
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }

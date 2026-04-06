@@ -46,6 +46,7 @@ fn process_file_minimal(
         output_path,
         true,
         esbuild_path,
+        None,
     )?;
     Ok(())
 }

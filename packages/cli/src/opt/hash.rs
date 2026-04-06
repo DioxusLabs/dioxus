@@ -76,9 +76,15 @@ pub(crate) fn hash_file_with_options(
             hash_js(options, source, hasher, !in_folder)?;
         }
 
+        // CSS files may reference other assets via url() or @import.
+        // Include those referenced files' contents in the hash so the CSS
+        // hash changes when any referenced asset changes.
+        ResolvedAssetType::Css(_) => {
+            super::css::hash_css(source, hasher)?;
+        }
+
         // Otherwise, we can just hash the file contents
         ResolvedAssetType::CssModule(_)
-        | ResolvedAssetType::Css(_)
         | ResolvedAssetType::Image(_)
         | ResolvedAssetType::Json
         | ResolvedAssetType::File => {

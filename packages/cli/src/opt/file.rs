@@ -16,8 +16,9 @@ pub(crate) fn process_file_to(
     source: &Path,
     output_path: &Path,
     esbuild_path: Option<&Path>,
+    manifest: Option<&super::AssetManifest>,
 ) -> anyhow::Result<()> {
-    process_file_to_with_options(options, source, output_path, false, esbuild_path)
+    process_file_to_with_options(options, source, output_path, false, esbuild_path, manifest)
 }
 
 /// Process a specific file asset with additional options
@@ -27,6 +28,7 @@ pub(crate) fn process_file_to_with_options(
     output_path: &Path,
     in_folder: bool,
     esbuild_path: Option<&Path>,
+    manifest: Option<&super::AssetManifest>,
 ) -> anyhow::Result<()> {
     // If the file already exists and this is a hashed asset, then we must have a file
     // with the same hash already. The hash has the file contents and options, so if we
@@ -54,7 +56,7 @@ pub(crate) fn process_file_to_with_options(
 
     match &resolved_options {
         ResolvedAssetType::Css(options) => {
-            process_css(options, source, &temp_path)?;
+            process_css(options, source, &temp_path, manifest)?;
         }
         ResolvedAssetType::CssModule(options) => {
             process_css_module(options, source, &temp_path)?;

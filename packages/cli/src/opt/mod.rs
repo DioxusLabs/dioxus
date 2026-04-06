@@ -11,6 +11,7 @@ mod image;
 mod js;
 mod json;
 
+pub(crate) use css::discover_css_references;
 pub(crate) use file::process_file_to;
 pub(crate) use hash::add_hash_to_asset;
 
@@ -82,5 +83,17 @@ impl AssetManifest {
             .values()
             .flat_map(|assets| assets.iter())
             .filter(move |asset| seen.insert(asset.bundled_path()))
+    }
+
+    /// Return all CSS source paths currently in this manifest.
+    fn css_source_paths(&self) -> Vec<PathBuf> {
+        self.assets
+            .keys()
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|ext| ext == "css" || ext == "scss" || ext == "sass")
+            })
+            .cloned()
+            .collect()
     }
 }
