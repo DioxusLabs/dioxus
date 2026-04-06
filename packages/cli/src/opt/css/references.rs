@@ -6,6 +6,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use manganis_core::BundledAsset;
+
 use lightningcss::{
     rules::CssRule,
     values::url::Url,
@@ -136,14 +138,14 @@ fn collect_css_referenced_paths(source: &Path, visited: &mut HashSet<PathBuf>) -
     paths
 }
 
-/// Discover assets referenced by CSS files in the manifest and register them.
-///
-/// Walks all CSS assets currently in `manifest`, parses them for `url()` and
-/// `@import` references, and registers any newly-discovered files as assets.
-/// Newly-discovered CSS files are themselves scanned (breadth-first).
-pub(crate) fn discover_css_references(manifest: &mut AssetManifest) {
+/// BFS core: starting from `queue`, discover and register assets referenced by CSS files.
+/// Returns the list of newly registered [`BundledAsset`]s.
+fn discover_refs_bfs(
+    manifest: &mut AssetManifest,
+    mut queue: VecDeque<PathBuf>,
+) -> Vec<BundledAsset> {
     let mut visited: HashSet<PathBuf> = HashSet::new();
-    let mut queue: VecDeque<PathBuf> = manifest.css_source_paths().into();
+    let mut newly_registered = Vec::new();
 
     while let Some(css_source) = queue.pop_front() {
         let canonical = dunce::canonicalize(&css_source).unwrap_or_else(|_| css_source.clone());
@@ -178,8 +180,9 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) {
 
             let options = infer_asset_options(ref_path);
             match manifest.register_asset(ref_path, options) {
-                Ok(_) => {
+                Ok(asset) => {
                     tracing::debug!("Registered CSS-referenced asset: {}", ref_path.display());
+                    newly_registered.push(asset);
                 }
                 Err(e) => {
                     tracing::warn!(
@@ -195,6 +198,29 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) {
             }
         }
     }
+
+    newly_registered
+}
+
+/// Discover assets referenced by CSS files in the manifest and register them.
+///
+/// Walks all CSS assets currently in `manifest`, parses them for `url()` and
+/// `@import` references, and registers any newly-discovered files as assets.
+/// Newly-discovered CSS files are themselves scanned (breadth-first).
+pub(crate) fn discover_css_references(manifest: &mut AssetManifest) {
+    let queue = manifest.css_source_paths().into();
+    discover_refs_bfs(manifest, queue);
+}
+
+/// Discover CSS-referenced assets reachable from a single changed file.
+/// Returns the list of newly registered assets.
+pub(crate) fn discover_css_references_for_file(
+    manifest: &mut AssetManifest,
+    changed_file: &Path,
+) -> Vec<BundledAsset> {
+    let mut queue = VecDeque::new();
+    queue.push_back(changed_file.to_path_buf());
+    discover_refs_bfs(manifest, queue)
 }
 
 /// Hash a CSS file's contents together with all assets it references.

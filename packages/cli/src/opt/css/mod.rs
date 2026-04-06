@@ -17,6 +17,7 @@ use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModul
 use super::AssetProcessor;
 
 pub(crate) use references::discover_css_references;
+pub(crate) use references::discover_css_references_for_file;
 pub(crate) use references::hash_css;
 pub(crate) use scss::hash_scss;
 

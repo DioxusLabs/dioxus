@@ -12,6 +12,7 @@ mod js;
 mod json;
 
 pub(crate) use css::discover_css_references;
+pub(crate) use css::discover_css_references_for_file;
 pub(crate) use file::is_stylesheet_asset;
 pub(crate) use hash::add_hash_to_asset;
 

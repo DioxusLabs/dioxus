@@ -855,23 +855,17 @@ impl AppBuilder {
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 
-        let (resources, assets, newly_discovered_assets) = {
+        let (resources, newly_discovered_assets) = {
             let artifacts = self.artifacts.as_mut()?;
-            let mut assets = artifacts.assets.clone();
-            let mut newly_discovered_assets = Vec::new();
 
-            if is_stylesheet_asset(&changed_file) {
-                crate::opt::discover_css_references(&mut assets);
-                newly_discovered_assets = assets
-                    .unique_assets()
-                    .filter(|asset| !artifacts.assets.contains(asset))
-                    .copied()
-                    .collect();
-
-                for asset in &newly_discovered_assets {
-                    artifacts.assets.insert_asset(*asset);
-                }
-            }
+            let newly_discovered_assets = if is_stylesheet_asset(&changed_file) {
+                crate::opt::discover_css_references_for_file(
+                    &mut artifacts.assets,
+                    &changed_file,
+                )
+            } else {
+                Vec::new()
+            };
 
             let resources = artifacts
                 .assets
@@ -880,10 +874,10 @@ impl AppBuilder {
                 .copied()
                 .collect::<Vec<_>>();
 
-            (resources, assets, newly_discovered_assets)
+            (resources, newly_discovered_assets)
         };
 
-        let processor = self.build.asset_processor(&assets);
+        let processor = self.build.asset_processor(&self.artifacts.as_ref()?.assets);
 
         for asset in &newly_discovered_assets {
             let from = match dunce::canonicalize(PathBuf::from(asset.absolute_source_path())) {
