@@ -121,7 +121,7 @@ fn generic_props_compile() {
         fn clone(&self) -> Self {
             PropsWithOwnerOnlyRequiresStatic {
                 value: PhantomData,
-                trigger_owner: self.trigger_owner.clone(),
+                trigger_owner: self.trigger_owner,
             }
         }
     }
