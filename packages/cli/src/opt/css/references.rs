@@ -13,7 +13,7 @@ use lightningcss::{
     visitor::{Visit, VisitTypes, Visitor},
 };
 
-use crate::opt::AssetManifest;
+use crate::opt::{is_stylesheet_asset, AssetManifest};
 
 use super::parse_stylesheet;
 
@@ -34,10 +34,6 @@ fn resolve_css_url(url: &str, css_dir: &Path) -> Option<PathBuf> {
     let resolved = css_dir.join(url);
     dunce::canonicalize(&resolved).ok().filter(|p| p.exists())
 }
-
-// ---------------------------------------------------------------------------
-// Visitor: collect resolved dependency paths (read-only)
-// ---------------------------------------------------------------------------
 
 struct UrlCollector<'a> {
     css_dir: &'a Path,
@@ -79,13 +75,10 @@ fn extract_css_dep_paths(css: &str, css_dir: &Path) -> anyhow::Result<Vec<PathBu
     Ok(collector.paths)
 }
 
-// ---------------------------------------------------------------------------
-// Visitor: rewrite URLs to hashed bundled paths
-// ---------------------------------------------------------------------------
-
 pub(super) struct AssetUrlRewriter<'a> {
     pub css_dir: &'a Path,
     pub manifest: &'a AssetManifest,
+    pub public_asset_root: &'a str,
 }
 
 impl AssetUrlRewriter<'_> {
@@ -96,7 +89,7 @@ impl AssetUrlRewriter<'_> {
         let resolved = self.css_dir.join(url);
         let canonical = dunce::canonicalize(&resolved).ok()?;
         let asset = self.manifest.get_first_asset_for_source(&canonical)?;
-        Some(format!("/assets/{}", asset.bundled_path()))
+        Some(format!("{}/{}", self.public_asset_root, asset.bundled_path()))
     }
 }
 
@@ -123,10 +116,6 @@ impl<'i> Visitor<'i> for AssetUrlRewriter<'_> {
         rule.visit_children(self)
     }
 }
-
-// ---------------------------------------------------------------------------
-// Recursive path collection (for hashing)
-// ---------------------------------------------------------------------------
 
 /// Collect the resolved paths of all local assets referenced by a CSS file.
 /// Recursively follows `@import` to discover transitive dependencies.
@@ -156,10 +145,6 @@ fn collect_css_referenced_paths(source: &Path, visited: &mut HashSet<PathBuf>) -
     }
     paths
 }
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /// Discover assets referenced by CSS files in the manifest and register them.
 ///
@@ -215,10 +200,7 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) -> anyhow::R
                 }
             }
 
-            if ref_path
-                .extension()
-                .is_some_and(|ext| ext == "css" || ext == "scss" || ext == "sass")
-            {
+            if is_stylesheet_asset(ref_path) {
                 queue.push_back(ref_path.clone());
             }
         }
@@ -363,7 +345,7 @@ mod tests {
             .unwrap();
 
         let opts = CssAssetOptions::default();
-        let processor = AssetProcessor::new(&manifest, None);
+        let processor = AssetProcessor::new(&manifest, None, "/assets");
         processor.process_css(&opts, &css_path, &output_path).unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
@@ -383,13 +365,41 @@ mod tests {
         let output_path = dir.path().join("out.css");
 
         let manifest = AssetManifest::default();
-        let processor = AssetProcessor::new(&manifest, None);
+        let processor = AssetProcessor::new(&manifest, None, "/assets");
         processor
             .process_css(&CssAssetOptions::default(), &css_path, &output_path)
             .unwrap();
 
         let result = std::fs::read_to_string(&output_path).unwrap();
         assert!(result.contains("missing.png"));
+    }
+
+    #[test]
+    fn process_rewrites_urls_with_custom_public_asset_root() {
+        let dir = TempDir::new().unwrap();
+        let img_path = write_file(dir.path(), "logo.png", "fake-png");
+        let css_path = write_file(
+            dir.path(),
+            "style.css",
+            r#".hero { background: url("logo.png"); }"#,
+        );
+        let output_path = dir.path().join("out.css");
+
+        let mut manifest = AssetManifest::default();
+        manifest
+            .register_asset(
+                &img_path,
+                manganis::AssetOptions::builder().into_asset_options(),
+            )
+            .unwrap();
+
+        let processor = AssetProcessor::new(&manifest, None, "/docs/assets");
+        processor
+            .process_css(&CssAssetOptions::default(), &css_path, &output_path)
+            .unwrap();
+
+        let result = std::fs::read_to_string(&output_path).unwrap();
+        assert!(result.contains("/docs/assets/"));
     }
 
     #[test]

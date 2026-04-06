@@ -22,10 +22,6 @@ pub(crate) use scss::{hash_scss, process_scss};
 
 use references::AssetUrlRewriter;
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
 fn parse_stylesheet(css: &str) -> anyhow::Result<StyleSheet<'_, '_>> {
     StyleSheet::parse(
         css,
@@ -50,15 +46,12 @@ fn browser_targets() -> anyhow::Result<Targets> {
     })
 }
 
-// ---------------------------------------------------------------------------
-// CSS processing
-// ---------------------------------------------------------------------------
-
 impl AssetProcessor<'_> {
     fn css_rewriter<'a>(&'a self, css_dir: &'a Path) -> AssetUrlRewriter<'a> {
         AssetUrlRewriter {
             css_dir,
             manifest: self.manifest,
+            public_asset_root: &self.public_asset_root,
         }
     }
 

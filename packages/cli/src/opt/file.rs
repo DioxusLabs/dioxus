@@ -140,6 +140,13 @@ pub(crate) fn resolve_asset_options(source: &Path, options: &AssetVariant) -> Re
     }
 }
 
+pub(crate) fn is_stylesheet_asset(source: &Path) -> bool {
+    matches!(
+        resolve_asset_options(source, &AssetVariant::Unknown),
+        ResolvedAssetType::Css(_) | ResolvedAssetType::Scss(_)
+    )
+}
+
 fn resolve_unknown_asset_options(source: &Path) -> ResolvedAssetType {
     match source.extension().map(|e| e.to_string_lossy()).as_deref() {
         Some("scss" | "sass") => ResolvedAssetType::Scss(CssAssetOptions::default()),

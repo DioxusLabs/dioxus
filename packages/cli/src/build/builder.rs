@@ -1,4 +1,4 @@
-use crate::opt::AssetProcessor;
+use crate::opt::{is_stylesheet_asset, AssetProcessor};
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
@@ -743,6 +743,7 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let asset_dir = self.build.asset_dir();
+        let public_asset_root = self.build.public_asset_root();
 
         // Hotpatch asset!() calls
         for bundled in res.assets.unique_assets() {
@@ -764,7 +765,11 @@ impl AppBuilder {
 
             tracing::debug!("Copying asset from patch: {}", from.display());
             let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            let processor = AssetProcessor::new(&original_artifacts.assets, esbuild.as_deref());
+            let processor = AssetProcessor::new(
+                &original_artifacts.assets,
+                esbuild.as_deref(),
+                public_asset_root.clone(),
+            );
             if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
@@ -842,11 +847,9 @@ impl AppBuilder {
     /// them know what to reload. It's not super important that this is robust since most clients will
     /// kick all stylsheets without necessarily checking the name.
     pub(crate) async fn hotreload_bundled_assets(
-        &self,
+        &mut self,
         changed_file: &PathBuf,
     ) -> Option<Vec<PathBuf>> {
-        let artifacts = self.artifacts.as_ref()?;
-
         // Use the build dir if there's no runtime asset dir as the override. For the case of ios apps,
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asset_dir.as_ref() {
@@ -859,8 +862,60 @@ impl AppBuilder {
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 
+        let esbuild = crate::esbuild::Esbuild::path_if_installed();
+        let public_asset_root = self.build.public_asset_root();
+        let (resources, assets, newly_discovered_assets) = {
+            let artifacts = self.artifacts.as_mut()?;
+            let mut assets = artifacts.assets.clone();
+            let mut newly_discovered_assets = Vec::new();
+
+            if is_stylesheet_asset(&changed_file) {
+                if let Err(e) = crate::opt::discover_css_references(&mut assets) {
+                    tracing::warn!(
+                        "Failed to refresh CSS-referenced assets while hotreloading {}: {e}",
+                        changed_file.display()
+                    );
+                } else {
+                    newly_discovered_assets = assets
+                        .unique_assets()
+                        .filter(|asset| !artifacts.assets.contains(asset))
+                        .copied()
+                        .collect();
+
+                    for asset in &newly_discovered_assets {
+                        artifacts.assets.insert_asset(*asset);
+                    }
+                }
+            }
+
+            let resources = artifacts
+                .assets
+                .get_assets_for_source(&changed_file)?
+                .iter()
+                .copied()
+                .collect::<Vec<_>>();
+
+            (resources, assets, newly_discovered_assets)
+        };
+
+        let processor = AssetProcessor::new(&assets, esbuild.as_deref(), public_asset_root);
+
+        for asset in &newly_discovered_assets {
+            let from = dunce::canonicalize(PathBuf::from(asset.absolute_source_path()))
+                .inspect_err(|e| tracing::debug!("Failed to canonicalize discovered asset: {e}"))
+                .ok()?;
+            let output_path = asset_dir.join(asset.bundled_path());
+
+            tracing::debug!(
+                "Hotreloading newly discovered asset {from:?} in target {asset_dir:?}"
+            );
+
+            if let Err(e) = processor.process_file_to(asset.options(), &from, &output_path) {
+                tracing::debug!("Failed to process newly discovered CSS asset {e}");
+            }
+        }
+
         // The asset might've been renamed thanks to the manifest, let's attempt to reload that too
-        let resources = artifacts.assets.get_assets_for_source(&changed_file)?;
         let mut bundled_names = Vec::new();
         for resource in resources {
             let output_path = asset_dir.join(resource.bundled_path());
@@ -874,8 +929,6 @@ impl AppBuilder {
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
-            let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            let processor = AssetProcessor::new(&artifacts.assets, esbuild.as_deref());
             let res = processor.process_file_to(&options, &changed_file, &output_path);
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {

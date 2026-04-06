@@ -12,18 +12,32 @@ mod js;
 mod json;
 
 pub(crate) use css::discover_css_references;
+pub(crate) use file::is_stylesheet_asset;
 pub(crate) use hash::add_hash_to_asset;
 
 pub(crate) struct AssetProcessor<'a> {
     manifest: &'a AssetManifest,
     esbuild_path: Option<&'a Path>,
+    public_asset_root: String,
 }
 
 impl<'a> AssetProcessor<'a> {
-    pub(crate) fn new(manifest: &'a AssetManifest, esbuild_path: Option<&'a Path>) -> Self {
+    pub(crate) fn new(
+        manifest: &'a AssetManifest,
+        esbuild_path: Option<&'a Path>,
+        public_asset_root: impl Into<String>,
+    ) -> Self {
+        let mut public_asset_root = public_asset_root.into();
+        if !public_asset_root.starts_with('/') {
+            public_asset_root.insert(0, '/');
+        }
+        while public_asset_root.ends_with('/') && public_asset_root.len() > 1 {
+            public_asset_root.pop();
+        }
         Self {
             manifest,
             esbuild_path,
+            public_asset_root,
         }
     }
 }
@@ -106,10 +120,7 @@ impl AssetManifest {
     fn css_source_paths(&self) -> Vec<PathBuf> {
         self.assets
             .keys()
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|ext| ext == "css" || ext == "scss" || ext == "sass")
-            })
+            .filter(|path| is_stylesheet_asset(path))
             .cloned()
             .collect()
     }

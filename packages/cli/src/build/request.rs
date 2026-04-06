@@ -2298,10 +2298,12 @@ impl BuildRequest {
         let ws_dir = self.workspace_dir();
         let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
         let manifest = Arc::new(assets.clone());
+        let public_asset_root = self.public_asset_root();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
-            let processor = AssetProcessor::new(&manifest, esbuild_path.as_deref());
+            let processor =
+                AssetProcessor::new(&manifest, esbuild_path.as_deref(), public_asset_root);
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
@@ -6348,6 +6350,14 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
         self.trimmed_base_path().unwrap_or(".")
+    }
+
+    /// Get the public asset root for URLs emitted into bundled output.
+    pub(crate) fn public_asset_root(&self) -> String {
+        match self.trimmed_base_path() {
+            Some(base_path) => format!("/{base_path}/assets"),
+            None => "/assets".to_string(),
+        }
     }
 
     /// Get the path to the package manifest directory
