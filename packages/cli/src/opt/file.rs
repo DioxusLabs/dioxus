@@ -63,7 +63,7 @@ impl AssetProcessor<'_> {
                 process_scss(options, source, &temp_path)?;
             }
             ResolvedAssetType::Js(options) => {
-                process_js(options, source, &temp_path, !in_folder, self.esbuild_path)?;
+                process_js(options, source, &temp_path, !in_folder, self.esbuild_path.as_deref())?;
             }
             ResolvedAssetType::Image(options) => {
                 process_image(options, source, &temp_path)?;

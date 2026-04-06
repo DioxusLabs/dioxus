@@ -17,14 +17,14 @@ pub(crate) use hash::add_hash_to_asset;
 
 pub(crate) struct AssetProcessor<'a> {
     manifest: &'a AssetManifest,
-    esbuild_path: Option<&'a Path>,
+    esbuild_path: Option<PathBuf>,
     public_asset_root: String,
 }
 
 impl<'a> AssetProcessor<'a> {
     pub(crate) fn new(
         manifest: &'a AssetManifest,
-        esbuild_path: Option<&'a Path>,
+        esbuild_path: Option<PathBuf>,
         public_asset_root: impl Into<String>,
     ) -> Self {
         let mut public_asset_root = public_asset_root.into();

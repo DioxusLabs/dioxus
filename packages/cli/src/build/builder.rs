@@ -1,4 +1,4 @@
-use crate::opt::{is_stylesheet_asset, AssetProcessor};
+use crate::opt::is_stylesheet_asset;
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
@@ -743,42 +743,48 @@ impl AppBuilder {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
         let asset_dir = self.build.asset_dir();
-        let public_asset_root = self.build.public_asset_root();
 
-        // Hotpatch asset!() calls
-        for bundled in res.assets.unique_assets() {
+        // Hotpatch asset!() calls - first collect new assets, then process them in a batch
+        let mut new_assets = Vec::new();
+        {
             let original_artifacts = self
                 .artifacts
                 .as_mut()
                 .context("No artifacts to hotpatch")?;
 
-            if original_artifacts.assets.contains(bundled) {
-                continue;
+            for bundled in res.assets.unique_assets() {
+                if original_artifacts.assets.contains(bundled) {
+                    continue;
+                }
+
+                // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
+                original_artifacts.assets.insert_asset(*bundled);
+                new_assets.push(*bundled);
             }
+        }
 
-            // If this is a new asset, insert it into the artifacts so we can track it when hot reloading
-            original_artifacts.assets.insert_asset(*bundled);
+        if !new_assets.is_empty() {
+            let original_artifacts = self
+                .artifacts
+                .as_ref()
+                .context("No artifacts to hotpatch")?;
+            let processor = self.build.asset_processor(&original_artifacts.assets);
 
-            let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
+            for bundled in &new_assets {
+                let from = dunce::canonicalize(PathBuf::from(bundled.absolute_source_path()))?;
+                let to = asset_dir.join(bundled.bundled_path());
 
-            let to = asset_dir.join(bundled.bundled_path());
+                tracing::debug!("Copying asset from patch: {}", from.display());
+                if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
+                    tracing::error!("Failed to copy asset: {e}");
+                    continue;
+                }
 
-            tracing::debug!("Copying asset from patch: {}", from.display());
-            let esbuild = crate::esbuild::Esbuild::path_if_installed();
-            let processor = AssetProcessor::new(
-                &original_artifacts.assets,
-                esbuild.as_deref(),
-                public_asset_root.clone(),
-            );
-            if let Err(e) = processor.process_file_to(bundled.options(), &from, &to) {
-                tracing::error!("Failed to copy asset: {e}");
-                continue;
-            }
-
-            // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
-            if self.build.bundle == BundleFormat::Android {
-                let bundled_name = PathBuf::from(bundled.bundled_path());
-                _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
+                // If the emulator is android, we need to copy the asset to the device with `adb push asset /data/local/tmp/dx/assets/filename.ext`
+                if self.build.bundle == BundleFormat::Android {
+                    let bundled_name = PathBuf::from(bundled.bundled_path());
+                    _ = self.copy_file_to_android_tmp(&from, &bundled_name).await;
+                }
             }
         }
 
@@ -862,8 +868,6 @@ impl AppBuilder {
             .inspect_err(|e| tracing::debug!("Failed to canonicalize hotreloaded asset: {e}"))
             .ok()?;
 
-        let esbuild = crate::esbuild::Esbuild::path_if_installed();
-        let public_asset_root = self.build.public_asset_root();
         let (resources, assets, newly_discovered_assets) = {
             let artifacts = self.artifacts.as_mut()?;
             let mut assets = artifacts.assets.clone();
@@ -898,7 +902,7 @@ impl AppBuilder {
             (resources, assets, newly_discovered_assets)
         };
 
-        let processor = AssetProcessor::new(&assets, esbuild.as_deref(), public_asset_root);
+        let processor = self.build.asset_processor(&assets);
 
         for asset in &newly_discovered_assets {
             let from = dunce::canonicalize(PathBuf::from(asset.absolute_source_path()))

@@ -2303,7 +2303,7 @@ impl BuildRequest {
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
             let processor =
-                AssetProcessor::new(&manifest, esbuild_path.as_deref(), public_asset_root);
+                AssetProcessor::new(&manifest, esbuild_path, public_asset_root);
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
@@ -6358,6 +6358,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             Some(base_path) => format!("/{base_path}/assets"),
             None => "/assets".to_string(),
         }
+    }
+
+    /// Create an asset processor for the given manifest, resolving esbuild and the public asset root.
+    pub(crate) fn asset_processor<'a>(
+        &self,
+        manifest: &'a AssetManifest,
+    ) -> AssetProcessor<'a> {
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
+        AssetProcessor::new(manifest, esbuild_path, self.public_asset_root())
     }
 
     /// Get the path to the package manifest directory
