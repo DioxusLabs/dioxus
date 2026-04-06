@@ -90,7 +90,7 @@ toml_edit = "0.22.27"
 prettyplease = { workspace = true }
 
 # Assets
-lightningcss = { version = "1.0.0-alpha.67", features = ["browserslist", "into_owned"] }
+lightningcss = { version = "1.0.0-alpha.67", features = ["browserslist", "into_owned", "visitor"] }
 grass = "0.13.4"
 codemap = "0.1.3"
 mozjpeg = { version = "0.10.13", default-features = false, features = ["parallel"] }

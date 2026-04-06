@@ -588,6 +588,11 @@ path = "examples/03-assets-styling/css_modules.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "css_references"
+path = "examples/03-assets-styling/css_references.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "custom_assets"
 path = "examples/03-assets-styling/custom_assets.rs"
 doc-scrape-examples = true

@@ -10,29 +10,16 @@ use grass::OutputStyle;
 use lightningcss::{
     dependencies::{Dependency, DependencyOptions},
     printer::PrinterOptions,
+    rules::CssRule,
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
+    values::url::Url,
+    visit_types,
+    visitor::{Visit, VisitTypes, Visitor},
 };
 use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModuleAssetOptions};
 
 use super::AssetManifest;
-
-/// The result of parsing a CSS file for asset dependencies.
-struct CssDependencies {
-    /// CSS output with dependency URLs replaced by placeholders.
-    css_with_placeholders: String,
-    /// Each dependency's original URL, its placeholder, and the resolved path on disk (if any).
-    deps: Vec<ResolvedDep>,
-}
-
-struct ResolvedDep {
-    /// Original URL string from the CSS.
-    url: String,
-    /// Placeholder that replaced it in the output CSS.
-    placeholder: String,
-    /// Resolved absolute path on disk, if the file exists.
-    resolved_path: Option<PathBuf>,
-}
 
 /// Returns true if the URL is external and should not be rewritten.
 fn is_external_url(url: &str) -> bool {
@@ -43,12 +30,17 @@ fn is_external_url(url: &str) -> bool {
         || url.starts_with("blob:")
 }
 
-/// Parse a CSS string, extracting all `url()` and `@import` dependencies.
-///
-/// Returns the CSS with URLs replaced by placeholders plus the list of resolved
-/// dependencies. This is the single parse point used by both hashing, discovery,
-/// and rewriting.
-fn parse_css_dependencies(css: &str, css_dir: &Path) -> anyhow::Result<CssDependencies> {
+/// Resolve a URL to an absolute path on disk, if the file exists.
+fn resolve_css_url(url: &str, css_dir: &Path) -> Option<PathBuf> {
+    if is_external_url(url) {
+        return None;
+    }
+    let resolved = css_dir.join(url);
+    dunce::canonicalize(&resolved).ok().filter(|p| p.exists())
+}
+
+/// Parse a CSS file and return the resolved local paths of all `url()` and `@import` references.
+fn extract_css_dep_paths(css: &str, css_dir: &Path) -> anyhow::Result<Vec<PathBuf>> {
     let options = ParserOptions {
         error_recovery: true,
         ..Default::default()
@@ -63,35 +55,18 @@ fn parse_css_dependencies(css: &str, css_dir: &Path) -> anyhow::Result<CssDepend
     };
     let result = stylesheet.to_css(printer)?;
 
-    let deps = result
+    Ok(result
         .dependencies
         .unwrap_or_default()
         .into_iter()
-        .map(|dep| {
-            let (url, placeholder) = match dep {
-                Dependency::Import(i) => (i.url, i.placeholder),
-                Dependency::Url(u) => (u.url, u.placeholder),
+        .filter_map(|dep| {
+            let url = match dep {
+                Dependency::Import(i) => i.url,
+                Dependency::Url(u) => u.url,
             };
-
-            let resolved_path = if is_external_url(&url) {
-                None
-            } else {
-                let resolved = css_dir.join(&url);
-                dunce::canonicalize(&resolved).ok().filter(|p| p.exists())
-            };
-
-            ResolvedDep {
-                url,
-                placeholder,
-                resolved_path,
-            }
+            resolve_css_url(&url, css_dir)
         })
-        .collect();
-
-    Ok(CssDependencies {
-        css_with_placeholders: result.code,
-        deps,
-    })
+        .collect())
 }
 
 /// Collect the resolved paths of all local assets referenced by a CSS file.
@@ -109,19 +84,17 @@ fn collect_css_referenced_paths(source: &Path, visited: &mut HashSet<PathBuf>) -
     };
     let css_dir = source.parent().unwrap_or(Path::new("."));
 
-    let parsed = match parse_css_dependencies(&css, css_dir) {
+    let dep_paths = match extract_css_dep_paths(&css, css_dir) {
         Ok(p) => p,
         Err(_) => return vec![],
     };
 
     let mut paths = Vec::new();
-    for dep in &parsed.deps {
-        if let Some(ref_path) = &dep.resolved_path {
-            paths.push(ref_path.clone());
-            // Recurse into imported CSS files
-            if ref_path.extension().is_some_and(|e| e == "css") {
-                paths.extend(collect_css_referenced_paths(ref_path, visited));
-            }
+    for ref_path in dep_paths {
+        paths.push(ref_path.clone());
+        // Recurse into imported CSS files
+        if ref_path.extension().is_some_and(|e| e == "css") {
+            paths.extend(collect_css_referenced_paths(&ref_path, visited));
         }
     }
     paths
@@ -155,7 +128,7 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) -> anyhow::R
         };
         let css_dir = canonical.parent().unwrap_or(Path::new("."));
 
-        let parsed = match parse_css_dependencies(&css, css_dir) {
+        let dep_paths = match extract_css_dep_paths(&css, css_dir) {
             Ok(p) => p,
             Err(e) => {
                 tracing::debug!(
@@ -166,10 +139,7 @@ pub(crate) fn discover_css_references(manifest: &mut AssetManifest) -> anyhow::R
             }
         };
 
-        for dep in &parsed.deps {
-            let Some(ref_path) = &dep.resolved_path else {
-                continue;
-            };
+        for ref_path in &dep_paths {
 
             if manifest.get_first_asset_for_source(ref_path).is_some() {
                 continue;
@@ -252,24 +222,63 @@ pub(crate) fn process_css(
     })
 }
 
+/// Resolve a URL string to its bundled asset path, if it exists in the manifest.
+fn resolve_url_to_bundled_path(url: &str, css_dir: &Path, manifest: &AssetManifest) -> Option<String> {
+    if is_external_url(url) {
+        return None;
+    }
+    let resolved = css_dir.join(url);
+    let canonical = dunce::canonicalize(&resolved).ok()?;
+    let asset = manifest.get_first_asset_for_source(&canonical)?;
+    Some(format!("/assets/{}", asset.bundled_path()))
+}
+
+/// Visitor that rewrites `url()` and `@import` references to hashed bundled paths.
+struct AssetUrlRewriter<'a> {
+    css_dir: &'a Path,
+    manifest: &'a AssetManifest,
+}
+
+impl<'i> Visitor<'i> for AssetUrlRewriter<'_> {
+    type Error = std::convert::Infallible;
+
+    fn visit_types(&self) -> VisitTypes {
+        visit_types!(URLS | RULES)
+    }
+
+    fn visit_url(&mut self, url: &mut Url<'i>) -> Result<(), Self::Error> {
+        if let Some(bundled) = resolve_url_to_bundled_path(&url.url, self.css_dir, self.manifest) {
+            url.url = bundled.into();
+        }
+        Ok(())
+    }
+
+    fn visit_rule(&mut self, rule: &mut CssRule<'i>) -> Result<(), Self::Error> {
+        // @import url field has #[skip_visit], so visit_url won't see it.
+        // Handle it here by matching on the Import variant directly.
+        if let CssRule::Import(import) = rule {
+            if let Some(bundled) = resolve_url_to_bundled_path(&import.url, self.css_dir, self.manifest) {
+                import.url = bundled.into();
+            }
+        }
+        rule.visit_children(self)
+    }
+}
+
 /// Rewrite `url()` and `@import` references in CSS to their hashed bundled paths.
 fn rewrite_css_urls(css: &str, source: &Path, manifest: &AssetManifest) -> anyhow::Result<String> {
     let css_dir = source.parent().unwrap_or(Path::new("."));
-    let parsed = parse_css_dependencies(css, css_dir)?;
-    let mut output = parsed.css_with_placeholders;
+    let options = ParserOptions {
+        error_recovery: true,
+        ..Default::default()
+    };
+    let mut stylesheet = StyleSheet::parse(css, options).map_err(|err| err.into_owned())?;
 
-    for dep in &parsed.deps {
-        let replacement = dep
-            .resolved_path
-            .as_ref()
-            .and_then(|p| manifest.get_first_asset_for_source(p))
-            .map(|asset| format!("/assets/{}", asset.bundled_path()))
-            .unwrap_or_else(|| dep.url.clone());
+    let mut rewriter = AssetUrlRewriter { css_dir, manifest };
+    stylesheet.visit(&mut rewriter).unwrap();
 
-        output = output.replace(&dep.placeholder, &replacement);
-    }
-
-    Ok(output)
+    let result = stylesheet.to_css(PrinterOptions::default())?;
+    Ok(result.code)
 }
 
 // ---------------------------------------------------------------------------
@@ -497,7 +506,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_resolves_local_deps_and_skips_unresolvable() {
+    fn extract_resolves_local_deps_and_skips_unresolvable() {
         let dir = TempDir::new().unwrap();
         write_file(dir.path(), "logo.png", "fake-png");
         write_file(dir.path(), "other.css", "body { margin: 0 }");
@@ -509,24 +518,17 @@ mod tests {
             .c { background: url("missing.png"); }
         "#;
 
-        let parsed = parse_css_dependencies(css, dir.path()).unwrap();
+        let paths = extract_css_dep_paths(css, dir.path()).unwrap();
 
-        assert_eq!(parsed.deps.len(), 4);
-
-        // Local existing files resolve
-        let other = parsed.deps.iter().find(|d| d.url == "other.css").unwrap();
-        assert!(other.resolved_path.is_some());
-
-        let logo = parsed.deps.iter().find(|d| d.url == "logo.png").unwrap();
-        assert!(logo.resolved_path.is_some());
-        assert!(parsed.css_with_placeholders.contains(&logo.placeholder));
-
-        // External and missing do not resolve
-        let external = parsed.deps.iter().find(|d| d.url.contains("example.com")).unwrap();
-        assert!(external.resolved_path.is_none());
-
-        let missing = parsed.deps.iter().find(|d| d.url == "missing.png").unwrap();
-        assert!(missing.resolved_path.is_none());
+        // Only local existing files are returned
+        assert_eq!(paths.len(), 2);
+        let names: HashSet<_> = paths
+            .iter()
+            .filter_map(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .collect();
+        assert!(names.contains("other.css"));
+        assert!(names.contains("logo.png"));
     }
 
     #[test]
