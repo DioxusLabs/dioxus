@@ -73,21 +73,6 @@ pub fn verbosity_or_default() -> Verbosity {
     crate::VERBOSITY.get().cloned().unwrap_or_default()
 }
 
-fn reset_cursor() {
-    use std::io::IsTerminal;
-
-    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
-    // the cargo generate TUI, but we still want to reset the cursor.
-    if std::io::stdout().is_terminal() {
-        _ = console::Term::stdout().show_cursor();
-    }
-}
-
-/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
-pub(crate) trait Anonymized {
-    fn anonymized(&self) -> serde_json::Value;
-}
-
 /// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
 ///
 /// Redirects TUI logs, writes to files, and queues telemetry events.
@@ -114,6 +99,7 @@ struct CapturedPanicError {
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
+
 impl std::fmt::Display for CapturedPanicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -130,6 +116,11 @@ struct SavedLocation {
     file: String,
     line: u32,
     column: u32,
+}
+
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> serde_json::Value;
 }
 
 impl TraceController {
@@ -840,6 +831,12 @@ impl TraceController {
                 }),
             ),
             Commands::Doctor(_cmd) => ("doctor".to_string(), json!({})),
+            Commands::ShellCompletions(cmd) => (
+                "completions".to_string(),
+                json!({
+                    "shell": cmd.shell.to_string(),
+                }),
+            ),
             Commands::Translate(cmd) => (
                 "translate".to_string(),
                 json!({
@@ -1435,5 +1432,15 @@ impl PosthogEvent {
         self.properties
             .insert(key.into(), serde_json::to_value(value)?);
         Ok(())
+    }
+}
+
+fn reset_cursor() {
+    use std::io::IsTerminal;
+
+    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
+    // the cargo generate TUI, but we still want to reset the cursor.
+    if std::io::stdout().is_terminal() {
+        _ = console::Term::stdout().show_cursor();
     }
 }
