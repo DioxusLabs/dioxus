@@ -1123,9 +1123,9 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
-impl<T: IntoAttributeValue + Clone> IntoAttributeValue for &T {
+impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
     fn into_value(self) -> AttributeValue {
-        self.clone().into_value()
+        self.to_owned().into_value()
     }
 }
 
