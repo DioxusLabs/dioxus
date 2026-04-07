@@ -31,12 +31,13 @@ fn app() -> Element {
                 for (dir_id, path) in files.read().path_names.iter().enumerate() {
                     {
                         let path_end = path.components().next_back().map(|p|p.as_os_str()).unwrap_or(path.as_os_str()).to_string_lossy();
-                        let path = path.display();
+                        let path_display = path.display();
+                        let is_file = path.is_file();
                         rsx! {
-                            div { class: "folder", key: "{path}",
+                            div { class: "folder", key: "{path_display}",
                                 i { class: "material-icons",
                                     onclick: move |_| files.write().enter_dir(dir_id),
-                                    if path_end.contains('.') {
+                                    if is_file {
                                         "description"
                                     } else {
                                         "folder"
@@ -115,6 +116,9 @@ impl Files {
 
     fn enter_dir(&mut self, dir_id: usize) {
         let path = &self.path_names[dir_id];
+        if !path.is_dir() {
+            return;
+        }
         self.current_path.clone_from(path);
         self.reload_path_list();
     }

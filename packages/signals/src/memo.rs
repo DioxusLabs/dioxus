@@ -76,7 +76,7 @@ impl<T> Memo<T> {
         spawn_isomorphic(async move {
             while rx.next().await.is_some() {
                 // Remove any pending updates
-                while rx.try_next().is_ok() {}
+                while rx.try_recv().is_ok() {}
                 memo.recompute();
             }
         });

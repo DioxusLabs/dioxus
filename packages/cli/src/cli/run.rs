@@ -82,10 +82,13 @@ impl RunArgs {
                                 current,
                                 total,
                                 krate,
+                                fresh,
                             } => {
-                                tracing::debug!(
-                                    "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
-                                )
+                                if !fresh {
+                                    tracing::debug!(
+                                        "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
+                                    )
+                                }
                             }
                             BuildStage::RunningBindgen => {
                                 tracing::info!("[{bundle_format}] Running WASM bindgen")

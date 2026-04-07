@@ -78,6 +78,7 @@ impl WebviewEdits {
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 self.handle_html_event(event)
             }
@@ -259,12 +260,23 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
 
-        let mut web_context = WebContext::new(cfg.data_dir.clone());
+        let mut web_context = WebContext::new(cfg.data_dir.clone().or_else(|| {
+            // On Windows, WebView2 defaults to storing its data next to the executable.
+            // This fails on certain drives (e.g. ReFS dev drives, Program Files) where the
+            // directory may not be writable. Fall back to %LOCALAPPDATA%/<exe_name> automatically.
+            if cfg!(windows) {
+                let exe = std::env::current_exe().ok()?;
+                let name = exe.file_stem()?.to_str()?;
+                let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
+                Some(std::path::PathBuf::from(local_app_data).join(name))
+            } else {
+                None
+            }
+        }));
         let edit_queue = shared.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
@@ -557,6 +569,7 @@ impl WebviewInstance {
 
             {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
@@ -568,6 +581,7 @@ impl WebviewInstance {
             }
 
             // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             self.edits

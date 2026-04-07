@@ -167,12 +167,12 @@ impl TailwindCli {
         }
     }
 
-    fn installed_bin_name(&self) -> String {
-        let mut name = format!("tailwindcss-{}", self.version);
+    fn installed_bin_name(&self) -> &'static str {
         if cfg!(windows) {
-            name = format!("{name}.exe");
+            "tailwindcss.exe"
+        } else {
+            "tailwindcss"
         }
-        name
     }
 
     async fn install_github(&self) -> anyhow::Result<()> {
@@ -222,7 +222,7 @@ impl TailwindCli {
         let arch = match target_lexicon::HOST.architecture {
             target_lexicon::Architecture::X86_64 if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::X86_64 => "x64",
-            // you would think this would be arm64.exe, but tailwind doesnt distribute arm64 binaries
+            // you would think this would be arm64.exe, but tailwind doesn't distribute arm64 binaries
             target_lexicon::Architecture::Aarch64(_) if platform == "windows" => "x64.exe",
             target_lexicon::Architecture::Aarch64(_) => "arm64",
             _ => return None,
@@ -232,8 +232,7 @@ impl TailwindCli {
     }
 
     fn install_dir(&self) -> Result<PathBuf> {
-        let bindgen_dir = Workspace::dioxus_data_dir().join("tailwind/");
-        Ok(bindgen_dir)
+        Ok(Workspace::tools_dir().join(format!("tailwindcss-{}", self.version)))
     }
 
     fn git_install_url(&self) -> Option<String> {

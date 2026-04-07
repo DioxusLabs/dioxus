@@ -63,7 +63,7 @@ where
 {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         T::augment_args(cmd).defer(|cmd| {
-            PlatformOverrides::<Self>::augment_subcommands(cmd.disable_help_subcommand(true))
+            PlatformOverrides::<T>::augment_subcommands(cmd.disable_help_subcommand(true))
         })
     }
 
@@ -180,5 +180,64 @@ where
 
     fn update_from_arg_matches(&mut self, _matches: &ArgMatches) -> Result<(), clap::Error> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    #[test]
+    fn cli_parses_bundle_with_package_types_without_recursing() {
+        let cli = crate::Cli::try_parse_from([
+            "dx",
+            "bundle",
+            "--platform",
+            "desktop",
+            "--package-types",
+            "msi",
+        ])
+        .expect("bundle command should parse");
+
+        assert!(matches!(cli.action, crate::Commands::Bundle(_)));
+    }
+
+    #[test]
+    fn cli_parses_platform_override_subcommands_without_recursing() {
+        let cli = crate::Cli::try_parse_from([
+            "dx",
+            "bundle",
+            "--platform",
+            "desktop",
+            "@client",
+            "--release",
+            "@server",
+            "--platform",
+            "server",
+        ])
+        .expect("platform override subcommands should parse");
+
+        let crate::Commands::Bundle(bundle) = cli.action else {
+            panic!("expected bundle command");
+        };
+
+        let client = bundle
+            .args
+            .client
+            .as_ref()
+            .expect("@client override should be captured");
+        let server = bundle
+            .args
+            .server
+            .as_ref()
+            .expect("@server override should be captured");
+
+        assert!(!bundle.args.shared.build_arguments.release);
+        assert!(client.build_arguments.release);
+        assert_eq!(
+            server.build_arguments.platform,
+            crate::Platform::Server,
+            "@server should override the platform"
+        );
     }
 }
