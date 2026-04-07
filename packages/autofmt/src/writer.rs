@@ -712,6 +712,14 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    fn span_has_line_comments(&self, span: Span) -> bool {
+        span.source_text().is_some_and(|source| {
+            source
+                .lines()
+                .any(|line| line.trim_start().starts_with("//"))
+        })
+    }
+
     fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
         match value {
             AttributeValue::IfExpr(if_chain) => {
@@ -734,11 +742,23 @@ impl<'a> Writer<'a> {
             }
             AttributeValue::AttrExpr(expr) => expr
                 .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
+                .map(|expr| {
+                    if self.span_has_line_comments(expr.span()) {
+                        100000
+                    } else {
+                        self.attr_expr_len(&expr)
+                    }
+                })
                 .unwrap_or(100000),
             AttributeValue::EventTokens(closure) => closure
                 .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
+                .map(|expr| {
+                    if self.span_has_line_comments(expr.span()) {
+                        100000
+                    } else {
+                        self.attr_expr_len(&expr)
+                    }
+                })
                 .unwrap_or(100000),
         }
     }
@@ -846,6 +866,9 @@ impl<'a> Writer<'a> {
 
         let pretty = self.retrieve_formatted_expr(&expr).to_string();
         let source = src_span.source_text().unwrap_or_default();
+        let source_has_line_comments = source
+            .lines()
+            .any(|line| line.trim_start().starts_with("//"));
         let mut src_lines = source.lines().peekable();
 
         // Comments already in pretty output (from nested rsx!) - skip these from source
@@ -940,7 +963,9 @@ impl<'a> Writer<'a> {
                         let is_call = src_trimmed.ends_with('(')
                             || src_trimmed.ends_with(',')
                             || src_trimmed.ends_with('{');
-                        if !is_call {
+                        let is_commented_block =
+                            source_has_line_comments && src_trimmed.ends_with('{');
+                        if is_commented_block || !is_call {
                             multiline = Some(vec![*src]);
                             break;
                         }
@@ -1008,7 +1033,17 @@ impl<'a> Writer<'a> {
                     }
 
                     // Write multi-line with adjusted indentation
-                    let base_indent = ml[0].chars().take_while(|c| c.is_whitespace()).count();
+                    let base_indent = if source_has_line_comments && ml[0].trim_end().ends_with('{')
+                    {
+                        ml.iter()
+                            .skip(1)
+                            .filter(|line| !line.trim().is_empty())
+                            .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+                            .min()
+                            .unwrap_or(0)
+                    } else {
+                        ml[0].chars().take_while(|c| c.is_whitespace()).count()
+                    };
                     let target: String = line.chars().take_while(|c| c.is_whitespace()).collect();
 
                     for (i, src_line) in ml.iter().enumerate() {
