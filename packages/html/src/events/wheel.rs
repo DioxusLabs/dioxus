@@ -223,13 +223,6 @@ impl<'de> serde::Deserialize<'de> for WheelData {
     }
 }
 
-impl_event![
-    WheelData;
-
-    /// Called when the mouse wheel is rotated over an element.
-    onwheel
-];
-
 pub trait HasWheelData: HasMouseData + std::any::Any {
     /// The amount of wheel movement
     fn delta(&self) -> WheelDelta;
