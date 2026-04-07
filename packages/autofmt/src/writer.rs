@@ -963,7 +963,8 @@ impl<'a> Writer<'a> {
                         let is_call = src_trimmed.ends_with('(')
                             || src_trimmed.ends_with(',')
                             || src_trimmed.ends_with('{');
-                        let is_commented_block = source_has_line_comments && src_trimmed.ends_with('{');
+                        let is_commented_block =
+                            source_has_line_comments && src_trimmed.ends_with('{');
                         if is_commented_block || !is_call {
                             multiline = Some(vec![*src]);
                             break;
