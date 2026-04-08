@@ -166,12 +166,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Modular and Customizable
 
-Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev). Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
-
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
-</div>
+Build your own renderer. Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
 
 ## Community
 

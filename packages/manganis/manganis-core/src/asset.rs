@@ -22,8 +22,10 @@ use std::{fmt::Debug, hash::Hash, path::PathBuf};
 pub struct BundledAsset {
     /// The absolute path of the asset
     absolute_source_path: ConstStr,
+
     /// The bundled path of the asset
     bundled_path: ConstStr,
+
     /// The options for the asset
     options: AssetOptions,
 }
@@ -147,32 +149,32 @@ impl Asset {
     pub fn bundled(&self) -> BundledAsset {
         // Read the slice using volatile reads to prevent the compiler from optimizing
         // away the read at compile time
-        fn read_slice_volatile(bundled: &'static [u8]) -> const_serialize_07::ConstVec<u8> {
+        fn read_slice_volatile(bundled: &'static [u8]) -> Vec<u8> {
             let ptr = bundled as *const [u8] as *const u8;
             let len = bundled.len();
             if ptr.is_null() {
                 panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
             }
-            let mut bytes = const_serialize_07::ConstVec::new();
+            let mut bytes = Vec::with_capacity(len);
             for byte in 0..len {
                 // SAFETY: We checked that the pointer was not null above. The pointer is valid for reads and
                 // since we are reading a u8 there are no alignment requirements
                 let byte = unsafe { std::ptr::read_volatile(ptr.add(byte)) };
-                bytes = bytes.push(byte);
+                bytes.push(byte);
             }
             bytes
         }
 
         let bundled = (self.bundled)();
         let bytes = read_slice_volatile(bundled);
-        let read = bytes.as_ref();
+        let read = bytes.as_slice();
         let asset = deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1;
 
         // If the asset wasn't bundled with the newer format, try the legacy format
         if asset.bundled_path() == BundledAsset::PLACEHOLDER_HASH {
             let bundled = (self.legacy)();
             let bytes = read_slice_volatile(bundled);
-            let read = bytes.read();
+            let read = const_serialize_07::ConstReadBuffer::new(bytes.as_ref());
             let asset = const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1;
             asset
         } else {

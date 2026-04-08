@@ -105,7 +105,7 @@ web = [
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+native = ["dep:dioxus-native", "dioxus-config-macro/native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
   "dep:dioxus-server",
   "dioxus-fullstack?/server",

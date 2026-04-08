@@ -108,10 +108,3 @@ pub trait HasTransitionData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! {
-    TransitionData;
-
-    /// transitionend
-    ontransitionend
-}

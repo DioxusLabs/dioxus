@@ -1,8 +1,9 @@
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::{collections::HashMap, str::FromStr};
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct BundleConfig {
     #[serde(default)]
     pub(crate) identifier: Option<String>,
@@ -32,7 +33,7 @@ pub(crate) struct BundleConfig {
     pub(crate) android: Option<AndroidSettings>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct DebianSettings {
     // OS-specific settings:
     /// the list of debian dependencies.
@@ -88,7 +89,7 @@ pub(crate) struct DebianSettings {
     pub post_remove_script: Option<PathBuf>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct WixSettings {
     #[serde(default)]
     pub(crate) language: Vec<(String, Option<PathBuf>)>,
@@ -120,7 +121,7 @@ pub(crate) struct WixSettings {
     pub(crate) fips_compliant: bool,
     /// MSI installer version in the format `major.minor.patch.build` (build is optional).
     ///
-    /// Because a valid version is required for MSI installer, it will be derived from [`tauri_bundler::PackageSettings::version`] if this field is not set.
+    /// Because a valid version is required for MSI installer, it will be derived from the package version if this field is not set.
     ///
     /// The first field is the major version and has a maximum value of 255. The second field is the minor version and has a maximum value of 255.
     /// The third and fourth fields have a maximum value of 65,535.
@@ -131,41 +132,52 @@ pub(crate) struct WixSettings {
     /// A GUID upgrade code for MSI installer. This code **_must stay the same across all of your updates_**,
     /// otherwise, Windows will treat your update as a different app and your users will have duplicate versions of your app.
     ///
-    /// By default, tauri generates this code by generating a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
-    /// You can use Tauri's CLI to generate and print this code for you by running `tauri inspect wix-upgrade-code`.
+    /// By default, this code is generated as a Uuid v5 using the string `<productName>.exe.app.x64` in the DNS namespace.
     ///
-    /// It is recommended that you set this value in your tauri config file to avoid accidental changes in your upgrade code
+    /// It is recommended that you set this value in your Dioxus.toml to avoid accidental changes in your upgrade code
     /// whenever you want to change your product name.
     #[serde(default)]
+    #[schemars(with = "Option<String>")]
     pub upgrade_code: Option<uuid::Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct MacOsSettings {
     #[serde(default)]
     pub(crate) bundle_version: Option<String>,
+
     #[serde(default)]
     pub(crate) frameworks: Option<Vec<String>>,
+
     #[serde(default)]
     pub(crate) minimum_system_version: Option<String>,
+
     #[serde(default)]
     pub(crate) license: Option<String>,
+
     #[serde(default)]
     pub(crate) exception_domain: Option<String>,
+
     #[serde(default)]
     pub(crate) signing_identity: Option<String>,
+
     #[serde(default)]
     pub(crate) provider_short_name: Option<String>,
+
     #[serde(default)]
     pub(crate) entitlements: Option<String>,
+
     #[serde(default)]
     pub(crate) info_plist_path: Option<PathBuf>,
+
     #[serde(default)]
     pub(crate) bundle_name: Option<String>,
+
     /// List of custom files to add to the application bundle.
     /// Maps the path in the Contents directory in the app to the path of the file to include (relative to the current working directory).
     #[serde(default)]
     pub files: HashMap<PathBuf, PathBuf>,
+
     /// Preserve the hardened runtime version flag, see <https://developer.apple.com/documentation/security/hardened_runtime>
     ///
     /// Settings this to `false` is useful when using an ad-hoc signature, making it less strict.
@@ -177,7 +189,7 @@ fn default_hardened_runtime() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
 pub(crate) struct WindowsSettings {
     #[serde(default)]
     pub(crate) digest_algorithm: Option<String>,
@@ -215,7 +227,7 @@ pub(crate) struct WindowsSettings {
     pub sign_command: Option<CustomSignCommandSettings>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct NsisSettings {
     #[serde(default)]
     pub(crate) template: Option<PathBuf>,
@@ -246,7 +258,7 @@ pub(crate) struct NsisSettings {
     pub minimum_webview2_version: Option<String>,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum NSISInstallerMode {
     #[default]
     CurrentUser,
@@ -254,7 +266,7 @@ pub(crate) enum NSISInstallerMode {
     Both,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) enum WebviewInstallMode {
     Skip,
     DownloadBootstrapper { silent: bool },
@@ -270,7 +282,7 @@ impl Default for WebviewInstallMode {
 }
 
 // Because all four fields must appear at the same time, there is no need for an Option
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct AndroidSettings {
     pub(crate) jks_file: PathBuf,
     pub(crate) jks_password: String,
@@ -278,7 +290,7 @@ pub(crate) struct AndroidSettings {
     pub(crate) key_password: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct CustomSignCommandSettings {
     /// The command to run to sign the binary.
     pub cmd: String,
@@ -288,15 +300,19 @@ pub struct CustomSignCommandSettings {
     pub args: Vec<String>,
 }
 
-#[derive(Clone, Copy, Debug, clap::ValueEnum, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, clap::ValueEnum, Serialize)]
 pub(crate) enum PackageType {
     /// The macOS application bundle (.app).
     #[clap(name = "macos")]
     MacOsBundle,
 
-    /// The iOS app bundle.
+    /// The raw iOS application bundle (.app).
     #[clap(name = "ios")]
-    IosBundle,
+    IosApp,
+
+    /// The distributable iOS application archive (.ipa).
+    #[clap(name = "ipa")]
+    Ipa,
 
     /// The Windows bundle (.msi).
     #[clap(name = "msi")]
@@ -325,6 +341,14 @@ pub(crate) enum PackageType {
     /// The Updater bundle (a patch of an existing app)
     #[clap(name = "updater")]
     Updater,
+
+    /// Android application package (.apk).
+    #[clap(name = "apk")]
+    Apk,
+
+    /// Android App Bundle (.aab).
+    #[clap(name = "aab")]
+    Aab,
 }
 
 impl FromStr for PackageType {
@@ -333,7 +357,8 @@ impl FromStr for PackageType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "macos" => Ok(PackageType::MacOsBundle),
-            "ios" => Ok(PackageType::IosBundle),
+            "ios" => Ok(PackageType::IosApp),
+            "ipa" => Ok(PackageType::Ipa),
             "msi" => Ok(PackageType::WindowsMsi),
             "nsis" => Ok(PackageType::Nsis),
             "deb" => Ok(PackageType::Deb),
@@ -341,6 +366,8 @@ impl FromStr for PackageType {
             "appimage" => Ok(PackageType::AppImage),
             "dmg" => Ok(PackageType::Dmg),
             "updater" => Ok(PackageType::Updater),
+            "apk" => Ok(PackageType::Apk),
+            "aab" => Ok(PackageType::Aab),
             _ => Err(format!("{s} is not a valid package type")),
         }
     }
