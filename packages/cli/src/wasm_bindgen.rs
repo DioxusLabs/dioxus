@@ -91,9 +91,9 @@ impl WasmBindgen {
         }
     }
 
-    pub(crate) fn keep_lld_sections(self, keep_lld_sections: bool) -> Self {
+    pub(crate) fn keep_lld_exports(self, keep_lld_exports: bool) -> Self {
         Self {
-            keep_lld_exports: keep_lld_sections,
+            keep_lld_exports,
             ..self
         }
     }
