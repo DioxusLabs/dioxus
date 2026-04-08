@@ -83,6 +83,7 @@ impl HotpatchTip {
 
         let mode = BuildMode::Thin {
             workspace_rustc_args,
+            artifact_paths: HashMap::new(),
             changed_files: vec![],
             changed_crates: vec![],
             modified_crates: std::collections::HashSet::new(),

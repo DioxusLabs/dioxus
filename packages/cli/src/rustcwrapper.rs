@@ -31,6 +31,48 @@ pub struct RustcArgs {
     pub link_args: Vec<String>,
 }
 
+fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
+    // Extract the crate name from the args to use as the filename.
+    // Skip non-sensical args when a build is completely fresh (rustc is invoked with --crate-name ___)
+    let crate_name = rustc_args
+        .args
+        .iter()
+        .skip_while(|arg| *arg != "--crate-name")
+        .nth(1);
+
+    if let Some(crate_name) = crate_name {
+        if crate_name != "___" {
+            std::fs::create_dir_all(args_dir)
+                .expect("Failed to create args directory for rustc wrapper");
+
+            let crate_type = rustc_args
+                .args
+                .iter()
+                .skip_while(|arg| *arg != "--crate-type")
+                .nth(1)
+                .map(|s| s.as_str());
+
+            let serialized_args =
+                serde_json::to_string(rustc_args).expect("Failed to serialize rustc args");
+
+            // Write args with an explicit target suffix: {crate_name}.lib.json or
+            // {crate_name}.bin.json. This avoids the ambiguity of a bare {crate_name}.json
+            // and ensures lib+bin crates don't overwrite each other.
+            let suffix = match crate_type {
+                Some("lib" | "rlib") => "lib",
+                Some("bin") => "bin",
+                _ => "bin", // proc-macro, cdylib, etc. — treat as bin
+            };
+
+            std::fs::write(
+                args_dir.join(format!("{crate_name}.{suffix}.json")),
+                &serialized_args,
+            )
+            .expect("Failed to write rustc args to file");
+        }
+    }
+}
+
 /// Check if the arguments indicate a linking step, including those in command files.
 fn has_linking_args() -> bool {
     for arg in std::env::args() {
@@ -69,13 +111,6 @@ fn has_linking_args() -> bool {
 ///
 /// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
 pub fn run_rustc() -> ExitCode {
-    // If we are being asked to link, delegate to the linker action.
-    if has_linking_args() {
-        return crate::link::LinkAction::from_env()
-            .expect("Linker action not found")
-            .run_link();
-    }
-
     let args_dir: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
         .expect("DX_RUSTC env var must be set")
         .into();
@@ -90,44 +125,16 @@ pub fn run_rustc() -> ExitCode {
         link_args: Default::default(),
     };
 
-    // Extract the crate name from the args to use as the filename.
-    // Skip non-sensical args when a build is completely fresh (rustc is invoked with --crate-name ___)
-    let crate_name = rustc_args
-        .args
-        .iter()
-        .skip_while(|arg| *arg != "--crate-name")
-        .nth(1);
+    // Always persist the captured rustc invocation, even for link steps.
+    // The tip crate's bin target is typically only observed during the final link invocation,
+    // so returning early before writing would lose the exact args/envs we need for fat-link replay.
+    write_rustc_args(&args_dir, &rustc_args);
 
-    if let Some(crate_name) = crate_name {
-        if crate_name != "___" {
-            std::fs::create_dir_all(&args_dir)
-                .expect("Failed to create args directory for rustc wrapper");
-
-            let crate_type = rustc_args
-                .args
-                .iter()
-                .skip_while(|arg| *arg != "--crate-type")
-                .nth(1)
-                .map(|s| s.as_str());
-
-            let serialized_args =
-                serde_json::to_string(&rustc_args).expect("Failed to serialize rustc args");
-
-            // Write args with an explicit target suffix: {crate_name}.lib.json or
-            // {crate_name}.bin.json. This avoids the ambiguity of a bare {crate_name}.json
-            // and ensures lib+bin crates don't overwrite each other.
-            let suffix = match crate_type {
-                Some("lib" | "rlib") => "lib",
-                Some("bin") => "bin",
-                _ => "bin", // proc-macro, cdylib, etc. — treat as bin
-            };
-
-            std::fs::write(
-                args_dir.join(format!("{crate_name}.{suffix}.json")),
-                &serialized_args,
-            )
-            .expect("Failed to write rustc args to file");
-        }
+    // If we are being asked to link, delegate to the linker action after capturing.
+    if has_linking_args() {
+        return crate::link::LinkAction::from_env()
+            .expect("Linker action not found")
+            .run_link();
     }
 
     // Run the actual rustc command.

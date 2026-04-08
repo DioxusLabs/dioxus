@@ -415,6 +415,7 @@ impl AppBuilder {
                     changed_crates,
                     modified_crates: self.modified_crates.clone(),
                     workspace_rustc_args: artifacts.workspace_rustc_args,
+                    artifact_paths: artifacts.artifact_paths,
                     aslr_reference,
                     cache,
                     object_cache: self.object_cache.clone(),

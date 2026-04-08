@@ -448,6 +448,10 @@ pub enum BuildMode {
         /// This is used for replaying rustc invocations for workspace hotpatching
         workspace_rustc_args: HashMap<String, RustcArgs>,
 
+        /// Exact Cargo-produced artifact paths for workspace targets in the active scope.
+        /// This lets thin rebuilds reuse the precise rlib path instead of guessing the hash suffix.
+        artifact_paths: HashMap<String, PathBuf>,
+
         /// Cumulative set of all workspace crates modified since the fat build.
         modified_crates: HashSet<String>,
 
@@ -470,6 +474,7 @@ pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
     pub(crate) exe: PathBuf,
     pub(crate) workspace_rustc_args: HashMap<String, RustcArgs>,
+    pub(crate) artifact_paths: HashMap<String, PathBuf>,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
@@ -1276,6 +1281,18 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut emitting_error = false;
+        let (args_dir, mut workspace_rustc_args, mut artifact_paths) = match &ctx.mode {
+            BuildMode::Thin {
+                workspace_rustc_args,
+                artifact_paths,
+                ..
+            } => (None, workspace_rustc_args.clone(), artifact_paths.clone()),
+            _ => {
+                let args_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
+                let workspace_rustc_args = self.load_workspace_rustc_args_from_dir(&args_dir);
+                (Some(args_dir), workspace_rustc_args, HashMap::new())
+            }
+        };
 
         loop {
             use cargo_metadata::Message;
@@ -1345,12 +1362,14 @@ impl BuildRequest {
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
+                    let target_name = artifact.target.name.clone();
                     ctx.status_build_progress(
                         units_compiled,
                         crate_count,
-                        artifact.target.name,
+                        target_name,
                         artifact.fresh,
                     );
+                    self.record_workspace_artifact_path(&mut artifact_paths, &artifact);
                     output_location = artifact.executable.map(Into::into);
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
@@ -1368,21 +1387,9 @@ impl BuildRequest {
             }
         }
 
-        // Load per-crate rustc args from the wrapper directory.
-        // Each workspace crate compiled through the wrapper has its own JSON file:
-        // "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
-        // "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
-        let (args_dir, mut workspace_rustc_args) = match &ctx.mode {
-            BuildMode::Thin {
-                workspace_rustc_args,
-                ..
-            } => (None, workspace_rustc_args.clone()),
-            _ => {
-                let args_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
-                let workspace_rustc_args = self.load_workspace_rustc_args_from_dir(&args_dir);
-                (Some(args_dir), workspace_rustc_args)
-            }
-        };
+        if let Some(args_dir) = &args_dir {
+            workspace_rustc_args = self.load_workspace_rustc_args_from_dir(args_dir);
+        }
 
         if let Some(args_dir) = &args_dir {
             tracing::trace!(
@@ -1390,6 +1397,15 @@ impl BuildRequest {
                 args_dir.display(),
                 workspace_rustc_args.keys().collect::<Vec<_>>(),
             );
+            for key in workspace_rustc_args.keys().sorted() {
+                let extra = workspace_rustc_args
+                    .get(key)
+                    .and_then(Self::rustc_extra_filename);
+                let artifact = artifact_paths.get(key);
+                tracing::debug!(
+                    "Rustc cache entry: key={key} extra_filename={extra:?} artifact={artifact:?}",
+                );
+            }
         } else {
             tracing::trace!(
                 "Using in-memory workspace rustc args for thin build: keys={:?}",
@@ -1435,14 +1451,13 @@ impl BuildRequest {
         if matches!(ctx.mode, BuildMode::Fat) {
             ctx.status_starting_link();
             let link_start = SystemTime::now();
-            self.run_fat_link(
-                &exe,
-                &workspace_rustc_args
-                    .get(&tip_bin_key)
-                    .cloned()
-                    .unwrap_or_default(),
-            )
-            .await?;
+            let tip_args = workspace_rustc_args.get(&tip_bin_key).with_context(|| {
+                format!(
+                    "Missing captured rustc args for tip crate '{tip_bin_key}'. Loaded keys: {:?}",
+                    workspace_rustc_args.keys().collect::<Vec<_>>()
+                )
+            })?;
+            self.run_fat_link(&exe, tip_args).await?;
             tracing::debug!(
                 "Fat linking completed in {}us",
                 SystemTime::now()
@@ -1470,6 +1485,7 @@ impl BuildRequest {
             time_end,
             exe,
             workspace_rustc_args,
+            artifact_paths,
             time_start,
             assets,
             android_artifacts,
@@ -1492,6 +1508,7 @@ impl BuildRequest {
     async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
         let BuildMode::Thin {
             workspace_rustc_args,
+            artifact_paths,
             changed_crates,
             object_cache,
             ..
@@ -1532,7 +1549,14 @@ impl BuildRequest {
                 .await
                 .with_context(|| format!("Failed to compile workspace dep crate '{crate_name}'"))?;
 
-            if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
+            if let Some(rlib_path) =
+                self.find_rlib_for_crate(&crate_name, rustc_args, artifact_paths)
+            {
+                tracing::debug!(
+                    "Resolved workspace dep rlib: crate={crate_name} extra_filename={:?} path={}",
+                    Self::rustc_extra_filename(rustc_args),
+                    rlib_path.display()
+                );
                 if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
                     tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
                 }
@@ -1552,7 +1576,7 @@ impl BuildRequest {
         // before the bin target so the bin links against the fresh lib rlib.
         let lib_key = format!("{tip_name}.lib");
         if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
-            let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args);
+            let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args, artifact_paths);
             let pre_modified = rlib_pre
                 .as_ref()
                 .and_then(|p| std::fs::metadata(p).ok())
@@ -1561,7 +1585,14 @@ impl BuildRequest {
             tracing::info!("Compiling tip lib target: {lib_key}");
             if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
                 tracing::warn!("Failed to compile tip lib target: {e}");
-            } else if let Some(rlib_path) = self.find_rlib_for_crate(&tip_name, lib_args) {
+            } else if let Some(rlib_path) =
+                self.find_rlib_for_crate(&tip_name, lib_args, artifact_paths)
+            {
+                tracing::debug!(
+                    "Resolved tip lib rlib: crate={tip_name} extra_filename={:?} path={}",
+                    Self::rustc_extra_filename(lib_args),
+                    rlib_path.display()
+                );
                 let post_modified = std::fs::metadata(&rlib_path)
                     .ok()
                     .and_then(|m| m.modified().ok());
@@ -2884,6 +2915,13 @@ impl BuildRequest {
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
     pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
+        if rustc_args.link_args.is_empty() {
+            bail!(
+                "Missing linker args for fat link of '{}'. The tip crate likely did not run through linker interception for this build.",
+                self.tip_crate_name()
+            );
+        }
+
         // Filter out the rlib files from the arguments
         let rlibs = rustc_args
             .link_args
@@ -3168,17 +3206,27 @@ impl BuildRequest {
             .output()
             .await?;
 
+        if !res.status.success() {
+            let stderr = String::from_utf8_lossy(&res.stderr);
+            let stdout = String::from_utf8_lossy(&res.stdout);
+            let combined = match (stdout.trim().is_empty(), stderr.trim().is_empty()) {
+                (false, false) => format!("{}\n{}", stdout.trim(), stderr.trim()),
+                (false, true) => stdout.trim().to_string(),
+                (true, false) => stderr.trim().to_string(),
+                (true, true) => format!("linker exited with status {}", res.status),
+            };
+
+            tracing::error!(
+                telemetry = %serde_json::json!({ "event": "hotpatch_fat_binary_generation_failed" }),
+                "Failed to generate fat binary: {}",
+                combined
+            );
+            bail!("Failed to generate fat binary: {combined}");
+        }
+
         if !res.stderr.is_empty() {
             let errs = String::from_utf8_lossy(&res.stderr);
-            if !res.status.success() {
-                tracing::error!(
-                    telemetry = %serde_json::json!({ "event": "hotpatch_fat_binary_generation_failed" }),
-                    "Failed to generate fat binary: {}",
-                    errs.trim()
-                );
-            } else {
-                tracing::trace!("Warnings during fat linking: {}", errs.trim());
-            }
+            tracing::trace!("Warnings during fat linking: {}", errs.trim());
         }
 
         if !res.stdout.is_empty() {
@@ -6008,6 +6056,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 .cloned(),
         );
 
+        // Wasm hotpatches are linked as relocatable PIC modules, so replayed workspace crate
+        // compilations need to emit PIC-compatible objects too.
+        if self.is_wasm_or_wasi() {
+            cmd.arg("-Crelocation-model=pic");
+        }
+
         let output = cmd.output().await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -6023,7 +6077,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// rlib filename. This is important because multiple rlibs for the same crate can coexist
     /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
     /// and globbing would return an arbitrary one.
-    fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Option<PathBuf> {
+    fn find_rlib_for_crate(
+        &self,
+        crate_name: &str,
+        rustc_args: &RustcArgs,
+        artifact_paths: &HashMap<String, PathBuf>,
+    ) -> Option<PathBuf> {
+        if let Some(path) = artifact_paths.get(&format!("{crate_name}.lib")) {
+            if path.exists() {
+                return Some(path.clone());
+            }
+        }
+
         // Extract --out-dir from the captured args
         let out_dir = rustc_args
             .args
@@ -6081,6 +6146,22 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         None
     }
 
+    fn rustc_extra_filename(rustc_args: &RustcArgs) -> Option<String> {
+        rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
+            arg.strip_prefix("-Cextra-filename=")
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    if arg == "-C" {
+                        rustc_args.args.get(i + 1).and_then(|next| {
+                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
+                        })
+                    } else {
+                        None
+                    }
+                })
+        })
+    }
+
     /// with our hotpatching setup since it uses linker interception.
     ///
     /// This is sadly a hack. I think there might be other ways of busting the fingerprint (rustc wrapper?)
@@ -6119,15 +6200,18 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             // This causes to more aggressively bust hashes for all combinations of features
             // and fingerprints for this package since we're just ignoring the hash
             if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
+                let mut removed = Vec::new();
                 for entry in entries.flatten() {
                     if let Some(fname) = entry.file_name().to_str() {
                         if let Some((name, _)) = fname.rsplit_once('-') {
                             if busted.contains(name) {
+                                removed.push(fname.to_string());
                                 _ = std::fs::remove_dir_all(entry.path());
                             }
                         }
                     }
                 }
+                tracing::debug!("Removed fingerprint directories: {:?}", removed);
             }
         }
 
@@ -6200,6 +6284,54 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
         workspace_rustc_args
+    }
+
+    fn compiler_artifact_key(&self, artifact: &cargo_metadata::Artifact) -> Option<String> {
+        let normalized_name = artifact.target.name.replace('-', "_");
+        let kinds = &artifact.target.kind;
+
+        if kinds.iter().any(|kind| {
+            matches!(
+                kind,
+                cargo_metadata::TargetKind::Lib | cargo_metadata::TargetKind::RLib
+            )
+        }) {
+            Some(format!("{normalized_name}.lib"))
+        } else if kinds
+            .iter()
+            .any(|kind| matches!(kind, cargo_metadata::TargetKind::Bin))
+        {
+            Some(format!("{normalized_name}.bin"))
+        } else {
+            None
+        }
+    }
+
+    fn record_workspace_artifact_path(
+        &self,
+        artifact_paths: &mut HashMap<String, PathBuf>,
+        artifact: &cargo_metadata::Artifact,
+    ) {
+        let Some(key) = self.compiler_artifact_key(artifact) else {
+            return;
+        };
+
+        let path = if key.ends_with(".lib") {
+            artifact
+                .filenames
+                .iter()
+                .find(|path| path.extension().is_some_and(|ext| ext == "rlib"))
+                .map(|path| PathBuf::from(path.as_std_path()))
+        } else {
+            artifact
+                .executable
+                .as_ref()
+                .map(|path| PathBuf::from(path.as_std_path()))
+        };
+
+        if let Some(path) = path {
+            artifact_paths.insert(key, path);
+        }
     }
 
     fn persist_rustc_args(&self, args_dir: &Path, key: &str, args: &RustcArgs) -> Result<()> {
