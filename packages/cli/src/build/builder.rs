@@ -2,7 +2,7 @@ use crate::opt::process_file_to;
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
-    RustcArgs, StructuredOutput,
+    StructuredOutput,
 };
 use anyhow::{bail, Context, Error};
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
@@ -605,22 +605,16 @@ impl AppBuilder {
             ));
         }
 
-        // If there's any CARGO vars in the rustc_wrapper files, push those too.
-        // Read from any per-crate args file in the directory (they all share the same CARGO_ envs).
-        if let Ok(entries) = std::fs::read_dir(self.build.rustc_wrapper_args_dir()) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "json") {
-                    if let Ok(contents) = std::fs::read_to_string(&path) {
-                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
-                            for (key, value) in args.envs {
-                                if key.starts_with("CARGO_") {
-                                    envs.push((key, value));
-                                }
-                            }
-                            break; // Only need one file for CARGO_ env vars
-                        }
-                    }
+        // If there's any CARGO vars in the captured rustc args, push those too.
+        // Any captured invocation is sufficient since the CARGO_ environment is shared.
+        if let Some(args) = self
+            .artifacts
+            .as_ref()
+            .and_then(|artifacts| artifacts.workspace_rustc_args.values().next())
+        {
+            for (key, value) in args.envs.iter().cloned() {
+                if key.starts_with("CARGO_") {
+                    envs.push((key, value));
                 }
             }
         }
