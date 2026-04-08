@@ -1481,7 +1481,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    #[derive(Clone)]
                     #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
                         owner: dioxus_core::internal::generational_box::Owner,
@@ -1490,6 +1489,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                     impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
                         fn eq(&self, other: &Self) -> bool {
                             self.inner.eq(&other.inner)
+                        }
+                    }
+
+                    impl #original_impl_generics Clone for #name #ty_generics #where_clause {
+                        fn clone(&self) -> Self {
+                            Self {
+                                inner: self.inner.clone(),
+                                owner: self.owner.clone(),
+                            }
                         }
                     }
 

@@ -137,12 +137,19 @@ impl BuildContext {
         tracing::trace!(dx_src = ?TraceSrc::Cargo, "{line}");
     }
 
-    pub(crate) fn status_build_progress(&self, count: usize, total: usize, name: String) {
+    pub(crate) fn status_build_progress(
+        &self,
+        count: usize,
+        total: usize,
+        name: String,
+        fresh: bool,
+    ) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
                 total,
                 krate: name,
+                fresh,
             },
         });
     }

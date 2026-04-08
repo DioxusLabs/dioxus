@@ -94,16 +94,3 @@ pub trait HasCompositionData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! [
-    CompositionData;
-
-    /// oncompositionstart
-    oncompositionstart
-
-    /// oncompositionend
-    oncompositionend
-
-    /// oncompositionupdate
-    oncompositionupdate
-];

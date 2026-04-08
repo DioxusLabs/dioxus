@@ -320,6 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
+use crate::opt::{process_file_to, AssetManifest};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -331,7 +332,6 @@ use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_cli_opt::{process_file_to, AssetManifest};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
@@ -933,7 +933,16 @@ impl BuildRequest {
             let sysroot_location = match triple.environment {
                 target_lexicon::Environment::Sim => xcode_path
                     .join("Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk"),
-                _ => xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk"),
+                _ => {
+                    // If the target has been determined as the iOS x86 simulator above
+                    if triple.to_string() == "x86_64-apple-ios" {
+                        xcode_path.join(
+                            "Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk",
+                        )
+                    } else {
+                        xcode_path.join("Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk")
+                    }
+                }
             };
 
             if sysroot_location.exists() && !rustflags.flags.iter().any(|f| f == "-isysroot") {
@@ -1306,7 +1315,12 @@ impl BuildRequest {
                 }
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
-                    ctx.status_build_progress(units_compiled, crate_count, artifact.target.name);
+                    ctx.status_build_progress(
+                        units_compiled,
+                        crate_count,
+                        artifact.target.name,
+                        artifact.fresh,
+                    );
                     output_location = artifact.executable.map(Into::into);
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
@@ -2280,6 +2294,7 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
@@ -2292,7 +2307,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to);
+                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
@@ -2689,8 +2704,12 @@ impl BuildRequest {
 
                 // Preserve the original args. We only preserve:
                 // -L <path>
-                // -arch
                 // -lxyz
+                // -m (arch/emulation)
+                // -B<path>  (gcc program search path — Rust 1.86+ injects -B/gcc-ld + -fuse-ld=lld
+                //            so that cc picks up the bundled lld; we must forward it for the patch
+                //            linker invocation too, otherwise cc falls back to the system `ld`)
+                // -fuse-ld  (linker selection)
                 // There might be more, but some flags might break our setup.
                 for (idx, arg) in original_args.iter().enumerate() {
                     if *arg == "-L" {
@@ -2703,6 +2722,7 @@ impl BuildRequest {
                         || arg.starts_with("-Wl,--target=")
                         || arg.starts_with("-Wl,-fuse-ld")
                         || arg.starts_with("-fuse-ld")
+                        || arg.starts_with("-B")
                         || arg.contains("-ld-path")
                     {
                         out_args.push(arg.to_string());
@@ -3605,6 +3625,10 @@ impl BuildRequest {
             env_vars.extend(self.android_env_vars()?);
         };
 
+        // Always bake the product name into the binary so bundled apps can find their assets
+        // at runtime regardless of build profile (the asset directory structure uses the product name).
+        env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
+
         // If this is a release build, bake the base path and title into the binary with env vars.
         // todo: should we even be doing this? might be better being a build.rs or something else.
         if self.release {
@@ -3615,7 +3639,6 @@ impl BuildRequest {
                 APP_TITLE_ENV.into(),
                 self.config.web.app.title.clone().into(),
             ));
-            env_vars.push((PRODUCT_NAME_ENV.into(), self.bundled_app_name().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
@@ -3733,7 +3756,6 @@ impl BuildRequest {
         let java_home = tools.java_home();
         let ndk_home = tools.ndk.clone();
         let sdk_root = tools.sdk();
-        let artifact_dir = self.android_artifact_dir()?;
         tracing::debug!(
             r#"Using android:
             min_sdk_version: {min_sdk_version}
@@ -3743,7 +3765,6 @@ impl BuildRequest {
             target_cxx: {target_cxx:?}
             java_home: {java_home:?}
             sdk_root: {sdk_root:?}
-            artifact_dir: {artifact_dir:?}
             "#
         );
 
@@ -3756,10 +3777,6 @@ impl BuildRequest {
             ));
         }
 
-        env_vars.push((
-            "DX_ANDROID_ARTIFACT_DIR".into(),
-            artifact_dir.into_os_string(),
-        ));
         env_vars.push((
             "DX_ANDROID_NDK_HOME".into(),
             ndk_home.clone().into_os_string(),
@@ -3911,7 +3928,7 @@ impl BuildRequest {
             ),
             (
                 "WRY_ANDROID_LIBRARY".to_string(),
-                "dioxusmain".to_string().into(),
+                self.android_lib_name().into(),
             ),
             ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
                 let kotlin_dir = self.wry_android_kotlin_files_out_dir();
@@ -3943,17 +3960,6 @@ impl BuildRequest {
         }
 
         Ok(env_vars)
-    }
-
-    fn android_artifact_dir(&self) -> Result<PathBuf> {
-        let dir = self
-            .internal_out_dir()
-            .join(&self.main_target)
-            .join(if self.release { "release" } else { "debug" })
-            .join("android-artifacts")
-            .join(self.triple.to_string());
-        std::fs::create_dir_all(&dir)?;
-        Ok(dir)
     }
 
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
@@ -4086,15 +4092,24 @@ impl BuildRequest {
             // mac/ios are unixy and dont have an exe extension
             BundleFormat::MacOS | BundleFormat::Ios => self.executable_name().to_string(),
 
-            // "server" and windows can be the same
-            BundleFormat::Server | BundleFormat::Windows => match self.triple.operating_system {
+            // the server binary is always called "server" to avoid antivirus issues when the
+            // binary name changes between builds (the folder name already identifies the project)
+            BundleFormat::Server => match self.triple.operating_system {
+                OperatingSystem::Windows => "server.exe".to_string(),
+                _ => "server".to_string(),
+            },
+
+            BundleFormat::Windows => match self.triple.operating_system {
                 OperatingSystem::Windows => format!("{}.exe", self.executable_name()),
                 _ => self.executable_name().to_string(),
             },
 
             // from the apk spec, the root exe is a shared library
-            // we include the user's rust code as a shared library with a fixed namespace
-            BundleFormat::Android => "libdioxusmain.so".to_string(),
+            // defaults to "main" (libmain.so) per NativeActivity convention, overridable in Dioxus.toml
+            BundleFormat::Android => {
+                let lib_name = self.android_lib_name();
+                format!("lib{lib_name}.so")
+            }
 
             // this will be wrong, I think, but not important?
             BundleFormat::Web => format!("{}_bg.wasm", self.executable_name()),
@@ -4177,6 +4192,8 @@ impl BuildRequest {
             app_theme: Option<String>,
             supports_rtl: Option<bool>,
             large_heap: Option<bool>,
+            /// Native library name (without lib prefix and .so extension)
+            lib_name: String,
         }
 
         // Get permission mapper from config
@@ -4225,6 +4242,7 @@ impl BuildRequest {
             app_theme: self.config.android.application.theme.clone(),
             supports_rtl: self.config.android.application.supports_rtl,
             large_heap: self.config.android.application.large_heap,
+            lib_name: self.android_lib_name(),
         };
         let hbs = handlebars::Handlebars::new();
 
@@ -4528,6 +4546,16 @@ impl BuildRequest {
         &self.crate_target.name
     }
 
+    /// Android native library name (without `lib` prefix and `.so` extension).
+    /// Defaults to `"main"` per NativeActivity convention, overridable via `[android] lib_name`.
+    fn android_lib_name(&self) -> String {
+        self.config
+            .android
+            .lib_name
+            .clone()
+            .unwrap_or_else(|| "main".to_string())
+    }
+
     /// Get the type of executable we are compiling
     pub(crate) fn executable_type(&self) -> TargetKind {
         self.crate_target.kind[0].clone()
@@ -4609,7 +4637,7 @@ impl BuildRequest {
 
         // Get the strip setting from the profile or the profile it inherits from
         fn get_strip(profile: &Profile, profiles: &Profiles) -> Option<StripSetting> {
-            profile.strip.or_else(|| {
+            profile.strip.as_ref().copied().or_else(|| {
                 // If we can't find the strip setting, check if we inherit from another profile
                 profile.inherits.as_ref().and_then(|inherits| {
                     let profile = match inherits.as_str() {
@@ -4987,7 +5015,7 @@ impl BuildRequest {
 
     /// Check if the wasm output should be bundled to an asset type app.
     fn should_bundle_to_asset(&self) -> bool {
-        self.release && !self.wasm_split && self.bundle == BundleFormat::Web
+        self.release && self.bundle == BundleFormat::Web
     }
 
     /// Bundle the web app
@@ -5524,6 +5552,25 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .join("app-debug.apk")
     }
 
+    pub(crate) fn release_apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("release")
+            .join("app-release.apk")
+    }
+
+    pub(crate) fn android_apk_path(&self) -> PathBuf {
+        let assembled_release = self.release && self.config.bundle.android.is_some();
+        if assembled_release {
+            self.release_apk_path()
+        } else {
+            self.debug_apk_path()
+        }
+    }
+
     /// We only really currently care about:
     ///
     /// - app dir (.app, .exe, .apk, etc)
@@ -5757,6 +5804,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
         WasmBindgen::verify_install(&krate_bindgen_version).await?;
 
+        // esbuild is used for JS asset processing
+        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
+
         Ok(())
     }
 
@@ -5970,7 +6020,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with(&prefix) && name.ends_with(".rlib") {
                     let mtime = entry.metadata().ok()?.modified().ok()?;
-                    if best.as_ref().map_or(true, |(_, t)| mtime > *t) {
+                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
                         best = Some((entry.path(), mtime));
                     }
                 }
@@ -7021,8 +7071,7 @@ We checked the folders:
         };
 
         let entitlements_xml = format!(
-            r#"
-<?xml version="1.0" encoding="UTF-8"?>
+            r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
     <key>application-identifier</key>

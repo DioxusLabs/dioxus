@@ -7,11 +7,10 @@ description = "CLI for building fullstack web, desktop, and mobile apps with a s
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
-rust-version = "1.81.0"
+rust-version = "1.82.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
-dioxus-check = { workspace = true }
 dioxus-rsx-rosetta = { workspace = true }
 dioxus-rsx = { workspace = true }
 dioxus-rsx-hotreload = { workspace = true }
@@ -20,8 +19,6 @@ dioxus-core = { workspace = true, features = ["serialize"] }
 dioxus-core-types = { workspace = true }
 dioxus-devtools-types = { workspace = true }
 dioxus-cli-config = { workspace = true }
-dioxus-cli-opt = { workspace = true }
-dioxus-fullstack = { workspace = true }
 dioxus-dx-wire-format = { workspace = true }
 wasm-split-cli = { workspace = true }
 depinfo = { workspace = true }
@@ -33,10 +30,8 @@ bytes = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo"] }
 convert_case = { workspace = true }
 thiserror = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }
-# swc uses serde internals that break with newer versions of serde. We should move off of swc eventually,
-# but pinning serde fixes the issue in the meantime
-serde = { version = "=1.0.221", features = ["derive"] }
+uuid = { workspace = true, features = ["v4", "v5", "v7"] }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 toml = { workspace = true }
 cargo_toml = { workspace = true, features = ["features"] }
@@ -61,9 +56,10 @@ console = "0.16.0"
 ctrlc = "3.4.7"
 
 axum = { workspace = true, default-features = true, features = ["ws"] }
-axum-server = { workspace = true, features = ["tls-rustls"] }
+axum-server = { workspace = true, features = ["tls-rustls-no-provider"] }
 axum-extra = { workspace = true, features = ["typed-header"] }
 tower-http = { workspace = true, features = ["full"] }
+owo-colors = { workspace = true, features = ["supports-colors"] }
 proc-macro2 = { workspace = true, features = ["span-locations"] }
 syn = { workspace = true, features = [
     "full",
@@ -72,13 +68,12 @@ syn = { workspace = true, features = [
     "visit-mut",
 ] }
 
-headers = "0.4.1"
-walkdir = "2"
+walkdir = { workspace = true }
 dunce = { workspace = true }
 
 # tools download
 dirs = { workspace = true }
-reqwest = { workspace = true, features = ["rustls-tls", "trust-dns", "json"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json"] }
 tower = { workspace = true }
 git2 = "0.20.2"
 
@@ -95,13 +90,18 @@ toml_edit = "0.22.27"
 prettyplease = { workspace = true }
 
 # Assets
+lightningcss = { version = "1.0.0-alpha.67", features = ["browserslist", "into_owned"] }
+grass = "0.13.4"
+codemap = "0.1.3"
+mozjpeg = { version = "0.10.13", default-features = false, features = ["parallel"] }
+imagequant = "4.4.0"
+png = "0.17.16"
 brotli = "8.0.1"
 ignore = "0.4.23"
-env_logger = { workspace = true }
 const-serialize = { workspace = true, features = ["serde"] }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2", features = ["serde"] }
 
-tracing-subscriber = { version = "0.3.19", features = [
+tracing-subscriber = { workspace = true, features = [
     "std",
     "env-filter",
     "json",
@@ -119,7 +119,7 @@ ratatui = { workspace = true, features = ["crossterm", "unstable"] }
 shell-words = { workspace = true }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
-log = { version = "0.4", features = ["max_level_off", "release_max_level_off"] }
+log = { version = "0.4.27", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.19.1"
@@ -127,7 +127,6 @@ manganis = { workspace = true }
 manganis-core = { workspace = true }
 manganis-core-07 = { workspace = true }
 target-lexicon = { version = "0.13.2", features = ["serde", "serde_support"] }
-wasm-encoder = "0.235.0"
 
 # Extracting data from an executable
 object = { workspace = true, features = ["all"] }
@@ -136,26 +135,26 @@ itertools = { workspace = true }
 throbber-widgets-tui = "0.8.0"
 unicode-segmentation = "1.12.0"
 handlebars = "6.3.2"
-strum = { version = "0.27.1", features = ["derive"] }
-memmap = "0.7.0"
 walrus = { workspace = true, features = ["parallel"] }
 wasmparser = { workspace = true }
 
-tauri-utils = { workspace = true }
-tauri-macos-sign = { workspace = true }
-tauri-bundler = { workspace = true }
+# bundler dependencies
+icns = { workspace = true }
+image = { workspace = true }
+zip = { workspace = true }
+sha1 = { workspace = true }
+sha2 = { workspace = true }
+md5 = { workspace = true }
+rpm = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
 tar = "0.4.44"
-local-ip-address = "0.6.5"
 dircpy = "0.3.19"
 plist = "1.7.4"
-memoize = "0.5.1"
 backtrace = "0.3.74"
 ar = "0.9.0"
-wasm-bindgen-externref-xform = "0.2.100"
 pdb = "0.8.0"
-self_update = { version = "0.42.0", features = [
+self_update = { version = "0.42.0", default-features = false, features = [
     "archive-tar",
     "archive-zip",
     "compression-flate2",
@@ -163,7 +162,6 @@ self_update = { version = "0.42.0", features = [
 ] }
 self-replace = "1.5.0"
 cargo-config2 = { workspace = true }
-posthog-rs = "0.3.5"
 serde_json5 = "0.2.1"
 fs2 = "0.4.3"
 sentry-backtrace = "0.42.0"
@@ -171,12 +169,10 @@ nucleo = "0.5.0"
 
 # 0.5.12 rust-version is too high
 home = "=0.5.11"
+clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
 git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
-
-[build-dependencies]
-built = { version = "0.8.0", features = ["git2"] }
 
 [features]
 default = []
@@ -190,6 +186,8 @@ name = "dx"
 
 [dev-dependencies]
 escargot = "0.5"
+indoc = "2.0.6"
+pretty_assertions = { workspace = true }
 
 [package.metadata.binstall]
 pkg-url = "{ repo }/releases/download/v{ version }/dx-{ target }{ archive-suffix }"
