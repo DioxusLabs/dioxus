@@ -2186,6 +2186,34 @@ impl BuildRequest {
             }
         }
 
+        // Also copy frameworks declared in [ios]/[macos] frameworks, to cover the
+        // `-L dir -l name` case that the link-args loop above doesn't see.
+        let declared_frameworks: &[String] = match self.triple.operating_system {
+            OperatingSystem::IOS(_) => &self.config.ios.frameworks,
+            OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
+                &self.config.macos.frameworks
+            }
+            _ => &[],
+        };
+
+        for framework in declared_frameworks {
+            let framework_path = PathBuf::from(framework);
+            let resolved = if framework_path.is_absolute() {
+                framework_path.clone()
+            } else {
+                self.crate_dir().join(&framework_path)
+            };
+
+            if !resolved.exists() {
+                tracing::debug!(
+                    "Framework not found as file, assuming system framework: {framework}"
+                );
+                continue;
+            }
+
+            crate::bundler::copy_framework(&resolved, &framework_dir)?;
+        }
+
         Ok(())
     }
 
@@ -6602,6 +6630,29 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 let dest = target_exe.join("embedded.mobileprovision");
                 std::fs::copy(profile_path, &dest)
                     .context("Failed to embed provisioning profile into .app bundle")?;
+            }
+        }
+
+        // Sign embedded frameworks first (deepest-first, required by codesign).
+        let frameworks_dir = self.frameworks_folder();
+        if frameworks_dir.exists() {
+            for entry in std::fs::read_dir(&frameworks_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                let output = Command::new("codesign")
+                    .args(["--force", "--sign", app_dev_name])
+                    .arg(&path)
+                    .output()
+                    .await
+                    .with_context(|| format!("Failed to codesign {}", path.display()))?;
+
+                if !output.status.success() {
+                    bail!(
+                        "Failed to codesign {}: {}",
+                        path.display(),
+                        String::from_utf8_lossy(&output.stderr).trim()
+                    );
+                }
             }
         }
 
