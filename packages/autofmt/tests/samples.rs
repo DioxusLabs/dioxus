@@ -69,6 +69,8 @@ twoway![
     blank_lines,
     blank_lines_preserved,
     forloop_tuple,
+    commented_rsx_block,
+    commented_rsx_block_nested,
 ];
 
 fn assert_idempotent(src: &str) {
