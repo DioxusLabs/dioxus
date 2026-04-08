@@ -5,22 +5,6 @@ use std::sync::LazyLock;
 use std::{fs, path::PathBuf, sync::Arc};
 use tracing::{error, trace, warn};
 
-/// Supported editors for debug sessions
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum SupportedEditor {
-    /// Visual Studio Code
-    Vscode,
-    /// Cursor editor
-    Cursor,
-}
-
-impl Default for SupportedEditor {
-    fn default() -> Self {
-        SupportedEditor::Vscode
-    }
-}
-
 /// Describes cli settings from project or global level.
 /// The order of priority goes:
 /// 1. CLI Flags/Arguments
@@ -185,6 +169,17 @@ impl CliSettings {
 
         *CI
     }
+}
+
+/// Supported editors for debug sessions
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum SupportedEditor {
+    /// Visual Studio Code
+    #[default]
+    Vscode,
+    /// Cursor editor
+    Cursor,
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {
