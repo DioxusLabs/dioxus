@@ -174,3 +174,31 @@ fn memos_sync_rerun_after_unrelated_write() {
     dom.render_immediate(&mut NoOpMutations);
     assert!(PASSED.load(Ordering::SeqCst));
 }
+
+// Regression test for boxed ReadSignal wrappers bypassing Memo::try_read_unchecked
+#[test]
+fn boxed_memo_reads_recompute_dirty_memos() {
+    let boxed_value_after_write = Rc::new(RefCell::new(None));
+    let mut dom = VirtualDom::new_with_props(
+        {
+            let boxed_value_after_write = boxed_value_after_write.clone();
+            move |boxed_value_after_write: Rc<RefCell<Option<i32>>>| {
+                let mut signal = use_signal(|| 0);
+                let memo = use_memo(move || signal());
+                let boxed = ReadSignal::from(memo);
+
+                assert_eq!(boxed(), 0);
+                signal.set(1);
+                *boxed_value_after_write.borrow_mut() = Some(boxed());
+
+                rsx! {
+                    div {}
+                }
+            }
+        },
+        boxed_value_after_write.clone(),
+    );
+
+    dom.rebuild_in_place();
+    assert_eq!(*boxed_value_after_write.borrow(), Some(1));
+}

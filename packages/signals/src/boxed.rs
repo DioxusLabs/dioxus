@@ -1,6 +1,6 @@
-use std::{any::Any, ops::Deref, sync::Arc};
+use std::{any::Any, ops::Deref};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -19,6 +19,7 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
     value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
+    subscribers: CopyValue<Subscribers, SyncStorage>,
 }
 
 impl<T: ?Sized + 'static> ReadSignal<T> {
@@ -35,24 +36,22 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
-        let value: Box<<S as BoxedSignalStorage<T>>::DynReadable<sealed::SealedToken>> =
-            <S as CreateBoxedSignalStorage<R>>::new_read_signal_subscriber_layer(
-                value,
-                sealed::SealedToken,
-            );
         Self {
-            value: CopyValue::new_maybe_sync(value),
+            value: CopyValue::new_maybe_sync(S::new_readable(value, sealed::SealedToken)),
+            subscribers: CopyValue::<Subscribers, SyncStorage>::new_maybe_sync(Subscribers::new()),
         }
     }
 
     /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult {
         let this_subscribers = self.subscribers();
+        let old_wrapped_subscribers = self.value.try_peek_unchecked().unwrap().subscribers();
         let mut this_subscribers_vec = Vec::new();
         // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
         this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
-        let other_subscribers = other.subscribers();
+        let other_subscribers = other.value.try_peek_unchecked().unwrap().subscribers();
         for subscriber in this_subscribers_vec {
+            old_wrapped_subscribers.remove(&subscriber);
             subscriber.subscribe(other_subscribers.clone());
         }
         self.value.point_to(other.value)
@@ -136,10 +135,17 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        if let Some(reactive_context) = ReactiveContext::current() {
+            reactive_context.subscribe(self.subscribers());
+        }
+
+        let (temporary_context, _) = ReactiveContext::new();
+        temporary_context.run_in(|| {
+            self.value
+                .try_peek_unchecked()
+                .unwrap()
+                .try_read_unchecked()
+        })
     }
 
     #[track_caller]
@@ -157,87 +163,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value.try_peek_unchecked().unwrap().subscribers()
-    }
-}
-
-struct LayeredSubscribers {
-    local: Subscribers,
-    underlying: Subscribers,
-}
-
-impl LayeredSubscribers {
-    fn new(underlying: Subscribers) -> Self {
-        Self {
-            local: Subscribers::new(),
-            underlying,
-        }
-    }
-}
-
-impl SubscriberList for LayeredSubscribers {
-    fn add(&self, subscriber: ReactiveContext) {
-        self.local.add(subscriber);
-        self.underlying.add(subscriber);
-    }
-
-    fn remove(&self, subscriber: &ReactiveContext) {
-        self.local.remove(subscriber);
-        self.underlying.remove(subscriber);
-    }
-
-    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
-        self.local.visit(f);
-    }
-}
-
-struct ReadSignalSubscriberLayer<R: Readable> {
-    value: R,
-    subscribers: Arc<LayeredSubscribers>,
-}
-
-impl<R: Readable> ReadSignalSubscriberLayer<R> {
-    fn new(value: R) -> Self
-    where
-        R::Target: 'static,
-    {
-        Self {
-            subscribers: Arc::new(LayeredSubscribers::new(value.subscribers())),
-            value,
-        }
-    }
-}
-
-impl<R: Readable> Readable for ReadSignalSubscriberLayer<R> {
-    type Target = R::Target;
-    type Storage = R::Storage;
-
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
-    where
-        R::Target: 'static,
-    {
-        if let Some(reactive_context) = ReactiveContext::current() {
-            reactive_context.subscribe(Subscribers::from(self.subscribers.clone()));
-        }
-        self.value.try_peek_unchecked()
-    }
-
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError>
-    where
-        R::Target: 'static,
-    {
-        self.value.try_peek_unchecked()
-    }
-
-    fn subscribers(&self) -> Subscribers
-    where
-        R::Target: 'static,
-    {
-        Subscribers::from(self.subscribers.clone())
+        self.subscribers.try_peek_unchecked().unwrap().clone()
     }
 }
 
@@ -575,15 +501,6 @@ pub trait CreateBoxedSignalStorage<T: Readable + ?Sized>:
     where
         T: Sized;
 
-    #[doc(hidden)]
-    fn new_read_signal_subscriber_layer(
-        value: T,
-        _: sealed::SealedToken,
-    ) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized,
-        T::Target: 'static;
-
     // This is not a public api, and is sealed to prevent external usage and implementations
     #[doc(hidden)]
     fn new_writable(
@@ -616,17 +533,6 @@ impl<T: Readable<Storage = UnsyncStorage> + ?Sized + 'static> CreateBoxedSignalS
     {
         Box::new(BoxWriteMetadata::new(value))
     }
-
-    fn new_read_signal_subscriber_layer(
-        value: T,
-        _: sealed::SealedToken,
-    ) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized,
-        T::Target: 'static,
-    {
-        Box::new(ReadSignalSubscriberLayer::new(value))
-    }
 }
 
 impl<T: ?Sized + 'static> BoxedSignalStorage<T> for SyncStorage {
@@ -651,17 +557,6 @@ impl<T: Readable<Storage = SyncStorage> + Sync + Send + ?Sized + 'static>
         T: Writable + Sized,
     {
         Box::new(BoxWriteMetadata::new(value))
-    }
-
-    fn new_read_signal_subscriber_layer(
-        value: T,
-        _: sealed::SealedToken,
-    ) -> Box<Self::DynReadable<sealed::SealedToken>>
-    where
-        T: Sized,
-        T::Target: 'static,
-    {
-        Box::new(ReadSignalSubscriberLayer::new(value))
     }
 }
 

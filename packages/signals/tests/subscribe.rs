@@ -289,7 +289,7 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
     {
         let current_counter = run_counter.borrow();
         assert_eq!(current_counter.direct_effect_runs, 2);
-        assert_eq!(current_counter.child_renders, 2);
+        assert_eq!(current_counter.child_renders, 1);
     }
 
     let mut signal_b = handles.borrow().signal_b.unwrap();
@@ -301,6 +301,6 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
     {
         let current_counter = run_counter.borrow();
         assert_eq!(current_counter.direct_effect_runs, 2);
-        assert_eq!(current_counter.child_renders, 3);
+        assert_eq!(current_counter.child_renders, 2);
     }
 }
