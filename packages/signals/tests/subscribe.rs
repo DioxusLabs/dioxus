@@ -304,3 +304,43 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
         assert_eq!(current_counter.child_renders, 2);
     }
 }
+
+#[test]
+fn boxed_read_signal_subscribes_to_underlying_updates() {
+    let render_count = Rc::new(RefCell::new(0usize));
+    let signal_handle = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(render_count, signal_handle): (
+            Rc<RefCell<usize>>,
+            Rc<RefCell<Option<Signal<i32>>>>,
+        )| {
+            let mut signal = use_signal(|| 0);
+            *signal_handle.borrow_mut() = Some(signal);
+
+            let boxed = ReadSignal::from(signal);
+            let _ = boxed();
+            *render_count.borrow_mut() += 1;
+
+            rsx! { "{boxed}" }
+        },
+        (render_count.clone(), signal_handle.clone()),
+    );
+
+    dom.rebuild_in_place();
+
+    {
+        let current_render_count = render_count.borrow();
+        assert_eq!(*current_render_count, 1);
+    }
+
+    let mut signal = signal_handle.borrow().unwrap();
+    signal.set(1);
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
+
+    {
+        let current_render_count = render_count.borrow();
+        assert_eq!(*current_render_count, 2);
+    }
+}
