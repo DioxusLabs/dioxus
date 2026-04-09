@@ -69,14 +69,14 @@ async fn serve_server(
 
     let cb = move || {
         let cfg = cfg.clone();
-        Box::pin(async move {
+        async move {
             Ok(apply_base_path(
                 Router::new().serve_dioxus_application(cfg.clone(), original_root),
                 original_root,
                 cfg.clone(),
                 base_path().map(|s| s.to_string()),
             ))
-        }) as _
+        }
     };
 
     serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await;
@@ -111,16 +111,20 @@ pub fn router(app: fn() -> Element) -> Router {
 /// The axum router will be bound to the address specified by the `IP` and `PORT` environment variables,
 /// defaulting to `127.0.0.1:8080` if not set.
 ///
+/// To bind to a specific address from your own async runtime, use [`serve_router`] instead.
+///
 /// This function uses axum to block on serving the application, and will not return.
-pub fn serve<F>(mut serve_it: impl FnMut() -> F) -> !
+pub fn serve<F>(serve_it: impl FnMut() -> F) -> !
 where
     F: Future<Output = Result<Router, anyhow::Error>> + 'static,
 {
-    let cb = move || Box::pin(serve_it()) as _;
-
-    block_on(
-        async move { serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await },
-    );
+    block_on(async move {
+        serve_router(
+            serve_it,
+            dioxus_cli_config::fullstack_address_or_localhost(),
+        )
+        .await
+    });
 
     unreachable!("Serving a fullstack app should never return")
 }
@@ -131,10 +135,15 @@ where
 ///
 /// To enable hot-reloading of the router, the provided `serve_callback` should return a new `Router`
 /// each time it is called.
-pub async fn serve_router(
-    mut serve_callback: impl FnMut() -> Pin<Box<dyn Future<Output = Result<Router, anyhow::Error>>>>,
-    addr: SocketAddr,
-) {
+pub async fn serve_router<F>(mut serve_callback: impl FnMut() -> F, addr: SocketAddr)
+where
+    F: Future<Output = Result<Router, anyhow::Error>> + 'static,
+{
+    // Box internally so the hot-reload path (`HotFn`) still gets a type-erased future.
+    let mut serve_callback = move || {
+        Box::pin(serve_callback()) as Pin<Box<dyn Future<Output = Result<Router, anyhow::Error>>>>
+    };
+
     dioxus_logger::initialize_default();
 
     let listener = TcpListener::bind(addr)
