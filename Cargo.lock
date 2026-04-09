@@ -5822,11 +5822,9 @@ version = "0.7.5"
 dependencies = [
  "dioxus",
  "dioxus-core",
- "dioxus-html",
  "dioxus-signals",
  "dioxus-stores-macro",
  "generational-box",
- "tokio",
 ]
 
 [[package]]
