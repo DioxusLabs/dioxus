@@ -1,7 +1,3 @@
-use dioxus_core::Event;
-
-pub type ScrollEvent = Event<ScrollData>;
-
 pub struct ScrollData {
     inner: Box<dyn HasScrollData>,
 }

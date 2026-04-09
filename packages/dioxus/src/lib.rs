@@ -193,7 +193,7 @@ pub mod prelude {
     #[cfg_attr(docsrs, doc(cfg(feature = "html")))]
     #[doc(no_inline)]
     pub use dioxus_elements::{
-        events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
+        events::*, extensions::*, global_attributes, keyboard_types, svg_attributes,
         GlobalAttributesExtension, SvgAttributesExtension,
     };
 

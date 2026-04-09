@@ -5,12 +5,9 @@ use crate::{
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
 };
 
-use dioxus_core::Event;
 use keyboard_types::Modifiers;
 
 use crate::HasMouseData;
-
-pub type DragEvent = Event<DragData>;
 
 /// The DragEvent interface is a DOM event that represents a drag and drop interaction. The user initiates a drag by
 /// placing a pointer device (such as a mouse) on the touch surface and then dragging the pointer to a new location

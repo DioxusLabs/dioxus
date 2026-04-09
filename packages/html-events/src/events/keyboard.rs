@@ -1,4 +1,3 @@
-use dioxus_core::Event;
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::fmt::Debug;
 
@@ -14,7 +13,6 @@ where
     Ok(Code::deserialize(deserializer).unwrap_or(Code::Unidentified))
 }
 
-pub type KeyboardEvent = Event<KeyboardData>;
 pub struct KeyboardData {
     inner: Box<dyn HasKeyboardData>,
 }

@@ -1,7 +1,3 @@
-use dioxus_core::Event;
-
-pub type TransitionEvent = Event<TransitionData>;
-
 pub struct TransitionData {
     inner: Box<dyn HasTransitionData>,
 }

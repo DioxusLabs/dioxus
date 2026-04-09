@@ -1,7 +1,3 @@
-use dioxus_core::Event;
-
-pub type AnimationEvent = Event<AnimationData>;
-
 pub struct AnimationData {
     inner: Box<dyn HasAnimationData>,
 }

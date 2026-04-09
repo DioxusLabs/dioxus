@@ -9,7 +9,7 @@ use crate::{
 use crate::{document::DesktopDocument, WeakDesktopContext};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
+use dioxus_core::{consume_context, provide_context, ElementId, Runtime, ScopeId, VirtualDom};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
@@ -105,6 +105,8 @@ impl WebviewEdits {
             bubbles,
             data,
         } = event;
+        let element = ElementId(element);
+
         let Some(desktop_context) = self.desktop_context.get() else {
             tracing::error!(
                 "Tried to handle event before setting the desktop context on the event handler"

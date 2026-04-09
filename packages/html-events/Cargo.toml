@@ -1,37 +1,26 @@
 [package]
-name = "dioxus-html"
+name = "html-events"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
 edition = "2021"
-description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+description = "Types/Traits to represent HTML events"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
-dioxus-core = { workspace = true }
-dioxus-core-macro = { workspace = true }
-dioxus-core-types = { workspace = true }
-dioxus-rsx = { workspace = true, optional = true }
-dioxus-html-internal-macro = { workspace = true }
-dioxus-hooks = { workspace = true }
-html-events = { workspace = true }
-generational-box = { workspace = true }
-serde = { workspace = true, features = ["derive"], optional = true }
-serde_repr = { workspace = true, optional = true }
-js-sys = { workspace = true, optional = true }
 keyboard-types = { workspace = true, default-features = false }
-async-trait = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util"], optional = true }
-futures-channel = { workspace = true }
 futures-util = { workspace = true }
-serde_json = { workspace = true, optional = true }
-tracing = { workspace = true }
-rustversion = { workspace = true }
 euclid = "0.22.11"
 enumset = "1.1.6"
 bytes = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialize
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_repr = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }
@@ -42,6 +31,7 @@ dioxus = { workspace = true }
 dioxus-web = { workspace = true }
 tokio = { workspace = true, features = ["time"] }
 manganis = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = ["serialize"]
@@ -51,11 +41,8 @@ serialize = [
     "dep:serde_repr",
     "euclid/serde",
     "keyboard-types/serde",
-    "dioxus-core/serialize",
     "bytes/serde"
 ]
-hot-reload-context = ["dep:dioxus-rsx"]
-html-to-rsx = []
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

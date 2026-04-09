@@ -1,32 +1,28 @@
-use dioxus_core::Event;
-
-pub type ClipboardEvent = Event<ClipboardData>;
-
-pub struct ClipboardData {
-    inner: Box<dyn HasClipboardData>,
+pub struct ToggleData {
+    inner: Box<dyn HasToggleData>,
 }
 
-impl<E: HasClipboardData> From<E> for ClipboardData {
+impl<E: HasToggleData> From<E> for ToggleData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
 }
 
-impl std::fmt::Debug for ClipboardData {
+impl std::fmt::Debug for ToggleData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ClipboardData").finish()
+        f.debug_struct("ToggleData").finish()
     }
 }
 
-impl PartialEq for ClipboardData {
+impl PartialEq for ToggleData {
     fn eq(&self, _other: &Self) -> bool {
         true
     }
 }
 
-impl ClipboardData {
-    /// Create a new ClipboardData
-    pub fn new(inner: impl HasClipboardData) -> Self {
+impl ToggleData {
+    /// Create a new ToggleData
+    pub fn new(inner: impl HasToggleData + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }
@@ -35,47 +31,47 @@ impl ClipboardData {
     /// Downcast this event to a concrete event type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.inner.as_ref().as_any().downcast_ref::<T>()
+        self.inner.as_any().downcast_ref::<T>()
     }
 }
 
 #[cfg(feature = "serialize")]
-/// A serialized version of ClipboardData
+/// A serialized version of ToggleData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedClipboardData {}
+pub struct SerializedToggleData {}
 
 #[cfg(feature = "serialize")]
-impl From<&ClipboardData> for SerializedClipboardData {
-    fn from(_: &ClipboardData) -> Self {
+impl From<&ToggleData> for SerializedToggleData {
+    fn from(_: &ToggleData) -> Self {
         Self {}
     }
 }
 
 #[cfg(feature = "serialize")]
-impl HasClipboardData for SerializedClipboardData {
+impl HasToggleData for SerializedToggleData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
 #[cfg(feature = "serialize")]
-impl serde::Serialize for ClipboardData {
+impl serde::Serialize for ToggleData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedClipboardData::from(self).serialize(serializer)
+        SerializedToggleData::from(self).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for ClipboardData {
+impl<'de> serde::Deserialize<'de> for ToggleData {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = SerializedClipboardData::deserialize(deserializer)?;
+        let data = SerializedToggleData::deserialize(deserializer)?;
         Ok(Self {
             inner: Box::new(data),
         })
     }
 }
 
-pub trait HasClipboardData: std::any::Any {
+pub trait HasToggleData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

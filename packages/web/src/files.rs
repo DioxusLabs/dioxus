@@ -37,9 +37,7 @@ impl NativeFileData for WebFileData {
         self.file.last_modified() as u64
     }
 
-    fn read_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>> {
+    fn read_bytes(&self) -> Pin<Box<dyn Future<Output = Result<Bytes, anyhow::Error>> + 'static>> {
         let file_reader = self.reader.clone();
         let file_reader_ = self.reader.clone();
         let file = self.file.clone();
@@ -72,7 +70,7 @@ impl NativeFileData for WebFileData {
 
     fn read_string(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<String, anyhow::Error>> + 'static>> {
         let file_reader = self.reader.clone();
         let file_reader_ = self.reader.clone();
         let file = self.file.clone();
@@ -113,13 +111,8 @@ impl NativeFileData for WebFileData {
     /// We should maybe update these APIs to use our own custom `ByteBuffer` type to avoid going through `Vec<u8>`?
     fn byte_stream(
         &self,
-    ) -> Pin<
-        Box<
-            dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
-                + 'static
-                + Send,
-        >,
-    > {
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, anyhow::Error>> + 'static + Send>>
+    {
         let file = self.file.dyn_ref::<web_sys::Blob>().unwrap().clone();
         Box::pin(SendWrapper::new(futures_util::stream::once(async move {
             let array_buff = wasm_bindgen_futures::JsFuture::from(file.array_buffer())

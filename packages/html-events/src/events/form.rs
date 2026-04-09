@@ -2,10 +2,6 @@ use crate::file_data::HasFileData;
 use crate::FileData;
 use std::fmt::Debug;
 
-use dioxus_core::Event;
-
-pub type FormEvent = Event<FormData>;
-
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 pub struct FormData {
     inner: Box<dyn HasFormData>,

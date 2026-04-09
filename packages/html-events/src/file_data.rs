@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use futures_util::Stream;
-use std::{path::PathBuf, pin::Pin, prelude::rust_2024::Future};
+use std::{future::Future, path::PathBuf, pin::Pin};
 
 #[derive(Clone)]
 pub struct FileData {
@@ -30,18 +30,17 @@ impl FileData {
         self.inner.last_modified()
     }
 
-    pub async fn read_bytes(&self) -> Result<Bytes, dioxus_core::CapturedError> {
+    pub async fn read_bytes(&self) -> Result<Bytes, anyhow::Error> {
         self.inner.read_bytes().await
     }
 
-    pub async fn read_string(&self) -> Result<String, dioxus_core::CapturedError> {
+    pub async fn read_string(&self) -> Result<String, anyhow::Error> {
         self.inner.read_string().await
     }
 
     pub fn byte_stream(
         &self,
-    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::CapturedError>> + Send + 'static>>
-    {
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, anyhow::Error>> + Send + 'static>> {
         self.inner.byte_stream()
     }
 
@@ -69,21 +68,12 @@ pub trait NativeFileData: Send + Sync {
     fn last_modified(&self) -> u64;
     fn path(&self) -> PathBuf;
     fn content_type(&self) -> Option<String>;
-    fn read_bytes(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>>;
+    fn read_bytes(&self) -> Pin<Box<dyn Future<Output = Result<Bytes, anyhow::Error>> + 'static>>;
     fn byte_stream(
         &self,
-    ) -> Pin<
-        Box<
-            dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
-                + 'static
-                + Send,
-        >,
-    >;
-    fn read_string(
-        &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>>;
+    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, anyhow::Error>> + 'static + Send>>;
+    fn read_string(&self)
+        -> Pin<Box<dyn Future<Output = Result<String, anyhow::Error>> + 'static>>;
     fn inner(&self) -> &dyn std::any::Any;
 }
 
@@ -150,8 +140,7 @@ mod serialize {
 
         fn read_bytes(
             &self,
-        ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>>
-        {
+        ) -> Pin<Box<dyn Future<Output = Result<Bytes, anyhow::Error>> + 'static>> {
             let contents = self.contents.clone();
             let path = self.path.clone();
 
@@ -165,16 +154,13 @@ mod serialize {
                     return Ok(std::fs::read(path).map(Bytes::from)?);
                 }
 
-                Err(dioxus_core::CapturedError::msg(
-                    "File contents not available",
-                ))
+                Err(anyhow::Error::msg("File contents not available"))
             })
         }
 
         fn read_string(
             &self,
-        ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>>
-        {
+        ) -> Pin<Box<dyn Future<Output = Result<String, anyhow::Error>> + 'static>> {
             let contents = self.contents.clone();
             let path = self.path.clone();
 
@@ -188,21 +174,14 @@ mod serialize {
                     return Ok(std::fs::read_to_string(path)?);
                 }
 
-                Err(dioxus_core::CapturedError::msg(
-                    "File contents not available",
-                ))
+                Err(anyhow::Error::msg("File contents not available"))
             })
         }
 
         fn byte_stream(
             &self,
-        ) -> Pin<
-            Box<
-                dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
-                    + 'static
-                    + Send,
-            >,
-        > {
+        ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, anyhow::Error>> + 'static + Send>>
+        {
             let contents = self.contents.clone();
             let path = self.path.clone();
 
@@ -216,9 +195,7 @@ mod serialize {
                     return Ok(std::fs::read(path).map(Bytes::from)?);
                 }
 
-                Err(dioxus_core::CapturedError::msg(
-                    "File contents not available",
-                ))
+                Err(anyhow::Error::msg("File contents not available"))
             }))
         }
 

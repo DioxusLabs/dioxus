@@ -1,7 +1,3 @@
-use dioxus_core::Event;
-
-pub type CompositionEvent = Event<CompositionData>;
-
 pub struct CompositionData {
     inner: Box<dyn HasCompositionData>,
 }

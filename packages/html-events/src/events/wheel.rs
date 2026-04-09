@@ -1,4 +1,3 @@
-use dioxus_core::Event;
 use keyboard_types::Modifiers;
 use std::fmt::Formatter;
 
@@ -10,11 +9,6 @@ use crate::{
 
 use super::HasMouseData;
 
-/// A synthetic event that wraps a web-style
-/// [`WheelEvent`](https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent)
-pub type WheelEvent = Event<WheelData>;
-
-/// Data associated with a [WheelEvent]
 pub struct WheelData {
     inner: Box<dyn HasWheelData>,
 }

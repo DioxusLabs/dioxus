@@ -1,6 +1,3 @@
-use dioxus_core::Event;
-
-pub type ImageEvent = Event<ImageData>;
 pub struct ImageData {
     inner: Box<dyn HasImageData>,
 }

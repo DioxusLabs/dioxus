@@ -1,13 +1,12 @@
 use std::{any::Any, rc::Rc};
 
 use crate::events::*;
-use dioxus_core::ElementId;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "serialize")]
 #[derive(Serialize, Debug, PartialEq)]
 pub struct HtmlEvent {
-    pub element: ElementId,
+    pub element: usize,
     pub name: String,
     pub bubbles: bool,
     pub data: EventData,
@@ -21,7 +20,7 @@ impl<'de> Deserialize<'de> for HtmlEvent {
     {
         #[derive(Deserialize, Debug, Clone)]
         struct Inner {
-            element: ElementId,
+            element: usize,
             name: String,
             bubbles: bool,
             data: serde_json::Value,
@@ -164,7 +163,7 @@ impl EventData {
 #[test]
 fn test_back_and_forth() {
     let data = HtmlEvent {
-        element: ElementId(0),
+        element: usize(0),
         data: EventData::Mouse(SerializedMouseData::default()),
         name: "click".to_string(),
         bubbles: true,

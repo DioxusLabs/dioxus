@@ -25,6 +25,7 @@ dioxus-interpreter-js = { workspace = true, features = [
 dioxus-fullstack-core = { workspace = true, features = ["web"], optional = true }
 generational-box = { workspace = true }
 
+anyhow = { workspace = true }
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
 wasm-bindgen-futures = { workspace = true }
