@@ -45,15 +45,7 @@ manganis = { workspace = true }
 
 [features]
 default = ["serialize"]
-serialize = [
-    "dep:serde",
-    "dep:serde_json",
-    "dep:serde_repr",
-    "euclid/serde",
-    "keyboard-types/serde",
-    "dioxus-core/serialize",
-    "bytes/serde"
-]
+serialize = ["dioxus-core/serialize", "html-events/serialize"]
 hot-reload-context = ["dep:dioxus-rsx"]
 html-to-rsx = []
 
