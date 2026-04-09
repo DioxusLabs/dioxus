@@ -2127,6 +2127,11 @@ impl BuildRequest {
     ) -> Result<()> {
         let framework_dir = self.frameworks_folder();
 
+        // iOS `installd` rejects any symlinks inside `Frameworks/` (both on-device
+        // and on the simulator), so we must always copy real files on iOS — even in
+        // dev builds, where we'd otherwise symlink for speed.
+        let is_ios = matches!(self.triple.operating_system, OperatingSystem::IOS(_));
+
         // We use the rustc for the tip crate `main.rs` because that's where the linking happens
         let direct_rustc = artifacts
             .workspace_rustc_args
@@ -2173,7 +2178,7 @@ impl BuildRequest {
                         _ = std::fs::remove_file(&to);
                         _ = std::fs::create_dir_all(&framework_dir);
                         tracing::debug!("Copying framework from {candidate:?} to {to:?}");
-                        if cfg!(unix) && !self.release {
+                        if cfg!(unix) && !self.release && !is_ios {
                             #[cfg(unix)]
                             std::os::unix::fs::symlink(&candidate, &to).with_context(|| {
                                 "Failed to symlink framework into bundle: {candidate:?} -> {to:?}"
@@ -2202,8 +2207,10 @@ impl BuildRequest {
                 _ = std::fs::create_dir_all(&framework_dir);
 
                 // in dev and on normal oses, we want to symlink the file
-                // otherwise, just copy it (since in release you want to distribute the framework)
-                if cfg!(any(windows, unix)) && !self.release {
+                // otherwise, just copy it (since in release you want to distribute the framework).
+                // iOS is an exception: `installd` rejects symlinks in `Frameworks/`, so we
+                // always copy real files on iOS regardless of profile.
+                if cfg!(any(windows, unix)) && !self.release && !is_ios {
                     #[cfg(windows)]
                     std::os::windows::fs::symlink_file(from, to).with_context(|| {
                         "Failed to symlink framework into bundle: {from:?} -> {to:?}"
