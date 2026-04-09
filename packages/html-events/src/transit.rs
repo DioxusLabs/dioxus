@@ -163,7 +163,7 @@ impl EventData {
 #[test]
 fn test_back_and_forth() {
     let data = HtmlEvent {
-        element: usize(0),
+        element: 0,
         data: EventData::Mouse(SerializedMouseData::default()),
         name: "click".to_string(),
         bubbles: true,
