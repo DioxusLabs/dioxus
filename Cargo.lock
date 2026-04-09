@@ -8455,18 +8455,13 @@ version = "0.7.5"
 dependencies = [
  "anyhow",
  "bytes",
- "dioxus",
- "dioxus-web",
  "enumset",
  "euclid",
  "futures-util",
  "keyboard-types",
- "lazy-js-bundle",
- "manganis",
  "serde",
  "serde_json",
  "serde_repr",
- "tokio",
  "tracing",
 ]
 
