@@ -971,6 +971,17 @@ impl BuildRequest {
             );
         }
 
+        // Apple bundles route through dx-as-linker so we can capture resolved -l/-L
+        // flags and bundle -sys crate dylibs into Frameworks/ (forwards to `cc`).
+        if custom_linker.is_none()
+            && matches!(
+                triple.operating_system,
+                OperatingSystem::IOS(_) | OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_)
+            )
+        {
+            custom_linker = Some(PathBuf::from("cc"));
+        }
+
         let target_dir = std::env::var("CARGO_TARGET_DIR")
             .ok()
             .map(PathBuf::from)
@@ -1057,6 +1068,7 @@ impl BuildRequest {
         let cache_dir = self.session_cache_dir();
         _ = std::fs::create_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(self.rustc_wrapper_args_dir());
+        _ = std::fs::create_dir_all(self.link_args_file().parent().unwrap());
         _ = std::fs::File::create_new(self.link_err_file());
         _ = std::fs::File::create_new(self.link_args_file());
         _ = std::fs::File::create_new(self.windows_command_file());
@@ -1376,16 +1388,17 @@ impl BuildRequest {
             }
         }
 
-        // Collect the linker args and attach them to the tip crate's bin entry
+        // Always attach the persisted linker args, even on cached cargo builds where
+        // the rustc wrapper didn't run and the bin entry doesn't exist yet.
         let tip_crate_name = self.tip_crate_name();
         let tip_bin_key = format!("{tip_crate_name}.bin");
-        if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_bin_key) {
-            tip_args.link_args = std::fs::read_to_string(self.link_args_file())
-                .context("Failed to read link args from file")?
-                .lines()
-                .map(|s| s.to_string())
-                .collect();
-        }
+        let link_args: Vec<String> = std::fs::read_to_string(self.link_args_file())
+            .map(|s| s.lines().map(String::from).collect())
+            .unwrap_or_default();
+        workspace_rustc_args
+            .entry(tip_bin_key.clone())
+            .or_default()
+            .link_args = link_args;
 
         let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
@@ -2124,6 +2137,55 @@ impl BuildRequest {
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
         let openssl_dir_disp = openssl_dir.display().to_string();
+
+        // Resolve `-l <name>` against `-L <dir>` from the captured linker argv and
+        // copy `lib<name>.dylib` into the frameworks dir. Anything ld linked from a
+        // project-local `-L` is a -sys crate dylib, not a system lib (those come
+        // from SDK paths that aren't in `-L`).
+        if matches!(
+            self.triple.operating_system,
+            OperatingSystem::IOS(_) | OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_)
+        ) {
+            let mut search_dirs: Vec<&str> = Vec::new();
+            let mut requested: Vec<&str> = Vec::new();
+            let mut iter = direct_rustc.link_args.iter();
+            while let Some(arg) = iter.next() {
+                if arg == "-L" {
+                    if let Some(dir) = iter.next() {
+                        search_dirs.push(dir);
+                    }
+                } else if let Some(rest) = arg.strip_prefix("-L") {
+                    search_dirs.push(rest);
+                } else if arg == "-l" {
+                    if let Some(name) = iter.next() {
+                        requested.push(name);
+                    }
+                } else if let Some(rest) = arg.strip_prefix("-l") {
+                    requested.push(rest);
+                }
+            }
+            for name in &requested {
+                let filename = format!("lib{name}.dylib");
+                for dir in &search_dirs {
+                    let candidate = PathBuf::from(dir).join(&filename);
+                    if candidate.exists() {
+                        let to = framework_dir.join(&filename);
+                        _ = std::fs::remove_file(&to);
+                        _ = std::fs::create_dir_all(&framework_dir);
+                        tracing::debug!("Copying framework from {candidate:?} to {to:?}");
+                        if cfg!(unix) && !self.release {
+                            #[cfg(unix)]
+                            std::os::unix::fs::symlink(&candidate, &to).with_context(|| {
+                                "Failed to symlink framework into bundle: {candidate:?} -> {to:?}"
+                            })?;
+                        } else {
+                            std::fs::copy(&candidate, &to)?;
+                        }
+                        break;
+                    }
+                }
+            }
+        }
 
         for arg in &direct_rustc.link_args {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
@@ -3405,7 +3467,7 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { .. }) {
                     let args_dir = self.rustc_wrapper_args_dir();
                     std::fs::create_dir_all(&args_dir)
                         .context("Failed to create rustc wrapper args directory")?;
@@ -4508,7 +4570,13 @@ impl BuildRequest {
     }
 
     fn link_args_file(&self) -> PathBuf {
-        self.session_cache_dir().join("link_args.json")
+        // Persisted under `target/dx/...` so cached `dx bundle` runs (where cargo
+        // skips the link and the wrapper doesn't run) still see the previous args.
+        self.target_dir
+            .join("dx")
+            .join(&self.main_target)
+            .join(self.bundle.to_string())
+            .join("link_args.json")
     }
 
     fn windows_command_file(&self) -> PathBuf {
