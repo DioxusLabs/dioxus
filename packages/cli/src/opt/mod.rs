@@ -1,4 +1,5 @@
-use manganis_core::BundledAsset;
+use manganis::SwiftPackageMetadata;
+use manganis_core::{AndroidArtifactMetadata, BundledAsset};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -21,6 +22,10 @@ pub(crate) use hash::add_hash_to_asset;
 pub(crate) struct AssetManifest {
     /// Map of bundled asset name to the asset itself
     assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
+
+    pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
+
+    pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
 }
 
 impl AssetManifest {

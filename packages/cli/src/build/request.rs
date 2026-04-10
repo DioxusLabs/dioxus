@@ -478,8 +478,7 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
-    pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
-    pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
+
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1091,9 +1090,7 @@ impl BuildRequest {
         let cache_dir = self.session_cache_dir();
         _ = std::fs::create_dir_all(&cache_dir);
         _ = std::fs::create_dir_all(self.rustc_wrapper_args_dir());
-        if self.build_mode_uses_rustc_wrapper(&ctx.mode) {
-            _ = std::fs::create_dir_all(self.rustc_wrapper_args_scope_dir(&ctx.mode)?);
-        }
+        _ = std::fs::create_dir_all(self.rustc_wrapper_args_scope_dir(&ctx.mode)?);
         _ = std::fs::File::create(self.link_err_file());
         _ = std::fs::File::create(self.link_args_file());
         _ = std::fs::File::create(self.windows_command_file());
@@ -1406,8 +1403,7 @@ impl BuildRequest {
         }
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
-        let (assets, android_artifacts, swift_sources) =
-            self.collect_assets_and_metadata(&exe, ctx).await?;
+        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1426,8 +1422,6 @@ impl BuildRequest {
             artifact_paths,
             time_start,
             assets,
-            android_artifacts,
-            swift_sources,
             mode,
             depinfo,
             root_dir: self.root_dir(),
@@ -1574,11 +1568,7 @@ impl BuildRequest {
         &self,
         exe: &Path,
         ctx: &BuildContext,
-    ) -> Result<(
-        AssetManifest,
-        Vec<AndroidArtifactMetadata>,
-        Vec<SwiftPackageMetadata>,
-    )> {
+    ) -> Result<AssetManifest> {
         use super::assets::extract_symbols_from_file;
 
         let skip_assets = self.skip_assets;
@@ -1586,81 +1576,50 @@ impl BuildRequest {
         let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
         if skip_assets && !needs_android_artifacts && !needs_swift_packages {
-            return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
+            return Ok(AssetManifest::default());
         }
 
-        ctx.status_extracting_assets();
+        let mut manifest = AssetManifest::default();
+
         let super::assets::SymbolExtractionResult {
             assets: extracted_assets,
             android_artifacts,
             swift_packages,
         } = extract_symbols_from_file(exe).await?;
 
-        let asset_manifest = if skip_assets {
-            AssetManifest::default()
-        } else {
-            let mut manifest = AssetManifest::default();
-            for asset in extracted_assets {
-                manifest.insert_asset(asset);
-            }
+        ctx.status_extracting_assets();
 
-            if matches!(self.bundle, BundleFormat::Web)
-                && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
-            {
-                if let Some(dir) = self.user_public_dir() {
-                    for entry in walkdir::WalkDir::new(&dir)
-                        .into_iter()
-                        .filter_map(|e| e.ok())
-                        .filter(|e| e.file_type().is_file())
-                    {
-                        let from = entry.path().to_path_buf();
-                        let relative_path = from.strip_prefix(&dir).unwrap();
-                        let to = format!("../{}", relative_path.display());
-                        manifest.insert_asset(BundledAsset::new(
-                            from.to_string_lossy().as_ref(),
-                            to.as_str(),
-                            manganis_core::AssetOptions::builder()
-                                .with_hash_suffix(false)
-                                .into_asset_options(),
-                        ));
-                    }
+        for asset in extracted_assets {
+            manifest.insert_asset(asset);
+        }
+
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        manganis_core::AssetOptions::builder()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
                 }
             }
-
-            manifest
-        };
-
-        if !android_artifacts.is_empty() {
-            tracing::debug!(
-                "Found {} Android artifact declaration(s)",
-                android_artifacts.len()
-            );
-            for artifact in android_artifacts.iter() {
-                tracing::debug!(
-                    "  Plugin: {} Artifact: {}",
-                    artifact.plugin_name.as_str(),
-                    artifact.artifact_path.as_str()
-                );
-            }
         }
 
-        if !swift_packages.is_empty() {
-            tracing::debug!(
-                "Found {} Swift package declaration(s) for {:?}",
-                swift_packages.len(),
-                self.bundle
-            );
-            for source in &swift_packages {
-                tracing::debug!(
-                    "  Plugin: {} (Swift package path={} product={})",
-                    source.plugin_name.as_str(),
-                    source.package_path.as_str(),
-                    source.product.as_str()
-                );
-            }
-        }
+        manifest.android_artifacts = android_artifacts;
+        manifest.swift_sources = swift_packages;
 
-        Ok((asset_manifest, android_artifacts, swift_packages))
+        Ok(manifest)
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -2579,12 +2538,9 @@ impl BuildRequest {
         }
 
         // Now extract linker metadata from the fat binary (assets, plugin data)
-        let (assets, android_artifacts, swift_sources) = self
+        artifacts.assets = self
             .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
-        artifacts.assets = assets;
-        artifacts.android_artifacts = android_artifacts;
-        artifacts.swift_sources = swift_sources;
 
         // If this is a web build, reset the index.html file in case it was modified by SSG
         self.write_index_html(&artifacts.assets)
@@ -7418,21 +7374,23 @@ We checked the folders:
         artifacts: &BuildArtifacts,
     ) -> Result<()> {
         // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
-        if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+        if self.bundle == BundleFormat::Android && !artifacts.assets.android_artifacts.is_empty() {
             let names: Vec<_> = artifacts
+                .assets
                 .android_artifacts
                 .iter()
                 .map(|a| a.plugin_name.as_str().to_string())
                 .collect();
             ctx.status_compiling_native_plugins(format!("Kotlin build: {}", names.join(", ")));
-            self.install_android_artifacts(&artifacts.android_artifacts)
+            self.install_android_artifacts(&artifacts.assets.android_artifacts)
                 .context("Failed to install Android plugin artifacts")?;
         }
 
         if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-            && !artifacts.swift_sources.is_empty()
+            && !artifacts.assets.swift_sources.is_empty()
         {
             let names: Vec<_> = artifacts
+                .assets
                 .swift_sources
                 .iter()
                 .map(|s| s.plugin_name.as_str().to_string())
@@ -7440,12 +7398,12 @@ We checked the folders:
             ctx.status_compiling_native_plugins(format!("Swift build: {}", names.join(", ")));
 
             // Compile Swift packages from source
-            self.compile_swift_sources(&artifacts.swift_sources)
+            self.compile_swift_sources(&artifacts.assets.swift_sources)
                 .await
                 .context("Failed to compile Swift packages")?;
 
             // Then embed Swift standard libraries
-            self.embed_swift_stdlibs(&artifacts.swift_sources)
+            self.embed_swift_stdlibs(&artifacts.assets.swift_sources)
                 .await
                 .context("Failed to embed Swift standard libraries")?;
         }
