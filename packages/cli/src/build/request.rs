@@ -1124,8 +1124,6 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
-        let time_start = SystemTime::now();
-
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
         _ = self.bust_fingerprint(&ctx);
@@ -1155,9 +1153,7 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
-                self.strip_binary(&artifacts).await?;
-
-                self.write_executable(&ctx, &artifacts.exe, &mut artifacts.assets)
+                self.write_executable(&ctx, &mut artifacts)
                     .await
                     .context("Failed to write executable")?;
 
@@ -1200,12 +1196,10 @@ impl BuildRequest {
 
         // For thin builds, compile workspace dep crates before the tip.
         // This updates dep rlibs on disk so cargo links the tip against fresh code.
-        ctx.profile_phase("Workspace precompile");
         let object_cache = self.compile_workspace_deps(ctx).await?;
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
-        ctx.profile_phase("Planning Cargo Build");
         let crate_count = match ctx.mode {
             BuildMode::Thin { .. } => 1,
             _ => self.get_unit_count_estimate(&ctx.mode).await,
@@ -1452,6 +1446,8 @@ impl BuildRequest {
     ///
     /// Returns the updated `ObjectCache` — defaulting to empty for non-thin builds.
     async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
+        ctx.profile_phase("Workspace precompile");
+
         let BuildMode::Thin {
             workspace_rustc_args,
             artifact_paths,
@@ -2068,35 +2064,19 @@ impl BuildRequest {
     async fn write_executable(
         &self,
         ctx: &BuildContext,
-        exe: &Path,
-        assets: &mut AssetManifest,
+        artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
+        // Use rustc-objcopy to strip the binary
+        self.strip_binary(&artifacts).await?;
+
         match self.bundle {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
             // Also run wasm-opt on the wasm binary, and sets the index.html since that's also the "executable".
             //
             // The wasm stuff will be in a folder called "wasm" in the workdir.
-            //
-            // Final output format:
-            // ```
-            // dx/
-            //     app/
-            //         web/
-            //             bundle/
-            //             build/
-            //                 server.exe
-            //                 public/
-            //                     index.html
-            //                     wasm/
-            //                        app.wasm
-            //                        glue.js
-            //                        snippets/
-            //                            ...
-            //                     assets/
-            //                        logo.png
-            // ```
             BundleFormat::Web => {
-                self.bundle_web(ctx, exe, assets).await?;
+                self.bundle_web(ctx, &artifacts.exe, &mut artifacts.assets)
+                    .await?;
             }
 
             // this will require some extra oomf to get the multi architecture builds...
@@ -2119,7 +2099,7 @@ impl BuildRequest {
             | BundleFormat::Ios
             | BundleFormat::Server => {
                 std::fs::create_dir_all(self.exe_dir())?;
-                std::fs::copy(exe, self.main_exe())?;
+                std::fs::copy(&artifacts.exe, self.main_exe())?;
             }
         }
 
@@ -5015,6 +4995,7 @@ impl BuildRequest {
                     .unwrap()?;
                 }
             }
+
             BundleFormat::MacOS
             | BundleFormat::Windows
             | BundleFormat::Linux
@@ -5032,20 +5013,25 @@ impl BuildRequest {
         if self.wasm_split {
             return Ok(());
         }
+
         let exe = &artifacts.exe;
+
         // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
         let strip_arg = match self.get_strip_setting() {
             StripSetting::Debuginfo => Some("--strip-debug"),
             StripSetting::Symbols => Some("--strip-all"),
             StripSetting::None => None,
         };
+
         if let Some(strip_arg) = strip_arg {
             let rustc_objcopy = self.workspace.rustc_objcopy();
             let dylib_path = self.workspace.rustc_objcopy_dylib_path();
+
             let mut command = Command::new(rustc_objcopy);
             command.env("LD_LIBRARY_PATH", &dylib_path);
             command.arg(strip_arg).arg(exe).arg(exe);
             let output = command.output().await?;
+
             if !output.status.success() {
                 if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
                     tracing::error!("{}", stdout);
@@ -5056,6 +5042,7 @@ impl BuildRequest {
                 return Err(anyhow::anyhow!("Failed to strip binary"));
             }
         }
+
         Ok(())
     }
 
