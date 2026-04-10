@@ -5,21 +5,15 @@ use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::diagnostic::Diagnostic;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::{Deserialize, Serialize};
-use std::{
-    path::PathBuf,
-    process::ExitStatus,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant, SystemTime},
-};
+use std::{path::PathBuf, process::ExitStatus, time::SystemTime};
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
 /// and the BuildMode can change while serving.
 ///
 /// The structure of this is roughly taken from cargo itself which uses a similar pattern.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BuildContext {
-    pub time_start: SystemTime,
     pub tx: ProgressTx,
     pub mode: BuildMode,
     pub build_id: BuildId,
@@ -96,12 +90,7 @@ pub struct BuildPhaseProfile {
 
 impl BuildContext {
     pub(crate) fn new(tx: ProgressTx, mode: BuildMode, build_id: BuildId) -> Self {
-        Self {
-            time_start: SystemTime::now(),
-            tx,
-            mode,
-            build_id,
-        }
+        Self { tx, mode, build_id }
     }
 
     /// Returns true if this is a client build - basically, is this the primary build?

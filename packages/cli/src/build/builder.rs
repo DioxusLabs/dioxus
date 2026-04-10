@@ -10,7 +10,7 @@ use itertools::Itertools;
 use std::{
     collections::HashSet,
     env,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 use std::{
     net::SocketAddr,
@@ -315,107 +315,7 @@ impl AppBuilder {
             }
             BuilderUpdate::BuildReady { ref bundle } => {
                 // Log the build completion as a telemetry event + provide analytics on build phases
-                if let Some(start) = self.compile_start {
-                    // Record the build duration as a telemetry event. Capture `now` once and use
-                    // it as the end of the final phase too, so the flamegraph bars stay
-                    // internally consistent with `time_taken`.
-                    let now = SystemTime::now();
-                    let time_taken = now
-                        .duration_since(start)
-                        .unwrap_or_default()
-                        .as_millis()
-                        .max(1);
-
-                    tracing::debug!(
-                        telemetry = %serde_json::json!({
-                            "event": "build_and_bundle_complete",
-                            "time_taken": time_taken,
-                            "mode": match bundle.mode {
-                                BuildMode::Base { .. } => "base",
-                                BuildMode::Fat => "fat",
-                                BuildMode::Thin { .. } => "thin",
-                            },
-                            "blah": 123,
-                            "triple": self.build.triple.to_string(),
-                            "format": self.build.bundle.to_string(),
-                            "num_dependencies": self.build.workspace.krates.len(),
-                        }),
-                        "Build completed in {time_taken}ms",
-                    );
-
-                    // Render the flamegraph out by walking the span history. This is pretty naive
-                    // and doesn't support nested span contexts (yet!) - all phases live on one row
-                    // and a phase ends where the next one begins.
-                    use std::fmt::Write as _;
-
-                    let total_ms = time_taken as usize;
-                    let timeline_width = 96usize;
-                    let max_label_width = self
-                        .profile_spans
-                        .iter()
-                        .map(|phase| phase.label.len())
-                        .max()
-                        .unwrap_or(0)
-                        .min(28);
-                    // The final phase runs right up until `now`. Don't use `compile_end` here:
-                    // it's set when the Bundling stage starts, so it predates the bundling phases
-                    // themselves and would zero out the last bar.
-                    let phase_end = now;
-
-                    let mut flamegraph = format!(
-                        "Flamegraph for {} - time taken: {}ms",
-                        bundle.mode.name(),
-                        time_taken
-                    );
-
-                    let mut phase_iter = self.profile_spans.iter().peekable();
-                    while let Some(phase) = phase_iter.next() {
-                        let end_time = phase_iter.peek().map(|f| f.start).unwrap_or(phase_end);
-
-                        let offset_ms = phase
-                            .start
-                            .duration_since(start)
-                            .unwrap_or_default()
-                            .as_millis() as usize;
-                        let dur_ms = end_time
-                            .duration_since(phase.start)
-                            .unwrap_or_default()
-                            .as_millis() as usize;
-                        let pct = (dur_ms as f64) * 100.0 / (total_ms as f64);
-
-                        let bar_start =
-                            ((offset_ms * timeline_width) / total_ms).min(timeline_width - 1);
-                        let bar_end = (((offset_ms + dur_ms) * timeline_width).div_ceil(total_ms))
-                            .max(bar_start + 1)
-                            .min(timeline_width);
-
-                        let mut bar = vec![' '; timeline_width];
-                        for ch in &mut bar[bar_start..bar_end] {
-                            *ch = '█';
-                        }
-                        let bar: String = bar.into_iter().collect();
-
-                        // Labels are ASCII so byte slicing is safe; truncate so the bar column
-                        // stays aligned across rows.
-                        let label = if phase.label.len() > max_label_width {
-                            &phase.label[..max_label_width]
-                        } else {
-                            phase.label
-                        };
-
-                        let _ = write!(
-                            flamegraph,
-                            "\n  {:>6}ms {:>5.1}% {:<width$} |{}|",
-                            dur_ms,
-                            pct,
-                            label,
-                            bar,
-                            width = max_label_width
-                        );
-                    }
-
-                    tracing::info!("{}", flamegraph);
-                }
+                self.log_flamegraph_and_telemetry(bundle);
 
                 // And then update the build state
                 self.compiled_crates = self.expected_crates;
@@ -1970,5 +1870,119 @@ impl AppBuilder {
         }
 
         Ok(pid)
+    }
+
+    /// Log the profile flamegraph for this build run, and then emit a telemetry event.
+    ///
+    /// This works by walking the profile_spans vec, calculating the deltas, and then rendering out
+    /// the flamegraph via a debug!
+    fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
+        let Some(start) = self.compile_start else {
+            return;
+        };
+
+        // Record the build duration as a telemetry event. Capture `now` once and use
+        // it as the end of the final phase too, so the flamegraph bars stay
+        // internally consistent with `time_taken`.
+        let now = SystemTime::now();
+        let time_taken = now
+            .duration_since(start)
+            .unwrap_or_default()
+            .as_millis()
+            .max(1);
+
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match bundle.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.build.triple.to_string(),
+                "format": self.build.bundle.to_string(),
+                "num_dependencies": self.build.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
+
+        // Render the flamegraph out by walking the span history. This is pretty naive
+        // and doesn't support nested span contexts (yet!) - all phases live on one row
+        // and a phase ends where the next one begins.
+        use std::fmt::Write as _;
+
+        let total_ms = time_taken as usize;
+        let timeline_width = 96usize;
+        let max_label_width = self
+            .profile_spans
+            .iter()
+            .map(|phase| phase.label.len())
+            .max()
+            .unwrap_or(0)
+            .min(28);
+
+        // The final phase runs right up until `now`. Don't use `compile_end` here:
+        // it's set when the Bundling stage starts, so it predates the bundling phases
+        // themselves and would zero out the last bar.
+        let phase_end = now;
+
+        let mut flamegraph = format!(
+            "Flamegraph for {} - time taken: {}ms",
+            match bundle.mode {
+                BuildMode::Base { .. } => "base",
+                BuildMode::Fat => "fat",
+                BuildMode::Thin { .. } => "thin",
+            },
+            time_taken
+        );
+
+        let mut phase_iter = self.profile_spans.iter().peekable();
+        while let Some(phase) = phase_iter.next() {
+            let end_time = phase_iter.peek().map(|f| f.start).unwrap_or(phase_end);
+
+            let offset_ms = phase
+                .start
+                .duration_since(start)
+                .unwrap_or_default()
+                .as_millis() as usize;
+            let dur_ms = end_time
+                .duration_since(phase.start)
+                .unwrap_or_default()
+                .as_millis() as usize;
+            let pct = (dur_ms as f64) * 100.0 / (total_ms as f64);
+
+            let bar_start = ((offset_ms * timeline_width) / total_ms).min(timeline_width - 1);
+            let bar_end = (((offset_ms + dur_ms) * timeline_width).div_ceil(total_ms))
+                .max(bar_start + 1)
+                .min(timeline_width);
+
+            let mut bar = vec![' '; timeline_width];
+            for ch in &mut bar[bar_start..bar_end] {
+                *ch = '█';
+            }
+            let bar: String = bar.into_iter().collect();
+
+            // Labels are ASCII so byte slicing is safe; truncate so the bar column
+            // stays aligned across rows.
+            let label = if phase.label.len() > max_label_width {
+                &phase.label[..max_label_width]
+            } else {
+                phase.label
+            };
+
+            let _ = write!(
+                flamegraph,
+                "\n  {:>6}ms {:>5.1}% {:<width$} |{}|",
+                dur_ms,
+                pct,
+                label,
+                bar,
+                width = max_label_width
+            );
+        }
+
+        tracing::debug!("{}", flamegraph);
     }
 }

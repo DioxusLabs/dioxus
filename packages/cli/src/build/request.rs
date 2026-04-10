@@ -462,15 +462,6 @@ pub enum BuildMode {
         cache: Arc<HotpatchModuleCache>,
     },
 }
-impl BuildMode {
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::Base { run } => "base",
-            Self::Fat => "fat",
-            Self::Thin { .. } => "thin",
-        }
-    }
-}
 
 /// The end result of a build.
 ///
@@ -2318,8 +2309,11 @@ impl BuildRequest {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
 
-                    let finished = copied.fetch_add(1, Ordering::SeqCst);
-                    // progress.status_copied_asset(finished, asset_count, from.to_path_buf());
+                    progress.status_copied_asset(
+                        copied.fetch_add(1, Ordering::SeqCst),
+                        asset_count,
+                        from.to_path_buf(),
+                    );
 
                     res.map(|_| ())
                 })
