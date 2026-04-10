@@ -6346,13 +6346,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(missing)
     }
 
-    pub(crate) fn patch_cache_exe(&self, exe: &Path) -> PathBuf {
-        match self.bundle {
-            BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
-            _ => exe.to_path_buf(),
-        }
-    }
-
     /// Users create an index.html for their SPA if they want it
     ///
     /// We always write our wasm as main.js and main_bg.wasm
@@ -7428,8 +7421,11 @@ We checked the folders:
         // Populate the patch cache if we're in fat mode
         if matches!(ctx.mode, BuildMode::Fat) {
             ctx.profile_phase("Creating Patch Cache");
-            let hotpatch_module_cache =
-                HotpatchModuleCache::new(&self.patch_cache_exe(&artifacts.exe), &self.triple)?;
+            let patch_exe = match self.bundle {
+                BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
+                _ => artifacts.exe.to_path_buf(),
+            };
+            let hotpatch_module_cache = HotpatchModuleCache::new(&patch_exe, &self.triple)?;
             artifacts.patch_cache = Some(Arc::new(hotpatch_module_cache));
         }
 
