@@ -322,9 +322,9 @@
 use super::HotpatchModuleCache;
 use crate::opt::{process_file_to, AssetManifest};
 use crate::{
-    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
-    LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
-    TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, AppManifest, BuildContext, BuildId, BuildProfile, BundleFormat, DioxusConfig,
+    Error, LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs,
+    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -475,6 +475,7 @@ pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) workspace_rustc_args: HashMap<String, RustcArgs>,
     pub(crate) artifact_paths: HashMap<String, PathBuf>,
+    pub(crate) phase_profile: BuildProfile,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
@@ -1146,18 +1147,23 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                ctx.profile_phase("Stripping Binary");
                 self.strip_binary(&artifacts).await?;
 
+                ctx.profile_phase("Writing Executable");
                 self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
 
+                ctx.profile_phase("Writing Frameworks");
                 self.write_frameworks(ctx, &artifacts)
                     .await
                     .context("Failed to write frameworks")?;
+                ctx.profile_phase("Writing Assets");
                 self.write_assets(ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
+                ctx.profile_phase("Writing Metadata");
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
@@ -1173,6 +1179,7 @@ impl BuildRequest {
                         "Kotlin build: {}",
                         names.join(", ")
                     ));
+                    ctx.profile_phase("Installing Android Artifacts");
                     self.install_android_artifacts(&artifacts.android_artifacts)
                         .context("Failed to install Android plugin artifacts")?;
                 }
@@ -1191,11 +1198,13 @@ impl BuildRequest {
                     ));
 
                     // Compile Swift packages from source
+                    ctx.profile_phase("Compiling Swift Sources");
                     self.compile_swift_sources(&artifacts.swift_sources)
                         .await
                         .context("Failed to compile Swift packages")?;
 
                     // Then embed Swift standard libraries
+                    ctx.profile_phase("Embedding Swift Stdlibs");
                     self.embed_swift_stdlibs(&artifacts.swift_sources)
                         .await
                         .context("Failed to embed Swift standard libraries")?;
@@ -1216,21 +1225,25 @@ impl BuildRequest {
                         "Widget build: {}",
                         names.join(", ")
                     ));
+                    ctx.profile_phase("Compiling Widget Extensions");
                     self.compile_widget_extensions()
                         .await
                         .context("Failed to compile widget extensions")?;
                 }
 
+                ctx.profile_phase("Optimizing Bundle");
                 self.optimize(ctx)
                     .await
                     .context("Failed to optimize build")?;
 
+                ctx.profile_phase("Assembling Bundle");
                 self.assemble(ctx)
                     .await
                     .context("Failed to assemble build")?;
 
                 // Populate the patch cache if we're in fat mode
                 if matches!(ctx.mode, BuildMode::Fat) {
+                    ctx.profile_phase("Creating Patch Cache");
                     artifacts.patch_cache =
                         Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
                 }
@@ -1238,6 +1251,8 @@ impl BuildRequest {
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
         }
+
+        artifacts.phase_profile = ctx.finish_profile();
 
         // Record the build duration as a telemetry event
         self.record_build_duration(time_start, ctx);
@@ -1253,10 +1268,12 @@ impl BuildRequest {
 
         // For thin builds, compile workspace dep crates before the tip.
         // This updates dep rlibs on disk so cargo links the tip against fresh code.
+        ctx.profile_phase("Workspace precompile");
         let object_cache = self.compile_workspace_deps(ctx).await?;
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
+        ctx.profile_phase("Planning Cargo Build");
         let crate_count = match ctx.mode {
             BuildMode::Thin { .. } => 1,
             _ => self.get_unit_count_estimate(&ctx.mode).await,
@@ -1273,6 +1290,10 @@ impl BuildRequest {
             .stderr(Stdio::piped())
             .spawn()
             .context("Failed to spawn cargo build")?;
+
+        // Direct rustc thin builds don't emit Cargo-style unit progress messages, so if we don't
+        // advance the profiler here the entire compile winds up attributed to "Starting Build".
+        ctx.profile_phase("Compiling");
 
         let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
         let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
@@ -1469,7 +1490,8 @@ impl BuildRequest {
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
         let (assets, android_artifacts, swift_sources) =
-            self.collect_assets_and_metadata(&exe, ctx).await?;
+            self.collect_assets_and_metadata(&exe, ctx, "Extracting Build Assets")
+                .await?;
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1486,6 +1508,7 @@ impl BuildRequest {
             exe,
             workspace_rustc_args,
             artifact_paths,
+            phase_profile: BuildProfile::default(),
             time_start,
             assets,
             android_artifacts,
@@ -1634,6 +1657,7 @@ impl BuildRequest {
         &self,
         exe: &Path,
         ctx: &BuildContext,
+        profile_label: &'static str,
     ) -> Result<(
         AssetManifest,
         Vec<AndroidArtifactMetadata>,
@@ -1649,7 +1673,7 @@ impl BuildRequest {
             return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
         }
 
-        ctx.status_extracting_assets();
+        ctx.status_extracting_assets_named(profile_label);
         let super::assets::SymbolExtractionResult {
             assets: extracted_assets,
             android_artifacts,
@@ -2365,7 +2389,7 @@ impl BuildRequest {
         let copied = AtomicUsize::new(0);
 
         // Parallel Copy over the assets and keep track of progress with an atomic counter
-        let progress = ctx.tx.clone();
+        let progress = ctx.clone();
         let ws_dir = self.workspace_dir();
         let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
 
@@ -2386,12 +2410,7 @@ impl BuildRequest {
                     }
 
                     let finished = copied.fetch_add(1, Ordering::SeqCst);
-                    BuildContext::status_copied_asset(
-                        &progress,
-                        finished,
-                        asset_count,
-                        from.to_path_buf(),
-                    );
+                    progress.status_copied_asset(finished, asset_count, from.to_path_buf());
 
                     res.map(|_| ())
                 })
@@ -2431,6 +2450,7 @@ impl BuildRequest {
         ctx.status_hotpatching();
 
         let tip_name = self.tip_crate_name();
+        ctx.profile_phase("Patch: Cache Tip Objects");
 
         // Cache tip crate objects from the FRESH linker args (from the just-completed
         // thin build, not the stale ones from ctx.mode's fat build).
@@ -2464,6 +2484,7 @@ impl BuildRequest {
         // Collect cached object paths from all modified dep crates.
         // Objects are already on disk in the object cache directory.
         // These must NOT be deleted after linking — they persist across patches.
+        ctx.profile_phase("Patch: Gather Objects");
         let mut cached_objects: Vec<PathBuf> = Vec::new();
         for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
             if let Some(paths) = artifacts.object_cache.get(dep_name) {
@@ -2621,6 +2642,7 @@ impl BuildRequest {
         //
         // We dump its output directly into the patch exe location which is different than how rustc
         // does it since it uses llvm-objcopy into the `target/debug/` folder.
+        ctx.profile_phase("Patch: Link");
         let res = Command::new(linker)
             .args(out_args)
             .env_clear()
@@ -2655,7 +2677,11 @@ impl BuildRequest {
 
         // Now extract linker metadata from the fat binary (assets, plugin data)
         let (assets, android_artifacts, swift_sources) = self
-            .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
+            .collect_assets_and_metadata(
+                &self.patch_exe(artifacts.time_start),
+                ctx,
+                "Patch: Extract Assets",
+            )
             .await?;
         artifacts.assets = assets;
         artifacts.android_artifacts = android_artifacts;

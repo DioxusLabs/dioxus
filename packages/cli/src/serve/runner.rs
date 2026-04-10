@@ -601,10 +601,12 @@ impl AppServer {
         use crate::cli::styles::GLOW_STYLE;
 
         if should_open {
-            let time_taken = artifacts
-                .time_end
-                .duration_since(artifacts.time_start)
-                .unwrap();
+            let time_taken = self.client.total_build_time().unwrap_or_else(|| {
+                artifacts
+                    .time_end
+                    .duration_since(artifacts.time_start)
+                    .unwrap()
+            });
 
             if self.client.builds_opened == 0 {
                 tracing::info!(

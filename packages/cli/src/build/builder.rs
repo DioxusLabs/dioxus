@@ -185,13 +185,12 @@ impl AppBuilder {
             let request = self.build.clone();
             let tx = self.tx.clone();
             async move {
-                let ctx = BuildContext {
-                    mode,
-                    build_id,
-                    tx: tx.clone(),
-                };
+                let ctx = BuildContext::new(tx.clone(), mode, build_id);
+                ctx.profile_phase("Verify Tooling");
                 request.verify_tooling(&ctx).await?;
+                ctx.profile_phase("Prebuild");
                 request.prebuild(&ctx).await?;
+                ctx.profile_phase("Building");
                 request.build(&ctx).await
             }
         });
@@ -312,6 +311,9 @@ impl AppBuilder {
             }
             BuilderUpdate::CompilerMessage { .. } => {}
             BuilderUpdate::BuildReady { .. } => {
+                if let BuilderUpdate::BuildReady { bundle } = &update {
+                    log_build_profile(bundle);
+                }
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
@@ -407,10 +409,9 @@ impl AppBuilder {
         self.abort_all(BuildStage::Restarting);
         self.build_task = tokio::spawn({
             let request = self.build.clone();
-            let ctx = BuildContext {
-                build_id,
-                tx: self.tx.clone(),
-                mode: BuildMode::Thin {
+            let ctx = BuildContext::new(
+                self.tx.clone(),
+                BuildMode::Thin {
                     changed_files,
                     changed_crates,
                     modified_crates: self.modified_crates.clone(),
@@ -420,8 +421,12 @@ impl AppBuilder {
                     cache,
                     object_cache: self.object_cache.clone(),
                 },
-            };
-            async move { request.build(&ctx).await }
+                build_id,
+            );
+            async move {
+                ctx.profile_phase("Building");
+                request.build(&ctx).await
+            }
         });
     }
 
@@ -438,12 +443,16 @@ impl AppBuilder {
         self.object_cache = ObjectCache::new(&self.build.session_cache_dir());
         self.build_task = tokio::spawn({
             let request = self.build.clone();
-            let ctx = BuildContext {
-                tx: self.tx.clone(),
-                mode,
-                build_id,
-            };
-            async move { request.build(&ctx).await }
+            let tx = self.tx.clone();
+            async move {
+                let ctx = BuildContext::new(tx, mode, build_id);
+                ctx.profile_phase("Verify Tooling");
+                request.verify_tooling(&ctx).await?;
+                ctx.profile_phase("Prebuild");
+                request.prebuild(&ctx).await?;
+                ctx.profile_phase("Building");
+                request.build(&ctx).await
+            }
         });
     }
 
@@ -1862,5 +1871,62 @@ impl AppBuilder {
         }
 
         Ok(pid)
+    }
+}
+
+fn log_build_profile(bundle: &BuildArtifacts) {
+    let profile = &bundle.phase_profile;
+    if profile.phases.is_empty() || profile.total_duration_ms == 0 {
+        return;
+    }
+
+    let mode = match &bundle.mode {
+        super::BuildMode::Base { .. } => "base",
+        super::BuildMode::Fat => "fat",
+        super::BuildMode::Thin { .. } => "thin",
+    };
+
+    tracing::info!(
+        "Build profile for {mode} build: {}ms total",
+        profile.total_duration_ms
+    );
+
+    let max_label_width = profile
+        .phases
+        .iter()
+        .map(|phase| phase.label.len())
+        .max()
+        .unwrap_or(0)
+        .min(28);
+    let timeline_width = 96usize;
+    let total_ms = profile.total_duration_ms.max(1);
+
+    for phase in &profile.phases {
+        let pct = if profile.total_duration_ms == 0 {
+            0.0
+        } else {
+            phase.duration_ms as f64 / profile.total_duration_ms as f64 * 100.0
+        };
+        let start = ((phase.start_offset_ms as usize) * timeline_width) / total_ms as usize;
+        let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
+            .div_ceil(total_ms as usize);
+        let mut bar = vec![' '; timeline_width];
+        for ch in bar
+            .iter_mut()
+            .take(end.max(start + 1).min(timeline_width))
+            .skip(start.min(timeline_width.saturating_sub(1)))
+        {
+            *ch = '█';
+        }
+        let bar: String = bar.into_iter().collect();
+
+        tracing::info!(
+            "  {:>6}ms {:>5.1}% {:<width$} |{}|",
+            phase.duration_ms,
+            pct,
+            phase.label,
+            bar,
+            width = max_label_width
+        );
     }
 }

@@ -5,7 +5,12 @@ use crate::{BuildArtifacts, BuildStage, Error, TraceSrc};
 use cargo_metadata::diagnostic::Diagnostic;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::ExitStatus};
+use std::{
+    path::PathBuf,
+    process::ExitStatus,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
 /// provides some dynamic configuration that is only known at runtime. For example, the Progress channel
@@ -17,10 +22,38 @@ pub struct BuildContext {
     pub tx: ProgressTx,
     pub mode: BuildMode,
     pub build_id: BuildId,
+    profiler: Arc<Mutex<BuildProfileRecorder>>,
 }
 
 pub type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BuildProfile {
+    pub total_duration_ms: u64,
+    pub phases: Vec<BuildPhaseProfile>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildPhaseProfile {
+    pub label: String,
+    pub start_offset_ms: u64,
+    pub duration_ms: u64,
+}
+
+#[derive(Debug, Default)]
+struct BuildProfileRecorder {
+    start: Option<Instant>,
+    current: Option<ActiveBuildPhase>,
+    phases: Vec<BuildPhaseProfile>,
+}
+
+#[derive(Debug)]
+struct ActiveBuildPhase {
+    label: String,
+    started_at: Instant,
+    start_offset_ms: u64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuildId(pub(crate) usize);
@@ -79,37 +112,64 @@ pub enum BuilderUpdate {
 }
 
 impl BuildContext {
+    pub(crate) fn new(tx: ProgressTx, mode: BuildMode, build_id: BuildId) -> Self {
+        Self {
+            tx,
+            mode,
+            build_id,
+            profiler: Arc::new(Mutex::new(BuildProfileRecorder {
+                start: Some(Instant::now()),
+                ..Default::default()
+            })),
+        }
+    }
+
     /// Returns true if this is a client build - basically, is this the primary build?
     /// We try not to duplicate work between client and server builds, like asset copying.
     pub(crate) fn is_primary_build(&self) -> bool {
         self.build_id == BuildId::PRIMARY
     }
 
+    pub(crate) fn profile_phase(&self, label: impl Into<String>) {
+        let mut profiler = self.profiler.lock().expect("build profiler poisoned");
+        profiler.transition(label.into());
+    }
+
+    pub(crate) fn finish_profile(&self) -> BuildProfile {
+        let mut profiler = self.profiler.lock().expect("build profiler poisoned");
+        profiler.finish()
+    }
+
     pub(crate) fn status_wasm_bindgen_start(&self) {
+        self.profile_phase("Wasm Bindgen");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningBindgen,
         });
     }
 
     pub(crate) fn status_splitting_bundle(&self) {
+        self.profile_phase("Wasm Split");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::SplittingBundle,
         });
     }
 
     pub(crate) fn status_start_bundle(&self) {
+        self.profile_phase("Bundling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Bundling,
         });
     }
 
     pub(crate) fn status_running_gradle(&self) {
+        self.profile_phase("Gradle");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::RunningGradle,
         })
     }
 
     pub(crate) fn status_compiling_native_plugins(&self, detail: impl Into<String>) {
+        self.profile_phase("Compiling Native Plugins");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CompilingNativePlugins {
                 detail: detail.into(),
@@ -118,6 +178,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_codesigning(&self) {
+        self.profile_phase("Code Signing");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CodeSigning,
         });
@@ -144,6 +205,7 @@ impl BuildContext {
         name: String,
         fresh: bool,
     ) {
+        self.profile_phase("Compiling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Compiling {
                 current: count,
@@ -155,6 +217,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
+        self.profile_phase("Starting Build");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Starting {
                 patch: matches!(self.mode, BuildMode::Thin { .. }),
@@ -164,18 +227,15 @@ impl BuildContext {
     }
 
     pub(crate) fn status_starting_link(&self) {
+        self.profile_phase("Linking");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Linking,
         });
     }
 
-    pub(crate) fn status_copied_asset(
-        progress: &UnboundedSender<BuilderUpdate>,
-        current: usize,
-        total: usize,
-        path: PathBuf,
-    ) {
-        _ = progress.unbounded_send(BuilderUpdate::Progress {
+    pub(crate) fn status_copied_asset(&self, current: usize, total: usize, path: PathBuf) {
+        self.profile_phase("Copying Assets");
+        _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CopyingAssets {
                 current,
                 total,
@@ -185,31 +245,97 @@ impl BuildContext {
     }
 
     pub(crate) fn status_optimizing_wasm(&self) {
+        self.profile_phase("Optimizing Wasm");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::OptimizingWasm,
         });
     }
 
     pub(crate) fn status_hotpatching(&self) {
+        self.profile_phase("Hotpatching");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Hotpatching,
         });
     }
 
     pub(crate) fn status_installing_tooling(&self) {
+        self.profile_phase("Installing Tooling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::InstallingTooling,
         });
     }
 
     pub(crate) fn status_compressing_assets(&self) {
+        self.profile_phase("Compressing Assets");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::CompressingAssets,
         });
     }
-    pub(crate) fn status_extracting_assets(&self) {
+
+    pub(crate) fn status_extracting_assets_named(&self, label: impl Into<String>) {
+        self.profile_phase(label);
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::ExtractingAssets,
         });
     }
+}
+
+impl BuildProfileRecorder {
+    fn transition(&mut self, label: String) {
+        let Some(start) = self.start else {
+            self.start = Some(Instant::now());
+            self.transition(label);
+            return;
+        };
+
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|current| current.label == label)
+        {
+            return;
+        }
+
+        let now = Instant::now();
+        self.close_current(now);
+        self.current = Some(ActiveBuildPhase {
+            start_offset_ms: elapsed_ms(start, now),
+            started_at: now,
+            label,
+        });
+    }
+
+    fn finish(&mut self) -> BuildProfile {
+        let Some(start) = self.start else {
+            return BuildProfile::default();
+        };
+
+        let now = Instant::now();
+        self.close_current(now);
+
+        BuildProfile {
+            total_duration_ms: elapsed_ms(start, now),
+            phases: self.phases.clone(),
+        }
+    }
+
+    fn close_current(&mut self, now: Instant) {
+        let Some(current) = self.current.take() else {
+            return;
+        };
+
+        self.phases.push(BuildPhaseProfile {
+            label: current.label,
+            start_offset_ms: current.start_offset_ms,
+            duration_ms: duration_ms(now.saturating_duration_since(current.started_at)),
+        });
+    }
+}
+
+fn elapsed_ms(start: Instant, end: Instant) -> u64 {
+    duration_ms(end.saturating_duration_since(start))
+}
+
+fn duration_ms(duration: Duration) -> u64 {
+    duration.as_millis().try_into().unwrap_or(u64::MAX)
 }
