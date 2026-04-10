@@ -123,7 +123,6 @@ impl BuildContext {
     }
 
     pub(crate) fn status_start_bundle(&self) {
-        self.profile_phase("Bundling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Bundling,
         });
@@ -185,7 +184,7 @@ impl BuildContext {
     }
 
     pub(crate) fn status_starting_build(&self, crate_count: usize) {
-        self.profile_phase("Starting Build");
+        self.profile_phase("Compiling");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Starting {
                 patch: matches!(self.mode, BuildMode::Thin { .. }),
@@ -194,8 +193,8 @@ impl BuildContext {
         });
     }
 
-    pub(crate) fn status_starting_link(&self) {
-        self.profile_phase("Linking");
+    pub(crate) fn status_starting_fat_link(&self) {
+        self.profile_phase("Fat Linking");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Linking,
         });

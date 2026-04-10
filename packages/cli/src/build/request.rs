@@ -326,7 +326,7 @@ use crate::{
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
     TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
-use anyhow::{bail, Context};
+use anyhow::{bail, ensure, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
@@ -484,25 +484,6 @@ pub struct BuildArtifacts {
     pub(crate) depinfo: RustcDepInfo,
     pub(crate) build_id: BuildId,
     pub(crate) object_cache: ObjectCache,
-}
-
-#[derive(Debug, Serialize)]
-struct RustcWrapperScope {
-    version: u8,
-    capture_mode: &'static str,
-    bundle: String,
-    triple: String,
-    profile: String,
-    package: String,
-    main_target: String,
-    executable_type: String,
-    rustc_version: String,
-    features: Vec<String>,
-    no_default_features: bool,
-    all_features: bool,
-    rustflags: Vec<String>,
-    extra_cargo_args: Vec<String>,
-    extra_rustc_args: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -1122,7 +1103,7 @@ impl BuildRequest {
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(&ctx);
+        // _ = self.bust_fingerprint(&ctx);
 
         // Run the cargo build to produce our artifacts.
         // For thin builds this also pre-compiles workspace dep crates before the tip.
@@ -1149,32 +1130,40 @@ impl BuildRequest {
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
+                ctx.profile_phase("Writing executable");
                 self.write_executable(&ctx, &mut artifacts)
                     .await
                     .context("Failed to write executable")?;
 
+                ctx.profile_phase("Writing frameworks");
                 self.write_frameworks(&ctx, &artifacts)
                     .await
                     .context("Failed to write frameworks")?;
 
+                ctx.profile_phase("Writing assets");
                 self.write_assets(&ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
 
+                ctx.profile_phase("Writing metadata");
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
 
+                ctx.profile_phase("Writing ffi");
                 self.write_ffi_plugins(&ctx, &artifacts).await?;
 
+                ctx.profile_phase("Running optimizer");
                 self.optimize(&ctx)
                     .await
                     .context("Failed to optimize build")?;
 
+                ctx.profile_phase("Running assemble");
                 self.assemble(&ctx)
                     .await
                     .context("Failed to assemble build")?;
 
+                ctx.profile_phase("Populating cache");
                 self.fill_caches(&ctx, &mut artifacts).await?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
@@ -1201,13 +1190,9 @@ impl BuildRequest {
             _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
-        // Update the status to show that we're starting the build and how many crates we expect to build
-        ctx.status_starting_build(crate_count);
-
-        let mut cmd = self.build_command(&ctx.mode)?;
-        tracing::debug!(dx_src = ?TraceSrc::Build, "Executing cargo for {} using {}", self.bundle, self.triple);
-
-        let mut child = cmd
+        // Spawn the cargo build
+        let mut child = self
+            .cargo_build_command(&ctx.mode)?
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -1215,7 +1200,7 @@ impl BuildRequest {
 
         // Direct rustc thin builds don't emit Cargo-style unit progress messages, so if we don't
         // advance the profiler here the entire compile winds up attributed to "Starting Build".
-        ctx.profile_phase("Compiling");
+        ctx.status_starting_build(crate_count);
 
         let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
         let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
@@ -1224,18 +1209,19 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut emitting_error = false;
-        let (args_dir, mut workspace_rustc_args, mut artifact_paths) = match &ctx.mode {
-            BuildMode::Thin {
-                workspace_rustc_args,
-                artifact_paths,
-                ..
-            } => (None, workspace_rustc_args.clone(), artifact_paths.clone()),
-            _ => {
-                let args_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
-                let workspace_rustc_args = self.load_workspace_rustc_args_from_dir(&args_dir);
-                (Some(args_dir), workspace_rustc_args, HashMap::new())
-            }
-        };
+
+        // let (args_dir, mut workspace_rustc_args, mut artifact_paths) = match &ctx.mode {
+        //     BuildMode::Thin {
+        //         workspace_rustc_args,
+        //         artifact_paths,
+        //         ..
+        //     } => (None, workspace_rustc_args.clone(), artifact_paths.clone()),
+        //     _ => {
+        //         let args_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
+        //         let workspace_rustc_args = self.load_workspace_rustc_args_from_dir(&args_dir);
+        //         (Some(args_dir), workspace_rustc_args, HashMap::new())
+        //     }
+        // };
 
         loop {
             use cargo_metadata::Message;
@@ -1303,6 +1289,8 @@ impl BuildRequest {
                         false => ctx.status_build_message(line),
                     }
                 }
+
+                // Here, we record
                 Message::CompilerArtifact(artifact) => {
                     units_compiled += 1;
                     let target_name = artifact.target.name.clone();
@@ -1312,9 +1300,10 @@ impl BuildRequest {
                         target_name,
                         artifact.fresh,
                     );
-                    self.record_workspace_artifact_path(&mut artifact_paths, &artifact);
+                    // self.record_workspace_artifact_path(&mut artifact_paths, &artifact);
                     output_location = artifact.executable.map(Into::into);
                 }
+
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
                 //       since that is a really bad user experience.
                 Message::BuildFinished(finished) => {
@@ -1330,31 +1319,32 @@ impl BuildRequest {
             }
         }
 
-        if let Some(args_dir) = &args_dir {
-            workspace_rustc_args = self.load_workspace_rustc_args_from_dir(args_dir);
+        // Load per-crate rustc args from the wrapper directory.
+        // Each workspace crate compiled through the wrapper has its own JSON file:
+        // "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
+        // "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
+        let mut workspace_rustc_args = HashMap::new();
+        let args_dir = self.rustc_wrapper_args_dir();
+        if let Ok(entries) = std::fs::read_dir(&args_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "json") {
+                    if let Ok(contents) = std::fs::read_to_string(&path) {
+                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
+                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                workspace_rustc_args.insert(stem.to_string(), args);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        if let Some(args_dir) = &args_dir {
-            tracing::trace!(
-                "Loaded workspace rustc args from {}: keys={:?}",
-                args_dir.display(),
-                workspace_rustc_args.keys().collect::<Vec<_>>(),
-            );
-            for key in workspace_rustc_args.keys().sorted() {
-                let extra = workspace_rustc_args
-                    .get(key)
-                    .and_then(Self::rustc_extra_filename);
-                let artifact = artifact_paths.get(key);
-                tracing::debug!(
-                    "Rustc cache entry: key={key} extra_filename={extra:?} artifact={artifact:?}",
-                );
-            }
-        } else {
-            tracing::trace!(
-                "Using in-memory workspace rustc args for thin build: keys={:?}",
-                workspace_rustc_args.keys().collect::<Vec<_>>(),
-            );
-        }
+        tracing::trace!(
+            "Loaded workspace rustc args from {}: keys={:?}",
+            args_dir.display(),
+            workspace_rustc_args.keys().collect::<Vec<_>>(),
+        );
 
         // If there's any warnings from the linker, we should print them out
         if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
@@ -1367,39 +1357,31 @@ impl BuildRequest {
             }
         }
 
-        // Collect linker args for the tip crate's bin entry.
-        // Persist them back into the scoped cache so later dx runs can reuse a cached fat-link
-        // invocation even if cargo decides the current build is fully fresh and skips relinking.
+        // Collect the linker args and attach them to the tip crate's bin entry
         let tip_crate_name = self.tip_crate_name();
         let tip_bin_key = format!("{tip_crate_name}.bin");
         if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_bin_key) {
-            let new_link_args = std::fs::read_to_string(self.link_args_file())
+            tip_args.link_args = std::fs::read_to_string(self.link_args_file())
+                .inspect(|f| tracing::debug!("linkargs: {f}"))
                 .context("Failed to read link args from file")?
                 .lines()
                 .map(|s| s.to_string())
-                .collect::<Vec<_>>();
-
-            tip_args.link_args = new_link_args;
-
-            if !tip_args.link_args.is_empty() {
-                if let Some(args_dir) = &args_dir {
-                    self.persist_rustc_args(args_dir, &tip_bin_key, tip_args)?;
-                }
-            }
+                .collect();
         }
 
         let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
 
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
-            ctx.status_starting_link();
-            let tip_args = workspace_rustc_args.get(&tip_bin_key).with_context(|| {
-                format!(
-                    "Missing captured rustc args for tip crate '{tip_bin_key}'. Loaded keys: {:?}",
-                    workspace_rustc_args.keys().collect::<Vec<_>>()
-                )
-            })?;
-            self.run_fat_link(&exe, tip_args).await?;
+            self.run_fat_link(
+                ctx,
+                &exe,
+                &workspace_rustc_args
+                    .get(&tip_bin_key)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .await?;
         }
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
@@ -1409,17 +1391,11 @@ impl BuildRequest {
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
-        tracing::debug!(
-            "Build completed successfully in {}us: {:?}",
-            time_end.duration_since(time_start).unwrap().as_micros(),
-            exe
-        );
-
         Ok(BuildArtifacts {
             time_end,
             exe,
             workspace_rustc_args,
-            artifact_paths,
+            artifact_paths: Default::default(),
             time_start,
             assets,
             mode,
@@ -1579,19 +1555,9 @@ impl BuildRequest {
             return Ok(AssetManifest::default());
         }
 
-        let mut manifest = AssetManifest::default();
-
-        let super::assets::SymbolExtractionResult {
-            assets: extracted_assets,
-            android_artifacts,
-            swift_packages,
-        } = extract_symbols_from_file(exe).await?;
-
         ctx.status_extracting_assets();
 
-        for asset in extracted_assets {
-            manifest.insert_asset(asset);
-        }
+        let mut manifest = extract_symbols_from_file(exe).await?;
 
         if matches!(self.bundle, BundleFormat::Web)
             && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
@@ -1615,9 +1581,6 @@ impl BuildRequest {
                 }
             }
         }
-
-        manifest.android_artifacts = android_artifacts;
-        manifest.swift_sources = swift_packages;
 
         Ok(manifest)
     }
@@ -2795,15 +2758,20 @@ impl BuildRequest {
     ///
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
-    pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
-        let link_start = SystemTime::now();
+    pub(crate) async fn run_fat_link(
+        &self,
+        ctx: &BuildContext,
+        exe: &Path,
+        rustc_args: &RustcArgs,
+    ) -> Result<()> {
+        ensure!(
+            !rustc_args.link_args.is_empty(),
+            "Missing linker args for fat link of '{}'. The tip crate likely did not run through linker interception for this build.",
+            self.tip_crate_name()
+        );
 
-        if rustc_args.link_args.is_empty() {
-            bail!(
-                "Missing linker args for fat link of '{}'. The tip crate likely did not run through linker interception for this build.",
-                self.tip_crate_name()
-            );
-        }
+        let link_start = SystemTime::now();
+        ctx.status_starting_fat_link();
 
         // Filter out the rlib files from the arguments
         let rlibs = rustc_args
@@ -3284,7 +3252,7 @@ impl BuildRequest {
     ///
     /// When processing the output of this command, you need to make sure to handle both cases which
     /// both have different formats (but with json output for both).
-    fn build_command(&self, build_mode: &BuildMode) -> Result<Command> {
+    fn cargo_build_command(&self, build_mode: &BuildMode) -> Result<Command> {
         match build_mode {
             // We're assembling rustc directly, so we need to be *very* careful. Cargo sets rustc's
             // env up very particularly, and we want to match it 1:1 but with some changes.
@@ -3332,7 +3300,9 @@ impl BuildRequest {
             // workspace member crates to capture their args/envs for hot-patching.
             //
             // We use RUSTC_WORKSPACE_WRAPPER which wraps only workspace member crates, letting us
-            // capture per-crate args without interfering with external dependency compilation.
+            // capture per-crate args without interfering with external dependency compilation. Note
+            // that this will also separate dx from cargo/clippy/check because the path to dx ends up
+            // being used in the hash check. This means dx's output is always reliable!
             //
             // We've also had a number of issues with incorrect canonicalization when passing paths
             // through envs on windows, hence the frequent use of dunce::canonicalize.
@@ -3358,22 +3328,18 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
-                    let args_dir = self.rustc_wrapper_args_scope_dir(build_mode)?;
-                    std::fs::create_dir_all(&args_dir)
-                        .context("Failed to create rustc wrapper args directory")?;
-                    cmd.env(
-                        DX_RUSTC_WRAPPER_ENV_VAR,
-                        dunce::canonicalize(&args_dir)
-                            .context("Failed to canonicalize rustc wrapper args dir")?
-                            .display()
-                            .to_string(),
-                    );
-                    cmd.env(
-                        "RUSTC_WORKSPACE_WRAPPER",
-                        Workspace::path_to_dx()?.display().to_string(),
-                    );
-                }
+                // if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
+                // let args_dir = self.rustc_wrapper_args_scope_dir(build_mode)?;
+                let args_dir = self.rustc_wrapper_args_dir();
+                std::fs::create_dir_all(&args_dir)
+                    .context("Failed to create rustc wrapper args directory")?;
+                cmd.env(
+                    DX_RUSTC_WRAPPER_ENV_VAR,
+                    dunce::canonicalize(&args_dir)
+                        .context("Failed to canonicalize rustc wrapper args dir")?,
+                );
+                cmd.env("RUSTC_WORKSPACE_WRAPPER", Workspace::path_to_dx()?);
+                // }
 
                 Ok(cmd)
             }
@@ -4448,6 +4414,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn rustc_wrapper_args_dir(&self) -> PathBuf {
+        // self.session_cache_dir().join("rustc_wrapper_args")
         self.target_dir.join("dx").join("rustc-wrapper-cache")
     }
 
@@ -6130,8 +6097,27 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    fn rustc_wrapper_scope(&self, build_mode: &BuildMode) -> RustcWrapperScope {
-        RustcWrapperScope {
+    fn rustc_wrapper_scope_dir_name(&self, build_mode: &BuildMode) -> Result<String> {
+        #[derive(Debug, Serialize)]
+        struct RustcWrapperScope {
+            version: u8,
+            capture_mode: &'static str,
+            bundle: String,
+            triple: String,
+            profile: String,
+            package: String,
+            main_target: String,
+            executable_type: String,
+            rustc_version: String,
+            features: Vec<String>,
+            no_default_features: bool,
+            all_features: bool,
+            rustflags: Vec<String>,
+            extra_cargo_args: Vec<String>,
+            extra_rustc_args: Vec<String>,
+        }
+
+        let scope = RustcWrapperScope {
             version: 1,
             capture_mode: self.rustc_wrapper_capture_mode(build_mode),
             bundle: self.bundle.to_string(),
@@ -6147,11 +6133,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             rustflags: self.rustflags.flags.clone(),
             extra_cargo_args: self.extra_cargo_args.clone(),
             extra_rustc_args: self.extra_rustc_args.clone(),
-        }
-    }
+        };
 
-    fn rustc_wrapper_scope_dir_name(&self, build_mode: &BuildMode) -> Result<String> {
-        let scope = self.rustc_wrapper_scope(build_mode);
         let encoded =
             serde_json::to_vec(&scope).context("Failed to serialize rustc wrapper scope")?;
         let mut hasher = Sha256::new();
@@ -6168,6 +6151,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
 
     fn load_workspace_rustc_args_from_dir(&self, args_dir: &Path) -> HashMap<String, RustcArgs> {
         let mut workspace_rustc_args = HashMap::new();
+
         if let Ok(entries) = std::fs::read_dir(args_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -6182,6 +6166,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                 }
             }
         }
+
         workspace_rustc_args
     }
 
@@ -7357,6 +7342,10 @@ We checked the folders:
         Ok(())
     }
 
+    /// Write out the manganis ffi plugins that we support
+    /// - Kotlin / Java
+    /// - Swift
+    /// Todo: implement other languages like JS/TS
     async fn write_ffi_plugins(
         &self,
         ctx: &BuildContext,

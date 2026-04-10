@@ -258,59 +258,59 @@ impl AppBuilder {
         // doing so will cause the changes to be lost since this wait call is called under a cancellable task
         // todo - move this handling to a separate function that won't be cancelled
         match &update {
-            BuilderUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { .. } if self.is_finished() => {
                 // Prevent updates from flowing in after the build has already finished
-                if !self.is_finished() {
-                    self.stage = stage.clone();
+            }
+            BuilderUpdate::Progress { stage } => {
+                self.stage = stage.clone();
 
-                    match stage {
-                        BuildStage::Initializing => {
-                            self.profile_spans.clear();
-                            self.compiled_crates = 0;
-                            self.bundling_progress = 0.0;
-                        }
-                        BuildStage::Starting { crate_count, .. } => {
-                            self.expected_crates = *crate_count.max(&1);
-                        }
-                        BuildStage::InstallingTooling => {}
-                        BuildStage::Compiling { current, total, .. } => {
-                            self.compiled_crates = *current;
-                            self.expected_crates = *total.max(&1);
-
-                            if self.compile_start.is_none() {
-                                self.compile_start = Some(SystemTime::now());
-                            }
-                        }
-                        BuildStage::Bundling => {
-                            self.bundling_progress = 0.0;
-                            self.bundle_start = Some(SystemTime::now());
-
-                            if self.compile_end.is_none() {
-                                self.compiled_crates = self.expected_crates;
-                                self.compile_end = Some(SystemTime::now());
-                            }
-                        }
-                        BuildStage::OptimizingWasm => {}
-                        BuildStage::CopyingAssets { current, total, .. } => {
-                            self.bundling_progress = *current as f64 / *total as f64;
-                        }
-                        BuildStage::Success => {
-                            self.compiled_crates = self.expected_crates;
-                            self.bundling_progress = 1.0;
-                        }
-                        BuildStage::Failed => {
-                            self.compiled_crates = self.expected_crates;
-                            self.bundling_progress = 1.0;
-                        }
-                        BuildStage::Aborted => {}
-                        BuildStage::Restarting => {
-                            self.compiled_crates = 0;
-                            self.expected_crates = 1;
-                            self.bundling_progress = 0.0;
-                        }
-                        BuildStage::RunningBindgen => {}
-                        _ => {}
+                match stage {
+                    BuildStage::Initializing => {
+                        self.profile_spans.clear();
+                        self.compiled_crates = 0;
+                        self.bundling_progress = 0.0;
                     }
+                    BuildStage::Starting { crate_count, .. } => {
+                        self.expected_crates = *crate_count.max(&1);
+                    }
+                    BuildStage::InstallingTooling => {}
+                    BuildStage::Compiling { current, total, .. } => {
+                        self.compiled_crates = *current;
+                        self.expected_crates = *total.max(&1);
+
+                        if self.compile_start.is_none() {
+                            self.compile_start = Some(SystemTime::now());
+                        }
+                    }
+                    BuildStage::Bundling => {
+                        self.bundling_progress = 0.0;
+                        self.bundle_start = Some(SystemTime::now());
+
+                        if self.compile_end.is_none() {
+                            self.compiled_crates = self.expected_crates;
+                            self.compile_end = Some(SystemTime::now());
+                        }
+                    }
+                    BuildStage::OptimizingWasm => {}
+                    BuildStage::CopyingAssets { current, total, .. } => {
+                        self.bundling_progress = *current as f64 / *total as f64;
+                    }
+                    BuildStage::Success => {
+                        self.compiled_crates = self.expected_crates;
+                        self.bundling_progress = 1.0;
+                    }
+                    BuildStage::Failed => {
+                        self.compiled_crates = self.expected_crates;
+                        self.bundling_progress = 1.0;
+                    }
+                    BuildStage::Aborted => {}
+                    BuildStage::Restarting => {
+                        self.compiled_crates = 0;
+                        self.expected_crates = 1;
+                        self.bundling_progress = 0.0;
+                    }
+                    BuildStage::RunningBindgen => {}
+                    _ => {}
                 }
             }
             BuilderUpdate::BuildReady { ref bundle } => {
@@ -349,6 +349,23 @@ impl AppBuilder {
         update
     }
 
+    /// Kick off a thin (hotpatch) rebuild in response to a file change, replacing any in-flight
+    /// build with one that produces a relinkable patch dylib (later applied by [`Builder::hotpatch`]).
+    ///
+    /// Bails early if there's no prior fat build to link against, or if we're missing the ASLR
+    /// reference on a non-wasm target (which means no client is connected yet to report it).
+    ///
+    /// Updates the cumulative `modified_crates` set: every patch is self-contained and contains
+    /// the latest version of *every* crate modified since the fat build, not just the one that
+    /// changed this iteration. We BFS `workspace_dependents_of` from `changed_crates` to catch
+    /// the cascade — e.g. editing a leaf crate forces parent crates' generic instantiations to
+    /// change too. (`compile_workspace_deps` does its own walk to decide what to *compile* now;
+    /// this set tracks what to *link* into the patch.)
+    ///
+    /// Then aborts any in-flight build and spawns a fresh task with [`BuildMode::Thin`], handing
+    /// it the fat build's `workspace_rustc_args`/`artifact_paths` (so rustc gets re-invoked with
+    /// identical flags), the `HotpatchModuleCache` (symbol map for `create_jump_table`), and the
+    /// current `object_cache` (per-crate `.rcgu.o` files used for assembly diffing).
     pub(crate) fn patch_rebuild(
         &mut self,
         changed_files: Vec<PathBuf>,
@@ -422,6 +439,8 @@ impl AppBuilder {
 
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all(BuildStage::Restarting);
+        self.compile_start = Some(SystemTime::now());
+        self.profile_spans.clear();
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let ctx = BuildContext::new(
@@ -747,6 +766,56 @@ impl AppBuilder {
         }
     }
 
+    /// Apply the artifacts produced by a thin (hotpatch) build to the currently running app and
+    /// return a [`JumpTable`] that the runtime can use to swap function pointers in place.
+    ///
+    /// This is the CLI-side counterpart to `subsecond`'s runtime patch loader. A thin build
+    /// produces a self-contained dylib (`patch_exe`) that links against the symbols already
+    /// resident in the running process. To make that dylib actually take effect, this function
+    /// has to do four things, in order:
+    ///
+    /// 1. **Reconcile new assets.** Walks `res.assets` and, for any `asset!()` reference that
+    ///    wasn't in the previous build, processes the source file (via `process_file_to`, which
+    ///    runs the asset through the appropriate optimizer — esbuild for JS/CSS, image
+    ///    re-encoding, etc.) and copies it into the live `asset_dir`. New assets are also
+    ///    inserted into `self.artifacts.assets` so subsequent patches see them as already-known.
+    ///    On Android the asset is additionally `adb push`'d to `/data/local/tmp/dx/assets/...`
+    ///    so the on-device app can read it.
+    ///
+    /// 2. **Extend the file watcher set.** New `include!()` / `include_str!()` / `include_bytes!()`
+    ///    targets discovered in `res.depinfo.files` are appended to the existing artifacts'
+    ///    depinfo so the file watcher will pick up future edits to them.
+    ///
+    /// 3. **Build the jump table.** Calls [`BuildRequest::create_jump_table`] with the new dylib
+    ///    and the [`HotpatchModuleCache`] (which holds the symbol map from the original fat
+    ///    build). The cache is what lets us resolve "function `foo` in the new dylib" to "the
+    ///    address of `foo` in the running process" so the runtime can patch the call sites. On
+    ///    Android the dylib itself is also pushed to the device and `jump_table.lib` is
+    ///    rewritten to point at the on-device path, since the runtime will `dlopen` it from
+    ///    there rather than from the host filesystem.
+    ///
+    /// 4. **Commit local state.** The jump table is appended to `self.patches` (the cumulative
+    ///    history of patches applied to this run of the app — used so that a fresh client
+    ///    connecting mid-session can be brought up to date by replaying every patch in order),
+    ///    and `self.object_cache` is overwritten with `res.object_cache` so the next thin build
+    ///    diffs against the objects this patch produced rather than the previous tip.
+    ///
+    /// The returned [`JumpTable`] is what gets shipped to the runtime over the devserver
+    /// websocket; the runtime then `dlopen`s `jump_table.lib` and rewrites the trampolines
+    /// described by the table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there are no prior `artifacts` to patch against (i.e. no fat build
+    /// has completed yet), if `create_jump_table` fails (typically a symbol-resolution failure
+    /// indicating the patch references something that doesn't exist in the base binary), or if
+    /// the Android `adb push` of the dylib fails. Failures while copying individual assets are
+    /// logged and skipped rather than aborting the patch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `res.mode` is [`BuildMode::Thin`] but `changed_files` is empty — every thin
+    /// build is triggered by at least one file change, so this should be unreachable in practice.
     pub(crate) async fn hotpatch(
         &mut self,
         res: &BuildArtifacts,
@@ -1878,6 +1947,7 @@ impl AppBuilder {
     /// the flamegraph via a debug!
     fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
         let Some(start) = self.compile_start else {
+            tracing::debug!("no compile start?");
             return;
         };
 

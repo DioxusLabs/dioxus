@@ -696,24 +696,9 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     Ok(offsets)
 }
 
-/// Result of extracting symbols from a binary file
-#[derive(Debug, Clone)]
-pub(crate) struct SymbolExtractionResult {
-    /// Assets found in the binary
-    pub assets: Vec<BundledAsset>,
-
-    /// Android plugin artifacts discovered in the binary
-    pub android_artifacts: Vec<AndroidArtifactMetadata>,
-
-    /// Swift packages discovered in the binary
-    pub swift_packages: Vec<SwiftPackageMetadata>,
-}
-
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Also extracts Android/Swift plugin metadata for FFI bindings.
-pub(crate) async fn extract_symbols_from_file(
-    path: impl AsRef<Path>,
-) -> Result<SymbolExtractionResult> {
+pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
     let path = path.as_ref();
     let mut file = open_file_for_writing_with_timeout(
         path,
@@ -878,23 +863,15 @@ pub(crate) async fn extract_symbols_from_file(
         }
     }
 
-    Ok(SymbolExtractionResult {
-        assets,
-        android_artifacts,
-        swift_packages,
-    })
-}
-
-/// Find all assets in the given file, hash them, and write them back to the file.
-/// Then return an `AssetManifest` containing all the assets found in the file.
-///
-/// This is a convenience function that extracts symbols and returns only assets.
-pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
-    let result = extract_symbols_from_file(path).await?;
     let mut manifest = AssetManifest::default();
-    for asset in result.assets {
+
+    for asset in assets {
         manifest.insert_asset(asset);
     }
+
+    manifest.android_artifacts = android_artifacts;
+    manifest.swift_sources = swift_packages;
+
     Ok(manifest)
 }
 
