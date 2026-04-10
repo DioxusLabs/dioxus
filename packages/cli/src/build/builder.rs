@@ -316,8 +316,11 @@ impl AppBuilder {
             BuilderUpdate::BuildReady { ref bundle } => {
                 // Log the build completion as a telemetry event + provide analytics on build phases
                 if let Some(start) = self.compile_start {
-                    // Record the build duration as a telemetry event
-                    let time_taken = SystemTime::now()
+                    // Record the build duration as a telemetry event. Capture `now` once and use
+                    // it as the end of the final phase too, so the flamegraph bars stay
+                    // internally consistent with `time_taken`.
+                    let now = SystemTime::now();
+                    let time_taken = now
                         .duration_since(start)
                         .unwrap_or_default()
                         .as_millis()
@@ -340,16 +343,13 @@ impl AppBuilder {
                         "Build completed in {time_taken}ms",
                     );
 
-                    // Render the flameagraph out by walking the span history
-                    // This is pretty naive and doesn't support nested span contexts (yet!)
-                    let mut flamegraph = format!(
-                        "Flamegraph for {} - time taken: {}ms\n",
-                        bundle.mode.name(),
-                        time_taken
-                    );
-                    let mut phase_iter = self.profile_spans.iter().peekable();
+                    // Render the flamegraph out by walking the span history. This is pretty naive
+                    // and doesn't support nested span contexts (yet!) - all phases live on one row
+                    // and a phase ends where the next one begins.
+                    use std::fmt::Write as _;
+
+                    let total_ms = time_taken as usize;
                     let timeline_width = 96usize;
-                    let mut last_start: SystemTime = start;
                     let max_label_width = self
                         .profile_spans
                         .iter()
@@ -357,43 +357,64 @@ impl AppBuilder {
                         .max()
                         .unwrap_or(0)
                         .min(28);
+                    // The final phase runs right up until `now`. Don't use `compile_end` here:
+                    // it's set when the Bundling stage starts, so it predates the bundling phases
+                    // themselves and would zero out the last bar.
+                    let phase_end = now;
 
+                    let mut flamegraph = format!(
+                        "Flamegraph for {} - time taken: {}ms",
+                        bundle.mode.name(),
+                        time_taken
+                    );
+
+                    let mut phase_iter = self.profile_spans.iter().peekable();
                     while let Some(phase) = phase_iter.next() {
-                        let end_time = phase_iter
-                            .peek()
-                            .map(|f| f.start)
-                            .unwrap_or_else(|| self.compile_end.unwrap_or(SystemTime::now()));
+                        let end_time = phase_iter.peek().map(|f| f.start).unwrap_or(phase_end);
 
-                        let dur = end_time.duration_since(phase.start).unwrap_or_default();
-                        let pct = dur.as_millis() as f64 / time_taken as f64;
+                        let offset_ms = phase
+                            .start
+                            .duration_since(start)
+                            .unwrap_or_default()
+                            .as_millis() as usize;
+                        let dur_ms = end_time
+                            .duration_since(phase.start)
+                            .unwrap_or_default()
+                            .as_millis() as usize;
+                        let pct = (dur_ms as f64) * 100.0 / (total_ms as f64);
 
-                        last_start = phase.start;
+                        let bar_start =
+                            ((offset_ms * timeline_width) / total_ms).min(timeline_width - 1);
+                        let bar_end = (((offset_ms + dur_ms) * timeline_width).div_ceil(total_ms))
+                            .max(bar_start + 1)
+                            .min(timeline_width);
 
-                        let label_start = ((phase.start.duration_since(start).unwrap_or_default()
-                            as usize)
-                            * timeline_width)
-                            / total_ms as usize;
-                        //         let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
-                        //             .div_ceil(total_ms as usize);
-                        //         let mut bar = vec![' '; timeline_width];
-                        //         for ch in bar
-                        //             .iter_mut()
-                        //             .take(end.max(start + 1).min(timeline_width))
-                        //             .skip(start.min(timeline_width.saturating_sub(1)))
-                        //         {
-                        //             *ch = '█';
-                        //         }
-                        //         let bar: String = bar.into_iter().collect();
+                        let mut bar = vec![' '; timeline_width];
+                        for ch in &mut bar[bar_start..bar_end] {
+                            *ch = '█';
+                        }
+                        let bar: String = bar.into_iter().collect();
 
-                        //         tracing::info!(
-                        //             "  {:>6}ms {:>5.1}% {:<width$} |{}|",
-                        //             phase.duration_ms,
-                        //             pct,
-                        //             phase.label,
-                        //             bar,
-                        //             width = max_label_width
-                        //         );
+                        // Labels are ASCII so byte slicing is safe; truncate so the bar column
+                        // stays aligned across rows.
+                        let label = if phase.label.len() > max_label_width {
+                            &phase.label[..max_label_width]
+                        } else {
+                            phase.label
+                        };
+
+                        let _ = write!(
+                            flamegraph,
+                            "\n  {:>6}ms {:>5.1}% {:<width$} |{}|",
+                            dur_ms,
+                            pct,
+                            label,
+                            bar,
+                            width = max_label_width
+                        );
                     }
+
+                    tracing::info!("{}", flamegraph);
                 }
 
                 // And then update the build state
@@ -411,7 +432,13 @@ impl AppBuilder {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
-            BuilderUpdate::ProfilePhase { profile } => self.profile_spans.push(profile.clone()),
+            BuilderUpdate::ProfilePhase { profile } => {
+                // Collapse consecutive entries with the same label so e.g. per-crate "Compiling"
+                // calls show up as a single span instead of hundreds.
+                if self.profile_spans.last().map(|p| p.label) != Some(profile.label) {
+                    self.profile_spans.push(profile.clone());
+                }
+            }
             BuilderUpdate::CompilerMessage { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
@@ -1649,21 +1676,17 @@ impl AppBuilder {
     }
 
     pub(crate) fn compile_duration(&self) -> Option<Duration> {
-        todo!()
-        // Some(
-        //     self.compile_end
-        //         .unwrap_or_else(SystemTime::now)
-        //         .duration_since(self.compile_start?),
-        // )
+        self.compile_end
+            .unwrap_or_else(SystemTime::now)
+            .duration_since(self.compile_start?)
+            .ok()
     }
 
     pub(crate) fn bundle_duration(&self) -> Option<Duration> {
-        todo!()
-        // Some(
-        //     self.bundle_end
-        //         .unwrap_or_else(SystemTime::now)
-        //         .duration_since(self.bundle_start?),
-        // )
+        self.bundle_end
+            .unwrap_or_else(SystemTime::now)
+            .duration_since(self.bundle_start?)
+            .ok()
     }
 
     /// Return a number between 0 and 1 representing the progress of the app build

@@ -110,10 +110,13 @@ impl BuildContext {
         self.build_id == BuildId::PRIMARY
     }
 
-    pub(crate) fn profile_phase(&self, label: impl Into<String>) {
-        todo!()
-        // let mut profiler = self.profiler.lock().expect("build profiler poisoned");
-        // profiler.transition(label.into());
+    pub(crate) fn profile_phase(&self, label: &'static str) {
+        _ = self.tx.unbounded_send(BuilderUpdate::ProfilePhase {
+            profile: BuildPhaseProfile {
+                label,
+                start: SystemTime::now(),
+            },
+        });
     }
 
     pub(crate) fn status_wasm_bindgen_start(&self) {
@@ -255,63 +258,3 @@ impl BuildContext {
         });
     }
 }
-
-// impl BuildProfileRecorder {
-//     fn transition(&mut self, label: String) {
-//         let Some(start) = self.start else {
-//             self.start = Some(Instant::now());
-//             self.transition(label);
-//             return;
-//         };
-
-//         if self
-//             .current
-//             .as_ref()
-//             .is_some_and(|current| current.label == label)
-//         {
-//             return;
-//         }
-
-//         let now = Instant::now();
-//         self.close_current(now);
-//         self.current = Some(ActiveBuildPhase {
-//             start_offset_ms: elapsed_ms(start, now),
-//             started_at: now,
-//             label,
-//         });
-//     }
-
-//     fn finish(&mut self) -> BuildProfile {
-//         let Some(start) = self.start else {
-//             return BuildProfile::default();
-//         };
-
-//         let now = Instant::now();
-//         self.close_current(now);
-
-//         BuildProfile {
-//             total_duration_ms: elapsed_ms(start, now),
-//             phases: self.phases.clone(),
-//         }
-//     }
-
-//     fn close_current(&mut self, now: Instant) {
-//         let Some(current) = self.current.take() else {
-//             return;
-//         };
-
-//         self.phases.push(BuildPhaseProfile {
-//             label: current.label,
-//             start_offset_ms: current.start_offset_ms,
-//             duration_ms: duration_ms(now.saturating_duration_since(current.started_at)),
-//         });
-//     }
-// }
-
-// fn elapsed_ms(start: Instant, end: Instant) -> u64 {
-//     duration_ms(end.saturating_duration_since(start))
-// }
-
-// fn duration_ms(duration: Duration) -> u64 {
-//     duration.as_millis().try_into().unwrap_or(u64::MAX)
-// }
