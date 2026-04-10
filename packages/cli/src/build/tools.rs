@@ -1,7 +1,10 @@
 use crate::Result;
 use anyhow::Context;
 use itertools::Itertools;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use target_lexicon::{
     Aarch64Architecture, Architecture, ArmArchitecture, Triple, X86_32Architecture,
 };
@@ -19,31 +22,13 @@ pub(crate) struct AndroidTools {
 }
 
 pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
-    // We check for SDK first since users might install Android Studio and then install the SDK
-    // After that they might install the NDK, so the SDK drives the source of truth.
-    let sdk = var_or_debug("ANDROID_SDK_ROOT")
-        .or_else(|| var_or_debug("ANDROID_SDK"))
-        .or_else(|| var_or_debug("ANDROID_HOME"));
+    let sdk_from_env = android_sdk_from_env();
+    let ndk_from_env = android_ndk_from_env();
 
-    // Check the ndk. We look for users's overrides first and then look into the SDK.
-    // Sometimes users set only the NDK (especially if they're somewhat advanced) so we need to look for it manually
-    //
-    // Might look like this, typically under "sdk":
-    // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
-    let ndk = var_or_debug("NDK_HOME")
-        .or_else(|| var_or_debug("ANDROID_NDK_HOME"))
-        .or_else(|| {
-            // Look for the most recent NDK in the event the user has installed multiple NDK
-            // Eventually we might need to drive this from Dioxus.toml
-            let sdk = sdk.as_ref()?;
-            let ndk_dir = sdk.join("ndk").read_dir().ok()?;
-            ndk_dir
-                .flatten()
-                .map(|dir| (dir.file_name(), dir.path()))
-                .sorted()
-                .next_back()
-                .map(|(_, path)| path.to_path_buf())
-        })?;
+    // When the user explicitly points at an NDK but not an SDK, keep the SDK paired with that NDK
+    // instead of overriding it with a platform default installation.
+    let (sdk, ndk) =
+        resolve_android_sdk_and_ndk(sdk_from_env, ndk_from_env, default_android_sdk_path())?;
 
     // Look for ADB in the SDK. If it's not there we'll use `adb` from the PATH
     let adb = sdk
@@ -100,9 +85,33 @@ pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
                 }
             }
 
-            // todo(jon): how do we detect java home on linux?
             #[cfg(target_os = "linux")]
             {
+                // Check Android Studio bundled JDK first (common installation paths)
+                if let Some(home) = dirs::home_dir() {
+                    let studio_jbr = home.join("android-studio/jbr");
+                    if studio_jbr.exists() {
+                        return Some(studio_jbr);
+                    }
+
+                    let studio_jre = home.join("android-studio/jre");
+                    if studio_jre.exists() {
+                        return Some(studio_jre);
+                    }
+                }
+
+                // Also check /opt which is another common install location
+                let opt_jbr = PathBuf::from("/opt/android-studio/jbr");
+                if opt_jbr.exists() {
+                    return Some(opt_jbr);
+                }
+
+                let opt_jre = PathBuf::from("/opt/android-studio/jre");
+                if opt_jre.exists() {
+                    return Some(opt_jre);
+                }
+
+                // Fallback to system OpenJDK
                 let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
                 if jbr_home.exists() {
                     return Some(jbr_home);
@@ -356,4 +365,143 @@ fn var_or_debug(name: &str) -> Option<PathBuf> {
         .inspect_err(|_| tracing::trace!("{name} not set"))
         .ok()
         .map(PathBuf::from)
+}
+
+fn android_sdk_from_env() -> Option<PathBuf> {
+    var_or_debug("ANDROID_SDK_ROOT")
+        .or_else(|| var_or_debug("ANDROID_SDK"))
+        .or_else(|| var_or_debug("ANDROID_HOME"))
+}
+
+fn android_ndk_from_env() -> Option<PathBuf> {
+    var_or_debug("NDK_HOME").or_else(|| var_or_debug("ANDROID_NDK_HOME"))
+}
+
+fn sdk_from_ndk_path(ndk: &Path) -> Option<PathBuf> {
+    Some(ndk.parent()?.parent()?.to_path_buf())
+}
+
+fn latest_ndk_in_sdk(sdk: &Path) -> Option<PathBuf> {
+    // Look for the most recent NDK in the event the user has installed multiple NDKs.
+    sdk.join("ndk")
+        .read_dir()
+        .ok()?
+        .flatten()
+        .map(|dir| (dir.file_name(), dir.path()))
+        .sorted()
+        .next_back()
+        .map(|(_, path)| path)
+}
+
+fn resolve_android_sdk_and_ndk(
+    sdk_from_env: Option<PathBuf>,
+    ndk_from_env: Option<PathBuf>,
+    default_sdk: Option<PathBuf>,
+) -> Option<(Option<PathBuf>, PathBuf)> {
+    let sdk = sdk_from_env.clone().or_else(|| {
+        if ndk_from_env.is_some() {
+            None
+        } else {
+            default_sdk
+        }
+    });
+
+    let ndk = ndk_from_env
+        .clone()
+        .or_else(|| sdk.as_deref().and_then(latest_ndk_in_sdk))?;
+
+    let sdk = sdk.or_else(|| sdk_from_ndk_path(&ndk));
+
+    Some((sdk, ndk))
+}
+
+/// Returns the default Android SDK installation path for the current platform.
+///
+/// This checks the standard installation locations for Android SDK:
+/// - macOS: `~/Library/Android/sdk`
+/// - Windows: `%LOCALAPPDATA%\Android\Sdk`
+/// - Linux: `~/Android/Sdk`
+fn default_android_sdk_path() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        let sdk = dirs::home_dir()?.join("Library/Android/sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        let sdk = dirs::data_local_dir()?.join("Android").join("Sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let sdk = dirs::home_dir()?.join("Android/Sdk");
+        if sdk.exists() {
+            return Some(sdk);
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_android_sdk_and_ndk;
+    use std::{fs, path::PathBuf};
+
+    fn create_ndk(sdk: &PathBuf, version: &str) -> PathBuf {
+        let ndk = sdk.join("ndk").join(version);
+        fs::create_dir_all(&ndk).unwrap();
+        ndk
+    }
+
+    #[test]
+    fn explicit_ndk_keeps_matching_sdk() {
+        let temp = tempfile::tempdir().unwrap();
+        let default_sdk = temp.path().join("default-sdk");
+        let custom_sdk = temp.path().join("custom-sdk");
+        let custom_ndk = create_ndk(&custom_sdk, "26.3.11579264");
+        create_ndk(&default_sdk, "27.0.12077973");
+
+        let (sdk, ndk) =
+            resolve_android_sdk_and_ndk(None, Some(custom_ndk.clone()), Some(default_sdk)).unwrap();
+
+        assert_eq!(sdk, Some(custom_sdk));
+        assert_eq!(ndk, custom_ndk);
+    }
+
+    #[test]
+    fn default_sdk_is_used_when_no_overrides_exist() {
+        let temp = tempfile::tempdir().unwrap();
+        let default_sdk = temp.path().join("default-sdk");
+        let older_ndk = create_ndk(&default_sdk, "25.2.9519653");
+        let newer_ndk = create_ndk(&default_sdk, "27.0.12077973");
+
+        let (sdk, ndk) =
+            resolve_android_sdk_and_ndk(None, None, Some(default_sdk.clone())).unwrap();
+
+        assert_eq!(sdk, Some(default_sdk));
+        assert_eq!(ndk, newer_ndk);
+        assert_ne!(ndk, older_ndk);
+    }
+
+    #[test]
+    fn explicit_sdk_wins_over_default_sdk() {
+        let temp = tempfile::tempdir().unwrap();
+        let default_sdk = temp.path().join("default-sdk");
+        let env_sdk = temp.path().join("env-sdk");
+        create_ndk(&default_sdk, "27.0.12077973");
+        let env_ndk = create_ndk(&env_sdk, "26.1.10909125");
+
+        let (sdk, ndk) =
+            resolve_android_sdk_and_ndk(Some(env_sdk.clone()), None, Some(default_sdk)).unwrap();
+
+        assert_eq!(sdk, Some(env_sdk));
+        assert_eq!(ndk, env_ndk);
+    }
 }
