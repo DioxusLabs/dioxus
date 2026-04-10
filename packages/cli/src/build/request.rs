@@ -1187,8 +1187,6 @@ impl BuildRequest {
             }
         }
 
-        self.finalize_build(ctx, &mut artifacts)?;
-
         Ok(artifacts)
     }
     /// Run the cargo build by assembling the build command and executing it.
