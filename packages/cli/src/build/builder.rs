@@ -113,7 +113,7 @@ pub(crate) struct AppBuilder {
     /// Cache of the latest `.rcgu.o` files for each modified workspace crate.
     pub object_cache: ObjectCache,
 
-    ///
+    /// The build profiling spans for us to generate a flamegraph from.
     pub profile_spans: Vec<BuildPhaseProfile>,
 }
 
