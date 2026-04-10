@@ -16,7 +16,7 @@ mod ios_swift;
 mod manifest;
 mod manifest_mapper;
 mod patch;
-mod pre_render;
+mod prerender;
 mod request;
 mod tools;
 
@@ -26,6 +26,6 @@ pub(crate) use cache::*;
 pub(crate) use context::*;
 pub(crate) use manifest::*;
 pub(crate) use patch::*;
-pub(crate) use pre_render::*;
+pub(crate) use prerender::*;
 pub(crate) use request::*;
 pub(crate) use tools::*;

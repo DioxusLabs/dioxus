@@ -1,3 +1,4 @@
+use super::{AppBuilder, BuildId, BuilderUpdate};
 use anyhow::Context;
 use dioxus_cli_config::{server_ip, server_port};
 use dioxus_dx_wire_format::BuildStage;
@@ -7,10 +8,6 @@ use std::{
     time::Duration,
 };
 use tokio::process::Command;
-
-use crate::BuildId;
-
-use super::{AppBuilder, BuilderUpdate};
 
 /// Pre-render the static routes, performing static-site generation
 pub(crate) async fn pre_render_static_routes(

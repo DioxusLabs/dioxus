@@ -7,167 +7,6 @@ use std::path::{Path, PathBuf};
 use target_lexicon::{OperatingSystem, Triple};
 use tokio::process::Command;
 
-/// Create a proper framework bundle from a dylib for iOS/macOS.
-///
-/// iOS uses a flat structure while macOS uses a versioned structure.
-/// Both require an Info.plist for proper App Store submission.
-pub async fn create_framework_bundle(
-    dylib_path: &Path,
-    framework_name: &str,
-    output_dir: &Path,
-    target_triple: &Triple,
-    bundle_identifier: &str,
-) -> Result<PathBuf> {
-    let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
-    let min_os_version = if is_ios { "13.0" } else { "11.0" };
-
-    let framework_dir = output_dir.join(format!("{}.framework", framework_name));
-
-    // Remove existing framework if present
-    if framework_dir.exists() {
-        std::fs::remove_dir_all(&framework_dir)?;
-    }
-
-    if is_ios {
-        // iOS uses flat structure: Framework.framework/FrameworkName + Info.plist
-        std::fs::create_dir_all(&framework_dir)?;
-
-        // Copy dylib as the framework executable (no extension)
-        let exec_path = framework_dir.join(framework_name);
-        std::fs::copy(dylib_path, &exec_path)?;
-
-        // Set the install name using install_name_tool
-        let output = Command::new("xcrun")
-            .arg("install_name_tool")
-            .arg("-id")
-            .arg(format!(
-                "@rpath/{}.framework/{}",
-                framework_name, framework_name
-            ))
-            .arg(&exec_path)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("install_name_tool failed: {}", stderr);
-        }
-
-        // Create Info.plist
-        let info_plist = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>{framework_name}</string>
-    <key>CFBundleIdentifier</key>
-    <string>{bundle_identifier}</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>{framework_name}</string>
-    <key>CFBundlePackageType</key>
-    <string>FMWK</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>MinimumOSVersion</key>
-    <string>{min_os_version}</string>
-    <key>CFBundleSupportedPlatforms</key>
-    <array>
-        <string>iPhoneOS</string>
-    </array>
-</dict>
-</plist>"#
-        );
-
-        std::fs::write(framework_dir.join("Info.plist"), info_plist)?;
-    } else {
-        // macOS uses versioned structure with symlinks
-        let versions_a = framework_dir.join("Versions").join("A");
-        let resources_dir = versions_a.join("Resources");
-        std::fs::create_dir_all(&resources_dir)?;
-
-        // Copy dylib as the framework executable
-        let exec_path = versions_a.join(framework_name);
-        std::fs::copy(dylib_path, &exec_path)?;
-
-        // Set install name
-        let output = Command::new("xcrun")
-            .arg("install_name_tool")
-            .arg("-id")
-            .arg(format!(
-                "@rpath/{}.framework/Versions/A/{}",
-                framework_name, framework_name
-            ))
-            .arg(&exec_path)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            anyhow::bail!("install_name_tool failed: {}", stderr);
-        }
-
-        // Create Info.plist in Resources
-        let info_plist = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>{framework_name}</string>
-    <key>CFBundleIdentifier</key>
-    <string>{bundle_identifier}</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>{framework_name}</string>
-    <key>CFBundlePackageType</key>
-    <string>FMWK</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>{min_os_version}</string>
-</dict>
-</plist>"#
-        );
-
-        std::fs::write(resources_dir.join("Info.plist"), info_plist)?;
-
-        // Create symbolic links (required for macOS framework structure)
-        #[cfg(unix)]
-        {
-            let versions_dir = framework_dir.join("Versions");
-            std::os::unix::fs::symlink("A", versions_dir.join("Current"))?;
-            std::os::unix::fs::symlink(
-                format!("Versions/Current/{}", framework_name),
-                framework_dir.join(framework_name),
-            )?;
-            std::os::unix::fs::symlink(
-                "Versions/Current/Resources",
-                framework_dir.join("Resources"),
-            )?;
-        }
-    }
-
-    tracing::debug!(
-        "Created {} framework bundle: {}",
-        if is_ios { "iOS" } else { "macOS" },
-        framework_dir.display()
-    );
-
-    Ok(framework_dir)
-}
-
 /// Compile Swift sources and return the path to the dynamic framework bundle.
 ///
 /// This function:
@@ -912,4 +751,165 @@ pub async fn compile_apple_widget(
     tracing::debug!("Created Widget Extension bundle: {}", appex_dir.display());
 
     Ok(appex_dir)
+}
+
+/// Create a proper framework bundle from a dylib for iOS/macOS.
+///
+/// iOS uses a flat structure while macOS uses a versioned structure.
+/// Both require an Info.plist for proper App Store submission.
+pub async fn create_framework_bundle(
+    dylib_path: &Path,
+    framework_name: &str,
+    output_dir: &Path,
+    target_triple: &Triple,
+    bundle_identifier: &str,
+) -> Result<PathBuf> {
+    let is_ios = matches!(target_triple.operating_system, OperatingSystem::IOS(_));
+    let min_os_version = if is_ios { "13.0" } else { "11.0" };
+
+    let framework_dir = output_dir.join(format!("{}.framework", framework_name));
+
+    // Remove existing framework if present
+    if framework_dir.exists() {
+        std::fs::remove_dir_all(&framework_dir)?;
+    }
+
+    if is_ios {
+        // iOS uses flat structure: Framework.framework/FrameworkName + Info.plist
+        std::fs::create_dir_all(&framework_dir)?;
+
+        // Copy dylib as the framework executable (no extension)
+        let exec_path = framework_dir.join(framework_name);
+        std::fs::copy(dylib_path, &exec_path)?;
+
+        // Set the install name using install_name_tool
+        let output = Command::new("xcrun")
+            .arg("install_name_tool")
+            .arg("-id")
+            .arg(format!(
+                "@rpath/{}.framework/{}",
+                framework_name, framework_name
+            ))
+            .arg(&exec_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("install_name_tool failed: {}", stderr);
+        }
+
+        // Create Info.plist
+        let info_plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>{framework_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>{bundle_identifier}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>{framework_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>MinimumOSVersion</key>
+    <string>{min_os_version}</string>
+    <key>CFBundleSupportedPlatforms</key>
+    <array>
+        <string>iPhoneOS</string>
+    </array>
+</dict>
+</plist>"#
+        );
+
+        std::fs::write(framework_dir.join("Info.plist"), info_plist)?;
+    } else {
+        // macOS uses versioned structure with symlinks
+        let versions_a = framework_dir.join("Versions").join("A");
+        let resources_dir = versions_a.join("Resources");
+        std::fs::create_dir_all(&resources_dir)?;
+
+        // Copy dylib as the framework executable
+        let exec_path = versions_a.join(framework_name);
+        std::fs::copy(dylib_path, &exec_path)?;
+
+        // Set install name
+        let output = Command::new("xcrun")
+            .arg("install_name_tool")
+            .arg("-id")
+            .arg(format!(
+                "@rpath/{}.framework/Versions/A/{}",
+                framework_name, framework_name
+            ))
+            .arg(&exec_path)
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            anyhow::bail!("install_name_tool failed: {}", stderr);
+        }
+
+        // Create Info.plist in Resources
+        let info_plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>{framework_name}</string>
+    <key>CFBundleIdentifier</key>
+    <string>{bundle_identifier}</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>{framework_name}</string>
+    <key>CFBundlePackageType</key>
+    <string>FMWK</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>{min_os_version}</string>
+</dict>
+</plist>"#
+        );
+
+        std::fs::write(resources_dir.join("Info.plist"), info_plist)?;
+
+        // Create symbolic links (required for macOS framework structure)
+        #[cfg(unix)]
+        {
+            let versions_dir = framework_dir.join("Versions");
+            std::os::unix::fs::symlink("A", versions_dir.join("Current"))?;
+            std::os::unix::fs::symlink(
+                format!("Versions/Current/{}", framework_name),
+                framework_dir.join(framework_name),
+            )?;
+            std::os::unix::fs::symlink(
+                "Versions/Current/Resources",
+                framework_dir.join("Resources"),
+            )?;
+        }
+    }
+
+    tracing::debug!(
+        "Created {} framework bundle: {}",
+        if is_ios { "iOS" } else { "macOS" },
+        framework_dir.display()
+    );
+
+    Ok(framework_dir)
 }

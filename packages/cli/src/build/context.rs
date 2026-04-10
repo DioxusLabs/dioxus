@@ -9,7 +9,7 @@ use std::{
     path::PathBuf,
     process::ExitStatus,
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 
 /// The context of the build process. While the BuildRequest is a "plan" for the build, the BuildContext
@@ -17,8 +17,9 @@ use std::{
 /// and the BuildMode can change while serving.
 ///
 /// The structure of this is roughly taken from cargo itself which uses a similar pattern.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct BuildContext {
+    pub time_start: SystemTime,
     pub tx: ProgressTx,
     pub mode: BuildMode,
     pub build_id: BuildId,
@@ -114,6 +115,7 @@ pub enum BuilderUpdate {
 impl BuildContext {
     pub(crate) fn new(tx: ProgressTx, mode: BuildMode, build_id: BuildId) -> Self {
         Self {
+            time_start: SystemTime::now(),
             tx,
             mode,
             build_id,
@@ -272,8 +274,8 @@ impl BuildContext {
         });
     }
 
-    pub(crate) fn status_extracting_assets_named(&self, label: impl Into<String>) {
-        self.profile_phase(label);
+    pub(crate) fn status_extracting_assets(&self) {
+        self.profile_phase("Extracting assets");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::ExtractingAssets,
         });

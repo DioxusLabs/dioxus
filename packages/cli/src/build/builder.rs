@@ -181,18 +181,13 @@ impl AppBuilder {
     }
 
     pub(crate) fn start(&mut self, mode: BuildMode, build_id: BuildId) {
-        self.build_task = tokio::spawn({
-            let request = self.build.clone();
-            let tx = self.tx.clone();
-            async move {
-                let ctx = BuildContext::new(tx.clone(), mode, build_id);
-                ctx.profile_phase("Verify Tooling");
-                request.verify_tooling(&ctx).await?;
-                ctx.profile_phase("Prebuild");
-                request.prebuild(&ctx).await?;
-                ctx.profile_phase("Building");
-                request.build(&ctx).await
-            }
+        let request = self.build.clone();
+        let tx = self.tx.clone();
+        self.build_task = tokio::spawn(async move {
+            let ctx = BuildContext::new(tx, mode, build_id);
+            request.verify_tooling(&ctx).await?;
+            request.prebuild(&ctx).await?;
+            request.build(ctx).await
         });
     }
 
@@ -310,16 +305,15 @@ impl AppBuilder {
                 }
             }
             BuilderUpdate::CompilerMessage { .. } => {}
-            BuilderUpdate::BuildReady { .. } => {
-                if let BuilderUpdate::BuildReady { bundle } = &update {
-                    log_build_profile(bundle);
-                }
+            BuilderUpdate::BuildReady { ref bundle } => {
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
                 self.complete_compile();
                 self.bundle_end = Some(Instant::now());
+
+                log_build_profile(bundle);
             }
             BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
@@ -423,10 +417,7 @@ impl AppBuilder {
                 },
                 build_id,
             );
-            async move {
-                ctx.profile_phase("Building");
-                request.build(&ctx).await
-            }
+            async move { request.build(ctx).await }
         });
     }
 
@@ -446,12 +437,7 @@ impl AppBuilder {
             let tx = self.tx.clone();
             async move {
                 let ctx = BuildContext::new(tx, mode, build_id);
-                ctx.profile_phase("Verify Tooling");
-                request.verify_tooling(&ctx).await?;
-                ctx.profile_phase("Prebuild");
-                request.prebuild(&ctx).await?;
-                ctx.profile_phase("Building");
-                request.build(&ctx).await
+                request.build(ctx).await
             }
         });
     }

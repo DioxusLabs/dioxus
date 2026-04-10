@@ -1086,6 +1086,8 @@ impl BuildRequest {
     }
 
     pub(crate) async fn prebuild(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Prebuild");
+
         // Create the session cache directory
         let cache_dir = self.session_cache_dir();
         _ = std::fs::create_dir_all(&cache_dir);
@@ -1121,16 +1123,16 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub(crate) async fn build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+    pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(ctx);
+        _ = self.bust_fingerprint(&ctx);
 
         // Run the cargo build to produce our artifacts.
         // For thin builds this also pre-compiles workspace dep crates before the tip.
-        let mut artifacts = self.cargo_build(ctx).await?;
+        let mut artifacts = self.cargo_build(&ctx).await?;
 
         // Write the build artifacts to the bundle on the disk
         match &ctx.mode {
@@ -1140,122 +1142,52 @@ impl BuildRequest {
                 modified_crates,
                 ..
             } => {
-                self.write_patch(ctx, *aslr_reference, &mut artifacts, cache, modified_crates)
-                    .await?;
+                self.write_patch(
+                    &ctx,
+                    *aslr_reference,
+                    &mut artifacts,
+                    cache,
+                    modified_crates,
+                )
+                .await?;
             }
 
             BuildMode::Base { .. } | BuildMode::Fat => {
                 ctx.status_start_bundle();
 
-                ctx.profile_phase("Stripping Binary");
                 self.strip_binary(&artifacts).await?;
 
-                ctx.profile_phase("Writing Executable");
-                self.write_executable(ctx, &artifacts.exe, &mut artifacts.assets)
+                self.write_executable(&ctx, &artifacts.exe, &mut artifacts.assets)
                     .await
                     .context("Failed to write executable")?;
 
-                ctx.profile_phase("Writing Frameworks");
-                self.write_frameworks(ctx, &artifacts)
+                self.write_frameworks(&ctx, &artifacts)
                     .await
                     .context("Failed to write frameworks")?;
-                ctx.profile_phase("Writing Assets");
-                self.write_assets(ctx, &artifacts.assets)
+                self.write_assets(&ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
-                ctx.profile_phase("Writing Metadata");
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
 
-                // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
-                if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
-                    let names: Vec<_> = artifacts
-                        .android_artifacts
-                        .iter()
-                        .map(|a| a.plugin_name.as_str().to_string())
-                        .collect();
-                    ctx.status_compiling_native_plugins(format!(
-                        "Kotlin build: {}",
-                        names.join(", ")
-                    ));
-                    ctx.profile_phase("Installing Android Artifacts");
-                    self.install_android_artifacts(&artifacts.android_artifacts)
-                        .context("Failed to install Android plugin artifacts")?;
-                }
+                self.write_ffi_plugins(&ctx, &artifacts).await?;
 
-                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-                    && !artifacts.swift_sources.is_empty()
-                {
-                    let names: Vec<_> = artifacts
-                        .swift_sources
-                        .iter()
-                        .map(|s| s.plugin_name.as_str().to_string())
-                        .collect();
-                    ctx.status_compiling_native_plugins(format!(
-                        "Swift build: {}",
-                        names.join(", ")
-                    ));
-
-                    // Compile Swift packages from source
-                    ctx.profile_phase("Compiling Swift Sources");
-                    self.compile_swift_sources(&artifacts.swift_sources)
-                        .await
-                        .context("Failed to compile Swift packages")?;
-
-                    // Then embed Swift standard libraries
-                    ctx.profile_phase("Embedding Swift Stdlibs");
-                    self.embed_swift_stdlibs(&artifacts.swift_sources)
-                        .await
-                        .context("Failed to embed Swift standard libraries")?;
-                }
-
-                // Compile and install Apple Widget Extensions from Dioxus.toml config
-                if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-                    && !self.config.ios.widget_extensions.is_empty()
-                {
-                    let names: Vec<_> = self
-                        .config
-                        .ios
-                        .widget_extensions
-                        .iter()
-                        .map(|w| w.display_name.clone())
-                        .collect();
-                    ctx.status_compiling_native_plugins(format!(
-                        "Widget build: {}",
-                        names.join(", ")
-                    ));
-                    ctx.profile_phase("Compiling Widget Extensions");
-                    self.compile_widget_extensions()
-                        .await
-                        .context("Failed to compile widget extensions")?;
-                }
-
-                ctx.profile_phase("Optimizing Bundle");
-                self.optimize(ctx)
+                self.optimize(&ctx)
                     .await
                     .context("Failed to optimize build")?;
 
-                ctx.profile_phase("Assembling Bundle");
-                self.assemble(ctx)
+                self.assemble(&ctx)
                     .await
                     .context("Failed to assemble build")?;
 
-                // Populate the patch cache if we're in fat mode
-                if matches!(ctx.mode, BuildMode::Fat) {
-                    ctx.profile_phase("Creating Patch Cache");
-                    artifacts.patch_cache =
-                        Some(Arc::new(self.create_patch_cache(&artifacts.exe)?));
-                }
+                self.fill_caches(&ctx, &mut artifacts).await?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
             }
         }
 
-        artifacts.phase_profile = ctx.finish_profile();
-
-        // Record the build duration as a telemetry event
-        self.record_build_duration(time_start, ctx);
+        self.finalize_build(ctx, &mut artifacts)?;
 
         Ok(artifacts)
     }
@@ -1471,7 +1403,6 @@ impl BuildRequest {
         // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
         if matches!(ctx.mode, BuildMode::Fat) {
             ctx.status_starting_link();
-            let link_start = SystemTime::now();
             let tip_args = workspace_rustc_args.get(&tip_bin_key).with_context(|| {
                 format!(
                     "Missing captured rustc args for tip crate '{tip_bin_key}'. Loaded keys: {:?}",
@@ -1479,19 +1410,11 @@ impl BuildRequest {
                 )
             })?;
             self.run_fat_link(&exe, tip_args).await?;
-            tracing::debug!(
-                "Fat linking completed in {}us",
-                SystemTime::now()
-                    .duration_since(link_start)
-                    .unwrap()
-                    .as_micros()
-            );
         }
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
         let (assets, android_artifacts, swift_sources) =
-            self.collect_assets_and_metadata(&exe, ctx, "Extracting Build Assets")
-                .await?;
+            self.collect_assets_and_metadata(&exe, ctx).await?;
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
@@ -1657,7 +1580,6 @@ impl BuildRequest {
         &self,
         exe: &Path,
         ctx: &BuildContext,
-        profile_label: &'static str,
     ) -> Result<(
         AssetManifest,
         Vec<AndroidArtifactMetadata>,
@@ -1673,7 +1595,7 @@ impl BuildRequest {
             return Ok((AssetManifest::default(), Vec::new(), Vec::new()));
         }
 
-        ctx.status_extracting_assets_named(profile_label);
+        ctx.status_extracting_assets();
         let super::assets::SymbolExtractionResult {
             assets: extracted_assets,
             android_artifacts,
@@ -2410,7 +2332,7 @@ impl BuildRequest {
                     }
 
                     let finished = copied.fetch_add(1, Ordering::SeqCst);
-                    progress.status_copied_asset(finished, asset_count, from.to_path_buf());
+                    // progress.status_copied_asset(finished, asset_count, from.to_path_buf());
 
                     res.map(|_| ())
                 })
@@ -2677,11 +2599,7 @@ impl BuildRequest {
 
         // Now extract linker metadata from the fat binary (assets, plugin data)
         let (assets, android_artifacts, swift_sources) = self
-            .collect_assets_and_metadata(
-                &self.patch_exe(artifacts.time_start),
-                ctx,
-                "Patch: Extract Assets",
-            )
+            .collect_assets_and_metadata(&self.patch_exe(artifacts.time_start), ctx)
             .await?;
         artifacts.assets = assets;
         artifacts.android_artifacts = android_artifacts;
@@ -2941,6 +2859,8 @@ impl BuildRequest {
     /// todo: I think we can traverse our immediate dependencies and inspect their symbols, unless they `pub use` a crate
     /// todo: we should try and make this faster with memmapping
     pub(crate) async fn run_fat_link(&self, exe: &Path, rustc_args: &RustcArgs) -> Result<()> {
+        let link_start = SystemTime::now();
+
         if rustc_args.link_args.is_empty() {
             bail!(
                 "Missing linker args for fat link of '{}'. The tip crate likely did not run through linker interception for this build.",
@@ -3272,6 +3192,14 @@ impl BuildRequest {
                 .into_iter()
                 .map(|s| s.display().to_string())
                 .join("\n"),
+        );
+
+        tracing::debug!(
+            "Fat linking completed in {}us",
+            SystemTime::now()
+                .duration_since(link_start)
+                .unwrap()
+                .as_micros()
         );
 
         Ok(())
@@ -5069,6 +4997,8 @@ impl BuildRequest {
 
     /// Run the optimizers, obfuscators, minimizers, signers, etc
     async fn optimize(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Optimizing Bundle");
+
         match self.bundle {
             BundleFormat::Web => {
                 // Compress the asset dir
@@ -5572,6 +5502,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
     async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Assembling Bundle");
+
         if let BundleFormat::Android = self.bundle {
             ctx.status_running_gradle();
 
@@ -5848,6 +5780,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// This should generally be only called on the first build since it takes time to verify the tooling
     /// is in place, and we don't want to slow down subsequent builds.
     pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Verify Tooling");
         ctx.status_installing_tooling();
 
         self.verify_toolchain_installed().await?;
@@ -6478,13 +6411,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
             _ => exe.to_path_buf(),
         }
-    }
-
-    pub(crate) fn create_patch_cache(&self, exe: &Path) -> Result<HotpatchModuleCache> {
-        Ok(HotpatchModuleCache::new(
-            &self.patch_cache_exe(exe),
-            &self.triple,
-        )?)
     }
 
     /// Users create an index.html for their SPA if they want it
@@ -7498,11 +7424,82 @@ We checked the folders:
         Ok(())
     }
 
-    /// Log the build duration and some metadata about the build, saving a telemetry event.
-    fn record_build_duration(&self, time_start: SystemTime, ctx: &BuildContext) {
-        // Calculate some final metadata for logging
+    async fn write_ffi_plugins(
+        &self,
+        ctx: &BuildContext,
+        artifacts: &BuildArtifacts,
+    ) -> Result<()> {
+        // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
+        if self.bundle == BundleFormat::Android && !artifacts.android_artifacts.is_empty() {
+            let names: Vec<_> = artifacts
+                .android_artifacts
+                .iter()
+                .map(|a| a.plugin_name.as_str().to_string())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Kotlin build: {}", names.join(", ")));
+            self.install_android_artifacts(&artifacts.android_artifacts)
+                .context("Failed to install Android plugin artifacts")?;
+        }
+
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+            && !artifacts.swift_sources.is_empty()
+        {
+            let names: Vec<_> = artifacts
+                .swift_sources
+                .iter()
+                .map(|s| s.plugin_name.as_str().to_string())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Swift build: {}", names.join(", ")));
+
+            // Compile Swift packages from source
+            self.compile_swift_sources(&artifacts.swift_sources)
+                .await
+                .context("Failed to compile Swift packages")?;
+
+            // Then embed Swift standard libraries
+            self.embed_swift_stdlibs(&artifacts.swift_sources)
+                .await
+                .context("Failed to embed Swift standard libraries")?;
+        }
+
+        // Compile and install Apple Widget Extensions from Dioxus.toml config
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+            && !self.config.ios.widget_extensions.is_empty()
+        {
+            let names: Vec<_> = self
+                .config
+                .ios
+                .widget_extensions
+                .iter()
+                .map(|w| w.display_name.clone())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Widget build: {}", names.join(", ")));
+            self.compile_widget_extensions()
+                .await
+                .context("Failed to compile widget extensions")?;
+        }
+
+        Ok(())
+    }
+
+    async fn fill_caches(&self, ctx: &BuildContext, artifacts: &mut BuildArtifacts) -> Result<()> {
+        // Populate the patch cache if we're in fat mode
+        if matches!(ctx.mode, BuildMode::Fat) {
+            ctx.profile_phase("Creating Patch Cache");
+            let hotpatch_module_cache =
+                HotpatchModuleCache::new(&self.patch_cache_exe(&artifacts.exe), &self.triple)?;
+            artifacts.patch_cache = Some(Arc::new(hotpatch_module_cache));
+        }
+
+        Ok(())
+    }
+
+    fn finalize_build(&self, ctx: BuildContext, artifacts: &mut BuildArtifacts) -> Result<()> {
+        artifacts.phase_profile = ctx.finish_profile();
+
+        // Record the build duration as a telemetry event
         let time_taken = SystemTime::now()
-            .duration_since(time_start)
+            .duration_since(ctx.time_start)
             .map(|d| d.as_millis())
             .unwrap_or_default();
 
@@ -7522,6 +7519,8 @@ We checked the folders:
             }),
             "Build completed in {time_taken}ms",
         );
+
+        Ok(())
     }
 }
 
