@@ -1,9 +1,9 @@
-use crate::opt::process_file_to;
 use crate::{
     build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
     BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
     StructuredOutput,
 };
+use crate::{opt::process_file_to, BuildPhaseProfile};
 use anyhow::{bail, Context, Error};
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -98,10 +98,10 @@ pub(crate) struct AppBuilder {
     pub compiled_crates: usize,
     pub expected_crates: usize,
     pub bundling_progress: f64,
-    pub compile_start: Option<Instant>,
-    pub compile_end: Option<Instant>,
-    pub bundle_start: Option<Instant>,
-    pub bundle_end: Option<Instant>,
+    pub compile_start: Option<SystemTime>,
+    pub compile_end: Option<SystemTime>,
+    pub bundle_start: Option<SystemTime>,
+    pub bundle_end: Option<SystemTime>,
 
     /// The debugger for the app - must be enabled with the `d` key
     pub(crate) pid: Option<u32>,
@@ -112,6 +112,9 @@ pub(crate) struct AppBuilder {
 
     /// Cache of the latest `.rcgu.o` files for each modified workspace crate.
     pub object_cache: ObjectCache,
+
+    ///
+    pub profile_spans: Vec<BuildPhaseProfile>,
 }
 
 impl AppBuilder {
@@ -153,7 +156,7 @@ impl AppBuilder {
             expected_crates: 1,
             bundling_progress: 0.0,
             builds_opened: 0,
-            compile_start: Some(Instant::now()),
+            compile_start: Some(SystemTime::now()),
             aslr_reference: None,
             compile_end: None,
             bundle_start: None,
@@ -170,6 +173,7 @@ impl AppBuilder {
             pid: None,
             modified_crates: HashSet::new(),
             object_cache: ObjectCache::new(&request.session_cache_dir()),
+            profile_spans: Vec::new(),
         })
     }
 
@@ -261,6 +265,7 @@ impl AppBuilder {
 
                     match stage {
                         BuildStage::Initializing => {
+                            self.profile_spans.clear();
                             self.compiled_crates = 0;
                             self.bundling_progress = 0.0;
                         }
@@ -273,16 +278,16 @@ impl AppBuilder {
                             self.expected_crates = *total.max(&1);
 
                             if self.compile_start.is_none() {
-                                self.compile_start = Some(Instant::now());
+                                self.compile_start = Some(SystemTime::now());
                             }
                         }
                         BuildStage::Bundling => {
                             self.bundling_progress = 0.0;
-                            self.bundle_start = Some(Instant::now());
+                            self.bundle_start = Some(SystemTime::now());
 
                             if self.compile_end.is_none() {
                                 self.compiled_crates = self.expected_crates;
-                                self.compile_end = Some(Instant::now());
+                                self.compile_end = Some(SystemTime::now());
                             }
                         }
                         BuildStage::OptimizingWasm => {}
@@ -308,49 +313,106 @@ impl AppBuilder {
                     }
                 }
             }
-            BuilderUpdate::CompilerMessage { .. } => {}
             BuilderUpdate::BuildReady { ref bundle } => {
+                // Log the build completion as a telemetry event + provide analytics on build phases
+                if let Some(start) = self.compile_start {
+                    // Record the build duration as a telemetry event
+                    let time_taken = SystemTime::now()
+                        .duration_since(start)
+                        .unwrap_or_default()
+                        .as_millis()
+                        .max(1);
+
+                    tracing::debug!(
+                        telemetry = %serde_json::json!({
+                            "event": "build_and_bundle_complete",
+                            "time_taken": time_taken,
+                            "mode": match bundle.mode {
+                                BuildMode::Base { .. } => "base",
+                                BuildMode::Fat => "fat",
+                                BuildMode::Thin { .. } => "thin",
+                            },
+                            "blah": 123,
+                            "triple": self.build.triple.to_string(),
+                            "format": self.build.bundle.to_string(),
+                            "num_dependencies": self.build.workspace.krates.len(),
+                        }),
+                        "Build completed in {time_taken}ms",
+                    );
+
+                    // Render the flameagraph out by walking the span history
+                    // This is pretty naive and doesn't support nested span contexts (yet!)
+                    let mut flamegraph = format!(
+                        "Flamegraph for {} - time taken: {}ms\n",
+                        bundle.mode.name(),
+                        time_taken
+                    );
+                    let mut phase_iter = self.profile_spans.iter().peekable();
+                    let timeline_width = 96usize;
+                    let mut last_start: SystemTime = start;
+                    let max_label_width = self
+                        .profile_spans
+                        .iter()
+                        .map(|phase| phase.label.len())
+                        .max()
+                        .unwrap_or(0)
+                        .min(28);
+
+                    while let Some(phase) = phase_iter.next() {
+                        let end_time = phase_iter
+                            .peek()
+                            .map(|f| f.start)
+                            .unwrap_or_else(|| self.compile_end.unwrap_or(SystemTime::now()));
+
+                        let dur = end_time.duration_since(phase.start).unwrap_or_default();
+                        let pct = dur.as_millis() as f64 / time_taken as f64;
+
+                        last_start = phase.start;
+
+                        let label_start = ((phase.start.duration_since(start).unwrap_or_default()
+                            as usize)
+                            * timeline_width)
+                            / total_ms as usize;
+                        //         let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
+                        //             .div_ceil(total_ms as usize);
+                        //         let mut bar = vec![' '; timeline_width];
+                        //         for ch in bar
+                        //             .iter_mut()
+                        //             .take(end.max(start + 1).min(timeline_width))
+                        //             .skip(start.min(timeline_width.saturating_sub(1)))
+                        //         {
+                        //             *ch = '█';
+                        //         }
+                        //         let bar: String = bar.into_iter().collect();
+
+                        //         tracing::info!(
+                        //             "  {:>6}ms {:>5.1}% {:<width$} |{}|",
+                        //             phase.duration_ms,
+                        //             pct,
+                        //             phase.label,
+                        //             bar,
+                        //             width = max_label_width
+                        //         );
+                    }
+                }
+
+                // And then update the build state
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
-                self.bundle_end = Some(Instant::now());
+                self.bundle_end = Some(SystemTime::now());
                 if self.compile_end.is_none() {
                     self.compiled_crates = self.expected_crates;
-                    self.compile_end = Some(Instant::now());
+                    self.compile_end = Some(SystemTime::now());
                 }
-
-                // // Record the build duration as a telemetry event
-                // let time_taken = SystemTime::now()
-                //     .duration_since(ctx.time_start)
-                //     .map(|d| d.as_millis())
-                //     .unwrap_or_default();
-
-                // tracing::debug!(
-                //     telemetry = %serde_json::json!({
-                //         "event": "build_and_bundle_complete",
-                //         "time_taken": time_taken,
-                //         "mode": match ctx.mode {
-                //             BuildMode::Base { .. } => "base",
-                //             BuildMode::Fat => "fat",
-                //             BuildMode::Thin { .. } => "thin",
-                //         },
-                //         "blah": 123,
-                //         "triple": self.triple.to_string(),
-                //         "format": self.bundle.to_string(),
-                //         "num_dependencies": self.workspace.krates.len(),
-                //     }),
-                //     "Build completed in {time_taken}ms",
-                // );
-                // log_build_profile(bundle);
             }
             BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
-            BuilderUpdate::ProfilePhase { .. } => {
-                // todo: fill in the profile
-            }
+            BuilderUpdate::ProfilePhase { profile } => self.profile_spans.push(profile.clone()),
+            BuilderUpdate::CompilerMessage { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
@@ -1587,19 +1649,21 @@ impl AppBuilder {
     }
 
     pub(crate) fn compile_duration(&self) -> Option<Duration> {
-        Some(
-            self.compile_end
-                .unwrap_or_else(Instant::now)
-                .duration_since(self.compile_start?),
-        )
+        todo!()
+        // Some(
+        //     self.compile_end
+        //         .unwrap_or_else(SystemTime::now)
+        //         .duration_since(self.compile_start?),
+        // )
     }
 
     pub(crate) fn bundle_duration(&self) -> Option<Duration> {
-        Some(
-            self.bundle_end
-                .unwrap_or_else(Instant::now)
-                .duration_since(self.bundle_start?),
-        )
+        todo!()
+        // Some(
+        //     self.bundle_end
+        //         .unwrap_or_else(SystemTime::now)
+        //         .duration_since(self.bundle_start?),
+        // )
     }
 
     /// Return a number between 0 and 1 representing the progress of the app build
@@ -1885,60 +1949,3 @@ impl AppBuilder {
         Ok(pid)
     }
 }
-
-// fn log_build_profile(bundle: &BuildArtifacts) {
-//     let profile = &bundle.phase_profile;
-//     if profile.phases.is_empty() || profile.total_duration_ms == 0 {
-//         return;
-//     }
-
-//     let mode = match &bundle.mode {
-//         super::BuildMode::Base { .. } => "base",
-//         super::BuildMode::Fat => "fat",
-//         super::BuildMode::Thin { .. } => "thin",
-//     };
-
-//     tracing::info!(
-//         "Build profile for {mode} build: {}ms total",
-//         profile.total_duration_ms
-//     );
-
-//     let max_label_width = profile
-//         .phases
-//         .iter()
-//         .map(|phase| phase.label.len())
-//         .max()
-//         .unwrap_or(0)
-//         .min(28);
-//     let timeline_width = 96usize;
-//     let total_ms = profile.total_duration_ms.max(1);
-
-//     for phase in &profile.phases {
-//         let pct = if profile.total_duration_ms == 0 {
-//             0.0
-//         } else {
-//             phase.duration_ms as f64 / profile.total_duration_ms as f64 * 100.0
-//         };
-//         let start = ((phase.start_offset_ms as usize) * timeline_width) / total_ms as usize;
-//         let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
-//             .div_ceil(total_ms as usize);
-//         let mut bar = vec![' '; timeline_width];
-//         for ch in bar
-//             .iter_mut()
-//             .take(end.max(start + 1).min(timeline_width))
-//             .skip(start.min(timeline_width.saturating_sub(1)))
-//         {
-//             *ch = '█';
-//         }
-//         let bar: String = bar.into_iter().collect();
-
-//         tracing::info!(
-//             "  {:>6}ms {:>5.1}% {:<width$} |{}|",
-//             phase.duration_ms,
-//             pct,
-//             phase.label,
-//             bar,
-//             width = max_label_width
-//         );
-//     }
-// }

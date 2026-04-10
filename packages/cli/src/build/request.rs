@@ -320,10 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::{
-    opt::{process_file_to, AssetManifest},
-    BuildProfile,
-};
+use crate::opt::{process_file_to, AssetManifest};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -464,6 +461,15 @@ pub enum BuildMode {
         /// Cache of initial binary parsing which speeds up stub creation
         cache: Arc<HotpatchModuleCache>,
     },
+}
+impl BuildMode {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Base { run } => "base",
+            Self::Fat => "fat",
+            Self::Thin { .. } => "thin",
+        }
+    }
 }
 
 /// The end result of a build.

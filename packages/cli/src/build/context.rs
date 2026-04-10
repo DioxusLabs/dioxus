@@ -28,24 +28,6 @@ pub struct BuildContext {
 pub type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
-pub type ProfileTx = UnboundedSender<BuildPhaseProfile>;
-pub type ProfileRx = UnboundedReceiver<BuildPhaseProfile>;
-
-#[derive(Clone, Debug, Default)]
-pub struct BuildProfile {}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BuildPhaseProfile {
-    label: String,
-    start_offset_ms: u64,
-}
-
-#[derive(Debug)]
-struct ActiveBuildPhase {
-    label: String,
-    started_at: Instant,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub struct BuildId(pub(crate) usize);
 impl BuildId {
@@ -60,8 +42,7 @@ pub enum BuilderUpdate {
     },
 
     ProfilePhase {
-        label: &'static str,
-        start: SystemTime,
+        profile: BuildPhaseProfile,
     },
 
     CompilerMessage {
@@ -107,6 +88,12 @@ pub enum BuilderUpdate {
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuildPhaseProfile {
+    pub label: &'static str,
+    pub start: SystemTime,
+}
+
 impl BuildContext {
     pub(crate) fn new(tx: ProgressTx, mode: BuildMode, build_id: BuildId) -> Self {
         Self {
@@ -127,12 +114,6 @@ impl BuildContext {
         todo!()
         // let mut profiler = self.profiler.lock().expect("build profiler poisoned");
         // profiler.transition(label.into());
-    }
-
-    pub(crate) fn finish_profile(&self) -> BuildProfile {
-        todo!()
-        // let mut profiler = self.profiler.lock().expect("build profiler poisoned");
-        // profiler.finish()
     }
 
     pub(crate) fn status_wasm_bindgen_start(&self) {
@@ -327,10 +308,10 @@ impl BuildContext {
 //     }
 // }
 
-fn elapsed_ms(start: Instant, end: Instant) -> u64 {
-    duration_ms(end.saturating_duration_since(start))
-}
+// fn elapsed_ms(start: Instant, end: Instant) -> u64 {
+//     duration_ms(end.saturating_duration_since(start))
+// }
 
-fn duration_ms(duration: Duration) -> u64 {
-    duration.as_millis().try_into().unwrap_or(u64::MAX)
-}
+// fn duration_ms(duration: Duration) -> u64 {
+//     duration.as_millis().try_into().unwrap_or(u64::MAX)
+// }
