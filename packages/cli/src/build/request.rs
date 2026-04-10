@@ -6121,10 +6121,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(())
     }
 
-    fn build_mode_uses_rustc_wrapper(&self, build_mode: &BuildMode) -> bool {
-        matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true })
-    }
-
     fn rustc_wrapper_capture_mode(&self, build_mode: &BuildMode) -> &'static str {
         match build_mode {
             BuildMode::Fat => "fat",
