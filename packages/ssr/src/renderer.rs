@@ -447,6 +447,7 @@ pub(crate) const BOOL_ATTRS: &[&str] = &[
     "disabled",
     "formnovalidate",
     "hidden",
+    "inert",
     "ismap",
     "itemscope",
     "loop",
