@@ -286,7 +286,7 @@ impl StoreSubscriptions {
             paths
         };
         for path in descendant_paths {
-            self.mark_node_dirty(&path);
+            self.mark_node_subscribers_dirty(&path);
         }
     }
 
@@ -445,5 +445,57 @@ impl SubscriberList for StoreSubscribers {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::{ScopeId, VNode, VirtualDom};
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    fn empty_app() -> dioxus_core::Element {
+        VNode::empty()
+    }
+
+    #[track_caller]
+    fn counting_context(counter: Arc<AtomicUsize>) -> ReactiveContext {
+        ReactiveContext::new_with_callback(
+            move || {
+                counter.fetch_add(1, Ordering::Relaxed);
+            },
+            ScopeId::ROOT,
+            std::panic::Location::caller(),
+        )
+    }
+
+    #[test]
+    fn mark_dirty_marks_descendants_without_remarking_ancestors() {
+        let dom = VirtualDom::new(empty_app);
+
+        dom.in_scope(ScopeId::ROOT, || {
+            let subscriptions = StoreSubscriptions::new();
+
+            let root_count = Arc::new(AtomicUsize::new(0));
+            let root = counting_context(root_count.clone());
+            root.subscribe(subscriptions.deep_subscribers(&[]));
+
+            let child_count = Arc::new(AtomicUsize::new(0));
+            let child = counting_context(child_count.clone());
+            child.subscribe(subscriptions.deep_subscribers(&[1, 2]));
+
+            let leaf_count = Arc::new(AtomicUsize::new(0));
+            let leaf = counting_context(leaf_count.clone());
+            leaf.subscribe(subscriptions.shallow_subscribers(&[1, 2, 3]));
+
+            subscriptions.mark_dirty(&[1]);
+
+            assert_eq!(root_count.load(Ordering::Relaxed), 1);
+            assert_eq!(child_count.load(Ordering::Relaxed), 1);
+            assert_eq!(leaf_count.load(Ordering::Relaxed), 1);
+        });
     }
 }
