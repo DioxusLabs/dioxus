@@ -151,7 +151,7 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Track this scope recursively.
     pub fn track(&self) {
-        self.store.track_recursive(&self.path);
+        self.store.track_deep(&self.path);
     }
 
     /// Mark this scope as dirty recursively.
@@ -161,7 +161,7 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Mark this scope as dirty shallowly.
     pub fn mark_dirty_shallow(&self) {
-        self.store.mark_dirty_shallow(&self.path);
+        self.store.mark_node_dirty(&self.path);
     }
 
     /// Mark this scope as dirty at and after the given index.
@@ -210,7 +210,7 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
     }
 
     fn subscribers(&self) -> Subscribers {
-        self.store.subscribers(&self.path)
+        self.store.shallow_subscribers(&self.path)
     }
 }
 
