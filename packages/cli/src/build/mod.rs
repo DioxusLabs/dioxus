@@ -13,6 +13,7 @@ mod builder;
 mod cache;
 mod context;
 mod ios_swift;
+mod icon;
 mod manifest;
 mod manifest_mapper;
 mod patch;
