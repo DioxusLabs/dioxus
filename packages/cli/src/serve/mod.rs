@@ -159,6 +159,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                         }
                     }
                     BuilderUpdate::Progress { .. } => {}
+                    BuilderUpdate::ProfilePhase { .. } => {}
                     BuilderUpdate::CompilerMessage { message } => {
                         screen.push_cargo_log(message);
                     }

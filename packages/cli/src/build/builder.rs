@@ -277,9 +277,13 @@ impl AppBuilder {
                             }
                         }
                         BuildStage::Bundling => {
-                            self.complete_compile();
                             self.bundling_progress = 0.0;
                             self.bundle_start = Some(Instant::now());
+
+                            if self.compile_end.is_none() {
+                                self.compiled_crates = self.expected_crates;
+                                self.compile_end = Some(Instant::now());
+                            }
                         }
                         BuildStage::OptimizingWasm => {}
                         BuildStage::CopyingAssets { current, total, .. } => {
@@ -310,14 +314,42 @@ impl AppBuilder {
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
-                self.complete_compile();
                 self.bundle_end = Some(Instant::now());
+                if self.compile_end.is_none() {
+                    self.compiled_crates = self.expected_crates;
+                    self.compile_end = Some(Instant::now());
+                }
 
-                log_build_profile(bundle);
+                // // Record the build duration as a telemetry event
+                // let time_taken = SystemTime::now()
+                //     .duration_since(ctx.time_start)
+                //     .map(|d| d.as_millis())
+                //     .unwrap_or_default();
+
+                // tracing::debug!(
+                //     telemetry = %serde_json::json!({
+                //         "event": "build_and_bundle_complete",
+                //         "time_taken": time_taken,
+                //         "mode": match ctx.mode {
+                //             BuildMode::Base { .. } => "base",
+                //             BuildMode::Fat => "fat",
+                //             BuildMode::Thin { .. } => "thin",
+                //         },
+                //         "blah": 123,
+                //         "triple": self.triple.to_string(),
+                //         "format": self.bundle.to_string(),
+                //         "num_dependencies": self.workspace.krates.len(),
+                //     }),
+                //     "Build completed in {time_taken}ms",
+                // );
+                // log_build_profile(bundle);
             }
             BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
+            }
+            BuilderUpdate::ProfilePhase { .. } => {
+                // todo: fill in the profile
             }
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
@@ -516,6 +548,7 @@ impl AppBuilder {
 
                     return Err(err);
                 }
+                BuilderUpdate::ProfilePhase { .. } => {}
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
@@ -1548,13 +1581,6 @@ impl AppBuilder {
         main_exe
     }
 
-    fn complete_compile(&mut self) {
-        if self.compile_end.is_none() {
-            self.compiled_crates = self.expected_crates;
-            self.compile_end = Some(Instant::now());
-        }
-    }
-
     /// Get the total duration of the build, if all stages have completed
     pub(crate) fn total_build_time(&self) -> Option<Duration> {
         Some(self.compile_duration()? + self.bundle_duration()?)
@@ -1860,59 +1886,59 @@ impl AppBuilder {
     }
 }
 
-fn log_build_profile(bundle: &BuildArtifacts) {
-    let profile = &bundle.phase_profile;
-    if profile.phases.is_empty() || profile.total_duration_ms == 0 {
-        return;
-    }
+// fn log_build_profile(bundle: &BuildArtifacts) {
+//     let profile = &bundle.phase_profile;
+//     if profile.phases.is_empty() || profile.total_duration_ms == 0 {
+//         return;
+//     }
 
-    let mode = match &bundle.mode {
-        super::BuildMode::Base { .. } => "base",
-        super::BuildMode::Fat => "fat",
-        super::BuildMode::Thin { .. } => "thin",
-    };
+//     let mode = match &bundle.mode {
+//         super::BuildMode::Base { .. } => "base",
+//         super::BuildMode::Fat => "fat",
+//         super::BuildMode::Thin { .. } => "thin",
+//     };
 
-    tracing::info!(
-        "Build profile for {mode} build: {}ms total",
-        profile.total_duration_ms
-    );
+//     tracing::info!(
+//         "Build profile for {mode} build: {}ms total",
+//         profile.total_duration_ms
+//     );
 
-    let max_label_width = profile
-        .phases
-        .iter()
-        .map(|phase| phase.label.len())
-        .max()
-        .unwrap_or(0)
-        .min(28);
-    let timeline_width = 96usize;
-    let total_ms = profile.total_duration_ms.max(1);
+//     let max_label_width = profile
+//         .phases
+//         .iter()
+//         .map(|phase| phase.label.len())
+//         .max()
+//         .unwrap_or(0)
+//         .min(28);
+//     let timeline_width = 96usize;
+//     let total_ms = profile.total_duration_ms.max(1);
 
-    for phase in &profile.phases {
-        let pct = if profile.total_duration_ms == 0 {
-            0.0
-        } else {
-            phase.duration_ms as f64 / profile.total_duration_ms as f64 * 100.0
-        };
-        let start = ((phase.start_offset_ms as usize) * timeline_width) / total_ms as usize;
-        let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
-            .div_ceil(total_ms as usize);
-        let mut bar = vec![' '; timeline_width];
-        for ch in bar
-            .iter_mut()
-            .take(end.max(start + 1).min(timeline_width))
-            .skip(start.min(timeline_width.saturating_sub(1)))
-        {
-            *ch = '█';
-        }
-        let bar: String = bar.into_iter().collect();
+//     for phase in &profile.phases {
+//         let pct = if profile.total_duration_ms == 0 {
+//             0.0
+//         } else {
+//             phase.duration_ms as f64 / profile.total_duration_ms as f64 * 100.0
+//         };
+//         let start = ((phase.start_offset_ms as usize) * timeline_width) / total_ms as usize;
+//         let end = (((phase.start_offset_ms + phase.duration_ms) as usize) * timeline_width)
+//             .div_ceil(total_ms as usize);
+//         let mut bar = vec![' '; timeline_width];
+//         for ch in bar
+//             .iter_mut()
+//             .take(end.max(start + 1).min(timeline_width))
+//             .skip(start.min(timeline_width.saturating_sub(1)))
+//         {
+//             *ch = '█';
+//         }
+//         let bar: String = bar.into_iter().collect();
 
-        tracing::info!(
-            "  {:>6}ms {:>5.1}% {:<width$} |{}|",
-            phase.duration_ms,
-            pct,
-            phase.label,
-            bar,
-            width = max_label_width
-        );
-    }
-}
+//         tracing::info!(
+//             "  {:>6}ms {:>5.1}% {:<width$} |{}|",
+//             phase.duration_ms,
+//             pct,
+//             phase.label,
+//             bar,
+//             width = max_label_width
+//         );
+//     }
+// }

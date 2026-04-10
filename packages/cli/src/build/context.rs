@@ -23,37 +23,27 @@ pub struct BuildContext {
     pub tx: ProgressTx,
     pub mode: BuildMode,
     pub build_id: BuildId,
-    profiler: Arc<Mutex<BuildProfileRecorder>>,
 }
 
 pub type ProgressTx = UnboundedSender<BuilderUpdate>;
 pub type ProgressRx = UnboundedReceiver<BuilderUpdate>;
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct BuildProfile {
-    pub total_duration_ms: u64,
-    pub phases: Vec<BuildPhaseProfile>,
-}
+pub type ProfileTx = UnboundedSender<BuildPhaseProfile>;
+pub type ProfileRx = UnboundedReceiver<BuildPhaseProfile>;
+
+#[derive(Clone, Debug, Default)]
+pub struct BuildProfile {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BuildPhaseProfile {
-    pub label: String,
-    pub start_offset_ms: u64,
-    pub duration_ms: u64,
-}
-
-#[derive(Debug, Default)]
-struct BuildProfileRecorder {
-    start: Option<Instant>,
-    current: Option<ActiveBuildPhase>,
-    phases: Vec<BuildPhaseProfile>,
+    label: String,
+    start_offset_ms: u64,
 }
 
 #[derive(Debug)]
 struct ActiveBuildPhase {
     label: String,
     started_at: Instant,
-    start_offset_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
@@ -67,6 +57,11 @@ impl BuildId {
 pub enum BuilderUpdate {
     Progress {
         stage: BuildStage,
+    },
+
+    ProfilePhase {
+        label: &'static str,
+        start: SystemTime,
     },
 
     CompilerMessage {
@@ -119,10 +114,6 @@ impl BuildContext {
             tx,
             mode,
             build_id,
-            profiler: Arc::new(Mutex::new(BuildProfileRecorder {
-                start: Some(Instant::now()),
-                ..Default::default()
-            })),
         }
     }
 
@@ -133,13 +124,15 @@ impl BuildContext {
     }
 
     pub(crate) fn profile_phase(&self, label: impl Into<String>) {
-        let mut profiler = self.profiler.lock().expect("build profiler poisoned");
-        profiler.transition(label.into());
+        todo!()
+        // let mut profiler = self.profiler.lock().expect("build profiler poisoned");
+        // profiler.transition(label.into());
     }
 
     pub(crate) fn finish_profile(&self) -> BuildProfile {
-        let mut profiler = self.profiler.lock().expect("build profiler poisoned");
-        profiler.finish()
+        todo!()
+        // let mut profiler = self.profiler.lock().expect("build profiler poisoned");
+        // profiler.finish()
     }
 
     pub(crate) fn status_wasm_bindgen_start(&self) {
@@ -282,57 +275,57 @@ impl BuildContext {
     }
 }
 
-impl BuildProfileRecorder {
-    fn transition(&mut self, label: String) {
-        let Some(start) = self.start else {
-            self.start = Some(Instant::now());
-            self.transition(label);
-            return;
-        };
+// impl BuildProfileRecorder {
+//     fn transition(&mut self, label: String) {
+//         let Some(start) = self.start else {
+//             self.start = Some(Instant::now());
+//             self.transition(label);
+//             return;
+//         };
 
-        if self
-            .current
-            .as_ref()
-            .is_some_and(|current| current.label == label)
-        {
-            return;
-        }
+//         if self
+//             .current
+//             .as_ref()
+//             .is_some_and(|current| current.label == label)
+//         {
+//             return;
+//         }
 
-        let now = Instant::now();
-        self.close_current(now);
-        self.current = Some(ActiveBuildPhase {
-            start_offset_ms: elapsed_ms(start, now),
-            started_at: now,
-            label,
-        });
-    }
+//         let now = Instant::now();
+//         self.close_current(now);
+//         self.current = Some(ActiveBuildPhase {
+//             start_offset_ms: elapsed_ms(start, now),
+//             started_at: now,
+//             label,
+//         });
+//     }
 
-    fn finish(&mut self) -> BuildProfile {
-        let Some(start) = self.start else {
-            return BuildProfile::default();
-        };
+//     fn finish(&mut self) -> BuildProfile {
+//         let Some(start) = self.start else {
+//             return BuildProfile::default();
+//         };
 
-        let now = Instant::now();
-        self.close_current(now);
+//         let now = Instant::now();
+//         self.close_current(now);
 
-        BuildProfile {
-            total_duration_ms: elapsed_ms(start, now),
-            phases: self.phases.clone(),
-        }
-    }
+//         BuildProfile {
+//             total_duration_ms: elapsed_ms(start, now),
+//             phases: self.phases.clone(),
+//         }
+//     }
 
-    fn close_current(&mut self, now: Instant) {
-        let Some(current) = self.current.take() else {
-            return;
-        };
+//     fn close_current(&mut self, now: Instant) {
+//         let Some(current) = self.current.take() else {
+//             return;
+//         };
 
-        self.phases.push(BuildPhaseProfile {
-            label: current.label,
-            start_offset_ms: current.start_offset_ms,
-            duration_ms: duration_ms(now.saturating_duration_since(current.started_at)),
-        });
-    }
-}
+//         self.phases.push(BuildPhaseProfile {
+//             label: current.label,
+//             start_offset_ms: current.start_offset_ms,
+//             duration_ms: duration_ms(now.saturating_duration_since(current.started_at)),
+//         });
+//     }
+// }
 
 fn elapsed_ms(start: Instant, end: Instant) -> u64 {
     duration_ms(end.saturating_duration_since(start))

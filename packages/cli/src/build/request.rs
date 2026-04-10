@@ -320,11 +320,14 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AssetManifest};
 use crate::{
-    AndroidTools, AppManifest, BuildContext, BuildId, BuildProfile, BundleFormat, DioxusConfig,
-    Error, LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs,
-    TargetArgs, TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    opt::{process_file_to, AssetManifest},
+    BuildProfile,
+};
+use crate::{
+    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
+    LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
+    TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -475,7 +478,6 @@ pub struct BuildArtifacts {
     pub(crate) exe: PathBuf,
     pub(crate) workspace_rustc_args: HashMap<String, RustcArgs>,
     pub(crate) artifact_paths: HashMap<String, PathBuf>,
-    pub(crate) phase_profile: BuildProfile,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AssetManifest,
@@ -1160,9 +1162,11 @@ impl BuildRequest {
                 self.write_frameworks(&ctx, &artifacts)
                     .await
                     .context("Failed to write frameworks")?;
+
                 self.write_assets(&ctx, &artifacts.assets)
                     .await
                     .context("Failed to write assets")?;
+
                 self.write_metadata()
                     .await
                     .context("Failed to write metadata")?;
@@ -1425,7 +1429,6 @@ impl BuildRequest {
             exe,
             workspace_rustc_args,
             artifact_paths,
-            phase_profile: BuildProfile::default(),
             time_start,
             assets,
             android_artifacts,
@@ -7477,35 +7480,6 @@ We checked the folders:
                 HotpatchModuleCache::new(&self.patch_cache_exe(&artifacts.exe), &self.triple)?;
             artifacts.patch_cache = Some(Arc::new(hotpatch_module_cache));
         }
-
-        Ok(())
-    }
-
-    fn finalize_build(&self, ctx: BuildContext, artifacts: &mut BuildArtifacts) -> Result<()> {
-        artifacts.phase_profile = ctx.finish_profile();
-
-        // Record the build duration as a telemetry event
-        let time_taken = SystemTime::now()
-            .duration_since(ctx.time_start)
-            .map(|d| d.as_millis())
-            .unwrap_or_default();
-
-        tracing::debug!(
-            telemetry = %serde_json::json!({
-                "event": "build_and_bundle_complete",
-                "time_taken": time_taken,
-                "mode": match ctx.mode {
-                    BuildMode::Base { .. } => "base",
-                    BuildMode::Fat => "fat",
-                    BuildMode::Thin { .. } => "thin",
-                },
-                "blah": 123,
-                "triple": self.triple.to_string(),
-                "format": self.bundle.to_string(),
-                "num_dependencies": self.workspace.krates.len(),
-            }),
-            "Build completed in {time_taken}ms",
-        );
 
         Ok(())
     }
