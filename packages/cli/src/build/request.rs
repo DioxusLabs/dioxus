@@ -320,7 +320,7 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AssetManifest};
+use crate::opt::{discover_css_references, AssetManifest, AssetProcessor};
 use crate::{
     AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
     LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
@@ -1583,12 +1583,10 @@ impl BuildRequest {
             swift_packages,
         } = extract_symbols_from_file(exe).await?;
 
-        let asset_manifest = if skip_assets {
-            AssetManifest::default()
-        } else {
-            let mut manifest = AssetManifest::default();
+        let mut asset_manifest = AssetManifest::default();
+        if !skip_assets {
             for asset in extracted_assets {
-                manifest.insert_asset(asset);
+                asset_manifest.insert_asset(asset);
             }
 
             if matches!(self.bundle, BundleFormat::Web)
@@ -1603,7 +1601,7 @@ impl BuildRequest {
                         let from = entry.path().to_path_buf();
                         let relative_path = from.strip_prefix(&dir).unwrap();
                         let to = format!("../{}", relative_path.display());
-                        manifest.insert_asset(BundledAsset::new(
+                        asset_manifest.insert_asset(BundledAsset::new(
                             from.to_string_lossy().as_ref(),
                             to.as_str(),
                             manganis_core::AssetOptions::builder()
@@ -1613,9 +1611,7 @@ impl BuildRequest {
                     }
                 }
             }
-
-            manifest
-        };
+        }
 
         if !android_artifacts.is_empty() {
             tracing::debug!(
@@ -1647,7 +1643,11 @@ impl BuildRequest {
             }
         }
 
-        Ok((asset_manifest, android_artifacts, swift_packages))
+        // Discover assets referenced from CSS files and register them in the manifest
+        let mut manifest = asset_manifest;
+        discover_css_references(&mut manifest);
+
+        Ok((manifest, android_artifacts, swift_packages))
     }
 
     /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
@@ -2274,16 +2274,6 @@ impl BuildRequest {
         for bundled in assets.unique_assets() {
             let from = PathBuf::from(bundled.absolute_source_path());
             let to = asset_dir.join(bundled.bundled_path());
-
-            // prefer to log using a shorter path relative to the workspace dir by trimming the workspace dir
-            let from_ = from
-                .strip_prefix(self.workspace_dir())
-                .unwrap_or(from.as_path());
-            let to_ = from
-                .strip_prefix(self.workspace_dir())
-                .unwrap_or(to.as_path());
-
-            tracing::debug!("Copying asset {from_:?} to {to_:?}");
             assets_to_transfer.push((from, to, *bundled.options()));
         }
 
@@ -2294,10 +2284,13 @@ impl BuildRequest {
         // Parallel Copy over the assets and keep track of progress with an atomic counter
         let progress = ctx.tx.clone();
         let ws_dir = self.workspace_dir();
+        let manifest = Arc::new(assets.clone());
         let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
+        let base = self.base_path_or_default().to_string();
 
         // Optimizing assets is expensive and blocking, so we do it in a tokio spawn blocking task
         tokio::task::spawn_blocking(move || {
+            let processor = AssetProcessor::new(&manifest, esbuild_path, format!("/{base}/assets"));
             assets_to_transfer
                 .par_iter()
                 .try_for_each(|(from, to, options)| {
@@ -2307,7 +2300,7 @@ impl BuildRequest {
                         "Starting asset copy {processing}/{asset_count} from {from_:?}"
                     );
 
-                    let res = process_file_to(options, from, to, esbuild_path.as_deref());
+                    let res = processor.process_file_to(options, from, to);
                     if let Err(err) = res.as_ref() {
                         tracing::error!("Failed to copy asset {from:?}: {err}");
                     }
@@ -6344,6 +6337,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Get the trimmed base path or `.` if no base path is set
     pub(crate) fn base_path_or_default(&self) -> &str {
         self.trimmed_base_path().unwrap_or(".")
+    }
+
+    /// Create an asset processor for the given manifest, resolving esbuild and the public asset root.
+    pub(crate) fn asset_processor<'a>(&self, manifest: &'a AssetManifest) -> AssetProcessor<'a> {
+        let esbuild_path = crate::esbuild::Esbuild::path_if_installed();
+        let base = self.base_path_or_default();
+        AssetProcessor::new(manifest, esbuild_path, format!("/{base}/assets"))
     }
 
     /// Get the path to the package manifest directory
