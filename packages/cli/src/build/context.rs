@@ -219,7 +219,6 @@ impl BuildContext {
     }
 
     pub(crate) fn status_hotpatching(&self) {
-        self.profile_phase("Hotpatching");
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Hotpatching,
         });

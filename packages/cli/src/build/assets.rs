@@ -809,7 +809,11 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 
         match entry.representation {
             AssetRepresentation::RawBundled => {
-                tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
+                tracing::debug!(
+                    "Writing asset to offset {offset}: {:?} - {:?}",
+                    asset.absolute_source_path(),
+                    asset.bundled_path()
+                );
                 let new_data = version.serialize_asset(&asset);
                 if new_data.len() > version.size() {
                     tracing::warn!(

@@ -2273,9 +2273,9 @@ impl BuildRequest {
         modified_crates: &HashSet<String>,
     ) -> Result<()> {
         ctx.status_hotpatching();
+        ctx.profile_phase("Patch: Cache Tip Objects");
 
         let tip_name = self.tip_crate_name();
-        ctx.profile_phase("Patch: Cache Tip Objects");
 
         // Cache tip crate objects from the FRESH linker args (from the just-completed
         // thin build, not the stale ones from ctx.mode's fat build).
