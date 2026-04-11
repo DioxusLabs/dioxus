@@ -44,7 +44,6 @@ impl DioxusIconTrait for DioxusTrayIcon {
     where
         Self: Sized,
     {
-        #[cfg(target_os = "windows")]
         #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             let (img, width, height) = load_image_from_memory(DEFAULT_ICON)?;
