@@ -31,6 +31,14 @@ pub(crate) struct BundleConfig {
     pub(crate) windows: Option<WindowsSettings>,
     #[serde(default)]
     pub(crate) android: Option<AndroidSettings>,
+    #[serde(default)]
+    pub(crate) version: Option<String>,
+    #[serde(default)]
+    pub(crate) file_version: Option<String>,
+    #[serde(default)]
+    pub(crate) original_file_name: Option<String>,
+    #[serde(default)]
+    pub(crate) trademark: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
