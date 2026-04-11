@@ -17,10 +17,6 @@ pub trait DioxusIconTrait {
         Self: Sized;
 }
 
-// preferably this would have platform specific implementations, not just for windows
-#[cfg(not(target_os = "windows"))]
-static DEFAULT_ICON: &[u8] = include_bytes!("./assets/default_icon.png");
-
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 use crate::trayicon::DioxusTrayIcon;
 
@@ -44,10 +40,9 @@ impl DioxusIconTrait for DioxusTrayIcon {
     where
         Self: Sized,
     {
-        #[cfg(any(target_os = "linux", target_os = "macos"))]
+        #[cfg(not(target_os = "windows"))]
         {
-            let (img, width, height) = load_image_from_memory(DEFAULT_ICON)?;
-            DioxusTrayIcon::from_rgba(img, width, height).map_err(Into::into)
+            Err(anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         DioxusTrayIcon::from_resource(32512, None).map_err(Into::into)
@@ -85,8 +80,7 @@ impl DioxusIconTrait for DioxusMenuIcon {
     {
         #[cfg(not(target_os = "windows"))]
         {
-            let (img, width, height) = load_image_from_memory(DEFAULT_ICON)?;
-            DioxusMenuIcon::from_rgba(img, width, height).map_err(Into::into)
+            Err(anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         DioxusMenuIcon::from_resource(32512, None).map_err(Into::into)
@@ -125,8 +119,7 @@ impl DioxusIconTrait for Icon {
     {
         #[cfg(not(target_os = "windows"))]
         {
-            let (img, width, height) = load_image_from_memory(DEFAULT_ICON)?;
-            Icon::from_rgba(img, width, height).map_err(Into::into)
+            Err(anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         Icon::from_resource(32512, None).map_err(Into::into)
