@@ -28,7 +28,7 @@ pub type DioxusTray = ();
 pub fn init_tray_icon(menu: DioxusTrayMenu, icon: Option<DioxusTrayIcon>) -> DioxusTray {
     #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
     {
-        let icon = icon.map(Ok).unwrap_or_else(|| crate::default_icon());
+        let icon = icon.map(Ok).unwrap_or_else(crate::default_icon);
 
         let tray = tray_icon::TrayIconBuilder::new()
             .with_menu(Box::new(menu))
