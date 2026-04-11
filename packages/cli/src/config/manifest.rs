@@ -334,6 +334,10 @@ pub struct IosConfig {
     #[serde(default)]
     pub info_plist: Option<PathBuf>,
 
+    /// Frameworks to embed.
+    #[serde(default)]
+    pub frameworks: Vec<String>,
+
     /// iOS entitlements configuration.
     #[serde(default)]
     pub entitlements: IosEntitlements,

@@ -1,4 +1,4 @@
-use crate::bundler::{copy_dir_recursive, AppCategory, Bundle, BundleContext};
+use crate::bundler::{copy_dir_recursive, copy_framework, AppCategory, Bundle, BundleContext};
 use crate::{MacOsSettings, PackageType};
 use anyhow::{bail, Context, Result};
 use image::{DynamicImage, ImageReader};
@@ -618,21 +618,6 @@ fn write_plist(dict: &plist::Dictionary, path: &Path) -> Result<()> {
     plist::Value::Dictionary(dict.clone())
         .to_file_xml(path)
         .with_context(|| format!("Failed to write Info.plist to {}", path.display()))
-}
-
-/// Copy a framework (directory or .dylib) to the Frameworks directory.
-fn copy_framework(src: &Path, frameworks_dir: &Path) -> Result<()> {
-    let dest = frameworks_dir.join(src.file_name().context("Framework path has no filename")?);
-
-    tracing::debug!("Copying framework: {} -> {}", src.display(), dest.display());
-
-    if src.is_dir() {
-        copy_dir_recursive(src, &dest)?;
-    } else {
-        fs::copy(src, &dest)?;
-    }
-
-    Ok(())
 }
 
 /// Set up the signing identity.

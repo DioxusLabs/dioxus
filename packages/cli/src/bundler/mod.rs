@@ -805,6 +805,18 @@ pub(crate) fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Copy a framework directory or bare .dylib into an Apple `.app` Frameworks directory.
+pub(crate) fn copy_framework(src: &Path, frameworks_dir: &Path) -> Result<()> {
+    std::fs::create_dir_all(frameworks_dir)?;
+    let dest = frameworks_dir.join(src.file_name().context("Framework path has no filename")?);
+    if src.is_dir() {
+        copy_dir_recursive(src, &dest)?;
+    } else {
+        std::fs::copy(src, &dest)?;
+    }
+    Ok(())
+}
+
 /// Recursively zip a directory tree while preserving relative paths and Unix modes.
 pub(crate) fn zip_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
     use std::fs::File;

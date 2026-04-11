@@ -972,6 +972,13 @@
             "$ref": "#/definitions/IosTypeIdentifier"
           }
         },
+        "frameworks": {
+          "description": "Frameworks to embed.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "icon": {
           "description": "Icons for the app. Overrides `bundle.icon` for iOS builds.",
           "type": [
