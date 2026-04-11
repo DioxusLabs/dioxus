@@ -56,19 +56,22 @@ pub fn not<T>(inner: impl Matcher<T>) -> impl Matcher<T> {
     NotMatcher(inner, Default::default())
 }
 
-/// Returns a [Matcher] which matches a `Vec` with no elements.
-pub fn empty<T>() -> impl Matcher<Vec<T>> {
-    struct EmptyMatcher;
+/// A [Matcher] which matches a `Vec` with no elements.
+///
+/// Returned by [empty].
+pub struct EmptyMatcher;
 
-    impl<T> Matcher<Vec<T>> for EmptyMatcher {
-        fn matches(&self, actual: Vec<T>) -> ControlFlow<()> {
-            if actual.is_empty() {
-                ControlFlow::Break(())
-            } else {
-                ControlFlow::Continue(())
-            }
+impl<T> Matcher<Vec<T>> for EmptyMatcher {
+    fn matches(&self, actual: Vec<T>) -> ControlFlow<()> {
+        if actual.is_empty() {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
         }
     }
+}
 
+/// Returns a [Matcher] which matches a `Vec` with no elements.
+pub fn empty() -> EmptyMatcher {
     EmptyMatcher
 }

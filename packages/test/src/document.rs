@@ -176,11 +176,28 @@ impl DocumentTester {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn query(&'_ mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
+    pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
         let selector = query
             .try_into_selector(&self.document)
             .expect("Invalid CSS selector");
         ElementCondition {
+            data: self,
+            query: selector,
+        }
+    }
+
+    /// Returns all elements in the DOM satisfying the given [Query], waiting as necessary until the
+    /// set is nonempty.
+    ///
+    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
+    /// the limit and no matching elements are present, it returns an empty list.
+    ///
+    /// Returns an error if the Query contains a syntactically invalid CSS selector.
+    pub fn query_all(&mut self, query: impl TryIntoSelector) -> AllElementsCondition<'_> {
+        let selector = query
+            .try_into_selector(&self.document)
+            .expect("Invalid CSS selector");
+        AllElementsCondition {
             data: self,
             query: selector,
         }
@@ -194,26 +211,6 @@ impl DocumentTester {
         ResolvedElement {
             document: &self.document,
             node,
-        }
-    }
-
-    /// Returns all elements in the DOM satisfying the given [Query], waiting as necessary until the
-    /// set is nonempty.
-    ///
-    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
-    /// the limit and no matching elements are present, it returns an empty list.
-    ///
-    /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub fn query_all<'vdom>(
-        &'vdom mut self,
-        query: impl TryIntoSelector,
-    ) -> AllElementsCondition<'vdom> {
-        let selector = query
-            .try_into_selector(&self.document)
-            .expect("Invalid CSS selector");
-        AllElementsCondition {
-            data: self,
-            query: selector,
         }
     }
 }
@@ -280,10 +277,8 @@ trait Waitable {
     }
 }
 
-trait Resolvable<'vdom> {
-    type RawOutput;
-    type ResolvedOutput: 'vdom;
-    fn resolve(&'vdom self, v: Self::RawOutput) -> Self::ResolvedOutput;
+trait Matchable<M> {
+    fn matches(&self, matcher: &M) -> ControlFlow<()>;
 }
 
 pub trait ImmediateCondition<'output> {
@@ -312,12 +307,18 @@ impl<'vdom> Waitable for ElementCondition<'vdom> {
     }
 }
 
-impl<'vdom> Resolvable<'vdom> for ElementCondition<'vdom> {
-    type RawOutput = usize;
-    type ResolvedOutput = ResolvedElement<'vdom>;
-
-    fn resolve(&'vdom self, node_id: usize) -> Self::ResolvedOutput {
-        self.data.node_id_to_element(node_id)
+impl<'vdom, M> Matchable<M> for ElementCondition<'vdom>
+where
+    M: for<'a> Matcher<ResolvedElement<'a>>,
+{
+    fn matches(&self, matcher: &M) -> ControlFlow<()> {
+        match Waitable::check(self) {
+            ControlFlow::Continue(_) => ControlFlow::Continue(()),
+            ControlFlow::Break(n) => {
+                let node = self.data.node_id_to_element(n);
+                matcher.matches(node)
+            }
+        }
     }
 }
 
@@ -348,7 +349,7 @@ impl<'vdom> ElementCondition<'vdom> {
 
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
-        M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+        M: for<'a> Matcher<ResolvedElement<'a>>,
     {
         MatcherCondition {
             element: self,
@@ -380,7 +381,7 @@ pub struct AllElementsCondition<'vdom> {
 impl<'vdom> AllElementsCondition<'vdom> {
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
     where
-        M: for<'a> Matcher<ResolvedElement<'a>> + 'vdom,
+        M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
     {
         MatcherCondition {
             element: self,
@@ -407,14 +408,17 @@ impl<'vdom> Waitable for AllElementsCondition<'vdom> {
     }
 }
 
-impl<'vdom> Resolvable<'vdom> for AllElementsCondition<'vdom> {
-    type RawOutput = Vec<usize>;
-    type ResolvedOutput = Vec<ResolvedElement<'vdom>>;
-
-    fn resolve(&'vdom self, v: Self::RawOutput) -> Self::ResolvedOutput {
-        v.into_iter()
+impl<'vdom, M> Matchable<M> for AllElementsCondition<'vdom>
+where
+    M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
+{
+    fn matches(&self, matcher: &M) -> ControlFlow<()> {
+        let elements = self.data.get_elements(&self.query);
+        let resolved: Vec<ResolvedElement<'_>> = elements
+            .into_iter()
             .map(|node_id| self.data.node_id_to_element(node_id))
-            .collect()
+            .collect();
+        matcher.matches(resolved)
     }
 }
 
@@ -453,10 +457,9 @@ pub struct MatcherCondition<'vdom, M, W> {
     phantom: PhantomData<&'vdom ()>,
 }
 
-impl<'vdom, M, W, T> Waitable for MatcherCondition<'vdom, M, W>
+impl<'vdom, M, W> Waitable for MatcherCondition<'vdom, M, W>
 where
-    M: Matcher<T>,
-    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T>,
+    W: Waitable + Matchable<M>,
 {
     type Output = ();
 
@@ -465,20 +468,13 @@ where
     }
 
     fn check(&self) -> ControlFlow<Self::Output> {
-        match self.element.check() {
-            ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(n) => {
-                let node = self.element.resolve(n);
-                self.matcher.matches(node)
-            }
-        }
+        self.element.matches(&self.matcher)
     }
 }
 
-impl<'vdom, M, W, T> IntoFuture for MatcherCondition<'vdom, M, W>
+impl<'vdom, M, W> IntoFuture for MatcherCondition<'vdom, M, W>
 where
-    M: Matcher<T> + 'vdom,
-    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T> + 'vdom,
+    Self: Waitable<Output = ()> + 'vdom,
 {
     type Output = Result<(), TesterError>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
@@ -488,15 +484,14 @@ where
     }
 }
 
-impl<'vdom, M, W, T> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M, W>
+impl<'vdom, M, W> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M, W>
 where
-    M: Matcher<T> + 'vdom,
-    W: Waitable + Resolvable<'vdom, RawOutput = W::Output, ResolvedOutput = T>,
+    W: Matchable<M>,
 {
     type Output = ();
 
     fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
-        match self.check() {
+        match self.element.matches(&self.matcher) {
             ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
             ControlFlow::Break(_) => Ok(()),
         }
