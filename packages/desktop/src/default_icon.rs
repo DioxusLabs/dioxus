@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use image::load_from_memory;
 use image::GenericImageView;
 use image::ImageReader;
