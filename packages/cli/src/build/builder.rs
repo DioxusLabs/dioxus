@@ -471,6 +471,7 @@ impl AppBuilder {
 
         // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
         self.modified_crates.clear();
+        self.profile_spans.clear();
         self.object_cache = ObjectCache::new(&self.build.session_cache_dir());
         self.build_task = tokio::spawn({
             let request = self.build.clone();
@@ -1944,7 +1945,30 @@ impl AppBuilder {
     /// Log the profile flamegraph for this build run, and then emit a telemetry event.
     ///
     /// This works by walking the profile_spans vec, calculating the deltas, and then rendering out
-    /// the flamegraph via a debug!
+    /// the flamegraph via a debug!()
+    ///
+    /// The flamegraph looks something like this:
+    /// 17:22:56 [dev] Flamegraph for fat - time taken: 11371ms
+    ///        0ms   0.0% Verify Tooling       |█                                                                                               |
+    ///        0ms   0.0% Installing Tooling   |█                                                                                               |
+    ///      100ms   0.9% Prebuild             |██                                                                                              |
+    ///      307ms   2.7% Workspace precompile | ███                                                                                            |
+    ///     1400ms  12.3% Compiling            |   █████████████                                                                                |
+    ///     1325ms  11.7% Fat Linking          |               ████████████                                                                     |
+    ///      915ms   8.0% Extracting assets    |                          █████████                                                             |
+    ///     1529ms  13.4% Writing executable   |                                  ██████████████                                                |
+    ///     4685ms  41.2% Wasm Bindgen         |                                               █████████████████████████████████████████        |
+    ///        0ms   0.0% Writing frameworks   |                                                                                       █        |
+    ///        1ms   0.0% Writing assets       |                                                                                       █        |
+    ///        0ms   0.0% Copying Assets       |                                                                                       █        |
+    ///        0ms   0.0% Writing metadata     |                                                                                       █        |
+    ///        0ms   0.0% Writing ffi          |                                                                                       █        |
+    ///        0ms   0.0% Running optimizer    |                                                                                       █        |
+    ///        0ms   0.0% Optimizing Bundle    |                                                                                       █        |
+    ///        0ms   0.0% Running assemble     |                                                                                       █        |
+    ///        0ms   0.0% Assembling Bundle    |                                                                                       █        |
+    ///        0ms   0.0% Populating cache     |                                                                                       █        |
+    ///     1061ms   9.3% Creating Patch Cache |                                                                                       █████████|
     fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
         let Some(start) = self.compile_start else {
             tracing::debug!("no compile start?");

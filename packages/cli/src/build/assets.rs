@@ -38,7 +38,7 @@ use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
-use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
+use manganis_core::SymbolData;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
@@ -708,10 +708,16 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
-    let mut reader = Cursor::new(&file_contents);
-    let read_cache = ReadCache::new(&mut reader);
-    let object_file = object::File::parse(&read_cache)?;
-    let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
+
+    let (offsets, obj_format) = {
+        let mut reader = Cursor::new(&file_contents);
+        let read_cache = ReadCache::new(&mut reader);
+        let object_file = object::File::parse(&read_cache)?;
+        (
+            find_symbol_offsets(path, &file_contents, &object_file)?,
+            object_file.format(),
+        )
+    };
 
     let mut assets = Vec::new();
     let mut android_artifacts = Vec::new();
@@ -850,14 +856,15 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
         .context("Failed to sync file after writing assets")?;
 
     // If the file is a macos binary, we need to re-sign the modified binary
-    if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
+    if obj_format == object::BinaryFormat::MachO && !assets.is_empty() {
         // Spawn the codesign command to re-sign the binary
-        let output = std::process::Command::new("codesign")
+        let output = tokio::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
             .arg("-") // Sign with an empty identity
             .arg(path)
             .output()
+            .await
             .context("Failed to run codesign - is `codesign` in your path?")?;
         if !output.status.success() {
             bail!(

@@ -218,7 +218,7 @@ impl BuildContext {
         });
     }
 
-    pub(crate) fn status_hotpatching(&self) {
+    pub(crate) fn status_writing_patch(&self) {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::Hotpatching,
         });

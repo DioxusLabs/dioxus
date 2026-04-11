@@ -1103,7 +1103,7 @@ impl BuildRequest {
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
-        // _ = self.bust_fingerprint(&ctx);
+        _ = self.bust_fingerprint(&ctx);
 
         // Run the cargo build to produce our artifacts.
         // For thin builds this also pre-compiles workspace dep crates before the tip.
@@ -1362,7 +1362,6 @@ impl BuildRequest {
         let tip_bin_key = format!("{tip_crate_name}.bin");
         if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_bin_key) {
             tip_args.link_args = std::fs::read_to_string(self.link_args_file())
-                .inspect(|f| tracing::debug!("linkargs: {f}"))
                 .context("Failed to read link args from file")?
                 .lines()
                 .map(|s| s.to_string())
@@ -2272,7 +2271,7 @@ impl BuildRequest {
         cache: &Arc<HotpatchModuleCache>,
         modified_crates: &HashSet<String>,
     ) -> Result<()> {
-        ctx.status_hotpatching();
+        ctx.status_writing_patch();
         ctx.profile_phase("Patch: Cache Tip Objects");
 
         let tip_name = self.tip_crate_name();
@@ -6045,44 +6044,47 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
     /// target arg guarantees this will work.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if matches!(ctx.mode, BuildMode::Fat) {
-            let fingerprint_dir = self
-                .target_dir
-                .join(self.triple.to_string())
-                .join(&self.profile)
-                .join(".fingerprint");
+        // Only bust fingerpint when doing builds
+        if !matches!(ctx.mode, BuildMode::Fat) {
+            return Ok(());
+        }
 
-            let busted = self.missing_workspace_rustc_capture_fingerprints(&ctx.mode)?;
-            if busted.is_empty() {
-                tracing::debug!(
-                    "Rustc wrapper cache already complete for scope {}",
-                    self.rustc_wrapper_scope_dir_name(&ctx.mode)?
-                );
-                return Ok(());
-            }
+        let fingerprint_dir = self
+            .target_dir
+            .join(self.triple.to_string())
+            .join(&self.profile)
+            .join(".fingerprint");
 
+        let busted = self.missing_workspace_rustc_capture_fingerprints(&ctx.mode)?;
+        if busted.is_empty() {
             tracing::debug!(
-                "Busting fingerprints for crates missing rustc wrapper captures: {:?}",
-                busted
+                "Rustc wrapper cache already complete for scope {}",
+                self.rustc_wrapper_scope_dir_name(&ctx.mode)?
             );
+            return Ok(());
+        }
 
-            // split at the last `-` used to separate the hash from the name
-            // This causes to more aggressively bust hashes for all combinations of features
-            // and fingerprints for this package since we're just ignoring the hash
-            if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
-                let mut removed = Vec::new();
-                for entry in entries.flatten() {
-                    if let Some(fname) = entry.file_name().to_str() {
-                        if let Some((name, _)) = fname.rsplit_once('-') {
-                            if busted.contains(name) {
-                                removed.push(fname.to_string());
-                                _ = std::fs::remove_dir_all(entry.path());
-                            }
+        tracing::debug!(
+            "Busting fingerprints for crates missing rustc wrapper captures: {:?}",
+            busted
+        );
+
+        // split at the last `-` used to separate the hash from the name
+        // This causes to more aggressively bust hashes for all combinations of features
+        // and fingerprints for this package since we're just ignoring the hash
+        if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
+            let mut removed = Vec::new();
+            for entry in entries.flatten() {
+                if let Some(fname) = entry.file_name().to_str() {
+                    if let Some((name, _)) = fname.rsplit_once('-') {
+                        if busted.contains(name) {
+                            removed.push(fname.to_string());
+                            _ = std::fs::remove_dir_all(entry.path());
                         }
                     }
                 }
-                tracing::debug!("Removed fingerprint directories: {:?}", removed);
             }
+            tracing::debug!("Removed fingerprint directories: {:?}", removed);
         }
 
         Ok(())
