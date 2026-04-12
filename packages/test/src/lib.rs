@@ -96,13 +96,13 @@
 //! The layout system is limited by what the Blitz layout system can support. Since Blitz is not
 //! complete as of the time of writing, computed layouts will often not be as in reality.
 
+mod condition;
 mod document;
 mod element;
 mod matcher;
 mod result;
 
-pub use document::{
-    AllElementsCondition, DocumentTester, ElementCondition, ImmediateCondition, by_testid, render,
-};
+pub use condition::{AllElementsCondition, ElementCondition, ImmediateCondition};
+pub use document::{DocumentTester, by_testid, render};
 pub use matcher::{Matcher, contains_string, empty, inner_html, not};
 pub use result::{Result, TesterError};
