@@ -102,7 +102,7 @@ mod element;
 mod matcher;
 mod result;
 
-pub use condition::{AllElementsCondition, ElementCondition, ImmediateCondition};
+pub use condition::{AllElementsCondition, ElementCondition};
 pub use document::{DocumentTester, by_testid, render};
 pub use matcher::{Matcher, contains_string, empty, inner_html, not};
 pub use result::{Result, TesterError};

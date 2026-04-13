@@ -38,13 +38,8 @@ trait Waitable {
     }
 }
 
-trait Matchable<M> {
+pub trait Matchable<M> {
     fn matches(&self, matcher: &M) -> ControlFlow<()>;
-}
-
-pub trait ImmediateCondition<'output> {
-    type Output: 'output;
-    fn immediately(&'output self) -> Result<Self::Output, TesterError>;
 }
 
 pub struct ElementCondition<'vdom> {
@@ -122,12 +117,8 @@ impl<'vdom> ElementCondition<'vdom> {
             phantom: Default::default(),
         }
     }
-}
 
-impl<'vdom> ImmediateCondition<'vdom> for ElementCondition<'vdom> {
-    type Output = ResolvedElement<'vdom>;
-
-    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
+    pub fn immediately(&'vdom self) -> Result<ResolvedElement<'vdom>, TesterError> {
         match self.check() {
             ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
             ControlFlow::Break(b) => {
@@ -156,6 +147,16 @@ impl<'vdom> AllElementsCondition<'vdom> {
             element: self,
             matcher,
             phantom: Default::default(),
+        }
+    }
+
+    pub fn immediately(&'vdom self) -> Result<Vec<ResolvedElement<'vdom>>, TesterError> {
+        match self.check() {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(node_ids) => Ok(node_ids
+                .into_iter()
+                .map(|node_id| self.data.node_id_to_element(node_id))
+                .collect()),
         }
     }
 }
@@ -206,24 +207,22 @@ impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
     }
 }
 
-impl<'vdom> ImmediateCondition<'vdom> for AllElementsCondition<'vdom> {
-    type Output = Vec<ResolvedElement<'vdom>>;
-
-    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
-        match self.check() {
-            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
-            ControlFlow::Break(node_ids) => Ok(node_ids
-                .into_iter()
-                .map(|node_id| self.data.node_id_to_element(node_id))
-                .collect()),
-        }
-    }
-}
-
 pub struct MatcherCondition<'vdom, M, W> {
     element: W,
     matcher: M,
     phantom: PhantomData<&'vdom ()>,
+}
+
+impl<'vdom, M, W> MatcherCondition<'vdom, M, W>
+where
+    W: Matchable<M>,
+{
+    pub fn immediately(&'vdom self) -> Result<(), TesterError> {
+        match self.element.matches(&self.matcher) {
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Break(_) => Ok(()),
+        }
+    }
 }
 
 impl<'vdom, M, W> Waitable for MatcherCondition<'vdom, M, W>
@@ -250,19 +249,5 @@ where
 
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move { self.into_waitable_future().await })
-    }
-}
-
-impl<'vdom, M, W> ImmediateCondition<'vdom> for MatcherCondition<'vdom, M, W>
-where
-    W: Matchable<M>,
-{
-    type Output = ();
-
-    fn immediately(&'vdom self) -> Result<Self::Output, TesterError> {
-        match self.element.matches(&self.matcher) {
-            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
-            ControlFlow::Break(_) => Ok(()),
-        }
     }
 }
