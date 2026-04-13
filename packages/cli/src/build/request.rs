@@ -6605,6 +6605,74 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             }
         }
 
+        // Sign embedded frameworks and dylibs before signing the app bundle.
+        // iOS requires all embedded code to be individually signed.
+        let frameworks_dir = self.frameworks_folder();
+        if frameworks_dir.exists() {
+            for entry in std::fs::read_dir(&frameworks_dir)
+                .context("Failed to read Frameworks directory")?
+            {
+                let entry = entry?;
+                let path = entry.path();
+
+                tracing::debug!("Codesigning embedded framework: {}", path.display());
+
+                let mut cmd = Command::new("codesign");
+                cmd.args(["--force", "--sign", app_dev_name]);
+
+                if path
+                    .extension()
+                    .map(|e| e == "framework" || e == "appex")
+                    .unwrap_or(false)
+                {
+                    cmd.arg("--deep");
+                }
+
+                cmd.arg(&path);
+
+                let output = cmd
+                    .output()
+                    .await
+                    .context("Failed to codesign embedded framework")?;
+
+                if !output.status.success() {
+                    bail!(
+                        "Failed to codesign '{}': {}",
+                        path.display(),
+                        String::from_utf8(output.stderr).unwrap_or_default()
+                    );
+                }
+            }
+        }
+
+        // Sign embedded widget extensions (.appex bundles) in the PlugIns directory.
+        let plugins_dir = self.plugins_folder();
+        if plugins_dir.exists() {
+            for entry in std::fs::read_dir(&plugins_dir)
+                .context("Failed to read PlugIns directory")?
+            {
+                let entry = entry?;
+                let path = entry.path();
+
+                tracing::debug!("Codesigning embedded plugin: {}", path.display());
+
+                let output = Command::new("codesign")
+                    .args(["--force", "--deep", "--sign", app_dev_name])
+                    .arg(&path)
+                    .output()
+                    .await
+                    .context("Failed to codesign embedded plugin")?;
+
+                if !output.status.success() {
+                    bail!(
+                        "Failed to codesign '{}': {}",
+                        path.display(),
+                        String::from_utf8(output.stderr).unwrap_or_default()
+                    );
+                }
+            }
+        }
+
         // codesign the app
         let output = Command::new("codesign")
             .args([
