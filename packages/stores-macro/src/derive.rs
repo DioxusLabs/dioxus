@@ -47,6 +47,7 @@ fn field_is_more_private(struct_vis: &syn::Visibility, field_vis: &syn::Visibili
 }
 
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
+#[allow(clippy::too_many_arguments)]
 fn extension_trait(
     visibility: &syn::Visibility,
     trait_name: &Ident,
@@ -213,8 +214,8 @@ fn transposed_struct(
     transposed_fields: &[TokenStream2],
 ) -> TokenStream2 {
     let (extension_impl_generics, _, extension_where_clause) = extension_generics.split_for_impl();
-    /// If the type only uses generics, we can define this in terms of a type alias on the original type
-    /// so all of the original type methods remain usable on the transposed version
+    // If the type only uses generics, we can define this in terms of a type alias on the original type
+    // so all of the original type methods remain usable on the transposed version
     if can_use_type_alias(generics, structure.fields.iter()) {
         let generics = transpose_generics(struct_name, generics);
         return quote! { #visibility type #transposed_name #extension_impl_generics = #struct_name #generics; };
@@ -496,7 +497,7 @@ fn derive_store_enum(
         // Now that we have the types for the field selectors within the variant,
         // we can construct the transposed variant and the logic to turn the normal
         // version of that variant into the store version
-        let field_names = fields
+        let field_names: Vec<_> = fields
             .iter()
             .enumerate()
             .map(|(i, field)| function_name_from_field(i, field))
