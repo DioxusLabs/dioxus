@@ -54,7 +54,6 @@ use super::AppServer;
 /// and better tooling on the pages that we serve.
 pub(crate) struct WebServer {
     devserver_exposed_ip: IpAddr,
-    devserver_bind_ip: IpAddr,
     devserver_port: u16,
     proxied_port: Option<u16>,
     hot_reload_sockets: Vec<ConnectedWsClient>,
@@ -121,7 +120,6 @@ impl WebServer {
         Ok(Self {
             build_status,
             proxied_port,
-            devserver_bind_ip,
             devserver_exposed_ip,
             devserver_port,
             hot_reload_sockets: Default::default(),
@@ -389,18 +387,12 @@ impl WebServer {
         }
     }
 
-    /// Get the address the server is running - showing 127.0.0.1 if the devserver is bound to 0.0.0.0
-    /// This is designed this way to not confuse users who expect the devserver to be bound to localhost
-    /// ... which it is, but they don't know that 0.0.0.0 also serves localhost.
+    /// Get the address the server is running, reflecting what the user actually specified via --addr.
     pub fn displayed_address(&self) -> Option<SocketAddr> {
         let mut address = self.server_address()?;
 
         // Set the port to the devserver port since that's usually what people expect
         address.set_port(self.devserver_port);
-
-        if self.devserver_bind_ip == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
-            address = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), address.port());
-        }
 
         Some(address)
     }
@@ -775,5 +767,51 @@ impl SharedStatus {
     async fn send_to(&self, socket: &mut WebSocket) -> Result<(), axum::Error> {
         let msg = serde_json::to_string(&self.get()).unwrap();
         socket.send(Message::Text(msg.into())).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_test_server(bind_ip: IpAddr, port: u16, bundle: BundleFormat) -> WebServer {
+        let (_, hot_reload_rx) = futures_channel::mpsc::unbounded();
+        let (_, build_status_rx) = futures_channel::mpsc::unbounded();
+        WebServer {
+            devserver_exposed_ip: bind_ip,
+            devserver_port: port,
+            proxied_port: None,
+            hot_reload_sockets: vec![],
+            build_status_sockets: vec![],
+            new_hot_reload_sockets: hot_reload_rx,
+            new_build_status_sockets: build_status_rx,
+            build_status: SharedStatus::new_with_starting_build(),
+            application_name: "test".to_string(),
+            bundle,
+        }
+    }
+
+    #[test]
+    fn displayed_address_preserves_0000_when_user_specified() {
+        let server = make_test_server(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            8080,
+            BundleFormat::Web,
+        );
+        let addr = server.displayed_address().unwrap();
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+        assert_eq!(addr.port(), 8080);
+    }
+
+    #[test]
+    fn displayed_address_shows_localhost_by_default() {
+        let server = make_test_server(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            8080,
+            BundleFormat::Web,
+        );
+        let addr = server.displayed_address().unwrap();
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(addr.port(), 8080);
     }
 }
