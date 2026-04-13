@@ -507,7 +507,7 @@ fn derive_store_enum(
             .zip(&field_selectors)
             .map(|(name, selector)| quote! { let #name = { #selector }; });
         // Merge the stores into the variant
-            let construct_variant = construct_from_fields(
+        let construct_variant = construct_from_fields(
             quote! { #transposed_name::#variant_name },
             fields,
             &field_names,
