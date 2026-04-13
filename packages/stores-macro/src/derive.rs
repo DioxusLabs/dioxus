@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
@@ -39,11 +41,54 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-/// A field is "more private" than the struct when the struct has an explicit public
-/// visibility but the does not.
-fn field_is_more_private(struct_vis: &syn::Visibility, field_vis: &syn::Visibility) -> bool {
-    matches!(struct_vis, syn::Visibility::Public(_))
-        && !matches!(field_vis, syn::Visibility::Public(_))
+/// Visibility level for partitioning field accessors into separate traits.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum VisibilityLevel {
+    /// Fully public (`pub`) - accessor goes on the public trait
+    Public,
+    /// Crate-visible (`pub(crate)`) - accessor goes on the crate trait
+    Crate,
+    /// Module-private (inherited or `pub(super)`, `pub(in path)`) - accessor goes on the private trait
+    Private,
+}
+
+/// Collected trait method definitions and implementations for a visibility level.
+#[derive(Default)]
+struct TraitMethods {
+    definitions: Vec<TokenStream2>,
+    implementations: Vec<TokenStream2>,
+}
+
+impl TraitMethods {
+    fn push(&mut self, definition: TokenStream2, implementation: TokenStream2) {
+        self.definitions.push(definition);
+        self.implementations.push(implementation);
+    }
+}
+
+/// Determine which trait a field's accessor should be placed on.
+///
+/// When the struct is `pub`:
+/// - `pub` fields → Public trait
+/// - `pub(crate)` fields → Crate trait
+/// - Other fields (private, `pub(super)`, etc.) → Private trait
+///
+/// When the struct is not `pub`, all fields go on the public trait
+/// (which inherits the struct's visibility).
+fn field_visibility_level(
+    struct_vis: &syn::Visibility,
+    field_vis: &syn::Visibility,
+) -> VisibilityLevel {
+    // Only split traits when the struct itself is fully public
+    if !matches!(struct_vis, syn::Visibility::Public(_)) {
+        return VisibilityLevel::Public;
+    }
+
+    match field_vis {
+        syn::Visibility::Public(_) => VisibilityLevel::Public,
+        syn::Visibility::Restricted(r) if r.path.is_ident("crate") => VisibilityLevel::Crate,
+        _ => VisibilityLevel::Private,
+    }
 }
 
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
@@ -257,24 +302,18 @@ fn derive_store_struct(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#struct_name #ty_generics, __Lens> };
 
-    // Generate accessor methods for each field, partitioned by visibility.
-    let mut public_definitions = Vec::new();
-    let mut public_implementations = Vec::new();
-    let mut private_definitions = Vec::new();
-    let mut private_implementations = Vec::new();
+    // Generate accessor methods for each field, partitioned by visibility level.
+    let mut methods: HashMap<VisibilityLevel, TraitMethods> = HashMap::new();
     let mut transposed_fields = Vec::new();
 
     for (field_index, field) in fields.iter().enumerate() {
         let (transposed, definition, implementation) =
             generate_field_method(field_index, field, struct_name, &ty_generics);
         transposed_fields.push(transposed);
-        if field_is_more_private(visibility, &field.vis) {
-            private_definitions.push(definition);
-            private_implementations.push(implementation);
-        } else {
-            public_definitions.push(definition);
-            public_implementations.push(implementation);
-        }
+        methods
+            .entry(field_visibility_level(visibility, &field.vis))
+            .or_default()
+            .push(definition, implementation);
     }
 
     // Transpose always goes on the public trait. Copy is required because the
@@ -285,17 +324,25 @@ fn derive_store_struct(
         .map(|(i, field)| function_name_from_field(i, field))
         .collect();
     let construct = construct_from_fields(quote! { #transposed_name }, fields, &field_names);
-    public_definitions.push(quote! {
-        fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
-    });
     // Each method name is unique to one trait, so `self.method()` resolves
-    // unambiguously since both traits are in scope in the generated code.
-    public_implementations.push(quote! {
-        fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
-            #( let #field_names = self.#field_names(); )*
-            #construct
-        }
-    });
+    // unambiguously since all traits are in scope in the generated code.
+    methods.entry(VisibilityLevel::Public).or_default().push(
+        quote! {
+            fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
+        },
+        quote! {
+            fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
+                #( let #field_names = self.#field_names(); )*
+                #construct
+            }
+        },
+    );
+
+    // Generate traits for each visibility level that has methods.
+    let empty = TraitMethods::default();
+    let public = methods.get(&VisibilityLevel::Public).unwrap_or(&empty);
+    let crate_level = methods.get(&VisibilityLevel::Crate);
+    let private = methods.get(&VisibilityLevel::Private);
 
     let public_trait = extension_trait(
         visibility,
@@ -304,24 +351,43 @@ fn derive_store_struct(
         &extension_impl_generics,
         &extension_ty_generics,
         extension_where_clause,
-        &public_definitions,
-        &public_implementations,
+        &public.definitions,
+        &public.implementations,
     );
 
-    let private_trait = if private_definitions.is_empty() {
-        quote! {}
-    } else {
-        let name = format_ident!("{}PrivateStoreExt", struct_name);
-        extension_trait(
-            &syn::Visibility::Inherited,
-            &name,
-            &store_ty,
-            &extension_impl_generics,
-            &extension_ty_generics,
-            extension_where_clause,
-            &private_definitions,
-            &private_implementations,
-        )
+    let crate_trait = match crate_level {
+        Some(methods) => {
+            let name = format_ident!("{}CrateStoreExt", struct_name);
+            let crate_vis: syn::Visibility = parse_quote!(pub(crate));
+            extension_trait(
+                &crate_vis,
+                &name,
+                &store_ty,
+                &extension_impl_generics,
+                &extension_ty_generics,
+                extension_where_clause,
+                &methods.definitions,
+                &methods.implementations,
+            )
+        }
+        None => quote! {},
+    };
+
+    let private_trait = match private {
+        Some(methods) => {
+            let name = format_ident!("{}PrivateStoreExt", struct_name);
+            extension_trait(
+                &syn::Visibility::Inherited,
+                &name,
+                &store_ty,
+                &extension_impl_generics,
+                &extension_ty_generics,
+                extension_where_clause,
+                &methods.definitions,
+                &methods.implementations,
+            )
+        }
+        None => quote! {},
     };
 
     let transposed_struct = transposed_struct(
@@ -336,6 +402,7 @@ fn derive_store_struct(
 
     Ok(quote! {
         #public_trait
+        #crate_trait
         #private_trait
         #transposed_struct
     })

@@ -1,3 +1,9 @@
+//! Compile-time tests for the Store derive macro.
+//!
+//! These tests verify that the macro generates valid, well-typed code. They are not
+//! executed at runtime—the test functions exist only to ensure the generated code compiles.
+//! Visibility enforcement is validated via `compile_fail` doctests in `lib.rs`.
+
 #[allow(unused)]
 #[allow(clippy::disallowed_names)]
 mod macro_tests {
@@ -536,7 +542,7 @@ mod macro_tests {
         store.increment_count();
     }
 
-    // pub(crate) fields on a pub struct should be treated as public (both have explicit vis)
+    // pub(crate) fields on a pub struct go on the crate trait (pub(crate) visibility)
     fn derive_struct_pub_crate_fields() {
         #[derive(Store)]
         pub struct Item {
@@ -549,7 +555,8 @@ mod macro_tests {
             count: 42,
         });
 
-        // Both pub(crate) and pub fields are on the public trait
+        // pub(crate) field is on crate trait, pub field is on public trait
+        // (all traits in scope within this crate)
         let name: Store<String, _> = store.name();
         let count: Store<u32, _> = store.count();
         let name: String = name();

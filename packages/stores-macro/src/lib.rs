@@ -51,14 +51,16 @@ mod extend;
 ///
 /// ### Field Visibility
 ///
-/// The generated extension trait respects field visibility. When a struct has an explicit
-/// visibility (e.g. `pub`) and some fields are more restricted (e.g. no visibility modifier),
-/// the macro generates **two** extension traits:
+/// The generated extension trait respects field visibility. When a `pub` struct has fields
+/// with more restricted visibility, the macro generates up to **three** extension traits:
 ///
 /// - **`{Name}StoreExt`** — has the same visibility as the struct and contains accessor
-///   methods for public fields along with the `transpose` method.
+///   methods for `pub` fields along with the `transpose` method.
+/// - **`{Name}CrateStoreExt`** — has `pub(crate)` visibility and contains accessor methods
+///   for `pub(crate)` fields. These are accessible anywhere within the crate.
 /// - **`{Name}PrivateStoreExt`** — is module-private and contains accessor methods for
-///   private fields. These methods are only usable within the module where the struct is defined.
+///   private fields (including `pub(super)`, `pub(in path)`, or no modifier). These methods
+///   are only usable within the module where the struct is defined.
 ///
 /// The transposed struct also preserves the original field visibility, so private fields
 /// remain private in the transposed version.
@@ -72,23 +74,29 @@ mod extend;
 /// #[derive(Store)]
 /// pub struct Config {
 ///     pub title: String,
-///     secret_key: String,  // private — accessor only available in this module
+///     pub(crate) api_key: String,  // crate-visible — accessible within crate
+///     secret_key: String,          // private — accessor only in this module
 /// }
 ///
 /// let store = use_store(|| Config {
 ///     title: "My App".to_string(),
+///     api_key: "abc123".to_string(),
 ///     secret_key: "hunter2".to_string(),
 /// });
 ///
 /// // `title()` is on the public ConfigStoreExt trait
 /// let title: Store<String, _> = store.title();
 ///
+/// // `api_key()` is on the pub(crate) ConfigCrateStoreExt trait —
+/// // accessible anywhere in this crate
+/// let api_key: Store<String, _> = store.api_key();
+///
 /// // `secret_key()` is on the private ConfigPrivateStoreExt trait —
 /// // accessible here (same module) but not from outside this module
 /// let secret: Store<String, _> = store.secret_key();
 ///
 /// // `transpose()` is on the public trait; the transposed struct's
-/// // `secret_key` field is private, matching the original
+/// // field visibility matches the original
 /// let transposed = store.transpose();
 /// let _title: Store<String, _> = transposed.title;
 /// ```

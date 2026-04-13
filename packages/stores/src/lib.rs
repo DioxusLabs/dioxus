@@ -61,6 +61,10 @@ pub use dioxus_stores_macro::{store, Store};
 /// use inner::ItemPrivateStoreExt;
 /// fn main() {}
 /// ```
+///
+/// Fields with `pub(crate)` visibility go on a separate `pub(crate)` trait
+/// (`{Name}CrateStoreExt`), making them accessible within the crate but not
+/// from external crates.
 #[cfg(doc)]
 mod private_field_compile_tests {}
 
