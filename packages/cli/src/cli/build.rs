@@ -198,7 +198,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         // Run SSG and cache static routes
         if ssg {
-            crate::pre_render_static_routes(None, &mut server_build, None).await?;
+            server_build.pre_render_static_routes(None, None).await?;
         }
 
         tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");

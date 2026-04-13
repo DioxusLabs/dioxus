@@ -259,12 +259,12 @@ impl AppServer {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) = crate::pre_render_static_routes(
-                Some(devserver.devserver_address()),
-                server,
-                Some(&server.tx.clone()),
-            )
-            .await
+            if let Err(err) = server
+                .pre_render_static_routes(
+                    Some(devserver.devserver_address()),
+                    Some(&server.tx.clone()),
+                )
+                .await
             {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }

@@ -15,6 +15,7 @@ use crate::config::{
 pub struct AndroidPermissionEntry {
     /// Full Android permission string (e.g., "android.permission.CAMERA")
     pub permission: String,
+
     /// User-facing description (used for documentation)
     pub description: String,
 }
@@ -24,6 +25,7 @@ pub struct AndroidPermissionEntry {
 pub struct PlistEntry {
     /// Plist key (e.g., "NSCameraUsageDescription")
     pub key: String,
+
     /// User-facing description shown in permission dialogs
     pub value: String,
 }

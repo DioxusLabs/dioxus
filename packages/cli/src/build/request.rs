@@ -323,7 +323,8 @@ use super::HotpatchModuleCache;
 use crate::opt::{process_file_to, AppManifest};
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
+    DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, ensure, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -795,7 +796,7 @@ impl BuildRequest {
                 if let Some(_device_name) = device.as_ref() {
                     if triple.is_none() {
                         triple = Some(
-                            crate::get_android_tools()
+                            AndroidTools::current()
                                 .context("Failed to get android tools")?
                                 .autodetect_android_device_triple()
                                 .await,

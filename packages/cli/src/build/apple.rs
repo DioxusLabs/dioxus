@@ -3,7 +3,7 @@
 use super::HotpatchModuleCache;
 use crate::{
     opt::{process_file_to, AppManifest},
-    BuildRequest,
+    BuildRequest, ManifestMapper,
 };
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
@@ -127,7 +127,7 @@ impl BuildRequest {
         }
 
         // Get permission mapper from config
-        let mapper = super::manifest_mapper::ManifestMapper::from_config(
+        let mapper = ManifestMapper::from_config(
             &self.config.permissions,
             &self.config.deep_links,
             &self.config.background,
@@ -337,7 +337,7 @@ impl BuildRequest {
                 let ent = &self.config.ios.entitlements;
 
                 // Associated domains (from deep_links.hosts + ios.entitlements.associated-domains)
-                let mapper = super::manifest_mapper::ManifestMapper::from_config(
+                let mapper = ManifestMapper::from_config(
                     &self.config.permissions,
                     &self.config.deep_links,
                     &self.config.background,

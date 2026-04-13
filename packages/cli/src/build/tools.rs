@@ -18,109 +18,112 @@ pub(crate) struct AndroidTools {
     pub(crate) java_home: Option<PathBuf>,
 }
 
-pub fn get_android_tools() -> Option<Arc<AndroidTools>> {
-    // We check for SDK first since users might install Android Studio and then install the SDK
-    // After that they might install the NDK, so the SDK drives the source of truth.
-    let sdk = var_or_debug("ANDROID_SDK_ROOT")
-        .or_else(|| var_or_debug("ANDROID_SDK"))
-        .or_else(|| var_or_debug("ANDROID_HOME"));
-
-    // Check the ndk. We look for users's overrides first and then look into the SDK.
-    // Sometimes users set only the NDK (especially if they're somewhat advanced) so we need to look for it manually
-    //
-    // Might look like this, typically under "sdk":
-    // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
-    let ndk = var_or_debug("NDK_HOME")
-        .or_else(|| var_or_debug("ANDROID_NDK_HOME"))
-        .or_else(|| {
-            // Look for the most recent NDK in the event the user has installed multiple NDK
-            // Eventually we might need to drive this from Dioxus.toml
-            let sdk = sdk.as_ref()?;
-            let ndk_dir = sdk.join("ndk").read_dir().ok()?;
-            ndk_dir
-                .flatten()
-                .map(|dir| (dir.file_name(), dir.path()))
-                .sorted()
-                .next_back()
-                .map(|(_, path)| path.to_path_buf())
-        })?;
-
-    // Look for ADB in the SDK. If it's not there we'll use `adb` from the PATH
-    let adb = sdk
-        .as_ref()
-        .and_then(|sdk| {
-            let tools = sdk.join("platform-tools");
-            if tools.join("adb").exists() {
-                return Some(tools.join("adb"));
-            }
-            if tools.join("adb.exe").exists() {
-                return Some(tools.join("adb.exe"));
-            }
-            None
-        })
-        .unwrap_or_else(|| PathBuf::from("adb"));
-
-    // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
-    // always respect the user's JAVA_HOME env var above all other options
-    //
-    // we only attempt autodetection if java_home is not set
-    //
-    // this is a better fallback than falling onto the users' system java home since many users might
-    // not even know which java that is - they just know they have android studio installed
-    let java_home = std::env::var_os("JAVA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| {
-            // Attempt to autodetect java home from the android studio path or jdk path on macos
-            #[cfg(target_os = "macos")]
-            {
-                let jbr_home =
-                    PathBuf::from("/Applications/Android Studio.app/Contents/jbr/Contents/Home/");
-                if jbr_home.exists() {
-                    return Some(jbr_home);
-                }
-
-                let jre_home =
-                    PathBuf::from("/Applications/Android Studio.app/Contents/jre/Contents/Home");
-                if jre_home.exists() {
-                    return Some(jre_home);
-                }
-
-                let jdk_home =
-                    PathBuf::from("/Library/Java/JavaVirtualMachines/openjdk.jdk/Contents/Home/");
-                if jdk_home.exists() {
-                    return Some(jdk_home);
-                }
-            }
-
-            #[cfg(target_os = "windows")]
-            {
-                let jbr_home = PathBuf::from("C:\\Program Files\\Android\\Android Studio\\jbr");
-                if jbr_home.exists() {
-                    return Some(jbr_home);
-                }
-            }
-
-            // todo(jon): how do we detect java home on linux?
-            #[cfg(target_os = "linux")]
-            {
-                let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
-                if jbr_home.exists() {
-                    return Some(jbr_home);
-                }
-            }
-
-            None
-        });
-
-    Some(Arc::new(AndroidTools {
-        ndk,
-        adb,
-        java_home,
-        sdk,
-    }))
-}
-
 impl AndroidTools {
+    pub fn current() -> Option<Arc<AndroidTools>> {
+        // We check for SDK first since users might install Android Studio and then install the SDK
+        // After that they might install the NDK, so the SDK drives the source of truth.
+        let sdk = Self::var_or_debug("ANDROID_SDK_ROOT")
+            .or_else(|| Self::var_or_debug("ANDROID_SDK"))
+            .or_else(|| Self::var_or_debug("ANDROID_HOME"));
+
+        // Check the ndk. We look for users's overrides first and then look into the SDK.
+        // Sometimes users set only the NDK (especially if they're somewhat advanced) so we need to look for it manually
+        //
+        // Might look like this, typically under "sdk":
+        // "/Users/jonkelley/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/bin/aarch64-linux-android24-clang"
+        let ndk = Self::var_or_debug("NDK_HOME")
+            .or_else(|| Self::var_or_debug("ANDROID_NDK_HOME"))
+            .or_else(|| {
+                // Look for the most recent NDK in the event the user has installed multiple NDK
+                // Eventually we might need to drive this from Dioxus.toml
+                let sdk = sdk.as_ref()?;
+                let ndk_dir = sdk.join("ndk").read_dir().ok()?;
+                ndk_dir
+                    .flatten()
+                    .map(|dir| (dir.file_name(), dir.path()))
+                    .sorted()
+                    .next_back()
+                    .map(|(_, path)| path.to_path_buf())
+            })?;
+
+        // Look for ADB in the SDK. If it's not there we'll use `adb` from the PATH
+        let adb = sdk
+            .as_ref()
+            .and_then(|sdk| {
+                let tools = sdk.join("platform-tools");
+                if tools.join("adb").exists() {
+                    return Some(tools.join("adb"));
+                }
+                if tools.join("adb.exe").exists() {
+                    return Some(tools.join("adb.exe"));
+                }
+                None
+            })
+            .unwrap_or_else(|| PathBuf::from("adb"));
+
+        // https://stackoverflow.com/questions/71381050/java-home-is-set-to-an-invalid-directory-android-studio-flutter
+        // always respect the user's JAVA_HOME env var above all other options
+        //
+        // we only attempt autodetection if java_home is not set
+        //
+        // this is a better fallback than falling onto the users' system java home since many users might
+        // not even know which java that is - they just know they have android studio installed
+        let java_home = std::env::var_os("JAVA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                // Attempt to autodetect java home from the android studio path or jdk path on macos
+                #[cfg(target_os = "macos")]
+                {
+                    let jbr_home = PathBuf::from(
+                        "/Applications/Android Studio.app/Contents/jbr/Contents/Home/",
+                    );
+                    if jbr_home.exists() {
+                        return Some(jbr_home);
+                    }
+
+                    let jre_home = PathBuf::from(
+                        "/Applications/Android Studio.app/Contents/jre/Contents/Home",
+                    );
+                    if jre_home.exists() {
+                        return Some(jre_home);
+                    }
+
+                    let jdk_home = PathBuf::from(
+                        "/Library/Java/JavaVirtualMachines/openjdk.jdk/Contents/Home/",
+                    );
+                    if jdk_home.exists() {
+                        return Some(jdk_home);
+                    }
+                }
+
+                #[cfg(target_os = "windows")]
+                {
+                    let jbr_home = PathBuf::from("C:\\Program Files\\Android\\Android Studio\\jbr");
+                    if jbr_home.exists() {
+                        return Some(jbr_home);
+                    }
+                }
+
+                // todo(jon): how do we detect java home on linux?
+                #[cfg(target_os = "linux")]
+                {
+                    let jbr_home = PathBuf::from("/usr/lib/jvm/java-11-openjdk-amd64");
+                    if jbr_home.exists() {
+                        return Some(jbr_home);
+                    }
+                }
+
+                None
+            });
+
+        Some(Arc::new(AndroidTools {
+            ndk,
+            adb,
+            java_home,
+            sdk,
+        }))
+    }
+
     pub(crate) fn android_tools_dir(&self) -> PathBuf {
         let prebuilt = self.ndk.join("toolchains").join("llvm").join("prebuilt");
 
@@ -347,13 +350,13 @@ impl AndroidTools {
 
         Ok(())
     }
-}
 
-fn var_or_debug(name: &str) -> Option<PathBuf> {
-    use std::env::var;
+    fn var_or_debug(name: &str) -> Option<PathBuf> {
+        use std::env::var;
 
-    var(name)
-        .inspect_err(|_| tracing::trace!("{name} not set"))
-        .ok()
-        .map(PathBuf::from)
+        var(name)
+            .inspect_err(|_| tracing::trace!("{name} not set"))
+            .ok()
+            .map(PathBuf::from)
+    }
 }

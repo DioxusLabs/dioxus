@@ -687,7 +687,7 @@ impl BuildRequest {
         }
 
         // Get permission mapper from config
-        let mapper = super::manifest_mapper::ManifestMapper::from_config(
+        let mapper = crate::ManifestMapper::from_config(
             &self.config.permissions,
             &self.config.deep_links,
             &self.config.background,

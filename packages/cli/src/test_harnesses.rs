@@ -117,7 +117,7 @@ async fn test_harnesses() {
                 assert_eq!(targets.client.triple, "aarch64-apple-ios".parse().unwrap());
             })
             .asrt(r#"dx build --android --device"#, |targets| async move {
-                if crate::get_android_tools().is_none() {
+                if crate::AndroidTools::current().is_none() {
                     // Skip when Android NDK/SDK is not installed
                     return;
                 }

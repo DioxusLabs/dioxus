@@ -1,4 +1,5 @@
 use super::HotpatchModuleCache;
+use super::{AppBuilder, BuilderUpdate};
 use crate::{
     opt::{process_file_to, AppManifest},
     BuildMode, BuildRequest,
@@ -13,7 +14,10 @@ use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
+use dioxus_cli_config::{server_ip, server_port};
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_dx_wire_format::BuildStage;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
@@ -32,6 +36,10 @@ use std::{
         Arc,
     },
     time::{SystemTime, UNIX_EPOCH},
+};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    time::Duration,
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem, Triple};
