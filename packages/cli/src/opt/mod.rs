@@ -18,17 +18,33 @@ pub(crate) use hash::add_hash_to_asset;
 /// A manifest of all assets collected from dependencies
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
-pub(crate) struct AssetManifest {
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub(crate) struct AppManifest {
+    /// Stable since 0.7.0
+    pub cli_version: String,
+
+    /// Stable since 0.7.0
+    pub rust_version: String,
+
     /// Map of bundled asset name to the asset itself
-    assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
+    pub assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
 
-    pub(crate) android_artifacts: Vec<AndroidArtifactMetadata>,
+    pub android_artifacts: Vec<AndroidArtifactMetadata>,
 
-    pub(crate) swift_sources: Vec<SwiftPackageMetadata>,
+    pub swift_sources: Vec<SwiftPackageMetadata>,
 }
 
-impl AssetManifest {
+impl AppManifest {
+    pub fn new(rust_version: String) -> Self {
+        Self {
+            rust_version,
+            cli_version: crate::VERSION.to_string(),
+            android_artifacts: Default::default(),
+            swift_sources: Default::default(),
+            assets: Default::default(),
+        }
+    }
+
     /// Manually add an asset to the manifest
     pub fn register_asset(
         &mut self,

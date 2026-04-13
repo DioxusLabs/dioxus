@@ -29,11 +29,13 @@
 //! build system.
 
 use std::{
+    fs::OpenOptions,
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
-use crate::opt::AssetManifest;
+use crate::opt::AppManifest;
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
@@ -43,23 +45,11 @@ use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Sect
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 
-/// Extract all manganis symbols and their sections from the given object file.
-fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
-    file: &'b File<'a, R>,
-) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
-    file.symbols().filter_map(move |symbol| {
-        let name = symbol.name().ok()?;
-        let version = looks_like_manganis_symbol(name)?;
-        let section_index = symbol.section_index()?;
-        let section = file.section_by_index(section_index).ok()?;
-        Some((version, symbol, section))
-    })
-}
-
 #[derive(Copy, Clone)]
 enum ManganisVersion {
     /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
     Legacy,
+
     /// The new version of the manganis format 0.7.2 onward
     /// This now includes both assets (old BundledAsset format) and permissions (SymbolData format)
     New,
@@ -698,13 +688,10 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
 
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Also extracts Android/Swift plugin metadata for FFI bindings.
-pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
+pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<AppManifest> {
     let path = path.as_ref();
-    let mut file = open_file_for_writing_with_timeout(
-        path,
-        std::fs::OpenOptions::new().write(true).read(true),
-    )
-    .await?;
+    let mut file =
+        open_file_for_writing_with_timeout(path, OpenOptions::new().write(true).read(true)).await?;
 
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
@@ -874,7 +861,7 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
         }
     }
 
-    let mut manifest = AssetManifest::default();
+    let mut manifest = AppManifest::new(todo!());
 
     for asset in assets {
         manifest.insert_asset(asset);
@@ -891,10 +878,10 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
 /// This is useful on windows where antivirus software might grab the executable before we have a chance to read it.
 async fn open_file_for_writing_with_timeout(
     file: &Path,
-    options: &mut std::fs::OpenOptions,
+    options: &mut OpenOptions,
 ) -> Result<std::fs::File> {
-    let start_time = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(5);
+    let start_time = Instant::now();
+    let timeout = Duration::from_secs(5);
     loop {
         match options.open(file) {
             Ok(file) => return Ok(file),
@@ -904,7 +891,7 @@ async fn open_file_for_writing_with_timeout(
                     tracing::trace!(
                         "Failed to open file because another process is using it. Retrying..."
                     );
-                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 } else {
                     return Err(e.into());
                 }
@@ -933,4 +920,17 @@ fn write_serialized_bytes(
     }
 
     Ok(())
+}
+
+/// Extract all manganis symbols and their sections from the given object file.
+fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
+    file: &'b File<'a, R>,
+) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+    file.symbols().filter_map(move |symbol| {
+        let name = symbol.name().ok()?;
+        let version = looks_like_manganis_symbol(name)?;
+        let section_index = symbol.section_index()?;
+        let section = file.section_by_index(section_index).ok()?;
+        Some((version, symbol, section))
+    })
 }

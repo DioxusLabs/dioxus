@@ -1958,16 +1958,6 @@ impl AppBuilder {
     ///      915ms   8.0% Extracting assets    |                          █████████                                                             |
     ///     1529ms  13.4% Writing executable   |                                  ██████████████                                                |
     ///     4685ms  41.2% Wasm Bindgen         |                                               █████████████████████████████████████████        |
-    ///        0ms   0.0% Writing frameworks   |                                                                                       █        |
-    ///        1ms   0.0% Writing assets       |                                                                                       █        |
-    ///        0ms   0.0% Copying Assets       |                                                                                       █        |
-    ///        0ms   0.0% Writing metadata     |                                                                                       █        |
-    ///        0ms   0.0% Writing ffi          |                                                                                       █        |
-    ///        0ms   0.0% Running optimizer    |                                                                                       █        |
-    ///        0ms   0.0% Optimizing Bundle    |                                                                                       █        |
-    ///        0ms   0.0% Running assemble     |                                                                                       █        |
-    ///        0ms   0.0% Assembling Bundle    |                                                                                       █        |
-    ///        0ms   0.0% Populating cache     |                                                                                       █        |
     ///     1061ms   9.3% Creating Patch Cache |                                                                                       █████████|
     fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
         let Some(start) = self.compile_start else {

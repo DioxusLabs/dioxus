@@ -320,11 +320,10 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AssetManifest};
+use crate::opt::{process_file_to, AppManifest};
 use crate::{
-    AndroidTools, AppManifest, BuildContext, BuildId, BundleFormat, DioxusConfig, Error,
-    LinkAction, LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs,
-    TraceSrc, WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
+    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, ensure, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -335,7 +334,6 @@ use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
-use manganis_core::{AndroidArtifactMetadata, AssetVariant};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -477,7 +475,7 @@ pub struct BuildArtifacts {
     pub(crate) artifact_paths: HashMap<String, PathBuf>,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
-    pub(crate) assets: AssetManifest,
+    pub(crate) assets: AppManifest,
 
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
@@ -1190,7 +1188,7 @@ impl BuildRequest {
             _ => self.get_unit_count_estimate(&ctx.mode).await,
         };
 
-        // Spawn the cargo build
+        // Spawn the `cargo rustc` or `rustc` command
         let mut child = self
             .cargo_build_command(&ctx.mode)?
             .stdout(Stdio::piped())
@@ -1543,7 +1541,7 @@ impl BuildRequest {
         &self,
         exe: &Path,
         ctx: &BuildContext,
-    ) -> Result<AssetManifest> {
+    ) -> Result<AppManifest> {
         use super::assets::extract_symbols_from_file;
 
         let skip_assets = self.skip_assets;
@@ -1551,7 +1549,7 @@ impl BuildRequest {
         let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
         if skip_assets && !needs_android_artifacts && !needs_swift_packages {
-            return Ok(AssetManifest::default());
+            return Ok(AppManifest::new(self.workspace.rustc_version.clone()));
         }
 
         ctx.status_extracting_assets();
@@ -1584,111 +1582,9 @@ impl BuildRequest {
         Ok(manifest)
     }
 
-    /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
-    ///
-    /// This function handles both prebuilt AARs and source folders:
-    /// - If `artifact_path` is a file (ends in .aar), copy it to libs/ and add file dependency
-    /// - If `artifact_path` is a directory, copy it as a Gradle submodule and add project dependency
-    ///
-    /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
-    fn install_android_artifacts(
-        &self,
-        android_artifacts: &[AndroidArtifactMetadata],
-    ) -> Result<()> {
-        let libs_dir = self.root_dir().join("app").join("libs");
-        std::fs::create_dir_all(&libs_dir)?;
-
-        let plugins_dir = self.root_dir().join("plugins");
-        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
-        let settings_gradle = self.root_dir().join("settings.gradle");
-
-        for artifact in android_artifacts {
-            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
-            let plugin_name = artifact.plugin_name.as_str();
-
-            if artifact_path.is_dir() {
-                // It's a source folder - copy it as a Gradle submodule
-                tracing::debug!(
-                    "Bundling Android plugin '{}' from source: {}",
-                    plugin_name,
-                    artifact_path.display()
-                );
-
-                // Create module directory
-                let module_dir = plugins_dir.join(plugin_name);
-                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
-
-                // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
-                self.strip_gradle_plugin_versions(&module_dir)?;
-
-                // Add to settings.gradle
-                self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
-
-                // Add project dependency to app/build.gradle.kts
-                let dep_line = format!("implementation(project(\":plugins:{}\"))", plugin_name);
-                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
-
-                tracing::debug!(
-                    "Added Android plugin module :plugins:{} from {}",
-                    plugin_name,
-                    artifact_path.display()
-                );
-            } else if artifact_path.extension().is_some_and(|ext| ext == "aar") {
-                // It's a prebuilt AAR - copy directly to libs
-                if !artifact_path.exists() {
-                    anyhow::bail!(
-                        "Android plugin artifact not found: {}",
-                        artifact_path.display()
-                    );
-                }
-
-                let filename = artifact_path
-                    .file_name()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Android plugin artifact path has no filename: {}",
-                            artifact_path.display()
-                        )
-                    })?
-                    .to_owned();
-                let dest_file = libs_dir.join(&filename);
-                std::fs::copy(&artifact_path, &dest_file)?;
-                tracing::debug!(
-                    "Copied Android artifact {} -> {}",
-                    artifact_path.display(),
-                    dest_file.display()
-                );
-
-                let dep_line = format!(
-                    "implementation(files(\"libs/{}\"))",
-                    filename.to_string_lossy()
-                );
-                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
-            } else {
-                anyhow::bail!(
-                    "Android artifact path is neither a directory nor an AAR file: {}",
-                    artifact_path.display()
-                );
-            }
-
-            // Add any extra Gradle dependencies specified by the plugin
-            for dependency in artifact
-                .gradle_dependencies
-                .as_str()
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-            {
-                self.ensure_gradle_dependency(&build_gradle, dependency)?;
-            }
-        }
-
-        Ok(())
-    }
-
     /// Recursively copy a directory and its contents.
     #[allow(clippy::only_used_in_recursion)]
-    fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+    pub(crate) fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
         std::fs::create_dir_all(dst)?;
 
         for entry in std::fs::read_dir(src)? {
@@ -1708,268 +1604,6 @@ impl BuildRequest {
             } else {
                 std::fs::copy(&src_path, &dst_path)?;
             }
-        }
-
-        Ok(())
-    }
-
-    /// Strip version specifiers from build.gradle.kts plugins block.
-    ///
-    /// When a plugin module is included as a subproject, having version specifiers in the
-    /// plugins block causes conflicts because the parent project already has the plugins
-    /// on the classpath. This function removes version specifications like:
-    /// - `version "8.4.2"` or `version "1.9.24"`
-    /// - Entire version calls from plugin declarations
-    fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
-        use std::fs;
-
-        let build_gradle = module_dir.join("build.gradle.kts");
-        if !build_gradle.exists() {
-            return Ok(());
-        }
-
-        let contents = fs::read_to_string(&build_gradle)?;
-
-        // Remove version specifications from plugin declarations
-        // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
-        // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
-        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
-        let cleaned = version_pattern.replace_all(&contents, "");
-
-        if cleaned != contents {
-            fs::write(&build_gradle, cleaned.as_ref())?;
-            tracing::debug!(
-                "Stripped version specifiers from {}",
-                build_gradle.display()
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Add a module include to settings.gradle if not already present.
-    fn ensure_settings_gradle_include(
-        &self,
-        settings_gradle: &Path,
-        plugin_name: &str,
-    ) -> Result<()> {
-        use std::fs;
-
-        let include_line = format!("include ':plugins:{}'", plugin_name);
-        let mut contents = fs::read_to_string(settings_gradle)?;
-
-        if contents.contains(&include_line) {
-            return Ok(());
-        }
-
-        // Add the include at the end
-        contents.push_str(&format!("\n{}\n", include_line));
-        fs::write(settings_gradle, contents)?;
-
-        Ok(())
-    }
-
-    /// Bundle and compile Swift packages from source into dynamic frameworks.
-    ///
-    /// This function:
-    /// 1. Calls ios_swift::compile_swift_sources to compile Swift packages
-    /// 2. The function creates proper .framework bundles from the dylibs
-    /// 3. Installs the frameworks to the app's Frameworks folder
-    async fn compile_swift_sources(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
-        if swift_sources.is_empty() {
-            return Ok(());
-        }
-
-        let build_dir = self.target_dir.join("swift-build");
-        std::fs::create_dir_all(&build_dir)?;
-
-        // Compile Swift sources and get the framework bundle path
-        let framework_path = super::ios_swift::compile_swift_sources(
-            swift_sources,
-            &self.triple,
-            &build_dir,
-            self.release,
-        )
-        .await?;
-
-        // If a framework was created, install it to the Frameworks folder
-        if let Some(framework) = framework_path {
-            self.install_swift_framework(&framework).await?;
-        }
-
-        Ok(())
-    }
-
-    /// Install a Swift framework bundle into the app's Frameworks directory.
-    async fn install_swift_framework(&self, framework_path: &Path) -> Result<()> {
-        let frameworks_dir = self.frameworks_folder();
-        std::fs::create_dir_all(&frameworks_dir)?;
-
-        let framework_name = framework_path
-            .file_name()
-            .ok_or_else(|| anyhow::anyhow!("Invalid framework path: no filename"))?;
-        let dest = frameworks_dir.join(framework_name);
-
-        // Remove existing framework if present
-        if dest.exists() {
-            std::fs::remove_dir_all(&dest)?;
-        }
-
-        // Copy the entire framework bundle
-        self.copy_build_dir_recursive(framework_path, &dest)?;
-
-        tracing::debug!(
-            "Installed Swift framework '{}' to {}",
-            framework_name.to_string_lossy(),
-            frameworks_dir.display()
-        );
-
-        Ok(())
-    }
-
-    /// Embed Swift standard libraries into the app bundle when Swift plugins are present.
-    async fn embed_swift_stdlibs(&self, swift_sources: &[SwiftPackageMetadata]) -> Result<()> {
-        if swift_sources.is_empty() {
-            return Ok(());
-        }
-
-        let platform_flag = match self.bundle {
-            BundleFormat::Ios => {
-                let triple_str = self.triple.to_string();
-                if triple_str.contains("sim") || triple_str.contains("x86_64") {
-                    "iphonesimulator"
-                } else {
-                    "iphoneos"
-                }
-            }
-            BundleFormat::MacOS => "macosx",
-            _ => return Ok(()),
-        };
-
-        let frameworks_dir = self.frameworks_folder();
-        std::fs::create_dir_all(&frameworks_dir)?;
-
-        let exe_path = self.main_exe();
-        if !exe_path.exists() {
-            anyhow::bail!(
-                "Expected executable at {} when embedding Swift stdlibs",
-                exe_path.display()
-            );
-        }
-
-        // Use swift-stdlib-tool to copy Swift runtime libraries needed by:
-        // 1. The main executable (--scan-executable)
-        // 2. Any Swift frameworks in the Frameworks folder (--scan-folder)
-        let output = Command::new("xcrun")
-            .arg("swift-stdlib-tool")
-            .arg("--copy")
-            .arg("--platform")
-            .arg(platform_flag)
-            .arg("--scan-executable")
-            .arg(&exe_path)
-            .arg("--scan-folder")
-            .arg(&frameworks_dir)
-            .arg("--destination")
-            .arg(&frameworks_dir)
-            .output()
-            .await?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            anyhow::bail!(
-                "swift-stdlib-tool failed: {}{}",
-                stderr.trim(),
-                if stdout.trim().is_empty() {
-                    "".to_string()
-                } else {
-                    format!(" | {}", stdout.trim())
-                }
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Compile and install Apple Widget Extensions from Dioxus.toml config.
-    ///
-    /// This processes widget extensions declared in `[[ios.widget_extensions]]` by:
-    /// 1. Compiling the Swift package as a Widget Extension executable
-    /// 2. Creating the .appex bundle structure with Info.plist
-    /// 3. Installing to the app's PlugIns folder
-    async fn compile_widget_extensions(&self) -> Result<()> {
-        let widget_configs = &self.config.ios.widget_extensions;
-        if widget_configs.is_empty() {
-            return Ok(());
-        }
-
-        tracing::debug!(
-            "Compiling {} Apple Widget Extension(s)",
-            widget_configs.len()
-        );
-
-        let build_dir = self.target_dir.join("widget-build");
-        std::fs::create_dir_all(&build_dir)?;
-
-        let app_bundle_id = self.bundle_identifier();
-        let default_deployment_target = self
-            .config
-            .ios
-            .deployment_target
-            .as_deref()
-            .unwrap_or("16.0");
-
-        let plugins_dir = self.plugins_folder();
-        std::fs::create_dir_all(&plugins_dir)?;
-
-        for widget_config in widget_configs {
-            let source_path = self.package_manifest_dir().join(&widget_config.source);
-            let deployment_target = widget_config
-                .deployment_target
-                .as_deref()
-                .unwrap_or(default_deployment_target);
-
-            let widget_source = super::ios_swift::AppleWidgetSource {
-                source_path,
-                display_name: widget_config.display_name.clone(),
-                bundle_id_suffix: widget_config.bundle_id_suffix.clone(),
-                deployment_target: deployment_target.to_string(),
-                module_name: widget_config.module_name.clone(),
-            };
-
-            let appex_path = super::ios_swift::compile_apple_widget(
-                &widget_source,
-                &self.triple,
-                &build_dir,
-                &app_bundle_id,
-                self.release,
-            )
-            .await
-            .with_context(|| {
-                format!(
-                    "Failed to compile widget extension '{}'",
-                    widget_source.display_name
-                )
-            })?;
-
-            // Install the .appex bundle to PlugIns/
-            let appex_name = appex_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Widget.appex".to_string());
-            let dest_path = plugins_dir.join(&appex_name);
-
-            if dest_path.exists() {
-                std::fs::remove_dir_all(&dest_path)?;
-            }
-
-            self.copy_build_dir_recursive(&appex_path, &dest_path)?;
-
-            tracing::debug!(
-                "Installed widget extension '{}' to {}",
-                widget_source.display_name,
-                dest_path.display()
-            );
         }
 
         Ok(())
@@ -2025,7 +1659,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    async fn write_frameworks(
+    pub async fn write_frameworks(
         &self,
         _ctx: &BuildContext,
         artifacts: &BuildArtifacts,
@@ -2107,7 +1741,7 @@ impl BuildRequest {
         Ok(())
     }
 
-    fn frameworks_folder(&self) -> PathBuf {
+    pub fn frameworks_folder(&self) -> PathBuf {
         match self.triple.operating_system {
             OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
                 self.root_dir().join("Contents").join("Frameworks")
@@ -2139,7 +1773,7 @@ impl BuildRequest {
 
     /// Get the folder where Apple Widget Extensions (.appex bundles) are installed.
     /// This is only applicable to iOS and macOS bundles.
-    fn plugins_folder(&self) -> PathBuf {
+    pub fn plugins_folder(&self) -> PathBuf {
         match self.triple.operating_system {
             OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
                 self.root_dir().join("Contents").join("PlugIns")
@@ -2152,7 +1786,7 @@ impl BuildRequest {
     /// Copy the assets out of the manifest and into the target location
     ///
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
-    async fn write_assets(&self, ctx: &BuildContext, assets: &AssetManifest) -> Result<()> {
+    async fn write_assets(&self, ctx: &BuildContext, assets: &AppManifest) -> Result<()> {
         // Server doesn't need assets - web will provide them
         if !ctx.is_primary_build() {
             return Ok(());
@@ -3003,7 +2637,7 @@ impl BuildRequest {
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
         ) {
             let workspace_dir = self.workspace_dir();
-            let swift_sources = super::ios_swift::extract_swift_metadata_from_link_args(
+            let swift_sources = super::apple::extract_swift_metadata_from_link_args(
                 &rustc_args.link_args,
                 &workspace_dir,
             );
@@ -3315,7 +2949,6 @@ impl BuildRequest {
                 for e in env.iter() {
                     tracing::trace!(": {}={}", e.0, e.1.to_string_lossy());
                 }
-
                 for a in args.iter() {
                     tracing::trace!(": {}", a);
                 }
@@ -3327,18 +2960,17 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                // if matches!(build_mode, BuildMode::Fat | BuildMode::Base { run: true }) {
-                // let args_dir = self.rustc_wrapper_args_scope_dir(build_mode)?;
-                let args_dir = self.rustc_wrapper_args_dir();
-                std::fs::create_dir_all(&args_dir)
-                    .context("Failed to create rustc wrapper args directory")?;
+                // Set the folder where dx will write its captured rustc args for replay
                 cmd.env(
                     DX_RUSTC_WRAPPER_ENV_VAR,
-                    dunce::canonicalize(&args_dir)
+                    dunce::canonicalize(&self.rustc_wrapper_args_dir())
                         .context("Failed to canonicalize rustc wrapper args dir")?,
                 );
+
+                // And then set the wrapper itself as dx. This will ensure both that dx captures the
+                // rustc args and the output hashes will not conflict with non-dx tools (cargo includes
+                // the RUSTC_WORKSPACE_WRAPPER value *in the artifact hash*)
                 cmd.env("RUSTC_WORKSPACE_WRAPPER", Workspace::path_to_dx()?);
-                // }
 
                 Ok(cmd)
             }
@@ -3629,285 +3261,6 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
-    /// Set the environment variables required for building on Android.
-    ///
-    /// This involves setting sysroots, CC, CXX, AR, and other environment variables along with
-    /// vars that cc-rs uses for its C/C++ compilation.
-    ///
-    /// We pulled the environment setup from `cargo ndk` and attempt to mimic its behavior to retain
-    /// compatibility with existing crates that work with `cargo ndk`.
-    ///
-    /// <https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102>
-    ///
-    /// cargo-ndk is MIT licensed.
-    ///
-    /// <https://github.com/bbqsrc/cargo-ndk>
-    fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
-        // Derived from getenv_with_target_prefixes in `cc` crate.
-        fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
-            #[inline]
-            fn env_var_with_key(key: String) -> Option<(String, String)> {
-                std::env::var(&key).map(|value| (key, value)).ok()
-            }
-
-            let triple_u = triple.replace('-', "_");
-            let most_specific_key = format!("{}_{}", var_base, triple);
-
-            env_var_with_key(most_specific_key.to_string())
-                .or_else(|| env_var_with_key(format!("{}_{}", var_base, triple_u)))
-                .or_else(|| env_var_with_key(format!("TARGET_{}", var_base)))
-                .or_else(|| env_var_with_key(var_base.to_string()))
-                .map(|(key, value)| (key, Some(value)))
-                .unwrap_or_else(|| (most_specific_key, None))
-        }
-
-        fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
-            format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
-        }
-
-        fn clang_target(rust_target: &str, api_level: u8) -> String {
-            let target = match rust_target {
-                "arm-linux-androideabi" => "armv7a-linux-androideabi",
-                "armv7-linux-androideabi" => "armv7a-linux-androideabi",
-                _ => rust_target,
-            };
-            format!("--target={target}{api_level}")
-        }
-
-        fn sysroot_target(rust_target: &str) -> &str {
-            (match rust_target {
-                "armv7-linux-androideabi" => "arm-linux-androideabi",
-                _ => rust_target,
-            }) as _
-        }
-        fn rt_builtins(rust_target: &str) -> &str {
-            (match rust_target {
-                "armv7-linux-androideabi" => "arm",
-                "aarch64-linux-android" => "aarch64",
-                "i686-linux-android" => "i686",
-                "x86_64-linux-android" => "x86_64",
-                _ => rust_target,
-            }) as _
-        }
-
-        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
-
-        let min_sdk_version = self.min_sdk_version_or_default();
-
-        let tools = self.workspace.android_tools()?;
-        let linker = tools.android_cc(&self.triple, min_sdk_version);
-        let ar_path = tools.ar_path();
-        let target_cc = tools.target_cc();
-        let target_cxx = tools.target_cxx();
-        let java_home = tools.java_home();
-        let ndk_home = tools.ndk.clone();
-        let sdk_root = tools.sdk();
-        tracing::debug!(
-            r#"Using android:
-            min_sdk_version: {min_sdk_version}
-            linker: {linker:?}
-            ar_path: {ar_path:?}
-            target_cc: {target_cc:?}
-            target_cxx: {target_cxx:?}
-            java_home: {java_home:?}
-            sdk_root: {sdk_root:?}
-            "#
-        );
-
-        if let Some(java_home) = &java_home {
-            tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
-            env_vars.push((
-                "DX_ANDROID_JAVA_HOME".into(),
-                java_home.clone().into_os_string(),
-            ));
-        }
-
-        env_vars.push((
-            "DX_ANDROID_NDK_HOME".into(),
-            ndk_home.clone().into_os_string(),
-        ));
-        env_vars.push((
-            "DX_ANDROID_SDK_ROOT".into(),
-            sdk_root.clone().into_os_string(),
-        ));
-        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
-        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
-        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
-        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
-
-        let triple = self.triple.to_string();
-
-        // Environment variables for the `cc` crate
-        let (cc_key, _cc_value) = cc_env("CC", &triple);
-        let (cflags_key, cflags_value) = cc_env("CFLAGS", &triple);
-        let (cxx_key, _cxx_value) = cc_env("CXX", &triple);
-        let (cxxflags_key, cxxflags_value) = cc_env("CXXFLAGS", &triple);
-        let (ar_key, _ar_value) = cc_env("AR", &triple);
-        let (ranlib_key, _ranlib_value) = cc_env("RANLIB", &triple);
-
-        // Environment variables for cargo
-        let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
-        let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
-        let bindgen_clang_args_key =
-            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
-
-        let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
-        let target_cc = tools.target_cc();
-        let target_cflags = match cflags_value {
-            Some(v) => format!("{clang_target} {v}"),
-            None => clang_target.to_string(),
-        };
-        let target_cxx = tools.target_cxx();
-        let target_cxxflags = match cxxflags_value {
-            Some(v) => format!("{clang_target} {v}"),
-            None => clang_target.to_string(),
-        };
-        let cargo_ndk_sysroot_path_key = "CARGO_NDK_SYSROOT_PATH";
-        let cargo_ndk_sysroot_path = tools.sysroot();
-        let cargo_ndk_sysroot_target_key = "CARGO_NDK_SYSROOT_TARGET";
-        let cargo_ndk_sysroot_target = sysroot_target(&triple);
-        let cargo_ndk_sysroot_libs_path_key = "CARGO_NDK_SYSROOT_LIBS_PATH";
-        let cargo_ndk_sysroot_libs_path = cargo_ndk_sysroot_path
-            .join("usr")
-            .join("lib")
-            .join(cargo_ndk_sysroot_target);
-        let target_ar = tools.ar_path();
-        let target_ranlib = tools.ranlib();
-        let clang_folder = tools.clang_folder();
-
-        // choose the clang target with the highest version
-        // Should we filter for only numbers?
-        let clang_rt = std::fs::read_dir(&clang_folder)
-            .map(|dir| {
-                let clang_builtins_target = dir
-                    .filter_map(|a| a.ok())
-                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-                    .map(|s| s.path())
-                    .unwrap_or_else(|| clang_folder.join("clang"));
-
-                format!(
-                    "-L{} -lstatic=clang_rt.builtins-{}-android",
-                    clang_builtins_target.join("lib").join("linux").display(),
-                    rt_builtins(&triple)
-                )
-            })
-            .unwrap_or_default();
-
-        let extra_include: String = format!(
-            "{}/usr/include/{}",
-            &cargo_ndk_sysroot_path.display(),
-            &cargo_ndk_sysroot_target
-        );
-
-        let bindgen_args = format!(
-            "--sysroot={} -I{}",
-            &cargo_ndk_sysroot_path.display(),
-            extra_include
-        );
-
-        // Load up the OpenSSL environment variables, using our defaults if not set.
-        // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
-        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple));
-        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| AndroidTools::openssl_include_dir());
-        let openssl_libs =
-            std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
-
-        for env in [
-            (cc_key, target_cc.clone().into_os_string()),
-            (cflags_key, target_cflags.into()),
-            (cxx_key, target_cxx.into_os_string()),
-            (cxxflags_key, target_cxxflags.into()),
-            (ar_key, target_ar.clone().into()),
-            (ranlib_key, target_ranlib.into_os_string()),
-            (cargo_ar_key, target_ar.into_os_string()),
-            (
-                cargo_ndk_sysroot_path_key.to_string(),
-                cargo_ndk_sysroot_path.clone().into_os_string(),
-            ),
-            (
-                cargo_ndk_sysroot_libs_path_key.to_string(),
-                cargo_ndk_sysroot_libs_path.into_os_string(),
-            ),
-            (
-                cargo_ndk_sysroot_target_key.to_string(),
-                cargo_ndk_sysroot_target.into(),
-            ),
-            (cargo_rust_flags_key, clang_rt.into()),
-            (bindgen_clang_args_key, bindgen_args.into()),
-            (
-                "ANDROID_NATIVE_API_LEVEL".to_string(),
-                min_sdk_version.to_string().into(),
-            ),
-            (
-                format!(
-                    "CARGO_TARGET_{}_LINKER",
-                    self.triple
-                        .to_string()
-                        .to_ascii_uppercase()
-                        .replace("-", "_")
-                ),
-                linker.into_os_string(),
-            ),
-            (
-                "ANDROID_NDK_ROOT".to_string(),
-                ndk_home.clone().into_os_string(),
-            ),
-            (
-                "OPENSSL_LIB_DIR".to_string(),
-                openssl_lib_dir.into_os_string(),
-            ),
-            (
-                "OPENSSL_INCLUDE_DIR".to_string(),
-                openssl_include_dir.into_os_string(),
-            ),
-            ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
-            // Set the wry env vars - this is where wry will dump its kotlin files.
-            // Their setup is really annoying and requires us to hardcode `dx` to specific versions of tao/wry.
-            (
-                "WRY_ANDROID_PACKAGE".to_string(),
-                "dev.dioxus.main".to_string().into(),
-            ),
-            (
-                "WRY_ANDROID_LIBRARY".to_string(),
-                self.android_lib_name().into(),
-            ),
-            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
-                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
-                // Ensure the directory exists for WRY's canonicalize check
-                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
-                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
-                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
-                }
-                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
-                kotlin_dir.into_os_string()
-            }),
-            // Found this through a comment related to bindgen using the wrong clang for cross compiles
-            //
-            // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
-            //
-            // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
-            ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
-        ] {
-            env_vars.push((env.0.into(), env.1));
-        }
-
-        if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
-            for var in env_vars.iter_mut() {
-                // Convert windows paths to unix-style paths
-                // This is a workaround for the fact that the `cc` crate expects unix-style paths
-                // and will fail if it encounters windows-style paths.
-                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
-            }
-        }
-
-        Ok(env_vars)
-    }
-
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
@@ -4033,7 +3386,7 @@ impl BuildRequest {
             .join(self.bundle.build_folder_name())
     }
 
-    fn platform_exe_name(&self) -> String {
+    pub fn platform_exe_name(&self) -> String {
         match self.bundle {
             // mac/ios are unixy and dont have an exe extension
             BundleFormat::MacOS | BundleFormat::Ios => self.executable_name().to_string(),
@@ -4065,345 +3418,6 @@ impl BuildRequest {
         }
     }
 
-    /// Assemble the android app dir.
-    ///
-    /// This is a bit of a mess since we need to create a lot of directories and files. Other approaches
-    /// would be to unpack some zip folder or something stored via `include_dir!()`. However, we do
-    /// need to customize the whole setup a bit, so it's just simpler (though messier) to do it this way.
-    fn build_android_app_dir(&self) -> Result<()> {
-        use std::fs::{create_dir_all, write};
-        let root = self.root_dir();
-
-        // gradle
-        let wrapper = root.join("gradle").join("wrapper");
-        create_dir_all(&wrapper)?;
-
-        // app
-        let app = root.join("app");
-        let app_main = app.join("src").join("main");
-        let app_kotlin = app_main.join("kotlin");
-        let app_java = app_main.join("java");
-        let app_jnilibs = app_main.join("jniLibs");
-        let app_assets = app_main.join("assets");
-        let app_kotlin_out = self.wry_android_kotlin_files_out_dir();
-        create_dir_all(&app)?;
-        create_dir_all(&app_main)?;
-        create_dir_all(&app_kotlin)?;
-        create_dir_all(&app_java)?;
-        create_dir_all(&app_jnilibs)?;
-        create_dir_all(&app_assets)?;
-        create_dir_all(&app_kotlin_out)?;
-
-        tracing::debug!(
-            r#"Initialized android dirs:
-- gradle:              {wrapper:?}
-- app/                 {app:?}
-- app/src:             {app_main:?}
-- app/src/kotlin:      {app_kotlin:?}
-- app/src/jniLibs:     {app_jnilibs:?}
-- app/src/assets:      {app_assets:?}
-- app/src/kotlin/main: {app_kotlin_out:?}
-"#
-        );
-
-        // handlebars
-        #[derive(Serialize)]
-        struct AndroidHandlebarsObjects {
-            application_id: String,
-            app_name: String,
-            version: String,
-            android_bundle: Option<crate::AndroidSettings>,
-            /// Android SDK version settings
-            min_sdk: u32,
-            target_sdk: u32,
-            compile_sdk: u32,
-            /// Android permission strings (e.g., "android.permission.CAMERA")
-            permissions: Vec<String>,
-            /// Android hardware features (e.g., "android.hardware.location.gps")
-            features: Vec<String>,
-            /// Raw manifest XML to inject
-            raw_manifest: String,
-            /// URL schemes for deep linking
-            url_schemes: Vec<String>,
-            /// App link hosts for auto-verified deep links
-            app_link_hosts: Vec<String>,
-            /// Pipe-joined foreground service type string (e.g., "location|mediaPlayback")
-            foreground_service_type: String,
-            /// Extra Gradle dependencies from [android] config
-            gradle_dependencies: Vec<String>,
-            /// Extra Gradle plugins from [android] config
-            gradle_plugins: Vec<String>,
-            /// Application-level manifest attributes from [android.application]
-            uses_cleartext_traffic: Option<bool>,
-            app_theme: Option<String>,
-            supports_rtl: Option<bool>,
-            large_heap: Option<bool>,
-            /// Native library name (without lib prefix and .so extension)
-            lib_name: String,
-        }
-
-        // Get permission mapper from config
-        let mapper = super::manifest_mapper::ManifestMapper::from_config(
-            &self.config.permissions,
-            &self.config.deep_links,
-            &self.config.background,
-            &self.config.android,
-            &self.config.ios,
-            &self.config.macos,
-        );
-
-        // Collect Android permissions
-        let permissions: Vec<String> = mapper
-            .android_permissions
-            .iter()
-            .map(|p| p.permission.clone())
-            .collect();
-
-        // Collect Android features from config
-        let features = self.config.android.features.clone();
-
-        // Get raw manifest XML
-        let raw_manifest = self.config.android.raw.manifest.clone().unwrap_or_default();
-
-        // Foreground service types as pipe-separated string
-        let foreground_service_type = mapper.android_foreground_service_types.join("|");
-
-        let hbs_data = AndroidHandlebarsObjects {
-            application_id: self.bundle_identifier(),
-            app_name: self.bundled_app_name(),
-            version: self.crate_version(),
-            android_bundle: self.config.bundle.android.clone(),
-            min_sdk: self.config.android.min_sdk.unwrap_or(24),
-            target_sdk: self.config.android.target_sdk.unwrap_or(34),
-            compile_sdk: self.config.android.compile_sdk.unwrap_or(34),
-            permissions,
-            features,
-            raw_manifest,
-            url_schemes: mapper.android_url_schemes,
-            app_link_hosts: mapper.android_app_link_hosts,
-            foreground_service_type,
-            gradle_dependencies: self.config.android.gradle_dependencies.clone(),
-            gradle_plugins: self.config.android.gradle_plugins.clone(),
-            uses_cleartext_traffic: self.config.android.application.uses_cleartext_traffic,
-            app_theme: self.config.android.application.theme.clone(),
-            supports_rtl: self.config.android.application.supports_rtl,
-            large_heap: self.config.android.application.large_heap,
-            lib_name: self.android_lib_name(),
-        };
-        let hbs = handlebars::Handlebars::new();
-
-        // Top-level gradle config
-        write(
-            root.join("build.gradle.kts"),
-            include_bytes!("../../assets/android/gen/build.gradle.kts"),
-        )?;
-        write(
-            root.join("gradle.properties"),
-            include_bytes!("../../assets/android/gen/gradle.properties"),
-        )?;
-        write(
-            root.join("gradlew"),
-            include_bytes!("../../assets/android/gen/gradlew"),
-        )?;
-        write(
-            root.join("gradlew.bat"),
-            include_bytes!("../../assets/android/gen/gradlew.bat"),
-        )?;
-        write(
-            root.join("settings.gradle"),
-            include_bytes!("../../assets/android/gen/settings.gradle"),
-        )?;
-
-        // Then the wrapper and its properties
-        write(
-            wrapper.join("gradle-wrapper.properties"),
-            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.properties"),
-        )?;
-        write(
-            wrapper.join("gradle-wrapper.jar"),
-            include_bytes!("../../assets/android/gen/gradle/wrapper/gradle-wrapper.jar"),
-        )?;
-
-        // Now the app directory
-        write(
-            app.join("build.gradle.kts"),
-            hbs.render_template(
-                include_str!("../../assets/android/gen/app/build.gradle.kts.hbs"),
-                &hbs_data,
-            )?,
-        )?;
-        write(
-            app.join("proguard-rules.pro"),
-            include_bytes!("../../assets/android/gen/app/proguard-rules.pro"),
-        )?;
-
-        // Copy additional ProGuard rule files from Dioxus.toml [android] config
-        for rule_file in &self.config.android.proguard_rules {
-            let src = self.package_manifest_dir().join(rule_file);
-            if src.exists() {
-                let dest_name = src
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                std::fs::copy(&src, app.join(&dest_name))?;
-                tracing::debug!("Copied ProGuard rules: {}", dest_name);
-            } else {
-                tracing::warn!("ProGuard rules file not found: {}", src.display());
-            }
-        }
-
-        let manifest_xml = match self.config.application.android_manifest.as_deref() {
-            Some(manifest) => std::fs::read_to_string(self.package_manifest_dir().join(manifest))
-                .context("Failed to locate custom AndroidManifest.xml")?,
-            _ => hbs.render_template(
-                include_str!("../../assets/android/gen/app/src/main/AndroidManifest.xml.hbs"),
-                &hbs_data,
-            )?,
-        };
-
-        write(
-            app.join("src").join("main").join("AndroidManifest.xml"),
-            manifest_xml,
-        )?;
-
-        // Write the main activity manually since tao dropped support for it
-        let main_activity = match self.config.application.android_main_activity.as_deref() {
-            Some(activity) => std::fs::read_to_string(self.package_manifest_dir().join(activity))
-                .context("Failed to locate custom MainActivity.kt")?,
-            _ => hbs.render_template(
-                include_str!("../../assets/android/MainActivity.kt.hbs"),
-                &hbs_data,
-            )?,
-        };
-        write(
-            self.wry_android_kotlin_files_out_dir()
-                .join("MainActivity.kt"),
-            main_activity,
-        )?;
-
-        // Write the res folder, containing stuff like default icons, colors, and menubars.
-        let res = app_main.join("res");
-        create_dir_all(&res)?;
-        create_dir_all(res.join("values"))?;
-        write(
-            res.join("values").join("strings.xml"),
-            hbs.render_template(
-                include_str!("../../assets/android/gen/app/src/main/res/values/strings.xml.hbs"),
-                &hbs_data,
-            )?,
-        )?;
-        write(
-            res.join("values").join("colors.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/res/values/colors.xml"),
-        )?;
-        write(
-            res.join("values").join("styles.xml"),
-            include_bytes!("../../assets/android/gen/app/src/main/res/values/styles.xml"),
-        )?;
-
-        create_dir_all(res.join("xml"))?;
-        write(
-            res.join("xml").join("network_security_config.xml"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/xml/network_security_config.xml"
-            ),
-        )?;
-
-        create_dir_all(res.join("drawable"))?;
-        write(
-            res.join("drawable").join("ic_launcher_background.xml"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/drawable/ic_launcher_background.xml"
-            ),
-        )?;
-        create_dir_all(res.join("drawable-v24"))?;
-        write(
-            res.join("drawable-v24").join("ic_launcher_foreground.xml"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/drawable-v24/ic_launcher_foreground.xml"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-anydpi-v26"))?;
-        write(
-            res.join("mipmap-anydpi-v26").join("ic_launcher.xml"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-hdpi"))?;
-        write(
-            res.join("mipmap-hdpi").join("ic_launcher.webp"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-hdpi/ic_launcher.webp"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-mdpi"))?;
-        write(
-            res.join("mipmap-mdpi").join("ic_launcher.webp"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-mdpi/ic_launcher.webp"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-xhdpi"))?;
-        write(
-            res.join("mipmap-xhdpi").join("ic_launcher.webp"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-xhdpi/ic_launcher.webp"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-xxhdpi"))?;
-        write(
-            res.join("mipmap-xxhdpi").join("ic_launcher.webp"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-xxhdpi/ic_launcher.webp"
-            ),
-        )?;
-        create_dir_all(res.join("mipmap-xxxhdpi"))?;
-        write(
-            res.join("mipmap-xxxhdpi").join("ic_launcher.webp"),
-            include_bytes!(
-                "../../assets/android/gen/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp"
-            ),
-        )?;
-
-        Ok(())
-    }
-
-    fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
-        let mut kotlin_dir = self
-            .root_dir()
-            .join("app")
-            .join("src")
-            .join("main")
-            .join("kotlin");
-
-        for segment in "dev.dioxus.main".split('.') {
-            kotlin_dir = kotlin_dir.join(segment);
-        }
-
-        kotlin_dir
-    }
-
-    fn ensure_gradle_dependency(&self, build_gradle: &Path, dependency_line: &str) -> Result<()> {
-        use std::fs;
-
-        let mut contents = fs::read_to_string(build_gradle)?;
-        if contents.contains(dependency_line) {
-            return Ok(());
-        }
-
-        if let Some(idx) = contents.find("dependencies {") {
-            let insert_pos = idx + "dependencies {".len();
-            contents.insert_str(insert_pos, &format!("\n    {dependency_line}"));
-        } else {
-            contents.push_str(&format!("\ndependencies {{\n    {dependency_line}\n}}\n"));
-        }
-
-        fs::write(build_gradle, contents)?;
-        Ok(())
-    }
-
     /// Get the directory where this app can write to for this session that's guaranteed to be stable
     /// for the same app. This is useful for emitting state like window position and size.
     ///
@@ -4413,7 +3427,6 @@ impl BuildRequest {
     }
 
     pub(crate) fn rustc_wrapper_args_dir(&self) -> PathBuf {
-        // self.session_cache_dir().join("rustc_wrapper_args")
         self.target_dir.join("dx").join("rustc-wrapper-cache")
     }
 
@@ -4497,16 +3510,6 @@ impl BuildRequest {
     /// Get the name of the package we are compiling
     pub(crate) fn executable_name(&self) -> &str {
         &self.crate_target.name
-    }
-
-    /// Android native library name (without `lib` prefix and `.so` extension).
-    /// Defaults to `"main"` per NativeActivity convention, overridable via `[android] lib_name`.
-    fn android_lib_name(&self) -> String {
-        self.config
-            .android
-            .lib_name
-            .clone()
-            .unwrap_or_else(|| "main".to_string())
     }
 
     /// Get the type of executable we are compiling
@@ -4755,7 +3758,7 @@ impl BuildRequest {
     }
 
     /// Get the crate version from Cargo.toml (e.g., "0.1.0")
-    fn crate_version(&self) -> String {
+    pub(crate) fn crate_version(&self) -> String {
         self.workspace.krates[self.crate_package]
             .version
             .to_string()
@@ -4969,445 +3972,6 @@ impl BuildRequest {
         Ok(())
     }
 
-    /// Check if assets should be pre_compressed. This will only be true in release mode if the user
-    /// has enabled pre_compress in the web config.
-    fn should_pre_compress_web_assets(&self, release: bool) -> bool {
-        self.config.web.pre_compress & release
-    }
-
-    /// Check if the wasm output should be bundled to an asset type app.
-    fn should_bundle_to_asset(&self) -> bool {
-        self.release && self.bundle == BundleFormat::Web
-    }
-
-    /// Bundle the web app
-    /// - Run wasm-bindgen
-    /// - Bundle split
-    /// - Run wasm-opt
-    /// - Register the .wasm and .js files with the asset system
-    async fn bundle_web(
-        &self,
-        ctx: &BuildContext,
-        exe: &Path,
-        assets: &mut AssetManifest,
-    ) -> Result<()> {
-        use crate::{wasm_bindgen::WasmBindgen, wasm_opt};
-        use std::fmt::Write;
-
-        // Locate the output of the build files and the bindgen output
-        // We'll fill these in a second if they don't already exist
-        let bindgen_outdir = self.wasm_bindgen_out_dir();
-        let post_bindgen_wasm = self.wasm_bindgen_wasm_output_file();
-        let should_bundle_split: bool = self.wasm_split;
-        let bindgen_version = self
-            .workspace
-            .wasm_bindgen_version()
-            .expect("this should have been checked by tool verification");
-
-        // Prepare any work dirs
-        _ = std::fs::remove_dir_all(&bindgen_outdir);
-        std::fs::create_dir_all(&bindgen_outdir)?;
-
-        // Lift the internal functions to exports
-        if ctx.mode == BuildMode::Fat {
-            let unprocessed = std::fs::read(exe)?;
-            let all_exported_bytes = crate::build::prepare_wasm_base_module(&unprocessed)?;
-            std::fs::write(exe, all_exported_bytes)?;
-        }
-
-        // Prepare our configuration
-        //
-        // we turn on debug symbols in dev mode
-        //
-        // We leave demangling to false since it's faster and these tools seem to prefer the raw symbols.
-        // todo(jon): investigate if the chrome extension needs them demangled or demangles them automatically.
-        let keep_debug = self.config.web.wasm_opt.debug
-            || self.debug_symbols
-            || self.wasm_split
-            || !self.release
-            || ctx.mode == BuildMode::Fat;
-        let keep_names = self.config.web.wasm_opt.keep_names
-            || self.keep_names
-            || self.wasm_split
-            || ctx.mode == BuildMode::Fat;
-        let demangle = false;
-        let wasm_opt_options = WasmOptConfig {
-            memory_packing: self.wasm_split,
-            debug: self.debug_symbols,
-            ..self.config.web.wasm_opt.clone()
-        };
-
-        // Run wasm-bindgen. Some of the options are not "optimal" but will be fixed up by wasm-opt
-        //
-        // There's performance implications here. Running with --debug is slower than without
-        // We're keeping around lld sections and names but wasm-opt will fix them
-        // todo(jon): investigate a good balance of wiping debug symbols during dev (or doing a double build?)
-        ctx.status_wasm_bindgen_start();
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "Running wasm-bindgen");
-        let start = std::time::Instant::now();
-        WasmBindgen::new(&bindgen_version)
-            .input_path(exe)
-            .target("web")
-            .debug(keep_debug)
-            .demangle(demangle)
-            .keep_debug(keep_debug)
-            .keep_lld_exports(true)
-            .out_name(self.executable_name())
-            .out_dir(&bindgen_outdir)
-            .remove_name_section(!keep_names)
-            .remove_producers_section(!keep_names)
-            .run()
-            .await
-            .context("Failed to generate wasm-bindgen bindings")?;
-        tracing::debug!(dx_src = ?TraceSrc::Bundle, "wasm-bindgen complete in {:?}", start.elapsed());
-
-        // Run bundle splitting if the user has requested it
-        // It's pretty expensive but because of rayon should be running separate threads, hopefully
-        // not blocking this thread. Dunno if that's true
-        if should_bundle_split {
-            ctx.status_splitting_bundle();
-
-            // Load the contents of these binaries since we need both of them
-            // We're going to use the default makeLoad glue from wasm-split
-            let original = std::fs::read(exe)?;
-            let bindgened = std::fs::read(&post_bindgen_wasm)?;
-            let mut glue = wasm_split_cli::MAKE_LOAD_JS.to_string();
-
-            // Run the emitter
-            let splitter = wasm_split_cli::Splitter::new(&original, &bindgened);
-            let modules = splitter
-                .context("Failed to parse wasm for splitter")?
-                .emit()
-                .context("Failed to emit wasm split modules")?;
-
-            // Write the chunks that contain shared imports
-            // These will be in the format of chunk_0_modulename.wasm - this is hardcoded in wasm-split
-            tracing::debug!("Writing split chunks to disk");
-            for (idx, chunk) in modules.chunks.iter().enumerate() {
-                let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
-                wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
-                writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
-                    base_path = self.base_path_or_default(),
-                    url = assets
-                        .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
-                )?;
-            }
-
-            // Write the modules that contain the entrypoints
-            tracing::debug!("Writing split modules to disk");
-            for (idx, module) in modules.modules.iter().enumerate() {
-                let comp_name = module
-                    .component_name
-                    .as_ref()
-                    .context("generated bindgen module has no name?")?;
-
-                let path = bindgen_outdir.join(format!("module_{idx}_{comp_name}.wasm"));
-                wasm_opt::write_wasm(&module.bytes, &path, &wasm_opt_options).await?;
-
-                let hash_id = module
-                    .hash_id
-                    .as_ref()
-                    .context("generated wasm-split bindgen module has no hash id?")?;
-
-                writeln!(
-                    glue,
-                    "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/{base_path}/assets/{url}\", [{deps}], fusedImports);",
-                    module = module.module_name,
-
-                    base_path = self.base_path_or_default(),
-
-                    // Again, register this wasm with the asset system
-                    url = assets
-                        .register_asset(&path, AssetOptions::builder().into_asset_options())?
-                        .bundled_path(),
-
-                    // This time, make sure to write the dependencies of this chunk
-                    // The names here are again, hardcoded in wasm-split - fix this eventually.
-                    deps = module
-                        .relies_on_chunks
-                        .iter()
-                        .map(|idx| format!("__wasm_split_load_chunk_{idx}"))
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )?;
-            }
-
-            // Write the js binding
-            // It's not registered as an asset since it will get included in the main.js file
-            let js_output_path = bindgen_outdir.join("__wasm_split.js");
-            std::fs::write(&js_output_path, &glue)?;
-
-            // Make sure to write some entropy to the main.js file so it gets a new hash
-            // If we don't do this, the main.js file will be cached and never pick up the chunk names
-            let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, glue.as_bytes());
-            std::fs::OpenOptions::new()
-                .append(true)
-                .open(self.wasm_bindgen_js_output_file())
-                .context("Failed to open main.js file")?
-                .write_all(format!("/*{uuid}*/").as_bytes())?;
-
-            // Write the main wasm_bindgen file and register it with the asset system
-            // This will overwrite the file in place
-            // We will wasm-opt it in just a second...
-            std::fs::write(&post_bindgen_wasm, modules.main.bytes).unwrap();
-        }
-
-        if matches!(ctx.mode, BuildMode::Fat) {
-            // add `export { __wbg_get_imports };` to the end of the wasmbindgen js file
-            let mut js = std::fs::read(self.wasm_bindgen_js_output_file())?;
-            writeln!(js, "\nexport {{ __wbg_get_imports }};")?;
-            std::fs::write(self.wasm_bindgen_js_output_file(), js)?;
-        }
-
-        // Make sure to optimize the main wasm file if requested or if bundle splitting
-        if should_bundle_split || self.release {
-            ctx.status_optimizing_wasm();
-            wasm_opt::optimize(&post_bindgen_wasm, &post_bindgen_wasm, &wasm_opt_options).await?;
-        }
-
-        if self.should_bundle_to_asset() {
-            // Make sure to register the main wasm file with the asset system
-            assets.register_asset(
-                &post_bindgen_wasm,
-                AssetOptions::builder().into_asset_options(),
-            )?;
-        }
-
-        // Now that the wasm is registered as an asset, we can write the js glue shim
-        self.write_js_glue_shim(assets)?;
-
-        if self.should_bundle_to_asset() {
-            // Register the main.js with the asset system so it bundles in the snippets and optimizes
-            assets.register_asset(
-                &self.wasm_bindgen_js_output_file(),
-                AssetOptions::js()
-                    .with_minify(true)
-                    .with_preload(true)
-                    .into_asset_options(),
-            )?;
-        }
-
-        // Write the index.html file with the pre-configured contents we got from pre-rendering
-        self.write_index_html(assets)?;
-
-        Ok(())
-    }
-
-    fn write_js_glue_shim(&self, assets: &AssetManifest) -> Result<()> {
-        let wasm_path = self.bundled_wasm_path(assets);
-
-        // Load and initialize wasm without requiring a separate javascript file.
-        // This also allows using a strict Content-Security-Policy.
-        let mut js = std::fs::OpenOptions::new()
-            .append(true)
-            .open(self.wasm_bindgen_js_output_file())?;
-        let mut buf_writer = std::io::BufWriter::new(&mut js);
-        writeln!(
-            buf_writer,
-            r#"
-globalThis.__wasm_split_main_initSync = initSync;
-
-// Actually perform the load
-__wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
-    // assign this module to be accessible globally
-    globalThis.__dx_mainWasm = wasm;
-    globalThis.__dx_mainInit = __wbg_init;
-    globalThis.__dx_mainInitSync = initSync;
-    globalThis.__dx___wbg_get_imports = __wbg_get_imports;
-
-    if (wasm.__wbindgen_start == undefined) {{
-        wasm.main();
-    }}
-}});
-"#,
-            self.base_path_or_default(),
-        )?;
-
-        Ok(())
-    }
-
-    /// Write the index.html file to the output directory. This must be called after the wasm and js
-    /// assets are registered with the asset system if this is a release build.
-    pub(crate) fn write_index_html(&self, assets: &AssetManifest) -> Result<()> {
-        let wasm_path = self.bundled_wasm_path(assets);
-        let js_path = self.bundled_js_path(assets);
-
-        // Write the index.html file with the pre-configured contents we got from pre-rendering
-        std::fs::write(
-            self.root_dir().join("index.html"),
-            self.prepare_html(assets, &wasm_path, &js_path).unwrap(),
-        )?;
-
-        Ok(())
-    }
-
-    fn bundled_js_path(&self, assets: &AssetManifest) -> String {
-        let wasm_bindgen_js_out = self.wasm_bindgen_js_output_file();
-        if self.should_bundle_to_asset() {
-            let name = assets
-                .get_first_asset_for_source(&wasm_bindgen_js_out)
-                .expect("The js source must exist before creating index.html");
-            format!("assets/{}", name.bundled_path())
-        } else {
-            format!(
-                "wasm/{}",
-                wasm_bindgen_js_out.file_name().unwrap().to_str().unwrap()
-            )
-        }
-    }
-
-    /// Get the path to the wasm-bindgen output files. Either the direct file or the optimized one depending on the build mode
-    fn bundled_wasm_path(&self, assets: &AssetManifest) -> String {
-        let wasm_bindgen_wasm_out = self.wasm_bindgen_wasm_output_file();
-        if self.should_bundle_to_asset() {
-            let name = assets
-                .get_first_asset_for_source(&wasm_bindgen_wasm_out)
-                .expect("The wasm source must exist before creating index.html");
-            format!("assets/{}", name.bundled_path())
-        } else {
-            format!(
-                "wasm/{}",
-                wasm_bindgen_wasm_out.file_name().unwrap().to_str().unwrap()
-            )
-        }
-    }
-
-    fn info_plist_contents(&self, bundle: BundleFormat) -> Result<String> {
-        /// A permission entry for plist (key + description)
-        #[derive(Serialize)]
-        struct PlistPermission {
-            key: String,
-            description: String,
-        }
-
-        #[derive(Serialize)]
-        pub struct InfoPlistData {
-            pub display_name: String,
-            pub bundle_name: String,
-            pub bundle_identifier: String,
-            pub executable_name: String,
-            /// App version string (from Cargo.toml)
-            pub version: String,
-            /// Permission usage descriptions
-            pub permissions: Vec<PlistPermission>,
-            /// Additional plist entries as raw XML
-            pub plist_entries: String,
-            /// Raw plist XML to inject
-            pub raw_plist: String,
-            /// Minimum system version (macOS only)
-            pub minimum_system_version: String,
-            /// URL schemes for deep linking
-            pub url_schemes: Vec<String>,
-            /// iOS UIBackgroundModes
-            pub background_modes: Vec<String>,
-        }
-
-        // Attempt to use the user's manually specified
-        let _app = &self.config.application;
-        match bundle {
-            BundleFormat::MacOS => {
-                if let Some(macos_info_plist) = _app.macos_info_plist.as_deref() {
-                    return Ok(std::fs::read_to_string(macos_info_plist)?);
-                }
-            }
-            BundleFormat::Ios => {
-                if let Some(macos_info_plist) = _app.ios_info_plist.as_deref() {
-                    return Ok(std::fs::read_to_string(macos_info_plist)?);
-                }
-            }
-            _ => {}
-        }
-
-        // Get permission mapper from config
-        let mapper = super::manifest_mapper::ManifestMapper::from_config(
-            &self.config.permissions,
-            &self.config.deep_links,
-            &self.config.background,
-            &self.config.android,
-            &self.config.ios,
-            &self.config.macos,
-        );
-
-        match bundle {
-            BundleFormat::MacOS => {
-                // Convert macOS plist entries to permission structs
-                let permissions: Vec<PlistPermission> = mapper
-                    .macos_plist_entries
-                    .iter()
-                    .map(|p| PlistPermission {
-                        key: p.key.clone(),
-                        description: p.value.clone(),
-                    })
-                    .collect();
-
-                // Generate plist entries from config
-                let plist_entries = generate_plist_entries(&self.config.macos.plist);
-                let raw_plist = self.config.macos.raw.info_plist.clone().unwrap_or_default();
-                let minimum_system_version = self
-                    .config
-                    .macos
-                    .minimum_system_version
-                    .clone()
-                    .unwrap_or_else(|| "10.15".to_string());
-
-                handlebars::Handlebars::new()
-                    .render_template(
-                        include_str!("../../assets/macos/mac.plist.hbs"),
-                        &InfoPlistData {
-                            display_name: self.bundled_app_name(),
-                            bundle_name: self.bundled_app_name(),
-                            executable_name: self.platform_exe_name(),
-                            bundle_identifier: self.bundle_identifier(),
-                            version: self.crate_version(),
-                            permissions,
-                            plist_entries,
-                            raw_plist,
-                            minimum_system_version,
-                            url_schemes: mapper.macos_url_schemes.clone(),
-                            background_modes: Vec::new(), // macOS doesn't use UIBackgroundModes
-                        },
-                    )
-                    .map_err(|e| e.into())
-            }
-            BundleFormat::Ios => {
-                // Convert iOS plist entries to permission structs
-                let permissions: Vec<PlistPermission> = mapper
-                    .ios_plist_entries
-                    .iter()
-                    .map(|p| PlistPermission {
-                        key: p.key.clone(),
-                        description: p.value.clone(),
-                    })
-                    .collect();
-
-                // Generate plist entries from config
-                let plist_entries = generate_plist_entries(&self.config.ios.plist);
-                let raw_plist = self.config.ios.raw.info_plist.clone().unwrap_or_default();
-
-                handlebars::Handlebars::new()
-                    .render_template(
-                        include_str!("../../assets/ios/ios.plist.hbs"),
-                        &InfoPlistData {
-                            display_name: self.bundled_app_name(),
-                            bundle_name: self.bundled_app_name(),
-                            executable_name: self.platform_exe_name(),
-                            bundle_identifier: self.bundle_identifier(),
-                            version: self.crate_version(),
-                            permissions,
-                            plist_entries,
-                            raw_plist,
-                            minimum_system_version: String::new(), // Not used for iOS
-                            url_schemes: mapper.ios_url_schemes.clone(),
-                            background_modes: mapper.ios_background_modes.clone(),
-                        },
-                    )
-                    .map_err(|e| e.into())
-            }
-            _ => Err(anyhow::anyhow!("Unsupported platform for Info.plist")),
-        }
-    }
-
     /// Run any final tools to produce apks or other artifacts we might need.
     ///
     /// This might include codesigning, zipping, creating an appimage, etc
@@ -5415,124 +3979,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         ctx.profile_phase("Assembling Bundle");
 
         if let BundleFormat::Android = self.bundle {
-            ctx.status_running_gradle();
-
-            // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-            let build_type = if self.release && self.config.bundle.android.is_some() {
-                "assembleRelease"
-            } else {
-                "assembleDebug"
-            };
-
-            let output = Command::new(self.gradle_exe()?)
-                .arg(build_type)
-                .current_dir(self.root_dir())
-                .output()
-                .await
-                .context("Failed to run gradle")?;
-
-            if !output.status.success() {
-                bail!(
-                    "Failed to assemble apk: {}",
-                    String::from_utf8_lossy(&output.stderr)
-                );
-            }
+            self.assemble_android(ctx).await?;
         }
 
         // if the triple is a ios or macos target, we need to codesign the binary
-        if matches!(
-            self.triple.operating_system,
-            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
-        ) && self.should_codesign
-        {
+        if self.is_apple_target() && self.should_codesign {
             self.codesign_apple(ctx).await?;
         }
 
         Ok(())
-    }
-
-    /// Run bundleRelease and return the path to the `.aab` file
-    ///
-    /// <https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and>
-    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
-        let output = Command::new(self.gradle_exe()?)
-            .arg("bundleRelease")
-            .current_dir(self.root_dir())
-            .output()
-            .await
-            .context("Failed to run gradle bundleRelease")?;
-
-        if !output.status.success() {
-            bail!(
-                "Failed to bundleRelease: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        let app_release = self
-            .root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("bundle")
-            .join("release");
-
-        // Rename it to Name-arch.aab
-        let from = app_release.join("app-release.aab");
-        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.triple));
-
-        std::fs::rename(from, &to).context("Failed to rename aab")?;
-
-        Ok(to)
-    }
-
-    fn gradle_exe(&self) -> Result<PathBuf> {
-        // make sure we can execute the gradlew script
-        #[cfg(unix)]
-        {
-            use std::os::unix::prelude::PermissionsExt;
-            std::fs::set_permissions(
-                self.root_dir().join("gradlew"),
-                std::fs::Permissions::from_mode(0o755),
-            )
-            .context("Failed to make gradlew executable")?;
-        }
-
-        let gradle_exec_name = match cfg!(windows) {
-            true => "gradlew.bat",
-            false => "gradlew",
-        };
-
-        Ok(self.root_dir().join(gradle_exec_name))
-    }
-
-    pub(crate) fn debug_apk_path(&self) -> PathBuf {
-        self.root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("apk")
-            .join("debug")
-            .join("app-debug.apk")
-    }
-
-    pub(crate) fn release_apk_path(&self) -> PathBuf {
-        self.root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("apk")
-            .join("release")
-            .join("app-release.apk")
-    }
-
-    pub(crate) fn android_apk_path(&self) -> PathBuf {
-        let assembled_release = self.release && self.config.bundle.android.is_some();
-        if assembled_release {
-            self.release_apk_path()
-        } else {
-            self.debug_apk_path()
-        }
     }
 
     /// We only really currently care about:
@@ -5543,7 +3998,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     /// - extra scaffolding
     ///
     /// It's not guaranteed that they're different from any other folder
-    pub(crate) fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
+    fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
         use std::fs::{create_dir_all, remove_dir_all};
         use std::sync::OnceLock;
 
@@ -5649,35 +4104,16 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
     }
 
-    /// Get the path to the wasm bindgen temporary output folder
-    fn wasm_bindgen_out_dir(&self) -> PathBuf {
-        self.root_dir().join("wasm")
-    }
-
-    /// Get the path to the wasm bindgen javascript output file
-    pub(crate) fn wasm_bindgen_js_output_file(&self) -> PathBuf {
-        self.wasm_bindgen_out_dir()
-            .join(self.executable_name())
-            .with_extension("js")
-    }
-
-    /// Get the path to the wasm bindgen wasm output file
-    pub(crate) fn wasm_bindgen_wasm_output_file(&self) -> PathBuf {
-        self.wasm_bindgen_out_dir()
-            .join(format!("{}_bg", self.executable_name()))
-            .with_extension("wasm")
-    }
-
     /// Get the path to the app manifest file
     ///
     /// This includes metadata about the build such as the bundle format, target triple, features, etc.
     /// Manifests are only written by the `PRIMARY` build.
-    pub(crate) fn app_manifest(&self) -> PathBuf {
+    pub(crate) fn app_manifest_file(&self) -> PathBuf {
         self.platform_dir().join(".manifest.json")
     }
 
     pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
-        let manifest_path = self.app_manifest();
+        let manifest_path = self.app_manifest_file();
         let manifest_data = std::fs::read_to_string(&manifest_path)
             .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
         let manifest: AppManifest = serde_json::from_str(&manifest_data)
@@ -5756,84 +4192,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         }
 
         Ok(())
-    }
-
-    async fn verify_web_tooling(&self) -> Result<()> {
-        // Wasm bindgen
-        let krate_bindgen_version =
-            self.workspace
-                .wasm_bindgen_version()
-                .ok_or(anyhow::anyhow!(
-                    "failed to detect wasm-bindgen version, unable to proceed"
-                ))?;
-
-        WasmBindgen::verify_install(&krate_bindgen_version).await?;
-
-        // esbuild is used for JS asset processing
-        let _esbuild_path = crate::esbuild::Esbuild::get_or_install().await?;
-
-        Ok(())
-    }
-
-    /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
-    ///
-    /// For ios, this would be just aarch64-apple-ios + aarch64-apple-ios-sim, as well as xcrun and xcode-select
-    ///
-    /// We don't auto-install these yet since we're not doing an architecture check. We assume most users
-    /// are running on an Apple Silicon Mac, but it would be confusing if we installed these when we actually
-    /// should be installing the x86 versions.
-    async fn verify_ios_tooling(&self) -> Result<()> {
-        // open the simulator
-        // _ = tokio::process::Command::new("open")
-        //     .arg("/Applications/Xcode.app/Contents/Developer/Applications/Simulator.app")
-        //     .output()
-        //     .await;
-
-        // Now xcrun to open the device
-        // todo: we should try and query the device list and/or parse it rather than hardcode this simulator
-        // _ = tokio::process::Command::new("xcrun")
-        //     .args(["simctl", "boot", "83AE3067-987F-4F85-AE3D-7079EF48C967"])
-        //     .output()
-        //     .await;
-
-        // if !rustup
-        //     .installed_toolchains
-        //     .contains(&"aarch64-apple-ios".to_string())
-        // {
-        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        // }
-
-        // if !rustup
-        //     .installed_toolchains
-        //     .contains(&"aarch64-apple-ios-sim".to_string())
-        // {
-        //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
-        // }
-
-        Ok(())
-    }
-
-    /// Check if the android tooling is installed
-    ///
-    /// looks for the android sdk + ndk
-    ///
-    /// will do its best to fill in the missing bits by exploring the sdk structure
-    /// IE will attempt to use the Java installed from android studio if possible.
-    async fn verify_android_tooling(&self) -> Result<()> {
-        let linker = self
-            .workspace
-            .android_tools()?
-            .android_cc(&self.triple, self.min_sdk_version_or_default());
-
-        tracing::debug!("Verifying android linker: {linker:?}");
-
-        if linker.exists() {
-            return Ok(());
-        }
-
-        bail!(
-            "Android linker not found at {linker:?}. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
-        );
     }
 
     /// Ensure the right dependencies are installed for linux apps.
@@ -6043,18 +4401,21 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
     ///
     /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
     /// target arg guarantees this will work.
+    ///
+    /// Each binary target has a fingerprinted location which we place under
+    /// `target/dx/.args/name-hash.lib.json`
+    ///
+    /// The hash includes the various args profile info that provide entropy to disambiguate the crate.
+    /// You might see `.args/serde-123.lib.json` in the same folder as `.args/serde-456.json` because
+    /// they might have different config flags, different target triples, different opt levels, etc.
     fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
         // Only bust fingerpint when doing builds
         if !matches!(ctx.mode, BuildMode::Fat) {
             return Ok(());
         }
 
-        let fingerprint_dir = self
-            .target_dir
-            .join(self.triple.to_string())
-            .join(&self.profile)
-            .join(".fingerprint");
-
+        // We need to find the workspace crates in our disk args index that don't have a cache entry.
+        // If a crate is missing, then we need to bust its fingerprint to ensure its args get captured.
         let busted = self.missing_workspace_rustc_capture_fingerprints(&ctx.mode)?;
         if busted.is_empty() {
             tracing::debug!(
@@ -6072,7 +4433,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // split at the last `-` used to separate the hash from the name
         // This causes to more aggressively bust hashes for all combinations of features
         // and fingerprints for this package since we're just ignoring the hash
-        if let Ok(entries) = std::fs::read_dir(&fingerprint_dir) {
+        if let Ok(entries) = std::fs::read_dir(self.cargo_fingeprint_dir()) {
             let mut removed = Vec::new();
             for entry in entries.flatten() {
                 if let Some(fname) = entry.file_name().to_str() {
@@ -6333,208 +4694,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         Ok(missing)
     }
 
-    /// Users create an index.html for their SPA if they want it
-    ///
-    /// We always write our wasm as main.js and main_bg.wasm
-    ///
-    /// In prod we run the optimizer which bundles everything together properly
-    ///
-    /// So their index.html needs to include main.js in the scripts otherwise nothing happens?
-    ///
-    /// Seems like every platform has a weird file that declares a bunch of stuff
-    /// - web: index.html
-    /// - ios: info.plist
-    /// - macos: info.plist
-    /// - linux: appimage root thing?
-    /// - android: androidmanifest.xml
-    ///
-    /// You also might different variants of these files (staging / prod) and different flavors (eu/us)
-    ///
-    /// web's index.html is weird since it's not just a bundle format but also a *content* format
-    pub(crate) fn prepare_html(
-        &self,
-        assets: &AssetManifest,
-        wasm_path: &str,
-        js_path: &str,
-    ) -> Result<String> {
-        let mut html = {
-            const DEV_DEFAULT_HTML: &str = include_str!("../../assets/web/dev.index.html");
-            const PROD_DEFAULT_HTML: &str = include_str!("../../assets/web/prod.index.html");
-
-            let crate_root: &Path = &self.crate_dir();
-            let custom_html_file = crate_root.join("index.html");
-            let default_html = match self.release {
-                true => PROD_DEFAULT_HTML,
-                false => DEV_DEFAULT_HTML,
-            };
-            std::fs::read_to_string(custom_html_file).unwrap_or_else(|_| String::from(default_html))
-        };
-
-        // Inject any resources from the config into the html
-        self.inject_resources(assets, &mut html)?;
-
-        // Inject loading scripts if they are not already present
-        self.inject_loading_scripts(assets, &mut html);
-
-        // Replace any special placeholders in the HTML with resolved values
-        self.replace_template_placeholders(&mut html, wasm_path, js_path);
-
-        let title = self.config.web.app.title.clone();
-        Self::replace_or_insert_before("{app_title}", "</title", &title, &mut html);
-
-        Ok(html)
-    }
-
-    fn is_dev_build(&self) -> bool {
-        !self.release
-    }
-
-    // Inject any resources from the config into the html
-    fn inject_resources(&self, assets: &AssetManifest, html: &mut String) -> Result<()> {
-        use std::fmt::Write;
-
-        // Collect all resources into a list of styles and scripts
-        let resources = &self.config.web.resource;
-        let mut style_list = resources.style.clone().unwrap_or_default();
-        let mut script_list = resources.script.clone().unwrap_or_default();
-
-        if self.is_dev_build() {
-            style_list.extend(resources.dev.style.iter().cloned());
-            script_list.extend(resources.dev.script.iter().cloned());
-        }
-
-        let mut head_resources = String::new();
-
-        // Add all styles to the head
-        for style in &style_list {
-            writeln!(
-                &mut head_resources,
-                "<link rel=\"stylesheet\" href=\"{}\">",
-                &style.to_str().unwrap(),
-            )?;
-        }
-
-        // Add all scripts to the head
-        for script in &script_list {
-            writeln!(
-                &mut head_resources,
-                "<script src=\"{}\"></script>",
-                &script.to_str().unwrap(),
-            )?;
-        }
-
-        // Add the base path to the head if this is a debug build
-        if self.is_dev_build() {
-            if let Some(base_path) = &self.trimmed_base_path() {
-                head_resources.push_str(&format_base_path_meta_element(base_path));
-            }
-        }
-
-        // Inject any resources from manganis into the head
-        for asset in assets.unique_assets() {
-            let asset_path = asset.bundled_path();
-            match asset.options().variant() {
-                AssetVariant::Css(css_options) => {
-                    if css_options.preloaded() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="style" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
-                    if css_options.static_head() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="stylesheet" href="/{{base_path}}/assets/{asset_path}" type="text/css">"#
-                        );
-                    }
-                }
-                AssetVariant::Image(image_options) => {
-                    if image_options.preloaded() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
-                }
-                AssetVariant::Js(js_options) => {
-                    if js_options.preloaded() {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="script" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
-                    if js_options.static_head() {
-                        _ = write!(
-                            head_resources,
-                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Do not preload the wasm file, because in Safari, preload as=fetch requires additional fetch() options to exactly match the network request
-        // And if they do not match then Safari downloads the wasm file twice.
-        // See https://github.com/wasm-bindgen/wasm-bindgen/blob/ac51055a4c39fa0affe02f7b63fb1d4c9b3ddfaf/crates/cli-support/src/js/mod.rs#L967
-        Self::replace_or_insert_before("{style_include}", "</head", &head_resources, html);
-
-        Ok(())
-    }
-
-    /// Inject loading scripts if they are not already present
-    fn inject_loading_scripts(&self, assets: &AssetManifest, html: &mut String) {
-        // If the current build opted out of injecting loading scripts, don't inject anything
-        if !self.inject_loading_scripts {
-            return;
-        }
-
-        // If not, insert the script
-        *html = html.replace(
-            "</body",
-            &format!(
-                r#"<script type="module" async src="/{}/{}"></script>
-            </body"#,
-                self.base_path_or_default(),
-                self.bundled_js_path(assets)
-            ),
-        );
-    }
-
-    /// Replace any special placeholders in the HTML with resolved values
-    fn replace_template_placeholders(&self, html: &mut String, wasm_path: &str, js_path: &str) {
-        let base_path = self.base_path_or_default();
-        *html = html.replace("{base_path}", base_path);
-
-        let app_name = &self.executable_name();
-
-        // If the html contains the old `{app_name}` placeholder, replace {app_name}_bg.wasm and {app_name}.js
-        // with the new paths
-        *html = html.replace("wasm/{app_name}_bg.wasm", wasm_path);
-        *html = html.replace("wasm/{app_name}.js", js_path);
-
-        // Otherwise replace the new placeholders
-        *html = html.replace("{wasm_path}", wasm_path);
-        *html = html.replace("{js_path}", js_path);
-
-        // Replace the app_name if we find it anywhere standalone
-        *html = html.replace("{app_name}", app_name);
-    }
-
-    /// Replace a string or insert the new contents before a marker
-    fn replace_or_insert_before(
-        replace: &str,
-        or_insert_before: &str,
-        with: &str,
-        content: &mut String,
-    ) {
-        if content.contains(replace) {
-            *content = content.replace(replace, with);
-        } else if let Some(pos) = content.find(or_insert_before) {
-            content.insert_str(pos, with);
-        }
-    }
-
     /// Resolve the configured public directory relative to the crate, if any.
     pub(crate) fn user_public_dir(&self) -> Option<PathBuf> {
         let path = self.config.application.public_dir.as_ref()?;
@@ -6548,19 +4707,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         } else {
             self.crate_dir().join(path)
         })
-    }
-
-    pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
-        let Some(static_dir) = self.user_public_dir() else {
-            return false;
-        };
-
-        // Canonicalize when possible so we work with editors that use tmp files
-        let canonical_static =
-            dunce::canonicalize(&static_dir).unwrap_or_else(|_| static_dir.clone());
-        let canonical_path = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-
-        canonical_path.starts_with(&canonical_static)
     }
 
     /// Get the base path from the config or None if this is not a web or server build
@@ -6591,14 +4737,6 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .unwrap()
             .to_path_buf()
             .into()
-    }
-
-    /// Returns the min sdk version set in config. If not set 24 is returned as a default.
-    pub(crate) fn min_sdk_version_or_default(&self) -> u32 {
-        self.config
-            .application
-            .android_min_sdk_version
-            .unwrap_or(28)
     }
 
     pub(crate) async fn start_simulators(&self) -> Result<()> {
@@ -6781,566 +4919,9 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .collect()
     }
 
-    pub async fn codesign_apple(&self, ctx: &BuildContext) -> Result<()> {
-        ctx.status_codesigning();
-
-        // We don't want to drop the entitlements file, until the end of the block, so we hoist it to this temporary.
-        let mut _saved_entitlements = None;
-
-        let mut app_dev_name = self.apple_team_id.clone();
-        if app_dev_name.is_none() {
-            app_dev_name = Some(Self::auto_provision_signing_name().await.context(
-                "Failed to automatically provision signing name for Apple codesigning.",
-            )?);
-        }
-
-        let mut entitlements_file = self.apple_entitlements.clone();
-        let mut provisioning_profile_path = None;
-        if entitlements_file.is_none() {
-            let bundle_id = self.bundle_identifier();
-            let (entitlements_xml, profile_path) = Self::auto_provision_entitlements(&bundle_id)
-                .await
-                .context("Failed to auto-provision entitlements for Apple codesigning.")?;
-
-            // Enrich with entitlements from Dioxus.toml config
-            let entitlements_xml = self.enrich_entitlements_from_config(entitlements_xml)?;
-
-            let entitlements_temp_file = tempfile::NamedTempFile::new()?;
-            std::fs::write(entitlements_temp_file.path(), entitlements_xml)?;
-            entitlements_file = Some(entitlements_temp_file.path().to_path_buf());
-            provisioning_profile_path = Some(profile_path);
-            _saved_entitlements = Some(entitlements_temp_file);
-        }
-
-        let entitlements_file = entitlements_file.as_ref().context(
-            "No entitlements file provided and could not provision entitlements to sign app.",
-        )?;
-        let app_dev_name = app_dev_name.as_ref().context(
-            "No Apple Development signing name provided and could not auto-provision one.",
-        )?;
-
-        tracing::debug!(
-            "Codesigning Apple app with entitlements: {} and dev name: {}",
-            entitlements_file.display(),
-            app_dev_name
-        );
-
-        // determine the target exe - the server and macos bundles are different
-        let target_exe = match self.bundle {
-            BundleFormat::MacOS => self.root_dir(),
-            BundleFormat::Ios => self.root_dir(),
-            BundleFormat::Server => self.main_exe(),
-            _ => bail!("Codesigning is only supported for MacOS and iOS bundles"),
-        };
-
-        // iOS devices require the provisioning profile to be embedded in the .app bundle
-        if self.bundle == BundleFormat::Ios {
-            if let Some(profile_path) = &provisioning_profile_path {
-                let dest = target_exe.join("embedded.mobileprovision");
-                std::fs::copy(profile_path, &dest)
-                    .context("Failed to embed provisioning profile into .app bundle")?;
-            }
-        }
-
-        // codesign the app
-        let output = Command::new("codesign")
-            .args([
-                "--force",
-                "--entitlements",
-                entitlements_file.to_str().unwrap(),
-                "--sign",
-                app_dev_name,
-            ])
-            .arg(target_exe)
-            .output()
-            .await
-            .context("Failed to codesign the app - is `codesign` in your path?")?;
-
-        if !output.status.success() {
-            bail!(
-                "Failed to codesign the app: {}",
-                String::from_utf8(output.stderr).unwrap_or_default()
-            );
-        }
-
-        Ok(())
-    }
-
-    async fn auto_provision_signing_name() -> Result<String> {
-        let identities = Command::new("security")
-            .args(["find-identity", "-v", "-p", "codesigning"])
-            .output()
-            .await
-            .context("Failed to run `security find-identity -v -p codesigning` - is `security` in your path?")
-            .map(|e| {
-                String::from_utf8(e.stdout)
-                    .context("Failed to parse `security find-identity -v -p codesigning`")
-            })??;
-
-        // Parsing this:
-        // 1231231231231asdasdads123123 "Apple Development: foo@gmail.com (XYZYZY)"
-        let app_dev_name = regex::Regex::new(r#""Apple Development: (.+)""#)
-            .unwrap()
-            .captures(&identities)
-            .and_then(|caps| caps.get(1))
-            .map(|m| m.as_str())
-            .context(
-                "Failed to find Apple Development in `security find-identity -v -p codesigning`",
-            )?;
-
-        Ok(app_dev_name.to_string())
-    }
-
-    /// Enrich auto-provisioned entitlements XML with config from Dioxus.toml.
-    ///
-    /// Injects entitlements from `[ios.entitlements]` or `[macos.entitlements]` sections
-    /// and associated domains from `[deep_links]` into the base entitlements XML.
-    fn enrich_entitlements_from_config(&self, base_xml: String) -> Result<String> {
-        let mut extra_entries = String::new();
-
-        match self.bundle {
-            BundleFormat::Ios => {
-                let ent = &self.config.ios.entitlements;
-
-                // Associated domains (from deep_links.hosts + ios.entitlements.associated-domains)
-                let mapper = super::manifest_mapper::ManifestMapper::from_config(
-                    &self.config.permissions,
-                    &self.config.deep_links,
-                    &self.config.background,
-                    &self.config.android,
-                    &self.config.ios,
-                    &self.config.macos,
-                );
-                let mut domains: Vec<String> = mapper.ios_associated_domains;
-                domains.extend(ent.associated_domains.clone());
-                domains.dedup();
-                if !domains.is_empty() {
-                    extra_entries.push_str(
-                        "    <key>com.apple.developer.associated-domains</key>\n    <array>\n",
-                    );
-                    for domain in &domains {
-                        extra_entries.push_str(&format!("        <string>{domain}</string>\n"));
-                    }
-                    extra_entries.push_str("    </array>\n");
-                }
-
-                // App groups
-                if !ent.app_groups.is_empty() {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.application-groups</key>\n    <array>\n",
-                    );
-                    for group in &ent.app_groups {
-                        extra_entries.push_str(&format!("        <string>{group}</string>\n"));
-                    }
-                    extra_entries.push_str("    </array>\n");
-                }
-
-                // APS environment (push notifications)
-                if let Some(env) = &ent.aps_environment {
-                    extra_entries.push_str(&format!(
-                        "    <key>aps-environment</key>\n    <string>{env}</string>\n"
-                    ));
-                }
-
-                // iCloud
-                if ent.icloud {
-                    extra_entries.push_str(
-                        "    <key>com.apple.developer.icloud-container-identifiers</key>\n    <array/>\n\
-                         <key>com.apple.developer.icloud-services</key>\n    <array>\n        <string>CloudDocuments</string>\n    </array>\n"
-                    );
-                }
-
-                // Keychain access groups
-                // (base entitlements already include one from provisioning profile, only add extras)
-                if !ent.keychain_access_groups.is_empty() {
-                    extra_entries.push_str("    <key>keychain-access-groups</key>\n    <array>\n");
-                    for group in &ent.keychain_access_groups {
-                        extra_entries.push_str(&format!("        <string>{group}</string>\n"));
-                    }
-                    extra_entries.push_str("    </array>\n");
-                }
-
-                // Apple Pay
-                if ent.apple_pay {
-                    extra_entries.push_str(
-                        "    <key>com.apple.developer.in-app-payments</key>\n    <array>\n        <string>merchant.*</string>\n    </array>\n"
-                    );
-                }
-
-                // HealthKit
-                if ent.healthkit {
-                    extra_entries
-                        .push_str("    <key>com.apple.developer.healthkit</key>\n    <true/>\n");
-                }
-
-                // HomeKit
-                if ent.homekit {
-                    extra_entries
-                        .push_str("    <key>com.apple.developer.homekit</key>\n    <true/>\n");
-                }
-
-                // Additional entitlements from the flat map
-                for (key, value) in &ent.additional {
-                    extra_entries.push_str(&format!(
-                        "    <key>{key}</key>\n    {}\n",
-                        value_to_plist_xml(value, 1)
-                    ));
-                }
-
-                // Raw entitlements XML
-                if let Some(raw) = &self.config.ios.raw.entitlements {
-                    extra_entries.push_str(raw);
-                    extra_entries.push('\n');
-                }
-            }
-            BundleFormat::MacOS => {
-                let ent = &self.config.macos.entitlements;
-
-                // App Sandbox
-                if let Some(v) = ent.app_sandbox {
-                    extra_entries.push_str(&format!(
-                        "    <key>com.apple.security.app-sandbox</key>\n    <{v}/>\n"
-                    ));
-                }
-
-                // File access
-                if let Some(true) = ent.files_user_selected {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.files.user-selected.read-write</key>\n    <true/>\n"
-                    );
-                }
-                if let Some(true) = ent.files_user_selected_readonly {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.files.user-selected.read-only</key>\n    <true/>\n"
-                    );
-                }
-
-                // Network
-                if let Some(true) = ent.network_client {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.network.client</key>\n    <true/>\n",
-                    );
-                }
-                if let Some(true) = ent.network_server {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.network.server</key>\n    <true/>\n",
-                    );
-                }
-
-                // Device access
-                if let Some(true) = ent.camera {
-                    extra_entries
-                        .push_str("    <key>com.apple.security.device.camera</key>\n    <true/>\n");
-                }
-                if let Some(true) = ent.microphone {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.device.microphone</key>\n    <true/>\n",
-                    );
-                }
-                if let Some(true) = ent.usb {
-                    extra_entries
-                        .push_str("    <key>com.apple.security.device.usb</key>\n    <true/>\n");
-                }
-                if let Some(true) = ent.bluetooth {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.device.bluetooth</key>\n    <true/>\n",
-                    );
-                }
-                if let Some(true) = ent.print {
-                    extra_entries
-                        .push_str("    <key>com.apple.security.print</key>\n    <true/>\n");
-                }
-
-                // Personal information
-                if let Some(true) = ent.location {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.personal-information.location</key>\n    <true/>\n"
-                    );
-                }
-                if let Some(true) = ent.addressbook {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.personal-information.addressbook</key>\n    <true/>\n"
-                    );
-                }
-                if let Some(true) = ent.calendars {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.personal-information.calendars</key>\n    <true/>\n"
-                    );
-                }
-
-                // Runtime exceptions
-                if let Some(true) = ent.disable_library_validation {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.cs.disable-library-validation</key>\n    <true/>\n"
-                    );
-                }
-                if let Some(true) = ent.allow_jit {
-                    extra_entries
-                        .push_str("    <key>com.apple.security.cs.allow-jit</key>\n    <true/>\n");
-                }
-                if let Some(true) = ent.allow_unsigned_executable_memory {
-                    extra_entries.push_str(
-                        "    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>\n    <true/>\n"
-                    );
-                }
-
-                // Additional entitlements from the flat map
-                for (key, value) in &ent.additional {
-                    extra_entries.push_str(&format!(
-                        "    <key>{key}</key>\n    {}\n",
-                        value_to_plist_xml(value, 1)
-                    ));
-                }
-
-                // Raw entitlements XML
-                if let Some(raw) = &self.config.macos.raw.entitlements {
-                    extra_entries.push_str(raw);
-                    extra_entries.push('\n');
-                }
-            }
-            _ => {}
-        }
-
-        if extra_entries.is_empty() {
-            return Ok(base_xml);
-        }
-
-        // Insert before closing </dict></plist>
-        if let Some(pos) = base_xml.rfind("</dict>") {
-            let mut enriched = base_xml[..pos].to_string();
-            enriched.push_str(&extra_entries);
-            enriched.push_str(&base_xml[pos..]);
-            Ok(enriched)
-        } else {
-            tracing::warn!("Could not find </dict> in entitlements XML to inject config entries");
-            Ok(base_xml)
-        }
-    }
-
-    async fn auto_provision_entitlements(bundle_id: &str) -> Result<(String, PathBuf)> {
-        const CODESIGN_ERROR: &str = r#"This is likely because you haven't
-- Created a provisioning profile before
-- Accepted the Apple Developer Program License Agreement
-
-The agreement changes frequently and might need to be accepted again.
-To accept the agreement, go to https://developer.apple.com/account
-
-To create a provisioning profile, follow the instructions here:
-https://developer.apple.com/documentation/xcode/sharing-your-teams-signing-certificates"#;
-
-        // Check the xcode 16 location first
-        let mut profiles_folder = dirs::home_dir()
-            .context("Your machine has no home-dir")?
-            .join("Library/Developer/Xcode/UserData/Provisioning Profiles");
-
-        // If it doesn't exist, check the old location
-        if !profiles_folder.exists() {
-            profiles_folder = dirs::home_dir()
-                .context("Your machine has no home-dir")?
-                .join("Library/MobileDevice/Provisioning Profiles");
-        }
-
-        if !profiles_folder.exists() || profiles_folder.read_dir()?.next().is_none() {
-            tracing::error!(
-                r#"No provisioning profiles found when trying to codesign the app.
-We checked the folders:
-- XCode16: ~/Library/Developer/Xcode/UserData/Provisioning Profiles
-- XCode15: ~/Library/MobileDevice/Provisioning Profiles
-
-{CODESIGN_ERROR}
-"#
-            )
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct ProvisioningProfile {
-            #[serde(rename = "TeamIdentifier")]
-            team_identifier: Vec<String>,
-            #[serde(rename = "Entitlements")]
-            entitlements: ProfileEntitlements,
-            #[allow(dead_code)]
-            #[serde(rename = "ApplicationIdentifierPrefix")]
-            application_identifier_prefix: Vec<String>,
-            #[serde(rename = "ProvisionedDevices", default)]
-            provisioned_devices: Vec<String>,
-        }
-
-        #[derive(serde::Deserialize, Debug)]
-        struct ProfileEntitlements {
-            #[serde(rename = "application-identifier")]
-            application_identifier: String,
-            #[serde(rename = "keychain-access-groups")]
-            keychain_access_groups: Vec<String>,
-        }
-
-        // The .mobileprovision file has some random binary thrown into it, but it's still basically a plist
-        // Let's use the plist markers to find the start and end of the plist
-        fn cut_plist(bytes: &[u8], byte_match: &[u8]) -> Option<usize> {
-            bytes
-                .windows(byte_match.len())
-                .enumerate()
-                .rev()
-                .find(|(_, slice)| *slice == byte_match)
-                .map(|(i, _)| i + byte_match.len())
-        }
-
-        fn parse_profile(path: &Path) -> Result<ProvisioningProfile> {
-            let bytes = std::fs::read(path)?;
-            let cut1 =
-                cut_plist(&bytes, b"<plist").context("Failed to parse .mobileprovision file")?;
-            let cut2 = cut_plist(&bytes, r#"</dict>"#.as_bytes())
-                .context("Failed to parse .mobileprovision file")?;
-            let sub_bytes = &bytes[(cut1 - 6)..cut2];
-            plist::from_bytes(sub_bytes).context("Failed to parse .mobileprovision file")
-        }
-
-        /// Check if a provisioning profile's application-identifier matches the given bundle ID.
-        /// The app ID is in the format "TEAMID.com.example.app" or "TEAMID.*" for wildcard profiles.
-        fn profile_matches_bundle_id(app_identifier: &str, bundle_id: &str) -> bool {
-            // Strip the team ID prefix (everything before and including the first dot)
-            let app_id_suffix = match app_identifier.split_once('.') {
-                Some((_, suffix)) => suffix,
-                None => return false,
-            };
-
-            // Wildcard profile matches everything
-            if app_id_suffix == "*" {
-                return true;
-            }
-
-            // Check exact match
-            if app_id_suffix == bundle_id {
-                return true;
-            }
-
-            // Check wildcard prefix match (e.g. "com.example.*" matches "com.example.app")
-            if let Some(prefix) = app_id_suffix.strip_suffix(".*") {
-                return bundle_id.starts_with(prefix);
-            }
-
-            false
-        }
-
-        // Collect all provisioning profiles and find the best match for the bundle ID.
-        // Priority: exact app ID match > more provisioned devices > newer file.
-        let mut best_match: Option<(PathBuf, ProvisioningProfile, bool, usize)> = None;
-
-        for entry in profiles_folder.read_dir()?.flatten() {
-            let path = entry.path();
-            let is_mobileprovision = path
-                .extension()
-                .map(|e| e == "mobileprovision")
-                .unwrap_or(false);
-
-            if !is_mobileprovision {
-                continue;
-            }
-
-            let profile = match parse_profile(&path) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::debug!("Skipping profile {}: {e}", path.display());
-                    continue;
-                }
-            };
-
-            let app_id = &profile.entitlements.application_identifier;
-            if !profile_matches_bundle_id(app_id, bundle_id) {
-                tracing::debug!(
-                    "Skipping profile {} (app ID {app_id} does not match bundle ID {bundle_id})",
-                    path.display()
-                );
-                continue;
-            }
-
-            let is_exact = !app_id.ends_with(".*") && !app_id.ends_with("*");
-            let num_devices = profile.provisioned_devices.len();
-
-            tracing::debug!(
-                "Found matching profile {} (app ID: {app_id}, exact: {is_exact}, devices: {num_devices})",
-                path.display()
-            );
-
-            // Prefer: exact match > more provisioned devices (newer profiles have more devices)
-            let dominated = match &best_match {
-                Some((_, _, prev_exact, prev_devices)) => {
-                    if *prev_exact && !is_exact {
-                        true // existing exact match beats wildcard
-                    } else if is_exact && !*prev_exact {
-                        false // new exact match beats existing wildcard
-                    } else {
-                        // same specificity — prefer more provisioned devices
-                        num_devices <= *prev_devices
-                    }
-                }
-                None => false,
-            };
-
-            if !dominated {
-                best_match = Some((path, profile, is_exact, num_devices));
-            }
-        }
-
-        let (profile_path, mbfile) = match best_match {
-            Some((path, profile, _, _)) => {
-                tracing::info!(
-                    "Using provisioning profile: {} (app ID: {})",
-                    path.display(),
-                    profile.entitlements.application_identifier
-                );
-                (path, profile)
-            }
-            None => {
-                bail!(
-                    "No provisioning profile found matching bundle identifier \"{bundle_id}\".\n\
-                     \n\
-                     Your provisioning profiles are in: {}\n\
-                     \n\
-                     To fix this, either:\n  \
-                     1. Set `bundle.identifier` in Dioxus.toml to match an existing profile\n  \
-                     2. Create a wildcard provisioning profile in your Apple Developer account\n  \
-                     3. Open the project in Xcode and let it auto-provision\n\
-                     \n\
-                     {CODESIGN_ERROR}",
-                    profiles_folder.display()
-                );
-            }
-        };
-
-        let entitlements_xml = format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-    <key>application-identifier</key>
-    <string>{APPLICATION_IDENTIFIER}</string>
-    <key>keychain-access-groups</key>
-    <array>
-        <string>{APP_ID_ACCESS_GROUP}.*</string>
-    </array>
-    <key>get-task-allow</key>
-    <true/>
-    <key>com.apple.developer.team-identifier</key>
-    <string>{TEAM_IDENTIFIER}</string>
-</dict></plist>
-        "#,
-            APPLICATION_IDENTIFIER = mbfile.entitlements.application_identifier,
-            APP_ID_ACCESS_GROUP = mbfile.entitlements.keychain_access_groups[0],
-            TEAM_IDENTIFIER = mbfile.team_identifier[0],
-        );
-
-        Ok((entitlements_xml, profile_path))
-    }
-
-    async fn write_app_manifest(&self, assets: &AssetManifest) -> Result<()> {
-        let manifest = AppManifest {
-            assets: assets.clone(),
-            cli_version: crate::VERSION.to_string(),
-            rust_version: self.workspace.rustc_version.clone(),
-        };
-
-        let manifest_path = self.app_manifest();
+    async fn write_app_manifest(&self, manifest: &AppManifest) -> Result<()> {
+        let manifest_path = self.app_manifest_file();
         std::fs::write(&manifest_path, serde_json::to_string_pretty(&manifest)?)?;
-
         Ok(())
     }
 
@@ -7422,66 +5003,18 @@ We checked the folders:
 
         Ok(())
     }
-}
 
-/// Generate plist XML entries from a HashMap of key-value pairs
-///
-/// Converts a HashMap like `{ "UIBackgroundModes" = ["location", "fetch"] }` to plist XML:
-/// ```xml
-/// <key>UIBackgroundModes</key>
-/// <array>
-///     <string>location</string>
-///     <string>fetch</string>
-/// </array>
-/// ```
-fn generate_plist_entries(plist: &std::collections::HashMap<String, serde_json::Value>) -> String {
-    let mut output = String::new();
-
-    for (key, value) in plist {
-        output.push_str(&format!("\t<key>{}</key>\n", key));
-        output.push_str(&value_to_plist_xml(value, 1));
+    fn cargo_fingeprint_dir(&self) -> PathBuf {
+        self.target_dir
+            .join(self.triple.to_string())
+            .join(&self.profile)
+            .join(".fingerprint")
     }
 
-    output
-}
-
-/// Convert a serde_json::Value to plist XML format
-fn value_to_plist_xml(value: &serde_json::Value, indent: usize) -> String {
-    let tabs = "\t".repeat(indent);
-
-    match value {
-        serde_json::Value::String(s) => format!("{}<string>{}</string>\n", tabs, s),
-        serde_json::Value::Bool(b) => {
-            if *b {
-                format!("{}<true/>\n", tabs)
-            } else {
-                format!("{}<false/>\n", tabs)
-            }
-        }
-        serde_json::Value::Number(n) => {
-            if n.is_i64() {
-                format!("{}<integer>{}</integer>\n", tabs, n)
-            } else {
-                format!("{}<real>{}</real>\n", tabs, n)
-            }
-        }
-        serde_json::Value::Array(arr) => {
-            let mut output = format!("{}<array>\n", tabs);
-            for item in arr {
-                output.push_str(&value_to_plist_xml(item, indent + 1));
-            }
-            output.push_str(&format!("{}</array>\n", tabs));
-            output
-        }
-        serde_json::Value::Object(obj) => {
-            let mut output = format!("{}<dict>\n", tabs);
-            for (k, v) in obj {
-                output.push_str(&format!("{}\t<key>{}</key>\n", tabs, k));
-                output.push_str(&value_to_plist_xml(v, indent + 1));
-            }
-            output.push_str(&format!("{}</dict>\n", tabs));
-            output
-        }
-        serde_json::Value::Null => String::new(),
+    fn is_apple_target(&self) -> bool {
+        matches!(
+            self.triple.operating_system,
+            OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
+        )
     }
 }
