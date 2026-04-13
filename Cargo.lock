@@ -3344,6 +3344,7 @@ dependencies = [
  "regex",
  "serde",
  "syn 2.0.117",
+ "tracing",
 ]
 
 [[package]]
@@ -3736,6 +3737,8 @@ dependencies = [
  "dioxus-rsx-rosetta",
  "html_parser",
  "syn 2.0.117",
+ "tracing",
+ "tracing-subscriber",
  "wasm-bindgen",
 ]
 

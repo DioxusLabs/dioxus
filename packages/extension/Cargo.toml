@@ -1,17 +1,17 @@
 [package]
 name = "dioxus-ext"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 publish = false
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
-wasm-bindgen = { workspace = true }
 dioxus-autofmt = { workspace = true }
 dioxus-rsx-rosetta = { workspace = true }
 html_parser = { workspace = true }
 syn = { workspace = true }
-
-[lib]
-crate-type = ["cdylib", "rlib"]
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["fmt"] }
+wasm-bindgen = { workspace = true }
