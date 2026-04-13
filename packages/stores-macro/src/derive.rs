@@ -11,6 +11,8 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     let extension_trait_name = format_ident!("{}StoreExt", item_name);
     let transposed_name = format_ident!("{}StoreTransposed", item_name);
 
+    // Create generics for the extension trait and transposed struct. Both items need the original generics
+    // and bounds plus an extra __Lens type used in the store generics
     let generics = &input.generics;
     let mut extension_generics = generics.clone();
     extension_generics.params.insert(0, parse_quote!(__Lens));
@@ -37,11 +39,11 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-/// A field is "more private" than the struct when the struct has an explicit
-/// visibility (e.g. `pub`) but the field uses inherited (no modifier) visibility.
+/// A field is "more private" than the struct when the struct has an explicit public
+/// visibility but the does not.
 fn field_is_more_private(struct_vis: &syn::Visibility, field_vis: &syn::Visibility) -> bool {
-    !matches!(struct_vis, syn::Visibility::Inherited)
-        && matches!(field_vis, syn::Visibility::Inherited)
+    matches!(struct_vis, syn::Visibility::Public(_))
+        && !matches!(field_vis, syn::Visibility::Public(_))
 }
 
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
@@ -104,6 +106,8 @@ fn zip_transposed_fields(fields: &Fields, types: &[TokenStream2]) -> Vec<TokenSt
 
 /// True when a type alias can replace a full transposed struct/enum definition
 /// (all type params are unbound and every field is a bare generic type).
+///
+/// Eg. struct MyStruct<T> {inner: T} can use a type alias to express MyStruct<StoreView<T>>
 fn can_use_type_alias<'a>(
     generics: &syn::Generics,
     mut fields: impl Iterator<Item = &'a Field>,
@@ -112,12 +116,14 @@ fn can_use_type_alias<'a>(
         && fields.all(|f| field_type_generic(f, generics))
 }
 
+/// Check if a field uses any generics
 fn field_type_generic(field: &Field, generics: &syn::Generics) -> bool {
     generics.type_params().any(|param| {
         matches!(&field.ty, syn::Type::Path(type_path) if type_path.path.is_ident(&param.ident))
     })
 }
 
+/// Get the function name the extension trait will use to create a selector scoped to a field
 fn function_name_from_field(index: usize, field: &syn::Field) -> Ident {
     field
         .ident
@@ -125,6 +131,7 @@ fn function_name_from_field(index: usize, field: &syn::Field) -> Ident {
         .map_or_else(|| format_ident!("field_{index}"), |name| name.clone())
 }
 
+/// Get the mapped type for a field
 fn mapped_type(
     item: &Ident,
     ty_generics: &syn::TypeGenerics,
@@ -195,6 +202,7 @@ fn generate_field_method(
     (store_type, definition, implementation)
 }
 
+/// Create the definition for a transposed struct
 fn transposed_struct(
     visibility: &syn::Visibility,
     struct_name: &Ident,
@@ -205,6 +213,8 @@ fn transposed_struct(
     transposed_fields: &[TokenStream2],
 ) -> TokenStream2 {
     let (extension_impl_generics, _, extension_where_clause) = extension_generics.split_for_impl();
+    /// If the type only uses generics, we can define this in terms of a type alias on the original type
+    /// so all of the original type methods remain usable on the transposed version
     if can_use_type_alias(generics, structure.fields.iter()) {
         let generics = transpose_generics(struct_name, generics);
         return quote! { #visibility type #transposed_name #extension_impl_generics = #struct_name #generics; };
@@ -377,6 +387,7 @@ fn select_enum_variant_field(
     field_index: usize,
     field_count: usize,
 ) -> TokenStream2 {
+    // When we map the field, we need to use either the field name for named fields or the index for unnamed fields.
     let binding = function_name_from_field(field_index, field);
     let field_type = &field.ty;
     let pattern = if field.ident.is_none() {
@@ -386,6 +397,7 @@ fn select_enum_variant_field(
     } else {
         quote!( { #binding, .. })
     };
+    // Each field gets its own reactive scope within the child based on the field's index
     let ordinal = LitInt::new(&field_index.to_string(), variant_name.span());
     quote! {
         let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
@@ -396,11 +408,17 @@ fn select_enum_variant_field(
             #enum_name::#variant_name #pattern => #binding,
             _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
         };
+        // Map the field into a child selector that tracks the field
         let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
+        // Convert the selector into a store
         ::std::convert::Into::into(scope)
     }
 }
 
+// For enums, we derive two items:
+// - An extension trait with methods to check if the store is a specific variant and a method
+//   to access the field of that variant if there is only one field
+// - A transposed version of the enum with all fields wrapped in stores
 fn derive_store_enum(
     input: &DeriveInput,
     structure: &DataEnum,
@@ -418,11 +436,14 @@ fn derive_store_enum(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#enum_name #ty_generics, __Lens> };
 
+    // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed enum
+    // and the match arms for the transposed enum.
     let mut definitions = Vec::new();
     let mut implementations = Vec::new();
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
+    // The generated items that check the variant of the enum need to read the enum which requires these extra bounds
     let readable_bounds = quote! {
         __Lens: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics>,
         #enum_name #ty_generics: 'static
@@ -446,6 +467,7 @@ fn derive_store_enum(
             let store_type = mapped_type(enum_name, &ty_generics, &field.ty);
             transposed_fields.push(store_type.clone());
 
+            // Generate the code to get Store<Field, W> from the enum
             let select_field = select_enum_variant_field(
                 enum_name,
                 &ty_generics,
@@ -455,6 +477,7 @@ fn derive_store_enum(
                 fields.len(),
             );
 
+            // If there is only one field, generate a field() -> Option<Store<O, W>> method
             if fields.len() == 1 {
                 let (def, imp) = generate_as_variant_method(
                     &is_fn,
@@ -470,17 +493,21 @@ fn derive_store_enum(
             field_selectors.push(select_field);
         }
 
-        // Build the match arm that transposes this variant
-        let field_names: Vec<_> = fields
+        // Now that we have the types for the field selectors within the variant,
+        // we can construct the transposed variant and the logic to turn the normal
+        // version of that variant into the store version
+        let field_names = fields
             .iter()
             .enumerate()
             .map(|(i, field)| function_name_from_field(i, field))
             .collect();
+        // Turn each field into its store
         let construct_fields = field_names
             .iter()
             .zip(&field_selectors)
             .map(|(name, selector)| quote! { let #name = { #selector }; });
-        let construct_variant = construct_from_fields(
+        // Merge the stores into the variant
+            let construct_variant = construct_from_fields(
             quote! { #transposed_name::#variant_name },
             fields,
             &field_names,
@@ -508,10 +535,13 @@ fn derive_store_enum(
     });
     implementations.push(quote! {
         fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy {
+            // We only do a shallow read of the store to get the current variant. We only need to rerun
+            // this match when the variant changes, not when the fields change
             self.selector().track_shallow();
             let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             match &*read {
                 #(#transposed_match_arms)*
+                // The enum may be #[non_exhaustive]
                 #[allow(unreachable)]
                 _ => unreachable!(),
             }
@@ -538,6 +568,7 @@ fn derive_store_enum(
         &implementations,
     );
 
+    // Expand to the extension trait and its implementation for the store alongside the transposed enum
     Ok(quote! {
         #trait_tokens
         #transposed_enum
