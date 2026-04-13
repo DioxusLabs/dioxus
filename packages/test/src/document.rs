@@ -96,7 +96,7 @@ impl DocumentTester {
     /// # fn AComponent() -> Element { rsx! { } }
     /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
     /// # let mut tester = dioxus_test::render(AComponent).build();
-    /// tester.find_by_test_id("make-request-button")?.click();
+    /// tester.query("make-request-button").click().await;
     ///
     /// tester.pump().await?; // React to the click
     /// // Assert on the state of the UI while the network request is in flight.
