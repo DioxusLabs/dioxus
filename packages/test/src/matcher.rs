@@ -23,6 +23,24 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
     InnerHtmlMatcher(inner)
 }
 
+/// Returns a [Matcher] which matches a value which equals the given value in the sense of
+/// [`PartialEq`].
+pub fn eq<T: PartialEq>(value: T) -> impl Matcher<T> {
+    struct EqualsMatcher<T>(T);
+
+    impl<T: PartialEq> Matcher<T> for EqualsMatcher<T> {
+        fn matches(&self, actual: T) -> ControlFlow<()> {
+            if actual == self.0 {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        }
+    }
+
+    EqualsMatcher(value)
+}
+
 /// Returns a [Matcher] which matches a `String` containing the given `substring`.
 pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<String> + 'a {
     struct ContainingStringMatcher<Expected: AsRef<str>>(Expected);
@@ -30,9 +48,9 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
     impl<Expected: AsRef<str>> Matcher<String> for ContainingStringMatcher<Expected> {
         fn matches(&self, actual: String) -> ControlFlow<()> {
             if actual.contains(self.0.as_ref()) {
-                ControlFlow::Continue(())
-            } else {
                 ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
             }
         }
     }

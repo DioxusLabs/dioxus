@@ -23,7 +23,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::render;
+//! use dioxus_test::{render, inner_html, eq};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -38,16 +38,17 @@
 //! #[test]
 //! fn my_component_renders_correctly() {
 //!     let tester = render(MyComponent).build();
-//!     assert_eq!(
-//!         tester.find_by_css_selector(".test-component").unwrap().inner_html(),
-//!         "Hello, world!"
-//!     );
+//!     tester
+//!         .query(".test-component")
+//!         .expect(inner_html(eq("Hello, world!")))
+//!         .immediately()
+//!         .unwrap();
 //! }
 //! ```
 //!
-//! [DocumentTester] also provides methods for interacting with elements and driving the runtime.
-//! After interacting with an element, the test must call [DocumentTester::pump] to cause the event
-//! handler to be invoked.
+//! Assertions can be awaited asynchronously, allowing asynchronous operations to run and the DOM to
+//! evolve. The tester will keep checking whether the assertion is true and handing control back to
+//! the asynchronous runtime until the assertion is true, or a maximum number of tries is reached.
 //!
 //! ```
 //! use dioxus::prelude::*;
@@ -70,22 +71,53 @@
 //! #[tokio::test]
 //! async fn my_component_changes_button_text_on_click() {
 //!     let mut tester = render(MyComponent).build();
-//!     tester.find_first_by_css_selector(".test-button").unwrap().click();
-//!     tester.pump().await;
-//!     assert_eq!(
-//!         tester.find_first_by_css_selector(".test-button").unwrap().inner_html(),
-//!         "Don't click any more!"
-//!     );
+//!     tester.query(".test-button").click().await;
+//!     tester
+//!         .query(".test-component")
+//!         .expect(inner_html(eq("Don't click any more!")))
+//!         .await
+//!         .unwrap();
 //! }
 //! ```
 //!
 //! ## Asynchronous operations
 //!
-//! The method [DocumentTester::pump] returns control to the async runtime and thus drives any
-//! asynchronous operations such as requests to the backend. If any rendering depends on the result
-//! of a request, then the test must invoke [DocumentTester::pump] to resolve that.
+//! For more precise control over DOM evolution, one can use the method [DocumentTester::pump]. This
+//! returns control to the async runtime and thus drives any asynchronous operations such as
+//! requests to the backend.
 //!
-//! The test can also assert on the state of the DOM while backend requests are in flight.
+//! ```
+//! use dioxus::prelude::*;
+//! use dioxus_test::render;
+//!
+//! #[component]
+//! fn MyComponent() -> Element {
+//!     let mut text = use_signal(|| "Click me!");
+//!     rsx! {
+//!         button {
+//!              class: "test-button",
+//!              onclick: move |_| {
+//!                  *text.write() = "Don't click any more!";
+//!              },
+//!              {text}
+//!         }
+//!     }
+//! }
+//!
+//! #[tokio::test]
+//! async fn my_component_changes_button_text_on_click() {
+//!     let mut tester = render(MyComponent).build();
+//!     tester.query(".test-button").click().await;
+//!     tester.pump().await;
+//!     tester
+//!         .query(".test-component")
+//!         .expect(inner_html(eq("Don't click any more!")))
+//!         .immediately()
+//!         .unwrap();
+//! }
+//! ```
+//!
+//! For example, a test can assert on the state of the DOM while backend requests are in flight.
 //!
 //! ## Limitations
 //!
@@ -104,5 +136,5 @@ mod result;
 
 pub use condition::{AllElementsCondition, ElementCondition};
 pub use document::{DocumentTester, by_testid, render};
-pub use matcher::{Matcher, contains_string, empty, inner_html, not};
+pub use matcher::{Matcher, contains_string, empty, eq, inner_html, not};
 pub use result::{Result, TesterError};
