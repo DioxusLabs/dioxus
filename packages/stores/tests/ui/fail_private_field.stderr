@@ -1,4 +1,4 @@
-error: type `dioxus_stores_visibility_helper::__ItemStoreMarker2` is private
+error: type `dioxus_stores_visibility_helper::__ItemStoreMarkerPrivate` is private
  --> tests/ui/fail_private_field.rs:8:13
   |
 8 |     let _ = store.private_field();

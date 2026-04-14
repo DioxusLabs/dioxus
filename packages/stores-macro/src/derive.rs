@@ -6,6 +6,39 @@ use syn::{
     Ident, Index, LitInt, Visibility,
 };
 
+/// Turn a visibility modifier into a readable PascalCase suffix used in
+/// generated marker / witness trait names.
+///
+/// - `pub` → `Pub`
+/// - `pub(crate)` → `PubCrate`, `pub(super)` → `PubSuper`, `pub(self)` → `PubSelf`
+/// - `pub(in crate::foo::bar)` → `CrateFooBar`
+/// - inherited (private) → `Private`
+pub(crate) fn visibility_suffix(vis: &Visibility) -> String {
+    fn capitalize(s: &str) -> String {
+        let mut cs = s.chars();
+        match cs.next() {
+            Some(c) => c.to_uppercase().collect::<String>() + cs.as_str(),
+            None => String::new(),
+        }
+    }
+    match vis {
+        Visibility::Public(_) => "Pub".to_string(),
+        Visibility::Inherited => "Private".to_string(),
+        Visibility::Restricted(r) => {
+            let segs: String = r
+                .path
+                .segments
+                .iter()
+                .map(|s| capitalize(&s.ident.to_string()))
+                .collect();
+            if r.in_token.is_some() {
+                segs
+            } else {
+                format!("Pub{}", segs)
+            }
+        }
+    }
+}
 
 pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     let item_name = &input.ident;
@@ -272,11 +305,23 @@ fn derive_store_struct(
     // function-local derives. The marker's visibility is exactly the field's
     // visibility, so `pub(in path)`, `pub(super)`, etc. all propagate
     // faithfully.
-    let marker_idents: Vec<Ident> = (0..visibility_order.len())
-        .map(|i| format_ident!("__{}StoreMarker{}", struct_name, i))
+    let marker_idents: Vec<Ident> = visibility_order
+        .iter()
+        .map(|v| {
+            Ident::new(
+                &format!("__{}StoreMarker{}", struct_name, visibility_suffix(v)),
+                struct_name.span(),
+            )
+        })
         .collect();
-    let witness_trait_idents: Vec<Ident> = (0..visibility_order.len())
-        .map(|i| format_ident!("__{}StoreVisibleAs{}", struct_name, i))
+    let witness_trait_idents: Vec<Ident> = visibility_order
+        .iter()
+        .map(|v| {
+            Ident::new(
+                &format!("__{}StoreVisibleIn{}", struct_name, visibility_suffix(v)),
+                struct_name.span(),
+            )
+        })
         .collect();
 
     let marker_decls: Vec<TokenStream2> = visibility_order

@@ -93,11 +93,31 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
         }
     }
 
-    let marker_idents: Vec<Ident> = (0..visibility_order.len())
-        .map(|i| Ident::new(&format!("__{}Marker{}", name_prefix, i), item.span()))
+    let marker_idents: Vec<Ident> = visibility_order
+        .iter()
+        .map(|v| {
+            Ident::new(
+                &format!(
+                    "__{}Marker{}",
+                    name_prefix,
+                    crate::derive::visibility_suffix(v)
+                ),
+                item.span(),
+            )
+        })
         .collect();
-    let witness_idents: Vec<Ident> = (0..visibility_order.len())
-        .map(|i| Ident::new(&format!("__{}VisibleAs{}", name_prefix, i), item.span()))
+    let witness_idents: Vec<Ident> = visibility_order
+        .iter()
+        .map(|v| {
+            Ident::new(
+                &format!(
+                    "__{}VisibleIn{}",
+                    name_prefix,
+                    crate::derive::visibility_suffix(v)
+                ),
+                item.span(),
+            )
+        })
         .collect();
 
     let marker_decls: Vec<TokenStream> = visibility_order
@@ -155,11 +175,7 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
             fn_cursor += 1;
             let witness = &witness_idents[bucket];
             let bound: WherePredicate = parse_quote!(Self: #witness<__V>);
-            func.sig
-                .generics
-                .make_where_clause()
-                .predicates
-                .push(bound);
+            func.sig.generics.make_where_clause().predicates.push(bound);
             func.vis = Visibility::Inherited;
         }
     }
