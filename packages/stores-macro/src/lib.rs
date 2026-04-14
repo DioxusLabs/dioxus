@@ -57,10 +57,16 @@ mod extend;
 /// - **`{Name}StoreExt`** — has the same visibility as the struct and contains accessor
 ///   methods for `pub` fields along with the `transpose` method.
 /// - **`{Name}CrateStoreExt`** — has `pub(crate)` visibility and contains accessor methods
-///   for `pub(crate)` fields. These are accessible anywhere within the crate.
+///   for `pub(crate)` (or the equivalent `pub(in crate)`) fields. These are accessible
+///   anywhere within the crate.
 /// - **`{Name}PrivateStoreExt`** — is module-private and contains accessor methods for
-///   private fields (including `pub(super)`, `pub(in path)`, or no modifier). These methods
-///   are only usable within the module where the struct is defined.
+///   private fields (no modifier, `pub(self)`, `pub(super)`, or `pub(in path)`). These
+///   methods are only usable within the module where the struct is defined.
+///
+///   Note: `pub(super)` and `pub(in path)` fields are themselves visible beyond the
+///   defining module, but their generated accessors are not — they land on the
+///   module-private trait. If you need an accessor to be callable from a parent or
+///   ancestor module, use `pub(crate)` (which gets its own trait) or `pub`.
 ///
 /// The transposed struct also preserves the original field visibility, so private fields
 /// remain private in the transposed version.

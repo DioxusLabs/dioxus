@@ -48,7 +48,14 @@ enum VisibilityLevel {
     Public,
     /// Crate-visible (`pub(crate)`) - accessor goes on the crate trait
     Crate,
-    /// Module-private (inherited or `pub(super)`, `pub(in path)`) - accessor goes on the private trait
+    /// Module-private (inherited, `pub(self)`, `pub(super)`, or `pub(in path)`) -
+    /// accessor goes on the private trait.
+    ///
+    /// Note: `pub(super)` and `pub(in path)` fields are visible to more than just
+    /// the defining module, but their accessors are emitted on an inherited-visibility
+    /// trait and are therefore only callable from the defining module. This is a
+    /// deliberate trade-off — modeling arbitrary `in path` scopes would require
+    /// emitting one trait per distinct path, which isn't worth the complexity.
     Private,
 }
 
@@ -70,8 +77,8 @@ impl TraitMethods {
 ///
 /// When the struct is `pub`:
 /// - `pub` fields → Public trait
-/// - `pub(crate)` fields → Crate trait
-/// - Other fields (private, `pub(super)`, etc.) → Private trait
+/// - `pub(crate)` / `pub(in crate)` fields → Crate trait
+/// - Other fields (private, `pub(self)`, `pub(super)`, `pub(in path)`) → Private trait
 ///
 /// When the struct is not `pub`, all fields go on the public trait
 /// (which inherits the struct's visibility).
@@ -86,9 +93,16 @@ fn field_visibility_level(
 
     match field_vis {
         syn::Visibility::Public(_) => VisibilityLevel::Public,
-        syn::Visibility::Restricted(r) if r.path.is_ident("crate") => VisibilityLevel::Crate,
+        // Both `pub(crate)` and `pub(in crate)` have a single-segment `crate` path
+        // and are semantically identical — treat them the same.
+        syn::Visibility::Restricted(r) if path_is_crate(&r.path) => VisibilityLevel::Crate,
         _ => VisibilityLevel::Private,
     }
+}
+
+/// True if the path refers to the crate root (`crate` or `::crate`).
+fn path_is_crate(path: &syn::Path) -> bool {
+    path.segments.len() == 1 && path.segments[0].ident == "crate"
 }
 
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
