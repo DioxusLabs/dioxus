@@ -31,7 +31,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 90;
+const VIEWPORT_MAX_WIDTH: u16 = 92;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
@@ -740,14 +740,7 @@ impl Output {
         };
 
         frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                if client.build.bundle == BundleFormat::Web {
-                    "Serving at: ".gray()
-                } else {
-                    "Server at: ".gray()
-                },
-                address,
-            ])),
+            Paragraph::new(Line::from(vec!["Address:  ".gray(), address])),
             serve_address,
         );
     }
@@ -823,14 +816,8 @@ impl Output {
             meta_list[3],
         );
 
-        let server_address = match state.server.server_address() {
-            Some(address) => format!("http://{address}").yellow(),
-            None => "no address".dark_gray(),
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(vec!["Network: ".gray(), server_address])),
-            meta_list[4],
-        );
+        // space
+        frame.render_widget(Paragraph::new(Line::from(vec![" ".gray()])), meta_list[4]);
 
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
