@@ -15,7 +15,7 @@
 //! source of truth is the read-out of the link args after the initial build
 
 use super::HotpatchModuleCache;
-use crate::{BuildArtifacts, BuildMode, RustcArgSet};
+use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
 use anyhow::{bail, ensure, Context};
@@ -40,6 +40,15 @@ impl BuildRequest {
     /// We're going to create a DAG of modified crates, replay their rustc commands directly, and then
     /// manually link at the end.
     ///
+    /// # Compilation
+    ///
+    /// We compile dirty crates by computing a dag across the workspace and then replaying the original
+    /// rustc commands that generated their artifacts. For most crates, this results in an rlib being
+    /// written to disk. In the case of hotpatching, the rlib is overwritten in-place since we're
+    /// replaying the original rustc command. The nice thing here is that the rlibs remain stable
+    /// in the linking command we've captured. The `.o` files in the linking command almost always
+    /// come from the main tip crate.
+    ///
     /// # Linking
     ///
     /// Run our custom linker setup to generate a patch file in the right location
@@ -52,13 +61,81 @@ impl BuildRequest {
     /// Workspace support replays captured rustc invocations into the modified crate chain first,
     /// updating their on-disk outputs in place. The final patch link then combines the tip crate's
     /// fresh `.rcgu.o` files with the updated workspace rlibs from that replay.
+    ///
+    /// # Stub creation
+    ///
+    /// During this phase, we call out to `create_undefined_symbol_stub`. This function reads the
+    /// rlibs and .o files that are about to be linked, identifies missing symbols, and then generates
+    /// new assembly on the fly that satisfies these missing symbols. The assembly we generate outputs
+    /// new functions with the corresponding symbol name that jump into known addresses of the originally
+    /// loaded binary that's running and receiving patch updates.
+    ///
+    /// On wasm, we don't call this since WASM is much more complex and actually requires a full rewrite
+    /// of the final binary. The `--allow-undefined` flag of wasm-ld lets us generate unrunnable binaries
+    /// that we then fixup for load.
+    ///
+    /// # Linking command format
+    ///
+    /// When rustc links your project, it passes the args as how a linker would expect, but with
+    /// a somewhat reliable ordering. These are all internal details to cargo/rustc, so we can't
+    /// rely on them *too* much, but the *are* fundamental to how rust compiles your projects, and
+    /// linker interfaces probably won't change drastically for another 40 years.
+    ///
+    /// We need to tear apart this command and only pass the args that are relevant to our thin link.
+    /// Mainly, we don't want any dependency (non-workspace) rlibs to be linked. Occasionally some
+    /// libraries like objc_exception export a folder with their artifacts - unsure if we actually
+    /// need to include them. Generally you can err on the side that most *libraries* don't need to
+    /// be linked here since dlopen satisfies those symbols anyways when the binary is loaded. In the
+    /// future, if there are weird issues with a non-rust crate being linked incorrectly during hotpatch,
+    /// the logic here would be a good place to check first.
+    ///
+    /// The format of this command roughly follows:
+    /// ```
+    /// clang
+    ///     /dioxus/target/debug/subsecond-cli
+    ///     /var/folders/zs/gvrfkj8x33d39cvw2p06yc700000gn/T/rustcAqQ4p2/symbols.o
+    ///     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.05stnb4bovskp7a00wyyf7l9s.rcgu.o
+    ///     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.08rgcutgrtj2mxoogjg3ufs0g.rcgu.o
+    ///     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.0941bd8fa2bydcv9hfmgzzne9.rcgu.o
+    ///     /dioxus/target/subsecond-dev/deps/libbincode-c215feeb7886f81b.rlib
+    ///     /dioxus/target/subsecond-dev/deps/libanyhow-e69ac15c094daba6.rlib
+    ///     /dioxus/target/subsecond-dev/deps/libratatui-c3364579b86a1dfc.rlib
+    ///     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libstd-019f0f6ae6e6562b.rlib
+    ///     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-7387d38173a2eb37.rlib
+    ///     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libobject-2b03cf6ece171d21.rlib
+    ///     -framework AppKit
+    ///     -lc
+    ///     -framework Foundation
+    ///     -framework Carbon
+    ///     -lSystem
+    ///     -framework CoreFoundation
+    ///     -lobjc
+    ///     -liconv
+    ///     -lm
+    ///     -arch arm64
+    ///     -mmacosx-version-min=11.0.0
+    ///     -L /dioxus/target/subsecond-dev/build/objc_exception-dc226cad0480ea65/out
+    ///     -o /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa
+    ///     -nodefaultlibs
+    ///     -Wl,-all_load
+    /// ```
+    ///
+    /// Many args are passed twice, too, which can be confusing, but generally don't have any real
+    /// effect. Note that on macos/ios, there's a special macho header that needs to be set, otherwise
+    /// dyld will complain.
+    ///
+    /// Also, some flags in darwin land might become deprecated, need to be super conservative:
+    /// - https://developer.apple.com/forums/thread/773907
+    ///
+    /// We need to be careful about which linker we're interpreting too. Some are old, some are new,
+    /// some are experimental, and each has their own syntax ie `-C, /C, --C, C=` which need to be handlded.
     pub async fn compile_workspace_hotpatch(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let BuildMode::Thin {
-            changed_files: _,
             aslr_reference,
             workspace_rustc_args,
             modified_crates,
             cache,
+            ..
         } = &ctx.mode
         else {
             bail!("Not thin mode!")
@@ -66,11 +143,20 @@ impl BuildRequest {
 
         tracing::debug!("Changed crates dag using {modified_crates:?}");
 
-        let replay_order = self
-            .replay_workspace_hotpatch_chain(ctx, workspace_rustc_args, modified_crates)
-            .await?;
-        let replayed_crates = replay_order.iter().cloned().collect::<HashSet<_>>();
+        // Replay the rustcs for all modified workspace crates. This is not the final tip binary.
+        // Note that the final tip might include itself as a lib (lib.rs + main.rs) which gets covered here.
+        ctx.profile_phase("Workspace hotpatch replay");
+        let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates);
+        for crate_name in &replayed_crates {
+            let rustc_args = self
+                .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
+                .context("Missing rustc args for crate replay")?;
+            self.compile_dep_crate(crate_name, rustc_args)
+                .await
+                .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
+        }
 
+        // Recompile just the tip crate now
         let mut artifacts = self.cargo_build(ctx).await?;
 
         ctx.status_writing_patch();
@@ -82,6 +168,7 @@ impl BuildRequest {
         let tip_bin_key = format!("{}.bin", self.tip_crate_name());
         let args = artifacts
             .workspace_rustc
+            .rustc_args
             .get(&tip_bin_key)
             .cloned()
             .with_context(|| {
@@ -96,58 +183,6 @@ impl BuildRequest {
                 )
             })?;
 
-        // Extract out the incremental object files.
-        //
-        // This is sadly somewhat of a hack, but it might be a moderately reliable hack.
-        //
-        // When rustc links your project, it passes the args as how a linker would expect, but with
-        // a somewhat reliable ordering. These are all internal details to cargo/rustc, so we can't
-        // rely on them *too* much, but the *are* fundamental to how rust compiles your projects, and
-        // linker interfaces probably won't change drastically for another 40 years.
-        //
-        // We need to tear apart this command and only pass the args that are relevant to our thin link.
-        // Mainly, we don't want any rlibs to be linked. Occasionally some libraries like objc_exception
-        // export a folder with their artifacts - unsure if we actually need to include them. Generally
-        // you can err on the side that most *libraries* don't need to be linked here since dlopen
-        // satisfies those symbols anyways when the binary is loaded.
-        //
-        // Many args are passed twice, too, which can be confusing, but generally don't have any real
-        // effect. Note that on macos/ios, there's a special macho header that needs to be set, otherwise
-        // dyld will complain.
-        //
-        // Also, some flags in darwin land might become deprecated, need to be super conservative:
-        // - https://developer.apple.com/forums/thread/773907
-        //
-        // The format of this command roughly follows:
-        // ```
-        // clang
-        //     /dioxus/target/debug/subsecond-cli
-        //     /var/folders/zs/gvrfkj8x33d39cvw2p06yc700000gn/T/rustcAqQ4p2/symbols.o
-        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.05stnb4bovskp7a00wyyf7l9s.rcgu.o
-        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.08rgcutgrtj2mxoogjg3ufs0g.rcgu.o
-        //     /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa.0941bd8fa2bydcv9hfmgzzne9.rcgu.o
-        //     /dioxus/target/subsecond-dev/deps/libbincode-c215feeb7886f81b.rlib
-        //     /dioxus/target/subsecond-dev/deps/libanyhow-e69ac15c094daba6.rlib
-        //     /dioxus/target/subsecond-dev/deps/libratatui-c3364579b86a1dfc.rlib
-        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libstd-019f0f6ae6e6562b.rlib
-        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libpanic_unwind-7387d38173a2eb37.rlib
-        //     /.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/lib/libobject-2b03cf6ece171d21.rlib
-        //     -framework AppKit
-        //     -lc
-        //     -framework Foundation
-        //     -framework Carbon
-        //     -lSystem
-        //     -framework CoreFoundation
-        //     -lobjc
-        //     -liconv
-        //     -lm
-        //     -arch arm64
-        //     -mmacosx-version-min=11.0.0
-        //     -L /dioxus/target/subsecond-dev/build/objc_exception-dc226cad0480ea65/out
-        //     -o /dioxus/target/subsecond-dev/deps/subsecond_harness-acfb69cb29ffb8fa
-        //     -nodefaultlibs
-        //     -Wl,-all_load
-        // ```
         let mut dylibs = vec![];
 
         // Tip objects from link_args are temps — safe to delete after linking.
@@ -161,9 +196,9 @@ impl BuildRequest {
             .collect();
 
         let workspace_rlibs =
-            self.workspace_hotpatch_link_rlibs(&artifacts.workspace_rustc, &replayed_crates);
+            self.workspace_hotpatch_link_rlibs(&artifacts.workspace_rustc, &replayed_crates)?;
 
-        // Merge both sets for the linker.
+        // Merge both sets for the linker. Merge order
         let mut object_files: Vec<PathBuf> = temp_objects.clone();
         object_files.extend(workspace_rlibs.iter().cloned());
 
@@ -547,54 +582,21 @@ impl BuildRequest {
         Ok(())
     }
 
-    async fn replay_workspace_hotpatch_chain(
-        &self,
-        ctx: &BuildContext,
-        workspace_rustc_args: &RustcArgSet,
-        modified_crates: &HashSet<String>,
-    ) -> Result<Vec<String>> {
-        ctx.profile_phase("Workspace hotpatch replay");
-
-        let replay_order = self.workspace_hotpatch_replay_order(modified_crates);
-        if replay_order.is_empty() {
-            tracing::debug!("No workspace crates need replay before thin link");
-            return Ok(replay_order);
-        }
-
-        tracing::debug!("Workspace hotpatch replay order: {:?}", replay_order);
-
-        for crate_name in &replay_order {
-            let Some(rustc_args) =
-                self.workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
-            else {
-                tracing::debug!(
-                    "No replayable rustc args captured for workspace crate {crate_name}; skipping"
-                );
-                continue;
-            };
-
-            tracing::debug!("Replaying workspace crate: {crate_name}");
-            self.compile_dep_crate(crate_name, rustc_args)
-                .await
-                .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
-        }
-
-        Ok(replay_order)
-    }
-
     fn workspace_hotpatch_replay_args<'a>(
         &self,
-        workspace_rustc_args: &'a RustcArgSet,
+        workspace_rustc_args: &'a WorkspaceRustcArgs,
         crate_name: &str,
     ) -> Option<&'a RustcArgs> {
         let lib_key = format!("{crate_name}.lib");
         if crate_name == self.tip_crate_name() {
-            return workspace_rustc_args.get(&lib_key);
+            return workspace_rustc_args.rustc_args.get(&lib_key);
         }
 
-        workspace_rustc_args
-            .get(&lib_key)
-            .or_else(|| workspace_rustc_args.get(&format!("{crate_name}.bin")))
+        workspace_rustc_args.rustc_args.get(&lib_key).or_else(|| {
+            workspace_rustc_args
+                .rustc_args
+                .get(&format!("{crate_name}.bin"))
+        })
     }
 
     fn workspace_hotpatch_replay_order(&self, modified_crates: &HashSet<String>) -> Vec<String> {
@@ -702,25 +704,21 @@ impl BuildRequest {
 
     fn workspace_hotpatch_link_rlibs(
         &self,
-        set: &RustcArgSet,
-        replayed_crates: &HashSet<String>,
-    ) -> Vec<PathBuf> {
+        args: &WorkspaceRustcArgs,
+        replayed_crates: &Vec<String>,
+    ) -> Result<Vec<PathBuf>> {
         let wanted = replayed_crates
             .iter()
             .filter_map(|crate_name| {
-                let rustc_args = set.get(&format!("{crate_name}.lib"))?;
+                let rustc_args = args.rustc_args.get(&format!("{crate_name}.lib"))?;
                 self.find_rlib_for_crate(crate_name, rustc_args)
             })
             .collect::<HashSet<_>>();
 
-        if wanted.is_empty() {
-            return Vec::new();
-        }
-
         let mut ordered = Vec::new();
         let mut seen = HashSet::new();
 
-        for arg in &set.link_args {
+        for arg in &args.link_args {
             if !arg.ends_with(".rlib") {
                 continue;
             }
@@ -745,7 +743,7 @@ impl BuildRequest {
             ordered.extend(missing);
         }
 
-        ordered
+        Ok(ordered)
     }
 
     /// Patches are stored in the same directory as the main executable, but with a name based on the
@@ -815,7 +813,7 @@ impl BuildRequest {
         &self,
         ctx: &BuildContext,
         exe: &Path,
-        set: &RustcArgSet,
+        set: &WorkspaceRustcArgs,
     ) -> Result<()> {
         // Get the tip crate rustc argsa
         let rustc_args = set
@@ -1308,18 +1306,7 @@ impl BuildRequest {
     /// rlib filename. This is important because multiple rlibs for the same crate can coexist
     /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
     /// and globbing would return an arbitrary one.
-    fn find_rlib_for_crate(
-        &self,
-        crate_name: &str,
-        rustc_args: &RustcArgs,
-        // artifact_paths: &HashMap<String, PathBuf>,
-    ) -> Option<PathBuf> {
-        // if let Some(path) = artifact_paths.get(&format!("{crate_name}.lib")) {
-        //     if path.exists() {
-        //         return Some(path.clone());
-        //     }
-        // }
-
+    fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Option<PathBuf> {
         // Extract --out-dir from the captured args
         let out_dir = rustc_args
             .args
@@ -1370,6 +1357,7 @@ impl BuildRequest {
                 }
             }
         }
+
         if let Some((path, _)) = best {
             return Some(path);
         }
@@ -1476,128 +1464,4 @@ impl BuildRequest {
             &scope_hash[..16]
         ))
     }
-
-    // /// For thin builds, compile workspace dep crates BEFORE the tip crate.
-    // ///
-    // /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
-    // /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
-    // ///
-    // /// Returns the updated `ObjectCache` — defaulting to empty for non-thin builds.
-    // pub async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
-    // ctx.profile_phase("Workspace precompile");
-
-    // let BuildMode::Thin {
-    //     workspace_rustc_args,
-    //     changed_crates,
-    //     object_cache,
-    //     ..
-    // } = &ctx.mode
-    // else {
-    //     return Ok(ObjectCache::new(&self.session_cache_dir()));
-    // };
-
-    // let tip_name = self.tip_crate_name();
-    // let mut object_cache = object_cache.clone();
-
-    // // Compile workspace dep crates with cascade. Start with the explicitly changed dep
-    // // crates (already in leaf-first order from handle_file_change). As we compile each,
-    // // add the crate's workspace dependents so their rlibs have consistent SVH references.
-    // let mut crates_to_compile: Vec<String> = changed_crates
-    //     .iter()
-    //     .filter(|c| *c != &tip_name)
-    //     .cloned()
-    //     .collect();
-    // let mut compiled = HashSet::new();
-    // let mut idx = 0;
-
-    // while idx < crates_to_compile.len() {
-    //     let crate_name = crates_to_compile[idx].clone();
-    //     idx += 1;
-
-    //     if !compiled.insert(crate_name.clone()) || crate_name == tip_name {
-    //         continue;
-    //     }
-
-    //     let Some(rustc_args) = workspace_rustc_args.get(&format!("{crate_name}.lib")) else {
-    //         tracing::warn!("No captured rustc args for workspace crate {crate_name}, skipping");
-    //         continue;
-    //     };
-
-    //     tracing::debug!("Compiling workspace dep crate: {crate_name}");
-    //     self.compile_dep_crate(&crate_name, rustc_args)
-    //         .await
-    //         .with_context(|| format!("Failed to compile workspace dep crate '{crate_name}'"))?;
-
-    //     if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
-    //         tracing::debug!(
-    //             "Resolved workspace dep rlib: crate={crate_name} extra_filename={:?} path={}",
-    //             Self::rustc_extra_filename(rustc_args),
-    //             rlib_path.display()
-    //         );
-    //         if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
-    //             tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
-    //         }
-    //     }
-
-    //     for dependent in self.workspace_dependents_of(&crate_name) {
-    //         if dependent != tip_name && !compiled.contains(&dependent) {
-    //             tracing::debug!(
-    //                 "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
-    //             );
-    //             crates_to_compile.push(dependent);
-    //         }
-    //     }
-    // }
-
-    // // If the tip crate has a lib target (src/lib.rs + src/main.rs), compile it
-    // // before the bin target so the bin links against the fresh lib rlib.
-    // let lib_key = format!("{tip_name}.lib");
-    // if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
-    //     let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args);
-    //     let pre_modified = rlib_pre
-    //         .as_ref()
-    //         .and_then(|p| std::fs::metadata(p).ok())
-    //         .and_then(|m| m.modified().ok());
-
-    //     tracing::info!("Compiling tip lib target: {lib_key}");
-    //     if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
-    //         tracing::warn!("Failed to compile tip lib target: {e}");
-    //     } else if let Some(rlib_path) = self.find_rlib_for_crate(&tip_name, lib_args) {
-    //         tracing::debug!(
-    //             "Resolved tip lib rlib: crate={tip_name} extra_filename={:?} path={}",
-    //             Self::rustc_extra_filename(lib_args),
-    //             rlib_path.display()
-    //         );
-    //         let post_modified = std::fs::metadata(&rlib_path)
-    //             .ok()
-    //             .and_then(|m| m.modified().ok());
-    //         let rlib_changed = match (pre_modified, post_modified) {
-    //             (Some(pre), Some(post)) => post > pre,
-    //             _ => true,
-    //         };
-    //         tracing::info!(
-    //             "Found lib rlib at: {} (modified={})",
-    //             rlib_path.display(),
-    //             rlib_changed,
-    //         );
-
-    //         match object_cache.cache_from_rlib(&lib_key, &rlib_path) {
-    //             Ok(()) => {
-    //                 let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
-    //                 tracing::info!("Cached {count} objects from tip lib rlib");
-    //             }
-    //             Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
-    //         }
-    //     } else {
-    //         tracing::warn!("Could not find rlib for tip lib target {tip_name}");
-    //     }
-    // } else {
-    //     tracing::debug!(
-    //         "No lib target for tip crate (key '{lib_key}' not in workspace_rustc_args, keys={:?})",
-    //         workspace_rustc_args.keys().collect::<Vec<_>>()
-    //     );
-    // }
-
-    // Ok(object_cache)
-    // }
 }

@@ -196,7 +196,7 @@
 use super::HotpatchModuleCache;
 use crate::{
     opt::{process_file_to, AppManifest},
-    RustcArgSet,
+    WorkspaceRustcArgs,
 };
 use crate::{
     AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, LinkAction, Platform,
@@ -312,7 +312,7 @@ pub enum BuildMode {
 
         /// The captured RustcArgs for every crate in the workspace, collected by RUSTC_WORKSPACE_WRAPPER
         /// This is used for replaying rustc invocations for workspace hotpatching
-        workspace_rustc_args: RustcArgSet,
+        workspace_rustc_args: WorkspaceRustcArgs,
 
         /// Cumulative set of all workspace crates modified since the fat build.
         modified_crates: HashSet<String>,
@@ -332,7 +332,7 @@ pub enum BuildMode {
 pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
     pub(crate) exe: PathBuf,
-    pub(crate) workspace_rustc: RustcArgSet,
+    pub(crate) workspace_rustc: WorkspaceRustcArgs,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AppManifest,
@@ -1191,14 +1191,14 @@ impl BuildRequest {
     /// Each workspace crate compiled through the wrapper has its own JSON file:
     /// - "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
     /// - "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
-    fn load_rustc_argset(&self) -> Result<RustcArgSet> {
+    fn load_rustc_argset(&self) -> Result<WorkspaceRustcArgs> {
         let link_args = std::fs::read_to_string(self.link_args_file())
             .context("Failed to read link args from file")?
             .lines()
             .map(|s| s.to_string())
             .collect();
 
-        let mut workspace_rustc_args = RustcArgSet::new(link_args);
+        let mut workspace_rustc_args = WorkspaceRustcArgs::new(link_args);
 
         // Always read from the fat build's scope dir — the rustc wrapper only captures
         // args during fat/base builds, not thin builds.
@@ -1210,7 +1210,9 @@ impl BuildRequest {
                     if let Ok(contents) = std::fs::read_to_string(&path) {
                         if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
                             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                                workspace_rustc_args.insert(stem.to_string(), args);
+                                workspace_rustc_args
+                                    .rustc_args
+                                    .insert(stem.to_string(), args);
                             }
                         }
                     }
@@ -1517,6 +1519,7 @@ impl BuildRequest {
                 ..
             } => {
                 let rustc_args = workspace_rustc_args
+                    .rustc_args
                     .get(&format!("{}.bin", self.tip_crate_name()))
                     .context("Missing rustc args for tip crate")?;
 

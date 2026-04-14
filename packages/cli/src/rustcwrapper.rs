@@ -6,31 +6,20 @@ use std::{
     process::ExitCode,
 };
 
-/// A "capture" of a workspace, cumulated from the workspace set
+/// A "capture" of a workspace's rustc commands, cumulated by reading the various rustc commands
+/// from disk.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RustcArgSet {
+pub struct WorkspaceRustcArgs {
     pub link_args: Vec<String>,
     pub rustc_args: HashMap<String, RustcArgs>,
 }
 
-impl RustcArgSet {
+impl WorkspaceRustcArgs {
     pub fn new(link_args: Vec<String>) -> Self {
         Self {
             link_args,
             rustc_args: Default::default(),
         }
-    }
-
-    pub(crate) fn insert(&mut self, format: String, link_args: RustcArgs) -> Option<RustcArgs> {
-        self.rustc_args.insert(format, link_args)
-    }
-
-    pub(crate) fn get(&self, format: &str) -> Option<&RustcArgs> {
-        self.rustc_args.get(format)
-    }
-
-    pub(crate) fn get_mut(&mut self, tip_bin_key: &str) -> Option<&mut RustcArgs> {
-        self.rustc_args.get_mut(tip_bin_key)
     }
 }
 
