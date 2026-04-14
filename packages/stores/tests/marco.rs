@@ -653,6 +653,53 @@ mod macro_tests {
         // transposed.secret is private — cannot be accessed here
     }
 
+    // Arbitrary `pub(super)` and `pub(in path)` visibilities propagate to the
+    // generated accessor — callable from exactly the scope that could have
+    // named the field itself.
+    mod arbitrary_vis_parent {
+        use dioxus_signals::*;
+        use dioxus_stores::*;
+
+        pub mod defining {
+            use dioxus_signals::*;
+            use dioxus_stores::*;
+
+            #[derive(Store)]
+            pub struct Item {
+                pub open: String,
+                pub(super) visible_to_parent: u32,
+                pub(in crate::macro_tests::arbitrary_vis_parent) visible_to_parent_by_path: u64,
+            }
+
+            impl Item {
+                pub fn new() -> Self {
+                    Self {
+                        open: "hi".into(),
+                        visible_to_parent: 0,
+                        visible_to_parent_by_path: 0,
+                    }
+                }
+            }
+
+            // All three callable from the defining module.
+            fn _defining_can_call_all() {
+                let store = use_store(Item::new);
+                let _: Store<String, _> = store.open();
+                let _: Store<u32, _> = store.visible_to_parent();
+                let _: Store<u64, _> = store.visible_to_parent_by_path();
+            }
+        }
+
+        // The parent module can reach the two restricted accessors.
+        fn _parent_can_call_restricted() {
+            use defining::ItemStoreExt;
+            let store = use_store(defining::Item::new);
+            let _: Store<String, _> = store.open();
+            let _: Store<u32, _> = store.visible_to_parent();
+            let _: Store<u64, _> = store.visible_to_parent_by_path();
+        }
+    }
+
     fn derive_generic_enum_transpose_passthrough() {
         #[derive(Store, PartialEq, Clone, Debug)]
         #[non_exhaustive]

@@ -8,6 +8,7 @@ use syn::{
     Ident, Index, LitInt,
 };
 
+
 pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     let item_name = &input.ident;
     let extension_trait_name = format_ident!("{}StoreExt", item_name);
@@ -41,71 +42,9 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-/// Visibility level for partitioning field accessors into separate traits.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum VisibilityLevel {
-    /// Fully public (`pub`) - accessor goes on the public trait
-    Public,
-    /// Crate-visible (`pub(crate)`) - accessor goes on the crate trait
-    Crate,
-    /// Module-private (inherited, `pub(self)`, `pub(super)`, or `pub(in path)`) -
-    /// accessor goes on the private trait.
-    ///
-    /// Note: `pub(super)` and `pub(in path)` fields are visible to more than just
-    /// the defining module, but their accessors are emitted on an inherited-visibility
-    /// trait and are therefore only callable from the defining module. This is a
-    /// deliberate trade-off — modeling arbitrary `in path` scopes would require
-    /// emitting one trait per distinct path, which isn't worth the complexity.
-    Private,
-}
-
-/// Collected trait method definitions and implementations for a visibility level.
-#[derive(Default)]
-struct TraitMethods {
-    definitions: Vec<TokenStream2>,
-    implementations: Vec<TokenStream2>,
-}
-
-impl TraitMethods {
-    fn push(&mut self, definition: TokenStream2, implementation: TokenStream2) {
-        self.definitions.push(definition);
-        self.implementations.push(implementation);
-    }
-}
-
-/// Determine which trait a field's accessor should be placed on.
-///
-/// When the struct is `pub`:
-/// - `pub` fields → Public trait
-/// - `pub(crate)` / `pub(in crate)` fields → Crate trait
-/// - Other fields (private, `pub(self)`, `pub(super)`, `pub(in path)`) → Private trait
-///
-/// When the struct is not `pub`, all fields go on the public trait
-/// (which inherits the struct's visibility).
-fn field_visibility_level(
-    struct_vis: &syn::Visibility,
-    field_vis: &syn::Visibility,
-) -> VisibilityLevel {
-    // Only split traits when the struct itself is fully public
-    if !matches!(struct_vis, syn::Visibility::Public(_)) {
-        return VisibilityLevel::Public;
-    }
-
-    match field_vis {
-        syn::Visibility::Public(_) => VisibilityLevel::Public,
-        // Both `pub(crate)` and `pub(in crate)` have a single-segment `crate` path
-        // and are semantically identical — treat them the same.
-        syn::Visibility::Restricted(r) if path_is_crate(&r.path) => VisibilityLevel::Crate,
-        _ => VisibilityLevel::Private,
-    }
-}
-
-/// True if the path refers to the crate root (`crate` or `::crate`).
-fn path_is_crate(path: &syn::Path) -> bool {
-    path.segments.len() == 1 && path.segments[0].ident == "crate"
-}
-
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
+///
+/// Used by the enum path, which doesn't have per-variant visibility gating.
 #[allow(clippy::too_many_arguments)]
 fn extension_trait(
     visibility: &syn::Visibility,
@@ -231,37 +170,6 @@ fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
     quote!(<#(#args),*>)
 }
 
-/// Generate a single field accessor's trait definition, implementation, and transposed store type.
-fn generate_field_method(
-    field_index: usize,
-    field: &syn::Field,
-    struct_name: &Ident,
-    ty_generics: &syn::TypeGenerics,
-) -> (TokenStream2, TokenStream2, TokenStream2) {
-    let field_accessor = field.ident.as_ref().map_or_else(
-        || Index::from(field_index).to_token_stream(),
-        |name| name.to_token_stream(),
-    );
-    let function_name = function_name_from_field(field_index, field);
-    let field_type = &field.ty;
-    let store_type = mapped_type(struct_name, ty_generics, field_type);
-    let ordinal = LitInt::new(&field_index.to_string(), field.span());
-
-    let definition = quote! {
-        fn #function_name(self) -> #store_type;
-    };
-    let implementation = quote! {
-        fn #function_name(self) -> #store_type {
-            let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
-            let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-            let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
-            ::std::convert::Into::into(scope)
-        }
-    };
-
-    (store_type, definition, implementation)
-}
-
 /// Create the definition for a transposed struct
 fn transposed_struct(
     visibility: &syn::Visibility,
@@ -312,96 +220,178 @@ fn derive_store_struct(
 
     let generics = &input.generics;
     let (_, ty_generics, _) = generics.split_for_impl();
-    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
+    let (extension_impl_generics, _extension_ty_generics, extension_where_clause) =
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#struct_name #ty_generics, __Lens> };
 
-    // Generate accessor methods for each field, partitioned by visibility level.
-    let mut methods: HashMap<VisibilityLevel, TraitMethods> = HashMap::new();
-    let mut transposed_fields = Vec::new();
+    // Extension-trait generics also carry the visibility witness `__V` as the
+    // first type parameter. Methods are gated on `Self: witness_trait<__V>`,
+    // which forces the compiler to infer `__V` to a named marker type. Because
+    // the marker's visibility matches the field's visibility, the inference
+    // silently fails outside the field's scope.
+    let mut witness_extension_generics = extension_generics.clone();
+    witness_extension_generics
+        .params
+        .insert(0, parse_quote!(__V));
+    let (witness_impl_generics, witness_ty_generics, witness_where_clause) =
+        witness_extension_generics.split_for_impl();
 
+    // Bucket fields by visibility. Bucket 0 is reserved for the struct's own
+    // visibility; `transpose` is gated on it so callers that can see the type
+    // can always call `transpose`.
+    //
+    // When the struct isn't `pub`, every field's effective visibility collapses
+    // to the struct's — no finer gating is meaningful because the whole type is
+    // already scoped.
+    let struct_is_pub = matches!(visibility, syn::Visibility::Public(_));
+    let mut visibility_order: Vec<syn::Visibility> = vec![visibility.clone()];
+    let mut vis_to_idx: HashMap<String, usize> = HashMap::new();
+    vis_to_idx.insert(visibility.to_token_stream().to_string(), 0);
+
+    let mut field_bucket: Vec<usize> = Vec::with_capacity(fields.len());
+    for field in fields.iter() {
+        let effective = if struct_is_pub {
+            field.vis.clone()
+        } else {
+            visibility.clone()
+        };
+        let key = effective.to_token_stream().to_string();
+        let idx = match vis_to_idx.get(&key) {
+            Some(i) => *i,
+            None => {
+                let i = visibility_order.len();
+                visibility_order.push(effective);
+                vis_to_idx.insert(key, i);
+                i
+            }
+        };
+        field_bucket.push(idx);
+    }
+    let transpose_bucket = 0;
+
+    // One marker + one witness trait + one blanket impl per bucket.
+    //
+    // These are emitted at the same scope as the struct itself (not inside a
+    // helper module) so they work equally well for module-level and
+    // function-local derives. The marker's visibility is exactly the field's
+    // visibility, so `pub(in path)`, `pub(super)`, etc. all propagate
+    // faithfully.
+    let marker_idents: Vec<Ident> = (0..visibility_order.len())
+        .map(|i| format_ident!("__{}StoreMarker{}", struct_name, i))
+        .collect();
+    let witness_trait_idents: Vec<Ident> = (0..visibility_order.len())
+        .map(|i| format_ident!("__{}StoreVisibleAs{}", struct_name, i))
+        .collect();
+
+    let marker_decls: Vec<TokenStream2> = visibility_order
+        .iter()
+        .zip(&marker_idents)
+        .map(|(vis, name)| {
+            quote! {
+                #[doc(hidden)]
+                #[allow(non_camel_case_types)]
+                #vis struct #name;
+            }
+        })
+        .collect();
+
+    let witness_trait_decls: Vec<TokenStream2> = witness_trait_idents
+        .iter()
+        .map(|name| {
+            quote! {
+                #[doc(hidden)]
+                #[allow(non_camel_case_types)]
+                trait #name<__V> {}
+            }
+        })
+        .collect();
+
+    let witness_impls: Vec<TokenStream2> = witness_trait_idents
+        .iter()
+        .zip(&marker_idents)
+        .map(|(trait_name, marker_name)| {
+            quote! {
+                impl #extension_impl_generics #trait_name<#marker_name>
+                    for dioxus_stores::Store<#struct_name #ty_generics, __Lens>
+                    #extension_where_clause
+                {}
+            }
+        })
+        .collect();
+
+    // Per-field signatures on the trait and bodies on the impl.
+    let mut trait_sigs: Vec<TokenStream2> = Vec::new();
+    let mut impl_bodies: Vec<TokenStream2> = Vec::new();
+    let mut transposed_fields: Vec<TokenStream2> = Vec::new();
     for (field_index, field) in fields.iter().enumerate() {
-        let (transposed, definition, implementation) =
-            generate_field_method(field_index, field, struct_name, &ty_generics);
-        transposed_fields.push(transposed);
-        methods
-            .entry(field_visibility_level(visibility, &field.vis))
-            .or_default()
-            .push(definition, implementation);
+        let field_accessor = field.ident.as_ref().map_or_else(
+            || Index::from(field_index).to_token_stream(),
+            |name| name.to_token_stream(),
+        );
+        let function_name = function_name_from_field(field_index, field);
+        let field_type = &field.ty;
+        let store_type = mapped_type(struct_name, &ty_generics, field_type);
+        let ordinal = LitInt::new(&field_index.to_string(), field.span());
+        transposed_fields.push(store_type.clone());
+
+        let witness_trait = &witness_trait_idents[field_bucket[field_index]];
+        trait_sigs.push(quote! {
+            fn #function_name(self) -> #store_type
+            where
+                Self: #witness_trait<__V>;
+        });
+        impl_bodies.push(quote! {
+            fn #function_name(self) -> #store_type
+            where
+                Self: #witness_trait<__V>,
+            {
+                let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
+                let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
+                let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
+                ::std::convert::Into::into(scope)
+            }
+        });
     }
 
-    // Transpose always goes on the public trait. Copy is required because the
-    // store is copied into the selector for each field.
+    // `transpose` is gated on the struct's own visibility bucket.
+    let transpose_witness = &witness_trait_idents[transpose_bucket];
     let field_names: Vec<_> = fields
         .iter()
         .enumerate()
         .map(|(i, field)| function_name_from_field(i, field))
         .collect();
     let construct = construct_from_fields(quote! { #transposed_name }, fields, &field_names);
-    // Each method name is unique to one trait, so `self.method()` resolves
-    // unambiguously since all traits are in scope in the generated code.
-    methods.entry(VisibilityLevel::Public).or_default().push(
-        quote! {
-            fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy;
-        },
-        quote! {
-            fn transpose(self) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
-                #( let #field_names = self.#field_names(); )*
-                #construct
-            }
-        },
-    );
-
-    // Generate traits for each visibility level that has methods.
-    let empty = TraitMethods::default();
-    let public = methods.get(&VisibilityLevel::Public).unwrap_or(&empty);
-    let crate_level = methods.get(&VisibilityLevel::Crate);
-    let private = methods.get(&VisibilityLevel::Private);
-
-    let public_trait = extension_trait(
-        visibility,
-        &extension_trait_name,
-        &store_ty,
-        &extension_impl_generics,
-        &extension_ty_generics,
-        extension_where_clause,
-        &public.definitions,
-        &public.implementations,
-    );
-
-    let crate_trait = match crate_level {
-        Some(methods) => {
-            let name = format_ident!("{}CrateStoreExt", struct_name);
-            let crate_vis: syn::Visibility = parse_quote!(pub(crate));
-            extension_trait(
-                &crate_vis,
-                &name,
-                &store_ty,
-                &extension_impl_generics,
-                &extension_ty_generics,
-                extension_where_clause,
-                &methods.definitions,
-                &methods.implementations,
-            )
+    let (_, transposed_ty_generics, _) = extension_generics.split_for_impl();
+    trait_sigs.push(quote! {
+        fn transpose(self) -> #transposed_name #transposed_ty_generics
+        where
+            Self: ::std::marker::Copy,
+            Self: #transpose_witness<__V>;
+    });
+    impl_bodies.push(quote! {
+        fn transpose(self) -> #transposed_name #transposed_ty_generics
+        where
+            Self: ::std::marker::Copy,
+            Self: #transpose_witness<__V>,
+        {
+            #( let #field_names = self.#field_names(); )*
+            #construct
         }
-        None => quote! {},
-    };
+    });
 
-    let private_trait = match private {
-        Some(methods) => {
-            let name = format_ident!("{}PrivateStoreExt", struct_name);
-            extension_trait(
-                &syn::Visibility::Inherited,
-                &name,
-                &store_ty,
-                &extension_impl_generics,
-                &extension_ty_generics,
-                extension_where_clause,
-                &methods.definitions,
-                &methods.implementations,
-            )
+    let extension_trait_tokens = quote! {
+        #[allow(private_bounds)]
+        #visibility trait #extension_trait_name #witness_impl_generics #witness_where_clause {
+            #(#trait_sigs)*
         }
-        None => quote! {},
+
+        #[allow(private_bounds)]
+        impl #witness_impl_generics #extension_trait_name #witness_ty_generics
+            for #store_ty
+            #witness_where_clause
+        {
+            #(#impl_bodies)*
+        }
     };
 
     let transposed_struct = transposed_struct(
@@ -415,9 +405,10 @@ fn derive_store_struct(
     );
 
     Ok(quote! {
-        #public_trait
-        #crate_trait
-        #private_trait
+        #(#marker_decls)*
+        #(#witness_trait_decls)*
+        #(#witness_impls)*
+        #extension_trait_tokens
         #transposed_struct
     })
 }

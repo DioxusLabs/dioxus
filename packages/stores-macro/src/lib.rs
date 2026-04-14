@@ -51,27 +51,18 @@ mod extend;
 ///
 /// ### Field Visibility
 ///
-/// The generated extension trait respects field visibility. When a `pub` struct has fields
-/// with more restricted visibility, the macro generates up to **three** extension traits:
+/// The generated extension trait `{Name}StoreExt` carries every accessor, but each
+/// method is individually gated to the field's declared visibility. Any `pub(...)`
+/// scope works — `pub`, `pub(crate)`, `pub(super)`, and `pub(in some::path)` all
+/// propagate faithfully to the accessor.
 ///
-/// - **`{Name}StoreExt`** — has the same visibility as the struct and contains accessor
-///   methods for `pub` fields along with the `transpose` method.
-/// - **`{Name}CrateStoreExt`** — has `pub(crate)` visibility and contains accessor methods
-///   for `pub(crate)` (or the equivalent `pub(in crate)`) fields. These are accessible
-///   anywhere within the crate.
-/// - **`{Name}PrivateStoreExt`** — is module-private and contains accessor methods for
-///   private fields (no modifier, `pub(self)`, `pub(super)`, or `pub(in path)`). These
-///   methods are only usable within the module where the struct is defined.
+/// Calling an accessor from outside the field's scope produces a type-inference
+/// error ("cannot find type `__{Name}StoreMarker{n}` in this scope") rather than a
+/// "trait is private" error, because the gating uses a visibility-witness generic
+/// rather than a trait-level seal.
 ///
-///   Note: `pub(super)` and `pub(in path)` fields are themselves visible beyond the
-///   defining module, but their generated accessors are not — they land on the
-///   module-private trait. If you need an accessor to be callable from a parent or
-///   ancestor module, use `pub(crate)` (which gets its own trait) or `pub`.
-///
-/// The transposed struct also preserves the original field visibility, so private fields
-/// remain private in the transposed version.
-///
-/// When all fields share the same visibility as the struct, only a single trait is generated.
+/// The transposed struct preserves the original field visibility as well, so
+/// fields you can't reach on the store you also can't reach on `.transpose()`.
 ///
 /// ```rust, no_run
 /// use dioxus::prelude::*;
@@ -90,19 +81,16 @@ mod extend;
 ///     secret_key: "hunter2".to_string(),
 /// });
 ///
-/// // `title()` is on the public ConfigStoreExt trait
+/// // `title()` is callable anywhere — the field is pub.
 /// let title: Store<String, _> = store.title();
 ///
-/// // `api_key()` is on the pub(crate) ConfigCrateStoreExt trait —
-/// // accessible anywhere in this crate
+/// // `api_key()` is callable anywhere inside the defining crate.
 /// let api_key: Store<String, _> = store.api_key();
 ///
-/// // `secret_key()` is on the private ConfigPrivateStoreExt trait —
-/// // accessible here (same module) but not from outside this module
+/// // `secret_key()` is callable here (same module) but not from outside.
 /// let secret: Store<String, _> = store.secret_key();
 ///
-/// // `transpose()` is on the public trait; the transposed struct's
-/// // field visibility matches the original
+/// // The transposed struct preserves field visibility too.
 /// let transposed = store.transpose();
 /// let _title: Store<String, _> = transposed.title;
 /// ```

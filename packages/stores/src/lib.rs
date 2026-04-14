@@ -14,9 +14,10 @@ pub mod scope;
 #[cfg(feature = "macro")]
 pub use dioxus_stores_macro::{store, Store};
 
-/// When a `pub` struct has private fields, the `Store` derive macro generates a
-/// private extension trait for private field accessors. These should not be
-/// callable from outside the defining module:
+/// When a `pub` struct has fields with restricted visibility, the `Store` derive
+/// macro gates their accessor methods so they can only be called from a scope
+/// that matches the field's visibility. Calling a private-field accessor from
+/// outside the defining module fails to compile:
 ///
 /// ```compile_fail
 /// use dioxus_stores::*;
@@ -50,21 +51,10 @@ pub use dioxus_stores_macro::{store, Store};
 /// }
 /// ```
 ///
-/// And the private trait itself cannot be imported:
-///
-/// ```compile_fail
-/// mod inner {
-///     use dioxus_stores::*;
-///     #[derive(Store)]
-///     pub struct Item { pub name: String, secret: u32 }
-/// }
-/// use inner::ItemPrivateStoreExt;
-/// fn main() {}
-/// ```
-///
-/// Fields with `pub(crate)` visibility go on a separate `pub(crate)` trait
-/// (`{Name}CrateStoreExt`), making them accessible within the crate but not
-/// from external crates.
+/// `pub(crate)` fields remain callable anywhere inside the crate but are
+/// unreachable from other crates. Arbitrary `pub(in path)` and `pub(super)`
+/// visibilities are supported — the accessor is callable from exactly the
+/// scope that could have named the field itself.
 #[cfg(doc)]
 mod private_field_compile_tests {}
 
