@@ -54,7 +54,25 @@ pub use dioxus_stores_macro::{store, Store};
 /// `pub(crate)` fields remain callable anywhere inside the crate but are
 /// unreachable from other crates. Arbitrary `pub(in path)` and `pub(super)`
 /// visibilities are supported — the accessor is callable from exactly the
-/// scope that could have named the field itself.
+/// scope that could have named the field itself:
+///
+/// ```compile_fail
+/// use dioxus_stores::*;
+/// mod parent {
+///     pub mod defining {
+///         use dioxus_stores::*;
+///         #[derive(Store)]
+///         pub struct Item { pub(super) parent_only: u32 }
+///         impl Item { pub fn new() -> Self { Self { parent_only: 0 } } }
+///     }
+/// }
+/// fn main() {
+///     use parent::defining::*;
+///     let store = use_store(Item::new);
+///     // parent_only is pub(super) — only callable from `parent`, not here.
+///     let _ = store.parent_only();
+/// }
+/// ```
 #[cfg(doc)]
 mod private_field_compile_tests {}
 

@@ -249,11 +249,14 @@ struct TodoItem {
     contents: String,
 }
 
-// Generates:
-pub trait TodoItemStoreExt<__Lens> {
-    fn checked(self) -> Store<bool, __Lens::MappedSignal>;
-    fn contents(self) -> Store<String, __Lens::MappedSignal>;
-    fn transpose(self) -> TodoItemStoreTransposed;
+// Generates (visibility-witness `__V` gates methods per-field; see derive docs):
+pub trait TodoItemStoreExt<__V, __Lens> {
+    fn checked(self) -> Store<bool, __Lens::MappedSignal>
+        where Self: __TodoItemStoreVisibleAs0<__V>;
+    fn contents(self) -> Store<String, __Lens::MappedSignal>
+        where Self: __TodoItemStoreVisibleAs0<__V>;
+    fn transpose(self) -> TodoItemStoreTransposed
+        where Self: Copy, Self: __TodoItemStoreVisibleAs0<__V>;
 }
 
 pub struct TodoItemStoreTransposed {

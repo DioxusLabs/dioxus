@@ -1,11 +1,9 @@
-use std::collections::HashMap;
-
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Fields, Generics,
-    Ident, Index, LitInt,
+    Ident, Index, LitInt, Visibility,
 };
 
 
@@ -220,7 +218,7 @@ fn derive_store_struct(
 
     let generics = &input.generics;
     let (_, ty_generics, _) = generics.split_for_impl();
-    let (extension_impl_generics, _extension_ty_generics, extension_where_clause) =
+    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#struct_name #ty_generics, __Lens> };
 
@@ -237,34 +235,24 @@ fn derive_store_struct(
         witness_extension_generics.split_for_impl();
 
     // Bucket fields by visibility. Bucket 0 is reserved for the struct's own
-    // visibility; `transpose` is gated on it so callers that can see the type
-    // can always call `transpose`.
+    // visibility so `transpose` can always be called by anyone who can see the
+    // type. Rust already guarantees each field's visibility is no wider than
+    // the struct's, so using `field.vis` directly is safe and gives the
+    // tightest gating the user asked for.
     //
-    // When the struct isn't `pub`, every field's effective visibility collapses
-    // to the struct's — no finer gating is meaningful because the whole type is
-    // already scoped.
-    let struct_is_pub = matches!(visibility, syn::Visibility::Public(_));
-    let mut visibility_order: Vec<syn::Visibility> = vec![visibility.clone()];
-    let mut vis_to_idx: HashMap<String, usize> = HashMap::new();
-    vis_to_idx.insert(visibility.to_token_stream().to_string(), 0);
-
+    // The bucket list is tiny (usually ≤ 3 distinct visibilities) so a linear
+    // scan with `visibility_eq` is faster and clearer than a hashed lookup.
+    let mut visibility_order: Vec<Visibility> = vec![visibility.clone()];
     let mut field_bucket: Vec<usize> = Vec::with_capacity(fields.len());
     for field in fields.iter() {
-        let effective = if struct_is_pub {
-            field.vis.clone()
-        } else {
-            visibility.clone()
-        };
-        let key = effective.to_token_stream().to_string();
-        let idx = match vis_to_idx.get(&key) {
-            Some(i) => *i,
-            None => {
+        let idx = visibility_order
+            .iter()
+            .position(|v| v == &field.vis)
+            .unwrap_or_else(|| {
                 let i = visibility_order.len();
-                visibility_order.push(effective);
-                vis_to_idx.insert(key, i);
+                visibility_order.push(field.vis.clone());
                 i
-            }
-        };
+            });
         field_bucket.push(idx);
     }
     let transpose_bucket = 0;
@@ -319,9 +307,9 @@ fn derive_store_struct(
         })
         .collect();
 
-    // Per-field signatures on the trait and bodies on the impl.
-    let mut trait_sigs: Vec<TokenStream2> = Vec::new();
-    let mut impl_bodies: Vec<TokenStream2> = Vec::new();
+    // Emit each method once as a `(signature, body)` pair so the signature and
+    // where-clauses live in a single place.
+    let mut methods: Vec<(TokenStream2, TokenStream2)> = Vec::new();
     let mut transposed_fields: Vec<TokenStream2> = Vec::new();
     for (field_index, field) in fields.iter().enumerate() {
         let field_accessor = field.ident.as_ref().map_or_else(
@@ -335,22 +323,20 @@ fn derive_store_struct(
         transposed_fields.push(store_type.clone());
 
         let witness_trait = &witness_trait_idents[field_bucket[field_index]];
-        trait_sigs.push(quote! {
+        let signature = quote! {
             fn #function_name(self) -> #store_type
             where
-                Self: #witness_trait<__V>;
-        });
-        impl_bodies.push(quote! {
-            fn #function_name(self) -> #store_type
-            where
-                Self: #witness_trait<__V>,
+                Self: #witness_trait<__V>
+        };
+        let body = quote! {
             {
                 let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
                 let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
                 let scope = self.into_selector().child(#ordinal, __map_field, __map_mut_field);
                 ::std::convert::Into::into(scope)
             }
-        });
+        };
+        methods.push((signature, body));
     }
 
     // `transpose` is gated on the struct's own visibility bucket.
@@ -361,23 +347,23 @@ fn derive_store_struct(
         .map(|(i, field)| function_name_from_field(i, field))
         .collect();
     let construct = construct_from_fields(quote! { #transposed_name }, fields, &field_names);
-    let (_, transposed_ty_generics, _) = extension_generics.split_for_impl();
-    trait_sigs.push(quote! {
-        fn transpose(self) -> #transposed_name #transposed_ty_generics
-        where
-            Self: ::std::marker::Copy,
-            Self: #transpose_witness<__V>;
-    });
-    impl_bodies.push(quote! {
-        fn transpose(self) -> #transposed_name #transposed_ty_generics
-        where
-            Self: ::std::marker::Copy,
-            Self: #transpose_witness<__V>,
-        {
-            #( let #field_names = self.#field_names(); )*
-            #construct
-        }
-    });
+    methods.push((
+        quote! {
+            fn transpose(self) -> #transposed_name #extension_ty_generics
+            where
+                Self: ::std::marker::Copy,
+                Self: #transpose_witness<__V>
+        },
+        quote! {
+            {
+                #( let #field_names = self.#field_names(); )*
+                #construct
+            }
+        },
+    ));
+
+    let trait_sigs = methods.iter().map(|(sig, _)| quote! { #sig; });
+    let impl_bodies = methods.iter().map(|(sig, body)| quote! { #sig #body });
 
     let extension_trait_tokens = quote! {
         #[allow(private_bounds)]

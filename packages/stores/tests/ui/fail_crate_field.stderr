@@ -1,0 +1,5 @@
+error: type `dioxus_stores_visibility_helper::__ItemStoreMarker1` is private
+ --> tests/ui/fail_crate_field.rs:8:13
+  |
+8 |     let _ = store.crate_field();
+  |             ^^^^^^^^^^^^^^^^^^^ private type
