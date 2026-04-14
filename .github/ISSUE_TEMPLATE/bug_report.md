@@ -26,10 +26,10 @@ Steps to reproduce the behavior:
 
 **Environment:**
 
-- Dioxus version:  <!-- e.g., v0.17, main -->
-- Rust version:    <!-- e.g., 1.123.0, nightly -->
-- OS info:         <!-- e.g., macOS, NixOS 25.05 -->
-- App platform:    <!-- e.g., web, desktop -->
+- Dioxus version:  <!-- e.g. v0.17, main -->
+- Rust version:    <!-- e.g. 1.123.0, nightly -->
+- OS info:         <!-- e.g. macOS, NixOS 25.05 -->
+- App platform:    <!-- e.g. web, desktop -->
 
 **Questionnaire**
 

@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{assets::*, webview::WebviewEdits};
 use crate::{document::NATIVE_EVAL_JS, file_upload::FileDialogRequest};
 use base64::prelude::BASE64_STANDARD;
@@ -63,9 +65,10 @@ pub(super) fn desktop_handler(
 
     // If the request is asking for a file dialog, handle that, returning the list of files selected
     if trimmed_uri == "__file_dialog" {
-        if let Err(err) = file_dialog_responder(request, responder) {
+        if let Err(err) = file_dialog_responder_sync(request, responder) {
             tracing::error!("Failed to handle file dialog request: {err:?}");
         }
+
         return;
     }
 
@@ -177,7 +180,7 @@ fn module_loader(root_id: &str, headless: bool, edit_state: &WebviewEdits) -> St
     )
 }
 
-fn file_dialog_responder(
+fn file_dialog_responder_sync(
     request: wry::http::Request<Vec<u8>>,
     responder: wry::RequestAsyncResponder,
 ) -> dioxus_core::Result<()> {
@@ -191,11 +194,29 @@ fn file_dialog_responder(
     let data_from_header = base64::Engine::decode(&BASE64_STANDARD, header.as_bytes())
         .context("Failed to decode x-dioxus-data header from base64")?;
 
-    let mut file_dialog: FileDialogRequest = serde_json::from_slice(&data_from_header)
+    let file_dialog: FileDialogRequest = serde_json::from_slice(&data_from_header)
         .context("Failed to parse x-dioxus-data header as JSON")?;
 
-    let file_list = file_dialog.get_file_event();
+    #[cfg(feature = "tokio_runtime")]
+    tokio::spawn(async move {
+        let file_list = file_dialog.get_file_event_async().await;
+        _ = respond_to_file_dialog(file_dialog, file_list, responder);
+    });
 
+    #[cfg(not(feature = "tokio_runtime"))]
+    {
+        let file_list = file_dialog.get_file_event_sync();
+        respond_to_file_dialog(file_dialog, file_list, responder)?;
+    }
+
+    Ok(())
+}
+
+fn respond_to_file_dialog(
+    mut file_dialog: FileDialogRequest,
+    file_list: Vec<PathBuf>,
+    responder: wry::RequestAsyncResponder,
+) -> dioxus_core::Result<()> {
     // Get the position of the entry we're updating, so we can insert new entries in the same place
     // If we can't find it, just append to the end. This is usually due to the input not being in a form element.
     let position_of_entry = file_dialog

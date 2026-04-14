@@ -6,7 +6,7 @@ edition = "2021"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 rust-version = "1.76.0"
 
@@ -21,8 +21,8 @@ dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
-serde = "1.0.219"
-serde_json = "1.0.140"
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
@@ -61,7 +61,7 @@ wry = { workspace = true, features = ["os-webview", "protocol", "drag-drop", "li
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux",target_os = "dragonfly", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))'.dependencies]
 global-hotkey = "0.7.0"
-rfd = { version = "0.15.3", default-features = false, features = ["xdg-portal", "tokio"] }
+rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 muda = { workspace = true }
 
 [target.'cfg(any(target_os = "windows",target_os = "macos",target_os = "linux"))'.dependencies]

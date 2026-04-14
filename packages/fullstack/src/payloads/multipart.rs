@@ -32,7 +32,7 @@ use axum::extract::multipart::{Field, MultipartError};
 /// `Multipart` extractor must be *last* if there are multiple extractors in a handler.
 /// See ["the order of extractors"][order-of-extractors]
 ///
-/// [order-of-extractors]: crate::extract#the-order-of-extractors
+/// [order-of-extractors]: mod@crate::extract#the-order-of-extractors
 ///
 /// # Large Files
 ///

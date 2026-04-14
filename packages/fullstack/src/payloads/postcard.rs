@@ -23,7 +23,7 @@ use std::future::Future;
 /// *last* if there are multiple extractors in a handler.
 /// See ["the order of extractors"][order-of-extractors]
 ///
-/// [order-of-extractors]: crate::extract#the-order-of-extractors
+/// [order-of-extractors]: mod@crate::extract#the-order-of-extractors
 pub struct Postcard<T>(pub T);
 
 #[derive(thiserror::Error, Debug)]

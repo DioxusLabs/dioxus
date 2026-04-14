@@ -12,7 +12,6 @@ rust-version = "1.79.0"
 
 [dependencies]
 thiserror = { workspace = true }
-manganis-core = { workspace = true }
 
 # native/fs resolver dependencies
 http = { workspace = true, optional = true }

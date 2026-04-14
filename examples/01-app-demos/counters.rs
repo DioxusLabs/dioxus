@@ -19,8 +19,8 @@ fn app() -> Element {
         Stylesheet { href: STYLE }
 
         div { id: "controls",
-            button { onclick: move |_| counters.write().push(0), "Add counter" }
-            button { onclick: move |_| { counters.write().pop(); }, "Remove counter" }
+            button { onclick: move |_| counters.push(0), "Add counter" }
+            button { onclick: move |_| { counters.pop(); }, "Remove counter" }
         }
 
         h3 { "Total: {sum}" }
@@ -47,7 +47,7 @@ fn app() -> Element {
                     }
                 }
                 button { onclick: move |_| counters.write()[i] += 1, "+1" }
-                button { onclick: move |_| { counters.write().remove(i); }, "x" }
+                button { onclick: move |_| { counters.remove(i); }, "x" }
             }
         }
     }

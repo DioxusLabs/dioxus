@@ -171,10 +171,3 @@ pub trait HasScrollData: std::any::Any {
     /// Get the viewport height
     fn client_height(&self) -> i32;
 }
-
-impl_event! {
-    ScrollData;
-
-    /// onscroll
-    onscroll
-}

@@ -101,7 +101,7 @@ impl Workspace {
         )
         .context("Failed to load Cargo.toml")?;
 
-        let android_tools = crate::build::get_android_tools();
+        let android_tools = AndroidTools::current();
 
         let workspace = Arc::new(Self {
             krates,
@@ -274,6 +274,22 @@ impl Workspace {
             .join("gcc-ld")
     }
 
+    // wasm-ld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/wasm-ld
+    // rust-lld: ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rust-lld
+    pub fn rustc_objcopy(&self) -> PathBuf {
+        self.sysroot
+            .join("lib")
+            .join("rustlib")
+            .join(Triple::host().to_string())
+            .join("bin")
+            .join("rust-objcopy")
+    }
+
+    // ./rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib
+    pub fn rustc_objcopy_dylib_path(&self) -> PathBuf {
+        self.sysroot.join("lib")
+    }
+
     /// Find the "main" package in the workspace. There might not be one!
     pub fn find_main_package(&self, package: Option<String>) -> Result<NodeId> {
         if let Some(package) = package {
@@ -310,6 +326,14 @@ impl Workspace {
 
                 let found = workspace_members.find_map(|node| {
                     if let krates::Node::Krate { id, krate, .. } = node {
+                        // Skip this default member if it doesn't have any binary targets
+                        if !krate
+                            .targets
+                            .iter()
+                            .any(|t| t.kind.contains(&krates::cm::TargetKind::Bin))
+                        {
+                            return None;
+                        }
                         let member_path =
                             std::fs::canonicalize(krate.manifest_path.parent().unwrap()).unwrap();
                         if member_path == default_member_path {
@@ -366,7 +390,23 @@ impl Workspace {
         Ok(package)
     }
 
-    pub fn load_dioxus_config(&self, package: NodeId) -> Result<Option<DioxusConfig>> {
+    /// Load the Dioxus.toml configuration for a package.
+    ///
+    /// Optionally accepts a source file path to extract inline configuration from doc comments.
+    /// Inline config is merged with the base Dioxus.toml, with inline values taking precedence.
+    ///
+    /// This allows examples and binaries to embed config in their doc comments:
+    /// ```rust,ignore
+    /// //! ```dioxus.toml
+    /// //! [bundle]
+    /// //! identifier = "com.example.app"
+    /// //! ```
+    /// ```
+    pub fn load_dioxus_config(
+        &self,
+        package: NodeId,
+        source_file: Option<&Path>,
+    ) -> Result<Option<DioxusConfig>> {
         // Walk up from the cargo.toml to the root of the workspace looking for Dioxus.toml
         let mut current_dir = self.krates[package]
             .manifest_path
@@ -402,15 +442,35 @@ impl Workspace {
                 .to_path_buf();
         }
 
-        let Some(dioxus_conf_file) = dioxus_conf_file else {
-            return Ok(None);
+        // Load base config from Dioxus.toml (if it exists)
+        let base_config: Option<DioxusConfig> = match &dioxus_conf_file {
+            Some(path) => {
+                let content = std::fs::read_to_string(path)?;
+                Some(toml::from_str(&content).map_err(|err| {
+                    anyhow::anyhow!("Failed to parse Dioxus.toml at {path:?}: {err}")
+                })?)
+            }
+            None => None,
         };
 
-        toml::from_str::<DioxusConfig>(&std::fs::read_to_string(&dioxus_conf_file)?)
-            .map_err(|err| {
-                anyhow::anyhow!("Failed to parse Dioxus.toml at {dioxus_conf_file:?}: {err}")
-            })
-            .map(Some)
+        // Extract inline config from source file (if provided)
+        let inline_config = source_file.and_then(crate::config::extract_inline_config_from_file);
+
+        // Merge configs: inline overrides base
+        match (base_config, inline_config) {
+            (Some(base), Some(inline)) => crate::config::merge_with_inline_config(&base, inline)
+                .map(Some)
+                .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}")),
+            (Some(base), None) => Ok(Some(base)),
+            (None, Some(inline)) => {
+                // No Dioxus.toml, but we have inline config - use defaults + inline
+                let base = DioxusConfig::default();
+                crate::config::merge_with_inline_config(&base, inline)
+                    .map(Some)
+                    .map_err(|err| anyhow::anyhow!("Failed to merge inline config: {err}"))
+            }
+            (None, None) => Ok(None),
+        }
     }
 
     /// Create a new gitignore map for this target crate
@@ -551,6 +611,13 @@ impl Workspace {
                 }
             })
             .to_path_buf()
+    }
+
+    /// The directory where managed tool binaries are installed.
+    ///
+    /// Layout: `~/.dx/tools/{tool-name}-{version}/`
+    pub(crate) fn tools_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("tools")
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {

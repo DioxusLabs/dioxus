@@ -198,7 +198,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         // Run SSG and cache static routes
         if ssg {
-            crate::pre_render_static_routes(None, &mut server_build, None).await?;
+            server_build.pre_render_static_routes(None, None).await?;
         }
 
         tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");
@@ -209,12 +209,24 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
 impl BuildArtifacts {
     pub(crate) fn into_structured_output(self) -> StructuredBuildArtifacts {
+        // Extract the tip crate's args for the structured output.
+        // The tip crate is identified by replacing hyphens with underscores in the target name,
+        // but since we don't have the BuildRequest here, we look for the entry with link_args
+        // (only the tip crate has link_args attached) or fall back to any entry.
+        let (rustc_args, rustc_envs) = self
+            .workspace_rustc
+            .rustc_args
+            .iter()
+            .find(|(k, _v)| k.ends_with(".bin"))
+            .map(|f| (f.1.args.clone(), f.1.envs.clone()))
+            .unwrap_or_default();
+
         StructuredBuildArtifacts {
             path: self.root_dir,
             exe: self.exe,
-            rustc_args: self.direct_rustc.args,
-            rustc_envs: self.direct_rustc.envs,
-            link_args: self.direct_rustc.link_args,
+            rustc_args,
+            rustc_envs,
+            link_args: self.workspace_rustc.link_args,
             assets: self.assets.unique_assets().cloned().collect(),
         }
     }

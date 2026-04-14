@@ -15,7 +15,7 @@ fn app() -> Element {
     let handle = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {
         use futures_util::StreamExt;
         while let Some(message) = rx.next().await {
-            emails_sent.write().push(message);
+            emails_sent.push(message);
         }
     });
 

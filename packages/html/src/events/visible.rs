@@ -266,13 +266,6 @@ use crate::geometry::PixelsRect;
 
 pub type VisibleEvent = Event<VisibleData>;
 
-impl_event! {
-    VisibleData;
-
-    /// onvisible
-    onvisible
-}
-
 /// The VisibleResult type for the VisibleData
 pub type VisibleResult<T> = Result<T, VisibleError>;
 

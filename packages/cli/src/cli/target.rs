@@ -104,6 +104,14 @@ pub(crate) struct TargetArgs {
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) debug_symbols: bool,
 
+    /// Keep the name section in the wasm binary, useful for profiling and debugging [default: false]
+    ///
+    /// Unlike --debug-symbols which preserves DWARF debug info (requiring a browser extension to
+    /// read), the name section allows tools like console_error_panic_hook to print backtraces with
+    /// human-readable function names without any browser extension.
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
+    pub(crate) keep_names: bool,
+
     /// The name of the device we are hoping to upload to. By default, dx tries to upload to the active
     /// simulator. If the device name is passed, we will upload to that device instead.
     ///
@@ -153,6 +161,22 @@ pub(crate) struct TargetArgs {
     /// Automatically pass `--features=js_cfg` when building for wasm targets. This is enabled by default.
     #[clap(long, default_value_t = true, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) wasm_js_cfg: bool,
+
+    /// The Windows subsystem to use when building for Windows targets. This can be either `CONSOLE` or `WINDOWS`.
+    ///
+    /// By default, DX uses `WINDOWS` since it assumes a GUI application, but you can override this behavior with this flag.
+    ///
+    /// See <https://learn.microsoft.com/en-us/cpp/build/reference/subsystem-specify-subsystem?view=msvc-170> for more information.
+    #[clap(long, help_heading = HELP_HEADING)]
+    pub(crate) windows_subsystem: Option<String>,
+
+    /// Output raw JSON diagnostics from cargo instead of processing them [default: false]
+    ///
+    /// When enabled, cargo's JSON output will be relayed directly to stdout without any processing or formatting by DX.
+    /// This is useful for integration with other tools that expect cargo's raw JSON format.
+    #[clap(long, help_heading = HELP_HEADING)]
+    #[serde(default)]
+    pub(crate) raw_json_diagnostics: bool,
 }
 
 impl Anonymized for TargetArgs {
@@ -174,10 +198,12 @@ impl Anonymized for TargetArgs {
             "inject_loading_scripts": self.inject_loading_scripts,
             "wasm_split": self.wasm_split,
             "debug_symbols": self.debug_symbols,
+            "keep_names": self.keep_names,
             "device": self.device,
             "base_path": self.base_path.is_some(),
             "cargo_args": self.cargo_args.is_some(),
             "rustc_args": self.rustc_args.is_some(),
+            "raw_json_diagnostics": self.raw_json_diagnostics,
         }}
     }
 }

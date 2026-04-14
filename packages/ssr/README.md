@@ -9,8 +9,8 @@
 
 This crate is a part of the broader Dioxus ecosystem. For more resources about Dioxus, check out:
 
-- [Getting Started](https://dioxuslabs.com/learn/0.6/getting_started)
-- [Book](https://dioxuslabs.com/learn/0.6/)
+- [Getting Started](https://dioxuslabs.com/learn/0.7/getting_started)
+- [Book](https://dioxuslabs.com/learn/0.7/)
 - [Examples](https://github.com/DioxusLabs/dioxus/tree/main/examples)
 
 ## Overview

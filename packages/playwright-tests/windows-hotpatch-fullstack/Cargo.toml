@@ -1,0 +1,14 @@
+[package]
+name = "windows-hotpatch-fullstack"
+edition = "2021"
+version = "0.0.1"
+publish = false
+
+[dependencies]
+dioxus = { path = "../../dioxus", features = ["fullstack"] }
+
+[features]
+desktop = ["dioxus/desktop"]
+server = ["dioxus/server"]
+
+[workspace]

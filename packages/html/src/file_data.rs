@@ -30,17 +30,18 @@ impl FileData {
         self.inner.last_modified()
     }
 
-    pub async fn read_bytes(&self) -> Result<Bytes, dioxus_core::Error> {
+    pub async fn read_bytes(&self) -> Result<Bytes, dioxus_core::CapturedError> {
         self.inner.read_bytes().await
     }
 
-    pub async fn read_string(&self) -> Result<String, dioxus_core::Error> {
+    pub async fn read_string(&self) -> Result<String, dioxus_core::CapturedError> {
         self.inner.read_string().await
     }
 
     pub fn byte_stream(
         &self,
-    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::Error>> + Send + 'static>> {
+    ) -> Pin<Box<dyn Stream<Item = Result<Bytes, dioxus_core::CapturedError>> + Send + 'static>>
+    {
         self.inner.byte_stream()
     }
 
@@ -70,13 +71,19 @@ pub trait NativeFileData: Send + Sync {
     fn content_type(&self) -> Option<String>;
     fn read_bytes(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>>;
     fn byte_stream(
         &self,
-    ) -> Pin<Box<dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send>>;
+    ) -> Pin<
+        Box<
+            dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
+                + 'static
+                + Send,
+        >,
+    >;
     fn read_string(
         &self,
-    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>>;
+    ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>>;
     fn inner(&self) -> &dyn std::any::Any;
 }
 
@@ -143,7 +150,8 @@ mod serialize {
 
         fn read_bytes(
             &self,
-        ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::Error>> + 'static>> {
+        ) -> Pin<Box<dyn Future<Output = Result<Bytes, dioxus_core::CapturedError>> + 'static>>
+        {
             let contents = self.contents.clone();
             let path = self.path.clone();
 
@@ -157,13 +165,16 @@ mod serialize {
                     return Ok(std::fs::read(path).map(Bytes::from)?);
                 }
 
-                Err(dioxus_core::Error::msg("File contents not available"))
+                Err(dioxus_core::CapturedError::msg(
+                    "File contents not available",
+                ))
             })
         }
 
         fn read_string(
             &self,
-        ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::Error>> + 'static>> {
+        ) -> Pin<Box<dyn Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>>
+        {
             let contents = self.contents.clone();
             let path = self.path.clone();
 
@@ -177,7 +188,9 @@ mod serialize {
                     return Ok(std::fs::read_to_string(path)?);
                 }
 
-                Err(dioxus_core::Error::msg("File contents not available"))
+                Err(dioxus_core::CapturedError::msg(
+                    "File contents not available",
+                ))
             })
         }
 
@@ -185,7 +198,9 @@ mod serialize {
             &self,
         ) -> Pin<
             Box<
-                dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::Error>> + 'static + Send,
+                dyn futures_util::Stream<Item = Result<Bytes, dioxus_core::CapturedError>>
+                    + 'static
+                    + Send,
             >,
         > {
             let contents = self.contents.clone();
@@ -201,7 +216,9 @@ mod serialize {
                     return Ok(std::fs::read(path).map(Bytes::from)?);
                 }
 
-                Err(dioxus_core::Error::msg("File contents not available"))
+                Err(dioxus_core::CapturedError::msg(
+                    "File contents not available",
+                ))
             }))
         }
 

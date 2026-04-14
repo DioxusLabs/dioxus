@@ -28,7 +28,11 @@ twoway![
     attributes,
     basic_expr,
     collapse_expr,
+    comments_attr_expr_blocks,
     comments,
+    comments_async_closure,
+    comments_expr_with_strings,
+    comments_nested_closures,
     commentshard,
     complex,
     docsite,
@@ -61,4 +65,42 @@ twoway![
     prop_rsx,
     asset,
     collapse,
+    expr_on_conditional,
+    blank_lines,
+    blank_lines_preserved,
+    forloop_tuple,
 ];
+
+fn assert_idempotent(src: &str) {
+    let src = src.replace("\r", "");
+
+    let once =
+        dioxus_autofmt::apply_formats(&src, dioxus_autofmt::fmt_file(&src, Default::default()))
+            .replace("\r", "");
+    let twice =
+        dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()))
+            .replace("\r", "");
+
+    pretty_assertions::assert_eq!(src, once);
+    pretty_assertions::assert_eq!(once, twice);
+}
+
+#[test]
+fn comments_async_closure_is_idempotent() {
+    assert_idempotent(include_str!("./samples/comments_async_closure.rsx"));
+}
+
+#[test]
+fn comments_nested_closures_is_idempotent() {
+    assert_idempotent(include_str!("./samples/comments_nested_closures.rsx"));
+}
+
+#[test]
+fn comments_attr_expr_blocks_is_idempotent() {
+    assert_idempotent(include_str!("./samples/comments_attr_expr_blocks.rsx"));
+}
+
+#[test]
+fn comments_expr_with_strings_is_idempotent() {
+    assert_idempotent(include_str!("./samples/comments_expr_with_strings.rsx"));
+}

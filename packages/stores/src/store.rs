@@ -8,8 +8,8 @@ use dioxus_core::{
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue,
     CreateBoxedSignalStorage, Global, InitializeFromFunction, MappedMutSignal, ReadSignal,
-    Readable, ReadableExt, ReadableRef, Storage, UnsyncStorage, Writable, WritableExt, WritableRef,
-    WriteSignal,
+    Readable, ReadableExt, ReadableRef, Storage, SyncStorage, UnsyncStorage, Writable, WritableExt,
+    WritableRef, WriteSignal,
 };
 use std::marker::PhantomData;
 
@@ -26,6 +26,9 @@ pub type ReadStore<T, S = UnsyncStorage> = Store<T, ReadSignal<T, S>>;
 
 /// A type alias for a boxed writable-only store.
 pub type WriteStore<T, S = UnsyncStorage> = Store<T, WriteSignal<T, S>>;
+
+/// A type alias for a store backed by SyncStorage.
+pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 
 /// Stores are a reactive type built for nested data structures. Each store will lazily create signals
 /// for each field/member of the data structure as needed.
@@ -402,6 +405,14 @@ write_impls!(Store<T, Lens> where Lens: Writable<Target = T>);
 /// ```
 pub fn use_store<T: 'static>(init: impl FnOnce() -> T) -> Store<T> {
     use_hook(move || Store::new(init()))
+}
+
+/// Create a new [`SyncStore`]. Stores are a reactive type built for nested data structures.
+/// `SyncStore` is a Store backed by `SyncStorage`.
+///
+/// Like [`use_store`], but produces `SyncStore<T>` instead of `Store<T>`
+pub fn use_store_sync<T: Send + Sync + 'static>(init: impl FnOnce() -> T) -> SyncStore<T> {
+    use_hook(|| Store::new_maybe_sync(init()))
 }
 
 /// A type alias for global stores

@@ -96,7 +96,7 @@ fn test_serialize_const_layout_struct_list() {
     const _ASSERT: () = {
         let mut buf = ConstVec::new();
         buf = serialize_const(&DATA, buf);
-        let buf = buf.read();
+        let buf = buf.as_ref();
         let [first, second, third] = match deserialize_const!([OtherStruct; 3], buf) {
             Some((_, data)) => data,
             None => panic!("data mismatch"),
@@ -109,7 +109,7 @@ fn test_serialize_const_layout_struct_list() {
         let mut buf = ConstVec::new();
         const DATA_AGAIN: [[OtherStruct; 3]; 3] = [DATA, DATA, DATA];
         buf = serialize_const(&DATA_AGAIN, buf);
-        let buf = buf.read();
+        let buf = buf.as_ref();
         let [first, second, third] = match deserialize_const!([[OtherStruct; 3]; 3], buf) {
             Some((_, data)) => data,
             None => panic!("data mismatch"),
@@ -128,7 +128,7 @@ fn test_serialize_const_layout_struct_list() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&DATA, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     let (_, data2) = deserialize_const!([OtherStruct; 3], buf).unwrap();
     assert_eq!(DATA, data2);
 }
@@ -158,7 +158,41 @@ fn test_serialize_const_layout_struct() {
     let mut buf = ConstVec::new();
     buf = serialize_const(&data, buf);
     println!("{:?}", buf.as_ref());
-    let buf = buf.read();
+    let buf = buf.as_ref();
     let (_, data2) = deserialize_const!(OtherStruct, buf).unwrap();
     assert_eq!(data, data2);
+}
+
+#[test]
+fn test_adding_struct_field_non_breaking() {
+    #[derive(Debug, PartialEq, SerializeConst)]
+    struct Initial {
+        a: u32,
+        b: u8,
+    }
+
+    #[derive(Debug, PartialEq, SerializeConst)]
+    struct New {
+        c: u32,
+        b: u8,
+        a: u32,
+    }
+
+    let data = New {
+        a: 0x11111111,
+        b: 0x22,
+        c: 0x33333333,
+    };
+    let mut buf = ConstVec::new();
+    buf = serialize_const(&data, buf);
+    let buf = buf.as_ref();
+    // The new struct should be able to deserialize into the initial struct
+    let (_, data2) = deserialize_const!(Initial, buf).unwrap();
+    assert_eq!(
+        Initial {
+            a: data.a,
+            b: data.b,
+        },
+        data2
+    );
 }

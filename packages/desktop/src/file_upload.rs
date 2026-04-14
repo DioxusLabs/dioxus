@@ -54,6 +54,19 @@ impl FileDialogRequest {
         vec![]
     }
 
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        vec![]
+    }
+
     #[cfg(any(
         target_os = "windows",
         target_os = "macos",
@@ -63,13 +76,84 @@ impl FileDialogRequest {
         target_os = "netbsd",
         target_os = "openbsd"
     ))]
-    pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
+    pub(crate) fn get_file_event_sync(&self) -> Vec<PathBuf> {
         let dialog = rfd::FileDialog::new();
-
         if self.directory {
             self.get_file_event_for_folder(dialog)
         } else {
             self.get_file_event_for_file(dialog)
+        }
+    }
+
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        let mut dialog = rfd::AsyncFileDialog::new();
+
+        if self.directory {
+            if self.multiple {
+                dialog
+                    .pick_folders()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            } else {
+                dialog
+                    .pick_folder()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            }
+        } else {
+            let filters: Vec<_> = self
+                .accept
+                .as_deref()
+                .unwrap_or(".*")
+                .split(',')
+                .filter_map(|s| Filters::from_str(s.trim()).ok())
+                .collect();
+
+            let file_extensions: Vec<_> = filters
+                .iter()
+                .flat_map(|f| f.as_extensions().into_iter())
+                .collect();
+
+            let filter_name = file_extensions
+                .iter()
+                .map(|extension| format!("*.{extension}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
+
+            let files: Vec<_> = if self.multiple {
+                dialog
+                    .pick_files()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            } else {
+                dialog
+                    .pick_file()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            };
+
+            files
         }
     }
 
@@ -221,14 +305,24 @@ impl HasFormData for DesktopFormData {
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
+    paths: Rc<RefCell<Vec<PathBuf>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
+        match event {
+            DragDropEvent::Enter { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            DragDropEvent::Drop { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            _ => {}
+        }
         self.event.borrow_mut().replace(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
         self.event.borrow_mut().clone()
+    }
+
+    pub fn current_paths(&self) -> Vec<PathBuf> {
+        self.paths.borrow_mut().clone()
     }
 }
 
@@ -331,7 +425,10 @@ impl NativeFileData for DesktopFileData {
     fn read_bytes(
         &self,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_core::Error>> + 'static>,
+        Box<
+            dyn std::future::Future<Output = Result<bytes::Bytes, dioxus_core::CapturedError>>
+                + 'static,
+        >,
     > {
         let path = self.0.clone();
         Box::pin(async move { Ok(bytes::Bytes::from(std::fs::read(&path)?)) })
@@ -340,7 +437,7 @@ impl NativeFileData for DesktopFileData {
     fn read_string(
         &self,
     ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<String, dioxus_core::Error>> + 'static>,
+        Box<dyn std::future::Future<Output = Result<String, dioxus_core::CapturedError>> + 'static>,
     > {
         let path = self.0.clone();
         Box::pin(async move { Ok(std::fs::read_to_string(&path)?) })
@@ -358,34 +455,15 @@ impl NativeFileData for DesktopFileData {
         &self,
     ) -> std::pin::Pin<
         Box<
-            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_core::Error>>
+            dyn futures_util::Stream<Item = Result<bytes::Bytes, dioxus_core::CapturedError>>
                 + 'static
                 + Send,
         >,
     > {
         let path = self.0.clone();
-        #[cfg(feature = "tokio_runtime")]
-        {
-            // todo!()
-            // use futures_util::TryFutureExt;
-
-            // futures_util::stream::try_unfold(File::open(path), |mut file| async move {
-            // let mut buf = vec![0; 8192];
-            // let n = file
-            //     .read(&mut buf)
-            //     .await
-            //     .map_err(|e| dioxus_core::Error::from(e))?;
-            // if n == 0 {
-            //     Ok(None)
-            // } else {
-            //     buf.truncate(n);
-            //     Ok(Some((bytes::Bytes::from(buf), file)))
-            // }
-            // })
-            // .map(|res| res.map(bytes::Bytes::from))
-            // .boxed()
-        }
-        todo!()
+        Box::pin(futures_util::stream::once(async move {
+            Ok(bytes::Bytes::from(std::fs::read(&path)?))
+        }))
     }
 
     fn content_type(&self) -> Option<String> {

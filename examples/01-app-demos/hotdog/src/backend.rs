@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 #[cfg(feature = "server")]
 thread_local! {
     static DB: std::sync::LazyLock<rusqlite::Connection> = std::sync::LazyLock::new(|| {
-        let conn = rusqlite::Connection::open("hotdogdb/hotdog.db").expect("Failed to open database");
+        let conn = rusqlite::Connection::open(":memory:").expect("Failed to open database");
 
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS dogs (

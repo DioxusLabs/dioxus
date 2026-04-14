@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::Anonymized;
+use crate::{shell_completions::GENERATING_COMPLETIONS, Anonymized};
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use serde_json::{json, Value};
@@ -63,7 +63,7 @@ where
 {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         T::augment_args(cmd).defer(|cmd| {
-            PlatformOverrides::<Self>::augment_subcommands(cmd.disable_help_subcommand(true))
+            PlatformOverrides::<T>::augment_subcommands(cmd.disable_help_subcommand(true))
         })
     }
 
@@ -159,9 +159,14 @@ where
     U: Subcommand,
 {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        // We use the special `defer` method which lets us recursively call `augment_args` on the inner command
-        // and thus `from_arg_matches`
-        T::augment_args(cmd).defer(|cmd| U::augment_subcommands(cmd.disable_help_subcommand(true)))
+        let cmd = T::augment_args(cmd).disable_help_subcommand(true);
+        if GENERATING_COMPLETIONS.load(std::sync::atomic::Ordering::Relaxed) {
+            cmd
+        } else {
+            // We use the special `defer` method which lets us recursively call `augment_args` on the inner command
+            // and thus `from_arg_matches`
+            cmd.defer(|cmd| U::augment_subcommands(cmd))
+        }
     }
 
     fn augment_args_for_update(_cmd: clap::Command) -> clap::Command {
@@ -180,5 +185,64 @@ where
 
     fn update_from_arg_matches(&mut self, _matches: &ArgMatches) -> Result<(), clap::Error> {
         unimplemented!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    #[test]
+    fn cli_parses_bundle_with_package_types_without_recursing() {
+        let cli = crate::Cli::try_parse_from([
+            "dx",
+            "bundle",
+            "--platform",
+            "desktop",
+            "--package-types",
+            "msi",
+        ])
+        .expect("bundle command should parse");
+
+        assert!(matches!(cli.action, crate::Commands::Bundle(_)));
+    }
+
+    #[test]
+    fn cli_parses_platform_override_subcommands_without_recursing() {
+        let cli = crate::Cli::try_parse_from([
+            "dx",
+            "bundle",
+            "--platform",
+            "desktop",
+            "@client",
+            "--release",
+            "@server",
+            "--platform",
+            "server",
+        ])
+        .expect("platform override subcommands should parse");
+
+        let crate::Commands::Bundle(bundle) = cli.action else {
+            panic!("expected bundle command");
+        };
+
+        let client = bundle
+            .args
+            .client
+            .as_ref()
+            .expect("@client override should be captured");
+        let server = bundle
+            .args
+            .server
+            .as_ref()
+            .expect("@server override should be captured");
+
+        assert!(!bundle.args.shared.build_arguments.release);
+        assert!(client.build_arguments.release);
+        assert_eq!(
+            server.build_arguments.platform,
+            crate::Platform::Server,
+            "@server should override the platform"
+        );
     }
 }

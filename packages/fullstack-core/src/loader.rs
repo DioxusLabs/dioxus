@@ -43,7 +43,7 @@ pub fn use_loader<F, T, E>(
 where
     F: Future<Output = Result<T, E>> + 'static,
     T: 'static + PartialEq + Serialize + DeserializeOwned,
-    E: Into<dioxus_core::Error> + 'static,
+    E: Into<CapturedError> + 'static,
 {
     let resolved = use_server_future(move || {
         let fut = future();

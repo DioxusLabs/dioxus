@@ -27,12 +27,12 @@ fn app() -> Element {
         for file in files {
             let filename = file.name();
             if let Ok(contents) = file.read_string().await {
-                files_uploaded.write().push(UploadedFile {
+                files_uploaded.push(UploadedFile {
                     name: filename,
                     contents,
                 });
             } else {
-                files_uploaded.write().push(UploadedFile {
+                files_uploaded.push(UploadedFile {
                     name: filename,
                     contents: "Failed to read file".into(),
                 });
@@ -45,7 +45,7 @@ fn app() -> Element {
 
         h1 { "File Upload Example" }
         p { "Drop a .txt, .rs, or .js file here to read it" }
-        button { onclick: move |_| files_uploaded.write().clear(), "Clear files" }
+        button { onclick: move |_| files_uploaded.clear(), "Clear files" }
 
         div {
             label { r#for: "directory-upload", "Enable directory upload" }

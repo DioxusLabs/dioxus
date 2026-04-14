@@ -14,6 +14,7 @@ use std::{
     future::{Future, IntoFuture},
     pin::Pin,
     rc::{Rc, Weak},
+    sync::Arc,
 };
 use tao::{
     event::Event,
@@ -59,7 +60,7 @@ pub struct DesktopService {
     pub webview: WebView,
 
     /// The tao window itself
-    pub window: Window,
+    pub window: Arc<Window>,
 
     pub(crate) shared: Rc<SharedContext>,
 
@@ -85,7 +86,7 @@ impl std::ops::Deref for DesktopService {
 impl DesktopService {
     pub(crate) fn new(
         webview: WebView,
-        window: Window,
+        window: Arc<Window>,
         shared: Rc<SharedContext>,
         asset_handlers: AssetHandlerRegistry,
         file_hover: NativeFileHover,

@@ -30,6 +30,8 @@ serde_json = { workspace = true }
 generational-box = { workspace = true }
 futures-util = { workspace = true, features = ["std"] }
 dioxus-stores.workspace = true
+tokio = { workspace = true, features = ["rt"] }
+parking_lot = { workspace = true }
 
 [features]
 web = []

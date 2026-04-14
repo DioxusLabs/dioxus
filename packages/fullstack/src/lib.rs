@@ -107,6 +107,9 @@ pub mod payloads {
     pub mod header;
     pub use header::*;
 
+    pub mod query;
+    pub use query::*;
+
     #[cfg(feature = "ws")]
     pub mod websocket;
     #[cfg(feature = "ws")]

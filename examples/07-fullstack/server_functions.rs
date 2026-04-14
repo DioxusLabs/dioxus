@@ -92,8 +92,8 @@
 //! take a `State<T>` extractor cannot be automatically added to the router since the dioxus router
 //! type does not know how to construct the `T` type.
 //!
-//! These server functions will be registered once the `ServerFnState<T>` layer is added to the app with
-//! `router = router.layer(ServerFnState::new(your_state))`.
+//! These server functions will be registered once the `ServerState<T>` layer is added to the app with
+//! `router = router.layer(ServerState::new(your_state))`.
 //!
 //! ## Middleware
 //!
@@ -282,7 +282,12 @@ async fn anonymous() -> Result<String> {
 /// This is less preferred over the `#[get]`/`#[post]` syntax but is still functional for backwards
 /// compatibility. Previously, only the `#[server]` attribute was available, but as of Dioxus 0.7,
 /// the `#[get]`/`#[post]` attributes are preferred for new code.
-#[server(prefix = "/api/custom", endpoint = "my_anonymous")]
+///
+/// You can also use server-only extractors here as well, provided they come after the configuration.
+#[server(prefix = "/api/custom", endpoint = "my_anonymous", headers: dioxus_fullstack::HeaderMap)]
 async fn custom_anonymous() -> Result<String> {
-    Ok("Hello from a custom anonymous server function!".to_string())
+    Ok(format!(
+        "Hello from a custom anonymous server function! -> {:#?}",
+        headers
+    ))
 }

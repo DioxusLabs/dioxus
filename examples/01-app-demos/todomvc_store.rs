@@ -175,7 +175,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter && !draft.read().is_empty() {
+        if evt.key() == Key::Enter && !draft.is_empty() {
             let id = todo_id();
             let todo = TodoItem::new(draft.take());
             todos.todos().insert(id, todo);

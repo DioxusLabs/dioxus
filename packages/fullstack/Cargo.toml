@@ -66,13 +66,13 @@ tower-http = { workspace = true, features = ["fs", "limit"], optional = true }
 tower-layer = { version = "0.3.3", optional = true }
 
 # payloads
-postcard = { features = ["alloc"], optional = true, workspace = true, default-features = true }
+postcard = { features = ["alloc", "use-std"], optional = true, workspace = true, default-features = true }
 rmp-serde = { version = "1.3", optional = true }
 async-stream = "0.3.6"
 
 # websocket stuff
 # [target.'cfg(target_arch = "wasm32")'.dependencies]
-web-sys = { version = "0.3", features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
+web-sys = { workspace = true, features = ["WebSocket", "CloseEvent", "ErrorEvent", "Event", "MessageEvent", "BinaryType", "FormData", "Response", "ReadableStream", "AbortController", "File", "ReadableStream", "HtmlFormElement", "FormData"], optional = true }
 gloo-net = "0.6.0"
 js-sys = { workspace = true }
 wasm-bindgen = { workspace = true }
@@ -84,7 +84,7 @@ content_disposition = "0.4.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 async-tungstenite = { version = "0.31.0", default-features = false, features = ["futures-03-sink"], optional = true }
 tungstenite = { version = "0.27", default-features = false, features = ["handshake"], optional = true }
-tokio-util = { workspace = true, features = ["codec", "compat"] }
+tokio-util = { workspace = true, features = ["codec", "compat", "rt"] }
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["fullstack", "router"] }

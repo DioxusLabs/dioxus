@@ -226,31 +226,3 @@ pub trait HasDragData: HasMouseData + crate::HasFileData + crate::HasDataTransfe
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! {
-    DragData;
-
-    /// ondrag
-    ondrag
-
-    /// ondragend
-    ondragend
-
-    /// ondragenter
-    ondragenter
-
-    /// ondragexit
-    ondragexit
-
-    /// ondragleave
-    ondragleave
-
-    /// ondragover
-    ondragover
-
-    /// ondragstart
-    ondragstart
-
-    /// ondrop
-    ondrop
-}

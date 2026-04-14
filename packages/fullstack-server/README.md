@@ -15,7 +15,7 @@
 [discord-url]: https://discord.gg/XgGxMSkvUM
 
 [Website](https://dioxuslabs.com) |
-[Guides](https://dioxuslabs.com/learn/0.6/) |
+[Guides](https://dioxuslabs.com/learn/0.7/) |
 [API Docs](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
@@ -24,7 +24,7 @@ Fullstack utilities for the [`Dioxus`](https://dioxuslabs.com) framework.
 # Features
 
 - Integrates with the [Axum](./examples/axum-hello-world/src/main.rs) server framework with utilities for serving and rendering Dioxus applications.
-- [Server functions](https://docs.rs/dioxus-fullstack/latest/dioxus_fullstack/prelude/attr.server.html) allow you to call code on the server from the client as if it were a normal function.
+- Server functions allow you to call code on the server from the client as if it were a normal function.
 - Instant RSX Hot reloading with [`dioxus-hot-reload`](https://crates.io/crates/dioxus-hot-reload).
 - Passing root props from the server to the client.
 
@@ -128,7 +128,7 @@ async fn get_meaning(of: String) -> ServerFnResult<Option<u32>> {
 
 ## Getting Started
 
-To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.6/getting_started), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/examples).
+To get started with full stack Dioxus, check out our [getting started guide](https://dioxuslabs.com/learn/0.7/getting_started), or the [full stack examples](https://github.com/DioxusLabs/dioxus/tree/master/examples).
 
 ## Contributing
 

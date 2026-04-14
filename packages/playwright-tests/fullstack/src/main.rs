@@ -9,12 +9,19 @@ use dioxus::fullstack::{commit_initial_chunk, Websocket};
 use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {
-    dioxus::LaunchBuilder::new()
-        .with_cfg(server_only! {
-            dioxus::server::ServeConfig::builder().enable_out_of_order_streaming()
-        })
-        .with_context(1234u32)
-        .launch(app);
+    #[cfg(feature = "server")]
+    dioxus::serve(|| async move {
+        use dioxus::server::axum::{self, Extension};
+
+        let cfg = dioxus::server::ServeConfig::builder().enable_out_of_order_streaming();
+        let router = axum::Router::new()
+            .serve_dioxus_application(cfg, app)
+            .layer(Extension(1234u32));
+
+        Ok(router)
+    });
+    #[cfg(not(feature = "server"))]
+    launch(app);
 }
 
 fn app() -> Element {
@@ -74,13 +81,12 @@ fn DefaultServerFnCodec() -> Element {
 
 #[cfg(feature = "server")]
 async fn assert_server_context_provided() {
-    // todo!("replace server context....")
-    // use dioxus::server::{extract, FromContext};
-    // let FromContext(i): FromContext<u32> = extract().await.unwrap();
-    // assert_eq!(i, 1234u32);
+    use dioxus::{fullstack::FullstackContext, server::axum::Extension};
+    // Just make sure the server context is provided
+    let Extension(id): Extension<u32> = FullstackContext::extract().await.unwrap();
+    assert_eq!(id, 1234u32);
 }
 
-// #[server(PostServerData)]
 #[server]
 async fn post_server_data(data: String) -> ServerFnResult {
     assert_server_context_provided().await;
@@ -89,7 +95,6 @@ async fn post_server_data(data: String) -> ServerFnResult {
     Ok(())
 }
 
-// #[server(GetServerData)]
 #[server]
 async fn get_server_data() -> ServerFnResult<String> {
     assert_server_context_provided().await;

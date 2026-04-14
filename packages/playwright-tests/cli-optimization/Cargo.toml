@@ -15,3 +15,8 @@ serde_json.workspace = true
 # reqwest = { workspace = true, features = ["blocking"] }
 # flate2 = "1.1.2"
 # tar = "0.4.44"
+
+# We need a separate bin for the old CLI build to avoid conflicting caches
+[[bin]]
+name = "cli-optimization-old-cli"
+path = "src/old_cli.rs"

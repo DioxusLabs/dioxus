@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::NamedTempFile;
 
+/// Pinned binaryen version (contains wasm-opt).
+const BINARYEN_VERSION: &str = "129";
+
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
     std::fs::write(output_path, bytes)?;
@@ -58,6 +61,7 @@ impl WasmOpt {
             "--enable-bulk-memory",
             "--enable-mutable-globals",
             "--enable-nontrapping-float-to-int",
+            "--enable-threads",
         ];
 
         if self.cfg.memory_packing {
@@ -134,15 +138,17 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // Find the platform identifier based on the current OS and architecture
     // hardcoded for now to get around github api rate limits
     if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-windows.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-windows.tar.gz".to_string());
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-arm64-windows.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-aarch64-linux.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-aarch64-linux.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-x86_64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-x86_64-macos.tar.gz".to_string());
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_123/binaryen-version_123-arm64-macos.tar.gz".to_string());
+        return Ok("https://github.com/WebAssembly/binaryen/releases/download/version_127/binaryen-version_127-arm64-macos.tar.gz".to_string());
     };
 
     let url = "https://api.github.com/repos/WebAssembly/binaryen/releases/latest";
@@ -165,6 +171,8 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     // Find the platform identifier based on the current OS and architecture
     let platform = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
         "x86_64-windows"
+    } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+        "arm64-windows"
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         "x86_64-linux"
     } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
@@ -244,7 +252,7 @@ pub fn installed_location() -> Option<PathBuf> {
 }
 
 fn install_dir() -> PathBuf {
-    Workspace::dioxus_data_dir().join("binaryen")
+    Workspace::tools_dir().join(format!("binaryen-{BINARYEN_VERSION}"))
 }
 
 fn installed_bin_name() -> &'static str {

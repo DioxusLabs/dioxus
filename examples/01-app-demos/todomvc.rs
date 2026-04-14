@@ -115,13 +115,13 @@ fn TodoHeader(mut todos: WriteSignal<HashMap<u32, TodoItem>>) -> Element {
     let mut todo_id = use_signal(|| 0);
 
     let onkeydown = move |evt: KeyboardEvent| {
-        if evt.key() == Key::Enter && !draft.read().is_empty() {
+        if evt.key() == Key::Enter && !draft.is_empty() {
             let id = todo_id();
             let todo = TodoItem {
                 checked: false,
                 contents: draft.to_string(),
             };
-            todos.write().insert(id, todo);
+            todos.insert(id, todo);
             todo_id += 1;
             draft.set("".to_string());
         }
@@ -169,7 +169,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().checked = evt.checked()
+                    oninput: move |evt| todos.get_mut(&id).unwrap().checked = evt.checked()
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -181,7 +181,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                     class: "destroy",
                     onclick: move |evt| {
                         evt.prevent_default();
-                        todos.write().remove(&id);
+                        todos.remove(&id);
                     },
                 }
             }
@@ -191,7 +191,7 @@ fn TodoEntry(mut todos: WriteSignal<HashMap<u32, TodoItem>>, id: u32) -> Element
                 input {
                     class: "edit",
                     value: "{contents}",
-                    oninput: move |evt| todos.write().get_mut(&id).unwrap().contents = evt.value(),
+                    oninput: move |evt| todos.get_mut(&id).unwrap().contents = evt.value(),
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
@@ -250,7 +250,7 @@ fn ListFooter(
             if show_clear_completed() {
                 button {
                     class: "clear-completed",
-                    onclick: move |_| todos.write().retain(|_, todo| !todo.checked),
+                    onclick: move |_| todos.retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
             }
