@@ -1,50 +1,48 @@
-use super::HotpatchModuleCache;
-use super::{AppBuilder, BuilderUpdate};
-use crate::{
-    opt::{process_file_to, AppManifest},
-    BuildMode, BuildRequest,
-};
-use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
-    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
-};
-use anyhow::{bail, ensure, Context};
-use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
-use depinfo::RustcDepInfo;
-use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
-use dioxus_cli_config::{server_ip, server_port};
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use dioxus_dx_wire_format::BuildStage;
-use futures_util::{stream::FuturesUnordered, StreamExt};
-use itertools::Itertools;
-use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
-use manganis_core::{AndroidArtifactMetadata, AssetVariant};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{borrow::Cow, ffi::OsString};
+//! ### Web:
+//!
+//! Create a folder that is somewhat similar to an app-image (exe + asset)
+//! The server is dropped into the `web` folder, even if there's no `public` folder.
+//! If there's no server (SPA), we still use the `web` folder, but it only contains the
+//! public folder.
+//!
+//! ```
+//! web/
+//!     server
+//!     assets/
+//!     public/
+//!         index.html
+//!         wasm/
+//!            app.wasm
+//!            glue.js
+//!            snippets/
+//!                ...
+//!         assets/
+//!            logo.png
+//! ```
+//!
+//! ### Linux:
+//!
+//! <https://docs.appimage.org/reference/appdir.html#ref-appdir>
+//! current_exe.join("Assets")
+//! ```
+//! app.appimage/
+//!     AppRun
+//!     app.desktop
+//!     package.json
+//!     assets/
+//!         logo.png
+//! ```
+
+use crate::{opt::AppManifest, BuildMode, BuildRequest};
+use crate::{BuildContext, BundleFormat, Result, TraceSrc, WasmBindgen, WasmOptConfig};
+use anyhow::Context;
+use dioxus_cli_config::format_base_path_meta_element;
+use manganis::AssetOptions;
+use manganis_core::AssetVariant;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     io::Write,
     path::{Path, PathBuf},
-    process::Stdio,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::{SystemTime, UNIX_EPOCH},
 };
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    time::Duration,
-};
-use subsecond_types::JumpTable;
-use target_lexicon::{Architecture, OperatingSystem, Triple};
-use tempfile::TempDir;
-use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
 impl BuildRequest {

@@ -259,13 +259,11 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     builder.full_rebuild().await;
                     devserver.send_reload_start().await;
                     devserver.start_build().await;
-                } else {
-                    if let Err(err) = builder.open_all(&devserver, true).await {
-                        tracing::error!(
-                            "Failed to open app: {}",
-                            crate::error::log_stacktrace(&err, 15)
-                        )
-                    }
+                } else if let Err(err) = builder.open_all(&devserver, true).await {
+                    tracing::error!(
+                        "Failed to open app: {}",
+                        crate::error::log_stacktrace(&err, 15)
+                    )
                 }
             }
 

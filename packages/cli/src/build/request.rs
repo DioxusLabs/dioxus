@@ -83,133 +83,7 @@
 //! bundle itself:
 //! - session_cache_dir which stores stuff like window position
 //!
-//! ### Web:
-//!
-//! Create a folder that is somewhat similar to an app-image (exe + asset)
-//! The server is dropped into the `web` folder, even if there's no `public` folder.
-//! If there's no server (SPA), we still use the `web` folder, but it only contains the
-//! public folder.
-//!
-//! ```
-//! web/
-//!     server
-//!     assets/
-//!     public/
-//!         index.html
-//!         wasm/
-//!            app.wasm
-//!            glue.js
-//!            snippets/
-//!                ...
-//!         assets/
-//!            logo.png
-//! ```
-//!
-//! ### Linux:
-//!
-//! <https://docs.appimage.org/reference/appdir.html#ref-appdir>
-//! current_exe.join("Assets")
-//! ```
-//! app.appimage/
-//!     AppRun
-//!     app.desktop
-//!     package.json
-//!     assets/
-//!         logo.png
-//! ```
-//!
-//! ### Macos
-//!
-//! We simply use the macos format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
-//! We put assets in an assets dir such that it generally matches every other platform and we can
-//! output `/assets/blah` from manganis.
-//! ```
-//! App.app/
-//!     Contents/
-//!         Info.plist
-//!         MacOS/
-//!             Frameworks/
-//!         Resources/
-//!             assets/
-//!                 blah.icns
-//!                 blah.png
-//!         CodeResources
-//!         _CodeSignature/
-//! ```
-//!
-//! ### iOS
-//!
-//! Not the same as mac! ios apps are a bit "flattened" in comparison. simpler format, presumably
-//! since most ios apps don't ship frameworks/plugins and such.
-//!
-//! todo(jon): include the signing and entitlements in this format diagram.
-//! ```
-//! App.app/
-//!     main
-//!     assets/
-//! ```
-//!
-//! ### Android:
-//!
-//! Currently we need to generate a `src` type structure, not a pre-packaged apk structure, since
-//! we need to compile kotlin and java. This pushes us into using gradle and following a structure
-//! similar to that of cargo mobile2. Eventually I'd like to slim this down (drop buildSrc) and
-//! drive the kotlin build ourselves. This would let us drop gradle (yay! no plugins!) but requires
-//! us to manage dependencies (like kotlinc) ourselves (yuck!).
-//!
-//! <https://github.com/WanghongLin/miscellaneous/blob/master/tools/build-apk-manually.sh>
-//!
-//! Unfortunately, it seems that while we can drop the `android` build plugin, we still will need
-//! gradle since kotlin is basically gradle-only.
-//!
-//! Pre-build:
-//! ```
-//! app.apk/
-//!     .gradle
-//!     app/
-//!         src/
-//!             main/
-//!                 assets/
-//!                 jniLibs/
-//!                 java/
-//!                 kotlin/
-//!                 res/
-//!                 AndroidManifest.xml
-//!             build.gradle.kts
-//!             proguard-rules.pro
-//!         buildSrc/
-//!             build.gradle.kts
-//!             src/
-//!                 main/
-//!                     kotlin/
-//!                          BuildTask.kt
-//!     build.gradle.kts
-//!     gradle.properties
-//!     gradlew
-//!     gradlew.bat
-//!     settings.gradle
-//! ```
-//!
-//! Final build:
-//! ```
-//! app.apk/
-//!   AndroidManifest.xml
-//!   classes.dex
-//!   assets/
-//!       logo.png
-//!   lib/
-//!       armeabi-v7a/
-//!           libmyapp.so
-//!       arm64-v8a/
-//!           libmyapp.so
-//!       x86/
-//!           libmyapp.so
-//!       x86_64/
-//!           libmyapp.so
-//! ```
-//! Notice that we *could* feasibly build this ourselves :)
-//!
-//! ### Windows:
+//! ### Windows / Linux:
 //! <https://superuser.com/questions/749447/creating-a-single-file-executable-from-a-directory-in-windows>
 //! Windows does not provide an AppImage format, so instead we're going build the same folder
 //! structure as an AppImage, but when distributing, we'll create a .exe that embeds the resources
@@ -330,18 +204,17 @@ use anyhow::{bail, ensure, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
-use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
+use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
+use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{borrow::Cow, ffi::OsString};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    io::Write,
+    collections::{HashMap, HashSet, VecDeque},
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
@@ -477,7 +350,6 @@ pub struct BuildArtifacts {
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AppManifest,
-
     pub(crate) mode: BuildMode,
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
@@ -1550,7 +1422,7 @@ impl BuildRequest {
         let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
 
         if skip_assets && !needs_android_artifacts && !needs_swift_packages {
-            return Ok(AppManifest::new(self.workspace.rustc_version.clone()));
+            return Ok(AppManifest::new());
         }
 
         ctx.status_extracting_assets();
@@ -1621,7 +1493,7 @@ impl BuildRequest {
         artifacts: &mut BuildArtifacts,
     ) -> Result<()> {
         // Use rustc-objcopy to strip the binary
-        self.strip_binary(&artifacts).await?;
+        self.strip_binary(artifacts).await?;
 
         match self.bundle {
             // Run wasm-bindgen on the wasm binary and set its output to be in the bundle folder
@@ -2964,7 +2836,7 @@ impl BuildRequest {
                 // Set the folder where dx will write its captured rustc args for replay
                 cmd.env(
                     DX_RUSTC_WRAPPER_ENV_VAR,
-                    dunce::canonicalize(&self.rustc_wrapper_args_dir())
+                    dunce::canonicalize(self.rustc_wrapper_args_dir())
                         .context("Failed to canonicalize rustc wrapper args dir")?,
                 );
 
@@ -4751,98 +4623,9 @@ impl BuildRequest {
             // We always choose the most recently opened simulator based on the xcrun list.
             // Note that simulators can be running but the simulator app itself is not open.
             // Calling `open::that` is always fine, even on running apps, since apps are singletons.
-            BundleFormat::Ios => {
-                #[derive(Deserialize, Debug)]
-                struct XcrunListJson {
-                    // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
-                    devices: BTreeMap<String, Vec<XcrunDevice>>,
-                }
+            BundleFormat::Ios => self.start_ios_sim().await?,
 
-                #[derive(Deserialize, Debug)]
-                struct XcrunDevice {
-                    #[serde(rename = "lastBootedAt")]
-                    last_booted_at: Option<String>,
-                    udid: String,
-                    name: String,
-                    state: String,
-                }
-                let xcrun_list = Command::new("xcrun")
-                    .arg("simctl")
-                    .arg("list")
-                    .arg("-j")
-                    .output()
-                    .await?;
-
-                let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
-                let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
-                if let Ok(xcrun_list_json) = xcrun_list_json {
-                    if xcrun_list_json.devices.is_empty() {
-                        tracing::warn!(
-                            "No iOS sdks installed found. Please install the iOS SDK in Xcode."
-                        );
-                    }
-
-                    if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
-                        if devices.iter().all(|device| device.state != "Booted") {
-                            let last_booted =
-                                devices
-                                    .iter()
-                                    .max_by_key(|device| match device.last_booted_at {
-                                        Some(ref last_booted) => last_booted,
-                                        None => "2000-01-01T01:01:01Z",
-                                    });
-
-                            if let Some(device) = last_booted {
-                                tracing::info!("Booting iOS simulator: \"{}\"", device.name);
-                                Command::new("xcrun")
-                                    .arg("simctl")
-                                    .arg("boot")
-                                    .arg(&device.udid)
-                                    .output()
-                                    .await?;
-                            }
-                        }
-                    }
-                }
-                let path_to_xcode = Command::new("xcode-select")
-                    .arg("--print-path")
-                    .output()
-                    .await?;
-                let path_to_xcode: PathBuf = String::from_utf8_lossy(&path_to_xcode.stdout)
-                    .as_ref()
-                    .trim()
-                    .into();
-                let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
-                open::that_detached(path_to_sim)?;
-            }
-
-            BundleFormat::Android => {
-                let tools = self.workspace.android_tools()?;
-                tokio::spawn(async move {
-                    let emulator = tools.emulator();
-                    let avds = Command::new(&emulator)
-                        .arg("-list-avds")
-                        .output()
-                        .await
-                        .unwrap();
-                    let avds = String::from_utf8_lossy(&avds.stdout);
-                    let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
-                    if let Some(avd) = avd {
-                        tracing::info!("Booting Android emulator: \"{avd}\"");
-                        Command::new(&emulator)
-                            .arg("-avd")
-                            .arg(avd)
-                            .args(["-netdelay", "none", "-netspeed", "full"])
-                            .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                            .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                            .output()
-                            .await
-                            .unwrap();
-                    } else {
-                        tracing::warn!("No Android emulators found. Please create one using `emulator -avd <name>`");
-                    }
-                });
-            }
+            BundleFormat::Android => self.start_android_sim()?,
 
             _ => {
                 // nothing - maybe on the web we should open the browser?

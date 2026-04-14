@@ -19,12 +19,11 @@ mod cache;
 mod context;
 mod patch;
 mod request;
-mod tools;
 
+pub(crate) use android::AndroidTools;
 pub(crate) use assets::*;
 pub(crate) use builder::*;
 pub(crate) use cache::*;
 pub(crate) use context::*;
 pub(crate) use patch::*;
 pub(crate) use request::*;
-pub(crate) use tools::*;

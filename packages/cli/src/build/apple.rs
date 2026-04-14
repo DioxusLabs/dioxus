@@ -1,45 +1,47 @@
 //! iOS/macOS Swift package manifest helpers and compilation.
+//!
+//! ### Macos
+//!
+//! We simply use the macos format where binaries are in `Contents/MacOS` and assets are in `Contents/Resources`
+//! We put assets in an assets dir such that it generally matches every other platform and we can
+//! output `/assets/blah` from manganis.
+//! ```
+//! App.app/
+//!     Contents/
+//!         Info.plist
+//!         MacOS/
+//!             Frameworks/
+//!         Resources/
+//!             assets/
+//!                 blah.icns
+//!                 blah.png
+//!         CodeResources
+//!         _CodeSignature/
+//! ```
+//!
+//! ### iOS
+//!
+//! Not the same as mac! ios apps are a bit "flattened" in comparison. simpler format, presumably
+//! since most ios apps don't ship frameworks/plugins and such.
+//!
+//! todo(jon): include the signing and entitlements in this format diagram.
+//! ```
+//! App.app/
+//!     main
+//!     assets/
+//! ```
 
-use super::HotpatchModuleCache;
-use crate::{
-    opt::{process_file_to, AppManifest},
-    BuildRequest, ManifestMapper,
-};
-use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, TraceSrc,
-    WasmBindgen, WasmOptConfig, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
-};
-use anyhow::{bail, ensure, Context};
-use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
-use depinfo::RustcDepInfo;
-use dioxus_cli_config::{format_base_path_meta_element, PRODUCT_NAME_ENV};
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use itertools::Itertools;
-use krates::{cm::TargetKind, NodeId};
-use manganis::{AssetOptions, BundledAsset, SwiftPackageMetadata};
-use manganis_core::{AndroidArtifactMetadata, AssetVariant};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use crate::{BuildContext, BundleFormat, Result};
+use crate::{BuildRequest, ManifestMapper};
+use anyhow::{bail, Context};
+use manganis::SwiftPackageMetadata;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{borrow::Cow, ffi::OsString};
 use std::{
-    collections::{BTreeMap, HashMap, HashSet, VecDeque},
-    io::Write,
+    collections::BTreeMap,
     path::{Path, PathBuf},
-    process::Stdio,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::{SystemTime, UNIX_EPOCH},
 };
-use subsecond_types::JumpTable;
-use target_lexicon::{Architecture, OperatingSystem, Triple};
-use tempfile::TempDir;
-use tokio::{io::AsyncBufReadExt, process::Command};
-use uuid::Uuid;
+use target_lexicon::{OperatingSystem, Triple};
+use tokio::process::Command;
 
 impl BuildRequest {
     /// Currently does nothing, but eventually we need to check that the mobile tooling is installed.
@@ -77,6 +79,68 @@ impl BuildRequest {
         //     tracing::error!("You need to install aarch64-apple-ios to build for ios. Run `rustup target add aarch64-apple-ios` to install it.");
         // }
 
+        Ok(())
+    }
+
+    pub async fn start_ios_sim(&self) -> Result<()> {
+        #[derive(Deserialize, Debug)]
+        struct XcrunListJson {
+            // "com.apple.CoreSimulator.SimRuntime.iOS-18-4": [{}, {}, {}]
+            devices: BTreeMap<String, Vec<XcrunDevice>>,
+        }
+        #[derive(Deserialize, Debug)]
+        struct XcrunDevice {
+            #[serde(rename = "lastBootedAt")]
+            last_booted_at: Option<String>,
+            udid: String,
+            name: String,
+            state: String,
+        }
+        let xcrun_list = Command::new("xcrun")
+            .arg("simctl")
+            .arg("list")
+            .arg("-j")
+            .output()
+            .await?;
+        let as_str = String::from_utf8_lossy(&xcrun_list.stdout);
+        let xcrun_list_json = serde_json::from_str::<XcrunListJson>(as_str.trim());
+        if let Ok(xcrun_list_json) = xcrun_list_json {
+            if xcrun_list_json.devices.is_empty() {
+                tracing::warn!("No iOS sdks installed found. Please install the iOS SDK in Xcode.");
+            }
+
+            if let Some((_rt, devices)) = xcrun_list_json.devices.iter().next() {
+                if devices.iter().all(|device| device.state != "Booted") {
+                    let last_booted =
+                        devices
+                            .iter()
+                            .max_by_key(|device| match device.last_booted_at {
+                                Some(ref last_booted) => last_booted,
+                                None => "2000-01-01T01:01:01Z",
+                            });
+
+                    if let Some(device) = last_booted {
+                        tracing::info!("Booting iOS simulator: \"{}\"", device.name);
+                        Command::new("xcrun")
+                            .arg("simctl")
+                            .arg("boot")
+                            .arg(&device.udid)
+                            .output()
+                            .await?;
+                    }
+                }
+            }
+        }
+        let path_to_xcode = Command::new("xcode-select")
+            .arg("--print-path")
+            .output()
+            .await?;
+        let path_to_xcode: PathBuf = String::from_utf8_lossy(&path_to_xcode.stdout)
+            .as_ref()
+            .trim()
+            .into();
+        let path_to_sim = path_to_xcode.join("Applications").join("Simulator.app");
+        open::that_detached(path_to_sim)?;
         Ok(())
     }
 

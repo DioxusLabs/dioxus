@@ -2076,7 +2076,7 @@ impl AppBuilder {
         devserver_ip: Option<SocketAddr>,
         updates: Option<&futures_channel::mpsc::UnboundedSender<BuilderUpdate>>,
     ) -> anyhow::Result<()> {
-        use super::{AppBuilder, BuildId, BuilderUpdate};
+        use super::{BuildId, BuilderUpdate};
         use anyhow::Context;
         use dioxus_cli_config::{server_ip, server_port};
         use dioxus_dx_wire_format::BuildStage;

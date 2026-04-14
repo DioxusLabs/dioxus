@@ -861,7 +861,7 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
         }
     }
 
-    let mut manifest = AppManifest::new(todo!());
+    let mut manifest = AppManifest::new();
 
     for asset in assets {
         manifest.insert_asset(asset);

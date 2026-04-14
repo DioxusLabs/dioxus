@@ -15,16 +15,14 @@ mod json;
 pub(crate) use file::process_file_to;
 pub(crate) use hash::add_hash_to_asset;
 
-/// A manifest of all assets collected from dependencies
+/// A manifest of all assets collected from dependencies. This is persisted to disk for users to be
+/// able to pick up the result of asset extraction.
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub(crate) struct AppManifest {
     /// Stable since 0.7.0
     pub cli_version: String,
-
-    /// Stable since 0.7.0
-    pub rust_version: String,
 
     /// Map of bundled asset name to the asset itself
     pub assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
@@ -35,9 +33,8 @@ pub(crate) struct AppManifest {
 }
 
 impl AppManifest {
-    pub fn new(rust_version: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            rust_version,
             cli_version: crate::VERSION.to_string(),
             android_artifacts: Default::default(),
             swift_sources: Default::default(),
