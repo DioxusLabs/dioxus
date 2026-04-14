@@ -31,7 +31,7 @@ use tracing::Level;
 use super::AppServer;
 
 const TICK_RATE_MS: u64 = 100;
-const VIEWPORT_MAX_WIDTH: u16 = 90;
+const VIEWPORT_MAX_WIDTH: u16 = 92;
 const VIEWPORT_HEIGHT_SMALL: u16 = 5;
 const VIEWPORT_HEIGHT_BIG: u16 = 14;
 
@@ -740,14 +740,7 @@ impl Output {
         };
 
         frame.render_widget_ref(
-            Paragraph::new(Line::from(vec![
-                if client.build.bundle == BundleFormat::Web {
-                    "Serving at: ".gray()
-                } else {
-                    "Server at: ".gray()
-                },
-                address,
-            ])),
+            Paragraph::new(Line::from(vec!["Address:  ".gray(), address])),
             serve_address,
         );
     }
