@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
     fs, io,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener, UdpSocket},
     path::Path,
     sync::{Arc, RwLock},
     time::Duration,
@@ -387,15 +387,38 @@ impl WebServer {
         }
     }
 
-    /// Get the address the server is running, reflecting what the user actually specified via --addr.
+    /// Get the address to display to the user as a clickable link.
+    ///
+    /// When bound to 0.0.0.0, resolves the machine's primary network address so the user
+    /// sees a real clickable URL instead of the unroutable 0.0.0.0.
     pub fn displayed_address(&self) -> Option<SocketAddr> {
         let mut address = self.server_address()?;
 
         // Set the port to the devserver port since that's usually what people expect
         address.set_port(self.devserver_port);
 
+        if address.ip().is_unspecified() {
+            match resolve_local_ip() {
+                Some(ip) => address.set_ip(ip),
+                None => {
+                    tracing::debug!("Could not resolve local network IP; displaying localhost");
+                    address.set_ip(IpAddr::V4(Ipv4Addr::LOCALHOST));
+                }
+            }
+        }
+
         Some(address)
     }
+}
+
+/// Resolve the machine's primary local IP by asking the OS which interface routes to the internet.
+///
+/// Connects a UDP socket to a public address (no traffic is sent) and reads back the local address
+/// the OS selected. Returns `None` if the lookup fails (e.g. no network connectivity).
+fn resolve_local_ip() -> Option<IpAddr> {
+    let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    Some(socket.local_addr().ok()?.ip())
 }
 
 async fn devserver_mainloop(
@@ -792,26 +815,36 @@ mod tests {
     }
 
     #[test]
-    fn displayed_address_preserves_0000_when_user_specified() {
+    fn displayed_address_resolves_unspecified_to_routable_ip() {
         let server = make_test_server(
-            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            IpAddr::V4(Ipv4Addr::UNSPECIFIED),
             8080,
             BundleFormat::Web,
         );
         let addr = server.displayed_address().unwrap();
-        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)));
+        // When bound to 0.0.0.0, the displayed address should be a real routable IP
+        // (or 127.0.0.1 as fallback), never 0.0.0.0 itself.
+        assert_ne!(addr.ip(), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
         assert_eq!(addr.port(), 8080);
     }
 
     #[test]
-    fn displayed_address_shows_localhost_by_default() {
+    fn displayed_address_preserves_localhost() {
         let server = make_test_server(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
             8080,
             BundleFormat::Web,
         );
         let addr = server.displayed_address().unwrap();
-        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
         assert_eq!(addr.port(), 8080);
+    }
+
+    #[test]
+    fn resolve_local_ip_returns_non_unspecified() {
+        if let Some(ip) = super::resolve_local_ip() {
+            assert!(!ip.is_unspecified());
+        }
+        // None is acceptable (no network), so we don't assert Some here
     }
 }
