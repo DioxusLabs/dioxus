@@ -14,7 +14,7 @@ use tokio::time::{error::Elapsed, timeout};
 // TODO: Make this configurable.
 const PUMP_TIMEOUT: Duration = Duration::from_millis(1000);
 
-/// Returns a new [Tester] resulting from rendering the given [Element].
+/// Returns a new [DocumentTester] resulting from rendering the given [Element].
 pub fn render(element: fn() -> Element) -> DocumentTester {
     DocumentTester::from_element(element)
 }
@@ -124,7 +124,7 @@ impl DocumentTester {
         self.document.resolve(self.now);
     }
 
-    /// Returns a [TestElement] referencing the root DOM node managed by this tester.
+    /// Returns an element referencing the root DOM node managed by this tester.
     pub fn root<'vdom>(&'vdom self) -> ResolvedElement<'vdom> {
         ResolvedElement {
             document: &self.document,
@@ -148,7 +148,11 @@ impl DocumentTester {
         self.document.query_selector_all_raw(query).to_vec()
     }
 
-    /// Returns the first element in the DOM satisfying the given [Query], waiting as necessary.
+    /// Returns the first element in the DOM satisfying the given query, waiting as necessary.
+    ///
+    /// The query can be anything which dereferences to a `str`, including `&str` and `String`. This
+    /// method then interprets it as a CSS selector. Alternatively, one can select by testid with
+    /// [by_testid].
     ///
     /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
     /// the limit and the element is still not present, it returns an error.
@@ -187,8 +191,12 @@ impl DocumentTester {
         ElementCondition::new(self, selector)
     }
 
-    /// Returns all elements in the DOM satisfying the given [Query], waiting as necessary until the
+    /// Returns all elements in the DOM satisfying the given query, waiting as necessary until the
     /// set is nonempty.
+    ///
+    /// The query can be anything which dereferences to a `str`, including `&str` and `String`. This
+    /// method then interprets it as a CSS selector. Alternatively, one can select by testid with
+    /// [by_testid].
     ///
     /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
     /// the limit and no matching elements are present, it returns an empty list.
@@ -213,15 +221,23 @@ impl DocumentTester {
     }
 }
 
+/// A value which can be turned into a CSS selector to query the DOM.
+///
+/// This is implemented for all types which dereference to `str`, including `&str` and `String`.
+///
+/// One can also select by [testid](https://testing-library.com/docs/queries/bytestid/) using the
+/// function [by_testid].
 pub trait TryIntoSelector {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError>;
 }
 
-impl TryIntoSelector for &str {
+impl<T: AsRef<str>> TryIntoSelector for T {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
-        document.try_parse_selector_list(self).map_err(|_| {
-            TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self))
-        })
+        document
+            .try_parse_selector_list(self.as_ref())
+            .map_err(|_| {
+                TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self.as_ref()))
+            })
     }
 }
 
@@ -235,6 +251,10 @@ impl TryIntoSelector for QueryByTestId {
     }
 }
 
+/// Returns a query selector matching elements with the given value in the `data-testid` attribute.
+///
+/// This attribute is a common convention for marking DOM components with which tests interact. Find
+/// more information [here](https://testing-library.com/docs/queries/bytestid/).
 pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {
     QueryByTestId(testid.as_ref().to_string())
 }
