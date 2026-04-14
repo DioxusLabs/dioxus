@@ -1,11 +1,13 @@
 use dioxus_core::{CapturedError, RenderError, Result};
-use dioxus_hooks::Resource;
-use dioxus_signals::{MappedMutSignal, WriteSignal};
-use dioxus_stores::MappedStore;
+use dioxus_hooks::OkResource;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{cmp::PartialEq, future::Future};
 
 use crate::use_server_future;
+
+/// A resource returned by [`use_loader`]. This is the `Ok` branch of a server future's
+/// `Result<T, CapturedError>`, exposed as a [`Resource`](dioxus_hooks::Resource) of `T`.
+pub type Loader<T> = OkResource<T, CapturedError>;
 
 /// A hook to create a resource that loads data asynchronously.
 ///
@@ -28,18 +30,7 @@ use crate::use_server_future;
 #[track_caller]
 pub fn use_loader<F, T, E>(
     mut future: impl FnMut() -> F + 'static,
-) -> Result<
-    Resource<
-        MappedStore<
-            T,
-            MappedMutSignal<
-                Result<T, CapturedError>,
-                WriteSignal<Option<Result<T, CapturedError>>>,
-            >,
-        >,
-    >,
-    RenderError,
->
+) -> Result<Loader<T>, RenderError>
 where
     F: Future<Output = Result<T, E>> + 'static,
     T: 'static + PartialEq + Serialize + DeserializeOwned,

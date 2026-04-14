@@ -162,14 +162,14 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                                 }
                             }
                         },
-                        Err(RenderError::Error(error)) => rsx! {
-                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
-                                "Failed to search: {error:?}"
-                            }
-                        },
                         Err(RenderError::Suspended(_)) => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "Searching..."
+                            }
+                        },
+                        Err(RenderError::Error(error)) => rsx! {
+                            li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
+                                "Failed to search: {error:?}"
                             }
                         },
                     }
