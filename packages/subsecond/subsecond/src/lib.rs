@@ -305,7 +305,6 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 
     Some(unsafe { &*ptr })
 }
-
 unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
@@ -665,24 +664,18 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let exports: Object = Reflect::get(&instance, &"exports".into())
             .unwrap()
             .unchecked_into();
-
-        // Call the relocation and constructor functions exported by the patch module.
-        // These MUST be called in order: data relocs first (adjusts memory offsets),
-        // then global relocs (adjusts GOT.func.internal table indices by __table_base),
-        // then constructors. Without global relocs, PIC-compiled workspace crate
-        // function pointers remain as element-segment-relative offsets instead of
-        // absolute table indices, causing call_indirect type mismatches.
-        for func_name in [
-            "__wasm_apply_data_relocs",
-            "__wasm_apply_global_relocs",
-            "__wasm_call_ctors",
-        ] {
-            if let Ok(val) = Reflect::get(&exports, &func_name.into()) {
-                if let Ok(func) = val.dyn_into::<js_sys::Function>() {
-                    _ = func.call0(&JsValue::undefined());
-                }
-            }
-        }
+        _ = Reflect::get(&exports, &"__wasm_apply_data_relocs".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
+        _ = Reflect::get(&exports, &"__wasm_apply_global_relocs".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
+        _ = Reflect::get(&exports, &"__wasm_call_ctors".into())
+            .unwrap()
+            .unchecked_into::<js_sys::Function>()
+            .call0(&JsValue::undefined());
 
         unsafe { commit_patch(table) };
     });

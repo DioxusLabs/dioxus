@@ -723,7 +723,7 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // Without this export, the runtime can't call it, leaving GOT.func.internal globals
     // unrelocated — they contain element-segment-relative offsets instead of absolute
     // table indices, causing call_indirect type mismatches in PIC-compiled workspace code.
-    const APPLY_RELOCS: &'static str = "__wasm_apply_global_relocs";
+    const APPLY_RELOCS: &str = "__wasm_apply_global_relocs";
     if let Some(func) = new
         .funcs
         .iter()

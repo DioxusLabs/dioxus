@@ -212,7 +212,7 @@ use krates::{cm::TargetKind, NodeId};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
-use std::{borrow::Cow, ffi::OsString};
+use std::{borrow::Cow, collections::VecDeque, ffi::OsString};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -1012,7 +1012,7 @@ impl BuildRequest {
 
         // If we forget to do this, then we won't get the linker args since rust skips the full build
         // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(&ctx);
+        _ = self.bust_fingerprint(ctx);
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
@@ -1172,6 +1172,81 @@ impl BuildRequest {
             patch_cache: None,
             build_id: ctx.build_id,
         })
+    }
+
+    /// with our hotpatching setup since it uses linker interception.
+    ///
+    /// This is sadly a hack. I think there might be other ways of busting the fingerprint (rustc wrapper?)
+    /// but that would require relying on cargo internals.
+    ///
+    /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
+    ///
+    /// `dx` compiles everything with `--target` which ends up with a structure like:
+    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`
+    ///
+    /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
+    /// target arg guarantees this will work.
+    ///
+    /// Each binary target has a fingerprinted location which we place under
+    /// `target/dx/.args/name-hash.lib.json`
+    ///
+    /// The hash includes the various args profile info that provide entropy to disambiguate the crate.
+    /// You might see `.args/serde-123.lib.json` in the same folder as `.args/serde-456.json` because
+    /// they might have different config flags, different target triples, different opt levels, etc.
+    /// Bust cargo fingerprints to force recompilation during the fat build.
+    ///
+    /// The tip crate is always busted so we get a fresh linker invocation. For workspace
+    /// dependency crates, we check whether we already have cached rustc args in the scope
+    /// directory from a previous run. If a crate's `<name>.lib.json` exists, its args are
+    /// still valid and we skip busting so cargo can reuse its incremental artifacts. If the
+    /// file is missing, we bust that crate's fingerprint to force the rustc wrapper to
+    /// re-capture its args.
+    pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+        // Ensure the rustc args capture directory exists - only in fat/base builds.
+        // This ensures we always capture fresh rustc args provided we're not hotpatching. This could
+        // be annoying for regular dx build/bundle commands, but should generally be fine.
+        // todo: think about how CI might interact with this if it's not persisting the dx folder
+        if matches!(ctx.mode, BuildMode::Thin { .. }) {
+            return Ok(());
+        }
+
+        let scope_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
+        _ = std::fs::create_dir_all(&scope_dir)
+            .context("Failed to create rustc wrapper args scope dir");
+
+        // Always bust the tip crate.
+        let mut bust = HashSet::new();
+        bust.insert(self.package().name.clone());
+
+        // Walk workspace deps of the tip crate. If we're missing cached args for any of
+        // them, bust their fingerprint so the wrapper re-captures during this fat build.
+        // Use the raw path (not canonicalized) since the scope dir may not exist yet.
+        let scope_dir = self
+            .rustc_wrapper_args_dir()
+            .join(self.rustc_wrapper_scope_dir_name(&BuildMode::Fat)?);
+
+        for dep_name in self.workspace_crate_dep_names() {
+            if !scope_dir.join(format!("{dep_name}.lib.json")).exists() {
+                bust.insert(dep_name);
+            }
+        }
+
+        let fingerprint_dir = self.cargo_fingeprint_dir();
+        for entry in std::fs::read_dir(&fingerprint_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if let Some(fname) = entry.file_name().to_str() {
+                if let Some((name, _)) = fname.rsplit_once('-') {
+                    if bust.contains(name) {
+                        _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+
+        Ok(())
     }
 
     fn print_linker_warnings(&self, exe_output_location: &Option<PathBuf>) {
@@ -2963,5 +3038,46 @@ impl BuildRequest {
             self.triple.operating_system,
             OperatingSystem::Darwin(_) | OperatingSystem::IOS(_)
         )
+    }
+
+    /// All workspace crate names that the tip crate transitively depends on
+    /// (underscore-normalized, excluding the tip itself).
+    pub(crate) fn workspace_crate_dep_names(&self) -> Vec<String> {
+        let krates = &self.workspace.krates;
+
+        let workspace_names: HashSet<String> = krates
+            .workspace_members()
+            .filter_map(|m| match m {
+                krates::Node::Krate { krate, .. } => Some(krate.name.replace('-', "_")),
+                _ => None,
+            })
+            .collect();
+
+        let tip = self.tip_crate_name();
+        let Some(tip_nid) = krates.workspace_members().find_map(|m| match m {
+            krates::Node::Krate { id, krate, .. } if krate.name.replace('-', "_") == tip => {
+                krates.nid_for_kid(id)
+            }
+            _ => None,
+        }) else {
+            return Vec::new();
+        };
+
+        // BFS forward through workspace deps.
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::from([tip_nid]);
+        let mut deps = Vec::new();
+
+        while let Some(nid) = queue.pop_front() {
+            for dep in krates.direct_dependencies(nid) {
+                let name = dep.krate.name.replace('-', "_");
+                if workspace_names.contains(&name) && visited.insert(dep.node_id) {
+                    deps.push(name);
+                    queue.push_back(dep.node_id);
+                }
+            }
+        }
+
+        deps
     }
 }
