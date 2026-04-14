@@ -1,14 +1,14 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
-use std::path::PathBuf;
+use std::path::{Component, PathBuf};
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
 use quote::{quote, ToTokens};
 use syn::{
     parse::{Parse, ParseStream},
-    parse_macro_input, ItemStruct,
+    parse_macro_input, ItemStruct, Token,
 };
 
 pub(crate) mod asset;
@@ -22,15 +22,10 @@ use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 ///
 /// # Files
 ///
-/// The file builder collects an arbitrary file. Relative paths are resolved relative to the package root
+/// The file builder collects an arbitrary file.
 /// ```rust
 /// # use manganis::{asset, Asset};
 /// const _: Asset = asset!("/assets/asset.txt");
-/// ```
-/// Macros like `concat!` and `env!` are supported in the asset path.
-/// ```rust
-/// # use manganis::{asset, Asset};
-/// const _: Asset = asset!(concat!("/assets/", env!("CARGO_CRATE_NAME"), ".dat"));
 /// ```
 ///
 /// # Images
@@ -55,6 +50,26 @@ use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
 /// # use manganis::{asset, Asset, AssetOptions};
 /// const _: Asset = asset!("/assets/image.png", AssetOptions::image().with_preload(true));
 /// ```
+///
+/// # Path resolution
+///
+/// By default, paths are resolved relative to the current file if they begin with either `.` or `..`, and the crate root otherwise.
+/// ```rust
+/// # use manganis::{asset, Asset};
+/// const _: Asset = asset!("/assets/asset.txt"); // Resolved relative to the crate root
+/// const _: Asset = asset!("../assets/asset.txt"); // Resolved relative to the current file
+/// ```
+/// To explicitly declare the path resolution strategy, use the `crate`, `self`, and `out` keywords.
+/// ```rust
+/// # use manganis::{asset, Asset};
+/// const _: Asset = asset!(crate "/assets/asset.txt"); // Resolved relative to the crate root
+/// const _: Asset = asset!(self "../assets/asset.txt"); // Resolved relative to the current file
+/// # #[cfg(not(skip_out_tests))]
+/// const _: Asset = asset!(out "generated-asset.txt"); // Resolved relative to the output folder
+/// ```
+/// The output folder is read from the `OUT_DIR` environment variable.
+///
+/// Leading `/` characters are ignored in all cases.
 #[proc_macro]
 pub fn asset(input: TokenStream) -> TokenStream {
     let asset = parse_macro_input!(input as asset::AssetParser);
@@ -90,7 +105,7 @@ pub fn option_asset(input: TokenStream) -> TokenStream {
 /// # Syntax
 ///
 /// The `css_module` attribute takes:
-/// - The asset string path - the absolute path (from the crate root) to your CSS file.
+/// - The asset path. Uses the same rules for resolution as `asset!`.
 /// - Optional `AssetOptions` to configure the processing of your CSS module.
 ///
 /// It must be applied to a unit struct:
@@ -284,67 +299,188 @@ pub fn ffi(attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 }
 
-fn resolve_path(raw: &str, span: Span) -> Result<PathBuf, AssetParseError> {
-    // Get the location of the root of the crate which is where all assets are relative to
-    //
-    // IE
-    // /users/dioxus/dev/app/
-    // is the root of
-    // /users/dioxus/dev/app/assets/blah.css
-    let manifest_dir = dunce::canonicalize(
-        std::env::var("CARGO_MANIFEST_DIR")
-            .map(PathBuf::from)
-            .unwrap(),
-    )
-    .unwrap();
+struct PathResolver {
+    resolution: PathResolution,
+    src: PathBuf,
+    manifest_dir: PathBuf,
+    out_dir: Option<PathBuf>,
+    file_path: Option<PathBuf>,
+    looks_like_rust_analyzer: bool,
+}
 
-    // 1. the input file should be a pathbuf
-    let input = PathBuf::from(raw);
+impl PathResolver {
+    fn new(resolution: PathResolution, src: impl Into<PathBuf>, span: &Span) -> Self {
+        let manifest_dir = Self::get_manifest_dir();
 
-    let path = if raw.starts_with('.') {
-        if let Some(local_folder) = span.local_file().as_ref().and_then(|f| f.parent()) {
-            local_folder.join(raw)
-        } else {
-            // If we are running in rust analyzer, just assume the path is valid and return an error when
-            // we compile if it doesn't exist
-            if looks_like_rust_analyzer(&span) {
-                return Ok(
-                    "The asset macro was expanded under Rust Analyzer which doesn't support paths or local assets yet"
-                        .into(),
-                );
-            }
+        // The output directory is only available when a build script is present
+        let out_dir = std::env::var("OUT_DIR")
+            .ok()
+            .map(dunce::canonicalize)
+            .transpose()
+            .unwrap();
 
-            // Otherwise, return an error about the version of rust required for relative assets
-            return Err(AssetParseError::RelativeAssetPath);
+        Self {
+            resolution,
+            src: src.into(),
+            manifest_dir,
+            out_dir,
+            file_path: span.local_file(),
+            looks_like_rust_analyzer: looks_like_rust_analyzer(span),
         }
-    } else {
-        manifest_dir.join(raw.trim_start_matches('/'))
-    };
-
-    // 2. absolute path to the asset
-    let Ok(path) = std::path::absolute(path) else {
-        return Err(AssetParseError::InvalidPath {
-            path: input.clone(),
-        });
-    };
-
-    // 3. Ensure the path exists
-    let Ok(path) = dunce::canonicalize(path) else {
-        return Err(AssetParseError::AssetDoesntExist {
-            path: input.clone(),
-        });
-    };
-
-    // 4. Ensure the path doesn't escape the crate dir
-    //
-    // - Note: since we called canonicalize on both paths, we can safely compare the parent dirs.
-    //   On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
-    //   https://github.com/rust-lang/rust/issues/42869
-    if path == manifest_dir || !path.starts_with(manifest_dir) {
-        return Err(AssetParseError::InvalidPath { path });
     }
 
-    Ok(path)
+    #[cfg(test)]
+    fn implicit(src: impl Into<PathBuf>) -> Self {
+        Self::test(PathResolution::Implicit, src)
+    }
+
+    #[cfg(test)]
+    fn from_crate(src: impl Into<PathBuf>) -> Self {
+        Self::test(PathResolution::Explicit(PathBase::Crate), src)
+    }
+
+    #[cfg(test)]
+    fn from_file(src: impl Into<PathBuf>) -> Self {
+        Self::test(PathResolution::Explicit(PathBase::File), src)
+    }
+
+    #[cfg(test)]
+    fn from_out(src: impl Into<PathBuf>) -> Self {
+        Self::test(PathResolution::Explicit(PathBase::Out), src)
+    }
+
+    #[cfg(test)]
+    fn test(resolution: PathResolution, src: impl Into<PathBuf>) -> Self {
+        let manifest_dir = Self::get_manifest_dir();
+
+        let out_dir = Some(manifest_dir.join("out"));
+        let file_path = Some(manifest_dir.join("src/lib.rs"));
+
+        Self {
+            resolution,
+            src: src.into(),
+            manifest_dir,
+            out_dir,
+            file_path,
+            looks_like_rust_analyzer: false,
+        }
+    }
+
+    fn get_manifest_dir() -> PathBuf {
+        dunce::canonicalize(std::env::var("CARGO_MANIFEST_DIR").unwrap()).unwrap()
+    }
+
+    fn resolve(&self) -> Result<PathBuf, AssetParseError> {
+        // 1. Convert strategy to base
+        let base = match self.resolution {
+            PathResolution::Explicit(base) => base,
+            PathResolution::Implicit => match self.src.components().next() {
+                Some(Component::CurDir | Component::ParentDir) => PathBase::File,
+                _ => PathBase::Crate,
+            },
+        };
+
+        // 2. Stip leading slash
+        let path = self.src.strip_prefix("/").unwrap_or(self.src.as_path());
+
+        // 3. Resolve path
+        let path = match base {
+            PathBase::Crate => self.manifest_dir.join(path),
+            PathBase::File => {
+                if let Some(parent) = self.file_path.as_ref().and_then(|path| path.parent()) {
+                    parent.join(path)
+                } else {
+                    // If we are running in rust analyzer, just assume the path is valid and return an error when
+                    // we compile if it doesn't exist
+                    if self.looks_like_rust_analyzer {
+                        let message = concat!(
+                            "The asset macro was expanded under Rust Analyzer ",
+                            "which doesn't support paths or local assets yet."
+                        );
+
+                        return Ok(message.into());
+                    }
+
+                    // Otherwise, return an error about the version of rust required for relative assets
+                    return Err(AssetParseError::FileBaseUnavailable);
+                }
+            }
+            PathBase::Out => {
+                if let Some(out_dir) = self.out_dir.as_ref() {
+                    out_dir.join(path)
+                } else {
+                    return Err(AssetParseError::OutBaseUnavailable);
+                }
+            }
+        };
+
+        // 4. Convert to absolute path
+        let Ok(path) = std::path::absolute(&path) else {
+            return Err(AssetParseError::DoesNotExist { path });
+        };
+
+        // 5. Ensure the path exists
+        let Ok(path) = dunce::canonicalize(&path) else {
+            return Err(AssetParseError::DoesNotExist { path });
+        };
+
+        let in_manifest_dir = path != self.manifest_dir && path.starts_with(&self.manifest_dir);
+
+        let in_out_dir = self
+            .out_dir
+            .as_ref()
+            .is_some_and(|dir| path != *dir && path.starts_with(dir));
+
+        // 6. Ensure the path doesn't escape the crate or output directories
+        //
+        // On windows, we can only compare the prefix if both paths are canonicalized (not just absolute)
+        //
+        // See: https://github.com/rust-lang/rust/issues/42869
+        if !in_manifest_dir && !in_out_dir {
+            return Err(AssetParseError::Outside { path });
+        }
+
+        Ok(path)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathResolution {
+    Explicit(PathBase),
+    Implicit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathBase {
+    Crate,
+    File,
+    Out,
+}
+
+impl Parse for PathResolution {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        syn::custom_keyword!(out);
+
+        if input.peek(Token![crate]) {
+            input.parse::<Token![crate]>().unwrap();
+
+            return Ok(Self::Explicit(PathBase::Crate));
+        }
+
+        if input.peek(Token![self]) {
+            input.parse::<Token![self]>().unwrap();
+
+            return Ok(Self::Explicit(PathBase::File));
+        }
+
+        if input.peek(out) {
+            input.parse::<out>().unwrap();
+
+            return Ok(Self::Explicit(PathBase::Out));
+        }
+
+        Ok(Self::Implicit)
+    }
 }
 
 /// Parse `T`, while also collecting the tokens it was parsed from.
@@ -364,27 +500,29 @@ fn parse_with_tokens<T: Parse>(input: ParseStream) -> syn::Result<(T, proc_macro
     Ok((t, tokens))
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum AssetParseError {
-    AssetDoesntExist { path: PathBuf },
-    InvalidPath { path: PathBuf },
-    RelativeAssetPath,
+    FileBaseUnavailable,
+    OutBaseUnavailable,
+    DoesNotExist { path: PathBuf },
+    Outside { path: PathBuf },
 }
 
 impl std::fmt::Display for AssetParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AssetParseError::AssetDoesntExist { path } => {
-                write!(f, "Asset at {} doesn't exist", path.display())
+            AssetParseError::FileBaseUnavailable => {
+                write!(f, "Relative paths are only supported in Rust 1.88+.")
             }
-            AssetParseError::InvalidPath { path } => {
-                write!(
-                    f,
-                    "Asset path {} is invalid. Make sure the asset exists within this crate.",
-                    path.display()
-                )
+            AssetParseError::OutBaseUnavailable => {
+                write!(f, "No output folder specified by the compiler.")
             }
-            AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
+            AssetParseError::DoesNotExist { path } => {
+                write!(f, "Path {} not found.", path.display())
+            }
+            AssetParseError::Outside { path } => {
+                write!(f, "Path {} is outside of allowed folders.", path.display())
+            }
         }
     }
 }
@@ -406,4 +544,273 @@ fn looks_like_rust_analyzer(span: &Span) -> bool {
             .is_some_and(|s| s.contains("rust-analyzer"))
     });
     looks_like_rust_analyzer_span || looks_like_rust_analyzer_env || looks_like_rust_analyzer_exe
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use super::{AssetParseError, PathResolver};
+
+    struct Ctx {
+        workspace_root: PathBuf,
+        crate_root: PathBuf,
+        out_folder: PathBuf,
+    }
+
+    impl Ctx {
+        fn init() -> Self {
+            let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+            let out_folder = crate_root.join("out");
+
+            let workspace_root = crate_root
+                .join("../../..")
+                .canonicalize()
+                .and_then(std::path::absolute)
+                .unwrap();
+
+            Self {
+                workspace_root,
+                crate_root,
+                out_folder,
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_crate_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_crate("assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+
+        assert_eq!(
+            PathResolver::from_crate("/assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+    }
+
+    #[test]
+    fn resolve_missing_crate_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_crate("assets/does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: crate_root.join("assets/does-not-exist.txt")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_crate("/assets/does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: crate_root.join("assets/does-not-exist.txt")
+            })
+        );
+    }
+
+    #[test]
+    fn resolve_outside_crate_path() {
+        let Ctx {
+            workspace_root,
+            crate_root,
+            ..
+        } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_crate("../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_crate("/../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_crate("..").resolve(),
+            Err(AssetParseError::Outside {
+                path: crate_root.join("..").canonicalize().unwrap()
+            })
+        );
+    }
+
+    #[test]
+    fn resolve_implicit_crate_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::implicit("assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+
+        assert_eq!(
+            PathResolver::implicit("/assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+    }
+
+    #[test]
+    fn resolve_file_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_file("../assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+
+        assert_eq!(
+            PathResolver::from_file("/../assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+    }
+
+    #[test]
+    fn resolve_missing_file_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_file("../assets/does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: crate_root.join("src/../assets/does-not-exist.txt")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_file("/../assets/does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: crate_root.join("src/../assets/does-not-exist.txt")
+            })
+        );
+    }
+
+    #[test]
+    fn resolve_outside_file_path() {
+        let Ctx {
+            workspace_root,
+            crate_root,
+            ..
+        } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_file("../../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_file("/../../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_file("..").resolve(),
+            Err(AssetParseError::Outside {
+                path: crate_root.clone()
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_file("/..").resolve(),
+            Err(AssetParseError::Outside {
+                path: crate_root.clone()
+            })
+        );
+    }
+
+    #[test]
+    fn resolve_implicit_file_path() {
+        let Ctx { crate_root, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::implicit("./../assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+
+        assert_eq!(
+            PathResolver::implicit("../assets/asset.txt").resolve(),
+            Ok(crate_root.join("assets/asset.txt"))
+        );
+    }
+
+    #[test]
+    fn resolve_out_path() {
+        let Ctx { out_folder, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_out("generated-asset.txt").resolve(),
+            Ok(out_folder.join("generated-asset.txt"))
+        );
+
+        assert_eq!(
+            PathResolver::from_out("/generated-asset.txt").resolve(),
+            Ok(out_folder.join("generated-asset.txt"))
+        );
+    }
+
+    #[test]
+    fn resolve_missing_out_path() {
+        let Ctx { out_folder, .. } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_out("does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: out_folder.join("does-not-exist.txt")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_out("/does-not-exist.txt").resolve(),
+            Err(AssetParseError::DoesNotExist {
+                path: out_folder.join("does-not-exist.txt")
+            })
+        );
+    }
+
+    #[test]
+    fn resolve_outside_out_path() {
+        let Ctx {
+            workspace_root,
+            out_folder,
+            ..
+        } = Ctx::init();
+
+        assert_eq!(
+            PathResolver::from_out("../../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_out("/../../../../Cargo.toml").resolve(),
+            Err(AssetParseError::Outside {
+                path: workspace_root.join("Cargo.toml")
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_out("..").resolve(),
+            Err(AssetParseError::Outside {
+                path: out_folder.join("..").canonicalize().unwrap()
+            })
+        );
+
+        assert_eq!(
+            PathResolver::from_out("/..").resolve(),
+            Err(AssetParseError::Outside {
+                path: out_folder.join("..").canonicalize().unwrap()
+            })
+        );
+    }
 }
