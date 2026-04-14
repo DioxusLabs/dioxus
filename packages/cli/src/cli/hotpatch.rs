@@ -5,8 +5,8 @@ use crate::{
 use anyhow::Context;
 use clap::Parser;
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
+use std::io::Read;
 use std::sync::Arc;
-use std::{collections::HashMap, io::Read};
 
 const HELP_HEADING: &str = "Hotpatching a binary";
 
