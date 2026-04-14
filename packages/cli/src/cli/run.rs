@@ -161,6 +161,7 @@ impl RunArgs {
                         BuilderUpdate::ProcessWaitFailed { err } => {
                             return Err(err.into());
                         }
+                        BuilderUpdate::ProfilePhase { .. } => {}
                     }
                 }
                 ServeUpdate::Exit { .. } => break,
