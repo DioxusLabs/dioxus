@@ -35,15 +35,18 @@
 //!     }
 //! }
 //!
+//! # /* Make sure this also compiles as a doctest.
 //! #[test]
+//! # */
 //! fn my_component_renders_correctly() {
-//!     let tester = render(MyComponent).build();
+//!     let mut tester = render(MyComponent).build();
 //!     tester
 //!         .query(".test-component")
 //!         .expect(inner_html(eq("Hello, world!")))
 //!         .immediately()
 //!         .unwrap();
 //! }
+//! # my_component_renders_correctly();
 //! ```
 //!
 //! Assertions can be awaited asynchronously, allowing asynchronous operations to run and the DOM to
@@ -52,7 +55,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::render;
+//! use dioxus_test::{eq, inner_html, render};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {
@@ -68,16 +71,19 @@
 //!     }
 //! }
 //!
+//! # /* Make sure this also compiles as a doctest.
 //! #[tokio::test]
+//! # */
 //! async fn my_component_changes_button_text_on_click() {
 //!     let mut tester = render(MyComponent).build();
 //!     tester.query(".test-button").click().await;
 //!     tester
-//!         .query(".test-component")
+//!         .query(".test-button")
 //!         .expect(inner_html(eq("Don't click any more!")))
 //!         .await
 //!         .unwrap();
 //! }
+//! # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_changes_button_text_on_click());
 //! ```
 //!
 //! ## Asynchronous operations

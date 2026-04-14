@@ -25,11 +25,11 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
 
 /// Returns a [Matcher] which matches a value which equals the given value in the sense of
 /// [`PartialEq`].
-pub fn eq<T: PartialEq>(value: T) -> impl Matcher<T> {
+pub fn eq<T, A: PartialEq<T>>(value: T) -> impl Matcher<A> {
     struct EqualsMatcher<T>(T);
 
-    impl<T: PartialEq> Matcher<T> for EqualsMatcher<T> {
-        fn matches(&self, actual: T) -> ControlFlow<()> {
+    impl<T, A: PartialEq<T>> Matcher<A> for EqualsMatcher<T> {
+        fn matches(&self, actual: A) -> ControlFlow<()> {
             if actual == self.0 {
                 ControlFlow::Break(())
             } else {
