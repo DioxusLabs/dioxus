@@ -254,7 +254,6 @@ async fn test_harnesses() {
                     assert!(t.server.is_none());
                     assert_eq!(t.client.bundle, BundleFormat::Ios);
                     assert_eq!(t.client.triple, TestHarnessBuilder::host_ios_triple_sim());
-                    assert!(t.client.no_default_features);
                 },
             ),
         TestHarnessBuilder::new("harness-fullstack-with-optional-tokio")

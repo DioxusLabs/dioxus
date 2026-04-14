@@ -17,6 +17,7 @@ mod assets;
 mod builder;
 mod cache;
 mod context;
+mod fingerprint;
 mod link;
 mod patch;
 mod renderer;
