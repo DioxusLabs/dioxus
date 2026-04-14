@@ -213,18 +213,19 @@ impl BuildArtifacts {
         // The tip crate is identified by replacing hyphens with underscores in the target name,
         // but since we don't have the BuildRequest here, we look for the entry with link_args
         // (only the tip crate has link_args attached) or fall back to any entry.
-        let (_tip_krate, tip_args) = self
+        let (rustc_args, rustc_envs) = self
             .workspace_rustc
             .rustc_args
             .iter()
             .find(|(k, _v)| k.ends_with(".bin"))
-            .unwrap();
+            .map(|f| (f.1.args.clone(), f.1.envs.clone()))
+            .unwrap_or_default();
 
         StructuredBuildArtifacts {
             path: self.root_dir,
             exe: self.exe,
-            rustc_args: tip_args.args.clone(),
-            rustc_envs: tip_args.envs.clone(),
+            rustc_args,
+            rustc_envs,
             link_args: self.workspace_rustc.link_args,
             assets: self.assets.unique_assets().cloned().collect(),
         }

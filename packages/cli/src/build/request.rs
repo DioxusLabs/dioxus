@@ -1231,7 +1231,7 @@ impl BuildRequest {
             }
         }
 
-        let fingerprint_dir = self.cargo_fingeprint_dir();
+        let fingerprint_dir = self.cargo_fingerprint_dir();
         for entry in std::fs::read_dir(&fingerprint_dir)
             .into_iter()
             .flatten()
@@ -3049,7 +3049,7 @@ impl BuildRequest {
             .collect()
     }
 
-    fn cargo_fingeprint_dir(&self) -> PathBuf {
+    fn cargo_fingerprint_dir(&self) -> PathBuf {
         self.target_dir
             .join(self.triple.to_string())
             .join(&self.profile)
