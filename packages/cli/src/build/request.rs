@@ -1201,7 +1201,7 @@ impl BuildRequest {
     /// still valid and we skip busting so cargo can reuse its incremental artifacts. If the
     /// file is missing, we bust that crate's fingerprint to force the rustc wrapper to
     /// re-capture its args.
-    pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+    fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
         // Ensure the rustc args capture directory exists - only in fat/base builds.
         // This ensures we always capture fresh rustc args provided we're not hotpatching. This could
         // be annoying for regular dx build/bundle commands, but should generally be fine.
@@ -1247,104 +1247,6 @@ impl BuildRequest {
         }
 
         Ok(())
-    }
-
-    fn print_linker_warnings(&self, exe_output_location: &Option<PathBuf>) {
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
-            if !linker_warnings.is_empty() {
-                if exe_output_location.is_none() {
-                    tracing::error!("Linker warnings: {}", linker_warnings);
-                } else {
-                    tracing::debug!("Linker warnings: {}", linker_warnings);
-                }
-            }
-        }
-    }
-
-    /// Load per-crate rustc args from the wrapper directory.
-    ///
-    /// Each workspace crate compiled through the wrapper has its own JSON file:
-    /// - "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
-    /// - "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
-    fn load_rustc_argset(&self) -> Result<WorkspaceRustcArgs> {
-        let link_args = std::fs::read_to_string(self.link_args_file())
-            .context("Failed to read link args from file")?
-            .lines()
-            .map(|s| s.to_string())
-            .collect();
-
-        let mut workspace_rustc_args = WorkspaceRustcArgs::new(link_args);
-
-        // Always read from the fat build's scope dir — the rustc wrapper only captures
-        // args during fat/base builds, not thin builds.
-        let args_dir = self.rustc_wrapper_args_scope_dir(&BuildMode::Fat)?;
-        if let Ok(entries) = std::fs::read_dir(&args_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "json") {
-                    if let Ok(contents) = std::fs::read_to_string(&path) {
-                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
-                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                                workspace_rustc_args
-                                    .rustc_args
-                                    .insert(stem.to_string(), args);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(workspace_rustc_args)
-    }
-
-    /// Collect assets and plugin metadata from the final executable in one pass
-    ///
-    /// This method extracts assets and FFI plugin metadata (Android/Swift) from the
-    /// binary. Permissions are now read from Dioxus.toml, not extracted from the binary.
-    pub async fn collect_assets_and_metadata(
-        &self,
-        exe: &Path,
-        ctx: &BuildContext,
-    ) -> Result<AppManifest> {
-        use super::assets::extract_symbols_from_file;
-
-        let skip_assets = self.skip_assets;
-        let needs_android_artifacts = self.bundle == BundleFormat::Android;
-        let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
-
-        if skip_assets && !needs_android_artifacts && !needs_swift_packages {
-            return Ok(AppManifest::new());
-        }
-
-        ctx.status_extracting_assets();
-
-        let mut manifest = extract_symbols_from_file(exe).await?;
-
-        if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
-        {
-            if let Some(dir) = self.user_public_dir() {
-                for entry in walkdir::WalkDir::new(&dir)
-                    .into_iter()
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.file_type().is_file())
-                {
-                    let from = entry.path().to_path_buf();
-                    let relative_path = from.strip_prefix(&dir).unwrap();
-                    let to = format!("../{}", relative_path.display());
-                    manifest.insert_asset(BundledAsset::new(
-                        from.to_string_lossy().as_ref(),
-                        to.as_str(),
-                        manganis_core::AssetOptions::builder()
-                            .with_hash_suffix(false)
-                            .into_asset_options(),
-                    ));
-                }
-            }
-        }
-
-        Ok(manifest)
     }
 
     /// Take the output of rustc and make it into the main exe of the bundle
@@ -1394,7 +1296,21 @@ impl BuildRequest {
         Ok(())
     }
 
-    pub async fn write_frameworks(&self, artifacts: &BuildArtifacts) -> Result<()> {
+    /// Bundle shared libraries into the app's frameworks folder so they sit next to the binary
+    /// at runtime and the dynamic loader can find them.
+    ///
+    /// Scans the captured linker arguments for `.dylib` and `.so` paths and copies each one
+    /// into `frameworks_folder()`. In dev builds on unix/windows the copy is a symlink so
+    /// rebuilds don't re-copy large files; release builds do a real copy for distribution.
+    ///
+    /// Also handles platform-specific extras:
+    /// - **Android**: always creates the jniLibs framework dir, copies `libc++_shared.so`
+    ///   when `-lc++_shared` appears in the link args, and copies prebuilt OpenSSL libs
+    ///   (`libssl.so`, `libcrypto.so`) when the link args reference the OpenSSL directory.
+    ///
+    /// Note: Windows `.dll` bundling is not yet implemented — system DLLs should not be
+    /// bundled, and we don't yet distinguish user DLLs from system ones.
+    async fn write_frameworks(&self, artifacts: &BuildArtifacts) -> Result<()> {
         let framework_dir = self.frameworks_folder();
 
         // We have some prebuilt stuff that needs to be copied into the framework dir
@@ -1465,6 +1381,55 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Collect assets and plugin metadata from the final executable in one pass
+    ///
+    /// This method extracts assets and FFI plugin metadata (Android/Swift) from the
+    /// binary. Permissions are now read from Dioxus.toml, not extracted from the binary.
+    pub async fn collect_assets_and_metadata(
+        &self,
+        exe: &Path,
+        ctx: &BuildContext,
+    ) -> Result<AppManifest> {
+        use super::assets::extract_symbols_from_file;
+
+        let skip_assets = self.skip_assets;
+        let needs_android_artifacts = self.bundle == BundleFormat::Android;
+        let needs_swift_packages = matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS);
+
+        if skip_assets && !needs_android_artifacts && !needs_swift_packages {
+            return Ok(AppManifest::new());
+        }
+
+        ctx.status_extracting_assets();
+
+        let mut manifest = extract_symbols_from_file(exe).await?;
+
+        if matches!(self.bundle, BundleFormat::Web)
+            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+        {
+            if let Some(dir) = self.user_public_dir() {
+                for entry in walkdir::WalkDir::new(&dir)
+                    .into_iter()
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.file_type().is_file())
+                {
+                    let from = entry.path().to_path_buf();
+                    let relative_path = from.strip_prefix(&dir).unwrap();
+                    let to = format!("../{}", relative_path.display());
+                    manifest.insert_asset(BundledAsset::new(
+                        from.to_string_lossy().as_ref(),
+                        to.as_str(),
+                        manganis_core::AssetOptions::builder()
+                            .with_hash_suffix(false)
+                            .into_asset_options(),
+                    ));
+                }
+            }
+        }
+
+        Ok(manifest)
+    }
+
     /// Copy the assets out of the manifest and into the target location
     ///
     /// Should be the same on all platforms - just copy over the assets from the manifest into the output directory
@@ -1474,7 +1439,7 @@ impl BuildRequest {
             return Ok(());
         }
 
-        let asset_dir = self.asset_dir();
+        let asset_dir = self.bundle_asset_dir();
 
         // First, clear the asset dir of any files that don't exist in the new manifest
         _ = std::fs::create_dir_all(&asset_dir);
@@ -1489,7 +1454,7 @@ impl BuildRequest {
         // other build metadata. If we can't parse this file (or the CLI version changed), then we
         // want to re-copy all the assets rather than trying to do an incremental update.
         let clear_cache = self
-            .load_manifest()
+            .load_bundle_manifest()
             .map(|manifest| manifest.cli_version != crate::VERSION.as_str())
             .unwrap_or(true);
         if clear_cache {
@@ -1947,6 +1912,396 @@ impl BuildRequest {
         Ok(env_vars)
     }
 
+    /// Post-process the final binary.
+    /// Strip the final binary after extracting all assets with rustc-objcopy
+    async fn post_process_executable(&self, artifacts: &BuildArtifacts) -> Result<()> {
+        // Never strip the binary if we are going to bundle split it
+        if self.wasm_split {
+            return Ok(());
+        }
+
+        let exe = &artifacts.exe;
+
+        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
+        let strip_arg = match self.get_strip_setting() {
+            StripSetting::Debuginfo => Some("--strip-debug"),
+            StripSetting::Symbols => Some("--strip-all"),
+            StripSetting::None => None,
+        };
+
+        if let Some(strip_arg) = strip_arg {
+            let rustc_objcopy = self.workspace.rustc_objcopy();
+            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
+
+            let mut command = Command::new(rustc_objcopy);
+            command.env("LD_LIBRARY_PATH", &dylib_path);
+            command.arg(strip_arg).arg(exe).arg(exe);
+            let output = command.output().await?;
+
+            if !output.status.success() {
+                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
+                    tracing::error!("{}", stdout);
+                }
+                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
+                    tracing::error!("{}", stderr);
+                }
+                return Err(anyhow::anyhow!("Failed to strip binary"));
+            }
+        }
+
+        Ok(())
+    }
+
+    /// todo(jon): use handlebars templates instead of these prebaked templates
+    async fn write_metadata(&self) -> Result<()> {
+        // write the Info.plist file
+        match self.bundle {
+            BundleFormat::MacOS => {
+                let dest = self.root_dir().join("Contents").join("Info.plist");
+                let plist = self.info_plist_contents(self.bundle)?;
+                std::fs::write(dest, plist)?;
+            }
+
+            BundleFormat::Ios => {
+                let dest = self.root_dir().join("Info.plist");
+                let plist = self.info_plist_contents(self.bundle)?;
+                std::fs::write(dest, plist)?;
+            }
+
+            // AndroidManifest.xml
+            // er.... maybe even all the kotlin/java/gradle stuff?
+            BundleFormat::Android => {}
+
+            // Probably some custom format or a plist file (haha)
+            // When we do the proper bundle, we'll need to do something with wix templates, I think?
+            BundleFormat::Windows => {}
+
+            // eventually we'll create the .appimage file, I guess?
+            BundleFormat::Linux => {}
+
+            // These are served as folders, not appimages, so we don't need to do anything special (I think?)
+            // Eventually maybe write some secrets/.env files for the server?
+            // We could also distribute them as a deb/rpm for linux and msi for windows
+            BundleFormat::Web => {}
+            BundleFormat::Server => {}
+        }
+
+        Ok(())
+    }
+
+    /// Write out the manganis ffi plugins that we support
+    /// - Kotlin / Java
+    /// - Swift
+    /// - TS: Todo
+    /// - JS: Todo
+    async fn write_ffi_plugins(
+        &self,
+        ctx: &BuildContext,
+        artifacts: &BuildArtifacts,
+    ) -> Result<()> {
+        // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
+        if self.bundle == BundleFormat::Android && !artifacts.assets.android_artifacts.is_empty() {
+            let names: Vec<_> = artifacts
+                .assets
+                .android_artifacts
+                .iter()
+                .map(|a| a.plugin_name.as_str().to_string())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Kotlin build: {}", names.join(", ")));
+            self.install_android_artifacts(&artifacts.assets.android_artifacts)
+                .context("Failed to install Android plugin artifacts")?;
+        }
+
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+            && !artifacts.assets.swift_sources.is_empty()
+        {
+            let names: Vec<_> = artifacts
+                .assets
+                .swift_sources
+                .iter()
+                .map(|s| s.plugin_name.as_str().to_string())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Swift build: {}", names.join(", ")));
+
+            // Compile Swift packages from source
+            self.compile_swift_sources(&artifacts.assets.swift_sources)
+                .await
+                .context("Failed to compile Swift packages")?;
+
+            // Then embed Swift standard libraries
+            self.embed_swift_stdlibs(&artifacts.assets.swift_sources)
+                .await
+                .context("Failed to embed Swift standard libraries")?;
+        }
+
+        // Compile and install Apple Widget Extensions from Dioxus.toml config
+        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
+            && !self.config.ios.widget_extensions.is_empty()
+        {
+            let names: Vec<_> = self
+                .config
+                .ios
+                .widget_extensions
+                .iter()
+                .map(|w| w.display_name.clone())
+                .collect();
+            ctx.status_compiling_native_plugins(format!("Widget build: {}", names.join(", ")));
+            self.compile_widget_extensions()
+                .await
+                .context("Failed to compile widget extensions")?;
+        }
+
+        Ok(())
+    }
+
+    /// Run the optimizers, obfuscators, minimizers, signers, etc
+    async fn optimize(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Optimizing Bundle");
+
+        match self.bundle {
+            BundleFormat::Web => {
+                // Compress the asset dir
+                // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
+                let pre_compress = self.should_pre_compress_web_assets(self.release);
+
+                if pre_compress {
+                    ctx.status_compressing_assets();
+                    let asset_dir = self.bundle_asset_dir();
+                    tokio::task::spawn_blocking(move || {
+                        crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
+                    })
+                    .await
+                    .unwrap()?;
+                }
+            }
+
+            BundleFormat::MacOS
+            | BundleFormat::Windows
+            | BundleFormat::Linux
+            | BundleFormat::Ios
+            | BundleFormat::Android
+            | BundleFormat::Server => {}
+        }
+
+        Ok(())
+    }
+
+    /// Run any final tools to produce apks or other artifacts we might need.
+    ///
+    /// This might include codesigning, zipping, creating an appimage, etc
+    async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Assembling Bundle");
+
+        if let BundleFormat::Android = self.bundle {
+            self.assemble_android(ctx).await?;
+        }
+
+        // if the triple is a ios or macos target, we need to codesign the binary
+        if self.is_apple_target() && self.should_codesign {
+            self.codesign_apple(ctx).await?;
+        }
+
+        Ok(())
+    }
+
+    /// We only really currently care about:
+    ///
+    /// - app dir (.app, .exe, .apk, etc)
+    /// - assetas dir
+    /// - exe dir (.exe, .app, .apk, etc)
+    /// - extra scaffolding
+    ///
+    /// It's not guaranteed that they're different from any other folder
+    fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
+        use std::fs::{create_dir_all, remove_dir_all};
+        use std::sync::OnceLock;
+
+        static PRIMARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+        static SECONDARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
+
+        let initializer = if ctx.is_primary_build() {
+            &PRIMARY_INITIALIZED
+        } else {
+            &SECONDARY_INITIALIZED
+        };
+
+        let success = initializer.get_or_init(|| {
+            if ctx.is_primary_build() {
+                _ = remove_dir_all(self.exe_dir());
+            }
+
+            create_dir_all(self.root_dir())?;
+            create_dir_all(self.exe_dir())?;
+            create_dir_all(self.bundle_asset_dir())?;
+
+            tracing::debug!(
+                r#"Initialized build dirs:
+               • root dir: {:?}
+               • exe dir: {:?}
+               • asset dir: {:?}"#,
+                self.root_dir(),
+                self.exe_dir(),
+                self.bundle_asset_dir(),
+            );
+
+            // we could download the templates from somewhere (github?) but after having banged my head against
+            // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
+            // by writing them here.
+            if self.bundle == BundleFormat::Android {
+                self.build_android_app_dir()?;
+            }
+
+            Ok(())
+        });
+
+        if let Err(e) = success.as_ref() {
+            bail!("Failed to initialize build directory: {e}");
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn load_bundle_manifest(&self) -> Result<AppManifest> {
+        let manifest_path = self.bundle_manifest_file();
+        let manifest_data = std::fs::read_to_string(&manifest_path)
+            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
+        let manifest: AppManifest = serde_json::from_str(&manifest_data)
+            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
+        Ok(manifest)
+    }
+
+    /// Check for tooling that might be required for this build.
+    ///
+    /// This should generally be only called on the first build since it takes time to verify the tooling
+    /// is in place, and we don't want to slow down subsequent builds.
+    pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.profile_phase("Verify Tooling");
+        ctx.status_installing_tooling();
+
+        self.verify_toolchain_installed().await?;
+
+        match self.bundle {
+            BundleFormat::Web => self.verify_web_tooling().await?,
+            BundleFormat::Ios => self.verify_ios_tooling().await?,
+            BundleFormat::Android => self.verify_android_tooling().await?,
+            BundleFormat::Linux => self.verify_linux_tooling().await?,
+            BundleFormat::MacOS | BundleFormat::Windows | BundleFormat::Server => {}
+        }
+
+        Ok(())
+    }
+
+    async fn verify_toolchain_installed(&self) -> Result<()> {
+        let toolchain_dir = self.workspace.sysroot.join("lib/rustlib");
+        let triple = self.triple.to_string();
+
+        // Install target using rustup.
+        if !toolchain_dir.join(&triple).exists() {
+            tracing::info!(
+                "{} platform requires {} to be installed. Installing...",
+                self.bundle,
+                triple
+            );
+
+            let mut child = tokio::process::Command::new("rustup")
+                .args(["target", "add"])
+                .arg(&triple)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .kill_on_drop(true)
+                .spawn()?;
+
+            let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
+            let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
+            let mut stdout_lines = stdout.lines();
+            let mut stderr_lines = stderr.lines();
+            loop {
+                tokio::select! {
+                    line = stdout_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                    line = stderr_lines.next_line() => {
+                        match line {
+                            Ok(Some(line)) => tracing::info!("{}", line),
+                            Err(err) => tracing::error!("{}", err),
+                            Ok(_) => break,
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ensure target is installed.
+        if !toolchain_dir.join(&triple).exists() {
+            bail!("Missing rust target {}", triple);
+        }
+
+        Ok(())
+    }
+
+    async fn write_app_manifest(&self, manifest: &AppManifest) -> Result<()> {
+        std::fs::write(
+            self.bundle_manifest_file(),
+            serde_json::to_string_pretty(&manifest)?,
+        )?;
+        Ok(())
+    }
+
+    async fn fill_caches(&self, ctx: &BuildContext, artifacts: &mut BuildArtifacts) -> Result<()> {
+        // Populate the patch cache if we're in fat mode
+        if matches!(ctx.mode, BuildMode::Fat) {
+            ctx.profile_phase("Creating Patch Cache");
+            let patch_exe = match self.bundle {
+                BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
+                _ => artifacts.exe.to_path_buf(),
+            };
+            let hotpatch_module_cache = HotpatchModuleCache::new(&patch_exe, &self.triple)?;
+            artifacts.patch_cache = Some(Arc::new(hotpatch_module_cache));
+        }
+
+        Ok(())
+    }
+
+    /// Recursively copy a directory and its contents.
+    #[allow(clippy::only_used_in_recursion)]
+    pub(crate) fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
+        std::fs::create_dir_all(dst)?;
+
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+
+            if src_path.is_dir() {
+                // Skip build directories and hidden folders
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
+                    continue;
+                }
+
+                self.copy_build_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                std::fs::copy(&src_path, &dst_path)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Ensure the right dependencies are installed for linux apps.
+    /// This varies by distro, so we just do nothing for now.
+    ///
+    /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
+    ///     <https://tauri.app/start/prerequisites/>
+    async fn verify_linux_tooling(&self) -> Result<()> {
+        Ok(())
+    }
+
     /// Get an estimate of the number of units in the crate. If nightly rustc is not available, this
     /// will return an estimate of the number of units in the crate based on cargo metadata.
     ///
@@ -2009,188 +2364,53 @@ impl BuildRequest {
         Ok(graph.units.len())
     }
 
-    /// todo(jon): use handlebars templates instead of these prebaked templates
-    async fn write_metadata(&self) -> Result<()> {
-        // write the Info.plist file
-        match self.bundle {
-            BundleFormat::MacOS => {
-                let dest = self.root_dir().join("Contents").join("Info.plist");
-                let plist = self.info_plist_contents(self.bundle)?;
-                std::fs::write(dest, plist)?;
-            }
-
-            BundleFormat::Ios => {
-                let dest = self.root_dir().join("Info.plist");
-                let plist = self.info_plist_contents(self.bundle)?;
-                std::fs::write(dest, plist)?;
-            }
-
-            // AndroidManifest.xml
-            // er.... maybe even all the kotlin/java/gradle stuff?
-            BundleFormat::Android => {}
-
-            // Probably some custom format or a plist file (haha)
-            // When we do the proper bundle, we'll need to do something with wix templates, I think?
-            BundleFormat::Windows => {}
-
-            // eventually we'll create the .appimage file, I guess?
-            BundleFormat::Linux => {}
-
-            // These are served as folders, not appimages, so we don't need to do anything special (I think?)
-            // Eventually maybe write some secrets/.env files for the server?
-            // We could also distribute them as a deb/rpm for linux and msi for windows
-            BundleFormat::Web => {}
-            BundleFormat::Server => {}
-        }
-
-        Ok(())
-    }
-
-    /// Run the optimizers, obfuscators, minimizers, signers, etc
-    async fn optimize(&self, ctx: &BuildContext) -> Result<()> {
-        ctx.profile_phase("Optimizing Bundle");
-
-        match self.bundle {
-            BundleFormat::Web => {
-                // Compress the asset dir
-                // If pre-compressing is enabled, we can pre_compress the wasm-bindgen output
-                let pre_compress = self.should_pre_compress_web_assets(self.release);
-
-                if pre_compress {
-                    ctx.status_compressing_assets();
-                    let asset_dir = self.asset_dir();
-                    tokio::task::spawn_blocking(move || {
-                        crate::fastfs::pre_compress_folder(&asset_dir, pre_compress)
-                    })
-                    .await
-                    .unwrap()?;
+    fn print_linker_warnings(&self, exe_output_location: &Option<PathBuf>) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
+            if !linker_warnings.is_empty() {
+                if exe_output_location.is_none() {
+                    tracing::error!("Linker warnings: {}", linker_warnings);
+                } else {
+                    tracing::debug!("Linker warnings: {}", linker_warnings);
                 }
             }
-
-            BundleFormat::MacOS
-            | BundleFormat::Windows
-            | BundleFormat::Linux
-            | BundleFormat::Ios
-            | BundleFormat::Android
-            | BundleFormat::Server => {}
         }
-
-        Ok(())
     }
 
-    /// Post-process the final binary.
-    /// Strip the final binary after extracting all assets with rustc-objcopy
-    async fn post_process_executable(&self, artifacts: &BuildArtifacts) -> Result<()> {
-        // Never strip the binary if we are going to bundle split it
-        if self.wasm_split {
-            return Ok(());
-        }
+    /// Load per-crate rustc args from the wrapper directory.
+    ///
+    /// Each workspace crate compiled through the wrapper has its own JSON file:
+    /// - "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
+    /// - "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
+    fn load_rustc_argset(&self) -> Result<WorkspaceRustcArgs> {
+        let link_args = std::fs::read_to_string(self.link_args_file())
+            .context("Failed to read link args from file")?
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
 
-        let exe = &artifacts.exe;
+        let mut workspace_rustc_args = WorkspaceRustcArgs::new(link_args);
 
-        // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
-        let strip_arg = match self.get_strip_setting() {
-            StripSetting::Debuginfo => Some("--strip-debug"),
-            StripSetting::Symbols => Some("--strip-all"),
-            StripSetting::None => None,
-        };
-
-        if let Some(strip_arg) = strip_arg {
-            let rustc_objcopy = self.workspace.rustc_objcopy();
-            let dylib_path = self.workspace.rustc_objcopy_dylib_path();
-
-            let mut command = Command::new(rustc_objcopy);
-            command.env("LD_LIBRARY_PATH", &dylib_path);
-            command.arg(strip_arg).arg(exe).arg(exe);
-            let output = command.output().await?;
-
-            if !output.status.success() {
-                if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
-                    tracing::error!("{}", stdout);
+        // Always read from the fat build's scope dir — the rustc wrapper only captures
+        // args during fat/base builds, not thin builds.
+        let args_dir = self.rustc_wrapper_args_scope_dir(&BuildMode::Fat)?;
+        if let Ok(entries) = std::fs::read_dir(&args_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|e| e == "json") {
+                    if let Ok(contents) = std::fs::read_to_string(&path) {
+                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
+                            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                                workspace_rustc_args
+                                    .rustc_args
+                                    .insert(stem.to_string(), args);
+                            }
+                        }
+                    }
                 }
-                if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
-                    tracing::error!("{}", stderr);
-                }
-                return Err(anyhow::anyhow!("Failed to strip binary"));
             }
         }
 
-        Ok(())
-    }
-
-    /// Run any final tools to produce apks or other artifacts we might need.
-    ///
-    /// This might include codesigning, zipping, creating an appimage, etc
-    async fn assemble(&self, ctx: &BuildContext) -> Result<()> {
-        ctx.profile_phase("Assembling Bundle");
-
-        if let BundleFormat::Android = self.bundle {
-            self.assemble_android(ctx).await?;
-        }
-
-        // if the triple is a ios or macos target, we need to codesign the binary
-        if self.is_apple_target() && self.should_codesign {
-            self.codesign_apple(ctx).await?;
-        }
-
-        Ok(())
-    }
-
-    /// We only really currently care about:
-    ///
-    /// - app dir (.app, .exe, .apk, etc)
-    /// - assetas dir
-    /// - exe dir (.exe, .app, .apk, etc)
-    /// - extra scaffolding
-    ///
-    /// It's not guaranteed that they're different from any other folder
-    fn prepare_build_dir(&self, ctx: &BuildContext) -> Result<()> {
-        use std::fs::{create_dir_all, remove_dir_all};
-        use std::sync::OnceLock;
-
-        static PRIMARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
-        static SECONDARY_INITIALIZED: OnceLock<Result<()>> = OnceLock::new();
-
-        let initializer = if ctx.is_primary_build() {
-            &PRIMARY_INITIALIZED
-        } else {
-            &SECONDARY_INITIALIZED
-        };
-
-        let success = initializer.get_or_init(|| {
-            if ctx.is_primary_build() {
-                _ = remove_dir_all(self.exe_dir());
-            }
-
-            create_dir_all(self.root_dir())?;
-            create_dir_all(self.exe_dir())?;
-            create_dir_all(self.asset_dir())?;
-
-            tracing::debug!(
-                r#"Initialized build dirs:
-               • root dir: {:?}
-               • exe dir: {:?}
-               • asset dir: {:?}"#,
-                self.root_dir(),
-                self.exe_dir(),
-                self.asset_dir(),
-            );
-
-            // we could download the templates from somewhere (github?) but after having banged my head against
-            // cargo-mobile2 for ages, I give up with that. We're literally just going to hardcode the templates
-            // by writing them here.
-            if self.bundle == BundleFormat::Android {
-                self.build_android_app_dir()?;
-            }
-
-            Ok(())
-        });
-
-        if let Err(e) = success.as_ref() {
-            bail!("Failed to initialize build directory: {e}");
-        }
-
-        Ok(())
+        Ok(workspace_rustc_args)
     }
 
     pub(crate) fn all_target_features(&self) -> Vec<String> {
@@ -2284,7 +2504,7 @@ impl BuildRequest {
             .join(self.bundle.build_folder_name())
     }
 
-    pub fn platform_exe_name(&self) -> String {
+    pub(crate) fn platform_exe_name(&self) -> String {
         match self.bundle {
             // mac/ios are unixy and dont have an exe extension
             BundleFormat::MacOS | BundleFormat::Ios => self.executable_name().to_string(),
@@ -2335,19 +2555,25 @@ impl BuildRequest {
     }
 
     /// The crate name that rustc uses for the tip crate (hyphens replaced with underscores).
-    pub fn tip_crate_name(&self) -> String {
+    pub(crate) fn tip_crate_name(&self) -> String {
         self.main_target.replace('-', "_")
     }
 
+    /// Stderr captured from the linker during the last build. Written by the linker
+    /// interception in `rustcwrapper` and read back to surface warnings/errors to the user.
     fn link_err_file(&self) -> PathBuf {
         self.session_cache_dir().join("link_err.txt")
     }
 
+    /// The linker arguments captured from the tip crate's final link invocation.
+    /// Used to replay the link step during thin (hotpatch) builds.
     fn link_args_file(&self) -> PathBuf {
         self.session_cache_dir().join("link_args.json")
     }
 
-    pub fn windows_command_file(&self) -> PathBuf {
+    /// A response file for MSVC's `link.exe`. Windows command lines have a ~32k character
+    /// limit, so we write linker arguments to this file and pass `@<path>` instead.
+    pub(crate) fn windows_command_file(&self) -> PathBuf {
         self.session_cache_dir().join("windows_command.txt")
     }
 
@@ -2457,7 +2683,7 @@ impl BuildRequest {
         self.exe_dir().join(self.platform_exe_name())
     }
 
-    pub fn is_wasm_or_wasi(&self) -> bool {
+    pub(crate) fn is_wasm_or_wasi(&self) -> bool {
         matches!(
             self.triple.architecture,
             target_lexicon::Architecture::Wasm32 | target_lexicon::Architecture::Wasm64
@@ -2527,7 +2753,7 @@ impl BuildRequest {
         false
     }
 
-    pub(crate) fn asset_dir(&self) -> PathBuf {
+    pub(crate) fn bundle_asset_dir(&self) -> PathBuf {
         match self.bundle {
             BundleFormat::MacOS => self
                 .root_dir()
@@ -2588,90 +2814,8 @@ impl BuildRequest {
     ///
     /// This includes metadata about the build such as the bundle format, target triple, features, etc.
     /// Manifests are only written by the `PRIMARY` build.
-    pub(crate) fn app_manifest_file(&self) -> PathBuf {
+    fn bundle_manifest_file(&self) -> PathBuf {
         self.platform_dir().join(".manifest.json")
-    }
-
-    pub(crate) fn load_manifest(&self) -> Result<AppManifest> {
-        let manifest_path = self.app_manifest_file();
-        let manifest_data = std::fs::read_to_string(&manifest_path)
-            .with_context(|| format!("Failed to read manifest at {:?}", &manifest_path))?;
-        let manifest: AppManifest = serde_json::from_str(&manifest_data)
-            .with_context(|| format!("Failed to parse manifest at {:?}", &manifest_path))?;
-        Ok(manifest)
-    }
-
-    /// Check for tooling that might be required for this build.
-    ///
-    /// This should generally be only called on the first build since it takes time to verify the tooling
-    /// is in place, and we don't want to slow down subsequent builds.
-    pub(crate) async fn verify_tooling(&self, ctx: &BuildContext) -> Result<()> {
-        ctx.profile_phase("Verify Tooling");
-        ctx.status_installing_tooling();
-
-        self.verify_toolchain_installed().await?;
-
-        match self.bundle {
-            BundleFormat::Web => self.verify_web_tooling().await?,
-            BundleFormat::Ios => self.verify_ios_tooling().await?,
-            BundleFormat::Android => self.verify_android_tooling().await?,
-            BundleFormat::Linux => self.verify_linux_tooling().await?,
-            BundleFormat::MacOS | BundleFormat::Windows | BundleFormat::Server => {}
-        }
-
-        Ok(())
-    }
-
-    async fn verify_toolchain_installed(&self) -> Result<()> {
-        let toolchain_dir = self.workspace.sysroot.join("lib/rustlib");
-        let triple = self.triple.to_string();
-
-        // Install target using rustup.
-        if !toolchain_dir.join(&triple).exists() {
-            tracing::info!(
-                "{} platform requires {} to be installed. Installing...",
-                self.bundle,
-                triple
-            );
-
-            let mut child = tokio::process::Command::new("rustup")
-                .args(["target", "add"])
-                .arg(&triple)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .kill_on_drop(true)
-                .spawn()?;
-
-            let stdout = tokio::io::BufReader::new(child.stdout.take().unwrap());
-            let stderr = tokio::io::BufReader::new(child.stderr.take().unwrap());
-            let mut stdout_lines = stdout.lines();
-            let mut stderr_lines = stderr.lines();
-            loop {
-                tokio::select! {
-                    line = stdout_lines.next_line() => {
-                        match line {
-                            Ok(Some(line)) => tracing::info!("{}", line),
-                            Err(err) => tracing::error!("{}", err),
-                            Ok(_) => break,
-                        }
-                    }
-                    line = stderr_lines.next_line() => {
-                        match line {
-                            Ok(Some(line)) => tracing::info!("{}", line),
-                            Err(err) => tracing::error!("{}", err),
-                            Ok(_) => break,
-                        }
-                    }
-                }
-            }
-        }
-
-        // Ensure target is installed.
-        if !toolchain_dir.join(&triple).exists() {
-            bail!("Missing rust target {}", triple);
-        }
-
-        Ok(())
     }
 
     /// Blow away the fingerprint for this package, forcing rustc to recompile it.
@@ -2725,74 +2869,9 @@ impl BuildRequest {
             .collect()
     }
 
-    /// Write out the manganis ffi plugins that we support
-    /// - Kotlin / Java
-    /// - Swift
-    /// - TS: Todo
-    /// - JS: Todo
-    async fn write_ffi_plugins(
-        &self,
-        ctx: &BuildContext,
-        artifacts: &BuildArtifacts,
-    ) -> Result<()> {
-        // Install prebuilt Android plugin artifacts (AARs + Gradle deps)
-        if self.bundle == BundleFormat::Android && !artifacts.assets.android_artifacts.is_empty() {
-            let names: Vec<_> = artifacts
-                .assets
-                .android_artifacts
-                .iter()
-                .map(|a| a.plugin_name.as_str().to_string())
-                .collect();
-            ctx.status_compiling_native_plugins(format!("Kotlin build: {}", names.join(", ")));
-            self.install_android_artifacts(&artifacts.assets.android_artifacts)
-                .context("Failed to install Android plugin artifacts")?;
-        }
-
-        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-            && !artifacts.assets.swift_sources.is_empty()
-        {
-            let names: Vec<_> = artifacts
-                .assets
-                .swift_sources
-                .iter()
-                .map(|s| s.plugin_name.as_str().to_string())
-                .collect();
-            ctx.status_compiling_native_plugins(format!("Swift build: {}", names.join(", ")));
-
-            // Compile Swift packages from source
-            self.compile_swift_sources(&artifacts.assets.swift_sources)
-                .await
-                .context("Failed to compile Swift packages")?;
-
-            // Then embed Swift standard libraries
-            self.embed_swift_stdlibs(&artifacts.assets.swift_sources)
-                .await
-                .context("Failed to embed Swift standard libraries")?;
-        }
-
-        // Compile and install Apple Widget Extensions from Dioxus.toml config
-        if matches!(self.bundle, BundleFormat::Ios | BundleFormat::MacOS)
-            && !self.config.ios.widget_extensions.is_empty()
-        {
-            let names: Vec<_> = self
-                .config
-                .ios
-                .widget_extensions
-                .iter()
-                .map(|w| w.display_name.clone())
-                .collect();
-            ctx.status_compiling_native_plugins(format!("Widget build: {}", names.join(", ")));
-            self.compile_widget_extensions()
-                .await
-                .context("Failed to compile widget extensions")?;
-        }
-
-        Ok(())
-    }
-
     /// Get the folder where Apple Widget Extensions (.appex bundles) are installed.
     /// This is only applicable to iOS and macOS bundles.
-    pub fn plugins_folder(&self) -> PathBuf {
+    pub(crate) fn plugins_folder(&self) -> PathBuf {
         match self.triple.operating_system {
             OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
                 self.root_dir().join("Contents").join("PlugIns")
@@ -2802,7 +2881,7 @@ impl BuildRequest {
         }
     }
 
-    pub fn frameworks_folder(&self) -> PathBuf {
+    pub(crate) fn frameworks_folder(&self) -> PathBuf {
         match self.triple.operating_system {
             OperatingSystem::Darwin(_) | OperatingSystem::MacOSX(_) => {
                 self.root_dir().join("Contents").join("Frameworks")
@@ -2967,66 +3046,7 @@ impl BuildRequest {
             .collect()
     }
 
-    async fn write_app_manifest(&self, manifest: &AppManifest) -> Result<()> {
-        std::fs::write(
-            self.app_manifest_file(),
-            serde_json::to_string_pretty(&manifest)?,
-        )?;
-        Ok(())
-    }
-
-    async fn fill_caches(&self, ctx: &BuildContext, artifacts: &mut BuildArtifacts) -> Result<()> {
-        // Populate the patch cache if we're in fat mode
-        if matches!(ctx.mode, BuildMode::Fat) {
-            ctx.profile_phase("Creating Patch Cache");
-            let patch_exe = match self.bundle {
-                BundleFormat::Web => self.wasm_bindgen_wasm_output_file(),
-                _ => artifacts.exe.to_path_buf(),
-            };
-            let hotpatch_module_cache = HotpatchModuleCache::new(&patch_exe, &self.triple)?;
-            artifacts.patch_cache = Some(Arc::new(hotpatch_module_cache));
-        }
-
-        Ok(())
-    }
-
-    /// Recursively copy a directory and its contents.
-    #[allow(clippy::only_used_in_recursion)]
-    pub(crate) fn copy_build_dir_recursive(&self, src: &Path, dst: &Path) -> Result<()> {
-        std::fs::create_dir_all(dst)?;
-
-        for entry in std::fs::read_dir(src)? {
-            let entry = entry?;
-            let src_path = entry.path();
-            let dst_path = dst.join(entry.file_name());
-
-            if src_path.is_dir() {
-                // Skip build directories and hidden folders
-                let name = entry.file_name();
-                let name_str = name.to_string_lossy();
-                if name_str == "build" || name_str == ".gradle" || name_str.starts_with('.') {
-                    continue;
-                }
-
-                self.copy_build_dir_recursive(&src_path, &dst_path)?;
-            } else {
-                std::fs::copy(&src_path, &dst_path)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Ensure the right dependencies are installed for linux apps.
-    /// This varies by distro, so we just do nothing for now.
-    ///
-    /// Eventually, we want to check for the prereqs for wry/tao as outlined by tauri:
-    ///     <https://tauri.app/start/prerequisites/>
-    async fn verify_linux_tooling(&self) -> Result<()> {
-        Ok(())
-    }
-
-    pub fn cargo_fingeprint_dir(&self) -> PathBuf {
+    fn cargo_fingeprint_dir(&self) -> PathBuf {
         self.target_dir
             .join(self.triple.to_string())
             .join(&self.profile)
@@ -3042,7 +3062,7 @@ impl BuildRequest {
 
     /// All workspace crate names that the tip crate transitively depends on
     /// (underscore-normalized, excluding the tip itself).
-    pub(crate) fn workspace_crate_dep_names(&self) -> Vec<String> {
+    fn workspace_crate_dep_names(&self) -> Vec<String> {
         let krates = &self.workspace.krates;
 
         let workspace_names: HashSet<String> = krates

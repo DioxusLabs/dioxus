@@ -815,7 +815,7 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let asset_dir = self.build.asset_dir();
+        let asset_dir = self.build.bundle_asset_dir();
 
         // Hotpatch asset!() calls
         for bundled in res.assets.unique_assets() {
@@ -920,7 +920,7 @@ impl AppBuilder {
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asset_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.build.asset_dir(),
+            None => self.build.bundle_asset_dir(),
         };
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
