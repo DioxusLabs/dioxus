@@ -52,67 +52,20 @@ mod seal;
 ///
 /// ### Field Visibility
 ///
-/// The generated extension trait `{Name}StoreExt` carries every accessor, but each
-/// method is individually gated to the field's declared visibility. Any `pub(...)`
-/// scope works — `pub`, `pub(crate)`, `pub(super)`, and `pub(in some::path)` all
-/// propagate faithfully to the accessor.
-///
-/// Calling an accessor from outside the field's scope fails because the generated
-/// visibility-witness marker type is no longer nameable there. In practice this
-/// usually surfaces as a "private type" error mentioning
-/// `__{Name}StoreMarker{...}` rather than a "trait is private" error, because the
-/// gating uses a visibility-witness generic instead of a trait-level seal.
-///
-/// The transposed struct preserves the original field visibility as well, so
-/// fields you can't reach on the store you also can't reach on `.transpose()`.
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-/// use dioxus_stores::*;
-///
-/// #[derive(Store)]
-/// pub struct Config {
-///     pub title: String,
-///     pub(crate) api_key: String,  // crate-visible — accessible within crate
-///     secret_key: String,          // private — accessor only in this module
-/// }
-///
-/// let store = use_store(|| Config {
-///     title: "My App".to_string(),
-///     api_key: "abc123".to_string(),
-///     secret_key: "hunter2".to_string(),
-/// });
-///
-/// // `title()` is callable anywhere — the field is pub.
-/// let title: Store<String, _> = store.title();
-///
-/// // `api_key()` is callable anywhere inside the defining crate.
-/// let api_key: Store<String, _> = store.api_key();
-///
-/// // `secret_key()` is callable here (same module) but not from outside.
-/// let secret: Store<String, _> = store.secret_key();
-///
-/// // The transposed struct preserves field visibility too.
-/// let transposed = store.transpose();
-/// let _title: Store<String, _> = transposed.title;
-/// ```
+/// Each generated accessor carries the visibility of its field, and the
+/// transposed struct preserves the original field visibility.
 ///
 /// ### Enums
 ///
 /// For enums, the store macro generates methods for each variant that checks if the store is that variant. It also generates a `transpose` method that returns an enum with all fields as stores.
 ///
-/// Enum variant fields cannot carry their own visibility modifier in Rust —
-/// they inherit the enum's visibility — so the per-field visibility gating
-/// described above for structs does not apply to variant fields. Variant
-/// accessors (`is_variant`, the single-field downcast, and `transpose`) are
-/// reachable wherever the extension trait itself is in scope.
+/// Variant accessors carry the enum's visibility, since variant fields
+/// inherit it.
 ///
-/// The single-field variant accessor returns `Option<Store<..>>` and only
-/// produces `Some` when the store currently matches that variant. The returned
-/// store reads the field via the current variant; if the underlying enum is
-/// later mutated to a different variant, subsequent reads or writes through
-/// that store will panic. This is a runtime invariant — hold the store only
-/// for as long as the variant is guaranteed to be live.
+/// The single-field variant accessor returns `Option<Store<..>>` that yields
+/// `Some` when the store currently matches that variant. The returned store
+/// reads and writes the field through the enum, and panics if the variant
+/// has since changed.
 ///
 /// ```rust, no_run
 /// use dioxus::prelude::*;
@@ -178,18 +131,9 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 ///   `#[store(pub(crate))]`. If omitted, the trait is generated as `pub`.
 /// - `name = YourExtensionName`: The name of the extension trait. If not provided, it will be generated based on the type name.
 ///
-/// ## Visibility
-///
-/// The generated extension trait defaults to `pub`, but you can override that by
-/// passing an explicit visibility such as `#[store(pub(crate))]`. Each method is
-/// then individually sealed to the visibility declared on the `impl` block's
-/// function. A `pub fn` is callable anywhere the trait is in scope; a
-/// `pub(crate) fn` is only callable from inside the crate; a bare `fn` is only
-/// callable from the module that defined the impl.
-///
-/// `#[store]` only supports methods. Associated consts and associated types are
-/// rejected because trait items do not preserve the same per-method visibility
-/// model.
+/// Each method carries the visibility declared on its `fn` in the `impl`
+/// block. `#[store]` supports methods only; associated consts and types are
+/// rejected.
 ///
 /// ## Bounds
 ///

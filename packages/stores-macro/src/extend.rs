@@ -22,8 +22,8 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
         Some(attr) => attr,
         None => Ident::new(&format!("{}StoreImplExt", type_name), item.span()),
     };
-    // Hidden seal/witness items must be unique per generated trait, otherwise
-    // multiple `#[store(name = ...)]` impls on the same type collide.
+    // Prefix hidden items with the trait name so multiple `#[store]` impls on
+    // the same type don't collide.
     let name_prefix = extension_name.unraw().to_string();
 
     // Push a __Lens generic to the impl if it doesn't already exist.
@@ -43,8 +43,8 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
 
     let store_ty = quote! { #store_path<#item, #lens_generic> };
 
-    // Seal generics = the impl's generics (with __Lens). Trait generics add
-    // __V at the front so each method can be gated on `Self: __Witness<__V>`.
+    // Trait generics prepend `__V` to the impl's generics; the seal impls use
+    // the impl's generics unchanged.
     let mut extension_generics = input.generics.clone();
     extension_generics.params.insert(0, parse_quote!(__V));
     let (seal_impl, _, seal_where) = input.generics.split_for_impl();
@@ -66,10 +66,8 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
     for impl_item in input.items {
         match impl_item {
             ImplItem::Fn(mut func) => {
-                // Every fn — receiver or not — is gated on a witness for its
-                // declared visibility so static methods honor the same seal as
-                // `&self` / `&mut self` methods. Additionally, `&self` adds a
-                // `Readable` bound on __Lens and `&mut self` adds `Writable`.
+                // Add `Readable` to `&self` fns and `Writable` to `&mut self`
+                // fns; every fn also gets a witness bound for its visibility.
                 let receiver = func.sig.inputs.iter().find_map(|arg| {
                     if let syn::FnArg::Receiver(r) = arg {
                         Some(r)

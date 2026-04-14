@@ -8,11 +8,6 @@ use syn::{
 
 /// Turn a visibility modifier into a readable PascalCase suffix used in
 /// generated marker / witness trait names.
-///
-/// - `pub` → `Pub`
-/// - `pub(crate)` → `PubCrate`, `pub(super)` → `PubSuper`, `pub(self)` → `PubSelf`
-/// - `pub(in crate::foo::bar)` → `CrateFooBar`
-/// - inherited (private) → `Private`
 pub(crate) fn visibility_suffix(vis: &Visibility) -> String {
     fn capitalize(s: &str) -> String {
         let mut cs = s.chars();
@@ -230,11 +225,9 @@ fn derive_store_struct(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#struct_name #ty_generics, __Lens> };
 
-    // Extension-trait generics also carry the visibility witness `__V` as the
-    // first type parameter. Methods are gated on `Self: witness_trait<__V>`,
-    // which forces the compiler to infer `__V` to a named marker type. Because
-    // the marker's visibility matches the field's visibility, the inference
-    // silently fails outside the field's scope.
+    // Prepend a `__V` witness type parameter to the extension trait. Each
+    // method is gated on `Self: witness<__V>`, and `__V` is inferred from a
+    // marker struct whose visibility matches the field it stands for.
     let mut witness_extension_generics = extension_generics.clone();
     witness_extension_generics
         .params
@@ -242,10 +235,6 @@ fn derive_store_struct(
     let (witness_impl_generics, witness_ty_generics, witness_where_clause) =
         witness_extension_generics.split_for_impl();
 
-    // Each field's visibility gates access to its accessor method. Rust
-    // already guarantees a field's visibility is no wider than the struct's,
-    // so passing `field.vis` straight to the builder gives the tightest gating
-    // the user asked for.
     let mut seal = crate::seal::SealBuilder::new(
         format!("{}Store", struct_name),
         struct_name.span(),
@@ -263,7 +252,6 @@ fn derive_store_struct(
     )
     .trait_visibility(visibility.clone());
 
-    // `transpose` is gated on the struct's own visibility.
     let transpose_witness = seal.push_witness(visibility);
 
     let mut transposed_fields: Vec<TokenStream2> = Vec::new();
@@ -438,10 +426,8 @@ fn derive_store_enum(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#enum_name #ty_generics, __Lens> };
 
-    // Enum accessors are gated the same way as struct accessors: each method
-    // carries a `Self: witness<__V>` bound so the extension trait runs through
-    // the same seal machinery. Variant fields can't declare their own
-    // visibility in Rust, so every method gates on the enum's own visibility.
+    // Every accessor is gated on the enum's own visibility, since variant
+    // fields inherit it.
     let mut witness_extension_generics = extension_generics.clone();
     witness_extension_generics
         .params
