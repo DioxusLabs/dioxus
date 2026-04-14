@@ -176,13 +176,14 @@ impl DocumentTester {
     ///        }
     ///    }
     /// }
-    /// async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut tester = dioxus_test::render(AComponent).build();
     /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 0"))).await?;
     /// tester.query("button").click().await?;
     /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 1"))).await?;
     /// # Ok(())
     /// # }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(run_test()).unwrap();
     /// ```
     pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
         let selector = query
