@@ -86,7 +86,7 @@ fn clear_error_boundary() {
     assert_eq!(out, "We should see this");
 
     // There should be no errors left in the error boundary
-    dom.in_runtime(|| {
-        ScopeId::APP.in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+    dom.in_scope(ScopeId::APP, || {
+        assert!(consume_context::<ErrorContext>().error().is_none())
     })
 }

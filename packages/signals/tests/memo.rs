@@ -142,8 +142,8 @@ fn memos_prevents_component_rerun() {
         assert_eq!(current_counter.memo, 3);
     }
 
-    dom.in_runtime(|| {
-        ScopeId(3).in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+    dom.in_scope(ScopeId(3), || {
+        assert!(consume_context::<ErrorContext>().error().is_none())
     });
 }
 

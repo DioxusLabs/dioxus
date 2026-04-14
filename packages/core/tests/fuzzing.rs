@@ -288,9 +288,8 @@ fn create() {
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         vdom.rebuild(&mut NoOpMutations);
 
-        vdom.in_runtime(|| {
-            ScopeId::APP
-                .in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+        vdom.in_scope(ScopeId::APP, || {
+            assert!(consume_context::<ErrorContext>().error().is_none())
         })
     }
 }
@@ -323,9 +322,8 @@ fn diff() {
             }
         }
 
-        vdom.in_runtime(|| {
-            ScopeId::APP
-                .in_runtime(|| assert!(consume_context::<ErrorContext>().errors().is_empty()))
+        vdom.in_scope(ScopeId::APP, || {
+            assert!(consume_context::<ErrorContext>().error().is_none())
         })
     }
 }
