@@ -1,15 +1,18 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal};
+use crate::{use_callback, use_signal, use_waker, UseWaker};
 
 use dioxus_core::{
     spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
     Subscribers, SuspendedFuture, Task,
 };
 use dioxus_signals::*;
-use futures_util::{future, pin_mut, FutureExt, StreamExt};
-use std::ops::Deref;
+use futures_util::{
+    future::{self},
+    pin_mut, FutureExt, StreamExt,
+};
 use std::{cell::Cell, future::Future, rc::Rc};
+use std::{fmt::Debug, ops::Deref};
 
 #[doc = include_str!("../docs/use_resource.md")]
 #[doc = include_str!("../docs/rules_of_hooks.md")]
@@ -30,6 +33,8 @@ where
         let (rc, changed) = ReactiveContext::new_with_origin(location);
         (rc, Rc::new(Cell::new(Some(changed))))
     });
+
+    let mut waker = use_waker::<()>();
 
     let cb = use_callback(move |_| {
         // Set the state to Pending when the task is restarted
@@ -57,6 +62,9 @@ where
             // Set the value and state
             state.set(UseResourceState::Ready);
             value.set(Some(res));
+
+            // Notify that the value has changed
+            waker.wake(());
         })
     });
 
@@ -82,6 +90,7 @@ where
         task,
         value,
         state,
+        waker,
         callback: cb,
     }
 }
@@ -113,6 +122,7 @@ where
 /// ```
 #[derive(Debug)]
 pub struct Resource<T: 'static> {
+    waker: UseWaker<()>,
     value: Signal<Option<T>>,
     task: Signal<Task>,
     state: Signal<UseResourceState>,
@@ -314,6 +324,11 @@ impl<T> Resource<T> {
         self.task.cloned()
     }
 
+    /// Is the resource's future currently running?
+    pub fn pending(&self) -> bool {
+        matches!(*self.state.peek(), UseResourceState::Pending)
+    }
+
     /// Is the resource's future currently finished running?
     ///
     /// Reading this does not subscribe to the future's state
@@ -429,6 +444,35 @@ impl<T> Resource<T> {
     }
 }
 
+impl<T, E> Resource<Result<T, E>> {
+    /// Convert the `Resource<Result<T, E>>` into an `Option<Result<MappedSignal<T>, MappedSignal<E>>>`
+    #[allow(clippy::type_complexity)]
+    pub fn result(
+        &self,
+    ) -> Option<
+        Result<
+            MappedSignal<T, Signal<Option<Result<T, E>>>>,
+            MappedSignal<E, Signal<Option<Result<T, E>>>>,
+        >,
+    > {
+        let value: MappedSignal<T, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
+            Some(Ok(ref res)) => res,
+            _ => panic!("Resource is not ready"),
+        });
+
+        let error: MappedSignal<E, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
+            Some(Err(ref err)) => err,
+            _ => panic!("Resource is not ready"),
+        });
+
+        match &*self.value.peek() {
+            Some(Ok(_)) => Some(Ok(value)),
+            Some(Err(_)) => Some(Err(error)),
+            None => None,
+        }
+    }
+}
+
 impl<T> From<Resource<T>> for ReadSignal<Option<T>> {
     fn from(val: Resource<T>) -> Self {
         val.value.into()
@@ -458,6 +502,19 @@ impl<T> Readable for Resource<T> {
     }
 }
 
+impl<T> Writable for Resource<T> {
+    type WriteMetadata = <Signal<Option<T>> as Writable>::WriteMetadata;
+
+    fn try_write_unchecked(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.value.try_write_unchecked()
+    }
+}
+
 impl<T> IntoAttributeValue for Resource<T>
 where
     T: Clone + IntoAttributeValue,
@@ -484,5 +541,19 @@ impl<T: Clone> Deref for Resource<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe { ReadableExt::deref_impl(self) }
+    }
+}
+
+impl<T> std::future::Future for Resource<T> {
+    type Output = ();
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        match self.waker.clone().poll_unpin(cx) {
+            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
+            std::task::Poll::Pending => std::task::Poll::Pending,
+        }
     }
 }

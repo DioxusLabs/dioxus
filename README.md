@@ -49,22 +49,22 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/learn/0.6/guide"> Guide </a>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/zh-cn/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/zh-cn/README.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/pt-br/README.md"> PT-BR </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ja-jp/README.md"> 日本語 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ja-jp/README.md"> 日本語 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/tr-tr"> Türkçe </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/tr-tr"> Türkçe </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/main/translations/ko-kr"> 한국어 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/main/notes/translations/ko-kr"> 한국어 </a>
   </h3>
 </div>
 <br>
 <p align="center">
-  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0-alpha.0">✨ Dioxus 0.7 is in alpha - test it out! ✨</a>
+  <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0">✨ Dioxus 0.7 is out!!! ✨</a>
 </p>
 <br>
 
@@ -89,7 +89,7 @@ fn app() -> Element {
 - Built-in featureful, type-safe, fullstack web framework
 - Integrated bundler for deploying to the web, macOS, Linux, and Windows
 - Subsecond Rust hot-patching and asset hot-reloading
-- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.6/).
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.7/).
 
 ## Instant hot-reloading
 
@@ -110,6 +110,15 @@ Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support o
 </div>
 
 
+
+## Truly fullstack applications
+
+Dioxus deeply integrates with [axum](https://github.com/tokio-rs/axum) to provide powerful fullstack capabilities for both clients and servers. Pick from a wide array of built-in batteries like WebSockets, SSE, Streaming, File Upload/Download, Server-Side-Rendering, Forms, Middleware, and Hot-Reload, or go fully custom and integrate your existing axum backend.
+
+<div align="center">
+  <img src="./notes/fullstack-websockets.avif" width="700">
+</div>
+
 ## Experimental Native Renderer
 
 Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
@@ -124,7 +133,7 @@ Render using web-sys, webview, server-side-rendering, liveview, or even with our
 Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
 
 <div align="center">
-  <img src="./notes/primitive-components.avif">
+  <img src="./notes/primitive-components.avif" width="700">
 </div>
 
 ## First-class Android and iOS support
@@ -136,32 +145,10 @@ Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx 
 </div>
 
 
-## Productive, typesafe, fullstack web framework
-
-Directly call your backend from your frontend with our built-in type-safe RPC using [`server_fn`](http://crates.io/crates/server_fn). Supports streaming, suspense, bundle splitting, websockets, and more.
-
-```rust
-fn app() -> Element {
-  let mut fortune = use_signal(|| "Fetch a fortune!");
-  rsx! {
-    h1 { "{fortune}" }
-    button {
-      onclick: move |_| async move {
-        fortune.set(fetch_fortune().await.unwrap());
-      }
-    }
-  }
-}
-
-#[server]
-async fn fetch_fortune() -> ServerFnResult<String> {
-  "Dioxus is super productive!".to_string()
-}
-```
 
 ## Bundle for web, desktop, and mobile
 
-Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.6/guides/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.7/tutorial/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
 
 <div align="center">
   <img src="./notes/bundle.gif">
@@ -170,7 +157,7 @@ Simply run `dx bundle` and your app will be built and bundled with maximization 
 
 ## Fantastic documentation
 
-We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.6/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.7/) for guides, references, recipes, and more. Fun fact: we use the Dioxus website as a testbed for new Dioxus features - [check it out!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
   <img src="./notes/docs.avif">
@@ -179,12 +166,7 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 
 ## Modular and Customizable
 
-Build your own renderer, or use a community renderer like [Freya](http://freyaui.dev). Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
-
-
-<div align="center">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/freya-todo-example.webp">
-</div>
+Build your own renderer. Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
 
 ## Community
 
@@ -270,7 +252,7 @@ cargo run --example <example>
 However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
 
 ```sh
-cargo binstall dioxus-cli@0.7.0-rc.0 --force
+cargo binstall dioxus-cli@0.7.0 --force
 ```
 
 If this CLI is out-of-date, you can install it directly from git
@@ -287,7 +269,7 @@ dx serve --example <example> --platform web -- --no-default-features
 
 ## Contributing
 
-- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.6/contributing).
+- Check out the website [section on contributing](https://dioxuslabs.com/learn/0.7/beyond/contributing).
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - [Join](https://discord.gg/XgGxMSkvUM) the discord and ask questions!
 

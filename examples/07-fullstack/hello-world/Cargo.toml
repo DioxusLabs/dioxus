@@ -1,0 +1,20 @@
+[package]
+name = "fullstack-hello-world-example"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"]}
+serde = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = []
+server = ["dioxus/server"]
+web = ["dioxus/web"]

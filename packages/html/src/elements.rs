@@ -1421,6 +1421,8 @@ builder_constructors! {
         accept: String DEFAULT,
         alt: String DEFAULT,
         autocomplete: String DEFAULT,
+        /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
+        autocorrect: OnOff DEFAULT,
         autofocus: Bool DEFAULT,
         capture: String DEFAULT,
         checked: Bool DEFAULT,
@@ -1574,6 +1576,8 @@ builder_constructors! {
     /// element.
     textarea None {
         autocomplete: OnOff DEFAULT,
+        /// cf. <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/autocorrect>
+        autocorrect: OnOff DEFAULT,
         autofocus: Bool DEFAULT,
         cols: usize DEFAULT,
         disabled: Bool DEFAULT,

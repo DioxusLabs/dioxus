@@ -15,7 +15,9 @@ use rustc_hash::FxHashMap;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Event, Node};
 
-use crate::{load_document, virtual_event_from_websys_event, Config, WebEventConverter};
+use crate::{
+    event_type_matches, load_document, virtual_event_from_websys_event, Config, WebEventConverter,
+};
 
 pub struct WebsysDom {
     #[allow(dead_code)]
@@ -93,6 +95,14 @@ impl WebsysDom {
                 let Some((element, target)) = element else {
                     return;
                 };
+
+                // Some browser features (e.g. datalist autocomplete) dispatch
+                // a plain Event with a typed name like "keydown" that isn't
+                // actually a KeyboardEvent. Drop events whose JS type doesn't
+                // match what the converters will unchecked-cast to.
+                if !event_type_matches(name.as_str(), web_sys_event) {
+                    return;
+                }
 
                 let data = virtual_event_from_websys_event(web_sys_event.clone(), target);
 

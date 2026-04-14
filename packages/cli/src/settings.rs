@@ -29,6 +29,8 @@ pub(crate) struct CliSettings {
     pub(crate) ignore_version_update: Option<String>,
     /// Disable telemetry
     pub(crate) disable_telemetry: Option<bool>,
+    /// Preferred editor for debug sessions
+    pub(crate) preferred_editor: Option<SupportedEditor>,
 }
 
 impl CliSettings {
@@ -62,7 +64,7 @@ impl CliSettings {
             return None;
         };
 
-        let Some(data) = serde_json5::from_str::<CliSettings>(&data).ok() else {
+        let Some(data) = toml::from_str::<CliSettings>(&data).ok() else {
             warn!("failed to parse global settings file");
             return None;
         };
@@ -167,6 +169,17 @@ impl CliSettings {
 
         *CI
     }
+}
+
+/// Supported editors for debug sessions
+#[derive(Default, Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum SupportedEditor {
+    /// Visual Studio Code
+    #[default]
+    Vscode,
+    /// Cursor editor
+    Cursor,
 }
 
 fn default_wsl_file_poll_interval() -> Option<u16> {

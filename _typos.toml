@@ -10,6 +10,8 @@ seeked = "seeked"
 udid = "udid"
 # Part of Blitz's API
 unparented = "unparented"
+# bundle type / archive
+flate2="flate2"
 
 [files]
-extend-exclude = ["translations/*", "CHANGELOG.md", "*.js"]
+extend-exclude = ["notes/translations/*", "CHANGELOG.md", "*.js"]

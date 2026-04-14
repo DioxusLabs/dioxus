@@ -1,7 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildMode, BuildRequest, TargetArgs, Workspace,
+    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
+    Platform, TargetArgs, Workspace,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -116,14 +117,26 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                 Some(server_args) => {
                     // Make sure we set the client target here so @server knows to place its output into the @client target directory.
                     server_args.build_arguments.client_target = Some(client.main_target.clone());
+
+                    // We don't override anything except the bundle format since @server usually implies a server output
+                    server_args.build_arguments.bundle = server_args
+                        .build_arguments
+                        .bundle
+                        .or(Some(BundleFormat::Server));
+
                     server = Some(
                         BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
                     );
                 }
+                None if client_args.platform == Platform::Server => {
+                    // If the user requests a server build with `--server`, then we don't need to build a separate server binary.
+                    // There's no client to use, so even though fullstack is true, we only build the server.
+                }
                 None => {
                     let mut args = self.shared.build_arguments.clone();
-                    args.platform = Some(crate::Platform::Server);
-                    args.renderer.renderer = Some(crate::Renderer::Server);
+                    args.platform = crate::Platform::Server;
+                    args.renderer = Some(crate::Renderer::Server);
+                    args.bundle = Some(crate::BundleFormat::Server);
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, workspace.clone()).await?);
                 }
@@ -162,7 +175,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         request: &BuildRequest,
         mode: BuildMode,
     ) -> Result<BuildArtifacts> {
-        AppBuilder::started(request, mode)?
+        AppBuilder::started(request, mode, BuildId::PRIMARY)?
             .finish_build()
             .await
             .inspect(|_| {
@@ -180,12 +193,12 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         };
 
         // If the server is present, we need to build it as well
-        let mut server_build = AppBuilder::started(server, mode)?;
+        let mut server_build = AppBuilder::started(server, mode, BuildId::SECONDARY)?;
         let server_artifacts = server_build.finish_build().await?;
 
         // Run SSG and cache static routes
         if ssg {
-            crate::pre_render_static_routes(None, &mut server_build, None).await?;
+            server_build.pre_render_static_routes(None, None).await?;
         }
 
         tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");
@@ -196,12 +209,24 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
 impl BuildArtifacts {
     pub(crate) fn into_structured_output(self) -> StructuredBuildArtifacts {
+        // Extract the tip crate's args for the structured output.
+        // The tip crate is identified by replacing hyphens with underscores in the target name,
+        // but since we don't have the BuildRequest here, we look for the entry with link_args
+        // (only the tip crate has link_args attached) or fall back to any entry.
+        let (rustc_args, rustc_envs) = self
+            .workspace_rustc
+            .rustc_args
+            .iter()
+            .find(|(k, _v)| k.ends_with(".bin"))
+            .map(|f| (f.1.args.clone(), f.1.envs.clone()))
+            .unwrap_or_default();
+
         StructuredBuildArtifacts {
             path: self.root_dir,
             exe: self.exe,
-            rustc_args: self.direct_rustc.args,
-            rustc_envs: self.direct_rustc.envs,
-            link_args: self.direct_rustc.link_args,
+            rustc_args,
+            rustc_envs,
+            link_args: self.workspace_rustc.link_args,
             assets: self.assets.unique_assets().cloned().collect(),
         }
     }

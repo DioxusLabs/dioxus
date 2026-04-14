@@ -25,10 +25,14 @@ pub mod events;
 pub(crate) mod file_data;
 pub use file_data::*;
 mod attribute_groups;
+mod data_transfer;
 pub mod geometry;
 pub mod input_data;
 pub mod point_interaction;
 mod render_template;
+pub use data_transfer::*;
+
+pub use bytes;
 
 #[cfg(feature = "serialize")]
 mod transit;

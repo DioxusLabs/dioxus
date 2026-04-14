@@ -6,11 +6,11 @@ edition = "2021"
 description = "Core headless native renderer for Dioxus based on blitz"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com/learn/0.6/getting_started"
+homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "tracing", "svg", "system-fonts"]
+default = ["accessibility", "svg", "system-fonts"]
 svg = ["blitz-dom/svg"]
 accessibility = ["blitz-dom/accessibility"]
 tracing = ["dep:tracing", "blitz-dom/tracing"]
@@ -40,4 +40,3 @@ dioxus = { workspace = true }
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docsrs"]

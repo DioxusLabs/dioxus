@@ -6,9 +6,16 @@ use anyrender::WindowRenderer;
 
 pub use anyrender_vello::{
     wgpu::{Features, Limits},
-    CustomPaintSource, VelloWindowRenderer as InnerRenderer,
+    CustomPaintSource, VelloRendererOptions,
 };
 
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
+pub use anyrender_vello::VelloWindowRenderer as InnerRenderer;
+
+#[cfg(all(target_os = "ios", target_abi = "sim"))]
+pub use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
+
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
 pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
     use dioxus_core::{consume_context, use_hook_with_cleanup};
 
@@ -44,8 +51,13 @@ impl DioxusNativeWindowRenderer {
         Self::with_inner_renderer(vello_renderer)
     }
 
+    #[cfg(not(all(target_os = "ios", target_abi = "sim")))]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
-        let vello_renderer = InnerRenderer::with_features_and_limits(features, limits);
+        let vello_renderer = InnerRenderer::with_options(VelloRendererOptions {
+            features,
+            limits,
+            ..Default::default()
+        });
         Self::with_inner_renderer(vello_renderer)
     }
 
@@ -56,6 +68,7 @@ impl DioxusNativeWindowRenderer {
     }
 }
 
+#[cfg(not(all(target_os = "ios", target_abi = "sim")))]
 impl DioxusNativeWindowRenderer {
     pub fn register_custom_paint_source(&self, source: Box<dyn CustomPaintSource>) -> u64 {
         self.inner.borrow_mut().register_custom_paint_source(source)

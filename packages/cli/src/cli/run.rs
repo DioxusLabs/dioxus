@@ -82,10 +82,13 @@ impl RunArgs {
                                 current,
                                 total,
                                 krate,
+                                fresh,
                             } => {
-                                tracing::debug!(
-                                    "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
-                                )
+                                if !fresh {
+                                    tracing::debug!(
+                                        "[{bundle_format}] ({current}/{total}) Compiling {krate} ",
+                                    )
+                                }
                             }
                             BuildStage::RunningBindgen => {
                                 tracing::info!("[{bundle_format}] Running WASM bindgen")
@@ -102,7 +105,9 @@ impl RunArgs {
                                 path,
                             } => tracing::info!(
                                 "[{bundle_format}] Copying asset {} ({current}/{total})",
-                                path.display(),
+                                path.file_name()
+                                    .map(|f| f.to_string_lossy())
+                                    .unwrap_or_default(),
                             ),
                             BuildStage::Bundling => {
                                 tracing::info!("[{bundle_format}] Bundling app")
@@ -156,6 +161,7 @@ impl RunArgs {
                         BuilderUpdate::ProcessWaitFailed { err } => {
                             return Err(err.into());
                         }
+                        BuilderUpdate::ProfilePhase { .. } => {}
                     }
                 }
                 ServeUpdate::Exit { .. } => break,

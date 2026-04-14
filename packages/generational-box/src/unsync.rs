@@ -21,10 +21,12 @@ thread_local! {
     static UNSYNC_RUNTIME: RefCell<Vec<&'static UnsyncStorage>> = const { RefCell::new(Vec::new()) };
 }
 
+#[derive(Default)]
 pub(crate) enum RefCellStorageEntryData {
     Reference(GenerationalPointer<UnsyncStorage>),
     Rc(RcStorageEntry<Box<dyn Any>>),
     Data(Box<dyn Any>),
+    #[default]
     Empty,
 }
 
@@ -36,12 +38,6 @@ impl Debug for RefCellStorageEntryData {
             Self::Data(_) => write!(f, "Data"),
             Self::Empty => write!(f, "Empty"),
         }
-    }
-}
-
-impl Default for RefCellStorageEntryData {
-    fn default() -> Self {
-        Self::Empty
     }
 }
 

@@ -98,3 +98,9 @@ pub use use_set_compare::*;
 
 mod use_after_suspense_resolved;
 pub use use_after_suspense_resolved::*;
+
+mod use_action;
+pub use use_action::*;
+
+mod use_waker;
+pub use use_waker::*;

@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
-rust-version = "1.80.0"
+rust-version = "1.83.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
@@ -24,17 +24,17 @@ dioxus-signals = { workspace = true, optional = true }
 dioxus-router = { workspace = true, optional = true }
 dioxus-web = { workspace = true, default-features = false, optional = true }
 dioxus-desktop = { workspace = true, default-features = true, optional = true }
-dioxus-fullstack = { workspace = true, default-features = true, optional = true }
 dioxus-liveview = { workspace = true, optional = true }
-dioxus-server = { workspace = true, optional = true }
 dioxus-ssr = { workspace = true, optional = true }
 dioxus-native = { workspace = true, optional = true }
-dioxus_server_macro = { workspace = true, optional = true }
+dioxus-server = { workspace = true, default-features = true, optional = true }
+dioxus-fullstack = { workspace = true, default-features = true, optional = true }
+dioxus-fullstack-macro = { workspace = true, optional = true }
 dioxus-asset-resolver = { workspace = true, optional = true }
 manganis = { workspace = true, features = ["dioxus"], optional = true }
 dioxus-logger = { workspace = true, optional = true }
 warnings = { workspace = true, optional = true }
-wasm-splitter = { workspace = true, package = "wasm-split", optional = true }
+wasm-splitter = { workspace = true, optional = true }
 subsecond = { workspace = true }
 
 serde = { workspace = true, optional = true }
@@ -55,7 +55,6 @@ lib = [
   "signals",
   "hooks",
   "mounted",
-  "file_engine",
   "document",
   "asset",
   "warnings",
@@ -67,9 +66,8 @@ signals = ["dep:dioxus-signals", "dep:dioxus-stores"]
 macro = ["dep:dioxus-core-macro"]
 html = ["dep:dioxus-html"]
 hooks = ["dep:dioxus-hooks"]
-devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools", "dioxus-fullstack?/devtools"]
+devtools = ["dep:dioxus-devtools", "dioxus-web?/devtools"]
 mounted = ["dioxus-web?/mounted"]
-file_engine = ["dioxus-web?/file_engine"]
 asset = ["dep:manganis", "dep:dioxus-asset-resolver"]
 document = ["dioxus-web?/document", "dep:dioxus-document", "dep:dioxus-history"]
 logger = ["dep:dioxus-logger"]
@@ -84,9 +82,19 @@ launch = ["dep:dioxus-config-macro"]
 router = ["dep:dioxus-router"]
 
 # Platforms
-fullstack = ["dep:dioxus-fullstack", "dioxus-config-macro/fullstack", "dep:serde"]
-desktop = ["dep:dioxus-desktop", "dioxus-fullstack?/desktop", "dioxus-config-macro/desktop"]
-mobile = ["dep:dioxus-desktop", "dioxus-fullstack?/mobile", "dioxus-config-macro/mobile"]
+fullstack = [
+  "dep:dioxus-fullstack",
+  "dioxus-config-macro/fullstack",
+  "dep:serde",
+  "dioxus-web?/document",
+  "dioxus-web?/hydrate",
+  "dioxus-server?/document",
+  "dioxus-web?/devtools",
+  "dioxus-web?/mounted",
+  "dioxus-web?/document"
+]
+desktop = ["dep:dioxus-desktop", "dioxus-config-macro/desktop"]
+mobile = ["dep:dioxus-desktop", "dioxus-config-macro/mobile"]
 web = [
   "dep:dioxus-web",
   "dioxus-fullstack?/web",
@@ -97,15 +105,13 @@ web = [
 ]
 ssr = ["dep:dioxus-ssr", "dioxus-config-macro/ssr"]
 liveview = ["dep:dioxus-liveview", "dioxus-config-macro/liveview"]
-native = ["dep:dioxus-native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
+native = ["dep:dioxus-native", "dioxus-config-macro/native"] # todo(jon): decompose the desktop crate such that "webview" is the default and native is opt-in
 server = [
   "dep:dioxus-server",
-  "dep:dioxus_server_macro",
-  "dioxus_server_macro/server",
-  "dioxus_server_macro/axum",
+  "dioxus-fullstack?/server",
+  "dep:dioxus-fullstack-macro",
   "ssr",
   "dioxus-liveview?/axum",
-  "dioxus-fullstack?/server",
 ]
 
 # This feature just disables the no-renderer-enabled warning

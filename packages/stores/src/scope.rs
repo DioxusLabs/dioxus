@@ -17,7 +17,7 @@ use dioxus_signals::{
 /// - A tree of subscriptions used to make the store reactive.
 ///
 /// The `SelectorScope` contains a view into the lock (`Lens`) and a path into the subscription tree. When
-/// the selector is read to, it will track the current path in the subscription tree. When it it written to
+/// the selector is read to, it will track the current path in the subscription tree. When it is written to
 /// it marks itself and all its children as dirty.
 ///
 /// When you derive the [`Store`](dioxus_stores_macro::Store) macro on your data structure,
@@ -151,7 +151,7 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Track this scope recursively.
     pub fn track(&self) {
-        self.store.track_recursive(&self.path);
+        self.store.track_deep(&self.path);
     }
 
     /// Mark this scope as dirty recursively.
@@ -161,7 +161,7 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Mark this scope as dirty shallowly.
     pub fn mark_dirty_shallow(&self) {
-        self.store.mark_dirty_shallow(&self.path);
+        self.store.mark_node_dirty(&self.path);
     }
 
     /// Mark this scope as dirty at and after the given index.
@@ -185,6 +185,15 @@ impl<Lens> SelectorScope<Lens> {
     {
         self.write.write_unchecked()
     }
+
+    /// Borrow the writer
+    pub(crate) fn as_ref(&self) -> SelectorScope<&Lens> {
+        SelectorScope {
+            path: self.path,
+            store: self.store,
+            write: &self.write,
+        }
+    }
 }
 
 impl<Lens: Readable> Readable for SelectorScope<Lens> {
@@ -201,7 +210,7 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
     }
 
     fn subscribers(&self) -> Subscribers {
-        self.store.subscribers(&self.path)
+        self.store.shallow_subscribers(&self.path)
     }
 }
 

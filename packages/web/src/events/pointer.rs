@@ -13,12 +13,12 @@ impl HasPointerData for Synthetic<PointerEvent> {
         self.event.pointer_id()
     }
 
-    fn width(&self) -> i32 {
-        self.event.width()
+    fn width(&self) -> f64 {
+        self.event.width() as _
     }
 
-    fn height(&self) -> i32 {
-        self.event.height()
+    fn height(&self) -> f64 {
+        self.event.height() as _
     }
 
     fn pressure(&self) -> f32 {

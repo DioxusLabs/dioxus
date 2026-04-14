@@ -104,6 +104,14 @@ impl<T: ?Sized, R: Deref<Target = T>> GenerationalRef<R> {
             guard: self.guard,
         })
     }
+
+    /// Clone the inner value. This requires that the inner value implements [`Clone`].
+    pub fn cloned(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner.deref().clone()
+    }
 }
 
 impl<T: ?Sized + Debug, R: Deref<Target = T>> Debug for GenerationalRef<R> {

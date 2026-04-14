@@ -1,6 +1,6 @@
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::generation;
+use dioxus_core::{consume_context_from_scope, generation};
 
 #[test]
 fn state_shares() {
@@ -31,13 +31,13 @@ fn state_shares() {
     dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 1);
+        assert_eq!(consume_context_from_scope::<i32>(ScopeId::APP).unwrap(), 1);
     });
 
     dom.mark_dirty(ScopeId::APP);
     _ = dom.render_immediate_to_vec();
     dom.in_runtime(|| {
-        assert_eq!(ScopeId::APP.consume_context::<i32>().unwrap(), 2);
+        assert_eq!(consume_context_from_scope::<i32>(ScopeId::APP).unwrap(), 2);
     });
 
     dom.mark_dirty(ScopeId(ScopeId::APP.0 + 2));

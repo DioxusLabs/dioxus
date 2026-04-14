@@ -29,6 +29,7 @@
 //! - set `dx config set disable-telemetry true`
 //!
 
+use crate::component::ComponentCommand;
 use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
 use anyhow::{bail, Context, Error, Result};
@@ -41,14 +42,14 @@ use futures_util::FutureExt;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{any::Any, io::Read, str::FromStr, sync::Arc, time::SystemTime};
+use std::{any::Any, io::Read, pin::Pin, str::FromStr, sync::Arc, time::SystemTime};
 use std::{borrow::Cow, sync::OnceLock};
 use std::{
     collections::HashMap,
     env,
     fmt::{Debug, Display, Write as _},
     sync::atomic::{AtomicBool, Ordering},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use std::{future::Future, panic::AssertUnwindSafe};
 use tracing::{field::Visit, Level, Subscriber};
@@ -68,19 +69,8 @@ const DX_SRC_FLAG: &str = "dx_src";
 
 pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
-fn reset_cursor() {
-    use std::io::IsTerminal;
-
-    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
-    // the cargo generate TUI, but we still want to reset the cursor.
-    if std::io::stdout().is_terminal() {
-        _ = console::Term::stdout().show_cursor();
-    }
-}
-
-/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
-pub(crate) trait Anonymized {
-    fn anonymized(&self) -> serde_json::Value;
+pub fn verbosity_or_default() -> Verbosity {
+    crate::VERBOSITY.get().cloned().unwrap_or_default()
 }
 
 /// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
@@ -109,6 +99,7 @@ struct CapturedPanicError {
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
+
 impl std::fmt::Display for CapturedPanicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -127,6 +118,11 @@ struct SavedLocation {
     column: u32,
 }
 
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> serde_json::Value;
+}
+
 impl TraceController {
     /// Initialize the CLI and set up the tracing infrastructure
     ///
@@ -134,10 +130,9 @@ impl TraceController {
     ///
     /// We pass the TraceController around the CLI in a few places, namely the serve command so the TUI
     /// can access things like the logs.
-    pub async fn main<F>(run_app: impl FnOnce(Commands, Self) -> F) -> StructuredOutput
-    where
-        F: Future<Output = Result<StructuredOutput>>,
-    {
+    pub async fn main(
+        run_app: impl FnOnce(Commands, Self) -> Pin<Box<dyn Future<Output = Result<StructuredOutput>>>>,
+    ) -> StructuredOutput {
         let args = Cli::parse();
         let tui_active = Arc::new(AtomicBool::new(false));
         let is_serve_cmd = matches!(args.action, Commands::Serve(_));
@@ -173,7 +168,7 @@ impl TraceController {
 
         // We complete filter out a few fields that are not relevant to the user, like `dx_src` and `json`
         let fmt_layer = tracing_subscriber::fmt::layer()
-            .with_target(args.verbosity.verbose)
+            .with_target(false)
             .fmt_fields(
                 format::debug_fn(move |writer, field, value| {
                     if field.name() == "json" && !args.verbosity.json_output {
@@ -516,7 +511,7 @@ impl TraceController {
             error_handled,
         } = event;
 
-        let mut ph_event = posthog_rs::Event::new(action, distinct_id.to_string());
+        let mut ph_event = PosthogEvent::new(action, distinct_id.to_string());
 
         // The reporter's fields
         _ = ph_event.insert_prop("is_ci", CliSettings::is_ci());
@@ -644,7 +639,7 @@ impl TraceController {
         reset_cursor();
 
         // re-emit any remaining messages in case they're useful.
-        while let Ok(Some(msg)) = self.tui_rx.lock().await.try_next() {
+        while let Ok(msg) = self.tui_rx.lock().await.try_recv() {
             let content = match msg.content {
                 TraceContent::Text(text) => text,
                 TraceContent::Cargo(msg) => msg.message.to_string(),
@@ -658,7 +653,7 @@ impl TraceController {
             }
         }
 
-        // If we have "safe" error, we we need to log it
+        // If we have "safe" error, we need to log it
         if let Ok(Err(err)) = &res {
             self.record_backtrace(
                 err,
@@ -724,7 +719,7 @@ impl TraceController {
             true => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let request_body = std::iter::from_fn(|| msgs.try_next().ok().flatten())
+                let request_body = std::iter::from_fn(|| msgs.try_recv().ok())
                     .filter_map(|msg| serde_json::to_value(msg).ok())
                     .collect::<Vec<_>>();
 
@@ -735,8 +730,7 @@ impl TraceController {
             false => {
                 let mut msgs = self.telemetry_rx.lock().await;
 
-                let msg_list =
-                    std::iter::from_fn(|| msgs.try_next().ok().flatten()).collect::<Vec<_>>();
+                let msg_list = std::iter::from_fn(|| msgs.try_recv().ok()).collect::<Vec<_>>();
 
                 if !msg_list.is_empty() {
                     let dest = Workspace::dioxus_data_dir()
@@ -837,6 +831,12 @@ impl TraceController {
                 }),
             ),
             Commands::Doctor(_cmd) => ("doctor".to_string(), json!({})),
+            Commands::ShellCompletions(cmd) => (
+                "completions".to_string(),
+                json!({
+                    "shell": cmd.shell.to_string(),
+                }),
+            ),
             Commands::Translate(cmd) => (
                 "translate".to_string(),
                 json!({
@@ -873,6 +873,7 @@ impl TraceController {
                 ),
                 Config::FormatPrint {} => ("config format-print".to_string(), json!({})),
                 Config::CustomHtml {} => ("config custom-html".to_string(), json!({})),
+                Config::Schema { out } => ("config schema".to_string(), json!({ "out": out })),
                 Config::Set(setting) => (
                     format!("config set {}", setting),
                     match setting {
@@ -881,6 +882,9 @@ impl TraceController {
                         Setting::AlwaysOnTop { value } => json!({ "value": value }),
                         Setting::WSLFilePollInterval { value } => json!({ "value": value }),
                         Setting::DisableTelemetry { value } => json!({ "value": value }),
+                        Setting::PreferredEditor { value } => {
+                            json!({ "value": format!("{:?}", value) })
+                        }
                     },
                 ),
             },
@@ -901,6 +905,44 @@ impl TraceController {
             Commands::Print(print) => match print {
                 Print::ClientArgs(_args) => ("print client-args".to_string(), json!({})),
                 Print::ServerArgs(_args) => ("print server-args".to_string(), json!({})),
+            },
+            Commands::Components(cmd) => match cmd {
+                ComponentCommand::Add {
+                    component,
+                    registry,
+                    force,
+                } => (
+                    "components add".to_string(),
+                    json!({
+                        "component": component,
+                        "registry": registry,
+                        "force": force,
+                    }),
+                ),
+                ComponentCommand::Remove {
+                    component,
+                    registry,
+                } => (
+                    "components remove".to_string(),
+                    json!({
+                        "component": component,
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::Update { registry } => (
+                    "components update".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::List { registry } => (
+                    "components list".to_string(),
+                    json!({
+                        "registry": registry,
+                    }),
+                ),
+                ComponentCommand::Clean => ("components clean".to_string(), json!({})),
+                ComponentCommand::Schema => ("components schema".to_string(), json!({})),
             },
         }
     }
@@ -1038,7 +1080,7 @@ where
             };
 
             // If the event has the captured panic attached, we record it through capture_backtrace directly.
-            // Otherwise, we wont have a backtrace to work with, so we just log the event as a telemetry event.
+            // Otherwise, we won't have a backtrace to work with, so we just log the event as a telemetry event.
             if let Some(error) = visitor.captured_panic {
                 self.record_backtrace(
                     error.error.as_ref(),
@@ -1292,10 +1334,43 @@ impl Default for PrettyUptime {
 
 impl FormatTime for PrettyUptime {
     fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        let e = self.epoch.elapsed();
-        write!(w, "{:4}.{:2}s", e.as_secs(), e.subsec_millis())
+        Self::write_elapsed(self.epoch.elapsed(), w)
     }
 }
+
+impl PrettyUptime {
+    fn write_elapsed(elapsed: Duration, mut w: impl std::fmt::Write) -> std::fmt::Result {
+        write!(
+            w,
+            "{:3}.{:02}s",
+            elapsed.as_secs(),
+            elapsed.subsec_millis() / 10
+        )
+    }
+}
+
+#[cfg(test)]
+mod pretty_uptime_tests {
+    use super::PrettyUptime;
+    use std::time::Duration;
+
+    #[test]
+    fn pretty_uptime_pads_centiseconds_to_keep_a_stable_width() {
+        let cases = [
+            (Duration::from_millis(92_993), " 92.99s"),
+            (Duration::from_millis(93_085), " 93.08s"),
+            (Duration::from_millis(93_130), " 93.13s"),
+            (Duration::from_millis(999_999), "999.99s"),
+        ];
+
+        for (elapsed, expected) in cases {
+            let mut rendered = String::new();
+            PrettyUptime::write_elapsed(elapsed, &mut rendered).unwrap();
+            assert_eq!(rendered, expected);
+        }
+    }
+}
+
 /// Run the provided future and wait for it to complete, handling Ctrl-C gracefully.
 ///
 /// If ctrl-c is pressed twice, it exits immediately, skipping our telemetry flush.
@@ -1328,7 +1403,47 @@ async fn run_with_ctrl_c(
 /// We only store non-pii information in telemetry to track issues and performance
 /// across the CLI.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Reporter {
-    pub session_id: Uuid,
-    pub distinct_id: Uuid,
+struct Reporter {
+    session_id: Uuid,
+    distinct_id: Uuid,
+}
+
+/// A minimal PostHog event, replacing the `posthog-rs` crate dependency.
+/// See <https://posthog.com/docs/api/capture>
+#[derive(Serialize, Debug)]
+struct PosthogEvent {
+    event: String,
+    #[serde(rename = "$distinct_id")]
+    distinct_id: String,
+    properties: std::collections::HashMap<String, serde_json::Value>,
+}
+
+impl PosthogEvent {
+    fn new(event: impl Into<String>, distinct_id: impl Into<String>) -> Self {
+        Self {
+            event: event.into(),
+            distinct_id: distinct_id.into(),
+            properties: std::collections::HashMap::new(),
+        }
+    }
+
+    fn insert_prop<V: Serialize>(
+        &mut self,
+        key: impl Into<String>,
+        value: V,
+    ) -> Result<(), serde_json::Error> {
+        self.properties
+            .insert(key.into(), serde_json::to_value(value)?);
+        Ok(())
+    }
+}
+
+fn reset_cursor() {
+    use std::io::IsTerminal;
+
+    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
+    // the cargo generate TUI, but we still want to reset the cursor.
+    if std::io::stdout().is_terminal() {
+        _ = console::Term::stdout().show_cursor();
+    }
 }

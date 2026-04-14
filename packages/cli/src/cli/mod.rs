@@ -3,6 +3,7 @@ pub(crate) mod build;
 pub(crate) mod build_assets;
 pub(crate) mod bundle;
 pub(crate) mod check;
+pub(crate) mod component;
 pub(crate) mod config;
 pub(crate) mod create;
 pub(crate) mod doctor;
@@ -13,6 +14,7 @@ pub(crate) mod platform_override;
 pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
+pub(crate) mod shell_completions;
 pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod update;
@@ -83,6 +85,10 @@ pub(crate) enum Commands {
     #[clap(name = "doctor")]
     Doctor(doctor::Doctor),
 
+    /// Print shell completions for the given shell.
+    #[clap(name = "completions")]
+    ShellCompletions(shell_completions::ShellCompletions),
+
     /// Print project information in a structured format, like cargo args, linker args, and other
     /// flags DX sets that might be useful in third-party tools.
     #[clap(name = "print")]
@@ -114,6 +120,11 @@ pub(crate) enum Commands {
     #[clap(name = "tools")]
     #[clap(subcommand)]
     Tools(BuildTools),
+
+    /// Manage components from the `dioxus-component` registry.
+    #[clap(name = "components")]
+    #[clap(subcommand)]
+    Components(component::ComponentCommand),
 }
 
 #[allow(clippy::large_enum_variant)]

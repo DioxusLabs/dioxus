@@ -11,7 +11,7 @@ use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
 use serde::Serialize;
-use std::{any::Any, rc::Rc, time::Duration};
+use std::{any::Any, rc::Rc};
 use tokio_util::task::LocalPoolHandle;
 
 #[derive(Clone)]
@@ -133,7 +133,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
     // Create the a proxy for query engine
     let (query_tx, mut query_rx) = tokio::sync::mpsc::unbounded_channel();
     let query_engine = QueryEngine::new(query_tx);
-    vdom.runtime().on_scope(ScopeId::ROOT, || {
+    vdom.runtime().in_scope(ScopeId::ROOT, || {
         provide_context(query_engine.clone());
         init_document();
     });
@@ -236,12 +236,6 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                 #[cfg(not(all(feature = "devtools", debug_assertions)))]
                 let () = msg;
             }
-        }
-
-        // wait for suspense to resolve in a 10ms window
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_millis(10)) => {}
-            _ = vdom.wait_for_suspense() => {}
         }
 
         // render the vdom

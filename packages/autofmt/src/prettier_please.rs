@@ -7,6 +7,10 @@ impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
         unparse_expr(expr, self.raw_src, &self.out.indent)
     }
+
+    pub fn unparse_pat(&self, pat: &syn::Pat) -> String {
+        unparse_pat(pat)
+    }
 }
 
 // we use weird unicode alternatives to avoid conflicts with the actual rsx! macro
@@ -55,7 +59,14 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
                 if multiline || formatted.contains('\n') {
                     formatted = formatted
                         .lines()
-                        .map(|line| format!("{}{line}", self.cfg.indent_str()))
+                        .map(|line| {
+                            // Don't add indentation to blank lines (avoid trailing whitespace)
+                            if line.is_empty() {
+                                String::new()
+                            } else {
+                                format!("{}{line}", self.cfg.indent_str())
+                            }
+                        })
                         .collect::<Vec<_>>()
                         .join("\n");
                 }
@@ -106,8 +117,8 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         let mut lines = fmted.lines().enumerate().peekable();
 
         while let Some((_idx, fmt_line)) = lines.next() {
-            // Push the indentation
-            if is_multiline {
+            // Push the indentation (but not for blank lines - avoid trailing whitespace)
+            if is_multiline && !fmt_line.is_empty() {
                 out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
             }
 
@@ -156,6 +167,32 @@ pub fn unparse_inner(expr: &Expr) -> String {
     unwrapped(wrapped)
 }
 
+/// Unparse a pattern into a properly formatted string using prettyplease.
+///
+/// Wraps the pattern in `fn main() { for PAT in () {} }`, formats with prettyplease,
+/// then extracts just the pattern text between "for " and " in".
+pub fn unparse_pat(pat: &syn::Pat) -> String {
+    let file = File {
+        shebang: None,
+        attrs: vec![],
+        items: vec![Item::Verbatim(quote::quote! {
+            fn main() {
+                for #pat in () {}
+            }
+        })],
+    };
+    let formatted = prettyplease::unparse(&file);
+    let after_for = formatted
+        .find("for ")
+        .map(|i| i + 4)
+        .expect("prettyplease output missing 'for' keyword in pattern wrapper");
+    let before_in = formatted[after_for..]
+        .find(" in ")
+        .map(|i| i + after_for)
+        .expect("prettyplease output missing 'in' keyword in pattern wrapper");
+    formatted[after_for..before_in].trim().to_string()
+}
+
 // Split off the fn main and then cut the tabs off the front
 fn unwrapped(raw: String) -> String {
     let mut o = raw
@@ -164,7 +201,7 @@ fn unwrapped(raw: String) -> String {
         .strip_suffix("}\n")
         .unwrap()
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap()) // todo: set this to tab level
+        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
         .collect::<Vec<_>>()
         .join("\n");
 

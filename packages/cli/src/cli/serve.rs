@@ -61,7 +61,7 @@ pub(crate) struct ServeArgs {
     pub(crate) hot_patch: bool,
 
     /// Watch the filesystem for changes and trigger a rebuild [default: true]
-    #[clap(long, default_missing_value = "true")]
+    #[clap(long, default_missing_value = "true", num_args=0..=1)]
     pub(crate) watch: Option<bool>,
 
     /// Exit the CLI after running into an error. This is mainly used to test hot patching internally
@@ -92,10 +92,6 @@ impl ServeArgs {
     ///
     /// We also set up proper panic handling since the TUI has a tendency to corrupt the terminal.
     pub(crate) async fn serve(self, tracer: &TraceController) -> Result<StructuredOutput> {
-        if std::env::var("RUST_BACKTRACE").is_err() {
-            std::env::set_var("RUST_BACKTRACE", "1");
-        }
-
         // Redirect all logging the cli logger - if there's any pending after a panic, we flush it
         let is_interactive_tty = self.is_interactive_tty();
         if is_interactive_tty {

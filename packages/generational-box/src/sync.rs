@@ -22,23 +22,19 @@ type RwLockStorageEntryMut = RwLockWriteGuard<'static, StorageEntry<RwLockStorag
 type AnyRef = MappedRwLockReadGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
 type AnyRefMut = MappedRwLockWriteGuard<'static, Box<dyn Any + Send + Sync + 'static>>;
 
+#[derive(Default)]
 pub(crate) enum RwLockStorageEntryData {
     Reference(GenerationalPointer<SyncStorage>),
     Rc(RcStorageEntry<Box<dyn Any + Send + Sync>>),
     Data(Box<dyn Any + Send + Sync>),
+    #[default]
     Empty,
-}
-
-impl Default for RwLockStorageEntryData {
-    fn default() -> Self {
-        Self::Empty
-    }
 }
 
 impl Debug for RwLockStorageEntryData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Reference(location) => write!(f, "Reference({:?})", location),
+            Self::Reference(location) => write!(f, "Reference({location:?})"),
             Self::Rc(_) => write!(f, "Rc"),
             Self::Data(_) => write!(f, "Data"),
             Self::Empty => write!(f, "Empty"),

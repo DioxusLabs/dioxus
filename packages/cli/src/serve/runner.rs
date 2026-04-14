@@ -22,13 +22,12 @@ use notify::{
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     net::{IpAddr, TcpListener},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
-use subsecond_types::JumpTable;
 use syn::spanned::Spanned;
 use tokio::process::Command;
 
@@ -47,13 +46,13 @@ pub(crate) struct AppServer {
     pub(crate) client: AppBuilder,
     pub(crate) server: Option<AppBuilder>,
 
-    // Related to to the filesystem watcher
+    // Related to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
     pub(crate) _watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
 
     // Tracked state related to open builds and hot reloading
-    pub(crate) applied_hot_reload_message: HotReloadMsg,
+    pub(crate) applied_client_hot_reload_message: HotReloadMsg,
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
@@ -82,6 +81,9 @@ pub(crate) struct AppServer {
 
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
+
+    // File changes that arrived while a build was in progress, to be processed after build completes
+    pub(crate) pending_file_changes: Vec<PathBuf>,
 }
 
 pub(crate) struct CachedFile {
@@ -101,7 +103,12 @@ impl AppServer {
         let cross_origin_policy = args.cross_origin_policy;
 
         // Find the launch args for the client and server
-        let split_args = |args: &str| args.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let split_args = |args: &str| {
+            args.split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        };
+
         let server_args = args.platform_args.with_server_or_shared(|c| &c.args);
         let server_args = split_args(server_args);
         let client_args = args.platform_args.with_client_or_shared(|c| &c.args);
@@ -180,7 +187,7 @@ impl AppServer {
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),
-            applied_hot_reload_message: Default::default(),
+            applied_client_hot_reload_message: Default::default(),
             automatic_rebuilds: true,
             watch_fs,
             use_hotpatch_engine,
@@ -205,6 +212,7 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            pending_file_changes: Vec::new(),
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -230,10 +238,16 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start(build_mode.clone());
+        self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
-            server.start(build_mode);
+            server.start(build_mode, BuildId::SECONDARY);
         }
+    }
+
+    /// Take any pending file changes that were queued while a build was in progress.
+    /// Returns the files and clears the pending list.
+    pub(crate) fn take_pending_file_changes(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.pending_file_changes)
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -245,12 +259,12 @@ impl AppServer {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) = crate::pre_render_static_routes(
-                Some(devserver.devserver_address()),
-                server,
-                Some(&server.tx.clone()),
-            )
-            .await
+            if let Err(err) = server
+                .pre_render_static_routes(
+                    Some(devserver.devserver_address()),
+                    Some(&server.tx.clone()),
+                )
+                .await
             {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }
@@ -269,14 +283,14 @@ impl AppServer {
             // Wait for the client to finish
             client_update = client_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::CLIENT,
+                    id: BuildId::PRIMARY,
                     update: client_update,
                 }
             }
 
             Some(server_update) = server_wait => {
                 ServeUpdate::BuilderUpdate {
-                    id: BuildId::SERVER,
+                    id: BuildId::SECONDARY,
                     update: server_update,
                 }
             }
@@ -286,7 +300,7 @@ impl AppServer {
                 let mut changes: Vec<_> = event.into_iter().collect();
 
                 // Dequeue in bulk if we can, we might've received a lot of events in one go
-                while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                while let Ok(event) = self.watcher_rx.try_recv() {
                     changes.push(event);
                 }
 
@@ -344,10 +358,14 @@ impl AppServer {
             self.client.stage,
             BuildStage::Failed | BuildStage::Aborted | BuildStage::Success
         ) {
+            // Queue file changes that arrive during a build, so we can process them after the build completes.
+            // This prevents losing changes from tools like stylance, tailwind, or sass that generate files
+            // in response to source changes.
             tracing::debug!(
-                "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
+                "Queueing file change - client is not ready to receive hotreloads. Files: {:?}",
                 files
             );
+            self.pending_file_changes.extend(files.iter().cloned());
             return;
         }
 
@@ -375,6 +393,12 @@ impl AppServer {
                 }
             }
 
+            // If it's in the public dir, we sync it and trigger a full rebuild
+            if self.client.build.path_is_in_public_dir(path) {
+                needs_full_rebuild = true;
+                continue;
+            }
+
             // If it's a rust file, we want to hotreload it using the filemap
             if ext == "rs" {
                 // And grabout the contents
@@ -386,7 +410,6 @@ impl AppServer {
                 // Get the cached file if it exists - ignoring if it doesn't exist
                 let Some(cached_file) = self.file_map.get_mut(path) else {
                     tracing::debug!("No entry for file in filemap: {:?}", path);
-                    tracing::debug!("Filemap: {:#?}", self.file_map.keys());
                     continue;
                 };
 
@@ -487,17 +510,22 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
             if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec());
+                let changed_crates = self.order_changed_crates(files);
+
+                self.client
+                    .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
+
                 if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec());
+                    server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client.start_rebuild(BuildMode::Base { run: true });
+                self.client
+                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true });
+                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -556,13 +584,14 @@ impl AppServer {
         devserver: &mut WebServer,
     ) -> Result<()> {
         // Make sure to save artifacts regardless of if we're opening the app or not
-        match artifacts.bundle {
-            BundleFormat::Server => {
+        match artifacts.build_id {
+            BuildId::PRIMARY => self.client.artifacts = Some(artifacts.clone()),
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.artifacts = Some(artifacts.clone());
                 }
             }
-            _ => self.client.artifacts = Some(artifacts.clone()),
+            _ => {}
         }
 
         let should_open = self.client.stage == BuildStage::Success
@@ -571,20 +600,22 @@ impl AppServer {
         use crate::cli::styles::GLOW_STYLE;
 
         if should_open {
-            let time_taken = artifacts
-                .time_end
-                .duration_since(artifacts.time_start)
-                .unwrap();
+            let time_taken = self.client.total_build_time().unwrap_or_else(|| {
+                artifacts
+                    .time_end
+                    .duration_since(artifacts.time_start)
+                    .unwrap()
+            });
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
-                    time_taken.as_millis()
+                    "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
+                    format_duration_ms(time_taken)
                 );
             } else {
                 tracing::info!(
-                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
-                    time_taken.as_millis()
+                    "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
+                    format_duration_ms(time_taken)
                 );
             }
 
@@ -619,21 +650,32 @@ impl AppServer {
         let displayed_address = devserver.displayed_address();
 
         // Always open the server first after the client has been built
-        // Only open the server if it isn't prerendered
+        // Only open the server if it isn't prerendered and finished building
         if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
-            tracing::debug!("Opening server build");
-            server.soft_kill().await;
-            server
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    false,
-                    false,
-                    BuildId::SERVER,
-                    &self.server_args,
-                )
-                .await?;
+            if server.stage < BuildStage::Success {
+                tracing::trace!("Skipping server open: will open once build completes");
+            } else {
+                tracing::debug!("Opening server build");
+                server.soft_kill().await;
+                server
+                    .open(
+                        devserver_ip,
+                        displayed_address,
+                        fullstack_address,
+                        false,
+                        false,
+                        BuildId::SECONDARY,
+                        &self.server_args,
+                    )
+                    .await?;
+            }
+        }
+
+        // Skip opening native client if still building (web can open anytime)
+        if self.client.build.bundle != BundleFormat::Web && self.client.stage < BuildStage::Success
+        {
+            tracing::trace!("Skipping client open: will open once build completes");
+            return Ok(());
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
@@ -645,7 +687,7 @@ impl AppServer {
                 fullstack_address,
                 open_browser,
                 self.always_on_top,
-                BuildId::CLIENT,
+                BuildId::PRIMARY,
                 &self.client_args,
             )
             .await?;
@@ -692,9 +734,10 @@ impl AppServer {
             false => BuildMode::Base { run: true },
         };
 
-        self.client.start_rebuild(build_mode.clone());
+        self.client
+            .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
         if let Some(s) = self.server.as_mut() {
-            s.start_rebuild(build_mode)
+            s.start_rebuild(build_mode, BuildId::SECONDARY);
         }
 
         self.clear_hot_reload_changes();
@@ -704,33 +747,77 @@ impl AppServer {
 
     pub(crate) async fn hotpatch(
         &mut self,
-        res: &BuildArtifacts,
+        bundle: &BuildArtifacts,
         id: BuildId,
         cache: &HotpatchModuleCache,
-    ) -> Result<JumpTable> {
+        devserver: &mut WebServer,
+    ) -> Result<()> {
+        let elapsed = bundle
+            .time_end
+            .duration_since(bundle.time_start)
+            .unwrap_or_default();
+
         let jump_table = match id {
-            BuildId::CLIENT => self.client.hotpatch(res, cache).await,
-            BuildId::SERVER => {
+            BuildId::PRIMARY => self.client.hotpatch(bundle, cache).await,
+            BuildId::SECONDARY => {
                 self.server
                     .as_mut()
                     .context("Server not found")?
-                    .hotpatch(res, cache)
+                    .hotpatch(bundle, cache)
                     .await
             }
             _ => bail!("Invalid build id"),
         }?;
 
-        if id == BuildId::CLIENT {
-            self.applied_hot_reload_message.jump_table = self.client.patches.last().cloned();
+        if id == BuildId::PRIMARY {
+            self.applied_client_hot_reload_message.jump_table = self.client.patches.last().cloned();
         }
 
-        Ok(jump_table)
+        // If no server, just send the patch immediately
+        let Some(server) = self.server.as_mut() else {
+            devserver
+                .send_patch(jump_table, elapsed, id, self.client.pid)
+                .await;
+            return Ok(());
+        };
+
+        // If we have a server, we need to wait until both the client and server are ready
+        // Otherwise we end up with an annoying race condition where the client can't actually load the patch
+        if self.client.stage == BuildStage::Success && server.stage == BuildStage::Success {
+            let client_jump_table = self
+                .client
+                .patches
+                .last()
+                .cloned()
+                .context("Missing client jump table")?;
+
+            let server_jump_table = server
+                .patches
+                .last()
+                .cloned()
+                .context("Missing server jump table")?;
+
+            devserver
+                .send_patch(server_jump_table, elapsed, BuildId::SECONDARY, server.pid)
+                .await;
+
+            devserver
+                .send_patch(
+                    client_jump_table,
+                    elapsed,
+                    BuildId::PRIMARY,
+                    self.client.pid,
+                )
+                .await;
+        }
+
+        Ok(())
     }
 
     pub(crate) fn get_build(&self, id: BuildId) -> Option<&AppBuilder> {
         match id {
-            BuildId::CLIENT => Some(&self.client),
-            BuildId::SERVER => self.server.as_ref(),
+            BuildId::PRIMARY => Some(&self.client),
+            BuildId::SECONDARY => self.server.as_ref(),
             _ => None,
         }
     }
@@ -746,20 +833,20 @@ impl AppServer {
 
     /// Get any hot reload changes that have been applied since the last full rebuild
     pub(crate) fn applied_hot_reload_changes(&mut self, build: BuildId) -> HotReloadMsg {
-        let mut msg = self.applied_hot_reload_message.clone();
+        let mut msg = self.applied_client_hot_reload_message.clone();
 
-        if build == BuildId::CLIENT {
+        if build == BuildId::PRIMARY {
             msg.jump_table = self.client.patches.last().cloned();
-            msg.for_build_id = Some(BuildId::CLIENT.0 as _);
+            msg.for_build_id = Some(BuildId::PRIMARY.0 as _);
             if let Some(lib) = msg.jump_table.as_mut() {
                 lib.lib = PathBuf::from("/").join(lib.lib.clone());
             }
         }
 
-        if build == BuildId::SERVER {
+        if build == BuildId::SECONDARY {
             if let Some(server) = self.server.as_mut() {
                 msg.jump_table = server.patches.last().cloned();
-                msg.for_build_id = Some(BuildId::SERVER.0 as _);
+                msg.for_build_id = Some(BuildId::SECONDARY.0 as _);
             }
         }
 
@@ -768,7 +855,7 @@ impl AppServer {
 
     /// Clear the hot reload changes. This should be called any time a new build is starting
     pub(crate) fn clear_hot_reload_changes(&mut self) {
-        self.applied_hot_reload_message = Default::default();
+        self.applied_client_hot_reload_message = Default::default();
     }
 
     pub(crate) fn clear_patches(&mut self) {
@@ -785,7 +872,7 @@ impl AppServer {
         pid: Option<u32>,
     ) {
         match build_id {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
                 if self.client.build.bundle != BundleFormat::Web {
@@ -797,7 +884,7 @@ impl AppServer {
                     }
                 }
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.aslr_reference = aslr_reference;
                 }
@@ -831,7 +918,7 @@ impl AppServer {
 
     /// Store the hot reload changes for any future clients that connect
     fn add_hot_reload_message(&mut self, msg: &HotReloadMsg) {
-        let applied = &mut self.applied_hot_reload_message;
+        let applied = &mut self.applied_client_hot_reload_message;
 
         // Merge the assets, unknown files, and templates
         // We keep the newer change if there is both a old and new change
@@ -977,6 +1064,15 @@ impl AppServer {
         let mut watched_crates = self.local_dependencies(crate_package);
         watched_crates.push(crate_dir);
 
+        // Watch the `public` directory if this is the client crate
+        if self.client.build.crate_package == crate_package {
+            if let Some(public_dir) = self.client.build.user_public_dir() {
+                if public_dir.exists() {
+                    watched_paths.push(public_dir);
+                }
+            }
+        }
+
         // Now, watch all the folders in the crates, but respecting their respective ignore files
         for krate_root in watched_crates {
             // Build the ignore builder for this crate, but with our default ignore list as well
@@ -1083,6 +1179,152 @@ impl AppServer {
         krates
     }
 
+    /// Compute the ordered compilation chain from a changed workspace crate to the tip crate.
+    ///
+    /// Returns crate names (underscore-normalized) in compilation order: the changed crate first,
+    /// then each intermediate workspace crate that depends on it, ending with the tip crate.
+    ///
+    /// Uses BFS from the tip crate through its workspace dependencies to find the path.
+    /// If the changed crate IS the tip crate, returns just `[tip]`.
+    pub(crate) fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
+        let tip_name = self.client.build.main_target.replace('-', "_");
+
+        // If the changed crate is the tip, no chain needed
+        if changed_crate == tip_name {
+            return vec![tip_name];
+        }
+
+        // Build a map of workspace crate names to their krates NodeIds
+        let mut name_to_node: HashMap<String, NodeId> = HashMap::new();
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { id, krate, .. } = member {
+                let normalized = krate.name.replace('-', "_");
+                name_to_node.insert(normalized, self.workspace.krates.nid_for_kid(id).unwrap());
+            }
+        }
+
+        // BFS/DFS from tip through workspace deps to find path to changed crate.
+        // We walk the dependency edges (tip → its deps → their deps → ...) looking for changed_crate.
+        let Some(&tip_node) = name_to_node.get(&tip_name) else {
+            return vec![changed_crate.to_string()];
+        };
+
+        // parent[node] = the workspace crate that depends on it (closer to tip)
+        let mut parent: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        parent.insert(tip_node, None);
+        let mut queue = VecDeque::new();
+        queue.push_back(tip_node);
+
+        let mut target_node = None;
+
+        while let Some(current) = queue.pop_front() {
+            for (dep, _edge) in self.workspace.krates.get_deps(current) {
+                let (dep_name, dep_nid) = match dep {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let normalized = krate.name.replace('-', "_");
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (normalized, nid)
+                    }
+                    _ => continue,
+                };
+
+                // Only traverse workspace members
+                if !name_to_node.contains_key(&dep_name) {
+                    continue;
+                }
+
+                if parent.contains_key(&dep_nid) {
+                    continue; // already visited
+                }
+
+                parent.insert(dep_nid, Some(current));
+
+                if dep_name == changed_crate {
+                    target_node = Some(dep_nid);
+                    break;
+                }
+
+                queue.push_back(dep_nid);
+            }
+
+            if target_node.is_some() {
+                break;
+            }
+        }
+
+        // Reconstruct the path from changed_crate → ... → tip
+        let Some(target) = target_node else {
+            // Changed crate not found in workspace dep graph — just compile it alone
+            return vec![changed_crate.to_string()];
+        };
+
+        let mut chain = vec![];
+        let mut node = target;
+        loop {
+            // Find the crate name for this node
+            let krate = &self.workspace.krates[node];
+            chain.push(krate.name.replace('-', "_"));
+
+            match parent.get(&node) {
+                Some(Some(parent_node)) => node = *parent_node,
+                _ => break,
+            }
+        }
+
+        chain
+    }
+
+    /// Order a set of changed workspace crates so that deeper dependencies compile first.
+    ///
+    /// Uses `workspace_dep_chain` to determine the depth of each crate in the dependency graph,
+    /// then sorts so that leaves (deepest deps) compile before crates closer to the tip.
+    fn order_changed_crates(&self, files: &[PathBuf]) -> Vec<String> {
+        // Determine which workspace crates changed based on the file paths.
+        // Order them so deeper deps compile first (leaves before dependents).
+        let changed_set: HashSet<String> = files
+            .iter()
+            .filter_map(|f| self.file_to_workspace_crate(f))
+            .collect();
+
+        let mut crates_with_depth: Vec<_> = changed_set
+            .iter()
+            .map(|c| (c.clone(), self.workspace_dep_chain(c).len()))
+            .collect();
+
+        // Longer chain = deeper in dep tree = should compile first
+        crates_with_depth.sort_by(|a, b| b.1.cmp(&a.1));
+        crates_with_depth.into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// Map a changed file path to the workspace crate it belongs to.
+    ///
+    /// Returns the crate name in rustc convention (hyphens → underscores), matching the
+    /// `--crate-name` arg used by rustc and the keys in `workspace_rustc_args`.
+    ///
+    /// Finds the workspace member whose crate directory is the longest prefix of the file path.
+    fn file_to_workspace_crate(&self, file: &Path) -> Option<String> {
+        let mut best_match: Option<(String, usize)> = None;
+
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                let Some(crate_dir) = krate.manifest_path.parent() else {
+                    continue;
+                };
+                if let Ok(relative) = file.strip_prefix(crate_dir.as_std_path()) {
+                    let depth = relative.components().count();
+                    let is_better = best_match
+                        .as_ref()
+                        .is_none_or(|(_, best_depth)| depth < *best_depth);
+                    if is_better {
+                        best_match = Some((krate.name.replace('-', "_"), depth));
+                    }
+                }
+            }
+        }
+
+        best_match.map(|(name, _)| name)
+    }
+
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
     pub(crate) fn is_fullstack(&self) -> bool {
         self.fullstack
@@ -1103,10 +1345,10 @@ impl AppServer {
         }
 
         match build {
-            BuildId::CLIENT => {
+            BuildId::PRIMARY => {
                 _ = self.client.open_debugger(dev).await;
             }
-            BuildId::SERVER => {
+            BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     _ = server.open_debugger(dev).await;
                 }
@@ -1227,4 +1469,16 @@ fn is_wsl() -> bool {
     }
 
     false
+}
+
+/// Format a Duration for human-readable output.
+fn format_duration_ms(d: Duration) -> String {
+    let total_ms = d.as_millis() as u64;
+
+    if total_ms < 1000 {
+        format!("{total_ms}ms")
+    } else {
+        let secs = total_ms as f64 / 1000.0;
+        format!("{secs:.2}s")
+    }
 }

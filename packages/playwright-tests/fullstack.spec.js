@@ -4,6 +4,9 @@ const { test, expect } = require("@playwright/test");
 test("hydration", async ({ page }) => {
   await page.goto("http://localhost:3333");
 
+  // Then wait for the page to start loading
+  await page.goto("http://localhost:3333", { waitUntil: "networkidle" });
+
   // Expect the page to contain the pending text.
   const main = page.locator("#main");
   await expect(main).toContainText("Server said: ...");
@@ -95,7 +98,7 @@ test("assets cache correctly", async ({ page }) => {
 
   // Wait for the asset image to be loaded
   const assetImageResponse = await assetImageFuture;
-  console.log("Asset Image Response:", assetImageResponse);
+  // console.log("Asset Image Response:", assetImageResponse);
   // Make sure the asset image cache control header does not contain immutable
   const assetCacheControl = assetImageResponse.headers()["cache-control"];
   console.log("Cache-Control header:", assetCacheControl);
@@ -104,10 +107,10 @@ test("assets cache correctly", async ({ page }) => {
 
   // Wait for the nested asset image to be loaded
   const nestedAssetImageResponse = await nestedAssetImageFuture;
-  console.log(
-    "Nested Asset Image Response:",
-    nestedAssetImageResponse
-  );
+  // console.log(
+  //   "Nested Asset Image Response:",
+  //   nestedAssetImageResponse
+  // );
   // Make sure the nested asset image cache control header does not contain immutable
   const nestedAssetCacheControl =
     nestedAssetImageResponse.headers()["cache-control"];

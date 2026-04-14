@@ -1,8 +1,11 @@
+//! Additional utilities for `HashMap` stores.
+
 use std::{
     borrow::Borrow,
     collections::HashMap,
     hash::{BuildHasher, Hash},
     iter::FusedIterator,
+    panic::Location,
 };
 
 use crate::{store::Store, ReadStore};
@@ -10,6 +13,7 @@ use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
     Writable, WriteLock, WriteSignal,
 };
+use generational_box::ValueDroppedError;
 
 impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'static, St: 'static>
     Store<HashMap<K, V, St>, Lens>
@@ -80,10 +84,8 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
     {
         self.selector().track_shallow();
         let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
-        keys.into_iter().map(move |key| {
-            let value = self.clone().get(key.clone()).unwrap();
-            (key, value)
-        })
+        keys.into_iter()
+            .map(move |key| (key.clone(), self.clone().get_unchecked(key)))
     }
 
     /// Get an iterator over the values in the HashMap. This method will track the store shallowly and only cause
@@ -115,7 +117,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
         self.selector().track_shallow();
         let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
         keys.into_iter()
-            .map(move |key| self.clone().get(key).unwrap())
+            .map(move |key| self.clone().get_unchecked(key))
     }
 
     /// Insert a new key-value pair into the HashMap. This method will mark the store as shallowly dirty, causing
@@ -137,7 +139,13 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
         St: BuildHasher,
         Lens: Writable,
     {
+        // Mark the store itself as dirty since the keys may have changed
         self.selector().mark_dirty_shallow();
+        // Mark the existing value as dirty if it exists
+        self.selector()
+            .as_ref()
+            .hash_child_unmapped(key.borrow())
+            .mark_dirty();
         self.selector().write_untracked().insert(key, value);
     }
 
@@ -256,15 +264,39 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
         K: Borrow<Q> + Eq + Hash,
         St: BuildHasher,
     {
-        self.contains_key(&key).then(|| {
-            self.into_selector()
-                .hash_child_unmapped(key.borrow())
-                .map_writer(move |writer| GetWrite {
-                    index: key,
-                    write: writer,
-                })
-                .into()
-        })
+        self.contains_key(&key).then(|| self.get_unchecked(key))
+    }
+
+    /// Get a store for the value associated with the given key without checking if the key exists.
+    /// This method creates a new store scope that tracks just changes to the value associated with the key.
+    ///
+    /// This is not unsafe, but it will panic when you try to read the value if it does not exist.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// use dioxus::prelude::*;
+    /// use std::collections::HashMap;
+    /// let mut store = use_store(|| HashMap::new());
+    /// store.insert(0, "value".to_string());
+    /// assert_eq!(store.get_unchecked(0).cloned(), "value".to_string());
+    /// ```
+    #[track_caller]
+    pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
+    where
+        Q: Hash + Eq + 'static,
+        K: Borrow<Q> + Eq + Hash,
+        St: BuildHasher,
+    {
+        let location = Location::caller();
+        self.into_selector()
+            .hash_child_unmapped(key.borrow())
+            .map_writer(move |writer| GetWrite {
+                index: key,
+                write: writer,
+                created: location,
+            })
+            .into()
     }
 }
 
@@ -273,6 +305,7 @@ impl<Lens: Readable<Target = HashMap<K, V, St>> + 'static, K: 'static, V: 'stati
 pub struct GetWrite<Index, Write> {
     index: Index,
     write: Write,
+    created: &'static Location<'static>,
 }
 
 impl<Index, Write, K, V, St> Readable for GetWrite<Index, Write>
@@ -290,12 +323,9 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_read_unchecked().map(|value| {
-            Self::Storage::map(value, |value: &Write::Target| {
-                value
-                    .get(&self.index)
-                    .expect("Tried to access a key that does not exist")
-            })
+        self.write.try_read_unchecked().and_then(|value| {
+            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
+                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 
@@ -303,12 +333,9 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_peek_unchecked().map(|value| {
-            Self::Storage::map(value, |value: &Write::Target| {
-                value
-                    .get(&self.index)
-                    .expect("Tried to access a key that does not exist")
-            })
+        self.write.try_peek_unchecked().and_then(|value| {
+            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
+                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 
@@ -335,12 +362,11 @@ where
     where
         Self::Target: 'static,
     {
-        self.write.try_write_unchecked().map(|value| {
-            WriteLock::map(value, |value: &mut Write::Target| {
-                value
-                    .get_mut(&self.index)
-                    .expect("Tried to access a key that does not exist")
+        self.write.try_write_unchecked().and_then(|value| {
+            WriteLock::filter_map(value, |value: &mut Write::Target| {
+                value.get_mut(&self.index)
             })
+            .ok_or_else(|| BorrowMutError::Dropped(ValueDroppedError::new(self.created)))
         })
     }
 }

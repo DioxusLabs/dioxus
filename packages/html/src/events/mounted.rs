@@ -61,13 +61,16 @@ impl RenderedElementBacking for () {
 }
 
 /// The way that scrolling should be performed
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[doc(alias = "ScrollIntoViewOptions")]
 pub enum ScrollBehavior {
     /// Scroll to the element immediately
     #[cfg_attr(feature = "serialize", serde(rename = "instant"))]
     Instant,
+
     /// Scroll to the element smoothly
+    #[default]
     #[cfg_attr(feature = "serialize", serde(rename = "smooth"))]
     Smooth,
 }
@@ -210,70 +213,7 @@ use crate::geometry::{PixelsRect, PixelsSize, PixelsVector2D};
 
 pub type MountedEvent = Event<MountedData>;
 
-impl_event! [
-    MountedData;
-
-    #[doc(alias = "ref")]
-    #[doc(alias = "createRef")]
-    #[doc(alias = "useRef")]
-    /// The onmounted event is fired when the element is first added to the DOM. This event gives you a [`MountedData`] object and lets you interact with the raw DOM element.
-    ///
-    /// This event is fired once per element. If you need to access the element multiple times, you can store the [`MountedData`] object in a [`use_signal`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_signal.html) hook and use it as needed.
-    ///
-    /// # Examples
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// fn App() -> Element {
-    ///     let mut header_element = use_signal(|| None);
-    ///
-    ///     rsx! {
-    ///         div {
-    ///             h1 {
-    ///                 // The onmounted event will run the first time the h1 element is mounted
-    ///                 onmounted: move |element| header_element.set(Some(element.data())),
-    ///                 "Scroll to top example"
-    ///             }
-    ///
-    ///             for i in 0..100 {
-    ///                 div { "Item {i}" }
-    ///             }
-    ///
-    ///             button {
-    ///                 // When you click the button, if the header element has been mounted, we scroll to that element
-    ///                 onclick: move |_| async move {
-    ///                     if let Some(header) = header_element.cloned() {
-    ///                         let _ = header.scroll_to(ScrollBehavior::Smooth).await;
-    ///                     }
-    ///                 },
-    ///                 "Scroll to top"
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// The `MountedData` struct contains cross platform APIs that work on the desktop, mobile, liveview and web platforms. For the web platform, you can also downcast the `MountedData` event to the `web-sys::Element` type for more web specific APIs:
-    ///
-    /// ```rust, ignore
-    /// use dioxus::prelude::*;
-    /// use dioxus_web::WebEventExt; // provides [`as_web_event()`] method
-    ///
-    /// fn App() -> Element {
-    ///     rsx! {
-    ///         div {
-    ///             id: "some-id",
-    ///             onmounted: move |element| {
-    ///                 // You can use the web_event trait to downcast the element to a web specific event. For the mounted event, this will be a web_sys::Element
-    ///                 let web_sys_element = element.as_web_event();
-    ///                 assert_eq!(web_sys_element.id(), "some-id");
-    ///             }
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    onmounted
-];
+pub use super::onmounted as onmount;
 
 /// The MountedResult type for the MountedData
 pub type MountedResult<T> = Result<T, MountedError>;

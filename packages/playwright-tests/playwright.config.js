@@ -1,214 +1,112 @@
 // @ts-check
 const { defineConfig, devices } = require("@playwright/test");
+const { execSync } = require("child_process");
+const fs = require("fs");
 const path = require("path");
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-// require('dotenv').config();
+// Copy a directory to a temp location for tests that modify source files (hot-patch tests).
+// Done in JS so the webServer command is a simple `dx serve` with a `cwd`, which keeps
+// stdout/stderr piping clean on both Unix and Windows cmd.exe.
+function copyToTemp(src, dest) {
+  const absSrc = path.resolve(__dirname, src);
+  const absDest = path.resolve(__dirname, dest);
+  fs.rmSync(absDest, { recursive: true, force: true });
+  fs.cpSync(absSrc, absDest, { recursive: true });
+}
 
-/**
- * @see https://playwright.dev/docs/test-configuration
- */
+const repoRoot = path.resolve(__dirname, "..", "..");
+const dx = path.join(repoRoot, "target", "release", process.platform === "win32" ? "dx.exe" : "dx");
+
+const ALL_SERVERS = [
+  {
+    specs: ["liveview.spec.js"], port: 3030,
+    command: "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
+    env: { CARGO_TERM_PROGRESS_WHEN: "never" }
+  },
+  { specs: ["web.spec.js"], port: 9990, cwd: "web", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 9990` },
+  { specs: ["web-routing.spec.js"], port: 2020, cwd: "web-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 2020` },
+  { specs: ["web-hash-routing.spec.js"], port: 2021, cwd: "web-hash-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 2021` },
+  { specs: ["fullstack.spec.js"], port: 3333, cwd: "fullstack", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 3333 --release` },
+  { specs: ["fullstack-errors.spec.js"], port: 3232, cwd: "fullstack-errors", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 3232` },
+  { specs: ["fullstack-mounted.spec.js"], port: 7777, cwd: "fullstack-mounted", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 7777` },
+  { specs: ["fullstack-routing.spec.js"], port: 8888, cwd: "fullstack-routing", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 8888` },
+  { specs: ["fullstack-spread.spec.js"], port: 7980, cwd: "fullstack-spread", command: `${dx} run --verbose --force-sequential --web --addr 127.0.0.1 --port 7980` },
+  { specs: ["fullstack-hydration-order.spec.js"], port: 7979, cwd: "fullstack-hydration-order", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 7979` },
+  { specs: ["fullstack-error-codes.spec.js"], port: 8124, cwd: "fullstack-error-codes", command: `${dx} run --force-sequential --addr 127.0.0.1 --port 8124` },
+  { specs: ["nested-suspense.spec.js", "nested-suspense-no-js.spec.js"], port: 5050, cwd: "nested-suspense", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 5050` },
+  { specs: ["nested-suspense-ssg.spec.js"], port: 6060, cwd: "nested-suspense", command: `${dx} run --bin nested-suspense-ssg --force-sequential --web --ssg --addr 127.0.0.1 --port 6060` },
+  { specs: ["suspense-carousel.spec.js"], port: 4040, cwd: "suspense-carousel", command: `${dx} run --force-sequential --web --addr 127.0.0.1 --port 4040` },
+  { specs: ["cli-optimization.spec.js"], port: 8989, cwd: "cli-optimization", command: `${dx} run --addr 127.0.0.1 --port 8989` },
+  { specs: ["wasm-split.spec.js"], port: 8001, cwd: "wasm-split-harness", command: `${dx} run --bin wasm-split-harness --web --addr 127.0.0.1 --port 8001 --wasm-split --profile wasm-split-release` },
+  { specs: ["default-features-disabled.spec.js"], port: 8002, cwd: "default-features-disabled", command: `${dx} run --force-sequential --addr 127.0.0.1 --port 8002` },
+  { specs: ["web-patch.spec.js"], port: 9980, cwd: "web-hot-patch-temp", setup: () => copyToTemp("web-hot-patch", "web-hot-patch-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9980 --hot-patch --exit-on-error` },
+  { specs: ["web-patch-fullstack.spec.js"], port: 9981, cwd: "web-hot-patch-fullstack-temp", setup: () => copyToTemp("web-hot-patch-fullstack", "web-hot-patch-fullstack-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9981 --hot-patch --exit-on-error` },
+];
+
+if (process.platform === "win32") {
+  ALL_SERVERS.push({ specs: ["windows.spec.js"], port: 8787, cwd: "windows-headless", command: `${dx} run --force-sequential` });
+  ALL_SERVERS.push({ specs: ["windows-hotpatch-fullstack.spec.js"], port: 8788, cwd: "windows-hotpatch-fullstack-temp", setup: () => copyToTemp("windows-hotpatch-fullstack", "windows-hotpatch-fullstack-temp"), command: `${dx} serve --verbose --force-sequential --hot-patch --exit-on-error` });
+}
+
+// Determine which servers to start based on spec files in argv and platform.
+// On Windows only windows.spec.js runs (grep filter below), so don't bother
+// starting servers for tests that will never execute — they just crash and
+// pollute the logs.
+const specArgs = process.argv.filter((a) => a.endsWith(".spec.js")).map((a) => path.basename(a));
+const isWindows = process.platform === "win32";
+const activeServers = specArgs.length > 0
+  ? ALL_SERVERS.filter((s) => s.specs.some((spec) => specArgs.includes(spec)))
+  : isWindows
+    ? ALL_SERVERS.filter((s) => s.specs.some((spec) => spec.includes("windows")))
+    : ALL_SERVERS.filter((s) => !s.specs.some((spec) => spec.includes("windows")));
+
+// Run any setup functions (e.g. copying source to temp dirs for hot-patch tests)
+// Only happens on initialize
+//
+// Build dx once: main process builds and sets env var; workers inherit it and skip.
+// todo: implement proper fixtures https://www.youtube.com/watch?v=3i6cJUFO_m4
+if (!process.env._DX_BUILT) {
+  for (const s of activeServers) {
+    if (s.setup) s.setup();
+  }
+
+  execSync("cargo build --package dioxus-cli --release", {
+    cwd: repoRoot,
+    env: { ...process.env, CARGO_TERM_PROGRESS_WHEN: "never" },
+    stdio: "inherit",
+  });
+
+  process.env._DX_BUILT = "1";
+}
+
 module.exports = defineConfig({
   testDir: ".",
-  /* Run tests in files in parallel */
   fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
   workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: "html",
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
-    // baseURL: 'http://127.0.0.1:3000',
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: "retain-on-failure",
-    // Increase the timeout for navigations to give dx time to build the project
     navigationTimeout: 50 * 60 * 1000,
   },
-
   timeout: 50 * 60 * 1000,
-
-  /* Configure projects for major browsers */
+  webServer: activeServers.map((s) => ({
+    command: s.command,
+    port: s.port,
+    cwd: s.cwd ? path.join(__dirname, s.cwd) : __dirname,
+    timeout: 50 * 60 * 1000,
+    reuseExistingServer: !process.env.CI,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: s.env,
+  })),
   projects: [
     {
       name: "chromium",
+      grep: process.platform === "win32" ? /windows/ : undefined,
+      grepInvert: process.platform !== "win32" ? /windows/ : undefined,
       use: { ...devices["Desktop Chrome"] },
-    },
-
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ..devices['Desktop Chrome'], channel: 'chrome' },
-    // },
-  ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: [
-    {
-      command:
-        "cargo run --package dioxus-playwright-liveview-test --bin dioxus-playwright-liveview-test",
-      port: 3030,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "web"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 9990',
-      port: 9990,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "web-routing"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 2020',
-      port: 2020,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "web-hash-routing"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 2021',
-      port: 2021,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "fullstack"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 3333',
-      port: 3333,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "fullstack-mounted"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 7777',
-      port: 7777,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "fullstack-routing"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 8888',
-      port: 8888,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "suspense-carousel"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 4040',
-      port: 4040,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "nested-suspense"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --web --addr "127.0.0.1" --port 5050',
-      port: 5050,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "nested-suspense"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --bin nested-suspense-ssg --force-sequential --web --ssg --addr "127.0.0.1" --port 6060',
-      port: 6060,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "cli-optimization"),
-      // Remove the cache folder for the cli-optimization build to force a full cache reset
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --addr "127.0.0.1" --port 8989',
-      port: 8989,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "wasm-split-harness"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --bin wasm-split-harness --web --addr "127.0.0.1" --port 8001 --wasm-split --profile wasm-split-release',
-      port: 8001,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "default-features-disabled"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --addr "127.0.0.1" --port 8002',
-      port: 8002,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      cwd: path.join(process.cwd(), "barebones-template"),
-      command:
-        'cargo run --package dioxus-cli --release -- run --verbose --force-sequential --addr "127.0.0.1" --port 8123',
-      port: 8123,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
-    },
-    {
-      command:
-        'rm -rf ./web-hot-patch-temp && cp -r ./web-hot-patch ./web-hot-patch-temp && cd web-hot-patch-temp && cargo run --manifest-path ../../cli/Cargo.toml --release -- serve --verbose --force-sequential --web --addr "127.0.0.1" --port 9980 --hot-patch --exit-on-error',
-      port: 9980,
-      timeout: 50 * 60 * 1000,
-      reuseExistingServer: !process.env.CI,
-      stdout: "pipe",
     },
   ],
 });

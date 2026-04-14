@@ -20,7 +20,7 @@ pub struct LinkProps {
     pub disabled: Option<bool>,
     pub r#as: Option<String>,
     pub sizes: Option<String>,
-    /// Links are deduplicated by their href attribute
+    /// Links are deduplicated by their href and rel attributes
     pub href: Option<String>,
     pub crossorigin: Option<String>,
     pub referrerpolicy: Option<String>,
@@ -122,7 +122,7 @@ pub fn Link(props: LinkProps) -> Element {
         let document = document();
         let mut insert_link = document.create_head_component();
         if let Some(href) = &props.href {
-            if !should_insert_link(href) {
+            if !should_insert_link(href, props.rel.as_deref()) {
                 insert_link = false;
             }
         }
@@ -140,8 +140,14 @@ pub fn Link(props: LinkProps) -> Element {
 #[derive(Default, Clone)]
 struct LinkContext(DeduplicationContext);
 
-fn should_insert_link(href: &str) -> bool {
+fn should_insert_link(href: &str, rel: Option<&str>) -> bool {
+    // Include rel in the deduplication key so that the same href can be used
+    // with different rel values (e.g., rel="preload" and rel="stylesheet")
+    let key = match rel {
+        Some(rel) => format!("{href}|{rel}"),
+        None => href.to_string(),
+    };
     get_or_insert_root_context::<LinkContext>()
         .0
-        .should_insert(href)
+        .should_insert(&key)
 }

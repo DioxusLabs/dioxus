@@ -7,6 +7,7 @@
 mod impls;
 mod store;
 mod subscriptions;
+pub use impls::*;
 pub use store::*;
 pub mod scope;
 

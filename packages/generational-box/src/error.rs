@@ -1,3 +1,6 @@
+//! Generational box errors
+#![allow(clippy::uninlined_format_args, reason = "causes compile error")]
+
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;

@@ -37,7 +37,7 @@ impl<'de> Deserialize<'de> for HtmlEvent {
         // in debug mode let's try and be helpful as to why the deserialization failed
         let data = deserialize_raw(&name, &data).map_err(|e| {
             serde::de::Error::custom(format!(
-                "Failed to deserialize event data for event {}:  {:#?}\n'{:#?}'",
+                "Failed to deserialize event data for event {}:  {}\n'{:#?}'",
                 name, e, data,
             ))
         })?;
@@ -53,97 +53,12 @@ impl<'de> Deserialize<'de> for HtmlEvent {
 
 #[cfg(feature = "serialize")]
 fn deserialize_raw(name: &str, data: &serde_json::Value) -> Result<EventData, serde_json::Error> {
-    use EventData::*;
-
-    // a little macro-esque thing to make the code below more readable
-    #[inline]
-    fn de<'de, F>(f: &'de serde_json::Value) -> Result<F, serde_json::Error>
-    where
-        F: Deserialize<'de>,
-    {
-        F::deserialize(f)
+    match deserialize_raw_event(name, data)? {
+        Some(result) => Ok(result),
+        None => Err(serde::de::Error::custom(format!(
+            "Unknown event type: {name}"
+        ))),
     }
-
-    let data = match name {
-        // Cancel
-        "cancel" => Cancel(de(data)?),
-
-        // Mouse
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => Mouse(de(data)?),
-
-        // Clipboard
-        "copy" | "cut" | "paste" => Clipboard(de(data)?),
-
-        // Composition
-        "compositionend" | "compositionstart" | "compositionupdate" => Composition(de(data)?),
-
-        // Keyboard
-        "keydown" | "keypress" | "keyup" => Keyboard(de(data)?),
-
-        // Focus
-        "blur" | "focus" | "focusin" | "focusout" => Focus(de(data)?),
-
-        // Form
-        "change" | "input" | "invalid" | "reset" | "submit" => Form(de(data)?),
-
-        // Drag
-        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => Drag(de(data)?),
-
-        // Pointer
-        "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup"
-        | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture"
-        | "lostpointercapture" => Pointer(de(data)?),
-
-        // Selection
-        "selectstart" | "selectionchange" | "select" => Selection(de(data)?),
-
-        // Touch
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => Touch(de(data)?),
-
-        // Resize
-        "resize" => Resize(de(data)?),
-
-        // Scroll
-        "scroll" => Scroll(de(data)?),
-
-        // Visible
-        "visible" => Visible(de(data)?),
-
-        // Wheel
-        "wheel" => Wheel(de(data)?),
-
-        // Media
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "interruptbegin" | "interruptend" | "loadeddata" | "loadedmetadata"
-        | "loadstart" | "pause" | "play" | "playing" | "progress" | "ratechange" | "seeked"
-        | "seeking" | "stalled" | "suspend" | "timeupdate" | "volumechange" | "waiting"
-        | "loadend" | "timeout" => Media(de(data)?),
-
-        // Animation
-        "animationstart" | "animationend" | "animationiteration" => Animation(de(data)?),
-
-        // Transition
-        "transitionend" => Transition(de(data)?),
-
-        // Toggle
-        "toggle" => Toggle(de(data)?),
-
-        "load" | "error" => Image(de(data)?),
-
-        // Mounted
-        "mounted" => Mounted,
-
-        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
-        other => {
-            return Err(serde::de::Error::custom(format!(
-                "Unknown event type: {other}"
-            )))
-        }
-    };
-
-    Ok(data)
 }
 
 #[cfg(feature = "serialize")]

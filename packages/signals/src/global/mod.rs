@@ -1,4 +1,4 @@
-use dioxus_core::{ScopeId, Subscribers};
+use dioxus_core::{Runtime, ScopeId, Subscribers};
 use generational_box::BorrowResult;
 use std::{any::Any, cell::RefCell, collections::HashMap, ops::Deref, panic::Location, rc::Rc};
 
@@ -182,15 +182,25 @@ where
         let context = get_global_context();
 
         // Get the entry if it already exists
+        let mut evicted_stale_entry = false;
         {
             let read = context.map.borrow();
             if let Some(signal) = read.get(&key) {
-                return signal.downcast_ref::<T>().cloned().unwrap();
+                if let Some(signal) = signal.downcast_ref::<T>() {
+                    return signal.clone();
+                }
+                evicted_stale_entry = true;
             }
+        }
+
+        if evicted_stale_entry {
+            context.map.borrow_mut().remove(&key);
         }
         // Otherwise, create it
         // Constructors are always run in the root scope
-        let signal = ScopeId::ROOT.in_runtime(|| T::initialize_from_function(self.constructor));
+        let signal = dioxus_core::Runtime::current().in_scope(ScopeId::ROOT, || {
+            T::initialize_from_function(self.constructor)
+        });
         context
             .map
             .borrow_mut()
@@ -274,9 +284,10 @@ impl GlobalLazyContext {
 
 /// Get the global context for signals
 pub fn get_global_context() -> GlobalLazyContext {
-    match ScopeId::ROOT.has_context() {
+    let rt = Runtime::current();
+    match rt.has_context(ScopeId::ROOT) {
         Some(context) => context,
-        None => ScopeId::ROOT.provide_context(Default::default()),
+        None => rt.provide_context(ScopeId::ROOT, Default::default()),
     }
 }
 

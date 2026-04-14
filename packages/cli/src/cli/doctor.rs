@@ -1,5 +1,5 @@
 use super::*;
-use crate::{Result, Workspace};
+use crate::{AndroidTools, Result, Workspace};
 use anyhow::{bail, Context};
 use itertools::Itertools;
 
@@ -66,6 +66,11 @@ impl Doctor {
             Ok(path) => path.to_string_lossy().to_string(),
             Err(_) => "not found".to_string(),
         };
+        let vscode_insiders_ext = has_dioxus_ext(".vscode-insiders");
+        let vscode_insiders_ext_msg = match vscode_insiders_ext.as_ref() {
+            Ok(path) => path.to_string_lossy().to_string(),
+            Err(_) => "not found".to_string(),
+        };
         let cursor_ext = has_dioxus_ext(".cursor");
         let cursor_ext_msg = match cursor_ext.as_ref() {
             Ok(path) => path.to_string_lossy().to_string(),
@@ -86,24 +91,24 @@ impl Doctor {
         let mut sdk = "not found".to_string();
         let mut java_home = "not found".to_string();
         let mut emulator = "not found".to_string();
-        if let Some(rf) = crate::build::get_android_tools() {
-            if rf.adb.exists() {
-                adb = rf.adb.display().to_string();
+        if let Some(tools) = AndroidTools::current() {
+            if tools.adb.exists() {
+                adb = tools.adb.display().to_string();
             }
-            if rf.ndk.exists() {
-                ndk = rf.ndk.display().to_string();
+            if tools.ndk.exists() {
+                ndk = tools.ndk.display().to_string();
             }
-            if let Some(jh) = rf.java_home.as_ref() {
+            if let Some(jh) = tools.java_home.as_ref() {
                 java_home = jh.display().to_string();
             }
-            if rf.sdk().exists() {
-                sdk = rf.sdk().display().to_string();
+            if tools.sdk().exists() {
+                sdk = tools.sdk().display().to_string();
             }
-            if let Some(jh) = rf.java_home.as_ref() {
+            if let Some(jh) = tools.java_home.as_ref() {
                 java_home = jh.display().to_string();
             }
-            if rf.emulator().exists() {
-                emulator = rf.emulator().display().to_string();
+            if tools.emulator().exists() {
+                emulator = tools.emulator().display().to_string();
             }
         };
 
@@ -142,10 +147,10 @@ impl Doctor {
 
         // toolchains
         let mut has_wasm32_unknown_unknown = "❌";
-        let mut has_aarch64_android_linux = "❌";
+        let mut has_aarch64_linux_android = "❌";
         let mut has_i686_linux_android = "❌";
         let mut has_armv7_linux_androideabi = "❌";
-        let mut has_x86_64_android_linux = "❌";
+        let mut has_x86_64_linux_android = "❌";
         let mut has_x86_64_apple_ios = "❌";
         let mut has_aarch64_apple_ios = "❌";
         let mut has_aarch64_apple_ios_sim = "❌";
@@ -154,7 +159,7 @@ impl Doctor {
             has_wasm32_unknown_unknown = "✅";
         }
         if rustlib.join("aarch64-linux-android").exists() {
-            has_aarch64_android_linux = "✅";
+            has_aarch64_linux_android = "✅";
         }
         if rustlib.join("i686-linux-android").exists() {
             has_i686_linux_android = "✅";
@@ -163,7 +168,7 @@ impl Doctor {
             has_armv7_linux_androideabi = "✅";
         }
         if rustlib.join("x86_64-linux-android").exists() {
-            has_x86_64_android_linux = "✅";
+            has_x86_64_linux_android = "✅";
         }
         if rustlib.join("x86_64-apple-ios").exists() {
             has_x86_64_apple_ios = "✅";
@@ -216,6 +221,7 @@ impl Doctor {
 
 {LINK_STYLE}Devtools{LINK_STYLE:#}
  VSCode Extension: {HINT_STYLE}{vscode_ext_msg}{HINT_STYLE:#}
+ VSCode-Insiders Extension: {HINT_STYLE}{vscode_insiders_ext_msg}{HINT_STYLE:#}
  Cursor Extension: {HINT_STYLE}{cursor_ext_msg}{HINT_STYLE:#}
  TailwindCSS: {HINT_STYLE}{tailwindcss}{HINT_STYLE:#}
 
@@ -242,17 +248,17 @@ impl Doctor {
 
 {LINK_STYLE}Toolchains{LINK_STYLE:#}
  {HINT_STYLE}{has_wasm32_unknown_unknown}{HINT_STYLE:#} wasm32-unknown-unknown {HINT_STYLE}(web){HINT_STYLE:#}
- {HINT_STYLE}{has_aarch64_android_linux}{HINT_STYLE:#} aarch64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_aarch64_linux_android}{HINT_STYLE:#} aarch64-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_i686_linux_android}{HINT_STYLE:#} i686-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_armv7_linux_androideabi}{HINT_STYLE:#} armv7-linux-androideabi {HINT_STYLE}(android){HINT_STYLE:#}
- {HINT_STYLE}{has_x86_64_android_linux}{HINT_STYLE:#} x86_64-android-linux {HINT_STYLE}(android){HINT_STYLE:#}
+ {HINT_STYLE}{has_x86_64_linux_android}{HINT_STYLE:#} x86_64-linux-android {HINT_STYLE}(android){HINT_STYLE:#}
  {HINT_STYLE}{has_x86_64_apple_ios}{HINT_STYLE:#} x86_64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
  {HINT_STYLE}{has_aarch64_apple_ios}{HINT_STYLE:#} aarch64-apple-ios {HINT_STYLE}(iOS){HINT_STYLE:#}
  {HINT_STYLE}{has_aarch64_apple_ios_sim}{HINT_STYLE:#} aarch64-apple-ios-sim {HINT_STYLE}(iOS){HINT_STYLE:#}
  {HINT_STYLE}{has_aarch64_apple_darwin}{HINT_STYLE:#} aarch64-apple-darwin {HINT_STYLE}(iOS){HINT_STYLE:#}
 
 Get help: {LINK_STYLE}https://discord.gg/XgGxMSkvUM{LINK_STYLE:#}
-More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.6/{LINK_STYLE:#}
+More info: {LINK_STYLE}https://dioxuslabs.com/learn/0.7/{LINK_STYLE:#}
 "#
         );
 

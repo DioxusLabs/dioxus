@@ -145,15 +145,15 @@ pub fn serve_asset(path: &str) -> Result<Response<Vec<u8>>, AssetServeError> {
 /// - [x] iOS
 /// - [x] Windows
 /// - [x] Linux (appimage)
-/// - [ ] Linux (rpm)
+/// - [x] Linux (rpm)
 /// - [x] Linux (deb)
-/// - [ ] Android
+/// - [x] Android (returns current exe.)
 #[allow(unreachable_code)]
 fn get_asset_root() -> PathBuf {
     let cur_exe = std::env::current_exe().unwrap();
 
-    #[cfg(target_os = "macos")]
-    {
+    // In macOS bundles, the assets are in the `Resources` directory
+    if cfg!(target_os = "macos") {
         return cur_exe
             .parent()
             .unwrap()
@@ -162,21 +162,35 @@ fn get_asset_root() -> PathBuf {
             .join("Resources");
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        // In linux bundles, the assets are placed in the lib/$product_name directory
-        // bin/
-        //   main
-        // lib/
-        //   $product_name/
-        //     assets/
-        if let Some(product_name) = dioxus_cli_config::product_name() {
-            let lib_asset_path = || {
-                let path = cur_exe.parent()?.parent()?.join("lib").join(product_name);
-                path.exists().then_some(path)
-            };
-            if let Some(asset_dir) = lib_asset_path() {
-                return asset_dir;
+    // In linux bundles, the assets are placed in the lib/$product_name directory
+    // bin/
+    //   main
+    // lib/
+    //   $product_name/
+    //     assets/
+    if cfg!(target_os = "linux") {
+        if let Some(lib_dir) = cur_exe
+            .parent()
+            .and_then(|parent| parent.parent())
+            .map(|root| root.join("lib"))
+        {
+            // Try the product name from the compile-time env var first
+            if let Some(product_name) = dioxus_cli_config::product_name() {
+                let path = lib_dir.join(&product_name);
+                if path.exists() {
+                    return path;
+                }
+            }
+
+            // Fall back to scanning lib/ for a directory containing an `assets/` subfolder.
+            // This handles debug builds where DIOXUS_PRODUCT_NAME isn't baked in.
+            if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.join("assets").is_dir() {
+                        return path;
+                    }
+                }
             }
         }
     }
@@ -207,7 +221,7 @@ fn get_mime_by_ext(trimmed: &Path) -> &'static str {
 }
 
 /// Get the mime type from a URI using its extension
-fn get_mime_from_ext(ext: Option<&str>) -> &'static str {
+pub fn get_mime_from_ext(ext: Option<&str>) -> &'static str {
     match ext {
         // The common assets are all utf-8 encoded
         Some("js") => "text/javascript; charset=utf-8",

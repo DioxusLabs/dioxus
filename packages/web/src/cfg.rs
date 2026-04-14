@@ -14,6 +14,7 @@ use wasm_bindgen::JsCast as _;
 /// ```
 pub struct Config {
     pub(crate) hydrate: bool,
+    #[allow(dead_code)]
     pub(crate) panic_hook: bool,
     pub(crate) root: ConfigRoot,
     #[cfg(feature = "document")]

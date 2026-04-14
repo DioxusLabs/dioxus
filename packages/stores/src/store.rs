@@ -6,9 +6,10 @@ use dioxus_core::{
     use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
 };
 use dioxus_signals::{
-    read_impls, write_impls, BorrowError, BorrowMutError, CopyValue, Global,
-    InitializeFromFunction, MappedMutSignal, ReadSignal, Readable, ReadableExt, ReadableRef,
-    Storage, UnsyncStorage, Writable, WritableExt, WritableRef, WriteSignal,
+    read_impls, write_impls, BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue,
+    CreateBoxedSignalStorage, Global, InitializeFromFunction, MappedMutSignal, ReadSignal,
+    Readable, ReadableExt, ReadableRef, Storage, SyncStorage, UnsyncStorage, Writable, WritableExt,
+    WritableRef, WriteSignal,
 };
 use std::marker::PhantomData;
 
@@ -21,10 +22,13 @@ pub(crate) type MappedStore<
 > = Store<T, MappedMutSignal<T, Lens, F, FMut>>;
 
 /// A type alias for a boxed read-only store.
-pub type ReadStore<T> = Store<T, ReadSignal<T>>;
+pub type ReadStore<T, S = UnsyncStorage> = Store<T, ReadSignal<T, S>>;
 
 /// A type alias for a boxed writable-only store.
-pub type WriteStore<T> = Store<T, WriteSignal<T>>;
+pub type WriteStore<T, S = UnsyncStorage> = Store<T, WriteSignal<T, S>>;
+
+/// A type alias for a store backed by SyncStorage.
+pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 
 /// Stores are a reactive type built for nested data structures. Each store will lazily create signals
 /// for each field/member of the data structure as needed.
@@ -181,12 +185,13 @@ where
 }
 impl<T: ?Sized, Lens> Copy for Store<T, Lens> where Lens: Copy {}
 
-impl<__F, __FMut, T: ?Sized, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
-    for Store<T, WriteSignal<T>>
+impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
+    for WriteStore<T, S>
 where
-    Lens: Writable<Storage = UnsyncStorage> + 'static,
+    Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
     fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
@@ -196,12 +201,13 @@ where
         }
     }
 }
-impl<__F, __FMut, T: ?Sized, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
-    for Store<T, ReadSignal<T>>
+impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
+    for ReadStore<T, S>
 where
-    Lens: Writable<Storage = UnsyncStorage> + 'static,
+    Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
     __FMut: Fn(&mut Lens::Target) -> &mut T + 'static,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
     fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
@@ -211,11 +217,36 @@ where
         }
     }
 }
-impl<T> ::std::convert::From<Store<T>> for ReadStore<T>
+impl<T, S> ::std::convert::From<WriteStore<T, S>> for ReadStore<T, S>
 where
     T: ?Sized + 'static,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<WriteSignal<T, S>>,
 {
-    fn from(value: Store<T>) -> Self {
+    fn from(value: Store<T, WriteSignal<T, S>>) -> Self {
+        Self {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
+impl<T, S> ::std::convert::From<Store<T, CopyValue<T, S>>> for ReadStore<T, S>
+where
+    T: 'static,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<CopyValue<T, S>> + Storage<T>,
+{
+    fn from(value: Store<T, CopyValue<T, S>>) -> Self {
+        Self {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
+impl<T, S> ::std::convert::From<Store<T, CopyValue<T, S>>> for WriteStore<T, S>
+where
+    T: 'static,
+    S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<CopyValue<T, S>> + Storage<T>,
+{
+    fn from(value: Store<T, CopyValue<T, S>>) -> Self {
         Self {
             selector: value.selector.map_writer(::std::convert::Into::into),
             _phantom: ::std::marker::PhantomData,
@@ -225,25 +256,27 @@ where
 
 #[doc(hidden)]
 pub struct SuperIntoReadSignalMarker;
-impl<T, Lens> SuperInto<ReadSignal<T>, SuperIntoReadSignalMarker> for Store<T, Lens>
+impl<T, S, Lens> SuperInto<ReadSignal<T, S>, SuperIntoReadSignalMarker> for Store<T, Lens>
 where
     T: ?Sized + 'static,
-    Lens: Readable<Target = T, Storage = UnsyncStorage> + 'static,
+    Lens: Readable<Target = T, Storage = S> + 'static,
+    S: CreateBoxedSignalStorage<Store<T, Lens>> + BoxedSignalStorage<T>,
 {
-    fn super_into(self) -> ReadSignal<T> {
-        ReadSignal::new(self)
+    fn super_into(self) -> ReadSignal<T, S> {
+        ReadSignal::new_maybe_sync(self)
     }
 }
 
 #[doc(hidden)]
 pub struct SuperIntoWriteSignalMarker;
-impl<T, Lens> SuperInto<WriteSignal<T>, SuperIntoWriteSignalMarker> for Store<T, Lens>
+impl<T, S, Lens> SuperInto<WriteSignal<T, S>, SuperIntoWriteSignalMarker> for Store<T, Lens>
 where
     T: ?Sized + 'static,
-    Lens: Writable<Target = T, Storage = UnsyncStorage> + 'static,
+    Lens: Writable<Target = T, Storage = S> + 'static,
+    S: CreateBoxedSignalStorage<Store<T, Lens>> + BoxedSignalStorage<T>,
 {
-    fn super_into(self) -> WriteSignal<T> {
-        WriteSignal::new(self)
+    fn super_into(self) -> WriteSignal<T, S> {
+        WriteSignal::new_maybe_sync(self)
     }
 }
 
@@ -372,6 +405,14 @@ write_impls!(Store<T, Lens> where Lens: Writable<Target = T>);
 /// ```
 pub fn use_store<T: 'static>(init: impl FnOnce() -> T) -> Store<T> {
     use_hook(move || Store::new(init()))
+}
+
+/// Create a new [`SyncStore`]. Stores are a reactive type built for nested data structures.
+/// `SyncStore` is a Store backed by `SyncStorage`.
+///
+/// Like [`use_store`], but produces `SyncStore<T>` instead of `Store<T>`
+pub fn use_store_sync<T: Send + Sync + 'static>(init: impl FnOnce() -> T) -> SyncStore<T> {
+    use_hook(|| Store::new_maybe_sync(init()))
 }
 
 /// A type alias for global stores

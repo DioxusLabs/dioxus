@@ -1,16 +1,28 @@
 use crate::{
-    global_context::current_scope_id, innerlude::provide_context, use_hook, Element, IntoDynNode,
-    Properties, ScopeId, Template, TemplateAttribute, TemplateNode, VNode,
+    innerlude::{provide_context, CapturedError},
+    try_consume_context, use_hook, Element, IntoDynNode, Properties, ReactiveContext, Subscribers,
+    Template, TemplateAttribute, TemplateNode, VNode,
 };
 use std::{
     any::Any,
-    backtrace::Backtrace,
-    cell::{Ref, RefCell},
-    error::Error,
+    cell::RefCell,
     fmt::{Debug, Display},
     rc::Rc,
-    str::FromStr,
 };
+
+/// Return early with an error.
+#[macro_export]
+macro_rules! bail {
+    ($msg:literal $(,)?) => {
+        return $crate::internal::Err($crate::internal::__anyhow!($msg).into())
+    };
+    ($err:expr $(,)?) => {
+        return $crate::internal::Err($crate::internal::__anyhow!($err).into())
+    };
+    ($fmt:expr, $($arg:tt)*) => {
+        return $crate::internal::Err($crate::internal::__anyhow!($fmt, $($arg)*).into())
+    };
+}
 
 /// A panic in a component that was caught by an error boundary.
 ///
@@ -19,12 +31,9 @@ use std::{
 /// WASM currently does not support caching unwinds, so this struct will not be created in WASM.
 ///
 /// </div>
-pub struct CapturedPanic {
-    #[allow(dead_code)]
-    /// The error that was caught
-    pub error: Box<dyn Any + 'static>,
-}
-
+pub(crate) struct CapturedPanic(pub(crate) Box<dyn Any + Send + 'static>);
+unsafe impl Sync for CapturedPanic {}
+impl std::error::Error for CapturedPanic {}
 impl Debug for CapturedPanic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CapturedPanic").finish()
@@ -33,480 +42,104 @@ impl Debug for CapturedPanic {
 
 impl Display for CapturedPanic {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("Encountered panic: {:?}", self.error))
+        f.write_fmt(format_args!("Encountered panic: {:?}", self.0))
     }
 }
 
-impl Error for CapturedPanic {}
+/// A context supplied by fullstack to create hydration compatible error boundaries. Generally, this
+/// is not present and the default in memory error boundary is used. If fullstack is enabled, it will
+/// provide its own factory that handles syncing errors to the hydration context
+#[derive(Clone, Copy)]
+struct CreateErrorBoundary(fn() -> ErrorContext);
 
-/// Provide an error boundary to catch errors from child components
-pub fn provide_error_boundary() -> ErrorContext {
-    provide_context(ErrorContext::new(
-        Vec::new(),
-        current_scope_id().unwrap_or_else(|e| panic!("{}", e)),
-    ))
-}
-
-/// A trait for any type that can be downcast to a concrete type and implements Debug. This is automatically implemented for all types that implement Any + Debug.
-pub trait AnyError {
-    fn as_any(&self) -> &dyn Any;
-    fn as_error(&self) -> &dyn Error;
-}
-
-/// An wrapper error type for types that only implement Display. We use a inner type here to avoid overlapping implementations for DisplayError and impl Error
-struct DisplayError(DisplayErrorInner);
-
-impl<E: Display + 'static> From<E> for DisplayError {
-    fn from(e: E) -> Self {
-        Self(DisplayErrorInner(Box::new(e)))
+impl Default for CreateErrorBoundary {
+    fn default() -> Self {
+        Self(|| ErrorContext::new(None))
     }
 }
 
-struct DisplayErrorInner(Box<dyn Display>);
-impl Display for DisplayErrorInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
+/// Provides a method that is used to create error boundaries in `use_error_boundary_provider`.
+/// This is only called from fullstack to create a hydration compatible error boundary
+#[doc(hidden)]
+pub fn provide_create_error_boundary(create_error_boundary: fn() -> ErrorContext) {
+    provide_context(CreateErrorBoundary(create_error_boundary));
 }
 
-impl Debug for DisplayErrorInner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
+/// Create an error boundary with the current error boundary factory (either hydration compatible or default)
+fn create_error_boundary() -> ErrorContext {
+    let create_error_boundary = try_consume_context::<CreateErrorBoundary>().unwrap_or_default();
+    (create_error_boundary.0)()
 }
 
-impl Error for DisplayErrorInner {}
-
-impl AnyError for DisplayError {
-    fn as_any(&self) -> &dyn Any {
-        &self.0 .0
-    }
-
-    fn as_error(&self) -> &dyn Error {
-        &self.0
-    }
-}
-
-/// Provides context methods to [`Result`] and [`Option`] types that are compatible with [`CapturedError`]
-///
-/// This trait is sealed and cannot be implemented outside of dioxus-core
-pub trait Context<T, E>: private::Sealed {
-    /// Add a visual representation of the error that the [`ErrorBoundary`] may render
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn Component() -> Element {
-    ///     // You can bubble up errors with `?` inside components, and event handlers
-    ///     // Along with the error itself, you can provide a way to display the error by calling `show`
-    ///     let number = "1234".parse::<usize>().show(|error| rsx! {
-    ///         div {
-    ///             background_color: "red",
-    ///             color: "white",
-    ///             "Error parsing number: {error}"
-    ///         }
-    ///     })?;
-    ///     unimplemented!()
-    /// }
-    /// ```
-    fn show(self, display_error: impl FnOnce(&E) -> Element) -> Result<T>;
-
-    /// Wrap the result additional context about the error that occurred.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn NumberParser() -> Element {
-    ///     // You can bubble up errors with `?` inside components, and event handlers
-    ///     // Along with the error itself, you can provide a way to display the error by calling `context`
-    ///     let number = "-1234".parse::<usize>().context("Parsing number inside of the NumberParser")?;
-    ///     unimplemented!()
-    /// }
-    /// ```
-    fn context<C: Display + 'static>(self, context: C) -> Result<T>;
-
-    /// Wrap the result with additional context about the error that occurred. The closure will only be run if the Result is an error.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus::prelude::*;
-    /// fn NumberParser() -> Element {
-    ///     // You can bubble up errors with `?` inside components, and event handlers
-    ///     // Along with the error itself, you can provide a way to display the error by calling `context`
-    ///     let number = "-1234".parse::<usize>().with_context(|| format!("Timestamp: {:?}", std::time::Instant::now()))?;
-    ///     unimplemented!()
-    /// }
-    /// ```
-    fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T>;
-}
-
-impl<T, E> Context<T, E> for std::result::Result<T, E>
-where
-    E: Error + 'static,
-{
-    fn show(self, display_error: impl FnOnce(&E) -> Element) -> Result<T> {
-        // We don't use result mapping to avoid extra frames
-        match self {
-            std::result::Result::Ok(value) => Ok(value),
-            Err(error) => {
-                let render = display_error(&error).unwrap_or_default();
-                let mut error: CapturedError = error.into();
-                error.render = render;
-                Err(error)
-            }
-        }
-    }
-
-    fn context<C: Display + 'static>(self, context: C) -> Result<T> {
-        self.with_context(|| context)
-    }
-
-    fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T> {
-        // We don't use result mapping to avoid extra frames
-        match self {
-            std::result::Result::Ok(value) => Ok(value),
-            Err(error) => {
-                let mut error: CapturedError = error.into();
-                error.context.push(Rc::new(AdditionalErrorContext {
-                    backtrace: Backtrace::capture(),
-                    context: Box::new(context()),
-                    scope: current_scope_id().ok(),
-                }));
-                Err(error)
-            }
-        }
-    }
-}
-
-impl<T> Context<T, CapturedError> for Option<T> {
-    fn show(self, display_error: impl FnOnce(&CapturedError) -> Element) -> Result<T> {
-        // We don't use result mapping to avoid extra frames
-        match self {
-            Some(value) => Ok(value),
-            None => {
-                let mut error = CapturedError::from_display("Value was none");
-                let render = display_error(&error).unwrap_or_default();
-                error.render = render;
-                Err(error)
-            }
-        }
-    }
-
-    fn context<C: Display + 'static>(self, context: C) -> Result<T> {
-        self.with_context(|| context)
-    }
-
-    fn with_context<C: Display + 'static>(self, context: impl FnOnce() -> C) -> Result<T> {
-        // We don't use result mapping to avoid extra frames
-        match self {
-            Some(value) => Ok(value),
-            None => {
-                let error = CapturedError::from_display(context());
-                Err(error)
-            }
-        }
-    }
-}
-
-pub(crate) mod private {
-    use super::*;
-
-    pub trait Sealed {}
-
-    impl<T, E> Sealed for std::result::Result<T, E> where E: Error {}
-    impl<T> Sealed for Option<T> {}
-}
-
-impl<T: Any + Error> AnyError for T {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn as_error(&self) -> &dyn Error {
-        self
-    }
+/// Provide an error boundary to catch errors from child components. This needs to called in a hydration comptable
+/// order if fullstack is enabled
+pub fn use_error_boundary_provider() -> ErrorContext {
+    use_hook(|| provide_context(create_error_boundary()))
 }
 
 /// A context with information about suspended components
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ErrorContext {
-    errors: Rc<RefCell<Vec<CapturedError>>>,
-    id: ScopeId,
+    error: Rc<RefCell<Option<CapturedError>>>,
+    subscribers: Subscribers,
+}
+
+impl Debug for ErrorContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ErrorContext")
+            .field("error", &self.error)
+            .finish()
+    }
 }
 
 impl PartialEq for ErrorContext {
     fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.errors, &other.errors)
+        Rc::ptr_eq(&self.error, &other.error)
     }
 }
 
 impl ErrorContext {
     /// Create a new suspense boundary in a specific scope
-    pub(crate) fn new(errors: Vec<CapturedError>, id: ScopeId) -> Self {
+    pub fn new(error: Option<CapturedError>) -> Self {
         Self {
-            errors: Rc::new(RefCell::new(errors)),
-            id,
+            error: Rc::new(RefCell::new(error)),
+            subscribers: Subscribers::new(),
         }
     }
 
-    /// Get all errors thrown from child components
-    pub fn errors(&self) -> Ref<'_, [CapturedError]> {
-        Ref::map(self.errors.borrow(), |errors| errors.as_slice())
-    }
+    /// Get the current error, if any. If multiple components have errored, this will return the first
+    /// error that made it to this boundary.
+    pub fn error(&self) -> Option<CapturedError> {
+        // Subscribe to the current reactive context if one exists. This is usually
+        // the error boundary component that is rendering the errors
+        if let Some(rc) = ReactiveContext::current() {
+            self.subscribers.add(rc);
+        }
 
-    /// Get the Element from the first error that can be shown
-    pub fn show(&self) -> Option<Element> {
-        self.errors.borrow().iter().find_map(|task| task.show())
+        self.error.borrow().clone()
     }
 
     /// Push an error into this Error Boundary
     pub fn insert_error(&self, error: CapturedError) {
-        self.errors.borrow_mut().push(error);
-        self.id.needs_update();
+        self.error.borrow_mut().replace(error);
+        self.mark_dirty()
     }
 
     /// Clear all errors from this Error Boundary
     pub fn clear_errors(&self) {
-        self.errors.borrow_mut().clear();
-        self.id.needs_update();
+        self.error.borrow_mut().take();
+        self.mark_dirty();
     }
-}
 
-/// Errors can have additional context added as they bubble up the render tree
-/// This context can be used to provide additional information to the user
-struct AdditionalErrorContext {
-    backtrace: Backtrace,
-    context: Box<dyn Display>,
-    scope: Option<ScopeId>,
-}
-
-impl Debug for AdditionalErrorContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ErrorContext")
-            .field("backtrace", &self.backtrace)
-            .field("context", &self.context.to_string())
-            .finish()
-    }
-}
-
-impl Display for AdditionalErrorContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let AdditionalErrorContext {
-            backtrace,
-            context,
-            scope,
-        } = self;
-
-        write!(f, "{context} (from ")?;
-
-        if let Some(scope) = scope {
-            write!(f, "scope {scope:?} ")?;
+    /// Mark the error context as dirty and notify all subscribers
+    fn mark_dirty(&self) {
+        let mut this_subscribers_vec = Vec::new();
+        self.subscribers
+            .visit(|subscriber| this_subscribers_vec.push(*subscriber));
+        for subscriber in this_subscribers_vec {
+            self.subscribers.remove(&subscriber);
+            subscriber.mark_dirty();
         }
-
-        write!(f, "at {backtrace:?})")
-    }
-}
-
-/// A type alias for a result that can be either a boxed error or a value
-/// This is useful to avoid having to use `Result<T, CapturedError>` everywhere
-pub type Result<T = ()> = std::result::Result<T, CapturedError>;
-
-/// A helper function for an Ok result that can be either a boxed error or a value
-/// This is useful to avoid having to use `Ok<T, CapturedError>` everywhere
-#[allow(non_snake_case)]
-pub fn Ok<T>(value: T) -> Result<T> {
-    Result::Ok(value)
-}
-
-#[derive(Clone)]
-/// An instance of an error captured by a descendant component.
-pub struct CapturedError {
-    /// The error captured by the error boundary
-    error: Rc<dyn AnyError + 'static>,
-
-    /// The backtrace of the error
-    backtrace: Rc<Backtrace>,
-
-    /// The scope that threw the error
-    scope: ScopeId,
-
-    /// An error message that can be displayed to the user
-    pub(crate) render: VNode,
-
-    /// Additional context that was added to the error
-    context: Vec<Rc<AdditionalErrorContext>>,
-}
-
-impl FromStr for CapturedError {
-    type Err = std::convert::Infallible;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        std::result::Result::Ok(Self::from_display(s.to_string()))
-    }
-}
-
-#[cfg(feature = "serialize")]
-#[derive(serde::Serialize, serde::Deserialize)]
-struct SerializedCapturedError {
-    error: String,
-    context: Vec<String>,
-}
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for CapturedError {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> std::result::Result<S::Ok, S::Error> {
-        let serialized = SerializedCapturedError {
-            error: self.error.as_error().to_string(),
-            context: self
-                .context
-                .iter()
-                .map(|context| context.to_string())
-                .collect(),
-        };
-        serialized.serialize(serializer)
-    }
-}
-
-#[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for CapturedError {
-    fn deserialize<D: serde::Deserializer<'de>>(
-        deserializer: D,
-    ) -> std::result::Result<Self, D::Error> {
-        let serialized = SerializedCapturedError::deserialize(deserializer)?;
-
-        let error = DisplayError::from(serialized.error);
-        let context = serialized
-            .context
-            .into_iter()
-            .map(|context| {
-                Rc::new(AdditionalErrorContext {
-                    scope: None,
-                    backtrace: Backtrace::disabled(),
-                    context: Box::new(context),
-                })
-            })
-            .collect();
-
-        std::result::Result::Ok(Self {
-            error: Rc::new(error),
-            context,
-            backtrace: Rc::new(Backtrace::disabled()),
-            scope: ScopeId::ROOT,
-            render: VNode::placeholder(),
-        })
-    }
-}
-
-impl Debug for CapturedError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CapturedError")
-            .field("error", &self.error.as_error())
-            .field("backtrace", &self.backtrace)
-            .field("scope", &self.scope)
-            .finish()
-    }
-}
-
-impl<E: AnyError + 'static> From<E> for CapturedError {
-    fn from(error: E) -> Self {
-        Self {
-            error: Rc::new(error),
-            backtrace: Rc::new(Backtrace::capture()),
-            scope: current_scope_id()
-                .expect("Cannot create an error boundary outside of a component's scope."),
-            render: Default::default(),
-            context: Default::default(),
-        }
-    }
-}
-
-impl CapturedError {
-    /// Create a new captured error
-    pub fn new(error: impl AnyError + 'static) -> Self {
-        Self {
-            error: Rc::new(error),
-            backtrace: Rc::new(Backtrace::capture()),
-            scope: current_scope_id().unwrap_or(ScopeId::ROOT),
-            render: Default::default(),
-            context: Default::default(),
-        }
-    }
-
-    /// Create a new error from a type that only implements [`Display`]. If your type implements [`Error`], you can use [`CapturedError::from`] instead.
-    pub fn from_display(error: impl Display + 'static) -> Self {
-        Self {
-            error: Rc::new(DisplayError::from(error)),
-            backtrace: Rc::new(Backtrace::capture()),
-            scope: current_scope_id().unwrap_or(ScopeId::ROOT),
-            render: Default::default(),
-            context: Default::default(),
-        }
-    }
-
-    /// Mark the error as being thrown from a specific scope
-    pub fn with_origin(mut self, scope: ScopeId) -> Self {
-        self.scope = scope;
-        self
-    }
-
-    /// Get a VNode representation of the error if the error provides one
-    pub fn show(&self) -> Option<Element> {
-        if self.render == VNode::placeholder() {
-            None
-        } else {
-            Some(std::result::Result::Ok(self.render.clone()))
-        }
-    }
-
-    /// Create a deep clone of this error
-    pub(crate) fn deep_clone(&self) -> Self {
-        Self {
-            render: self.render.deep_clone(),
-            ..self.clone()
-        }
-    }
-}
-
-impl PartialEq for CapturedError {
-    fn eq(&self, other: &Self) -> bool {
-        format!("{:?}", self) == format!("{:?}", other)
-    }
-}
-
-impl Display for CapturedError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "Encountered error: {:?}\nIn scope: {:?}\nBacktrace: {}\nContext: ",
-            self.error.as_error(),
-            self.scope,
-            self.backtrace
-        ))?;
-        for context in &*self.context {
-            f.write_fmt(format_args!("{}\n", context))?;
-        }
-        std::result::Result::Ok(())
-    }
-}
-
-impl CapturedError {
-    /// Downcast the error type into a concrete error type
-    pub fn downcast<T: 'static>(&self) -> Option<&T> {
-        self.error.as_any().downcast_ref::<T>()
-    }
-}
-
-pub(crate) fn throw_into(error: impl Into<CapturedError>, scope: ScopeId) {
-    let error = error.into();
-    if let Some(cx) = scope.consume_context::<ErrorContext>() {
-        cx.insert_error(error)
-    } else {
-        tracing::error!(
-            "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-            error
-        )
     }
 }
 
@@ -538,7 +171,7 @@ fn default_handler(errors: ErrorContext) -> Element {
         None,
         TEMPLATE,
         Box::new([errors
-            .errors()
+            .error()
             .iter()
             .map(|e| {
                 static TEMPLATE: Template = Template {
@@ -568,6 +201,140 @@ pub struct ErrorBoundaryProps {
     children: Element,
     handle_error: ErrorHandler,
 }
+
+/// Create a new error boundary component that catches any errors thrown from child components
+///
+/// ## Details
+///
+/// Error boundaries handle errors within a specific part of your application. They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
+/// Any errors passed up from a child will be caught by the nearest error boundary. Error boundaries are quick to implement, but it can be useful to individually handle errors
+/// in your components to provide a better user experience when you know that an error is likely to occur.
+///
+/// ## Example
+///
+/// ```rust, no_run
+/// use dioxus::prelude::*;
+///
+/// fn App() -> Element {
+///     let mut multiplier = use_signal(|| String::from("2"));
+///     rsx! {
+///         input {
+///             r#type: "text",
+///             value: multiplier,
+///             oninput: move |e| multiplier.set(e.value())
+///         }
+///         ErrorBoundary {
+///             handle_error: |errors: ErrorContext| {
+///                 rsx! {
+///                     div {
+///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
+///                     }
+///                 }
+///             },
+///             Counter {
+///                 multiplier
+///             }
+///         }
+///     }
+/// }
+///
+/// #[component]
+/// fn Counter(multiplier: ReadSignal<String>) -> Element {
+///     let multiplier_parsed = multiplier().parse::<usize>()?;
+///     let mut count = use_signal(|| multiplier_parsed);
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let multiplier_parsed = multiplier().parse::<usize>()?;
+///                 *count.write() *= multiplier_parsed;
+///                 Ok(())
+///             },
+///             "{count}x{multiplier}"
+///         }
+///     }
+/// }
+/// ```
+///
+/// ## Resetting the error boundary
+///
+/// Once the error boundary catches an error, it will render the rsx returned from the handle_error function instead of the children. To reset the error boundary,
+/// you can call the [`ErrorContext::clear_errors`] method. This will clear all errors and re-render the children.
+///
+/// ```rust, no_run
+/// # use dioxus::prelude::*;
+/// fn App() -> Element {
+///     let mut multiplier = use_signal(|| String::new());
+///     rsx! {
+///         input {
+///             r#type: "text",
+///             value: multiplier,
+///             oninput: move |e| multiplier.set(e.value())
+///         }
+///         ErrorBoundary {
+///             handle_error: |errors: ErrorContext| {
+///                 rsx! {
+///                     div {
+///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
+///                     }
+///                     button {
+///                         onclick: move |_| {
+///                             errors.clear_errors();
+///                         },
+///                         "try again"
+///                     }
+///                 }
+///             },
+///             Counter {
+///                 multiplier
+///             }
+///         }
+///     }
+/// }
+///
+/// #[component]
+/// fn Counter(multiplier: ReadSignal<String>) -> Element {
+///     let multiplier_parsed = multiplier().parse::<usize>()?;
+///     let mut count = use_signal(|| multiplier_parsed);
+///     rsx! {
+///         button {
+///             onclick: move |_| {
+///                 let multiplier_parsed = multiplier().parse::<usize>()?;
+///                 *count.write() *= multiplier_parsed;
+///                 Ok(())
+///             },
+///             "{count}x{multiplier}"
+///         }
+///     }
+/// }
+/// ```
+#[allow(non_upper_case_globals, non_snake_case)]
+pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
+    let error_boundary = use_error_boundary_provider();
+    let errors = error_boundary.error();
+    let has_errors = errors.is_some();
+
+    // Drop errors before running user code that might borrow the error lock
+    drop(errors);
+
+    if has_errors {
+        (props.handle_error.0)(error_boundary.clone())
+    } else {
+        std::result::Result::Ok({
+            static TEMPLATE: Template = Template {
+                roots: &[TemplateNode::Dynamic { id: 0usize }],
+                node_paths: &[&[0u8]],
+                attr_paths: &[],
+            };
+            VNode::new(
+                None,
+                TEMPLATE,
+                Box::new([(props.children).into_dyn_node()]),
+                Default::default(),
+            )
+        })
+    }
+}
+
 impl ErrorBoundaryProps {
     /**
     Create a builder for building `ErrorBoundaryProps`.
@@ -579,6 +346,7 @@ impl ErrorBoundaryProps {
         ErrorBoundaryPropsBuilder { fields: ((), ()) }
     }
 }
+
 #[must_use]
 #[doc(hidden)]
 #[allow(dead_code, non_camel_case_types, non_snake_case)]
@@ -690,137 +458,5 @@ impl<
             children,
             handle_error,
         }
-    }
-}
-
-/// Create a new error boundary component that catches any errors thrown from child components
-///
-/// ## Details
-///
-/// Error boundaries handle errors within a specific part of your application. They are similar to `try/catch` in JavaScript, but they only catch errors in the tree below them.
-/// Any errors passed up from a child will be caught by the nearest error boundary. Error boundaries are quick to implement, but it can be useful to individually handle errors
-/// in your components to provide a better user experience when you know that an error is likely to occur.
-///
-/// ## Example
-///
-/// ```rust, no_run
-/// use dioxus::prelude::*;
-///
-/// fn App() -> Element {
-///     let mut multiplier = use_signal(|| String::from("2"));
-///     rsx! {
-///         input {
-///             r#type: "text",
-///             value: multiplier,
-///             oninput: move |e| multiplier.set(e.value())
-///         }
-///         ErrorBoundary {
-///             handle_error: |errors: ErrorContext| {
-///                 rsx! {
-///                     div {
-///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
-///                     }
-///                 }
-///             },
-///             Counter {
-///                 multiplier
-///             }
-///         }
-///     }
-/// }
-///
-/// #[component]
-/// fn Counter(multiplier: ReadSignal<String>) -> Element {
-///     let multiplier_parsed = multiplier().parse::<usize>()?;
-///     let mut count = use_signal(|| multiplier_parsed);
-///     rsx! {
-///         button {
-///             onclick: move |_| {
-///                 let multiplier_parsed = multiplier().parse::<usize>()?;
-///                 *count.write() *= multiplier_parsed;
-///                 Ok(())
-///             },
-///             "{count}x{multiplier}"
-///         }
-///     }
-/// }
-/// ```
-///
-/// ## Resetting the error boundary
-///
-/// Once the error boundary catches an error, it will render the rsx returned from the handle_error function instead of the children. To reset the error boundary,
-/// you can call the [`ErrorContext::clear_errors`] method. This will clear all errors and re-render the children.
-///
-/// ```rust, no_run
-/// # use dioxus::prelude::*;
-/// fn App() -> Element {
-///     let mut multiplier = use_signal(|| String::new());
-///     rsx! {
-///         input {
-///             r#type: "text",
-///             value: multiplier,
-///             oninput: move |e| multiplier.set(e.value())
-///         }
-///         ErrorBoundary {
-///             handle_error: |errors: ErrorContext| {
-///                 rsx! {
-///                     div {
-///                         "Oops, we encountered an error. Please report {errors:?} to the developer of this application"
-///                     }
-///                     button {
-///                         onclick: move |_| {
-///                             errors.clear_errors();
-///                         },
-///                         "try again"
-///                     }
-///                 }
-///             },
-///             Counter {
-///                 multiplier
-///             }
-///         }
-///     }
-/// }
-///
-/// #[component]
-/// fn Counter(multiplier: ReadSignal<String>) -> Element {
-///     let multiplier_parsed = multiplier().parse::<usize>()?;
-///     let mut count = use_signal(|| multiplier_parsed);
-///     rsx! {
-///         button {
-///             onclick: move |_| {
-///                 let multiplier_parsed = multiplier().parse::<usize>()?;
-///                 *count.write() *= multiplier_parsed;
-///                 Ok(())
-///             },
-///             "{count}x{multiplier}"
-///         }
-///     }
-/// }
-/// ```
-#[allow(non_upper_case_globals, non_snake_case)]
-pub fn ErrorBoundary(props: ErrorBoundaryProps) -> Element {
-    let error_boundary = use_hook(provide_error_boundary);
-    let errors = error_boundary.errors();
-    let has_errors = !errors.is_empty();
-    // Drop errors before running user code that might borrow the error lock
-    drop(errors);
-
-    if has_errors {
-        (props.handle_error.0)(error_boundary.clone())
-    } else {
-        std::result::Result::Ok({
-            static TEMPLATE: Template = Template {
-                roots: &[TemplateNode::Dynamic { id: 0usize }],
-                node_paths: &[&[0u8]],
-                attr_paths: &[],
-            };
-            VNode::new(
-                None,
-                TEMPLATE,
-                Box::new([(props.children).into_dyn_node()]),
-                Default::default(),
-            )
-        })
     }
 }

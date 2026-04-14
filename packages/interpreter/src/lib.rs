@@ -32,23 +32,20 @@ pub mod minimal_bindings {
     /// Some useful snippets that we use to share common functionality between the different platforms we support.
     ///
     /// This maintains some sort of consistency between web, desktop, and liveview
-    #[wasm_bindgen(module = "/src/js/common.js")]
+    #[wasm_bindgen(module = "/src/js/set_attribute.js")]
     extern "C" {
         /// Set the attribute of the node
         pub fn setAttributeInner(node: JsValue, name: &str, value: JsValue, ns: Option<&str>);
-
-        /// Roll up all the values from the node into a JS object that we can deserialize
-        pub fn retrieveFormValues(node: JsValue) -> JsValue;
     }
 
     #[wasm_bindgen(module = "/src/js/hydrate.js")]
     extern "C" {
-        /// Register a callback that that will be called to hydrate a node at the given id with data from the server
+        /// Register a callback that will be called to hydrate a node at the given id with data from the server
         pub fn register_rehydrate_chunk_for_streaming(
             closure: &wasm_bindgen::closure::Closure<dyn FnMut(Vec<u32>, js_sys::Uint8Array)>,
         );
 
-        /// Register a callback that that will be called to hydrate a node at the given id with data from the server
+        /// Register a callback that will be called to hydrate a node at the given id with data from the server
         pub fn register_rehydrate_chunk_for_streaming_debug(
             closure: &wasm_bindgen::closure::Closure<
                 dyn FnMut(Vec<u32>, js_sys::Uint8Array, Option<Vec<String>>, Option<Vec<String>>),

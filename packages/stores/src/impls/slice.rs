@@ -57,4 +57,27 @@ where
     {
         (0..self.len()).map(move |i| self.clone().index(i))
     }
+
+    /// Try to get an item from slice. This will only track the shallow state of the slice.
+    /// It will only cause a re-run if the length of the slice could change. The new store
+    /// will only update when the item at the index changes.
+    ///
+    /// # Example
+    /// ```rust, no_run
+    /// use dioxus_stores::*;
+    /// let store = use_store(|| vec![1, 2, 3]);
+    /// let indexed_store = store.get(1).unwrap();
+    /// // The indexed store can access the store methods of the indexed store.
+    /// assert_eq!(indexed_store(), 2);
+    /// ```
+    pub fn get(&self, index: usize) -> Option<Store<I, IndexWrite<usize, Lens>>>
+    where
+        Lens: Clone,
+    {
+        if index >= self.len() {
+            None
+        } else {
+            Some(self.clone().index(index))
+        }
+    }
 }

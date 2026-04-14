@@ -14,6 +14,6 @@ fn root_node_isnt_null() {
 
     dom.in_runtime(|| {
         // The height should be 0
-        assert_eq!(ScopeId::ROOT.height(), 0);
+        assert_eq!(scope.height(), 0);
     });
 }

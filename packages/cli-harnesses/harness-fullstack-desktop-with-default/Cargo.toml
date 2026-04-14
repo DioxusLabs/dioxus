@@ -1,0 +1,19 @@
+[package]
+name = "harness-fullstack-desktop-with-default"
+version = "0.0.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack"] }
+anyhow = { workspace = true, optional = true }
+
+
+[features]
+default=["desktop"]
+desktop=["dioxus/desktop", "has_anyhow"]
+has_anyhow=["dep:anyhow"]
+server=["dioxus/server"]
+
+    

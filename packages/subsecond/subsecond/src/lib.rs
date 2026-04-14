@@ -79,7 +79,7 @@
 //! Subsecond *does* support hot-reloading of globals, statics, and thread locals. However, there are several limitations:
 //!
 //! - You may add new globals at runtime, but their destructors will never be called.
-//! - Globals are tracked across patches, but will renames are considered to be *new* globals.
+//! - Globals are tracked across patches, but renames are considered to be *new* globals.
 //! - Changes to static initializers will not be observed.
 //!
 //! Subsecond purposefully handles statics this way since many libraries like Dioxus and Tokio rely
@@ -132,7 +132,7 @@
 //!
 //! ```rust
 //! fn main() {
-//!     // Changes to the the `for` loop will cause an unwind to this call.
+//!     // Changes to the `for` loop will cause an unwind to this call.
 //!     subsecond::call(|| {
 //!         for x in 0..5 {
 //!             // Changes to the `println!` will be isolated to this call.
@@ -271,7 +271,7 @@ pub fn call<O>(mut f: impl FnMut() -> O) -> O {
 }
 
 // We use an AtomicPtr with a leaked JumpTable and Relaxed ordering to give us a global jump table
-// with very very little overhead. Reading this amounts of a Relaxed atomic load which basically
+// with very little overhead. Reading this amounts of a Relaxed atomic load which basically
 // is no overhead. We might want to look into using a thread_local with a stop-the-world approach
 // just in case multiple threads try to call the jump table before synchronization with the runtime.
 // For Dioxus purposes, this is not a big deal, but for libraries like bevy which heavily rely on
@@ -499,7 +499,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     // On non-wasm platforms we can just use libloading and the known aslr offsets to load the library
     #[cfg(any(unix, windows))]
     {
-        // on android we try to cirumvent permissions issues by copying the library to a memmap and then libloading that
+        // on android we try to circumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
         let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
 
@@ -573,6 +573,16 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
 
         // Wait for the fetch to complete - we need the wasm module size in bytes to reserve in the memory
         let response: web_sys::Response = JsFuture::from(response).await.unwrap().unchecked_into();
+
+        // If the status is not success, we bail
+        if !response.ok() {
+            panic!(
+                "Failed to patch wasm module at {} - response failed with: {}",
+                path,
+                response.status_text()
+            );
+        }
+
         let dl_bytes: ArrayBuffer = JsFuture::from(response.array_buffer().unwrap())
             .await
             .unwrap()

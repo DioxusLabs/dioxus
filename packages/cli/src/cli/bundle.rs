@@ -1,10 +1,10 @@
-use crate::{AppBuilder, BuildArgs, BuildMode, BuildRequest, BundleFormat};
-use anyhow::{bail, Context};
+use crate::{
+    AppBuilder, BuildArgs, BuildId, BuildMode, BuildRequest, BundleFormat, PackageType, Platform,
+};
+use anyhow::Context;
 use path_absolutize::Absolutize;
-use std::collections::HashMap;
-use tauri_bundler::{BundleBinary, BundleSettings, PackageSettings, SettingsBuilder};
-
-use walkdir::WalkDir;
+use std::path::PathBuf;
+use target_lexicon::Triple;
 
 use super::*;
 
@@ -15,7 +15,7 @@ use super::*;
 pub struct Bundle {
     /// The package types to bundle
     #[clap(long)]
-    pub package_types: Option<Vec<crate::PackageType>>,
+    pub package_types: Option<Vec<PackageType>>,
 
     /// The directory in which the final bundle will be placed.
     ///
@@ -37,19 +37,19 @@ impl Bundle {
     pub(crate) async fn bundle(mut self) -> Result<StructuredOutput> {
         tracing::info!("Bundling project...");
 
+        self.force_ios_bundle_device_target_if_needed()?;
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
+        let client_artifacts =
+            AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
+                .finish_build()
+                .await?;
         let mut server_artifacts = None;
-        let client_artifacts = AppBuilder::started(&client, BuildMode::Base { run: false })?
-            .finish_build()
-            .await?;
-
-        tracing::info!(path = ?client.root_dir(), "Client build completed successfully! 🚀");
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
             server_artifacts = Some(
-                AppBuilder::started(server, BuildMode::Base { run: false })?
+                AppBuilder::started(server, BuildMode::Base { run: false }, BuildId::SECONDARY)?
                     .finish_build()
                     .await?,
             );
@@ -57,10 +57,12 @@ impl Bundle {
             tracing::info!(path = ?client.root_dir(), "Server build completed successfully! 🚀");
         }
 
-        // If we're building for iOS, we need to bundle the iOS bundle
-        if client.bundle == BundleFormat::Ios && self.package_types.is_none() {
-            self.package_types = Some(vec![crate::PackageType::IosBundle]);
+        // Fill platform-specific defaults for package types when omitted.
+        if self.package_types.is_none() {
+            self.package_types = Self::default_package_types(client.bundle);
         }
+
+        Self::validate_package_types_for_bundle(client.bundle, self.package_types.as_deref())?;
 
         let mut bundles = vec![];
 
@@ -69,31 +71,24 @@ impl Bundle {
             bundles.push(server.main_exe());
         }
 
-        // Create a list of bundles that we might need to copy
+        // Create a list of bundles that we might need to copy.
+        // Package-type based bundling is handled by the bundler module.
         match client.bundle {
-            // By default, mac/win/linux work with tauri bundle
-            BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows => {
-                tracing::info!("Running desktop bundler...");
-                for bundle in Self::bundle_desktop(&client, &self.package_types)? {
+            // Desktop and Android platforms use package-type dispatch in the bundler module.
+            BundleFormat::MacOS
+            | BundleFormat::Ios
+            | BundleFormat::Linux
+            | BundleFormat::Windows
+            | BundleFormat::Android => {
+                tracing::info!("Running package bundler...");
+                for bundle in Self::bundle_with_package_types(&client, &self.package_types).await? {
                     bundles.extend(bundle.bundle_paths);
                 }
             }
 
-            // Web/ios can just use their root_dir
+            // Web can use its root_dir directly.
             BundleFormat::Web => bundles.push(client.root_dir()),
-            BundleFormat::Ios => {
-                tracing::warn!("iOS bundles are not currently codesigned! You will need to codesign the app before distributing.");
-                bundles.push(client.root_dir())
-            }
             BundleFormat::Server => bundles.push(client.root_dir()),
-
-            BundleFormat::Android => {
-                let aab = client
-                    .android_gradle_bundle()
-                    .await
-                    .context("Failed to run gradle bundleRelease")?;
-                bundles.push(aab);
-            }
         };
 
         // Copy the bundles to the output directory if one was specified
@@ -147,119 +142,45 @@ impl Bundle {
         })
     }
 
-    fn bundle_desktop(
+    async fn bundle_with_package_types(
         build: &BuildRequest,
-        package_types: &Option<Vec<crate::PackageType>>,
-    ) -> Result<Vec<tauri_bundler::Bundle>, Error> {
-        let krate = &build;
-        let exe = build.main_exe();
+        package_types: &Option<Vec<PackageType>>,
+    ) -> Result<Vec<crate::bundler::Bundle>, Error> {
+        use anyhow::bail;
 
-        _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
+        if matches!(
+            build.bundle,
+            BundleFormat::MacOS | BundleFormat::Linux | BundleFormat::Windows
+        ) {
+            let krate = &build;
+            let exe = build.main_exe();
 
-        let package = krate.package();
-        let mut name: PathBuf = krate.executable_name().into();
-        if cfg!(windows) {
-            name.set_extension("exe");
-        }
-        std::fs::create_dir_all(krate.bundle_dir(build.bundle))
-            .context("Failed to create bundle directory")?;
-        std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name))
-            .with_context(|| "Failed to copy the output executable into the bundle directory")?;
+            _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
 
-        let binaries = vec![
-            // We use the name of the exe but it has to be in the same directory
-            BundleBinary::new(krate.executable_name().to_string(), true)
-                .set_src_path(Some(exe.display().to_string())),
-        ];
+            let mut name: PathBuf = krate.executable_name().into();
+            if cfg!(windows) {
+                name.set_extension("exe");
+            }
+            std::fs::create_dir_all(krate.bundle_dir(build.bundle))
+                .context("Failed to create bundle directory")?;
+            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(|| {
+                "Failed to copy the output executable into the bundle directory"
+            })?;
 
-        let mut bundle_settings: BundleSettings = krate.config.bundle.clone().into();
-
-        // Check if required fields are provided instead of failing silently.
-        if bundle_settings.identifier.is_none() {
-            bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
-        }
-        if bundle_settings.publisher.is_none() {
-            bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
-        }
-
-        if cfg!(windows) {
-            let windows_icon_override = krate.config.bundle.windows.as_ref().map(|w| &w.icon_path);
-            if windows_icon_override.is_none() {
-                let icon_path = bundle_settings
-                    .icon
-                    .as_ref()
-                    .and_then(|icons| icons.first());
-
-                if let Some(icon_path) = icon_path {
-                    bundle_settings.icon = Some(vec![icon_path.into()]);
-                };
+            // Check if required fields are provided instead of failing silently.
+            if build.config.bundle.identifier.is_none() {
+                bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
+            }
+            if build.config.bundle.publisher.is_none() {
+                bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
             }
         }
 
-        if bundle_settings.resources_map.is_none() {
-            bundle_settings.resources_map = Some(HashMap::new());
-        }
+        let ctx = crate::bundler::BundleContext::new(build, package_types).await?;
 
-        let asset_dir = build.asset_dir();
-        if asset_dir.exists() {
-            for entry in WalkDir::new(&asset_dir) {
-                let entry = entry.unwrap();
-                let path = entry.path();
+        tracing::debug!("Bundling project for {:?}", ctx.package_types());
 
-                if path.is_file() {
-                    let old = path
-                        .canonicalize()
-                        .with_context(|| format!("Failed to canonicalize {entry:?}"))?;
-                    let new =
-                        PathBuf::from("assets").join(path.strip_prefix(&asset_dir).unwrap_or(path));
-
-                    tracing::debug!("Bundled asset: {old:?} -> {new:?}");
-                    bundle_settings
-                        .resources_map
-                        .as_mut()
-                        .expect("to be set")
-                        .insert(old.display().to_string(), new.display().to_string());
-                }
-            }
-        }
-
-        for resource_path in bundle_settings.resources.take().into_iter().flatten() {
-            bundle_settings
-                .resources_map
-                .as_mut()
-                .expect("to be set")
-                .insert(resource_path, "".to_string());
-        }
-
-        let mut settings = SettingsBuilder::new()
-            .project_out_directory(krate.bundle_dir(build.bundle))
-            .package_settings(PackageSettings {
-                product_name: krate.bundled_app_name(),
-                version: package.version.to_string(),
-                description: package.description.clone().unwrap_or_default(),
-                homepage: Some(package.homepage.clone().unwrap_or_default()),
-                authors: Some(package.authors.clone()),
-                default_run: Some(name.display().to_string()),
-            })
-            .log_level(log::Level::Debug)
-            .binaries(binaries)
-            .bundle_settings(bundle_settings);
-
-        if let Some(packages) = &package_types {
-            settings = settings.package_types(packages.iter().map(|p| (*p).into()).collect());
-        }
-
-        settings = settings.target(build.triple.to_string());
-
-        let settings = settings
-            .build()
-            .context("failed to bundle tauri bundle settings")?;
-        tracing::debug!("Bundling project with settings: {:#?}", settings);
-        if cfg!(target_os = "macos") {
-            std::env::set_var("CI", "true");
-        }
-
-        let bundles = tauri_bundler::bundle::bundle_project(&settings).inspect_err(|err| {
+        let bundles = ctx.bundle_project().await.inspect_err(|err| {
             tracing::error!("Failed to bundle project: {:#?}", err);
             if cfg!(target_os = "macos") {
                 tracing::error!("Make sure you have automation enabled in your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208) and full disk access enabled for your terminal (https://github.com/tauri-apps/tauri/issues/3055#issuecomment-1624389208)");
@@ -267,5 +188,128 @@ impl Bundle {
         })?;
 
         Ok(bundles)
+    }
+
+    fn default_package_types(bundle: BundleFormat) -> Option<Vec<PackageType>> {
+        match bundle {
+            BundleFormat::Ios => Some(vec![crate::PackageType::Ipa]),
+            BundleFormat::Android => Some(vec![crate::PackageType::Aab]),
+            _ => None,
+        }
+    }
+
+    fn force_ios_bundle_device_target_if_needed(&mut self) -> Result<()> {
+        let client_args = self
+            .args
+            .client
+            .as_mut()
+            .map(|args| &mut args.build_arguments)
+            .unwrap_or(&mut self.args.shared.build_arguments);
+
+        if client_args.platform == Platform::Ios && client_args.target.is_none() {
+            client_args.target = Some("aarch64-apple-ios".parse::<Triple>()?);
+        }
+
+        Ok(())
+    }
+
+    fn validate_package_types_for_bundle(
+        bundle: BundleFormat,
+        package_types: Option<&[PackageType]>,
+    ) -> Result<(), Error> {
+        let Some(package_types) = package_types else {
+            return Ok(());
+        };
+
+        let is_package_supported = |package_type: &PackageType| -> bool {
+            match bundle {
+                BundleFormat::MacOS => matches!(
+                    package_type,
+                    PackageType::MacOsBundle | PackageType::Dmg | PackageType::Updater
+                ),
+                BundleFormat::Linux => matches!(
+                    package_type,
+                    PackageType::Deb
+                        | PackageType::Rpm
+                        | PackageType::AppImage
+                        | PackageType::Updater
+                ),
+                BundleFormat::Windows => {
+                    matches!(
+                        package_type,
+                        PackageType::WindowsMsi | PackageType::Nsis | PackageType::Updater
+                    )
+                }
+                BundleFormat::Android => {
+                    matches!(package_type, PackageType::Apk | PackageType::Aab)
+                }
+                BundleFormat::Ios => matches!(package_type, PackageType::IosApp | PackageType::Ipa),
+                BundleFormat::Web | BundleFormat::Server => false,
+            }
+        };
+
+        if let Some(invalid) = package_types.iter().find(|pt| !is_package_supported(pt)) {
+            anyhow::bail!(
+                "Package type '{invalid:?}' is not supported for bundle format '{bundle}'."
+            );
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Bundle;
+    use crate::{
+        cli::CommandWithPlatformOverrides, BuildArgs, BundleFormat, PackageType, Platform,
+    };
+
+    #[test]
+    fn ios_bundle_defaults_to_ipa() {
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Ios),
+            Some(vec![PackageType::Ipa])
+        );
+    }
+
+    #[test]
+    fn validates_ios_package_types() {
+        assert!(Bundle::validate_package_types_for_bundle(
+            BundleFormat::Ios,
+            Some(&[PackageType::IosApp, PackageType::Ipa]),
+        )
+        .is_ok());
+
+        assert!(Bundle::validate_package_types_for_bundle(
+            BundleFormat::Ios,
+            Some(&[PackageType::Dmg]),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn bundle_ios_defaults_to_device_target() {
+        let mut bundle = Bundle {
+            package_types: None,
+            out_dir: None,
+            args: CommandWithPlatformOverrides {
+                shared: BuildArgs {
+                    build_arguments: crate::TargetArgs {
+                        platform: Platform::Ios,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        };
+
+        bundle.force_ios_bundle_device_target_if_needed().unwrap();
+
+        assert_eq!(
+            bundle.args.shared.build_arguments.target,
+            Some("aarch64-apple-ios".parse().unwrap())
+        );
     }
 }

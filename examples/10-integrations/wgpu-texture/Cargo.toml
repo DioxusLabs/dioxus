@@ -1,0 +1,21 @@
+[package]
+name = "wgpu-texture"
+version = "0.0.0"
+edition = "2021"
+license = "MIT"
+publish = false
+
+[features]
+default = ["desktop"]
+desktop = ["dioxus/desktop"]
+native = ["dioxus/native"]
+tracing = ["dep:tracing-subscriber", "dioxus-native/tracing"]
+
+[dependencies]
+dioxus-native = { workspace = true }
+dioxus = { workspace = true }
+wgpu = { workspace = true }
+winit = { workspace = true }
+bytemuck = "1.23.2"
+color = "0.3.2"
+tracing-subscriber = { workspace = true, optional = true }

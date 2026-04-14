@@ -1,28 +1,117 @@
-#![doc = include_str!("../README.md")]
-#![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-#![warn(missing_docs)]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+// #![warn(missing_docs)]
+#![allow(clippy::manual_async_fn)]
+#![allow(clippy::needless_return)]
 
-mod error;
+pub use client::{get_server_url, set_server_url};
+pub use dioxus_fullstack_core::*;
+
+#[doc(inline)]
+pub use dioxus_fullstack_macro::*;
+
+pub use axum_core;
+pub use headers;
+pub use http;
+pub use reqwest;
+pub use serde;
+
+/// Re-export commonly used items from axum, http, and hyper for convenience.
+pub use axum::{body, extract, response, routing};
+
 #[doc(hidden)]
-pub mod mock_client;
+pub use const_format;
+#[doc(hidden)]
+pub use const_str;
+#[doc(hidden)]
+pub use xxhash_rust;
 
-pub use dioxus_fullstack_hooks::history::provide_fullstack_history_context;
-
-pub use crate::error::{ServerFnError, ServerFnResult};
-#[doc(inline)]
-pub use dioxus_fullstack_hooks::*;
 #[cfg(feature = "server")]
-#[doc(inline)]
-pub use dioxus_server::*;
-#[doc(inline)]
-pub use dioxus_server_macro::*;
-pub use server_fn::ServerFn as _;
-#[doc(inline)]
-pub use server_fn::{
-    self, client,
-    client::{get_server_url, set_server_url},
-    codec, server, BoxedStream, ContentType, Decodes, Encodes, Format, FormatType, ServerFn,
-    Websocket,
-};
+pub use {axum, axum_extra::TypedHeader, inventory};
+
+#[cfg(feature = "server")]
+pub(crate) mod spawn;
+#[cfg(feature = "server")]
+pub(crate) use spawn::*;
+
+pub mod magic;
+pub use magic::*;
+
+pub mod request;
+pub use request::*;
+
+pub use http::StatusCode;
+
+pub mod encoding;
+pub use encoding::*;
+
+pub mod lazy;
+pub use lazy::*;
+
+pub use http::{HeaderMap, HeaderValue, Method};
+
+mod client;
+pub use client::*;
+
+pub use axum::extract::Json;
+pub use axum::response::{NoContent, Redirect};
+
+pub use crate::request::{FromResponse, FromResponseParts};
+
+pub use payloads::*;
+pub mod payloads {
+    use crate::{ClientRequest, ClientResponse, ClientResult, IntoRequest};
+    use crate::{FromResponse, FromResponseParts};
+    use axum::extract::FromRequest;
+    use axum::response::{IntoResponse, IntoResponseParts, ResponseParts};
+    use bytes::Bytes;
+    use dioxus_fullstack_core::ServerFnError;
+    use futures::Stream;
+    use headers::Header;
+    use http::{header::InvalidHeaderValue, HeaderValue};
+    use serde::{de::DeserializeOwned, Serialize};
+    use std::future::Future;
+
+    mod axum_types;
+
+    pub mod cbor;
+    pub use cbor::*;
+
+    pub mod form;
+    pub use form::*;
+
+    pub mod multipart;
+    pub use multipart::*;
+
+    #[cfg(feature = "postcard")]
+    pub mod postcard;
+
+    #[cfg(feature = "postcard")]
+    pub use postcard::*;
+
+    #[cfg(feature = "msgpack")]
+    pub mod msgpack;
+    #[cfg(feature = "msgpack")]
+    pub use msgpack::*;
+
+    pub mod text;
+    pub use text::*;
+
+    pub mod sse;
+    pub use sse::*;
+
+    pub mod stream;
+    pub use stream::*;
+
+    pub mod files;
+    pub use files::*;
+
+    pub mod header;
+    pub use header::*;
+
+    pub mod query;
+    pub use query::*;
+
+    #[cfg(feature = "ws")]
+    pub mod websocket;
+    #[cfg(feature = "ws")]
+    pub use websocket::*;
+}

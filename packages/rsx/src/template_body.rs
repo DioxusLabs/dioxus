@@ -109,6 +109,8 @@ impl ToTokens for TemplateBody {
             None => quote! { None },
         };
 
+        let key_warnings = self.check_for_duplicate_keys();
+
         let roots = node.quote_roots();
 
         // Print paths is easy - just print the paths
@@ -138,6 +140,8 @@ impl ToTokens for TemplateBody {
             dioxus_core::Element::Ok({
                 #diagnostics
 
+                #key_warnings
+
                 // Components pull in the dynamic literal pool and template in debug mode, so they need to be defined before dynamic nodes
                 #[cfg(debug_assertions)]
                 fn __original_template() -> &'static dioxus_core::internal::HotReloadedTemplate {
@@ -149,6 +153,8 @@ impl ToTokens for TemplateBody {
                 }
                 #[cfg(debug_assertions)]
                 let __template_read = {
+                    use dioxus_signals::ReadableExt;
+
                     static __NORMALIZED_FILE: &'static str = {
                         const PATH: &str = dioxus_core::const_format::str_replace!(file!(), "\\\\", "/");
                         dioxus_core::const_format::str_replace!(PATH, '\\', "/")
@@ -156,7 +162,7 @@ impl ToTokens for TemplateBody {
 
                     // The key is important here - we're creating a new GlobalSignal each call to this
                     // But the key is what's keeping it stable
-                    static __TEMPLATE: GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = GlobalSignal::with_location(
+                    static __TEMPLATE: dioxus_signals::GlobalSignal<Option<dioxus_core::internal::HotReloadedTemplate>> = dioxus_signals::GlobalSignal::with_location(
                         || None::<dioxus_core::internal::HotReloadedTemplate>,
                         __NORMALIZED_FILE,
                         line!(),
@@ -164,7 +170,7 @@ impl ToTokens for TemplateBody {
                         #index
                     );
 
-                    dioxus_core::Runtime::current().ok().map(|_| __TEMPLATE.read())
+                    dioxus_core::Runtime::try_current().map(|_| __TEMPLATE.read())
                 };
                 // If the template has not been hot reloaded, we always use the original template
                 // Templates nested within macros may be merged because they have the same file-line-column-index
@@ -271,11 +277,7 @@ impl TemplateBody {
     }
 
     pub fn implicit_key(&self) -> Option<&AttributeValue> {
-        match self.roots.first() {
-            Some(BodyNode::Element(el)) => el.key(),
-            Some(BodyNode::Component(comp)) => comp.get_key(),
-            _ => None,
-        }
+        self.roots.first().and_then(BodyNode::key)
     }
 
     /// Ensure only one key and that the key is not a static str
@@ -300,6 +302,22 @@ impl TemplateBody {
 
             self.diagnostics.push(diagnostic);
         }
+    }
+
+    fn check_for_duplicate_keys(&self) -> TokenStream2 {
+        let mut warnings = TokenStream2::new();
+
+        // Make sure there are not multiple keys or keys on nodes other than the first in the block
+        for root in self.roots.iter().skip(1) {
+            if let Some(key) = root.key() {
+                warnings.extend(new_diagnostics::warning_diagnostic(
+                    key.span(),
+                    "Keys are only allowed on the first node in the block.",
+                ));
+            }
+        }
+
+        warnings
     }
 
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {

@@ -59,7 +59,7 @@ impl Init {
 
         // Perform a connectivity check so we just don't it around doing nothing if there's a network error
         if self.template.is_none() {
-            create::connectivity_check().await?;
+            create::check_connectivity().await?;
         }
 
         // If no template is specified, use the default one and set the branch to the latest release.

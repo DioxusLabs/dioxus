@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CliSettings, TraceSrc, Workspace};
+use crate::{settings::SupportedEditor, CliSettings, TraceSrc, Workspace};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]
@@ -24,6 +24,14 @@ pub(crate) enum Config {
     /// Set CLI settings.
     #[command(subcommand)]
     Set(Setting),
+
+    /// Generate JSON schema for Dioxus.toml configuration.
+    /// Useful for IDE autocomplete and validation.
+    Schema {
+        /// Output file path. If not provided, prints to stdout.
+        #[clap(long, short)]
+        out: Option<PathBuf>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Subcommand)]
@@ -38,6 +46,8 @@ pub(crate) enum Setting {
     WSLFilePollInterval { value: u16 },
     /// Disable the built-in telemetry for the CLI
     DisableTelemetry { value: BoolValue },
+    /// Set the preferred editor for debug sessions
+    PreferredEditor { value: SupportedEditor },
 }
 
 impl Display for Setting {
@@ -48,6 +58,7 @@ impl Display for Setting {
             Self::AlwaysOnTop { value: _ } => write!(f, "always-on-top"),
             Self::WSLFilePollInterval { value: _ } => write!(f, "wsl-file-poll-interval"),
             Self::DisableTelemetry { value: _ } => write!(f, "disable-telemetry"),
+            Self::PreferredEditor { value: _ } => write!(f, "preferred-editor"),
         }
     }
 }
@@ -114,8 +125,22 @@ impl Config {
                     Setting::DisableTelemetry { value } => {
                         settings.disable_telemetry = Some(value.into());
                     }
+                    Setting::PreferredEditor { value } => {
+                        settings.preferred_editor = Some(value);
+                    }
                 })?;
                 tracing::info!(dx_src = ?TraceSrc::Dev, "🚩 CLI setting `{setting}` has been set.");
+            }
+            Config::Schema { out } => {
+                let schema = crate::config::generate_manifest_schema();
+                let json = serde_json::to_string_pretty(&schema)?;
+                match out {
+                    Some(path) => {
+                        std::fs::write(&path, format!("{json}\n"))?;
+                        tracing::info!(dx_src = ?TraceSrc::Dev, "Schema written to {}", path.display());
+                    }
+                    None => println!("{json}"),
+                }
             }
         }
 

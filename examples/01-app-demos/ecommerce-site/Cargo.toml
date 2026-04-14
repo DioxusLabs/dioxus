@@ -1,0 +1,21 @@
+[package]
+name = "ecommerce-site"
+version = "0.1.1"
+edition = "2021"
+publish = false
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+dioxus = { workspace = true, features = ["fullstack", "router"] }
+reqwest = { workspace = true, features = ["json"] }
+serde = { workspace = true }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+chrono = { workspace = true, features = ["serde", "wasmbind"] }
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+chrono = { workspace = true, features = ["serde"] }
+
+[features]
+web = ["dioxus/web"]
+server = ["dioxus/server"]

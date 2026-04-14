@@ -40,9 +40,12 @@ use crate::prelude::*;
 ///
 /// # Example
 /// ```rust, no_run
-/// # use dioxus::prelude::*;
+/// use dioxus::prelude::*;
 ///
-/// dioxus::launch(app);
+/// fn main() {
+///     dioxus::launch(app);
+/// }
+///
 /// fn app() -> Element {
 ///     rsx! {
 ///         div { "Hello, world!" }
@@ -77,7 +80,7 @@ enum KnownPlatform {
     Other(LaunchFn),
 }
 
-#[allow(clippy::redundant_closure)] // clippy doesnt doesn't understand our coercion to fn
+#[allow(clippy::redundant_closure)] // clippy doesn't understand our coercion to fn
 impl LaunchBuilder {
     /// Create a new builder for your application. This will create a launch configuration for the current platform based on the features enabled on the `dioxus` crate.
     // If you aren't using a third party renderer and this is not a docs.rs build, generate a warning about no renderer being enabled
@@ -299,7 +302,7 @@ impl LaunchBuilder {
         // Set any flags if we're running under fullstack
         #[cfg(feature = "fullstack")]
         {
-            use dioxus_fullstack::server_fn::client::{get_server_url, set_server_url};
+            use dioxus_fullstack::{get_server_url, set_server_url};
 
             // Make sure to set the server_fn endpoint if the user specified the fullstack feature
             // We only set this on native targets
