@@ -12,7 +12,7 @@ trait Waitable {
     fn pump(&mut self) -> impl Future<Output = ()>;
     fn check(&self) -> ControlFlow<Self::Output>;
 
-    fn into_waitable_future<'vdom>(
+    fn to_waitable_future<'vdom>(
         &'vdom mut self,
     ) -> Pin<Box<dyn Future<Output = Result<Self::Output, TesterError>> + 'vdom>>
     where
@@ -84,7 +84,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move {
-            let node_id = self.into_waitable_future().await?;
+            let node_id = self.to_waitable_future().await?;
             Ok(self.data.node_id_to_element(node_id))
         })
     }
@@ -95,12 +95,10 @@ impl<'vdom> ElementCondition<'vdom> {
         Self { data, query }
     }
 
-    pub fn click(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
-        async move {
-            let element = self.into_future().await?;
-            element.click();
-            Ok(())
-        }
+    pub async fn click(self) -> Result<(), TesterError> {
+        let element = self.into_future().await?;
+        element.click();
+        Ok(())
     }
 
     pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
@@ -198,7 +196,7 @@ impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
 
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move {
-            let node_ids = self.into_waitable_future().await?;
+            let node_ids = self.to_waitable_future().await?;
             Ok(node_ids
                 .into_iter()
                 .map(|node_id| self.data.node_id_to_element(node_id))
@@ -248,6 +246,6 @@ where
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
 
     fn into_future(mut self) -> Self::IntoFuture {
-        Box::pin(async move { self.into_waitable_future().await })
+        Box::pin(async move { self.to_waitable_future().await })
     }
 }

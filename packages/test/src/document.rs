@@ -137,14 +137,14 @@ impl DocumentTester {
     /// If no such element already exists on the DOM, then this returns an error.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_element<'vdom>(&'vdom self, query: &SelectorList) -> Option<usize> {
+    pub(crate) fn get_element(&self, query: &SelectorList) -> Option<usize> {
         self.document.query_selector_raw(query)
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given [Query].
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
-    pub(crate) fn get_elements<'vdom>(&'vdom self, query: &SelectorList) -> Vec<usize> {
+    pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<usize> {
         self.document.query_selector_all_raw(query).to_vec()
     }
 
