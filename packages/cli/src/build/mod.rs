@@ -15,7 +15,6 @@ mod web;
 
 mod assets;
 mod builder;
-mod cache;
 mod context;
 mod link;
 mod patch;
@@ -25,7 +24,6 @@ mod request;
 pub(crate) use android::AndroidTools;
 pub(crate) use assets::*;
 pub(crate) use builder::*;
-pub(crate) use cache::*;
 pub(crate) use context::*;
 pub(crate) use patch::*;
 pub(crate) use request::*;

@@ -1200,7 +1200,9 @@ impl BuildRequest {
 
         let mut workspace_rustc_args = RustcArgSet::new(link_args);
 
-        let args_dir = self.rustc_wrapper_args_dir();
+        // Always read from the fat build's scope dir — the rustc wrapper only captures
+        // args during fat/base builds, not thin builds.
+        let args_dir = self.rustc_wrapper_args_scope_dir(&BuildMode::Fat)?;
         if let Ok(entries) = std::fs::read_dir(&args_dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
@@ -1572,10 +1574,12 @@ impl BuildRequest {
                     .args(args)
                     .envs(env.iter().map(|(k, v)| (k.as_ref(), v)));
 
-                // Set the folder where dx will write its captured rustc args for replay
+                // Set the folder where dx will write its captured rustc args for replay.
+                // Use the scoped directory so different build configurations (triples,
+                // profiles, etc.) don't collide.
                 cmd.env(
                     DX_RUSTC_WRAPPER_ENV_VAR,
-                    dunce::canonicalize(self.rustc_wrapper_args_dir())
+                    dunce::canonicalize(self.rustc_wrapper_args_scope_dir(build_mode)?)
                         .context("Failed to canonicalize rustc wrapper args dir")?,
                 );
 
