@@ -24,7 +24,7 @@ use serde::Serialize;
 use sha1::Digest;
 use sha2::Sha256;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
     ffi::OsString,
 };
 use std::{
@@ -1355,19 +1355,38 @@ impl BuildRequest {
     /// The hash includes the various args profile info that provide entropy to disambiguate the crate.
     /// You might see `.args/serde-123.lib.json` in the same folder as `.args/serde-456.json` because
     /// they might have different config flags, different target triples, different opt levels, etc.
+    /// Bust cargo fingerprints to force recompilation during the fat build.
+    ///
+    /// The tip crate is always busted so we get a fresh linker invocation. For workspace
+    /// dependency crates, we check whether we already have cached rustc args in the scope
+    /// directory from a previous run. If a crate's `<name>.lib.json` exists, its args are
+    /// still valid and we skip busting so cargo can reuse its incremental artifacts. If the
+    /// file is missing, we bust that crate's fingerprint to force the rustc wrapper to
+    /// re-capture its args.
     pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        // Only bust fingerpint when doing builds
         if !matches!(ctx.mode, BuildMode::Fat) {
             return Ok(());
         }
 
-        // split at the last `-` used to separate the hash from the name
-        // This causes to more aggressively bust hashes for all combinations of features
-        // and fingerprints for this package since we're just ignoring the hash
+        // Always bust the tip crate.
+        let mut bust = HashSet::new();
+        bust.insert(self.package().name.clone());
+
+        // Walk workspace deps of the tip crate. If we're missing cached args for any of
+        // them, bust their fingerprint so the wrapper re-captures during this fat build.
+        for dep_name in self.workspace_crate_dep_names() {
+            let cached = self
+                .rustc_wrapper_args_scope_dir(&BuildMode::Fat)?
+                .join(format!("{dep_name}.lib.json"));
+            if !cached.exists() {
+                bust.insert(dep_name);
+            }
+        }
+
         for entry in std::fs::read_dir(&self.cargo_fingeprint_dir())?.flatten() {
             if let Some(fname) = entry.file_name().to_str() {
                 if let Some((name, _)) = fname.rsplit_once('-') {
-                    if name == self.package().name {
+                    if bust.contains(name) {
                         _ = std::fs::remove_dir_all(entry.path());
                     }
                 }
@@ -1375,6 +1394,47 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    /// All workspace crate names that the tip crate transitively depends on
+    /// (underscore-normalized, excluding the tip itself).
+    fn workspace_crate_dep_names(&self) -> Vec<String> {
+        let krates = &self.workspace.krates;
+
+        let workspace_names: HashSet<String> = krates
+            .workspace_members()
+            .filter_map(|m| match m {
+                krates::Node::Krate { krate, .. } => Some(krate.name.replace('-', "_")),
+                _ => None,
+            })
+            .collect();
+
+        let tip = self.tip_crate_name();
+        let Some(tip_nid) = krates.workspace_members().find_map(|m| match m {
+            krates::Node::Krate { id, krate, .. } if krate.name.replace('-', "_") == tip => {
+                krates.nid_for_kid(id)
+            }
+            _ => None,
+        }) else {
+            return Vec::new();
+        };
+
+        // BFS forward through workspace deps.
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::from([tip_nid]);
+        let mut deps = Vec::new();
+
+        while let Some(nid) = queue.pop_front() {
+            for dep in krates.direct_dependencies(nid) {
+                let name = dep.krate.name.replace('-', "_");
+                if workspace_names.contains(&name) && visited.insert(dep.node_id) {
+                    deps.push(name);
+                    queue.push_back(dep.node_id);
+                }
+            }
+        }
+
+        deps
     }
 
     fn rustc_wrapper_capture_mode(&self, build_mode: &BuildMode) -> &'static str {
