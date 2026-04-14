@@ -305,6 +305,54 @@ pub unsafe fn get_jump_table() -> Option<&'static JumpTable> {
 
     Some(unsafe { &*ptr })
 }
+
+// #[cfg(target_arch = "wasm32")]
+// fn resolve_latest_wasm_ifunc(table: &JumpTable, start: u64) -> u64 {
+//     let mut current = start;
+//     let mut visited = Vec::new();
+
+//     while let Some(next) = table.map.get(&current).copied() {
+//         if next == current || visited.contains(&current) {
+//             break;
+//         }
+//         visited.push(current);
+//         current = next;
+//     }
+
+//     current
+// }
+
+// #[cfg(target_arch = "wasm32")]
+// fn compose_wasm_jump_table(previous: &JumpTable, incoming: &JumpTable) -> JumpTable {
+//     let mut map = previous.map.clone();
+//     let resolved_aliases = previous
+//         .map
+//         .keys()
+//         .copied()
+//         .map(|key| (key, resolve_latest_wasm_ifunc(previous, key)))
+//         .collect::<Vec<_>>();
+
+//     for (&root_ifunc, &new_ifunc) in &incoming.map {
+//         let previous_latest = resolve_latest_wasm_ifunc(previous, root_ifunc);
+
+//         map.insert(root_ifunc, new_ifunc);
+//         map.insert(previous_latest, new_ifunc);
+
+//         for (alias, resolved) in &resolved_aliases {
+//             if *resolved == previous_latest {
+//                 map.insert(*alias, new_ifunc);
+//             }
+//         }
+//     }
+
+//     JumpTable {
+//         lib: incoming.lib.clone(),
+//         map,
+//         aslr_reference: incoming.aslr_reference,
+//         new_base_address: incoming.new_base_address,
+//         ifunc_count: incoming.ifunc_count,
+//     }
+// }
 unsafe fn commit_patch(table: JumpTable) {
     APP_JUMP_TABLE.store(
         Box::into_raw(Box::new(table)),
@@ -562,6 +610,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let memory: Memory = wasm_bindgen::memory().unchecked_into();
         let exports: Object = wasm_bindgen::exports().unchecked_into();
         let buffer: ArrayBuffer = memory.buffer().unchecked_into();
+        // let previous_table = unsafe { get_jump_table() }.cloned();
 
         let path = table.lib.to_str().unwrap();
         if !path.ends_with(".wasm") {
@@ -676,6 +725,22 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .unwrap()
             .unchecked_into::<js_sys::Function>()
             .call0(&JsValue::undefined());
+
+        // if let Some(previous) = previous_table.as_ref() {
+        //     table = compose_wasm_jump_table(previous, &table);
+        // }
+
+        // for (&stale_ifunc, &latest_ifunc) in &table.map {
+        //     if stale_ifunc == latest_ifunc {
+        //         continue;
+        //     }
+
+        //     let Ok(function) = funcs.get(latest_ifunc as u32) else {
+        //         continue;
+        //     };
+
+        //     let _ = funcs.set(stale_ifunc as u32, &function);
+        // }
 
         unsafe { commit_patch(table) };
     });

@@ -9,7 +9,8 @@ use object::{
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::{Deref, Range},
+    io::Read,
+    ops::Range,
     path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -846,15 +847,7 @@ pub fn create_undefined_symbol_stub(
     let mut defined_symbols = HashSet::new();
 
     for path in sorted {
-        let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
-        let file = File::parse(bytes.deref() as &[u8])?;
-        for symbol in file.symbols() {
-            if symbol.is_undefined() {
-                undefined_symbols.insert(symbol.name()?.to_string());
-            } else if symbol.is_global() {
-                defined_symbols.insert(symbol.name()?.to_string());
-            }
-        }
+        collect_stub_symbols_from_path(path, &mut undefined_symbols, &mut defined_symbols)?;
     }
     let undefined_symbols: Vec<_> = undefined_symbols
         .difference(&defined_symbols)
@@ -1249,6 +1242,54 @@ pub fn create_undefined_symbol_stub(
     }
 
     Ok(obj.write()?)
+}
+
+fn collect_stub_symbols_from_path(
+    path: &Path,
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
+
+    if path
+        .extension()
+        .is_some_and(|ext| matches!(ext.to_str(), Some("rlib" | "a")))
+    {
+        let mut archive = ar::Archive::new(std::io::Cursor::new(bytes));
+        while let Some(entry) = archive.next_entry() {
+            let mut entry = entry?;
+            let name = std::str::from_utf8(entry.header().identifier()).unwrap_or_default();
+
+            if name.ends_with(".rmeta") || !(name.ends_with(".o") || name.ends_with(".obj")) {
+                continue;
+            }
+
+            let mut entry_bytes = Vec::with_capacity(entry.header().size() as usize);
+            entry.read_to_end(&mut entry_bytes)?;
+            collect_stub_symbols_from_bytes(&entry_bytes, undefined_symbols, defined_symbols)?;
+        }
+
+        return Ok(());
+    }
+
+    collect_stub_symbols_from_bytes(&bytes, undefined_symbols, defined_symbols)
+}
+
+fn collect_stub_symbols_from_bytes(
+    bytes: &[u8],
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let file = File::parse(bytes)?;
+    for symbol in file.symbols() {
+        if symbol.is_undefined() {
+            undefined_symbols.insert(symbol.name()?.to_string());
+        } else if symbol.is_global() {
+            defined_symbols.insert(symbol.name()?.to_string());
+        }
+    }
+
+    Ok(())
 }
 
 /// Prepares the base module before running wasm-bindgen.

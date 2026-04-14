@@ -20,19 +20,16 @@ use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
 use anyhow::{bail, ensure, Context};
 use itertools::Itertools;
-use krates::{cm::TargetKind, NodeId};
 use serde::Serialize;
 use sha1::Digest;
 use sha2::Sha256;
 use std::{
-    collections::HashSet,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    ffi::OsString,
 };
 use std::{
-    collections::{HashMap, VecDeque},
-    ffi::OsString,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem};
@@ -52,12 +49,12 @@ impl BuildRequest {
     ///
     /// We also run some post processing steps here, like extracting out any new assets.
     ///
-    /// `extra_objects` contains additional object file paths from compiled workspace dep crates
-    /// that should be included in the patch dylib. These are combined with the tip crate's
-    /// `.rcgu.o` files extracted from linker args, creating a self-contained patch.
+    /// Workspace support replays captured rustc invocations into the modified crate chain first,
+    /// updating their on-disk outputs in place. The final patch link then combines the tip crate's
+    /// fresh `.rcgu.o` files with the updated workspace rlibs from that replay.
     pub async fn compile_workspace_hotpatch(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let BuildMode::Thin {
-            changed_files,
+            changed_files: _,
             aslr_reference,
             workspace_rustc_args,
             modified_crates,
@@ -70,7 +67,11 @@ impl BuildRequest {
         tracing::debug!("Going to replay from {workspace_rustc_args:?}");
         tracing::debug!("Changed crates dag using {modified_crates:?}");
 
-        //
+        let replay_order = self
+            .replay_workspace_hotpatch_chain(ctx, workspace_rustc_args, modified_crates)
+            .await?;
+        let replayed_crates = replay_order.iter().cloned().collect::<HashSet<_>>();
+
         let mut artifacts = self.cargo_build(ctx).await?;
 
         ctx.status_writing_patch();
@@ -160,8 +161,12 @@ impl BuildRequest {
             .map(PathBuf::from)
             .collect();
 
+        let workspace_rlibs =
+            self.workspace_hotpatch_link_rlibs(&artifacts.workspace_rustc, &replayed_crates);
+
         // Merge both sets for the linker.
         let mut object_files: Vec<PathBuf> = temp_objects.clone();
+        object_files.extend(workspace_rlibs.iter().cloned());
 
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
         // fat binary into direct addresses from the running process.
@@ -209,6 +214,7 @@ impl BuildRequest {
         };
 
         tracing::trace!("Linking with {:?} using args: {:#?}", linker, object_files);
+        tracing::trace!("Workspace hotpatch rlibs: {:#?}", workspace_rlibs);
 
         let mut out_args: Vec<OsString> = vec![];
         out_args.extend(object_files.iter().map(Into::into));
@@ -470,17 +476,43 @@ impl BuildRequest {
         Ok(out_args)
     }
 
-    /// Compile a workspace dependency crate directly with `rustc` using its captured args.
+    /// Compile a workspace crate directly with `rustc` using its captured args.
     ///
-    /// This produces an updated rlib at the same path cargo originally wrote to.
-    /// Used during thin builds to recompile changed workspace deps before the tip crate.
+    /// This produces updated outputs at the same paths cargo originally wrote to.
+    /// Used during thin builds to replay the modified workspace chain before the tip crate.
     async fn compile_dep_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<()> {
         let mut cmd = Command::new("rustc");
         cmd.current_dir(self.workspace_dir());
         cmd.env_clear();
 
-        // Skip args[0] which is the rustc binary path captured by the wrapper
-        cmd.args(rustc_args.args[1..].iter());
+        // Skip args[0] which is the rustc binary path captured by the wrapper.
+        // We must also strip the dx linker override so replayed crates produce real outputs
+        // instead of re-entering our no-link interception path.
+        let mut replay_args = Vec::with_capacity(rustc_args.args.len().saturating_sub(1));
+        let mut idx = 1;
+        while idx < rustc_args.args.len() {
+            let arg = &rustc_args.args[idx];
+
+            if arg.starts_with("-Clinker=") {
+                idx += 1;
+                continue;
+            }
+
+            if arg == "-C"
+                && rustc_args
+                    .args
+                    .get(idx + 1)
+                    .is_some_and(|next| next.starts_with("linker="))
+            {
+                idx += 2;
+                continue;
+            }
+
+            replay_args.push(arg.clone());
+            idx += 1;
+        }
+
+        cmd.args(&replay_args);
 
         // Restore the captured environment, filtering out wrapper env vars and
         // stale cargo jobserver vars to prevent recursive invocation and warnings.
@@ -495,7 +527,9 @@ impl BuildRequest {
             rustc_args
                 .envs
                 .iter()
-                .filter(|(k, _)| !filtered_env_keys.contains(&k.as_str()))
+                .filter(|(k, _)| {
+                    !filtered_env_keys.contains(&k.as_str()) && !k.starts_with("DX_LINK")
+                })
                 .cloned(),
         );
 
@@ -512,6 +546,207 @@ impl BuildRequest {
         }
 
         Ok(())
+    }
+
+    async fn replay_workspace_hotpatch_chain(
+        &self,
+        ctx: &BuildContext,
+        workspace_rustc_args: &RustcArgSet,
+        modified_crates: &HashSet<String>,
+    ) -> Result<Vec<String>> {
+        ctx.profile_phase("Workspace hotpatch replay");
+
+        let replay_order = self.workspace_hotpatch_replay_order(modified_crates);
+        if replay_order.is_empty() {
+            tracing::debug!("No workspace crates need replay before thin link");
+            return Ok(replay_order);
+        }
+
+        tracing::debug!("Workspace hotpatch replay order: {:?}", replay_order);
+
+        for crate_name in &replay_order {
+            let Some(rustc_args) =
+                self.workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
+            else {
+                tracing::debug!(
+                    "No replayable rustc args captured for workspace crate {crate_name}; skipping"
+                );
+                continue;
+            };
+
+            tracing::debug!("Replaying workspace crate: {crate_name}");
+            self.compile_dep_crate(crate_name, rustc_args)
+                .await
+                .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
+        }
+
+        Ok(replay_order)
+    }
+
+    fn workspace_hotpatch_replay_args<'a>(
+        &self,
+        workspace_rustc_args: &'a RustcArgSet,
+        crate_name: &str,
+    ) -> Option<&'a RustcArgs> {
+        let lib_key = format!("{crate_name}.lib");
+        if crate_name == self.tip_crate_name() {
+            return workspace_rustc_args.get(&lib_key);
+        }
+
+        workspace_rustc_args
+            .get(&lib_key)
+            .or_else(|| workspace_rustc_args.get(&format!("{crate_name}.bin")))
+    }
+
+    fn workspace_hotpatch_replay_order(&self, modified_crates: &HashSet<String>) -> Vec<String> {
+        let relevant = self.workspace_hotpatch_relevant_crates(modified_crates);
+        if relevant.is_empty() {
+            return Vec::new();
+        }
+
+        let mut indegree = relevant
+            .iter()
+            .map(|crate_name| (crate_name.clone(), 0usize))
+            .collect::<HashMap<_, _>>();
+        let mut edges = HashMap::<String, Vec<String>>::new();
+
+        for crate_name in &relevant {
+            for dependent in self.workspace_dependents_of(crate_name) {
+                if !relevant.contains(&dependent) {
+                    continue;
+                }
+
+                *indegree.entry(dependent.clone()).or_default() += 1;
+                edges.entry(crate_name.clone()).or_default().push(dependent);
+            }
+        }
+
+        let mut ready = indegree
+            .iter()
+            .filter_map(|(crate_name, degree)| (*degree == 0).then_some(crate_name.clone()))
+            .collect::<BTreeSet<_>>();
+        let mut ordered = Vec::with_capacity(relevant.len());
+
+        while let Some(crate_name) = ready.pop_first() {
+            ordered.push(crate_name.clone());
+
+            if let Some(dependents) = edges.get(&crate_name) {
+                for dependent in dependents {
+                    if let Some(entry) = indegree.get_mut(dependent) {
+                        *entry -= 1;
+                        if *entry == 0 {
+                            ready.insert(dependent.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        if ordered.len() != relevant.len() {
+            let mut remaining = relevant
+                .into_iter()
+                .filter(|crate_name| !ordered.contains(crate_name))
+                .collect::<Vec<_>>();
+            remaining.sort();
+            tracing::warn!(
+                "Workspace hotpatch replay graph was cyclic or incomplete; appending remaining crates: {:?}",
+                remaining
+            );
+            ordered.extend(remaining);
+        }
+
+        ordered
+    }
+
+    fn workspace_hotpatch_relevant_crates(
+        &self,
+        modified_crates: &HashSet<String>,
+    ) -> HashSet<String> {
+        modified_crates
+            .iter()
+            .filter(|crate_name| self.workspace_hotpatch_reaches_tip(crate_name, modified_crates))
+            .cloned()
+            .collect()
+    }
+
+    fn workspace_hotpatch_reaches_tip(
+        &self,
+        crate_name: &str,
+        modified_crates: &HashSet<String>,
+    ) -> bool {
+        let tip = self.tip_crate_name();
+        if crate_name == tip {
+            return true;
+        }
+
+        let mut to_visit = VecDeque::from([crate_name.to_string()]);
+        let mut visited = HashSet::new();
+
+        while let Some(current) = to_visit.pop_front() {
+            if !visited.insert(current.clone()) {
+                continue;
+            }
+
+            for dependent in self.workspace_dependents_of(&current) {
+                if dependent == tip {
+                    return true;
+                }
+
+                if modified_crates.contains(&dependent) {
+                    to_visit.push_back(dependent);
+                }
+            }
+        }
+
+        false
+    }
+
+    fn workspace_hotpatch_link_rlibs(
+        &self,
+        set: &RustcArgSet,
+        replayed_crates: &HashSet<String>,
+    ) -> Vec<PathBuf> {
+        let wanted = replayed_crates
+            .iter()
+            .filter_map(|crate_name| {
+                let rustc_args = set.get(&format!("{crate_name}.lib"))?;
+                self.find_rlib_for_crate(crate_name, rustc_args)
+            })
+            .collect::<HashSet<_>>();
+
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+
+        let mut ordered = Vec::new();
+        let mut seen = HashSet::new();
+
+        for arg in &set.link_args {
+            if !arg.ends_with(".rlib") {
+                continue;
+            }
+
+            let path = PathBuf::from(arg);
+            if wanted.contains(&path) && seen.insert(path.clone()) {
+                ordered.push(path);
+            }
+        }
+
+        let mut missing = wanted
+            .into_iter()
+            .filter(|path| !seen.contains(path))
+            .collect::<Vec<_>>();
+        missing.sort();
+
+        if !missing.is_empty() {
+            tracing::debug!(
+                "Workspace hotpatch rlibs not present in captured link order, appending: {:?}",
+                missing
+            );
+            ordered.extend(missing);
+        }
+
+        ordered
     }
 
     /// Patches are stored in the same directory as the main executable, but with a name based on the
@@ -1066,22 +1301,6 @@ impl BuildRequest {
         };
 
         Ok(cc)
-    }
-
-    fn rustc_extra_filename(rustc_args: &RustcArgs) -> Option<String> {
-        rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
-            arg.strip_prefix("-Cextra-filename=")
-                .map(|s| s.to_string())
-                .or_else(|| {
-                    if arg == "-C" {
-                        rustc_args.args.get(i + 1).and_then(|next| {
-                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
-                        })
-                    } else {
-                        None
-                    }
-                })
-        })
     }
 
     /// Find the rlib path for a workspace crate from its captured rustc args.
