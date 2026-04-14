@@ -816,11 +816,7 @@ mod tests {
 
     #[test]
     fn displayed_address_resolves_unspecified_to_routable_ip() {
-        let server = make_test_server(
-            IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-            8080,
-            BundleFormat::Web,
-        );
+        let server = make_test_server(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 8080, BundleFormat::Web);
         let addr = server.displayed_address().unwrap();
         // When bound to 0.0.0.0, the displayed address should be a real routable IP
         // (or 127.0.0.1 as fallback), never 0.0.0.0 itself.
@@ -830,11 +826,7 @@ mod tests {
 
     #[test]
     fn displayed_address_preserves_localhost() {
-        let server = make_test_server(
-            IpAddr::V4(Ipv4Addr::LOCALHOST),
-            8080,
-            BundleFormat::Web,
-        );
+        let server = make_test_server(IpAddr::V4(Ipv4Addr::LOCALHOST), 8080, BundleFormat::Web);
         let addr = server.displayed_address().unwrap();
         assert_eq!(addr.ip(), IpAddr::V4(Ipv4Addr::LOCALHOST));
         assert_eq!(addr.port(), 8080);
