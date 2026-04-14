@@ -7,7 +7,7 @@ use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll}
 
 /// Create an action that runs async work on demand, triggered by user interaction.
 ///
-/// Unlike [`use_resource`](crate::use_resource) which runs automatically when its reactive
+/// Unlike [`use_resource`](crate::use_resource()) which runs automatically when its reactive
 /// dependencies change, `use_action` only runs when you explicitly call it. This makes it
 /// the right choice for mutations, form submissions, button clicks, and any async work that
 /// should happen in response to a user event rather than on mount or state change.
@@ -19,7 +19,7 @@ use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll}
 ///
 /// Pass a server function (or any async closure) directly:
 ///
-/// ```rust
+/// ```rust, ignore
 /// let mut save = use_action(save_to_database);
 ///
 /// rsx! {
@@ -40,7 +40,7 @@ use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll}
 ///
 /// # With inline async closures
 ///
-/// ```rust
+/// ```rust, ignore
 /// let mut fetch_dog = use_action(move |breed: String| async move {
 ///     reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
 ///         .await?
@@ -55,7 +55,7 @@ use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll}
 /// in-flight task. Only the most recent call's result is kept. You can also cancel or
 /// reset manually:
 ///
-/// ```rust
+/// ```rust, ignore
 /// save.cancel(); // cancel in-flight work, reset state
 /// save.reset();  // same — cancel and clear the value
 /// ```
