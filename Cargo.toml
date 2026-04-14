@@ -111,8 +111,6 @@ members = [
     "examples/10-integrations/pwa",
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
-    "examples/10-integrations/native-headless-in-bevy",
-    "examples/10-integrations/bevy",
 ]
 
 
@@ -206,7 +204,6 @@ anyrender_vello_cpu = { version = "0.8", default-features = false }
 wgpu_context = { version = "0.1", default-features = false }
 wgpu = { version = "26.0.1" }
 vello = "0.6"
-bevy = "0.17"
 
 
 # a fork of pretty please for tests - let's get off of this if we can!

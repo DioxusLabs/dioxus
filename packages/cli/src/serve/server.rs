@@ -265,6 +265,7 @@ impl WebServer {
             BuilderUpdate::StderrReceived { .. } => {}
             BuilderUpdate::ProcessExited { .. } => {}
             BuilderUpdate::ProcessWaitFailed { .. } => {}
+            BuilderUpdate::ProfilePhase { .. } => {}
         }
     }
 

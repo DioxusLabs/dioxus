@@ -101,7 +101,7 @@ impl Workspace {
         )
         .context("Failed to load Cargo.toml")?;
 
-        let android_tools = crate::build::get_android_tools();
+        let android_tools = AndroidTools::current();
 
         let workspace = Arc::new(Self {
             krates,

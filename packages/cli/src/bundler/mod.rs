@@ -46,7 +46,7 @@ impl<'a> BundleContext<'a> {
         // Build the resources map from assets + config resources
         let mut resources_map = HashMap::new();
 
-        let asset_dir = build.asset_dir();
+        let asset_dir = build.bundle_asset_dir();
         if asset_dir.exists() {
             for entry in walkdir::WalkDir::new(&asset_dir) {
                 let entry = entry?;
