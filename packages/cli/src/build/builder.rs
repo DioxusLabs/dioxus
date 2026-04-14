@@ -345,7 +345,7 @@ impl AppBuilder {
     }
 
     /// Kick off a thin (hotpatch) rebuild in response to a file change, replacing any in-flight
-    /// build with one that produces a relinkable patch dylib (later applied by [`Builder::hotpatch`]).
+    /// build with one that produces a relinkable patch dylib (later applied by [`AppBuilder::hotpatch`]).
     ///
     /// Bails early if there's no prior fat build to link against, or if we're missing the ASLR
     /// reference on a non-wasm target (which means no client is connected yet to report it).
@@ -1936,7 +1936,8 @@ impl AppBuilder {
     /// the flamegraph via a debug!()
     ///
     /// The flamegraph looks something like this:
-    /// ```
+    ///
+    /// ```txt
     /// 17:22:56 [dev] Flamegraph for fat - time taken: 11371ms
     ///        0ms   0.0% Verify Tooling       |█                                                                                               |
     ///        0ms   0.0% Installing Tooling   |█                                                                                               |

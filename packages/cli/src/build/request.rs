@@ -1214,6 +1214,11 @@ impl BuildRequest {
         _ = std::fs::create_dir_all(&scope_dir)
             .context("Failed to create rustc wrapper args scope dir");
 
+        // Only remove args in fat mode
+        if !matches!(ctx.mode, BuildMode::Fat { .. }) {
+            return Ok(());
+        }
+
         // Always bust the tip crate.
         let mut bust = HashSet::new();
         bust.insert(self.package().name.clone());
