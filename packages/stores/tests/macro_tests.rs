@@ -601,6 +601,53 @@ mod macro_tests {
         let _count: Store<u32, _> = transposed.count;
     }
 
+    fn store_impl_custom_names_do_not_conflict() {
+        #[derive(Store)]
+        struct Item {
+            value: i32,
+        }
+
+        #[store(name = ItemReadExt)]
+        impl Store<Item> {
+            fn read_value(&self) -> i32 {
+                self.value().cloned()
+            }
+        }
+
+        #[store(name = ItemWriteExt)]
+        impl Store<Item> {
+            fn set_value(&mut self, value: i32) {
+                self.value().set(value);
+            }
+        }
+
+        let mut store = use_store(|| Item { value: 1 });
+        let _: i32 = store.read_value();
+        store.set_value(2);
+    }
+
+    fn store_impl_method_attributes_are_preserved() {
+        #[derive(Store)]
+        struct Item {
+            value: i32,
+        }
+
+        #[store]
+        impl Store<Item> {
+            #[cfg(any())]
+            fn cfg_gated(&self) -> MissingType {
+                MissingType(self.value().cloned())
+            }
+
+            fn read_value(&self) -> i32 {
+                self.value().cloned()
+            }
+        }
+
+        let store = use_store(|| Item { value: 1 });
+        let _: i32 = store.read_value();
+    }
+
     // Multiple private fields alongside multiple public fields
     fn derive_struct_many_mixed_fields() {
         #[derive(Store)]
@@ -731,6 +778,39 @@ mod macro_tests {
             let _: Store<String, _> = store.open();
             let _: Store<u32, _> = store.visible_to_parent();
             let _: Store<u64, _> = store.visible_to_parent_by_path();
+        }
+    }
+
+    mod r#raw_parent {
+        use dioxus_signals::*;
+        use dioxus_stores::*;
+
+        pub mod raw_mod {
+            use dioxus_signals::*;
+            use dioxus_stores::*;
+
+            #[derive(Store)]
+            pub struct Item {
+                pub(in crate::macro_tests::r#raw_parent) restricted: i32,
+            }
+
+            impl Item {
+                pub fn new() -> Self {
+                    Self { restricted: 1 }
+                }
+            }
+
+            fn _defining_can_call_restricted() {
+                let store = use_store(Item::new);
+                let _: Store<i32, _> = store.restricted();
+            }
+        }
+
+        fn _parent_can_call_restricted() {
+            use raw_mod::ItemStoreExt;
+
+            let store = use_store(raw_mod::Item::new);
+            let _: Store<i32, _> = store.restricted();
         }
     }
 

@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::parse::Parse;
 use syn::spanned::Spanned;
+use syn::{ext::IdentExt, parse::Parse};
 use syn::{
     parse_quote, Ident, ImplItem, ImplItemConst, ImplItemType, ItemImpl, PathArguments, Type,
     WherePredicate,
@@ -25,7 +25,9 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
         Some(attr) => attr,
         None => Ident::new(&format!("{}StoreImplExt", type_name), item.span()),
     };
-    let name_prefix = format!("{}StoreImpl", type_name);
+    // Hidden seal/witness items must be unique per generated trait, otherwise
+    // multiple `#[store(name = ...)]` impls on the same type collide.
+    let name_prefix = extension_name.unraw().to_string();
 
     // Push a __Lens generic to the impl if it doesn't already exist.
     let contains_lens_generic = input.generics.params.iter().any(|param| {
@@ -93,9 +95,13 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
                 let witness = seal.push_witness(&func.vis);
                 let bound: WherePredicate = parse_quote!(Self: #witness<__V>);
                 func.sig.generics.make_where_clause().predicates.push(bound);
+                let attrs = &func.attrs;
                 let sig = &func.sig;
                 let body = &func.block;
-                seal.push_method(quote! { #sig }, quote! { #body });
+                seal.push_assoc(
+                    quote! { #(#attrs)* #sig; },
+                    quote! { #(#attrs)* #sig #body },
+                );
             }
             ImplItem::Const(c) => {
                 let ImplItemConst {

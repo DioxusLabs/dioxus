@@ -2,8 +2,8 @@ use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
-    parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Fields, Generics,
-    Ident, Index, LitInt, Visibility,
+    ext::IdentExt, parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Fields,
+    Generics, Ident, Index, LitInt, Visibility,
 };
 
 /// Turn a visibility modifier into a readable PascalCase suffix used in
@@ -29,7 +29,7 @@ pub(crate) fn visibility_suffix(vis: &Visibility) -> String {
                 .path
                 .segments
                 .iter()
-                .map(|s| capitalize(&s.ident.to_string()))
+                .map(|s| capitalize(&s.ident.unraw().to_string()))
                 .collect();
             if r.in_token.is_some() {
                 segs
