@@ -599,77 +599,76 @@ impl BuildRequest {
         })
     }
 
+    /// Topological sort of modified workspace crates for rustc replay.
+    ///
+    /// Only includes crates that transitively reach the tip crate through other modified
+    /// crates — unreachable modifications can't affect the final binary and are skipped.
+    /// Within that set, crates are ordered so dependencies compile before dependents
+    /// (Kahn's algorithm). Ties are broken lexicographically for determinism.
     fn workspace_hotpatch_replay_order(&self, modified_crates: &HashSet<String>) -> Vec<String> {
-        let relevant = self.workspace_hotpatch_relevant_crates(modified_crates);
+        // Filter to crates that can actually reach the tip through modified crates.
+        let relevant: HashSet<String> = modified_crates
+            .iter()
+            .filter(|name| self.workspace_hotpatch_reaches_tip(name, modified_crates))
+            .cloned()
+            .collect();
+
         if relevant.is_empty() {
             return Vec::new();
         }
 
-        let mut indegree = relevant
-            .iter()
-            .map(|crate_name| (crate_name.clone(), 0usize))
-            .collect::<HashMap<_, _>>();
-        let mut edges = HashMap::<String, Vec<String>>::new();
+        // Build the subgraph: edge A→B means "A must compile before B".
+        let mut indegree: HashMap<&String, usize> =
+            relevant.iter().map(|name| (name, 0)).collect();
+        let mut edges: HashMap<&String, Vec<&String>> = HashMap::new();
 
         for crate_name in &relevant {
             for dependent in self.workspace_dependents_of(crate_name) {
-                if !relevant.contains(&dependent) {
-                    continue;
+                if let Some(dep) = relevant.get(&dependent) {
+                    *indegree.entry(dep).or_default() += 1;
+                    edges.entry(crate_name).or_default().push(dep);
                 }
-
-                *indegree.entry(dependent.clone()).or_default() += 1;
-                edges.entry(crate_name.clone()).or_default().push(dependent);
             }
         }
 
-        let mut ready = indegree
+        // Kahn's algorithm. BTreeSet gives deterministic (lexicographic) tie-breaking.
+        let mut ready: BTreeSet<&String> = indegree
             .iter()
-            .filter_map(|(crate_name, degree)| (*degree == 0).then_some(crate_name.clone()))
-            .collect::<BTreeSet<_>>();
+            .filter(|(_, &deg)| deg == 0)
+            .map(|(name, _)| *name)
+            .collect();
         let mut ordered = Vec::with_capacity(relevant.len());
 
-        while let Some(crate_name) = ready.pop_first() {
-            ordered.push(crate_name.clone());
-
-            if let Some(dependents) = edges.get(&crate_name) {
-                for dependent in dependents {
-                    if let Some(entry) = indegree.get_mut(dependent) {
-                        *entry -= 1;
-                        if *entry == 0 {
-                            ready.insert(dependent.clone());
-                        }
-                    }
+        while let Some(name) = ready.pop_first() {
+            ordered.push(name.clone());
+            for dep in edges.get(name).into_iter().flatten() {
+                let deg = indegree.get_mut(dep).unwrap();
+                *deg -= 1;
+                if *deg == 0 {
+                    ready.insert(dep);
                 }
             }
         }
 
+        // Cycle guard — shouldn't happen in a valid cargo workspace, but don't lose crates.
         if ordered.len() != relevant.len() {
-            let mut remaining = relevant
-                .into_iter()
-                .filter(|crate_name| !ordered.contains(crate_name))
-                .collect::<Vec<_>>();
-            remaining.sort();
+            let mut rest: Vec<_> = relevant
+                .iter()
+                .filter(|n| !ordered.contains(n))
+                .cloned()
+                .collect();
+            rest.sort();
             tracing::warn!(
-                "Workspace hotpatch replay graph was cyclic or incomplete; appending remaining crates: {:?}",
-                remaining
+                "Workspace hotpatch replay graph has a cycle; appending: {rest:?}"
             );
-            ordered.extend(remaining);
+            ordered.extend(rest);
         }
 
         ordered
     }
 
-    fn workspace_hotpatch_relevant_crates(
-        &self,
-        modified_crates: &HashSet<String>,
-    ) -> HashSet<String> {
-        modified_crates
-            .iter()
-            .filter(|crate_name| self.workspace_hotpatch_reaches_tip(crate_name, modified_crates))
-            .cloned()
-            .collect()
-    }
-
+    /// Returns true if `crate_name` can reach the tip crate through a chain of modified
+    /// workspace dependents (BFS over the reverse dependency graph).
     fn workspace_hotpatch_reaches_tip(
         &self,
         crate_name: &str,
@@ -680,21 +679,19 @@ impl BuildRequest {
             return true;
         }
 
-        let mut to_visit = VecDeque::from([crate_name.to_string()]);
+        let mut queue = VecDeque::from([crate_name.to_string()]);
         let mut visited = HashSet::new();
 
-        while let Some(current) = to_visit.pop_front() {
+        while let Some(current) = queue.pop_front() {
             if !visited.insert(current.clone()) {
                 continue;
             }
-
             for dependent in self.workspace_dependents_of(&current) {
                 if dependent == tip {
                     return true;
                 }
-
                 if modified_crates.contains(&dependent) {
-                    to_visit.push_back(dependent);
+                    queue.push_back(dependent);
                 }
             }
         }
@@ -702,19 +699,45 @@ impl BuildRequest {
         false
     }
 
+    /// Collect the rlib paths for every replayed workspace crate, ordered for the linker.
+    ///
+    /// Each crate in `replayed_crates` is resolved to its on-disk `.rlib` using the captured
+    /// rustc args from the fat build (specifically `--out-dir` and `-C extra-filename`).
+    /// Every crate must resolve — a missing rlib would produce a corrupted patch binary.
+    ///
+    /// The returned paths preserve the original link order from the fat build's captured
+    /// linker arguments. Any rlibs not found in that order are appended at the end.
     fn workspace_hotpatch_link_rlibs(
         &self,
         args: &WorkspaceRustcArgs,
-        replayed_crates: &Vec<String>,
+        replayed_crates: &[String],
     ) -> Result<Vec<PathBuf>> {
-        let wanted = replayed_crates
-            .iter()
-            .filter_map(|crate_name| {
-                let rustc_args = args.rustc_args.get(&format!("{crate_name}.lib"))?;
-                self.find_rlib_for_crate(crate_name, rustc_args)
-            })
-            .collect::<HashSet<_>>();
+        // Resolve every replayed crate to its rlib path. Every crate must resolve —
+        // a missing rlib means we'd link a corrupted binary.
+        let mut wanted = HashSet::new();
+        for crate_name in replayed_crates {
+            let rustc_args = args
+                .rustc_args
+                .get(&format!("{crate_name}.lib"))
+                .with_context(|| {
+                    format!(
+                        "Missing captured rustc args for workspace crate '{crate_name}.lib' \
+                         (available: {:?})",
+                        args.rustc_args.keys().collect::<Vec<_>>()
+                    )
+                })?;
 
+            let rlib = self
+                .find_rlib_for_crate(crate_name, rustc_args)
+                .with_context(|| {
+                    format!("Could not find rlib for workspace crate '{crate_name}'")
+                })?;
+
+            wanted.insert(rlib);
+        }
+
+        // Preserve the link order from the original fat build for any rlibs that appear
+        // in the captured link args.
         let mut ordered = Vec::new();
         let mut seen = HashSet::new();
 
@@ -729,19 +752,10 @@ impl BuildRequest {
             }
         }
 
-        let mut missing = wanted
-            .into_iter()
-            .filter(|path| !seen.contains(path))
-            .collect::<Vec<_>>();
-        missing.sort();
-
-        if !missing.is_empty() {
-            tracing::debug!(
-                "Workspace hotpatch rlibs not present in captured link order, appending: {:?}",
-                missing
-            );
-            ordered.extend(missing);
-        }
+        // Any rlibs not in the captured link order get appended at the end.
+        let mut remaining: Vec<_> = wanted.into_iter().filter(|p| !seen.contains(p)).collect();
+        remaining.sort();
+        ordered.extend(remaining);
 
         Ok(ordered)
     }
@@ -1306,14 +1320,15 @@ impl BuildRequest {
     /// rlib filename. This is important because multiple rlibs for the same crate can coexist
     /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
     /// and globbing would return an arbitrary one.
-    fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Option<PathBuf> {
+    fn find_rlib_for_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<PathBuf> {
         // Extract --out-dir from the captured args
         let out_dir = rustc_args
             .args
             .iter()
             .zip(rustc_args.args.iter().skip(1))
             .find(|(flag, _)| *flag == "--out-dir")
-            .map(|(_, dir)| PathBuf::from(dir))?;
+            .map(|(_, dir)| PathBuf::from(dir))
+            .with_context(|| format!("No --out-dir in captured rustc args for '{crate_name}'"))?;
 
         // Extract -C extra-filename from captured args.
         // Cargo passes this to rustc to disambiguate output filenames via metadata hash.
@@ -1322,7 +1337,6 @@ impl BuildRequest {
             arg.strip_prefix("-Cextra-filename=")
                 .map(|s| s.to_string())
                 .or_else(|| {
-                    // Handle `-C` followed by `extra-filename=X` as separate args
                     if arg == "-C" {
                         rustc_args.args.get(i + 1).and_then(|next| {
                             next.strip_prefix("extra-filename=").map(|s| s.to_string())
@@ -1337,32 +1351,39 @@ impl BuildRequest {
         if let Some(extra) = &extra_filename {
             let exact = out_dir.join(format!("lib{crate_name}{extra}.rlib"));
             if exact.exists() {
-                return Some(exact);
+                return Ok(exact);
             }
         }
 
         // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
-        // This handles cases where -C extra-filename isn't in the captured args.
         // Prefer the most recently modified rlib to avoid picking up stale artifacts.
         let prefix = format!("lib{crate_name}-");
-        let entries = std::fs::read_dir(&out_dir).ok()?;
         let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
-        for entry in entries.flatten() {
+        for entry in std::fs::read_dir(&out_dir)
+            .with_context(|| format!("Could not read --out-dir '{}'", out_dir.display()))?
+            .flatten()
+        {
             if let Some(name) = entry.file_name().to_str() {
                 if name.starts_with(&prefix) && name.ends_with(".rlib") {
-                    let mtime = entry.metadata().ok()?.modified().ok()?;
-                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
-                        best = Some((entry.path(), mtime));
+                    if let Ok(meta) = entry.metadata() {
+                        if let Ok(mtime) = meta.modified() {
+                            if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
+                                best = Some((entry.path(), mtime));
+                            }
+                        }
                     }
                 }
             }
         }
 
-        if let Some((path, _)) = best {
-            return Some(path);
-        }
-
-        None
+        best.map(|(path, _)| path).with_context(|| {
+            format!(
+                "No rlib found for '{crate_name}' in '{}' \
+                 (looked for lib{crate_name}*.rlib, extra-filename={:?})",
+                out_dir.display(),
+                extra_filename
+            )
+        })
     }
 
     /// with our hotpatching setup since it uses linker interception.
