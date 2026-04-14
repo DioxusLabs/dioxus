@@ -159,8 +159,14 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 ///
 /// ## Arguments
 ///
-/// - `pub`: Makes the generated extension trait public. If not provided, the trait will be private.
 /// - `name = YourExtensionName`: The name of the extension trait. If not provided, it will be generated based on the type name.
+///
+/// ## Visibility
+///
+/// The generated extension trait is always `pub`, but each method is individually sealed to
+/// the visibility declared on the `impl` block's function. A `pub fn` is callable anywhere
+/// the trait is in scope; a `pub(crate) fn` is only callable from inside the crate; a bare
+/// `fn` is only callable from the module that defined the impl.
 ///
 /// ## Bounds
 ///

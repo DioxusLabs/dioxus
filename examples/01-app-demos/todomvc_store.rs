@@ -16,7 +16,7 @@ const STYLE: Asset = asset!("/examples/assets/todomvc.css");
 /// - `filter(self) -> Store<FilterState, _>`
 #[derive(Store, PartialEq, Clone, Debug)]
 struct TodoState {
-    todos: HashMap<u32, TodoItem>,
+    pub todos: HashMap<u32, TodoItem>,
     filter: FilterState,
 }
 

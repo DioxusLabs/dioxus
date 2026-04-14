@@ -43,10 +43,13 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
 /// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
 ///
 /// Used by the enum path, which doesn't have per-variant visibility gating.
+/// A private `Sealed` supertrait prevents external types from implementing
+/// the extension trait.
 #[allow(clippy::too_many_arguments)]
 fn extension_trait(
     visibility: &syn::Visibility,
     trait_name: &Ident,
+    sealed_trait_name: &Ident,
     store_ty: &TokenStream2,
     extension_impl_generics: &syn::ImplGenerics,
     extension_ty_generics: &syn::TypeGenerics,
@@ -55,7 +58,12 @@ fn extension_trait(
     implementations: &[TokenStream2],
 ) -> TokenStream2 {
     quote! {
-        #visibility trait #trait_name #extension_impl_generics #extension_where_clause {
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        trait #sealed_trait_name {}
+        impl #extension_impl_generics #sealed_trait_name for #store_ty #extension_where_clause {}
+
+        #visibility trait #trait_name #extension_impl_generics: #sealed_trait_name #extension_where_clause {
             #(#definitions)*
         }
 
@@ -365,9 +373,15 @@ fn derive_store_struct(
     let trait_sigs = methods.iter().map(|(sig, _)| quote! { #sig; });
     let impl_bodies = methods.iter().map(|(sig, body)| quote! { #sig #body });
 
+    let sealed_trait_name = format_ident!("__{}StoreSealed", struct_name);
     let extension_trait_tokens = quote! {
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        trait #sealed_trait_name {}
+        impl #extension_impl_generics #sealed_trait_name for #store_ty #extension_where_clause {}
+
         #[allow(private_bounds)]
-        #visibility trait #extension_trait_name #witness_impl_generics #witness_where_clause {
+        #visibility trait #extension_trait_name #witness_impl_generics: #sealed_trait_name #witness_where_clause {
             #(#trait_sigs)*
         }
 
@@ -616,9 +630,11 @@ fn derive_store_enum(
         quote! { #visibility enum #transposed_name #extension_impl_generics #extension_where_clause { #(#transposed_variants),* } }
     };
 
+    let sealed_trait_name = format_ident!("__{}StoreSealed", enum_name);
     let trait_tokens = extension_trait(
         visibility,
         &extension_trait_name,
+        &sealed_trait_name,
         &store_ty,
         &extension_impl_generics,
         &extension_ty_generics,
