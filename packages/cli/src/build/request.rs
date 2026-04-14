@@ -205,7 +205,6 @@ use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use itertools::Itertools;
 use krates::{cm::TargetKind, NodeId};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};

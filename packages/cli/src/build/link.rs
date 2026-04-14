@@ -1,14 +1,15 @@
+//! Hotpatching: Fat and Thin Linking
+//!
+//! This module implements the dance we need to perform around manually linking projects using dx itself.
+//! This is done by being the `RUSTC_WORKSPACE_WRAPPER` as well as `LINKER`. By intercepting both of these,
+//! we can perform various optimizations like persisting rustc arguments for hotpatching.
+
 use super::HotpatchModuleCache;
-use crate::BuildRequest;
 use crate::BuildArtifacts;
-use crate::{
-    BuildContext, Error,
-    LinkerFlavor, Result, RustcArgs, Workspace,
-};
+use crate::BuildRequest;
+use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use anyhow::{bail, ensure, Context};
 use itertools::Itertools;
-use rayon::prelude::ParallelIterator;
-use sha2::Digest;
 use std::ffi::OsString;
 use std::{
     collections::HashSet,
@@ -18,7 +19,7 @@ use std::{
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem};
-use tokio::{io::AsyncBufReadExt, process::Command};
+use tokio::process::Command;
 use uuid::Uuid;
 
 impl BuildRequest {
