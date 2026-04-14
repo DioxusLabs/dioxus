@@ -194,10 +194,13 @@
 //! - xbuild: <https://github.com/rust-mobile/xbuild/blob/master/xbuild/src/command/build.rs>
 
 use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AppManifest};
 use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, LinkAction, ObjectCache,
-    Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
+    opt::{process_file_to, AppManifest},
+    RustcArgSet,
+};
+use crate::{
+    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, LinkAction, Platform,
+    Renderer, Result, RustcArgs, TargetArgs, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
 use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
@@ -304,25 +307,15 @@ pub enum BuildMode {
         /// List of changed files causing this rebuild. Mostly used for diagnostics
         changed_files: Vec<PathBuf>,
 
-        /// Which workspace crates had source file changes in this edit.
-        changed_crates: Vec<String>,
-
         /// The ASLR slide of the running program, used to hardcode symbol jumps
         aslr_reference: u64,
 
         /// The captured RustcArgs for every crate in the workspace, collected by RUSTC_WORKSPACE_WRAPPER
         /// This is used for replaying rustc invocations for workspace hotpatching
-        workspace_rustc_args: HashMap<String, RustcArgs>,
-
-        /// Exact Cargo-produced artifact paths for workspace targets in the active scope.
-        /// This lets thin rebuilds reuse the precise rlib path instead of guessing the hash suffix.
-        artifact_paths: HashMap<String, PathBuf>,
+        workspace_rustc_args: RustcArgSet,
 
         /// Cumulative set of all workspace crates modified since the fat build.
         modified_crates: HashSet<String>,
-
-        /// Cache of compiled objects from previous thin builds, used by future re-linking
-        object_cache: ObjectCache,
 
         /// Cache of initial binary parsing which speeds up stub creation
         cache: Arc<HotpatchModuleCache>,
@@ -339,8 +332,7 @@ pub enum BuildMode {
 pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
     pub(crate) exe: PathBuf,
-    pub(crate) workspace_rustc_args: HashMap<String, RustcArgs>,
-    pub(crate) artifact_paths: HashMap<String, PathBuf>,
+    pub(crate) workspace_rustc_args: RustcArgSet,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AppManifest,
@@ -348,7 +340,6 @@ pub struct BuildArtifacts {
     pub(crate) patch_cache: Option<Arc<HotpatchModuleCache>>,
     pub(crate) depinfo: RustcDepInfo,
     pub(crate) build_id: BuildId,
-    pub(crate) object_cache: ObjectCache,
 }
 
 impl BuildRequest {
@@ -956,10 +947,6 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
-        // If we forget to do this, then we won't get the linker args since rust skips the full build
-        // We need to make sure to not react to this though, so the filemap must cache it
-        _ = self.bust_fingerprint(&ctx);
-
         // Run the cargo build to produce our artifacts.
         // For thin builds this also pre-compiles workspace dep crates before the tip.
         let mut artifacts = self.cargo_build(&ctx).await?;
@@ -1038,9 +1025,9 @@ impl BuildRequest {
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
-        // For thin builds, compile workspace dep crates before the tip.
-        // This updates dep rlibs on disk so cargo links the tip against fresh code.
-        let object_cache = self.compile_workspace_deps(ctx).await?;
+        // If we forget to do this, then we won't get the linker args since rust skips the full build
+        // We need to make sure to not react to this though, so the filemap must cache it
+        _ = self.bust_fingerprint(&ctx);
 
         // Extract the unit count of the crate graph so build_cargo has more accurate data
         // "Thin" builds only build the final exe, so we only need to build one crate
@@ -1159,7 +1146,6 @@ impl BuildRequest {
                         target_name,
                         artifact.fresh,
                     );
-                    // self.record_workspace_artifact_path(&mut artifact_paths, &artifact);
                     output_location = artifact.executable.map(Into::into);
                 }
 
@@ -1182,7 +1168,7 @@ impl BuildRequest {
         // Each workspace crate compiled through the wrapper has its own JSON file:
         // "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
         // "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
-        let mut workspace_rustc_args = HashMap::new();
+        let mut workspace_rustc_args = RustcArgSet::default();
         let args_dir = self.rustc_wrapper_args_dir();
         if let Ok(entries) = std::fs::read_dir(&args_dir) {
             for entry in entries.flatten() {
@@ -1202,7 +1188,7 @@ impl BuildRequest {
         tracing::trace!(
             "Loaded workspace rustc args from {}: keys={:?}",
             args_dir.display(),
-            workspace_rustc_args.keys().collect::<Vec<_>>(),
+            workspace_rustc_args.args.keys().collect::<Vec<_>>()
         );
 
         // If there's any warnings from the linker, we should print them out
@@ -1253,7 +1239,6 @@ impl BuildRequest {
             time_end,
             exe,
             workspace_rustc_args,
-            artifact_paths: Default::default(),
             time_start,
             assets,
             mode,
@@ -1261,137 +1246,7 @@ impl BuildRequest {
             root_dir: self.root_dir(),
             patch_cache: None,
             build_id: ctx.build_id,
-            object_cache,
         })
-    }
-
-    /// For thin builds, compile workspace dep crates BEFORE the tip crate.
-    ///
-    /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
-    /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
-    ///
-    /// Returns the updated `ObjectCache` — defaulting to empty for non-thin builds.
-    async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
-        ctx.profile_phase("Workspace precompile");
-
-        let BuildMode::Thin {
-            workspace_rustc_args,
-            artifact_paths,
-            changed_crates,
-            object_cache,
-            ..
-        } = &ctx.mode
-        else {
-            return Ok(ObjectCache::new(&self.session_cache_dir()));
-        };
-
-        let tip_name = self.tip_crate_name();
-        let mut object_cache = object_cache.clone();
-
-        // Compile workspace dep crates with cascade. Start with the explicitly changed dep
-        // crates (already in leaf-first order from handle_file_change). As we compile each,
-        // add the crate's workspace dependents so their rlibs have consistent SVH references.
-        let mut crates_to_compile: Vec<String> = changed_crates
-            .iter()
-            .filter(|c| *c != &tip_name)
-            .cloned()
-            .collect();
-        let mut compiled = HashSet::new();
-        let mut idx = 0;
-
-        while idx < crates_to_compile.len() {
-            let crate_name = crates_to_compile[idx].clone();
-            idx += 1;
-
-            if !compiled.insert(crate_name.clone()) || crate_name == tip_name {
-                continue;
-            }
-
-            let Some(rustc_args) = workspace_rustc_args.get(&format!("{crate_name}.lib")) else {
-                tracing::warn!("No captured rustc args for workspace crate {crate_name}, skipping");
-                continue;
-            };
-
-            tracing::debug!("Compiling workspace dep crate: {crate_name}");
-            self.compile_dep_crate(&crate_name, rustc_args)
-                .await
-                .with_context(|| format!("Failed to compile workspace dep crate '{crate_name}'"))?;
-
-            if let Some(rlib_path) =
-                self.find_rlib_for_crate(&crate_name, rustc_args, artifact_paths)
-            {
-                tracing::debug!(
-                    "Resolved workspace dep rlib: crate={crate_name} extra_filename={:?} path={}",
-                    Self::rustc_extra_filename(rustc_args),
-                    rlib_path.display()
-                );
-                if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
-                    tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
-                }
-            }
-
-            for dependent in self.workspace_dependents_of(&crate_name) {
-                if dependent != tip_name && !compiled.contains(&dependent) {
-                    tracing::debug!(
-                        "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
-                    );
-                    crates_to_compile.push(dependent);
-                }
-            }
-        }
-
-        // If the tip crate has a lib target (src/lib.rs + src/main.rs), compile it
-        // before the bin target so the bin links against the fresh lib rlib.
-        let lib_key = format!("{tip_name}.lib");
-        if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
-            let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args, artifact_paths);
-            let pre_modified = rlib_pre
-                .as_ref()
-                .and_then(|p| std::fs::metadata(p).ok())
-                .and_then(|m| m.modified().ok());
-
-            tracing::info!("Compiling tip lib target: {lib_key}");
-            if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
-                tracing::warn!("Failed to compile tip lib target: {e}");
-            } else if let Some(rlib_path) =
-                self.find_rlib_for_crate(&tip_name, lib_args, artifact_paths)
-            {
-                tracing::debug!(
-                    "Resolved tip lib rlib: crate={tip_name} extra_filename={:?} path={}",
-                    Self::rustc_extra_filename(lib_args),
-                    rlib_path.display()
-                );
-                let post_modified = std::fs::metadata(&rlib_path)
-                    .ok()
-                    .and_then(|m| m.modified().ok());
-                let rlib_changed = match (pre_modified, post_modified) {
-                    (Some(pre), Some(post)) => post > pre,
-                    _ => true,
-                };
-                tracing::info!(
-                    "Found lib rlib at: {} (modified={})",
-                    rlib_path.display(),
-                    rlib_changed,
-                );
-
-                match object_cache.cache_from_rlib(&lib_key, &rlib_path) {
-                    Ok(()) => {
-                        let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
-                        tracing::info!("Cached {count} objects from tip lib rlib");
-                    }
-                    Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
-                }
-            } else {
-                tracing::warn!("Could not find rlib for tip lib target {tip_name}");
-            }
-        } else {
-            tracing::debug!(
-                "No lib target for tip crate (key '{lib_key}' not in workspace_rustc_args, keys={:?})",
-                workspace_rustc_args.keys().collect::<Vec<_>>()
-            );
-        }
-
-        Ok(object_cache)
     }
 
     /// Collect assets and plugin metadata from the final executable in one pass
@@ -2823,141 +2678,6 @@ impl BuildRequest {
                 }
             })
             .collect()
-    }
-
-    /// Compile a workspace dependency crate directly with `rustc` using its captured args.
-    ///
-    /// This produces an updated rlib at the same path cargo originally wrote to.
-    /// Used during thin builds to recompile changed workspace deps before the tip crate.
-    async fn compile_dep_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<()> {
-        let mut cmd = Command::new("rustc");
-        cmd.current_dir(self.workspace_dir());
-        cmd.env_clear();
-
-        // Skip args[0] which is the rustc binary path captured by the wrapper
-        cmd.args(rustc_args.args[1..].iter());
-
-        // Restore the captured environment, filtering out wrapper env vars and
-        // stale cargo jobserver vars to prevent recursive invocation and warnings.
-        let filtered_env_keys = [
-            "RUSTC_WORKSPACE_WRAPPER",
-            "RUSTC_WRAPPER",
-            DX_RUSTC_WRAPPER_ENV_VAR,
-            "CARGO_MAKEFLAGS",
-            "MAKEFLAGS",
-        ];
-        cmd.envs(
-            rustc_args
-                .envs
-                .iter()
-                .filter(|(k, _)| !filtered_env_keys.contains(&k.as_str()))
-                .cloned(),
-        );
-
-        // Wasm hotpatches are linked as relocatable PIC modules, so replayed workspace crate
-        // compilations need to emit PIC-compatible objects too.
-        if self.is_wasm_or_wasi() {
-            cmd.arg("-Crelocation-model=pic");
-        }
-
-        let output = cmd.output().await?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("Failed to compile workspace dep crate '{crate_name}':\n{stderr}");
-        }
-
-        Ok(())
-    }
-
-    /// Find the rlib path for a workspace crate from its captured rustc args.
-    ///
-    /// Extracts `--out-dir` and `-C extra-filename` from the args to construct the exact
-    /// rlib filename. This is important because multiple rlibs for the same crate can coexist
-    /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
-    /// and globbing would return an arbitrary one.
-    fn find_rlib_for_crate(
-        &self,
-        crate_name: &str,
-        rustc_args: &RustcArgs,
-        artifact_paths: &HashMap<String, PathBuf>,
-    ) -> Option<PathBuf> {
-        if let Some(path) = artifact_paths.get(&format!("{crate_name}.lib")) {
-            if path.exists() {
-                return Some(path.clone());
-            }
-        }
-
-        // Extract --out-dir from the captured args
-        let out_dir = rustc_args
-            .args
-            .iter()
-            .zip(rustc_args.args.iter().skip(1))
-            .find(|(flag, _)| *flag == "--out-dir")
-            .map(|(_, dir)| PathBuf::from(dir))?;
-
-        // Extract -C extra-filename from captured args.
-        // Cargo passes this to rustc to disambiguate output filenames via metadata hash.
-        // Handle all forms: `-Cextra-filename=X`, `-C extra-filename=X`, and `-C` `extra-filename=X`.
-        let extra_filename = rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
-            arg.strip_prefix("-Cextra-filename=")
-                .map(|s| s.to_string())
-                .or_else(|| {
-                    // Handle `-C` followed by `extra-filename=X` as separate args
-                    if arg == "-C" {
-                        rustc_args.args.get(i + 1).and_then(|next| {
-                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
-                        })
-                    } else {
-                        None
-                    }
-                })
-        });
-
-        // If we have an exact extra-filename, construct the precise rlib path.
-        if let Some(extra) = &extra_filename {
-            let exact = out_dir.join(format!("lib{crate_name}{extra}.rlib"));
-            if exact.exists() {
-                return Some(exact);
-            }
-        }
-
-        // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
-        // This handles cases where -C extra-filename isn't in the captured args.
-        // Prefer the most recently modified rlib to avoid picking up stale artifacts.
-        let prefix = format!("lib{crate_name}-");
-        let entries = std::fs::read_dir(&out_dir).ok()?;
-        let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
-        for entry in entries.flatten() {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.starts_with(&prefix) && name.ends_with(".rlib") {
-                    let mtime = entry.metadata().ok()?.modified().ok()?;
-                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
-                        best = Some((entry.path(), mtime));
-                    }
-                }
-            }
-        }
-        if let Some((path, _)) = best {
-            return Some(path);
-        }
-
-        None
-    }
-
-    fn rustc_extra_filename(rustc_args: &RustcArgs) -> Option<String> {
-        rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
-            arg.strip_prefix("-Cextra-filename=")
-                .map(|s| s.to_string())
-                .or_else(|| {
-                    if arg == "-C" {
-                        rustc_args.args.get(i + 1).and_then(|next| {
-                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
-                        })
-                    } else {
-                        None
-                    }
-                })
-        })
     }
 
     /// Write out the manganis ffi plugins that we support

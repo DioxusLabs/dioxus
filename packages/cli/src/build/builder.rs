@@ -1,9 +1,8 @@
-use crate::{
-    build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
-    BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
-    StructuredOutput,
-};
 use crate::{opt::process_file_to, BuildPhaseProfile};
+use crate::{
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, StructuredOutput,
+};
 use anyhow::{bail, Context, Error};
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
@@ -110,9 +109,6 @@ pub(crate) struct AppBuilder {
     /// Each patch includes objects from ALL crates in this set.
     pub modified_crates: HashSet<String>,
 
-    /// Cache of the latest `.rcgu.o` files for each modified workspace crate.
-    pub object_cache: ObjectCache,
-
     /// The build profiling spans for us to generate a flamegraph from.
     pub profile_spans: Vec<BuildPhaseProfile>,
 }
@@ -172,7 +168,6 @@ impl AppBuilder {
             patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
-            object_cache: ObjectCache::new(&request.session_cache_dir()),
             profile_spans: Vec::new(),
         })
     }
@@ -447,13 +442,10 @@ impl AppBuilder {
                 self.tx.clone(),
                 BuildMode::Thin {
                     changed_files,
-                    changed_crates,
                     modified_crates: self.modified_crates.clone(),
                     workspace_rustc_args: artifacts.workspace_rustc_args,
-                    artifact_paths: artifacts.artifact_paths,
                     aslr_reference,
                     cache,
-                    object_cache: self.object_cache.clone(),
                 },
                 build_id,
             );
@@ -472,7 +464,6 @@ impl AppBuilder {
         // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
         self.modified_crates.clear();
         self.profile_spans.clear();
-        self.object_cache = ObjectCache::new(&self.build.session_cache_dir());
         self.build_task = tokio::spawn({
             let request = self.build.clone();
             let tx = self.tx.clone();
@@ -648,7 +639,7 @@ impl AppBuilder {
         if let Some(args) = self
             .artifacts
             .as_ref()
-            .and_then(|artifacts| artifacts.workspace_rustc_args.values().next())
+            .and_then(|artifacts| artifacts.workspace_rustc_args.args.values().next())
         {
             for (key, value) in args.envs.iter().cloned() {
                 if key.starts_with("CARGO_") {
@@ -903,9 +894,6 @@ impl AppBuilder {
 
         // Commit this patch
         self.patches.push(jump_table.clone());
-
-        // Sync the updated object cache back from the build artifacts.
-        self.object_cache = res.object_cache.clone();
 
         Ok(jump_table)
     }

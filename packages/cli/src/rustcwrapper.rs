@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env::{args, vars},
     path::PathBuf,
     process::ExitCode,
@@ -24,11 +25,78 @@ pub fn is_wrapping_rustc() -> bool {
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RustcArgSet {
+    pub args: HashMap<String, RustcArgs>,
+}
+
+impl RustcArgSet {
+    pub(crate) fn insert(&mut self, format: String, link_args: RustcArgs) -> Option<RustcArgs> {
+        self.args.insert(format, link_args)
+    }
+
+    pub(crate) fn get(&self, format: &str) -> Option<&RustcArgs> {
+        self.args.get(format)
+    }
+
+    pub(crate) fn get_mut(&mut self, tip_bin_key: &str) -> Option<&mut RustcArgs> {
+        self.args.get_mut(tip_bin_key)
+    }
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
-    /// it doesn't include first program name argument
+
+    /// note: it doesn't include first program name argument
     pub link_args: Vec<String>,
+}
+
+/// Run rustc directly, but output the result to a per-crate file in the args directory.
+///
+/// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
+pub fn run_rustc() -> ExitCode {
+    let args_dir: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
+        .expect("DX_RUSTC env var must be set")
+        .into();
+
+    // Cargo invokes a workspace wrapper like: `wrapper-name rustc [args...]`
+    // We skip our own executable name (`wrapper-name`) to get the args passed to us.
+    let captured_args = args().skip(1).collect::<Vec<_>>();
+
+    let rustc_args = RustcArgs {
+        args: captured_args.clone(),
+        envs: vars().collect::<_>(),
+        link_args: Default::default(),
+    };
+
+    // Always persist the captured rustc invocation, even for link steps.
+    // The tip crate's bin target is typically only observed during the final link invocation,
+    // so returning early before writing would lose the exact args/envs we need for fat-link replay.
+    write_rustc_args(&args_dir, &rustc_args);
+
+    // If we are being asked to link, delegate to the linker action after capturing.
+    if has_linking_args() {
+        return crate::link::LinkAction::from_env()
+            .expect("Linker action not found")
+            .run_link();
+    }
+
+    // Run the actual rustc command.
+    // We want all stdout/stderr to be inherited, so the user sees the compiler output.
+    let mut cmd = std::process::Command::new("rustc");
+
+    // The first argument in `captured_args` is the rustc path, which we need to skip
+    // when passing arguments to the `rustc` command we are spawning.
+    cmd.args(captured_args.iter().skip(1));
+    cmd.envs(rustc_args.envs);
+    cmd.stdout(std::process::Stdio::inherit());
+    cmd.stderr(std::process::Stdio::inherit());
+    cmd.current_dir(std::env::current_dir().expect("Failed to get current dir"));
+
+    // Spawn the process and propagate its exit code.
+    let status = cmd.status().expect("Failed to execute rustc command");
+    std::process::exit(status.code().unwrap_or(1)); // Exit with 1 if process was killed by signal
 }
 
 fn write_rustc_args(args_dir: &PathBuf, rustc_args: &RustcArgs) {
@@ -105,51 +173,4 @@ fn has_linking_args() -> bool {
     }
 
     false
-}
-
-/// Run rustc directly, but output the result to a per-crate file in the args directory.
-///
-/// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
-pub fn run_rustc() -> ExitCode {
-    let args_dir: PathBuf = std::env::var(DX_RUSTC_WRAPPER_ENV_VAR)
-        .expect("DX_RUSTC env var must be set")
-        .into();
-
-    // Cargo invokes a workspace wrapper like: `wrapper-name rustc [args...]`
-    // We skip our own executable name (`wrapper-name`) to get the args passed to us.
-    let captured_args = args().skip(1).collect::<Vec<_>>();
-
-    let rustc_args = RustcArgs {
-        args: captured_args.clone(),
-        envs: vars().collect::<_>(),
-        link_args: Default::default(),
-    };
-
-    // Always persist the captured rustc invocation, even for link steps.
-    // The tip crate's bin target is typically only observed during the final link invocation,
-    // so returning early before writing would lose the exact args/envs we need for fat-link replay.
-    write_rustc_args(&args_dir, &rustc_args);
-
-    // If we are being asked to link, delegate to the linker action after capturing.
-    if has_linking_args() {
-        return crate::link::LinkAction::from_env()
-            .expect("Linker action not found")
-            .run_link();
-    }
-
-    // Run the actual rustc command.
-    // We want all stdout/stderr to be inherited, so the user sees the compiler output.
-    let mut cmd = std::process::Command::new("rustc");
-
-    // The first argument in `captured_args` is the rustc path, which we need to skip
-    // when passing arguments to the `rustc` command we are spawning.
-    cmd.args(captured_args.iter().skip(1));
-    cmd.envs(rustc_args.envs);
-    cmd.stdout(std::process::Stdio::inherit());
-    cmd.stderr(std::process::Stdio::inherit());
-    cmd.current_dir(std::env::current_dir().expect("Failed to get current dir"));
-
-    // Spawn the process and propagate its exit code.
-    let status = cmd.status().expect("Failed to execute rustc command");
-    std::process::exit(status.code().unwrap_or(1)); // Exit with 1 if process was killed by signal
 }

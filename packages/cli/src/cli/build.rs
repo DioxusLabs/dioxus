@@ -215,9 +215,10 @@ impl BuildArtifacts {
         // (only the tip crate has link_args attached) or fall back to any entry.
         let tip_args = self
             .workspace_rustc_args
+            .args
             .values()
             .find(|a| !a.link_args.is_empty())
-            .or_else(|| self.workspace_rustc_args.values().next())
+            .or_else(|| self.workspace_rustc_args.args.values().next())
             .cloned()
             .unwrap_or_default();
 

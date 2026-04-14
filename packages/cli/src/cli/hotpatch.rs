@@ -1,6 +1,6 @@
 use crate::{
     platform_override::CommandWithPlatformOverrides, AppBuilder, BuildArgs, BuildId, BuildMode,
-    HotpatchModuleCache, Result, StructuredOutput,
+    HotpatchModuleCache, Result, RustcArgSet, StructuredOutput,
 };
 use anyhow::Context;
 use clap::Parser;
@@ -71,7 +71,7 @@ impl HotpatchTip {
         let cache = Arc::new(HotpatchModuleCache::new(&exe, &request.triple)?);
 
         let tip_crate_name = request.main_target.replace('-', "_");
-        let mut workspace_rustc_args = HashMap::new();
+        let mut workspace_rustc_args = RustcArgSet::default();
         workspace_rustc_args.insert(
             format!("{tip_crate_name}.bin"),
             crate::RustcArgs {
@@ -83,13 +83,10 @@ impl HotpatchTip {
 
         let mode = BuildMode::Thin {
             workspace_rustc_args,
-            artifact_paths: HashMap::new(),
             changed_files: vec![],
-            changed_crates: vec![],
             modified_crates: std::collections::HashSet::new(),
             aslr_reference: self.aslr_reference,
             cache: cache.clone(),
-            object_cache: crate::ObjectCache::new(&request.session_cache_dir()),
         };
 
         let artifacts = AppBuilder::started(request, mode, build_id)?

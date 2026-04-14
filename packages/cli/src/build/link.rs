@@ -3,19 +3,36 @@
 //! This module implements the dance we need to perform around manually linking projects using dx itself.
 //! This is done by being the `RUSTC_WORKSPACE_WRAPPER` as well as `LINKER`. By intercepting both of these,
 //! we can perform various optimizations like persisting rustc arguments for hotpatching.
+//!
+//! The flow looks like this
+//! - bust fingerprint for tip of crate to ensure we always get final linker invocation
+//! - run build, intercepting with wrapper, dumping rustc args to disk
+//! - read dumped rustc args into a local cache for the given build under artifacts
+//! - track changed crates
+//! - for each changed crate, re-run the direct rustc invocation all the way to the tip
+//! - relink the rlib set with the `.o` from the tip -> final binary
+//!
+//! source of truth is the read-out of the link args after the initial build
 
 use super::HotpatchModuleCache;
-use crate::BuildArtifacts;
-use crate::BuildRequest;
+use crate::{BuildArtifacts, BuildMode};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
+use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
 use anyhow::{bail, ensure, Context};
 use itertools::Itertools;
-use std::ffi::OsString;
+use krates::{cm::TargetKind, NodeId};
+use serde::Serialize;
+use sha1::Digest;
+use sha2::Sha256;
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
+};
+use std::{
+    collections::{HashMap, VecDeque},
+    ffi::OsString,
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem};
@@ -23,6 +40,174 @@ use tokio::process::Command;
 use uuid::Uuid;
 
 impl BuildRequest {
+    // /// For thin builds, compile workspace dep crates BEFORE the tip crate.
+    // ///
+    // /// This updates dep rlibs on disk so cargo links the tip against fresh code. Handles cascade
+    // /// (recompiling workspace dependents for SVH consistency) and lib+bin tip targets.
+    // ///
+    // /// Returns the updated `ObjectCache` — defaulting to empty for non-thin builds.
+    // pub async fn compile_workspace_deps(&self, ctx: &BuildContext) -> Result<ObjectCache> {
+    // ctx.profile_phase("Workspace precompile");
+
+    // let BuildMode::Thin {
+    //     workspace_rustc_args,
+    //     changed_crates,
+    //     object_cache,
+    //     ..
+    // } = &ctx.mode
+    // else {
+    //     return Ok(ObjectCache::new(&self.session_cache_dir()));
+    // };
+
+    // let tip_name = self.tip_crate_name();
+    // let mut object_cache = object_cache.clone();
+
+    // // Compile workspace dep crates with cascade. Start with the explicitly changed dep
+    // // crates (already in leaf-first order from handle_file_change). As we compile each,
+    // // add the crate's workspace dependents so their rlibs have consistent SVH references.
+    // let mut crates_to_compile: Vec<String> = changed_crates
+    //     .iter()
+    //     .filter(|c| *c != &tip_name)
+    //     .cloned()
+    //     .collect();
+    // let mut compiled = HashSet::new();
+    // let mut idx = 0;
+
+    // while idx < crates_to_compile.len() {
+    //     let crate_name = crates_to_compile[idx].clone();
+    //     idx += 1;
+
+    //     if !compiled.insert(crate_name.clone()) || crate_name == tip_name {
+    //         continue;
+    //     }
+
+    //     let Some(rustc_args) = workspace_rustc_args.get(&format!("{crate_name}.lib")) else {
+    //         tracing::warn!("No captured rustc args for workspace crate {crate_name}, skipping");
+    //         continue;
+    //     };
+
+    //     tracing::debug!("Compiling workspace dep crate: {crate_name}");
+    //     self.compile_dep_crate(&crate_name, rustc_args)
+    //         .await
+    //         .with_context(|| format!("Failed to compile workspace dep crate '{crate_name}'"))?;
+
+    //     if let Some(rlib_path) = self.find_rlib_for_crate(&crate_name, rustc_args) {
+    //         tracing::debug!(
+    //             "Resolved workspace dep rlib: crate={crate_name} extra_filename={:?} path={}",
+    //             Self::rustc_extra_filename(rustc_args),
+    //             rlib_path.display()
+    //         );
+    //         if let Err(e) = object_cache.cache_from_rlib(&crate_name, &rlib_path) {
+    //             tracing::warn!("Failed to cache objects from rlib for {crate_name}: {e}");
+    //         }
+    //     }
+
+    //     for dependent in self.workspace_dependents_of(&crate_name) {
+    //         if dependent != tip_name && !compiled.contains(&dependent) {
+    //             tracing::debug!(
+    //                 "Cascade: recompiling {dependent} (depends on recompiled {crate_name})"
+    //             );
+    //             crates_to_compile.push(dependent);
+    //         }
+    //     }
+    // }
+
+    // // If the tip crate has a lib target (src/lib.rs + src/main.rs), compile it
+    // // before the bin target so the bin links against the fresh lib rlib.
+    // let lib_key = format!("{tip_name}.lib");
+    // if let Some(lib_args) = workspace_rustc_args.get(&lib_key) {
+    //     let rlib_pre = self.find_rlib_for_crate(&tip_name, lib_args);
+    //     let pre_modified = rlib_pre
+    //         .as_ref()
+    //         .and_then(|p| std::fs::metadata(p).ok())
+    //         .and_then(|m| m.modified().ok());
+
+    //     tracing::info!("Compiling tip lib target: {lib_key}");
+    //     if let Err(e) = self.compile_dep_crate(&tip_name, lib_args).await {
+    //         tracing::warn!("Failed to compile tip lib target: {e}");
+    //     } else if let Some(rlib_path) = self.find_rlib_for_crate(&tip_name, lib_args) {
+    //         tracing::debug!(
+    //             "Resolved tip lib rlib: crate={tip_name} extra_filename={:?} path={}",
+    //             Self::rustc_extra_filename(lib_args),
+    //             rlib_path.display()
+    //         );
+    //         let post_modified = std::fs::metadata(&rlib_path)
+    //             .ok()
+    //             .and_then(|m| m.modified().ok());
+    //         let rlib_changed = match (pre_modified, post_modified) {
+    //             (Some(pre), Some(post)) => post > pre,
+    //             _ => true,
+    //         };
+    //         tracing::info!(
+    //             "Found lib rlib at: {} (modified={})",
+    //             rlib_path.display(),
+    //             rlib_changed,
+    //         );
+
+    //         match object_cache.cache_from_rlib(&lib_key, &rlib_path) {
+    //             Ok(()) => {
+    //                 let count = object_cache.get(&lib_key).map(|v| v.len()).unwrap_or(0);
+    //                 tracing::info!("Cached {count} objects from tip lib rlib");
+    //             }
+    //             Err(e) => tracing::warn!("Failed to cache tip lib objects: {e}"),
+    //         }
+    //     } else {
+    //         tracing::warn!("Could not find rlib for tip lib target {tip_name}");
+    //     }
+    // } else {
+    //     tracing::debug!(
+    //         "No lib target for tip crate (key '{lib_key}' not in workspace_rustc_args, keys={:?})",
+    //         workspace_rustc_args.keys().collect::<Vec<_>>()
+    //     );
+    // }
+
+    // Ok(object_cache)
+    // }
+
+    /// Compile a workspace dependency crate directly with `rustc` using its captured args.
+    ///
+    /// This produces an updated rlib at the same path cargo originally wrote to.
+    /// Used during thin builds to recompile changed workspace deps before the tip crate.
+    async fn compile_dep_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<()> {
+        let mut cmd = Command::new("rustc");
+        cmd.current_dir(self.workspace_dir());
+        cmd.env_clear();
+
+        // Skip args[0] which is the rustc binary path captured by the wrapper
+        cmd.args(rustc_args.args[1..].iter());
+
+        // Restore the captured environment, filtering out wrapper env vars and
+        // stale cargo jobserver vars to prevent recursive invocation and warnings.
+        let filtered_env_keys = [
+            "RUSTC_WORKSPACE_WRAPPER",
+            "RUSTC_WRAPPER",
+            DX_RUSTC_WRAPPER_ENV_VAR,
+            "CARGO_MAKEFLAGS",
+            "MAKEFLAGS",
+        ];
+        cmd.envs(
+            rustc_args
+                .envs
+                .iter()
+                .filter(|(k, _)| !filtered_env_keys.contains(&k.as_str()))
+                .cloned(),
+        );
+
+        // Wasm hotpatches are linked as relocatable PIC modules, so replayed workspace crate
+        // compilations need to emit PIC-compatible objects too.
+        if self.is_wasm_or_wasi() {
+            cmd.arg("-Crelocation-model=pic");
+        }
+
+        let output = cmd.output().await?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("Failed to compile workspace dep crate '{crate_name}':\n{stderr}");
+        }
+
+        Ok(())
+    }
+
     /// Run our custom linker setup to generate a patch file in the right location
     ///
     /// This should be the only case where the cargo output is a "dummy" file and requires us to
@@ -57,7 +242,11 @@ impl BuildRequest {
                 format!(
                     "Missing rustc args for tip bin target '{tip_bin_key}' \
                      (available keys: {:?})",
-                    artifacts.workspace_rustc_args.keys().collect::<Vec<_>>()
+                    artifacts
+                        .workspace_rustc_args
+                        .args
+                        .keys()
+                        .collect::<Vec<_>>()
                 )
             })?;
 
@@ -68,29 +257,29 @@ impl BuildRequest {
             .filter(|arg| arg.ends_with(".rcgu.o"))
             .map(PathBuf::from)
             .collect();
-        if !tip_object_paths.is_empty() {
-            artifacts
-                .object_cache
-                .cache_from_paths(&tip_name, &tip_object_paths)
-                .context("Failed to cache objs during patch")?;
-        }
+        // if !tip_object_paths.is_empty() {
+        //     artifacts
+        //         .object_cache
+        //         .cache_from_paths(&tip_name, &tip_object_paths)
+        //         .context("Failed to cache objs during patch")?;
+        // }
 
-        // Collect cached object paths from all modified dep crates.
-        // Objects are already on disk in the object cache directory.
-        // These must NOT be deleted after linking — they persist across patches.
-        ctx.profile_phase("Patch: Gather Objects");
-        let mut cached_objects: Vec<PathBuf> = Vec::new();
-        for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
-            if let Some(paths) = artifacts.object_cache.get(dep_name) {
-                cached_objects.extend(paths.iter().cloned());
-            }
-        }
+        // // Collect cached object paths from all modified dep crates.
+        // // Objects are already on disk in the object cache directory.
+        // // These must NOT be deleted after linking — they persist across patches.
+        // ctx.profile_phase("Patch: Gather Objects");
+        // let mut cached_objects: Vec<PathBuf> = Vec::new();
+        // for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
+        //     if let Some(paths) = artifacts.object_cache.get(dep_name) {
+        //         cached_objects.extend(paths.iter().cloned());
+        //     }
+        // }
 
-        // If the tip has a lib target (lib+bin crate), include its cached objects too.
-        let lib_key = format!("{tip_name}.lib");
-        if let Some(paths) = artifacts.object_cache.get(&lib_key) {
-            cached_objects.extend(paths.iter().cloned());
-        }
+        // // If the tip has a lib target (lib+bin crate), include its cached objects too.
+        // let lib_key = format!("{tip_name}.lib");
+        // if let Some(paths) = artifacts.object_cache.get(&lib_key) {
+        //     cached_objects.extend(paths.iter().cloned());
+        // }
 
         // Extract out the incremental object files.
         //
@@ -156,10 +345,10 @@ impl BuildRequest {
             .collect();
 
         // Merge both sets for the linker.
-        let mut object_files: Vec<PathBuf> =
-            Vec::with_capacity(cached_objects.len() + temp_objects.len());
-        object_files.append(&mut cached_objects);
+        let mut object_files: Vec<PathBuf> = vec![];
         object_files.extend(temp_objects.iter().cloned());
+        //     Vec::with_capacity(cached_objects.len() + temp_objects.len());
+        // object_files.append(&mut cached_objects);
 
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
         // fat binary into direct addresses from the running process.
@@ -1012,5 +1201,196 @@ impl BuildRequest {
         };
 
         Ok(cc)
+    }
+
+    fn rustc_extra_filename(rustc_args: &RustcArgs) -> Option<String> {
+        rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
+            arg.strip_prefix("-Cextra-filename=")
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    if arg == "-C" {
+                        rustc_args.args.get(i + 1).and_then(|next| {
+                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
+                        })
+                    } else {
+                        None
+                    }
+                })
+        })
+    }
+
+    /// Find the rlib path for a workspace crate from its captured rustc args.
+    ///
+    /// Extracts `--out-dir` and `-C extra-filename` from the args to construct the exact
+    /// rlib filename. This is important because multiple rlibs for the same crate can coexist
+    /// in the deps directory (e.g., from different dx builds that produce different `-C metadata`),
+    /// and globbing would return an arbitrary one.
+    fn find_rlib_for_crate(
+        &self,
+        crate_name: &str,
+        rustc_args: &RustcArgs,
+        // artifact_paths: &HashMap<String, PathBuf>,
+    ) -> Option<PathBuf> {
+        // if let Some(path) = artifact_paths.get(&format!("{crate_name}.lib")) {
+        //     if path.exists() {
+        //         return Some(path.clone());
+        //     }
+        // }
+
+        // Extract --out-dir from the captured args
+        let out_dir = rustc_args
+            .args
+            .iter()
+            .zip(rustc_args.args.iter().skip(1))
+            .find(|(flag, _)| *flag == "--out-dir")
+            .map(|(_, dir)| PathBuf::from(dir))?;
+
+        // Extract -C extra-filename from captured args.
+        // Cargo passes this to rustc to disambiguate output filenames via metadata hash.
+        // Handle all forms: `-Cextra-filename=X`, `-C extra-filename=X`, and `-C` `extra-filename=X`.
+        let extra_filename = rustc_args.args.iter().enumerate().find_map(|(i, arg)| {
+            arg.strip_prefix("-Cextra-filename=")
+                .map(|s| s.to_string())
+                .or_else(|| {
+                    // Handle `-C` followed by `extra-filename=X` as separate args
+                    if arg == "-C" {
+                        rustc_args.args.get(i + 1).and_then(|next| {
+                            next.strip_prefix("extra-filename=").map(|s| s.to_string())
+                        })
+                    } else {
+                        None
+                    }
+                })
+        });
+
+        // If we have an exact extra-filename, construct the precise rlib path.
+        if let Some(extra) = &extra_filename {
+            let exact = out_dir.join(format!("lib{crate_name}{extra}.rlib"));
+            if exact.exists() {
+                return Some(exact);
+            }
+        }
+
+        // Fallback: glob for lib<crate_name>-<hash>.rlib in the output directory.
+        // This handles cases where -C extra-filename isn't in the captured args.
+        // Prefer the most recently modified rlib to avoid picking up stale artifacts.
+        let prefix = format!("lib{crate_name}-");
+        let entries = std::fs::read_dir(&out_dir).ok()?;
+        let mut best: Option<(PathBuf, std::time::SystemTime)> = None;
+        for entry in entries.flatten() {
+            if let Some(name) = entry.file_name().to_str() {
+                if name.starts_with(&prefix) && name.ends_with(".rlib") {
+                    let mtime = entry.metadata().ok()?.modified().ok()?;
+                    if best.as_ref().is_none_or(|(_, t)| mtime > *t) {
+                        best = Some((entry.path(), mtime));
+                    }
+                }
+            }
+        }
+        if let Some((path, _)) = best {
+            return Some(path);
+        }
+
+        None
+    }
+
+    /// with our hotpatching setup since it uses linker interception.
+    ///
+    /// This is sadly a hack. I think there might be other ways of busting the fingerprint (rustc wrapper?)
+    /// but that would require relying on cargo internals.
+    ///
+    /// This might stop working if/when cargo stabilizes contents-based fingerprinting.
+    ///
+    /// `dx` compiles everything with `--target` which ends up with a structure like:
+    /// `target/<triple>/<profile>/.fingerprint/<package_name>-<hash>`
+    ///
+    /// Normally you can't rely on this structure (ie with `cargo build`) but the explicit
+    /// target arg guarantees this will work.
+    ///
+    /// Each binary target has a fingerprinted location which we place under
+    /// `target/dx/.args/name-hash.lib.json`
+    ///
+    /// The hash includes the various args profile info that provide entropy to disambiguate the crate.
+    /// You might see `.args/serde-123.lib.json` in the same folder as `.args/serde-456.json` because
+    /// they might have different config flags, different target triples, different opt levels, etc.
+    pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
+        // Only bust fingerpint when doing builds
+        if !matches!(ctx.mode, BuildMode::Fat) {
+            return Ok(());
+        }
+
+        // split at the last `-` used to separate the hash from the name
+        // This causes to more aggressively bust hashes for all combinations of features
+        // and fingerprints for this package since we're just ignoring the hash
+        for entry in std::fs::read_dir(&self.cargo_fingeprint_dir())?.flatten() {
+            if let Some(fname) = entry.file_name().to_str() {
+                if let Some((name, _)) = fname.rsplit_once('-') {
+                    if name == self.package().name {
+                        _ = std::fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn rustc_wrapper_capture_mode(&self, build_mode: &BuildMode) -> &'static str {
+        match build_mode {
+            BuildMode::Fat => "fat",
+            BuildMode::Base { run: true } => "base-run",
+            BuildMode::Base { run: false } => "base",
+            BuildMode::Thin { .. } => "thin",
+        }
+    }
+
+    pub fn rustc_wrapper_scope_dir_name(&self, build_mode: &BuildMode) -> Result<String> {
+        #[derive(Debug, Serialize)]
+        struct RustcWrapperScope {
+            version: u8,
+            capture_mode: &'static str,
+            bundle: String,
+            triple: String,
+            profile: String,
+            package: String,
+            main_target: String,
+            executable_type: String,
+            rustc_version: String,
+            features: Vec<String>,
+            all_features: bool,
+            rustflags: Vec<String>,
+            extra_cargo_args: Vec<String>,
+            extra_rustc_args: Vec<String>,
+        }
+
+        let scope = RustcWrapperScope {
+            version: 1,
+            capture_mode: self.rustc_wrapper_capture_mode(build_mode),
+            bundle: self.bundle.to_string(),
+            triple: self.triple.to_string(),
+            profile: self.profile.clone(),
+            package: self.package.clone(),
+            main_target: self.main_target.clone(),
+            executable_type: format!("{:?}", self.executable_type()),
+            rustc_version: self.workspace.rustc_version.clone(),
+            features: self.features.clone(),
+            all_features: self.all_features,
+            rustflags: self.rustflags.flags.clone(),
+            extra_cargo_args: self.extra_cargo_args.clone(),
+            extra_rustc_args: self.extra_rustc_args.clone(),
+        };
+
+        let encoded =
+            serde_json::to_vec(&scope).context("Failed to serialize rustc wrapper scope")?;
+        let mut hasher = Sha256::new();
+        hasher.update(encoded);
+        let scope_hash = format!("{:x}", hasher.finalize());
+        Ok(format!(
+            "scope-v{}-{}-{}-{}",
+            scope.version,
+            scope.capture_mode,
+            self.tip_crate_name(),
+            &scope_hash[..16]
+        ))
     }
 }
