@@ -6,6 +6,40 @@ use std::{
     process::ExitCode,
 };
 
+/// A "capture" of a workspace, cumulated from the workspace set
+#[derive(Clone, Debug, PartialEq)]
+pub struct RustcArgSet {
+    pub link_args: Vec<String>,
+    pub rustc_args: HashMap<String, RustcArgs>,
+}
+
+impl RustcArgSet {
+    pub fn new(link_args: Vec<String>) -> Self {
+        Self {
+            link_args,
+            rustc_args: Default::default(),
+        }
+    }
+
+    pub(crate) fn insert(&mut self, format: String, link_args: RustcArgs) -> Option<RustcArgs> {
+        self.rustc_args.insert(format, link_args)
+    }
+
+    pub(crate) fn get(&self, format: &str) -> Option<&RustcArgs> {
+        self.rustc_args.get(format)
+    }
+
+    pub(crate) fn get_mut(&mut self, tip_bin_key: &str) -> Option<&mut RustcArgs> {
+        self.rustc_args.get_mut(tip_bin_key)
+    }
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RustcArgs {
+    pub args: Vec<String>,
+    pub envs: Vec<(String, String)>,
+}
+
 /// The environment variable indicating where the args directory is located.
 ///
 /// When `dx-rustc` runs, it writes each workspace crate's arguments to a
@@ -24,34 +58,6 @@ pub fn is_wrapping_rustc() -> bool {
     std::env::var(DX_RUSTC_WRAPPER_ENV_VAR).is_ok()
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RustcArgSet {
-    pub args: HashMap<String, RustcArgs>,
-}
-
-impl RustcArgSet {
-    pub(crate) fn insert(&mut self, format: String, link_args: RustcArgs) -> Option<RustcArgs> {
-        self.args.insert(format, link_args)
-    }
-
-    pub(crate) fn get(&self, format: &str) -> Option<&RustcArgs> {
-        self.args.get(format)
-    }
-
-    pub(crate) fn get_mut(&mut self, tip_bin_key: &str) -> Option<&mut RustcArgs> {
-        self.args.get_mut(tip_bin_key)
-    }
-}
-
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct RustcArgs {
-    pub args: Vec<String>,
-    pub envs: Vec<(String, String)>,
-
-    /// note: it doesn't include first program name argument
-    pub link_args: Vec<String>,
-}
-
 /// Run rustc directly, but output the result to a per-crate file in the args directory.
 ///
 /// <https://doc.rust-lang.org/cargo/reference/config.html#buildrustc>
@@ -67,7 +73,6 @@ pub fn run_rustc() -> ExitCode {
     let rustc_args = RustcArgs {
         args: captured_args.clone(),
         envs: vars().collect::<_>(),
-        link_args: Default::default(),
     };
 
     // Always persist the captured rustc invocation, even for link steps.

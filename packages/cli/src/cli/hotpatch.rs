@@ -71,13 +71,12 @@ impl HotpatchTip {
         let cache = Arc::new(HotpatchModuleCache::new(&exe, &request.triple)?);
 
         let tip_crate_name = request.main_target.replace('-', "_");
-        let mut workspace_rustc_args = RustcArgSet::default();
+        let mut workspace_rustc_args = RustcArgSet::new(link_args);
         workspace_rustc_args.insert(
             format!("{tip_crate_name}.bin"),
             crate::RustcArgs {
                 args: rustc_args,
                 envs: rustc_envs,
-                link_args,
             },
         );
 

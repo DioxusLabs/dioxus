@@ -332,7 +332,7 @@ pub enum BuildMode {
 pub struct BuildArtifacts {
     pub(crate) root_dir: PathBuf,
     pub(crate) exe: PathBuf,
-    pub(crate) workspace_rustc_args: RustcArgSet,
+    pub(crate) workspace_rustc: RustcArgSet,
     pub(crate) time_start: SystemTime,
     pub(crate) time_end: SystemTime,
     pub(crate) assets: AppManifest,
@@ -1022,6 +1022,8 @@ impl BuildRequest {
     ///
     /// This method needs to be very careful with processing output since errors being swallowed will
     /// be very confusing to the user.
+    ///
+    /// This method is only meant to be run by fat/full builds - not by hotpatch builds
     async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
@@ -1055,19 +1057,6 @@ impl BuildRequest {
         let mut stderr = stderr.lines();
         let mut units_compiled = 0;
         let mut emitting_error = false;
-
-        // let (args_dir, mut workspace_rustc_args, mut artifact_paths) = match &ctx.mode {
-        //     BuildMode::Thin {
-        //         workspace_rustc_args,
-        //         artifact_paths,
-        //         ..
-        //     } => (None, workspace_rustc_args.clone(), artifact_paths.clone()),
-        //     _ => {
-        //         let args_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
-        //         let workspace_rustc_args = self.load_workspace_rustc_args_from_dir(&args_dir);
-        //         (Some(args_dir), workspace_rustc_args, HashMap::new())
-        //     }
-        // };
 
         loop {
             use cargo_metadata::Message;
@@ -1164,11 +1153,67 @@ impl BuildRequest {
             }
         }
 
-        // Load per-crate rustc args from the wrapper directory.
-        // Each workspace crate compiled through the wrapper has its own JSON file:
-        // "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
-        // "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
-        let mut workspace_rustc_args = RustcArgSet::default();
+        // If there's any warnings from the linker, we should print them out
+        self.print_linker_warnings(&output_location);
+
+        // Load the captured rustc args from the rustc_workspace_wrapper
+        let workspace_rustc_args = self.load_rustc_argset()?;
+
+        // Ensure the final exe exists - throw if it doesn't
+        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
+
+        // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
+        if matches!(ctx.mode, BuildMode::Fat) {
+            self.run_fat_link(ctx, &exe, &workspace_rustc_args).await?;
+        }
+
+        // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
+        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
+
+        let time_end = SystemTime::now();
+        let mode = ctx.mode.clone();
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
+
+        Ok(BuildArtifacts {
+            time_end,
+            exe,
+            workspace_rustc: workspace_rustc_args,
+            time_start,
+            assets,
+            mode,
+            depinfo,
+            root_dir: self.root_dir(),
+            patch_cache: None,
+            build_id: ctx.build_id,
+        })
+    }
+
+    fn print_linker_warnings(&self, exe_output_location: &Option<PathBuf>) {
+        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
+            if !linker_warnings.is_empty() {
+                if exe_output_location.is_none() {
+                    tracing::error!("Linker warnings: {}", linker_warnings);
+                } else {
+                    tracing::debug!("Linker warnings: {}", linker_warnings);
+                }
+            }
+        }
+    }
+
+    /// Load per-crate rustc args from the wrapper directory.
+    ///
+    /// Each workspace crate compiled through the wrapper has its own JSON file:
+    /// - "{crate_name}.lib.json" (key: "{crate_name}.lib") for lib targets and
+    /// - "{crate_name}.bin.json" (key: "{crate_name}.bin") for bin targets.
+    fn load_rustc_argset(&self) -> Result<RustcArgSet> {
+        let link_args = std::fs::read_to_string(self.link_args_file())
+            .context("Failed to read link args from file")?
+            .lines()
+            .map(|s| s.to_string())
+            .collect();
+
+        let mut workspace_rustc_args = RustcArgSet::new(link_args);
+
         let args_dir = self.rustc_wrapper_args_dir();
         if let Ok(entries) = std::fs::read_dir(&args_dir) {
             for entry in entries.flatten() {
@@ -1185,68 +1230,7 @@ impl BuildRequest {
             }
         }
 
-        tracing::trace!(
-            "Loaded workspace rustc args from {}: keys={:?}",
-            args_dir.display(),
-            workspace_rustc_args.args.keys().collect::<Vec<_>>()
-        );
-
-        // If there's any warnings from the linker, we should print them out
-        if let Ok(linker_warnings) = std::fs::read_to_string(self.link_err_file()) {
-            if !linker_warnings.is_empty() {
-                if output_location.is_none() {
-                    tracing::error!("Linker warnings: {}", linker_warnings);
-                } else {
-                    tracing::debug!("Linker warnings: {}", linker_warnings);
-                }
-            }
-        }
-
-        // Collect the linker args and attach them to the tip crate's bin entry
-        let tip_crate_name = self.tip_crate_name();
-        let tip_bin_key = format!("{tip_crate_name}.bin");
-        if let Some(tip_args) = workspace_rustc_args.get_mut(&tip_bin_key) {
-            tip_args.link_args = std::fs::read_to_string(self.link_args_file())
-                .context("Failed to read link args from file")?
-                .lines()
-                .map(|s| s.to_string())
-                .collect();
-        }
-
-        let exe = output_location.context("Cargo build failed - no output location. Toggle tracing mode (press `t`) for more information.")?;
-
-        // Fat builds need to be linked with the fat linker. Would also like to link here for thin builds
-        if matches!(ctx.mode, BuildMode::Fat) {
-            self.run_fat_link(
-                ctx,
-                &exe,
-                &workspace_rustc_args
-                    .get(&tip_bin_key)
-                    .cloned()
-                    .unwrap_or_default(),
-            )
-            .await?;
-        }
-
-        // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
-        let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
-
-        let time_end = SystemTime::now();
-        let mode = ctx.mode.clone();
-        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
-
-        Ok(BuildArtifacts {
-            time_end,
-            exe,
-            workspace_rustc_args,
-            time_start,
-            assets,
-            mode,
-            depinfo,
-            root_dir: self.root_dir(),
-            patch_cache: None,
-            build_id: ctx.build_id,
-        })
+        Ok(workspace_rustc_args)
     }
 
     /// Collect assets and plugin metadata from the final executable in one pass
@@ -1348,18 +1332,11 @@ impl BuildRequest {
     pub async fn write_frameworks(&self, artifacts: &BuildArtifacts) -> Result<()> {
         let framework_dir = self.frameworks_folder();
 
-        // We use the rustc for the tip crate `main.rs` because that's where the linking happens
-        let direct_rustc = artifacts
-            .workspace_rustc_args
-            .get(&format!("{}.bin", self.tip_crate_name()))
-            .cloned()
-            .unwrap_or_default();
-
         // We have some prebuilt stuff that needs to be copied into the framework dir
         let openssl_dir = AndroidTools::openssl_lib_dir(&self.triple);
         let openssl_dir_disp = openssl_dir.display().to_string();
 
-        for arg in &direct_rustc.link_args {
+        for arg in &artifacts.workspace_rustc.link_args {
             // todo - how do we handle windows dlls? we don't want to bundle the system dlls
             // for now, we don't do anything with dlls, and only use .dylibs and .so files
 

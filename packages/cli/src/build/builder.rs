@@ -443,7 +443,7 @@ impl AppBuilder {
                 BuildMode::Thin {
                     changed_files,
                     modified_crates: self.modified_crates.clone(),
-                    workspace_rustc_args: artifacts.workspace_rustc_args,
+                    workspace_rustc_args: artifacts.workspace_rustc,
                     aslr_reference,
                     cache,
                 },
@@ -639,7 +639,7 @@ impl AppBuilder {
         if let Some(args) = self
             .artifacts
             .as_ref()
-            .and_then(|artifacts| artifacts.workspace_rustc_args.args.values().next())
+            .and_then(|artifacts| artifacts.workspace_rustc.rustc_args.values().next())
         {
             for (key, value) in args.envs.iter().cloned() {
                 if key.starts_with("CARGO_") {

@@ -15,7 +15,7 @@
 //! source of truth is the read-out of the link args after the initial build
 
 use super::HotpatchModuleCache;
-use crate::{BuildArtifacts, BuildMode};
+use crate::{BuildArtifacts, BuildMode, RustcArgSet};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
 use anyhow::{bail, ensure, Context};
@@ -233,9 +233,10 @@ impl BuildRequest {
 
         // Cache tip crate objects from the FRESH linker args (from the just-completed
         // thin build, not the stale ones from ctx.mode's fat build).
+        let link_args = &artifacts.workspace_rustc.link_args;
         let tip_bin_key = format!("{tip_name}.bin");
         let args = artifacts
-            .workspace_rustc_args
+            .workspace_rustc
             .get(&tip_bin_key)
             .cloned()
             .with_context(|| {
@@ -243,43 +244,12 @@ impl BuildRequest {
                     "Missing rustc args for tip bin target '{tip_bin_key}' \
                      (available keys: {:?})",
                     artifacts
-                        .workspace_rustc_args
-                        .args
+                        .workspace_rustc
+                        .rustc_args
                         .keys()
                         .collect::<Vec<_>>()
                 )
             })?;
-
-        // Collect objs from tip and re-cache them in the obj cache map
-        let tip_object_paths: Vec<PathBuf> = args
-            .link_args
-            .iter()
-            .filter(|arg| arg.ends_with(".rcgu.o"))
-            .map(PathBuf::from)
-            .collect();
-        // if !tip_object_paths.is_empty() {
-        //     artifacts
-        //         .object_cache
-        //         .cache_from_paths(&tip_name, &tip_object_paths)
-        //         .context("Failed to cache objs during patch")?;
-        // }
-
-        // // Collect cached object paths from all modified dep crates.
-        // // Objects are already on disk in the object cache directory.
-        // // These must NOT be deleted after linking — they persist across patches.
-        // ctx.profile_phase("Patch: Gather Objects");
-        // let mut cached_objects: Vec<PathBuf> = Vec::new();
-        // for dep_name in modified_crates.iter().filter(|c| *c != &tip_name) {
-        //     if let Some(paths) = artifacts.object_cache.get(dep_name) {
-        //         cached_objects.extend(paths.iter().cloned());
-        //     }
-        // }
-
-        // // If the tip has a lib target (lib+bin crate), include its cached objects too.
-        // let lib_key = format!("{tip_name}.lib");
-        // if let Some(paths) = artifacts.object_cache.get(&lib_key) {
-        //     cached_objects.extend(paths.iter().cloned());
-        // }
 
         // Extract out the incremental object files.
         //
@@ -336,7 +306,8 @@ impl BuildRequest {
         let mut dylibs = vec![];
 
         // Tip objects from link_args are temps — safe to delete after linking.
-        let temp_objects: Vec<PathBuf> = args
+        let temp_objects: Vec<PathBuf> = artifacts
+            .workspace_rustc
             .link_args
             .iter()
             .filter(|arg| arg.ends_with(".rcgu.o"))
@@ -345,10 +316,7 @@ impl BuildRequest {
             .collect();
 
         // Merge both sets for the linker.
-        let mut object_files: Vec<PathBuf> = vec![];
-        object_files.extend(temp_objects.iter().cloned());
-        //     Vec::with_capacity(cached_objects.len() + temp_objects.len());
-        // object_files.append(&mut cached_objects);
+        let mut object_files: Vec<PathBuf> = temp_objects.clone();
 
         // On non-wasm platforms, we generate a special shim object file which converts symbols from
         // fat binary into direct addresses from the running process.
@@ -379,7 +347,7 @@ impl BuildRequest {
 
             // Add the dylibs/sos to the linker args
             // Make sure to use the one in the bundle, not the ones in the target dir or system.
-            for arg in &args.link_args {
+            for arg in &artifacts.workspace_rustc.link_args {
                 if arg.ends_with(".dylib") || arg.ends_with(".so") {
                     let path = PathBuf::from(arg);
                     dylibs.push(self.frameworks_folder().join(path.file_name().unwrap()));
@@ -400,7 +368,11 @@ impl BuildRequest {
         let mut out_args: Vec<OsString> = vec![];
         out_args.extend(object_files.iter().map(Into::into));
         out_args.extend(dylibs.iter().map(Into::into));
-        out_args.extend(self.thin_link_args(&args.link_args)?.iter().map(Into::into));
+        out_args.extend(
+            self.thin_link_args(&artifacts.workspace_rustc.link_args)?
+                .iter()
+                .map(Into::into),
+        );
         out_args.extend(out_arg.iter().map(Into::into));
 
         if cfg!(windows) {
@@ -454,8 +426,8 @@ impl BuildRequest {
         //
         // Fortunately, this binary exists in two places - the deps dir and the target out dir. We
         // can just remove the one in the deps dir and the problem goes away.
-        if let Some(idx) = args.link_args.iter().position(|arg| *arg == "-o") {
-            _ = std::fs::remove_file(PathBuf::from(args.link_args[idx + 1].as_str()));
+        if let Some(idx) = link_args.iter().position(|arg| *arg == "-o") {
+            _ = std::fs::remove_file(PathBuf::from(link_args[idx + 1].as_str()));
         }
 
         // Now extract linker metadata from the fat binary (assets, plugin data)
@@ -720,10 +692,16 @@ impl BuildRequest {
         &self,
         ctx: &BuildContext,
         exe: &Path,
-        rustc_args: &RustcArgs,
+        set: &RustcArgSet,
     ) -> Result<()> {
+        // Get the tip crate rustc argsa
+        let rustc_args = set
+            .rustc_args
+            .get(&format!("{}", self.tip_crate_name()))
+            .context("Missing rustc capture")?;
+
         ensure!(
-            !rustc_args.link_args.is_empty(),
+            !set.link_args.is_empty(),
             "Missing linker args for fat link of '{}'. The tip crate likely did not run through linker interception for this build.",
             self.tip_crate_name()
         );
@@ -732,7 +710,7 @@ impl BuildRequest {
         ctx.status_starting_fat_link();
 
         // Filter out the rlib files from the arguments
-        let rlibs = rustc_args
+        let rlibs = set
             .link_args
             .iter()
             .filter(|arg| arg.ends_with(".rlib"))
@@ -866,7 +844,7 @@ impl BuildRequest {
         // And then remove the rest of the rlibs
         //
         // We also need to insert the -force_load flag to force the linker to load the archive
-        let mut args: Vec<_> = rustc_args.link_args.clone();
+        let mut args: Vec<_> = set.link_args.clone();
         if let Some(last_object) = args.iter().rposition(|arg| arg.ends_with(".o")) {
             if archive_has_contents {
                 match self.linker_flavor() {
@@ -962,10 +940,8 @@ impl BuildRequest {
             OperatingSystem::IOS(_) | OperatingSystem::MacOSX { .. } | OperatingSystem::Darwin(_)
         ) {
             let workspace_dir = self.workspace_dir();
-            let swift_sources = super::apple::extract_swift_metadata_from_link_args(
-                &rustc_args.link_args,
-                &workspace_dir,
-            );
+            let swift_sources =
+                super::apple::extract_swift_metadata_from_link_args(&set.link_args, &workspace_dir);
 
             if !swift_sources.is_empty() {
                 tracing::debug!(
