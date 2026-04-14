@@ -100,6 +100,19 @@ mod seal;
 ///
 /// For enums, the store macro generates methods for each variant that checks if the store is that variant. It also generates a `transpose` method that returns an enum with all fields as stores.
 ///
+/// Enum variant fields cannot carry their own visibility modifier in Rust —
+/// they inherit the enum's visibility — so the per-field visibility gating
+/// described above for structs does not apply to variant fields. Variant
+/// accessors (`is_variant`, the single-field downcast, and `transpose`) are
+/// reachable wherever the extension trait itself is in scope.
+///
+/// The single-field variant accessor returns `Option<Store<..>>` and only
+/// produces `Some` when the store currently matches that variant. The returned
+/// store reads the field via the current variant; if the underlying enum is
+/// later mutated to a different variant, subsequent reads or writes through
+/// that store will panic. This is a runtime invariant — hold the store only
+/// for as long as the variant is guaranteed to be live.
+///
 /// ```rust, no_run
 /// use dioxus::prelude::*;
 /// use dioxus_stores::*;

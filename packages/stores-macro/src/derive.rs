@@ -336,9 +336,13 @@ fn generate_is_variant_method(
     variant_name: &Ident,
     enum_name: &Ident,
     readable_bounds: &TokenStream2,
+    witness_trait: &Ident,
 ) -> (TokenStream2, TokenStream2) {
     let sig = quote! {
-        fn #is_fn(&self) -> bool where #readable_bounds
+        fn #is_fn(&self) -> bool
+        where
+            #readable_bounds,
+            Self: #witness_trait<__V>
     };
     let body = quote! {
         {
@@ -357,9 +361,13 @@ fn generate_as_variant_method(
     select_field: &TokenStream2,
     store_type: &TokenStream2,
     readable_bounds: &TokenStream2,
+    witness_trait: &Ident,
 ) -> (TokenStream2, TokenStream2) {
     let sig = quote! {
-        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds
+        fn #snake_case_variant(self) -> Option<#store_type>
+        where
+            #readable_bounds,
+            Self: #witness_trait<__V>
     };
     let body = quote! {
         {
@@ -426,6 +434,17 @@ fn derive_store_enum(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#enum_name #ty_generics, __Lens> };
 
+    // Enum accessors are gated the same way as struct accessors: each method
+    // carries a `Self: witness<__V>` bound so the extension trait runs through
+    // the same seal machinery. Variant fields can't declare their own
+    // visibility in Rust, so every method gates on the enum's own visibility.
+    let mut witness_extension_generics = extension_generics.clone();
+    witness_extension_generics
+        .params
+        .insert(0, parse_quote!(__V));
+    let (witness_impl_generics, witness_ty_generics, witness_where_clause) =
+        witness_extension_generics.split_for_impl();
+
     let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
         prefix: format!("{}Store", enum_name),
         span: enum_name.span(),
@@ -434,10 +453,11 @@ fn derive_store_enum(
         seal_where: quote! { #extension_where_clause },
         trait_visibility: visibility.clone(),
         trait_name: extension_trait_name,
-        trait_generics_decl: quote! { #extension_impl_generics },
-        trait_generics_use: quote! { #extension_ty_generics },
-        trait_where: quote! { #extension_where_clause },
+        trait_generics_decl: quote! { #witness_impl_generics },
+        trait_generics_use: quote! { #witness_ty_generics },
+        trait_where: quote! { #witness_where_clause },
     });
+    let enum_witness = seal.push_witness(visibility);
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
@@ -452,8 +472,13 @@ fn derive_store_enum(
         let snake_case_variant = format_ident!("{}", variant_name.to_string().to_case(Case::Snake));
         let is_fn = format_ident!("is_{}", snake_case_variant);
 
-        let (sig, body) =
-            generate_is_variant_method(&is_fn, variant_name, enum_name, &readable_bounds);
+        let (sig, body) = generate_is_variant_method(
+            &is_fn,
+            variant_name,
+            enum_name,
+            &readable_bounds,
+            &enum_witness,
+        );
         seal.push_method(sig, body);
 
         let fields = &variant.fields;
@@ -482,6 +507,7 @@ fn derive_store_enum(
                     &select_field,
                     &store_type,
                     &readable_bounds,
+                    &enum_witness,
                 );
                 seal.push_method(sig, body);
             }
@@ -527,7 +553,11 @@ fn derive_store_enum(
 
     seal.push_method(
         quote! {
-            fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy
+            fn transpose(self) -> #transposed_name #extension_ty_generics
+            where
+                #readable_bounds,
+                Self: ::std::marker::Copy,
+                Self: #enum_witness<__V>
         },
         quote! {
             {

@@ -249,14 +249,16 @@ struct TodoItem {
     contents: String,
 }
 
-// Generates (visibility-witness `__V` gates methods per-field; see derive docs):
+// Generates (visibility-witness `__V` gates methods per-field; see derive docs).
+// Each field's declared visibility produces a `__TodoItemStoreVisibleIn{Suffix}`
+// witness trait; for an all-`pub` struct the suffix is `Pub`.
 pub trait TodoItemStoreExt<__V, __Lens> {
     fn checked(self) -> Store<bool, __Lens::MappedSignal>
-        where Self: __TodoItemStoreVisibleAs0<__V>;
+        where Self: __TodoItemStoreVisibleInPub<__V>;
     fn contents(self) -> Store<String, __Lens::MappedSignal>
-        where Self: __TodoItemStoreVisibleAs0<__V>;
+        where Self: __TodoItemStoreVisibleInPub<__V>;
     fn transpose(self) -> TodoItemStoreTransposed
-        where Self: Copy, Self: __TodoItemStoreVisibleAs0<__V>;
+        where Self: Copy, Self: __TodoItemStoreVisibleInPub<__V>;
 }
 
 pub struct TodoItemStoreTransposed {

@@ -10,6 +10,7 @@
 fn cross_crate_visibility() {
     let t = trybuild::TestCases::new();
     t.pass("tests/ui/pass_public_field.rs");
+    t.pass("tests/ui/pass_pub_enum.rs");
     t.compile_fail("tests/ui/fail_crate_field.rs");
     t.compile_fail("tests/ui/fail_private_field.rs");
     t.compile_fail("tests/ui/fail_transposed_private_field.rs");

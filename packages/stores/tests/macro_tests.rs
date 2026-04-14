@@ -144,6 +144,40 @@ mod macro_tests {
         store.check();
     }
 
+    fn derive_generic_struct_with_private_field() {
+        mod inner {
+            use dioxus_stores::*;
+
+            #[derive(Store)]
+            pub struct Item<T> {
+                pub visible: T,
+                secret: T,
+            }
+
+            impl<T: Default> Item<T> {
+                pub fn new() -> Self {
+                    Self {
+                        visible: T::default(),
+                        secret: T::default(),
+                    }
+                }
+            }
+
+            pub fn touch_secret(store: Store<Item<i32>>) {
+                // The private-field accessor is reachable here (same module).
+                let _ = store.secret();
+            }
+        }
+
+        use dioxus_signals::*;
+        use dioxus_stores::*;
+        use inner::{Item, ItemStoreExt};
+
+        let store = use_store(Item::<i32>::new);
+        let _: Store<i32, _> = store.visible();
+        inner::touch_secret(store);
+    }
+
     fn derive_generic_struct_transposed_passthrough() {
         #[derive(Store)]
         struct Item<const COUNT: usize, T> {

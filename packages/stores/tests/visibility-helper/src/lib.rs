@@ -27,3 +27,23 @@ impl Default for Item {
         Self::new()
     }
 }
+
+/// Public enum used to verify enum accessors still work across crates after the
+/// seal-builder plumbing was extended to enum variants.
+#[derive(Store)]
+pub enum PubEnum {
+    A(i32),
+    B { value: i32 },
+}
+
+impl PubEnum {
+    pub fn new() -> Self {
+        Self::A(0)
+    }
+}
+
+impl Default for PubEnum {
+    fn default() -> Self {
+        Self::new()
+    }
+}

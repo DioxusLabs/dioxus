@@ -57,7 +57,9 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
         store_ty: store_ty.clone(),
         seal_generics: quote! { #seal_impl },
         seal_where: quote! { #seal_where },
-        trait_visibility: parse_quote!(pub),
+        trait_visibility: args
+            .visibility
+            .unwrap_or_else(|| parse_quote!(pub)),
         trait_name: extension_name,
         trait_generics_decl: quote! { #trait_decl },
         trait_generics_use: quote! { #trait_use },
@@ -70,9 +72,10 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
     for impl_item in input.items {
         match impl_item {
             ImplItem::Fn(mut func) => {
-                // For methods with a `self` receiver, add the corresponding
-                // Readable / Writable bound on __Lens, then gate on a witness
-                // for the method's visibility.
+                // Every fn — receiver or not — is gated on a witness for its
+                // declared visibility so static methods honor the same seal as
+                // `&self` / `&mut self` methods. Additionally, `&self` adds a
+                // `Readable` bound on __Lens and `&mut self` adds `Writable`.
                 let receiver = func.sig.inputs.iter().find_map(|arg| {
                     if let syn::FnArg::Receiver(r) = arg {
                         Some(r)
@@ -80,23 +83,21 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
                         None
                     }
                 });
-                if let Some(receiver) = receiver {
-                    let extra = match (&receiver.reference, &receiver.mutability) {
-                        (Some(_), None) => Some(&immutable_bounds),
-                        (Some(_), Some(_)) => Some(&mutable_bounds),
-                        _ => None,
-                    };
-                    if let Some(extra) = extra {
-                        func.sig
-                            .generics
-                            .make_where_clause()
-                            .predicates
-                            .push(extra.clone());
-                        let witness = seal.push_witness(&func.vis);
-                        let bound: WherePredicate = parse_quote!(Self: #witness<__V>);
-                        func.sig.generics.make_where_clause().predicates.push(bound);
-                    }
+                let extra = receiver.and_then(|r| match (&r.reference, &r.mutability) {
+                    (Some(_), None) => Some(&immutable_bounds),
+                    (Some(_), Some(_)) => Some(&mutable_bounds),
+                    _ => None,
+                });
+                if let Some(extra) = extra {
+                    func.sig
+                        .generics
+                        .make_where_clause()
+                        .predicates
+                        .push(extra.clone());
                 }
+                let witness = seal.push_witness(&func.vis);
+                let bound: WherePredicate = parse_quote!(Self: #witness<__V>);
+                func.sig.generics.make_where_clause().predicates.push(bound);
                 let sig = &func.sig;
                 let body = &func.block;
                 seal.push_method(quote! { #sig }, quote! { #body });
@@ -218,10 +219,21 @@ fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
 pub(crate) struct ExtendArgs {
     /// The name of the extension trait generated
     name: Option<Ident>,
+    /// The visibility of the extension trait itself. Defaults to `pub`.
+    visibility: Option<syn::Visibility>,
 }
 
 impl Parse for ExtendArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        // An optional leading visibility, e.g. `#[store(pub(crate))]` or
+        // `#[store(pub(crate), name = Foo)]`.
+        let visibility = if input.peek(syn::Token![pub]) {
+            let vis: syn::Visibility = input.parse()?;
+            let _: Option<syn::Token![,]> = input.parse()?;
+            Some(vis)
+        } else {
+            None
+        };
         let name = if input.peek(Ident) && input.peek2(syn::Token![=]) {
             let ident: Ident = input.parse()?;
             if ident != "name" {
@@ -233,6 +245,6 @@ impl Parse for ExtendArgs {
         } else {
             None
         };
-        Ok(ExtendArgs { name })
+        Ok(ExtendArgs { name, visibility })
     }
 }

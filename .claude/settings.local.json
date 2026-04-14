@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cargo clippy:*)",
-      "Bash(TRYBUILD=overwrite cargo test -p dioxus-stores --test cross_crate)"
-    ]
-  }
-}
