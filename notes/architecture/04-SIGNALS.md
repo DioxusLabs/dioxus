@@ -244,29 +244,21 @@ let field = item_1.name;  // path = [1, field_hash]
 ### Store Macro
 ```rust
 #[derive(Store)]
-pub struct TodoItem {
-    pub checked: bool,
-    pub contents: String,
+struct TodoItem {
+    checked: bool,
+    contents: String,
 }
 
-// Roughly generates for a public struct with public fields
-// (simplified; mapped-lens types omitted for readability).
-//
-// Visibility-witness `__V` gates methods per-field; see derive docs.
-// Each field's declared visibility produces a `__TodoItemStoreVisibleIn{Suffix}`
-// witness trait; for an all-`pub` struct the suffix is `Pub`.
-pub trait TodoItemStoreExt<__V, __Lens> {
-    fn checked(self) -> Store<bool, /* mapped lens */>
-        where Self: __TodoItemStoreVisibleInPub<__V>;
-    fn contents(self) -> Store<String, /* mapped lens */>
-        where Self: __TodoItemStoreVisibleInPub<__V>;
-    fn transpose(self) -> TodoItemStoreTransposed
-        where Self: Copy, Self: __TodoItemStoreVisibleInPub<__V>;
+// Generates:
+pub trait TodoItemStoreExt<__Lens> {
+    fn checked(self) -> Store<bool, __Lens::MappedSignal>;
+    fn contents(self) -> Store<String, __Lens::MappedSignal>;
+    fn transpose(self) -> TodoItemStoreTransposed;
 }
 
 pub struct TodoItemStoreTransposed {
-    pub checked: Store<bool, /* mapped lens */>,
-    pub contents: Store<String, /* mapped lens */>,
+    pub checked: Store<bool>,
+    pub contents: Store<String>,
 }
 ```
 
@@ -280,8 +272,8 @@ enum Status {
 }
 
 // Generates:
-fn is_loading(&self) -> bool;
-fn ready(self) -> Option<Store<String, /* mapped lens */>>;
+fn is_loading(self) -> bool;
+fn ready(self) -> Option<Store<String, ...>>;
 fn transpose(self) -> StatusStoreTransposed;
 ```
 
