@@ -613,10 +613,6 @@ impl BuildRequest {
             .cloned()
             .collect();
 
-        if relevant.is_empty() {
-            return Vec::new();
-        }
-
         // Build the subgraph: edge A→B means "A must compile before B".
         let mut indegree: HashMap<&String, usize> =
             relevant.iter().map(|name| (name, 0)).collect();
