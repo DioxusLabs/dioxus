@@ -24,7 +24,7 @@ use serde::Serialize;
 use sha1::Digest;
 use sha2::Sha256;
 use std::{
-    collections::{BTreeSet, HashMap, HashSet, VecDeque},
+    collections::{BTreeSet, HashMap, HashSet},
     ffi::OsString,
 };
 use std::{
@@ -146,7 +146,7 @@ impl BuildRequest {
         // Replay the rustcs for all modified workspace crates. This is not the final tip binary.
         // Note that the final tip might include itself as a lib (lib.rs + main.rs) which gets covered here.
         ctx.profile_phase("Workspace hotpatch replay");
-        let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates);
+        let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
         for crate_name in &replayed_crates {
             let rustc_args = self
                 .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
@@ -601,26 +601,22 @@ impl BuildRequest {
 
     /// Topological sort of modified workspace crates for rustc replay.
     ///
-    /// Only includes crates that transitively reach the tip crate through other modified
-    /// crates — unreachable modifications can't affect the final binary and are skipped.
-    /// Within that set, crates are ordered so dependencies compile before dependents
-    /// (Kahn's algorithm). Ties are broken lexicographically for determinism.
-    fn workspace_hotpatch_replay_order(&self, modified_crates: &HashSet<String>) -> Vec<String> {
-        // Filter to crates that can actually reach the tip through modified crates.
-        let relevant: HashSet<String> = modified_crates
-            .iter()
-            .filter(|name| self.workspace_hotpatch_reaches_tip(name, modified_crates))
-            .cloned()
-            .collect();
-
+    /// The caller (builder) already guarantees that every crate in `modified_crates`
+    /// transitively reaches the tip. This function just orders them so dependencies
+    /// compile before dependents (Kahn's algorithm). Ties are broken lexicographically
+    /// for determinism.
+    fn workspace_hotpatch_replay_order(
+        &self,
+        modified_crates: &HashSet<String>,
+    ) -> Result<Vec<String>> {
         // Build the subgraph: edge A→B means "A must compile before B".
         let mut indegree: HashMap<&String, usize> =
-            relevant.iter().map(|name| (name, 0)).collect();
+            modified_crates.iter().map(|name| (name, 0)).collect();
         let mut edges: HashMap<&String, Vec<&String>> = HashMap::new();
 
-        for crate_name in &relevant {
+        for crate_name in modified_crates {
             for dependent in self.workspace_dependents_of(crate_name) {
-                if let Some(dep) = relevant.get(&dependent) {
+                if let Some(dep) = modified_crates.get(&dependent) {
                     *indegree.entry(dep).or_default() += 1;
                     edges.entry(crate_name).or_default().push(dep);
                 }
@@ -633,8 +629,7 @@ impl BuildRequest {
             .filter(|(_, &deg)| deg == 0)
             .map(|(name, _)| *name)
             .collect();
-        let mut ordered = Vec::with_capacity(relevant.len());
-
+        let mut ordered = Vec::with_capacity(modified_crates.len());
         while let Some(name) = ready.pop_first() {
             ordered.push(name.clone());
             for dep in edges.get(name).into_iter().flatten() {
@@ -646,53 +641,12 @@ impl BuildRequest {
             }
         }
 
-        // Cycle guard — shouldn't happen in a valid cargo workspace, but don't lose crates.
-        if ordered.len() != relevant.len() {
-            let mut rest: Vec<_> = relevant
-                .iter()
-                .filter(|n| !ordered.contains(n))
-                .cloned()
-                .collect();
-            rest.sort();
-            tracing::warn!(
-                "Workspace hotpatch replay graph has a cycle; appending: {rest:?}"
-            );
-            ordered.extend(rest);
-        }
+        ensure!(
+            ordered.len() == modified_crates.len(),
+            "Cycle in workspace dependency graph — cannot determine replay order"
+        );
 
-        ordered
-    }
-
-    /// Returns true if `crate_name` can reach the tip crate through a chain of modified
-    /// workspace dependents (BFS over the reverse dependency graph).
-    fn workspace_hotpatch_reaches_tip(
-        &self,
-        crate_name: &str,
-        modified_crates: &HashSet<String>,
-    ) -> bool {
-        let tip = self.tip_crate_name();
-        if crate_name == tip {
-            return true;
-        }
-
-        let mut queue = VecDeque::from([crate_name.to_string()]);
-        let mut visited = HashSet::new();
-
-        while let Some(current) = queue.pop_front() {
-            if !visited.insert(current.clone()) {
-                continue;
-            }
-            for dependent in self.workspace_dependents_of(&current) {
-                if dependent == tip {
-                    return true;
-                }
-                if modified_crates.contains(&dependent) {
-                    queue.push_back(dependent);
-                }
-            }
-        }
-
-        false
+        Ok(ordered)
     }
 
     /// Collect the rlib paths for every replayed workspace crate, ordered for the linker.
