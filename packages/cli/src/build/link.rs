@@ -1469,10 +1469,10 @@ impl BuildRequest {
         hasher.update(encoded);
         let scope_hash = format!("{:x}", hasher.finalize());
         Ok(format!(
-            "scope-v{}-{}-{}-{}",
-            scope.version,
-            scope.capture_mode,
+            "{}-{}-{}-{}",
             self.tip_crate_name(),
+            self.triple,
+            self.profile,
             &scope_hash[..16]
         ))
     }

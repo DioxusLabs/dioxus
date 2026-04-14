@@ -214,7 +214,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 use std::{borrow::Cow, ffi::OsString};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     path::{Path, PathBuf},
     process::Stdio,
     sync::{
