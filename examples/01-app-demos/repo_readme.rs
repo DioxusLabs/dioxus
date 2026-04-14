@@ -7,6 +7,8 @@
 
 use dioxus::prelude::*;
 
+use crate::private::{A, W};
+
 fn main() {
     dioxus::launch(app);
 }
@@ -15,7 +17,7 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     // fails because private is not in scope
-    <W as A>::private::A();
+    W.private();
 
     rsx! {
         h1 { "High-Five counter: {count}" }
@@ -30,34 +32,25 @@ pub enum MyPhantom<T> {
 }
 
 mod private {
-    use crate::{A, MyPhantom, W};
-    use std::ops::Deref;
+    trait Private<T> {}
+    impl Private<Sneaky> for W {}
+    struct Sneaky;
 
-    // Works because private is in scope
-    fn test() {
-        <W as A>::private::A();
-    }
+    pub struct W;
 
-    struct Private;
+    pub trait A {
+        fn public(&self) {}
 
-    impl Deref for MyPhantom<Private> {
-        type Target = fn();
-
-        fn deref(&self) -> &Self::Target {
-            fn f() {
-                println!("Hello from the private function!");
-            }
-            &(f as fn())
+        fn private<T>(&self)
+        where
+            Self: Private<T>,
+        {
         }
     }
-}
 
-pub struct W;
+    impl A for W {}
 
-pub trait A {
-    type private<T>;
-}
-
-impl A for W {
-    type private<T> = MyPhantom<T>;
+    fn test() {
+        W.private();
+    }
 }
