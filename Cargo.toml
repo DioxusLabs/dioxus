@@ -37,7 +37,6 @@ members = [
     "packages/signals",
     "packages/stores",
     "packages/stores-macro",
-    "packages/stores/tests/visibility-helper",
     "packages/const-serialize",
     "packages/const-serialize-macro",
     "packages/dx-wire-format",
@@ -114,6 +113,7 @@ members = [
     "examples/10-integrations/native-headless-in-bevy",
     "examples/10-integrations/bevy",
 ]
+exclude = ["packages/stores/tests/visibility-helper"]
 
 
 [workspace.package]

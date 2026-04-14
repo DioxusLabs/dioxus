@@ -8,5 +8,5 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-dioxus-stores = { workspace = true }
-dioxus-signals = { workspace = true }
+dioxus-stores = { path = "../.." }
+dioxus-signals = { path = "../../../signals" }
