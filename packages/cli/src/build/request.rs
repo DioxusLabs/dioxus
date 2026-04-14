@@ -6609,8 +6609,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // iOS requires all embedded code to be individually signed.
         let frameworks_dir = self.frameworks_folder();
         if frameworks_dir.exists() {
-            for entry in std::fs::read_dir(&frameworks_dir)
-                .context("Failed to read Frameworks directory")?
+            for entry in
+                std::fs::read_dir(&frameworks_dir).context("Failed to read Frameworks directory")?
             {
                 let entry = entry?;
                 let path = entry.path();
@@ -6648,8 +6648,8 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
         // Sign embedded widget extensions (.appex bundles) in the PlugIns directory.
         let plugins_dir = self.plugins_folder();
         if plugins_dir.exists() {
-            for entry in std::fs::read_dir(&plugins_dir)
-                .context("Failed to read PlugIns directory")?
+            for entry in
+                std::fs::read_dir(&plugins_dir).context("Failed to read PlugIns directory")?
             {
                 let entry = entry?;
                 let path = entry.path();
