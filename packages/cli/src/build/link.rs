@@ -147,10 +147,11 @@ impl BuildRequest {
         // Note that the final tip might include itself as a lib (lib.rs + main.rs) which gets covered here.
         ctx.profile_phase("Workspace hotpatch replay");
         let replayed_crates = self.workspace_hotpatch_replay_order(modified_crates)?;
+        tracing::debug!("replaying crates: {replayed_crates:?}");
         for crate_name in &replayed_crates {
             let rustc_args = self
                 .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
-                .context("Missing rustc args for crate replay")?;
+                .with_context(|| format!("Missing rustc args for replay: '{crate_name}'"))?;
             self.compile_dep_crate(crate_name, rustc_args)
                 .await
                 .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
@@ -588,9 +589,11 @@ impl BuildRequest {
         crate_name: &str,
     ) -> Option<&'a RustcArgs> {
         let lib_key = format!("{crate_name}.lib");
-        if crate_name == self.tip_crate_name() {
-            return workspace_rustc_args.rustc_args.get(&lib_key);
-        }
+        // if crate_name == self.tip_crate_name() {
+        //     return workspace_rustc_args
+        //         .rustc_args
+        //         .get(&format!("{crate_name}.bin"));
+        // }
 
         workspace_rustc_args.rustc_args.get(&lib_key).or_else(|| {
             workspace_rustc_args
@@ -602,21 +605,28 @@ impl BuildRequest {
     /// Topological sort of modified workspace crates for rustc replay.
     ///
     /// The caller (builder) already guarantees that every crate in `modified_crates`
-    /// transitively reaches the tip. This function just orders them so dependencies
-    /// compile before dependents (Kahn's algorithm). Ties are broken lexicographically
-    /// for determinism.
+    /// transitively reaches the tip. This function excludes the tip crate itself — it
+    /// gets compiled separately via `cargo_build` after the replay. The remaining lib
+    /// crates are ordered so dependencies compile before dependents (Kahn's algorithm).
+    /// Ties are broken lexicographically for determinism.
     fn workspace_hotpatch_replay_order(
         &self,
         modified_crates: &HashSet<String>,
     ) -> Result<Vec<String>> {
+        // Exclude the tip crate — it's compiled separately via cargo_build after replay.
+        let tip = self.tip_crate_name();
+        let crates: HashSet<&String> = modified_crates
+            .iter()
+            .filter(|name| **name != tip)
+            .collect();
+
         // Build the subgraph: edge A→B means "A must compile before B".
-        let mut indegree: HashMap<&String, usize> =
-            modified_crates.iter().map(|name| (name, 0)).collect();
+        let mut indegree: HashMap<&String, usize> = crates.iter().map(|name| (*name, 0)).collect();
         let mut edges: HashMap<&String, Vec<&String>> = HashMap::new();
 
-        for crate_name in modified_crates {
+        for crate_name in &crates {
             for dependent in self.workspace_dependents_of(crate_name) {
-                if let Some(dep) = modified_crates.get(&dependent) {
+                if let Some(dep) = crates.get(&dependent) {
                     *indegree.entry(dep).or_default() += 1;
                     edges.entry(crate_name).or_default().push(dep);
                 }
@@ -629,7 +639,7 @@ impl BuildRequest {
             .filter(|(_, &deg)| deg == 0)
             .map(|(name, _)| *name)
             .collect();
-        let mut ordered = Vec::with_capacity(modified_crates.len());
+        let mut ordered = Vec::with_capacity(crates.len());
         while let Some(name) = ready.pop_first() {
             ordered.push(name.clone());
             for dep in edges.get(name).into_iter().flatten() {
@@ -642,7 +652,7 @@ impl BuildRequest {
         }
 
         ensure!(
-            ordered.len() == modified_crates.len(),
+            ordered.len() == crates.len(),
             "Cycle in workspace dependency graph — cannot determine replay order"
         );
 
@@ -1364,9 +1374,17 @@ impl BuildRequest {
     /// file is missing, we bust that crate's fingerprint to force the rustc wrapper to
     /// re-capture its args.
     pub fn bust_fingerprint(&self, ctx: &BuildContext) -> Result<()> {
-        if !matches!(ctx.mode, BuildMode::Fat) {
+        // Ensure the rustc args capture directory exists - only in fat/base builds.
+        // This ensures we always capture fresh rustc args provided we're not hotpatching. This could
+        // be annoying for regular dx build/bundle commands, but should generally be fine.
+        // todo: think about how CI might interact with this if it's not persisting the dx folder
+        if matches!(ctx.mode, BuildMode::Thin { .. }) {
             return Ok(());
         }
+
+        let scope_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
+        _ = std::fs::create_dir_all(&scope_dir)
+            .context("Failed to create rustc wrapper args scope dir");
 
         // Always bust the tip crate.
         let mut bust = HashSet::new();
@@ -1374,16 +1392,23 @@ impl BuildRequest {
 
         // Walk workspace deps of the tip crate. If we're missing cached args for any of
         // them, bust their fingerprint so the wrapper re-captures during this fat build.
+        // Use the raw path (not canonicalized) since the scope dir may not exist yet.
+        let scope_dir = self
+            .rustc_wrapper_args_dir()
+            .join(self.rustc_wrapper_scope_dir_name(&BuildMode::Fat)?);
+
         for dep_name in self.workspace_crate_dep_names() {
-            let cached = self
-                .rustc_wrapper_args_scope_dir(&BuildMode::Fat)?
-                .join(format!("{dep_name}.lib.json"));
-            if !cached.exists() {
+            if !scope_dir.join(format!("{dep_name}.lib.json")).exists() {
                 bust.insert(dep_name);
             }
         }
 
-        for entry in std::fs::read_dir(&self.cargo_fingeprint_dir())?.flatten() {
+        let fingerprint_dir = self.cargo_fingeprint_dir();
+        for entry in std::fs::read_dir(&fingerprint_dir)
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
             if let Some(fname) = entry.file_name().to_str() {
                 if let Some((name, _)) = fname.rsplit_once('-') {
                     if bust.contains(name) {

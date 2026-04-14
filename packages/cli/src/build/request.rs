@@ -2250,7 +2250,7 @@ impl BuildRequest {
     }
 
     pub(crate) fn rustc_wrapper_args_dir(&self) -> PathBuf {
-        self.target_dir.join("dx").join("rustc-wrapper-cache")
+        self.target_dir.join("dx").join(".captured-args")
     }
 
     pub(crate) fn rustc_wrapper_args_scope_dir(&self, build_mode: &BuildMode) -> Result<PathBuf> {
