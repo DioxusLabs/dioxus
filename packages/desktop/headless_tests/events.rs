@@ -312,8 +312,8 @@ fn test_scroll_does_not_bubble() -> Element {
     rsx! {
         div {
             id: "scroll_parent",
-            onscroll: move |_| {
-                assert!(false, "non-bubbling scroll event reached ancestor");
+            onscroll: move |_| -> () {
+                panic!("non-bubbling scroll event reached ancestor");
             },
             div {
                 id: "scroll_child",
