@@ -816,14 +816,8 @@ impl Output {
             meta_list[3],
         );
 
-        let server_address = match state.server.server_address() {
-            Some(address) => format!("http://{address}").yellow(),
-            None => "no address".dark_gray(),
-        };
-        frame.render_widget(
-            Paragraph::new(Line::from(vec!["Network: ".gray(), server_address])),
-            meta_list[4],
-        );
+        // space
+        frame.render_widget(Paragraph::new(Line::from(vec![" ".gray()])), meta_list[4]);
 
         let links_list: [_; 2] =
             Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(bottom);
