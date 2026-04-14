@@ -1210,12 +1210,12 @@ impl BuildRequest {
             return Ok(());
         }
 
-        let scope_dir = self.rustc_wrapper_args_scope_dir(&ctx.mode)?;
-        _ = std::fs::create_dir_all(&scope_dir)
+        // Always make sure the rustc arg dir is ready to receive rustc_wrapper emits
+        _ = std::fs::create_dir_all(&self.rustc_wrapper_args_scope_dir(&ctx.mode)?)
             .context("Failed to create rustc wrapper args scope dir");
 
         // Only remove args in fat mode
-        if !matches!(ctx.mode, BuildMode::Fat { .. }) {
+        if !matches!(ctx.mode, BuildMode::Fat) {
             return Ok(());
         }
 
