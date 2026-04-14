@@ -2,10 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
 use syn::{ext::IdentExt, parse::Parse};
-use syn::{
-    parse_quote, Ident, ImplItem, ImplItemConst, ImplItemType, ItemImpl, PathArguments, Type,
-    WherePredicate,
-};
+use syn::{parse_quote, Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate};
 
 pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let store_type = &*input.self_ty;
@@ -104,40 +101,16 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
                 );
             }
             ImplItem::Const(c) => {
-                let ImplItemConst {
-                    attrs,
-                    const_token,
-                    ident,
-                    generics,
-                    colon_token,
-                    ty,
-                    semi_token,
-                    ..
-                } = &c;
-                let trait_item = quote! {
-                    #(#attrs)*
-                    #const_token #ident #generics #colon_token #ty #semi_token
-                };
-                let impl_item = quote! { #c };
-                seal.push_assoc(trait_item, impl_item);
+                return Err(syn::Error::new_spanned(
+                    c,
+                    "`#[store]` only supports methods; associated consts are not allowed",
+                ));
             }
             ImplItem::Type(t) => {
-                let ImplItemType {
-                    attrs,
-                    type_token,
-                    ident,
-                    generics,
-                    eq_token,
-                    ty,
-                    semi_token,
-                    ..
-                } = &t;
-                let trait_item = quote! {
-                    #(#attrs)*
-                    #type_token #ident #generics #eq_token #ty #semi_token
-                };
-                let impl_item = quote! { #t };
-                seal.push_assoc(trait_item, impl_item);
+                return Err(syn::Error::new_spanned(
+                    t,
+                    "`#[store]` only supports methods; associated types are not allowed",
+                ));
             }
             other => return Err(syn::Error::new_spanned(other, "Unsupported item type")),
         }
