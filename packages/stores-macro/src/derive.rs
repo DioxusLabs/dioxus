@@ -107,7 +107,7 @@ fn zip_transposed_fields(fields: &Fields, types: &[TokenStream2]) -> Vec<TokenSt
 /// True when a type alias can replace a full transposed struct/enum definition
 /// (all type params are unbound and every field is a bare generic type).
 ///
-/// Eg. struct MyStruct<T> {inner: T} can use a type alias to express MyStruct<StoreView<T>>
+/// Eg. `struct MyStruct<T> {inner: T}` can use a type alias to express `MyStruct<StoreView<T>>`
 fn can_use_type_alias<'a>(
     generics: &syn::Generics,
     mut fields: impl Iterator<Item = &'a Field>,
