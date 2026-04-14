@@ -697,7 +697,7 @@ impl BuildRequest {
         // Get the tip crate rustc argsa
         let rustc_args = set
             .rustc_args
-            .get(&format!("{}", self.tip_crate_name()))
+            .get(&format!("{}.bin", self.tip_crate_name()))
             .context("Missing rustc capture")?;
 
         ensure!(
