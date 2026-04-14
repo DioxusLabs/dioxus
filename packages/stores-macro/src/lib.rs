@@ -57,10 +57,11 @@ mod seal;
 /// scope works — `pub`, `pub(crate)`, `pub(super)`, and `pub(in some::path)` all
 /// propagate faithfully to the accessor.
 ///
-/// Calling an accessor from outside the field's scope produces a type-inference
-/// error ("cannot find type `__{Name}StoreMarker{n}` in this scope") rather than a
-/// "trait is private" error, because the gating uses a visibility-witness generic
-/// rather than a trait-level seal.
+/// Calling an accessor from outside the field's scope fails because the generated
+/// visibility-witness marker type is no longer nameable there. In practice this
+/// usually surfaces as a "private type" error mentioning
+/// `__{Name}StoreMarker{...}` rather than a "trait is private" error, because the
+/// gating uses a visibility-witness generic instead of a trait-level seal.
 ///
 /// The transposed struct preserves the original field visibility as well, so
 /// fields you can't reach on the store you also can't reach on `.transpose()`.
@@ -173,14 +174,22 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 ///
 /// ## Arguments
 ///
+/// - An optional leading visibility for the generated extension trait, e.g.
+///   `#[store(pub(crate))]`. If omitted, the trait is generated as `pub`.
 /// - `name = YourExtensionName`: The name of the extension trait. If not provided, it will be generated based on the type name.
 ///
 /// ## Visibility
 ///
-/// The generated extension trait is always `pub`, but each method is individually sealed to
-/// the visibility declared on the `impl` block's function. A `pub fn` is callable anywhere
-/// the trait is in scope; a `pub(crate) fn` is only callable from inside the crate; a bare
-/// `fn` is only callable from the module that defined the impl.
+/// The generated extension trait defaults to `pub`, but you can override that by
+/// passing an explicit visibility such as `#[store(pub(crate))]`. Each method is
+/// then individually sealed to the visibility declared on the `impl` block's
+/// function. A `pub fn` is callable anywhere the trait is in scope; a
+/// `pub(crate) fn` is only callable from inside the crate; a bare `fn` is only
+/// callable from the module that defined the impl.
+///
+/// `#[store]` only supports methods. Associated consts and associated types are
+/// rejected because trait items do not preserve the same per-method visibility
+/// model.
 ///
 /// ## Bounds
 ///
