@@ -196,11 +196,10 @@
 use super::HotpatchModuleCache;
 use crate::opt::{process_file_to, AppManifest};
 use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
-    DX_RUSTC_WRAPPER_ENV_VAR,
+    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, LinkAction, ObjectCache,
+    Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace, DX_RUSTC_WRAPPER_ENV_VAR,
 };
-use anyhow::{bail, ensure, Context};
+use anyhow::{bail, Context};
 use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
@@ -221,13 +220,11 @@ use std::{
         atomic::{AtomicUsize, Ordering},
         Arc,
     },
-    time::{SystemTime, UNIX_EPOCH},
+    time::SystemTime,
 };
-use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem, Triple};
 use tempfile::TempDir;
 use tokio::{io::AsyncBufReadExt, process::Command};
-use uuid::Uuid;
 
 /// This struct is used to plan the build process.
 ///
@@ -3054,7 +3051,8 @@ impl BuildRequest {
     /// Write out the manganis ffi plugins that we support
     /// - Kotlin / Java
     /// - Swift
-    /// Todo: implement other languages like JS/TS
+    /// - TS: Todo
+    /// - JS: Todo
     async fn write_ffi_plugins(
         &self,
         ctx: &BuildContext,
@@ -3537,7 +3535,7 @@ impl BuildRequest {
 
     async fn write_app_manifest(&self, manifest: &AppManifest) -> Result<()> {
         std::fs::write(
-            &self.app_manifest_file(),
+            self.app_manifest_file(),
             serde_json::to_string_pretty(&manifest)?,
         )?;
         Ok(())

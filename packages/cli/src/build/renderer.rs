@@ -1,38 +1,5 @@
-use super::HotpatchModuleCache;
-use crate::opt::{process_file_to, AppManifest};
-use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
-    DX_RUSTC_WRAPPER_ENV_VAR,
-};
-use anyhow::{bail, ensure, Context};
-use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
-use depinfo::RustcDepInfo;
-use dioxus_cli_config::PRODUCT_NAME_ENV;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
-use itertools::Itertools;
-use krates::{cm::TargetKind, NodeId};
-use manganis::BundledAsset;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{borrow::Cow, ffi::OsString};
-use std::{
-    collections::{HashMap, HashSet, VecDeque},
-    path::{Path, PathBuf},
-    process::Stdio,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    time::{SystemTime, UNIX_EPOCH},
-};
-use subsecond_types::JumpTable;
-use target_lexicon::{Architecture, OperatingSystem, Triple};
-use tempfile::TempDir;
-use tokio::{io::AsyncBufReadExt, process::Command};
-use uuid::Uuid;
+use crate::Renderer;
+use target_lexicon::Triple;
 
 use crate::BuildRequest;
 

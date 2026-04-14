@@ -1,40 +1,23 @@
 use super::HotpatchModuleCache;
 use crate::BuildRequest;
+use crate::BuildArtifacts;
 use crate::{
-    opt::{process_file_to, AppManifest},
-    BuildArtifacts,
-};
-use crate::{
-    AndroidTools, BuildContext, BuildId, BundleFormat, DioxusConfig, Error, LinkAction,
-    LinkerFlavor, ObjectCache, Platform, Renderer, Result, RustcArgs, TargetArgs, Workspace,
-    DX_RUSTC_WRAPPER_ENV_VAR,
+    BuildContext, Error,
+    LinkerFlavor, Result, RustcArgs, Workspace,
 };
 use anyhow::{bail, ensure, Context};
-use cargo_metadata::diagnostic::Diagnostic;
-use cargo_toml::{Profile, Profiles, StripSetting};
-use depinfo::RustcDepInfo;
-use dioxus_cli_config::PRODUCT_NAME_ENV;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
 use itertools::Itertools;
-use krates::{cm::TargetKind, NodeId};
-use manganis::BundledAsset;
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use std::{borrow::Cow, ffi::OsString};
+use rayon::prelude::ParallelIterator;
+use sha2::Digest;
+use std::ffi::OsString;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::HashSet,
     path::{Path, PathBuf},
-    process::Stdio,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use subsecond_types::JumpTable;
-use target_lexicon::{Architecture, OperatingSystem, Triple};
-use tempfile::TempDir;
+use target_lexicon::{Architecture, OperatingSystem};
 use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
