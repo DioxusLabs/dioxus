@@ -64,7 +64,6 @@ impl BuildRequest {
             bail!("Not thin mode!")
         };
 
-        tracing::debug!("Going to replay from {workspace_rustc_args:?}");
         tracing::debug!("Changed crates dag using {modified_crates:?}");
 
         let replay_order = self

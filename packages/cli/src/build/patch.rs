@@ -717,6 +717,21 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // Clear the start function from the patch - we don't want any code automatically running!
     new.start = None;
 
+    // Export __wasm_apply_global_relocs if it exists. wasm-ld generates this synthetic
+    // function to relocate GOT.func.internal globals by __table_base, but refuses to
+    // export it via --export or --export-if-defined since it's not a linker symbol.
+    // Without this export, the runtime can't call it, leaving GOT.func.internal globals
+    // unrelocated — they contain element-segment-relative offsets instead of absolute
+    // table indices, causing call_indirect type mismatches in PIC-compiled workspace code.
+    const APPLY_RELOCS: &'static str = "__wasm_apply_global_relocs";
+    if let Some(func) = new
+        .funcs
+        .iter()
+        .find(|f| f.name.as_deref() == Some(APPLY_RELOCS))
+    {
+        new.exports.add(APPLY_RELOCS, func.id());
+    }
+
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
     std::fs::write(&lib, new.emit_wasm())?;
