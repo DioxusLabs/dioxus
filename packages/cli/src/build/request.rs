@@ -947,30 +947,13 @@ impl BuildRequest {
     }
 
     pub(crate) async fn build(&self, ctx: BuildContext) -> Result<BuildArtifacts> {
-        // Run the cargo build to produce our artifacts.
-        // For thin builds this also pre-compiles workspace dep crates before the tip.
-        let mut artifacts = self.cargo_build(&ctx).await?;
-
-        // Write the build artifacts to the bundle on the disk
         match &ctx.mode {
-            BuildMode::Thin {
-                aslr_reference,
-                cache,
-                modified_crates,
-                ..
-            } => {
-                self.write_patch(
-                    &ctx,
-                    *aslr_reference,
-                    &mut artifacts,
-                    cache,
-                    modified_crates,
-                )
-                .await?;
-            }
+            // In hotpatch mode, we use the dedicated hotpatch flow
+            BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
 
+            // In base/fat mode, we do the full chain with a root `cargo rustc`
             BuildMode::Base { .. } | BuildMode::Fat => {
-                ctx.status_start_bundle();
+                let mut artifacts = self.cargo_build(&ctx).await?;
 
                 ctx.profile_phase("Post-processing executable");
                 self.post_process_executable(&mut artifacts).await?;
@@ -1012,10 +995,10 @@ impl BuildRequest {
                 self.fill_caches(&ctx, &mut artifacts).await?;
 
                 tracing::debug!("Bundle created at {}", self.root_dir().display());
+
+                Ok(artifacts)
             }
         }
-
-        Ok(artifacts)
     }
 
     /// Run the cargo build by assembling the build command and executing it.
@@ -1024,7 +1007,7 @@ impl BuildRequest {
     /// be very confusing to the user.
     ///
     /// This method is only meant to be run by fat/full builds - not by hotpatch builds
-    async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
+    pub async fn cargo_build(&self, ctx: &BuildContext) -> Result<BuildArtifacts> {
         let time_start = SystemTime::now();
 
         // If we forget to do this, then we won't get the linker args since rust skips the full build
@@ -1166,6 +1149,9 @@ impl BuildRequest {
         if matches!(ctx.mode, BuildMode::Fat) {
             self.run_fat_link(ctx, &exe, &workspace_rustc_args).await?;
         }
+
+        // Asset extraction is starts bundle
+        ctx.status_start_bundle();
 
         // Extract all linker metadata (assets, Android/iOS plugins, widget extensions) in a single pass.
         let assets = self.collect_assets_and_metadata(&exe, ctx).await?;
