@@ -1936,6 +1936,7 @@ impl AppBuilder {
     /// the flamegraph via a debug!()
     ///
     /// The flamegraph looks something like this:
+    /// ```
     /// 17:22:56 [dev] Flamegraph for fat - time taken: 11371ms
     ///        0ms   0.0% Verify Tooling       |█                                                                                               |
     ///        0ms   0.0% Installing Tooling   |█                                                                                               |
@@ -1947,6 +1948,7 @@ impl AppBuilder {
     ///     1529ms  13.4% Writing executable   |                                  ██████████████                                                |
     ///     4685ms  41.2% Wasm Bindgen         |                                               █████████████████████████████████████████        |
     ///     1061ms   9.3% Creating Patch Cache |                                                                                       █████████|
+    /// ```
     fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
         let Some(start) = self.compile_start else {
             tracing::debug!("no compile start?");

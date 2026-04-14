@@ -125,7 +125,7 @@ impl BuildRequest {
     /// dyld will complain.
     ///
     /// Also, some flags in darwin land might become deprecated, need to be super conservative:
-    /// - https://developer.apple.com/forums/thread/773907
+    /// - <https://developer.apple.com/forums/thread/773907>
     ///
     /// We need to be careful about which linker we're interpreting too. Some are old, some are new,
     /// some are experimental, and each has their own syntax ie `-C, /C, --C, C=` which need to be handlded.
