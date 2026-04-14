@@ -7,8 +7,6 @@
 
 use dioxus::prelude::*;
 
-use crate::private::{A, W};
-
 fn main() {
     dioxus::launch(app);
 }
@@ -16,41 +14,9 @@ fn main() {
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
-    // fails because private is not in scope
-    W.private();
-
     rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
-    }
-}
-
-pub enum MyPhantom<T> {
-    A,
-    B(T),
-}
-
-mod private {
-    trait Private<T> {}
-    impl Private<Sneaky> for W {}
-    struct Sneaky;
-
-    pub struct W;
-
-    pub trait A {
-        fn public(&self) {}
-
-        fn private<T>(&self)
-        where
-            Self: Private<T>,
-        {
-        }
-    }
-
-    impl A for W {}
-
-    fn test() {
-        W.private();
     }
 }
