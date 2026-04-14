@@ -51,20 +51,15 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
     let (seal_impl, _, seal_where) = input.generics.split_for_impl();
     let (trait_decl, trait_use, trait_where) = extension_generics.split_for_impl();
 
-    let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
-        prefix: name_prefix,
-        span: item.span(),
-        store_ty: store_ty.clone(),
-        seal_generics: quote! { #seal_impl },
-        seal_where: quote! { #seal_where },
-        trait_visibility: args
-            .visibility
-            .unwrap_or_else(|| parse_quote!(pub)),
-        trait_name: extension_name,
-        trait_generics_decl: quote! { #trait_decl },
-        trait_generics_use: quote! { #trait_use },
-        trait_where: quote! { #trait_where },
-    });
+    let mut seal =
+        crate::seal::SealBuilder::new(name_prefix, item.span(), store_ty.clone(), extension_name)
+            .seal_generics(quote! { #seal_impl }, quote! { #seal_where })
+            .trait_generics(
+                quote! { #trait_decl },
+                quote! { #trait_use },
+                quote! { #trait_where },
+            )
+            .trait_visibility(args.visibility.unwrap_or_else(|| parse_quote!(pub)));
 
     let immutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #item> + ::std::marker::Copy + 'static);
     let mutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #item> + ::std::marker::Copy + 'static);

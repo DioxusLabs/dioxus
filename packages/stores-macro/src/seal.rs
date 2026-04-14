@@ -13,36 +13,6 @@ use syn::{Ident, Visibility};
 
 use crate::derive::visibility_suffix;
 
-/// Inputs the caller provides up front. Generics are pre-tokenized so the
-/// builder is agnostic to how the caller built them.
-pub(crate) struct SealConfig {
-    /// Ident prefix for every generated type, e.g. `"TodoItemStore"` →
-    /// `__TodoItemStoreSealed`, `__TodoItemStoreMarkerPub`,
-    /// `__TodoItemStoreVisibleInPub`.
-    pub prefix: String,
-    /// Span attached to every generated ident.
-    pub span: Span,
-    /// The store type the extension trait is implemented for, e.g.
-    /// `dioxus_stores::Store<TodoItem, __Lens>`.
-    pub store_ty: TokenStream,
-    /// Impl generics for the marker / witness / sealed blanket impls (does not
-    /// include `__V`, which lives only on the extension trait).
-    pub seal_generics: TokenStream,
-    /// Where-clause for those blanket impls.
-    pub seal_where: TokenStream,
-    /// Visibility of the extension trait itself.
-    pub trait_visibility: Visibility,
-    /// Name of the extension trait.
-    pub trait_name: Ident,
-    /// Generics as they appear on the trait declaration and the trait impl
-    /// (usually `seal_generics` plus a leading `__V`).
-    pub trait_generics_decl: TokenStream,
-    /// Generics as they appear after the trait name in `impl Name<…> for …`.
-    pub trait_generics_use: TokenStream,
-    /// Where-clause on the trait decl + impl.
-    pub trait_where: TokenStream,
-}
-
 struct Bucket {
     vis: Visibility,
     marker: Ident,
@@ -50,41 +20,95 @@ struct Bucket {
 }
 
 pub(crate) struct SealBuilder {
-    cfg: SealConfig,
-    sealed: Ident,
+    prefix: String,
+    span: Span,
+    store_ty: TokenStream,
+    seal_generics: TokenStream,
+    seal_where: TokenStream,
+    trait_visibility: Visibility,
+    trait_name: Ident,
+    trait_generics_decl: TokenStream,
+    trait_generics_use: TokenStream,
+    trait_where: TokenStream,
     buckets: Vec<Bucket>,
-    /// `(trait_side, impl_side)` for each associated item. Fn methods push
-    /// `(sig;, sig body)`; consts / types push the same tokens on both sides.
     items: Vec<(TokenStream, TokenStream)>,
 }
 
 impl SealBuilder {
-    pub fn new(cfg: SealConfig) -> Self {
-        let sealed = Ident::new(&format!("__{}Sealed", cfg.prefix), cfg.span);
+    /// Start a builder with the minimum set of required fields. Everything
+    /// else defaults to empty; configure via the chainable `*_generics`,
+    /// `*_where`, and `trait_visibility` setters before `into_tokens`.
+    ///
+    /// - `prefix`: ident prefix for every generated type, e.g. `"TodoItemStore"`
+    ///   → `__TodoItemStoreSealed`, `__TodoItemStoreMarkerPub`,
+    ///   `__TodoItemStoreVisibleInPub`.
+    /// - `span`: span attached to every generated ident.
+    /// - `store_ty`: the store type the extension trait is implemented for,
+    ///   e.g. `dioxus_stores::Store<TodoItem, __Lens>`.
+    /// - `trait_name`: ident of the extension trait to generate.
+    pub(crate) fn new(
+        prefix: String,
+        span: Span,
+        store_ty: TokenStream,
+        trait_name: Ident,
+    ) -> Self {
         Self {
-            cfg,
-            sealed,
+            prefix,
+            span,
+            store_ty,
+            seal_generics: TokenStream::new(),
+            seal_where: TokenStream::new(),
+            trait_visibility: Visibility::Inherited,
+            trait_name,
+            trait_generics_decl: TokenStream::new(),
+            trait_generics_use: TokenStream::new(),
+            trait_where: TokenStream::new(),
             buckets: Vec::new(),
             items: Vec::new(),
         }
     }
 
+    /// Impl generics + where-clause for the marker / witness / sealed blanket
+    /// impls. These do not include `__V`, which lives only on the extension
+    /// trait.
+    pub(crate) fn seal_generics(mut self, generics: TokenStream, where_: TokenStream) -> Self {
+        self.seal_generics = generics;
+        self.seal_where = where_;
+        self
+    }
+
+    /// Generics + where-clause for the extension trait declaration and its
+    /// impl. `decl` is what appears after the trait name in the declaration
+    /// (typically `seal_generics` plus a leading `__V`); `use_` is what
+    /// appears in `impl Name<…> for …`.
+    pub(crate) fn trait_generics(
+        mut self,
+        decl: TokenStream,
+        use_: TokenStream,
+        where_: TokenStream,
+    ) -> Self {
+        self.trait_generics_decl = decl;
+        self.trait_generics_use = use_;
+        self.trait_where = where_;
+        self
+    }
+
+    /// Visibility of the extension trait itself. Defaults to inherited.
+    pub(crate) fn trait_visibility(mut self, vis: Visibility) -> Self {
+        self.trait_visibility = vis;
+        self
+    }
+
     /// Return the witness trait ident for `vis`, recording a new bucket on
     /// first use. Repeat calls for the same visibility reuse the previously
     /// minted ident.
-    pub fn push_witness(&mut self, vis: &Visibility) -> Ident {
+    pub(crate) fn push_witness(&mut self, vis: &Visibility) -> Ident {
         if let Some(b) = self.buckets.iter().find(|b| &b.vis == vis) {
             return b.witness.clone();
         }
         let suffix = visibility_suffix(vis);
-        let marker = Ident::new(
-            &format!("__{}Marker{}", self.cfg.prefix, suffix),
-            self.cfg.span,
-        );
-        let witness = Ident::new(
-            &format!("__{}VisibleIn{}", self.cfg.prefix, suffix),
-            self.cfg.span,
-        );
+        let marker = Ident::new(&format!("__{}Marker{}", self.prefix, suffix), self.span);
+        let witness = Ident::new(&format!("__{}VisibleIn{}", self.prefix, suffix), self.span);
         self.buckets.push(Bucket {
             vis: vis.clone(),
             marker,
@@ -96,26 +120,22 @@ impl SealBuilder {
     /// Queue a method for the extension trait. `sig` is everything before the
     /// semicolon / body (e.g. `fn foo(self) -> X where Self: W<__V>`); `body`
     /// is the `{ … }` block that follows in the impl.
-    pub fn push_method(&mut self, sig: TokenStream, body: TokenStream) {
+    pub(crate) fn push_method(&mut self, sig: TokenStream, body: TokenStream) {
         self.items.push((quote! { #sig; }, quote! { #sig #body }));
     }
 
     /// Queue a non-fn associated item (const / type). `trait_item` appears in
     /// the trait decl, `impl_item` in the trait impl.
-    pub fn push_assoc(&mut self, trait_item: TokenStream, impl_item: TokenStream) {
+    pub(crate) fn push_assoc(&mut self, trait_item: TokenStream, impl_item: TokenStream) {
         self.items.push((trait_item, impl_item));
     }
 
     /// Consume the builder and render the full expansion: seal scaffolding,
     /// extension trait declaration, and extension trait impl.
-    pub fn into_tokens(self) -> TokenStream {
+    pub(crate) fn into_tokens(self) -> TokenStream {
         let SealBuilder {
-            cfg,
-            sealed,
-            buckets,
-            items,
-        } = self;
-        let SealConfig {
+            prefix,
+            span,
             store_ty,
             seal_generics,
             seal_where,
@@ -124,8 +144,10 @@ impl SealBuilder {
             trait_generics_decl,
             trait_generics_use,
             trait_where,
-            ..
-        } = cfg;
+            buckets,
+            items,
+        } = self;
+        let sealed = Ident::new(&format!("__{}Sealed", prefix), span);
 
         let markers = buckets.iter().map(|b| {
             let Bucket { vis, marker, .. } = b;

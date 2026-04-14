@@ -246,18 +246,22 @@ fn derive_store_struct(
     // already guarantees a field's visibility is no wider than the struct's,
     // so passing `field.vis` straight to the builder gives the tightest gating
     // the user asked for.
-    let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
-        prefix: format!("{}Store", struct_name),
-        span: struct_name.span(),
-        store_ty: store_ty.clone(),
-        seal_generics: quote! { #extension_impl_generics },
-        seal_where: quote! { #extension_where_clause },
-        trait_visibility: visibility.clone(),
-        trait_name: extension_trait_name,
-        trait_generics_decl: quote! { #witness_impl_generics },
-        trait_generics_use: quote! { #witness_ty_generics },
-        trait_where: quote! { #witness_where_clause },
-    });
+    let mut seal = crate::seal::SealBuilder::new(
+        format!("{}Store", struct_name),
+        struct_name.span(),
+        store_ty.clone(),
+        extension_trait_name,
+    )
+    .seal_generics(
+        quote! { #extension_impl_generics },
+        quote! { #extension_where_clause },
+    )
+    .trait_generics(
+        quote! { #witness_impl_generics },
+        quote! { #witness_ty_generics },
+        quote! { #witness_where_clause },
+    )
+    .trait_visibility(visibility.clone());
 
     // `transpose` is gated on the struct's own visibility.
     let transpose_witness = seal.push_witness(visibility);
@@ -445,18 +449,22 @@ fn derive_store_enum(
     let (witness_impl_generics, witness_ty_generics, witness_where_clause) =
         witness_extension_generics.split_for_impl();
 
-    let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
-        prefix: format!("{}Store", enum_name),
-        span: enum_name.span(),
-        store_ty: store_ty.clone(),
-        seal_generics: quote! { #extension_impl_generics },
-        seal_where: quote! { #extension_where_clause },
-        trait_visibility: visibility.clone(),
-        trait_name: extension_trait_name,
-        trait_generics_decl: quote! { #witness_impl_generics },
-        trait_generics_use: quote! { #witness_ty_generics },
-        trait_where: quote! { #witness_where_clause },
-    });
+    let mut seal = crate::seal::SealBuilder::new(
+        format!("{}Store", enum_name),
+        enum_name.span(),
+        store_ty.clone(),
+        extension_trait_name,
+    )
+    .seal_generics(
+        quote! { #extension_impl_generics },
+        quote! { #extension_where_clause },
+    )
+    .trait_generics(
+        quote! { #witness_impl_generics },
+        quote! { #witness_ty_generics },
+        quote! { #witness_where_clause },
+    )
+    .trait_visibility(visibility.clone());
     let enum_witness = seal.push_witness(visibility);
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
