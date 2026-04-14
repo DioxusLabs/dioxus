@@ -73,39 +73,6 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
     }
 }
 
-/// Emit a trait definition + blanket impl for `Store<T, __Lens>`.
-///
-/// Used by the enum path, which doesn't have per-variant visibility gating.
-/// A private `Sealed` supertrait prevents external types from implementing
-/// the extension trait.
-#[allow(clippy::too_many_arguments)]
-fn extension_trait(
-    visibility: &syn::Visibility,
-    trait_name: &Ident,
-    sealed_trait_name: &Ident,
-    store_ty: &TokenStream2,
-    extension_impl_generics: &syn::ImplGenerics,
-    extension_ty_generics: &syn::TypeGenerics,
-    extension_where_clause: Option<&syn::WhereClause>,
-    definitions: &[TokenStream2],
-    implementations: &[TokenStream2],
-) -> TokenStream2 {
-    quote! {
-        #[doc(hidden)]
-        #[allow(non_camel_case_types)]
-        trait #sealed_trait_name {}
-        impl #extension_impl_generics #sealed_trait_name for #store_ty #extension_where_clause {}
-
-        #visibility trait #trait_name #extension_impl_generics: #sealed_trait_name #extension_where_clause {
-            #(#definitions)*
-        }
-
-        impl #extension_impl_generics #trait_name #extension_ty_generics for #store_ty #extension_where_clause {
-            #(#implementations)*
-        }
-    }
-}
-
 /// Build a constructor expression: `prefix { a, b }`, `prefix(a, b)`, or just `prefix`.
 fn construct_from_fields(prefix: TokenStream2, fields: &Fields, names: &[Ident]) -> TokenStream2 {
     match fields {
@@ -275,94 +242,26 @@ fn derive_store_struct(
     let (witness_impl_generics, witness_ty_generics, witness_where_clause) =
         witness_extension_generics.split_for_impl();
 
-    // Bucket fields by visibility. Bucket 0 is reserved for the struct's own
-    // visibility so `transpose` can always be called by anyone who can see the
-    // type. Rust already guarantees each field's visibility is no wider than
-    // the struct's, so using `field.vis` directly is safe and gives the
-    // tightest gating the user asked for.
-    //
-    // The bucket list is tiny (usually ≤ 3 distinct visibilities) so a linear
-    // scan with `visibility_eq` is faster and clearer than a hashed lookup.
-    let mut visibility_order: Vec<Visibility> = vec![visibility.clone()];
-    let mut field_bucket: Vec<usize> = Vec::with_capacity(fields.len());
-    for field in fields.iter() {
-        let idx = visibility_order
-            .iter()
-            .position(|v| v == &field.vis)
-            .unwrap_or_else(|| {
-                let i = visibility_order.len();
-                visibility_order.push(field.vis.clone());
-                i
-            });
-        field_bucket.push(idx);
-    }
-    let transpose_bucket = 0;
+    // Each field's visibility gates access to its accessor method. Rust
+    // already guarantees a field's visibility is no wider than the struct's,
+    // so passing `field.vis` straight to the builder gives the tightest gating
+    // the user asked for.
+    let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
+        prefix: format!("{}Store", struct_name),
+        span: struct_name.span(),
+        store_ty: store_ty.clone(),
+        seal_generics: quote! { #extension_impl_generics },
+        seal_where: quote! { #extension_where_clause },
+        trait_visibility: visibility.clone(),
+        trait_name: extension_trait_name,
+        trait_generics_decl: quote! { #witness_impl_generics },
+        trait_generics_use: quote! { #witness_ty_generics },
+        trait_where: quote! { #witness_where_clause },
+    });
 
-    // One marker + one witness trait + one blanket impl per bucket.
-    //
-    // These are emitted at the same scope as the struct itself (not inside a
-    // helper module) so they work equally well for module-level and
-    // function-local derives. The marker's visibility is exactly the field's
-    // visibility, so `pub(in path)`, `pub(super)`, etc. all propagate
-    // faithfully.
-    let marker_idents: Vec<Ident> = visibility_order
-        .iter()
-        .map(|v| {
-            Ident::new(
-                &format!("__{}StoreMarker{}", struct_name, visibility_suffix(v)),
-                struct_name.span(),
-            )
-        })
-        .collect();
-    let witness_trait_idents: Vec<Ident> = visibility_order
-        .iter()
-        .map(|v| {
-            Ident::new(
-                &format!("__{}StoreVisibleIn{}", struct_name, visibility_suffix(v)),
-                struct_name.span(),
-            )
-        })
-        .collect();
+    // `transpose` is gated on the struct's own visibility.
+    let transpose_witness = seal.push_witness(visibility);
 
-    let marker_decls: Vec<TokenStream2> = visibility_order
-        .iter()
-        .zip(&marker_idents)
-        .map(|(vis, name)| {
-            quote! {
-                #[doc(hidden)]
-                #[allow(non_camel_case_types)]
-                #vis struct #name;
-            }
-        })
-        .collect();
-
-    let witness_trait_decls: Vec<TokenStream2> = witness_trait_idents
-        .iter()
-        .map(|name| {
-            quote! {
-                #[doc(hidden)]
-                #[allow(non_camel_case_types)]
-                trait #name<__V> {}
-            }
-        })
-        .collect();
-
-    let witness_impls: Vec<TokenStream2> = witness_trait_idents
-        .iter()
-        .zip(&marker_idents)
-        .map(|(trait_name, marker_name)| {
-            quote! {
-                impl #extension_impl_generics #trait_name<#marker_name>
-                    for dioxus_stores::Store<#struct_name #ty_generics, __Lens>
-                    #extension_where_clause
-                {}
-            }
-        })
-        .collect();
-
-    // Emit each method once as a `(signature, body)` pair so the signature and
-    // where-clauses live in a single place.
-    let mut methods: Vec<(TokenStream2, TokenStream2)> = Vec::new();
     let mut transposed_fields: Vec<TokenStream2> = Vec::new();
     for (field_index, field) in fields.iter().enumerate() {
         let field_accessor = field.ident.as_ref().map_or_else(
@@ -375,7 +274,7 @@ fn derive_store_struct(
         let ordinal = LitInt::new(&field_index.to_string(), field.span());
         transposed_fields.push(store_type.clone());
 
-        let witness_trait = &witness_trait_idents[field_bucket[field_index]];
+        let witness_trait = seal.push_witness(&field.vis);
         let signature = quote! {
             fn #function_name(self) -> #store_type
             where
@@ -389,18 +288,16 @@ fn derive_store_struct(
                 ::std::convert::Into::into(scope)
             }
         };
-        methods.push((signature, body));
+        seal.push_method(signature, body);
     }
 
-    // `transpose` is gated on the struct's own visibility bucket.
-    let transpose_witness = &witness_trait_idents[transpose_bucket];
     let field_names: Vec<_> = fields
         .iter()
         .enumerate()
         .map(|(i, field)| function_name_from_field(i, field))
         .collect();
     let construct = construct_from_fields(quote! { #transposed_name }, fields, &field_names);
-    methods.push((
+    seal.push_method(
         quote! {
             fn transpose(self) -> #transposed_name #extension_ty_generics
             where
@@ -413,31 +310,9 @@ fn derive_store_struct(
                 #construct
             }
         },
-    ));
+    );
 
-    let trait_sigs = methods.iter().map(|(sig, _)| quote! { #sig; });
-    let impl_bodies = methods.iter().map(|(sig, body)| quote! { #sig #body });
-
-    let sealed_trait_name = format_ident!("__{}StoreSealed", struct_name);
-    let extension_trait_tokens = quote! {
-        #[doc(hidden)]
-        #[allow(non_camel_case_types)]
-        trait #sealed_trait_name {}
-        impl #extension_impl_generics #sealed_trait_name for #store_ty #extension_where_clause {}
-
-        #[allow(private_bounds)]
-        #visibility trait #extension_trait_name #witness_impl_generics: #sealed_trait_name #witness_where_clause {
-            #(#trait_sigs)*
-        }
-
-        #[allow(private_bounds)]
-        impl #witness_impl_generics #extension_trait_name #witness_ty_generics
-            for #store_ty
-            #witness_where_clause
-        {
-            #(#impl_bodies)*
-        }
-    };
+    let seal_tokens = seal.into_tokens();
 
     let transposed_struct = transposed_struct(
         visibility,
@@ -450,32 +325,29 @@ fn derive_store_struct(
     );
 
     Ok(quote! {
-        #(#marker_decls)*
-        #(#witness_trait_decls)*
-        #(#witness_impls)*
-        #extension_trait_tokens
+        #seal_tokens
         #transposed_struct
     })
 }
 
-/// Generate `is_variant()`: returns `(definition, implementation)`.
+/// Generate `is_variant()`: returns `(signature, body)` for the seal builder.
 fn generate_is_variant_method(
     is_fn: &Ident,
     variant_name: &Ident,
     enum_name: &Ident,
     readable_bounds: &TokenStream2,
 ) -> (TokenStream2, TokenStream2) {
-    let definition = quote! {
-        fn #is_fn(&self) -> bool where #readable_bounds;
+    let sig = quote! {
+        fn #is_fn(&self) -> bool where #readable_bounds
     };
-    let implementation = quote! {
-        fn #is_fn(&self) -> bool where #readable_bounds {
+    let body = quote! {
+        {
             self.selector().track_shallow();
             let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
             matches!(&*ref_self, #enum_name::#variant_name { .. })
         }
     };
-    (definition, implementation)
+    (sig, body)
 }
 
 /// Generate `variant() -> Option<Store<Field, W>>` for single-field variants.
@@ -486,15 +358,15 @@ fn generate_as_variant_method(
     store_type: &TokenStream2,
     readable_bounds: &TokenStream2,
 ) -> (TokenStream2, TokenStream2) {
-    let definition = quote! {
-        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds;
+    let sig = quote! {
+        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds
     };
-    let implementation = quote! {
-        fn #snake_case_variant(self) -> Option<#store_type> where #readable_bounds {
+    let body = quote! {
+        {
             self.#is_fn().then(|| { #select_field })
         }
     };
-    (definition, implementation)
+    (sig, body)
 }
 
 fn select_enum_variant_field(
@@ -554,10 +426,18 @@ fn derive_store_enum(
         extension_generics.split_for_impl();
     let store_ty = quote! { dioxus_stores::Store<#enum_name #ty_generics, __Lens> };
 
-    // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed enum
-    // and the match arms for the transposed enum.
-    let mut definitions = Vec::new();
-    let mut implementations = Vec::new();
+    let mut seal = crate::seal::SealBuilder::new(crate::seal::SealConfig {
+        prefix: format!("{}Store", enum_name),
+        span: enum_name.span(),
+        store_ty: store_ty.clone(),
+        seal_generics: quote! { #extension_impl_generics },
+        seal_where: quote! { #extension_where_clause },
+        trait_visibility: visibility.clone(),
+        trait_name: extension_trait_name,
+        trait_generics_decl: quote! { #extension_impl_generics },
+        trait_generics_use: quote! { #extension_ty_generics },
+        trait_where: quote! { #extension_where_clause },
+    });
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
@@ -572,10 +452,9 @@ fn derive_store_enum(
         let snake_case_variant = format_ident!("{}", variant_name.to_string().to_case(Case::Snake));
         let is_fn = format_ident!("is_{}", snake_case_variant);
 
-        let (def, imp) =
+        let (sig, body) =
             generate_is_variant_method(&is_fn, variant_name, enum_name, &readable_bounds);
-        definitions.push(def);
-        implementations.push(imp);
+        seal.push_method(sig, body);
 
         let fields = &variant.fields;
         let mut transposed_fields = Vec::new();
@@ -597,15 +476,14 @@ fn derive_store_enum(
 
             // If there is only one field, generate a field() -> Option<Store<O, W>> method
             if fields.len() == 1 {
-                let (def, imp) = generate_as_variant_method(
+                let (sig, body) = generate_as_variant_method(
                     &is_fn,
                     &snake_case_variant,
                     &select_field,
                     &store_type,
                     &readable_bounds,
                 );
-                definitions.push(def);
-                implementations.push(imp);
+                seal.push_method(sig, body);
             }
 
             field_selectors.push(select_field);
@@ -647,24 +525,25 @@ fn derive_store_enum(
         transposed_variants.push(transposed_variant);
     }
 
-    // Transpose method
-    definitions.push(quote! {
-        fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy;
-    });
-    implementations.push(quote! {
-        fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy {
-            // We only do a shallow read of the store to get the current variant. We only need to rerun
-            // this match when the variant changes, not when the fields change
-            self.selector().track_shallow();
-            let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
-            match &*read {
-                #(#transposed_match_arms)*
-                // The enum may be #[non_exhaustive]
-                #[allow(unreachable)]
-                _ => unreachable!(),
+    seal.push_method(
+        quote! {
+            fn transpose(self) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy
+        },
+        quote! {
+            {
+                // We only do a shallow read of the store to get the current variant. We only need to rerun
+                // this match when the variant changes, not when the fields change
+                self.selector().track_shallow();
+                let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
+                match &*read {
+                    #(#transposed_match_arms)*
+                    // The enum may be #[non_exhaustive]
+                    #[allow(unreachable)]
+                    _ => unreachable!(),
+                }
             }
-        }
-    });
+        },
+    );
 
     // Transposed enum definition
     let all_fields = structure.variants.iter().flat_map(|v| v.fields.iter());
@@ -675,22 +554,9 @@ fn derive_store_enum(
         quote! { #visibility enum #transposed_name #extension_impl_generics #extension_where_clause { #(#transposed_variants),* } }
     };
 
-    let sealed_trait_name = format_ident!("__{}StoreSealed", enum_name);
-    let trait_tokens = extension_trait(
-        visibility,
-        &extension_trait_name,
-        &sealed_trait_name,
-        &store_ty,
-        &extension_impl_generics,
-        &extension_ty_generics,
-        extension_where_clause,
-        &definitions,
-        &implementations,
-    );
-
-    // Expand to the extension trait and its implementation for the store alongside the transposed enum
+    let seal_tokens = seal.into_tokens();
     Ok(quote! {
-        #trait_tokens
+        #seal_tokens
         #transposed_enum
     })
 }

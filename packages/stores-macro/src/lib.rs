@@ -5,6 +5,7 @@ use crate::extend::ExtendArgs;
 
 mod derive;
 mod extend;
+mod seal;
 
 /// # `derive(Store)`
 ///
