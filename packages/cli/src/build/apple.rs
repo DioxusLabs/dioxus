@@ -864,7 +864,7 @@ We checked the folders:
     }
 
     /// Install a Swift framework bundle into the app's Frameworks directory.
-    pub async fn install_swift_framework(&self, framework_path: &Path) -> Result<()> {
+    async fn install_swift_framework(&self, framework_path: &Path) -> Result<()> {
         let frameworks_dir = self.frameworks_folder();
         std::fs::create_dir_all(&frameworks_dir)?;
 
@@ -1046,7 +1046,7 @@ We checked the folders:
 /// 2. Runs `swift build` to compile into a dynamic library
 /// 3. Wraps the dylib in a proper .framework bundle for iOS/macOS
 /// 4. Returns the path to the resulting `.framework` bundle
-pub async fn compile_swift_sources(
+async fn compile_swift_sources(
     swift_sources: &[SwiftPackageMetadata],
     target_triple: &Triple,
     build_dir: &Path,

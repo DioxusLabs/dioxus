@@ -73,614 +73,12 @@ use target_lexicon::{
 use tokio::process::Command;
 
 impl BuildRequest {
-    /// Check if the android tooling is installed
-    ///
-    /// looks for the android sdk + ndk
-    ///
-    /// will do its best to fill in the missing bits by exploring the sdk structure
-    /// IE will attempt to use the Java installed from android studio if possible.
-    pub async fn verify_android_tooling(&self) -> Result<()> {
-        let linker = self
-            .workspace
-            .android_tools()?
-            .android_cc(&self.triple, self.min_sdk_version_or_default());
-
-        tracing::debug!("Verifying android linker: {linker:?}");
-
-        if linker.exists() {
-            return Ok(());
-        }
-
-        bail!(
-            "Android linker not found at {linker:?}. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
-        );
-    }
-
-    pub fn start_android_sim(&self) -> Result<()> {
-        let tools = self.workspace.android_tools()?;
-        tokio::spawn(async move {
-            let emulator = tools.emulator();
-            let avds = Command::new(&emulator)
-                .arg("-list-avds")
-                .output()
-                .await
-                .unwrap();
-            let avds = String::from_utf8_lossy(&avds.stdout);
-            let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
-            if let Some(avd) = avd {
-                tracing::info!("Booting Android emulator: \"{avd}\"");
-                Command::new(&emulator)
-                    .arg("-avd")
-                    .arg(avd)
-                    .args(["-netdelay", "none", "-netspeed", "full"])
-                    .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                    .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
-                    .output()
-                    .await
-                    .unwrap();
-            } else {
-                tracing::warn!(
-                    "No Android emulators found. Please create one using `emulator -avd <name>`"
-                );
-            }
-        });
-        Ok(())
-    }
-
-    pub async fn assemble_android(&self, ctx: &BuildContext) -> Result<()> {
-        ctx.status_running_gradle();
-
-        // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-        let build_type = if self.release && self.config.bundle.android.is_some() {
-            "assembleRelease"
-        } else {
-            "assembleDebug"
-        };
-
-        let output = Command::new(self.gradle_exe()?)
-            .arg(build_type)
-            .current_dir(self.root_dir())
-            .output()
-            .await
-            .context("Failed to run gradle")?;
-
-        if !output.status.success() {
-            bail!(
-                "Failed to assemble apk: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Run bundleRelease and return the path to the `.aab` file
-    ///
-    /// <https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and>
-    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
-        let output = Command::new(self.gradle_exe()?)
-            .arg("bundleRelease")
-            .current_dir(self.root_dir())
-            .output()
-            .await
-            .context("Failed to run gradle bundleRelease")?;
-
-        if !output.status.success() {
-            bail!(
-                "Failed to bundleRelease: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        let app_release = self
-            .root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("bundle")
-            .join("release");
-
-        // Rename it to Name-arch.aab
-        let from = app_release.join("app-release.aab");
-        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.triple));
-
-        std::fs::rename(from, &to).context("Failed to rename aab")?;
-
-        Ok(to)
-    }
-
-    pub fn gradle_exe(&self) -> Result<PathBuf> {
-        // make sure we can execute the gradlew script
-        #[cfg(unix)]
-        {
-            use std::os::unix::prelude::PermissionsExt;
-            std::fs::set_permissions(
-                self.root_dir().join("gradlew"),
-                std::fs::Permissions::from_mode(0o755),
-            )
-            .context("Failed to make gradlew executable")?;
-        }
-
-        let gradle_exec_name = match cfg!(windows) {
-            true => "gradlew.bat",
-            false => "gradlew",
-        };
-
-        Ok(self.root_dir().join(gradle_exec_name))
-    }
-
-    pub(crate) fn debug_apk_path(&self) -> PathBuf {
-        self.root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("apk")
-            .join("debug")
-            .join("app-debug.apk")
-    }
-
-    pub(crate) fn release_apk_path(&self) -> PathBuf {
-        self.root_dir()
-            .join("app")
-            .join("build")
-            .join("outputs")
-            .join("apk")
-            .join("release")
-            .join("app-release.apk")
-    }
-
-    pub(crate) fn android_apk_path(&self) -> PathBuf {
-        let assembled_release = self.release && self.config.bundle.android.is_some();
-        if assembled_release {
-            self.release_apk_path()
-        } else {
-            self.debug_apk_path()
-        }
-    }
-
-    /// Set the environment variables required for building on Android.
-    ///
-    /// This involves setting sysroots, CC, CXX, AR, and other environment variables along with
-    /// vars that cc-rs uses for its C/C++ compilation.
-    ///
-    /// We pulled the environment setup from `cargo ndk` and attempt to mimic its behavior to retain
-    /// compatibility with existing crates that work with `cargo ndk`.
-    ///
-    /// <https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102>
-    ///
-    /// cargo-ndk is MIT licensed.
-    ///
-    /// <https://github.com/bbqsrc/cargo-ndk>
-    pub fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
-        // Derived from getenv_with_target_prefixes in `cc` crate.
-        fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
-            #[inline]
-            fn env_var_with_key(key: String) -> Option<(String, String)> {
-                std::env::var(&key).map(|value| (key, value)).ok()
-            }
-
-            let triple_u = triple.replace('-', "_");
-            let most_specific_key = format!("{}_{}", var_base, triple);
-
-            env_var_with_key(most_specific_key.to_string())
-                .or_else(|| env_var_with_key(format!("{}_{}", var_base, triple_u)))
-                .or_else(|| env_var_with_key(format!("TARGET_{}", var_base)))
-                .or_else(|| env_var_with_key(var_base.to_string()))
-                .map(|(key, value)| (key, Some(value)))
-                .unwrap_or_else(|| (most_specific_key, None))
-        }
-
-        fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
-            format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
-        }
-
-        fn clang_target(rust_target: &str, api_level: u8) -> String {
-            let target = match rust_target {
-                "arm-linux-androideabi" => "armv7a-linux-androideabi",
-                "armv7-linux-androideabi" => "armv7a-linux-androideabi",
-                _ => rust_target,
-            };
-            format!("--target={target}{api_level}")
-        }
-
-        fn sysroot_target(rust_target: &str) -> &str {
-            (match rust_target {
-                "armv7-linux-androideabi" => "arm-linux-androideabi",
-                _ => rust_target,
-            }) as _
-        }
-        fn rt_builtins(rust_target: &str) -> &str {
-            (match rust_target {
-                "armv7-linux-androideabi" => "arm",
-                "aarch64-linux-android" => "aarch64",
-                "i686-linux-android" => "i686",
-                "x86_64-linux-android" => "x86_64",
-                _ => rust_target,
-            }) as _
-        }
-
-        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
-
-        let min_sdk_version = self.min_sdk_version_or_default();
-
-        let tools = self.workspace.android_tools()?;
-        let linker = tools.android_cc(&self.triple, min_sdk_version);
-        let ar_path = tools.ar_path();
-        let target_cc = tools.target_cc();
-        let target_cxx = tools.target_cxx();
-        let java_home = tools.java_home();
-        let ndk_home = tools.ndk.clone();
-        let sdk_root = tools.sdk();
-        tracing::debug!(
-            r#"Using android:
-            min_sdk_version: {min_sdk_version}
-            linker: {linker:?}
-            ar_path: {ar_path:?}
-            target_cc: {target_cc:?}
-            target_cxx: {target_cxx:?}
-            java_home: {java_home:?}
-            sdk_root: {sdk_root:?}
-            "#
-        );
-
-        if let Some(java_home) = &java_home {
-            tracing::debug!("Setting JAVA_HOME to {java_home:?}");
-            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
-            env_vars.push((
-                "DX_ANDROID_JAVA_HOME".into(),
-                java_home.clone().into_os_string(),
-            ));
-        }
-
-        env_vars.push((
-            "DX_ANDROID_NDK_HOME".into(),
-            ndk_home.clone().into_os_string(),
-        ));
-        env_vars.push((
-            "DX_ANDROID_SDK_ROOT".into(),
-            sdk_root.clone().into_os_string(),
-        ));
-        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
-        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
-        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
-        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
-
-        let triple = self.triple.to_string();
-
-        // Environment variables for the `cc` crate
-        let (cc_key, _cc_value) = cc_env("CC", &triple);
-        let (cflags_key, cflags_value) = cc_env("CFLAGS", &triple);
-        let (cxx_key, _cxx_value) = cc_env("CXX", &triple);
-        let (cxxflags_key, cxxflags_value) = cc_env("CXXFLAGS", &triple);
-        let (ar_key, _ar_value) = cc_env("AR", &triple);
-        let (ranlib_key, _ranlib_value) = cc_env("RANLIB", &triple);
-
-        // Environment variables for cargo
-        let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
-        let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
-        let bindgen_clang_args_key =
-            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
-
-        let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
-        let target_cc = tools.target_cc();
-        let target_cflags = match cflags_value {
-            Some(v) => format!("{clang_target} {v}"),
-            None => clang_target.to_string(),
-        };
-        let target_cxx = tools.target_cxx();
-        let target_cxxflags = match cxxflags_value {
-            Some(v) => format!("{clang_target} {v}"),
-            None => clang_target.to_string(),
-        };
-        let cargo_ndk_sysroot_path_key = "CARGO_NDK_SYSROOT_PATH";
-        let cargo_ndk_sysroot_path = tools.sysroot();
-        let cargo_ndk_sysroot_target_key = "CARGO_NDK_SYSROOT_TARGET";
-        let cargo_ndk_sysroot_target = sysroot_target(&triple);
-        let cargo_ndk_sysroot_libs_path_key = "CARGO_NDK_SYSROOT_LIBS_PATH";
-        let cargo_ndk_sysroot_libs_path = cargo_ndk_sysroot_path
-            .join("usr")
-            .join("lib")
-            .join(cargo_ndk_sysroot_target);
-        let target_ar = tools.ar_path();
-        let target_ranlib = tools.ranlib();
-        let clang_folder = tools.clang_folder();
-
-        // choose the clang target with the highest version
-        // Should we filter for only numbers?
-        let clang_rt = std::fs::read_dir(&clang_folder)
-            .map(|dir| {
-                let clang_builtins_target = dir
-                    .filter_map(|a| a.ok())
-                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
-                    .map(|s| s.path())
-                    .unwrap_or_else(|| clang_folder.join("clang"));
-
-                format!(
-                    "-L{} -lstatic=clang_rt.builtins-{}-android",
-                    clang_builtins_target.join("lib").join("linux").display(),
-                    rt_builtins(&triple)
-                )
-            })
-            .unwrap_or_default();
-
-        let extra_include: String = format!(
-            "{}/usr/include/{}",
-            &cargo_ndk_sysroot_path.display(),
-            &cargo_ndk_sysroot_target
-        );
-
-        let bindgen_args = format!(
-            "--sysroot={} -I{}",
-            &cargo_ndk_sysroot_path.display(),
-            extra_include
-        );
-
-        // Load up the OpenSSL environment variables, using our defaults if not set.
-        // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
-        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple));
-        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| AndroidTools::openssl_include_dir());
-        let openssl_libs =
-            std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
-
-        for env in [
-            (cc_key, target_cc.clone().into_os_string()),
-            (cflags_key, target_cflags.into()),
-            (cxx_key, target_cxx.into_os_string()),
-            (cxxflags_key, target_cxxflags.into()),
-            (ar_key, target_ar.clone().into()),
-            (ranlib_key, target_ranlib.into_os_string()),
-            (cargo_ar_key, target_ar.into_os_string()),
-            (
-                cargo_ndk_sysroot_path_key.to_string(),
-                cargo_ndk_sysroot_path.clone().into_os_string(),
-            ),
-            (
-                cargo_ndk_sysroot_libs_path_key.to_string(),
-                cargo_ndk_sysroot_libs_path.into_os_string(),
-            ),
-            (
-                cargo_ndk_sysroot_target_key.to_string(),
-                cargo_ndk_sysroot_target.into(),
-            ),
-            (cargo_rust_flags_key, clang_rt.into()),
-            (bindgen_clang_args_key, bindgen_args.into()),
-            (
-                "ANDROID_NATIVE_API_LEVEL".to_string(),
-                min_sdk_version.to_string().into(),
-            ),
-            (
-                format!(
-                    "CARGO_TARGET_{}_LINKER",
-                    self.triple
-                        .to_string()
-                        .to_ascii_uppercase()
-                        .replace("-", "_")
-                ),
-                linker.into_os_string(),
-            ),
-            (
-                "ANDROID_NDK_ROOT".to_string(),
-                ndk_home.clone().into_os_string(),
-            ),
-            (
-                "OPENSSL_LIB_DIR".to_string(),
-                openssl_lib_dir.into_os_string(),
-            ),
-            (
-                "OPENSSL_INCLUDE_DIR".to_string(),
-                openssl_include_dir.into_os_string(),
-            ),
-            ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
-            // Set the wry env vars - this is where wry will dump its kotlin files.
-            // Their setup is really annoying and requires us to hardcode `dx` to specific versions of tao/wry.
-            (
-                "WRY_ANDROID_PACKAGE".to_string(),
-                "dev.dioxus.main".to_string().into(),
-            ),
-            (
-                "WRY_ANDROID_LIBRARY".to_string(),
-                self.android_lib_name().into(),
-            ),
-            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
-                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
-                // Ensure the directory exists for WRY's canonicalize check
-                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
-                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
-                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
-                }
-                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
-                kotlin_dir.into_os_string()
-            }),
-            // Found this through a comment related to bindgen using the wrong clang for cross compiles
-            //
-            // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
-            //
-            // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
-            ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
-        ] {
-            env_vars.push((env.0.into(), env.1));
-        }
-
-        if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
-            for var in env_vars.iter_mut() {
-                // Convert windows paths to unix-style paths
-                // This is a workaround for the fact that the `cc` crate expects unix-style paths
-                // and will fail if it encounters windows-style paths.
-                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
-            }
-        }
-
-        Ok(env_vars)
-    }
-
-    /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
-    ///
-    /// This function handles both prebuilt AARs and source folders:
-    /// - If `artifact_path` is a file (ends in .aar), copy it to libs/ and add file dependency
-    /// - If `artifact_path` is a directory, copy it as a Gradle submodule and add project dependency
-    ///
-    /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
-    pub fn install_android_artifacts(
-        &self,
-        android_artifacts: &[AndroidArtifactMetadata],
-    ) -> Result<()> {
-        let libs_dir = self.root_dir().join("app").join("libs");
-        std::fs::create_dir_all(&libs_dir)?;
-
-        let plugins_dir = self.root_dir().join("plugins");
-        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
-        let settings_gradle = self.root_dir().join("settings.gradle");
-
-        for artifact in android_artifacts {
-            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
-            let plugin_name = artifact.plugin_name.as_str();
-
-            if artifact_path.is_dir() {
-                // It's a source folder - copy it as a Gradle submodule
-                tracing::debug!(
-                    "Bundling Android plugin '{}' from source: {}",
-                    plugin_name,
-                    artifact_path.display()
-                );
-
-                // Create module directory
-                let module_dir = plugins_dir.join(plugin_name);
-                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
-
-                // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
-                self.strip_gradle_plugin_versions(&module_dir)?;
-
-                // Add to settings.gradle
-                self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
-
-                // Add project dependency to app/build.gradle.kts
-                let dep_line = format!("implementation(project(\":plugins:{}\"))", plugin_name);
-                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
-
-                tracing::debug!(
-                    "Added Android plugin module :plugins:{} from {}",
-                    plugin_name,
-                    artifact_path.display()
-                );
-            } else if artifact_path.extension().is_some_and(|ext| ext == "aar") {
-                // It's a prebuilt AAR - copy directly to libs
-                if !artifact_path.exists() {
-                    anyhow::bail!(
-                        "Android plugin artifact not found: {}",
-                        artifact_path.display()
-                    );
-                }
-
-                let filename = artifact_path
-                    .file_name()
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Android plugin artifact path has no filename: {}",
-                            artifact_path.display()
-                        )
-                    })?
-                    .to_owned();
-                let dest_file = libs_dir.join(&filename);
-                std::fs::copy(&artifact_path, &dest_file)?;
-                tracing::debug!(
-                    "Copied Android artifact {} -> {}",
-                    artifact_path.display(),
-                    dest_file.display()
-                );
-
-                let dep_line = format!(
-                    "implementation(files(\"libs/{}\"))",
-                    filename.to_string_lossy()
-                );
-                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
-            } else {
-                anyhow::bail!(
-                    "Android artifact path is neither a directory nor an AAR file: {}",
-                    artifact_path.display()
-                );
-            }
-
-            // Add any extra Gradle dependencies specified by the plugin
-            for dependency in artifact
-                .gradle_dependencies
-                .as_str()
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-            {
-                self.ensure_gradle_dependency(&build_gradle, dependency)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Strip version specifiers from build.gradle.kts plugins block.
-    ///
-    /// When a plugin module is included as a subproject, having version specifiers in the
-    /// plugins block causes conflicts because the parent project already has the plugins
-    /// on the classpath. This function removes version specifications like:
-    /// - `version "8.4.2"` or `version "1.9.24"`
-    /// - Entire version calls from plugin declarations
-    pub fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
-        use std::fs;
-
-        let build_gradle = module_dir.join("build.gradle.kts");
-        if !build_gradle.exists() {
-            return Ok(());
-        }
-
-        let contents = fs::read_to_string(&build_gradle)?;
-
-        // Remove version specifications from plugin declarations
-        // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
-        // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
-        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
-        let cleaned = version_pattern.replace_all(&contents, "");
-
-        if cleaned != contents {
-            fs::write(&build_gradle, cleaned.as_ref())?;
-            tracing::debug!(
-                "Stripped version specifiers from {}",
-                build_gradle.display()
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Add a module include to settings.gradle if not already present.
-    pub fn ensure_settings_gradle_include(
-        &self,
-        settings_gradle: &Path,
-        plugin_name: &str,
-    ) -> Result<()> {
-        use std::fs;
-
-        let include_line = format!("include ':plugins:{}'", plugin_name);
-        let mut contents = fs::read_to_string(settings_gradle)?;
-
-        if contents.contains(&include_line) {
-            return Ok(());
-        }
-
-        // Add the include at the end
-        contents.push_str(&format!("\n{}\n", include_line));
-        fs::write(settings_gradle, contents)?;
-
-        Ok(())
-    }
-
     /// Assemble the android app dir.
     ///
     /// This is a bit of a mess since we need to create a lot of directories and files. Other approaches
     /// would be to unpack some zip folder or something stored via `include_dir!()`. However, we do
     /// need to customize the whole setup a bit, so it's just simpler (though messier) to do it this way.
-    pub fn build_android_app_dir(&self) -> Result<()> {
+    pub(crate) fn build_android_app_dir(&self) -> Result<()> {
         use std::fs::{create_dir_all, write};
         let root = self.root_dir();
 
@@ -980,6 +378,608 @@ impl BuildRequest {
         Ok(())
     }
 
+    pub async fn assemble_android(&self, ctx: &BuildContext) -> Result<()> {
+        ctx.status_running_gradle();
+
+        // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
+        let build_type = if self.release && self.config.bundle.android.is_some() {
+            "assembleRelease"
+        } else {
+            "assembleDebug"
+        };
+
+        let output = Command::new(self.gradle_exe()?)
+            .arg(build_type)
+            .current_dir(self.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to assemble apk: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Run bundleRelease and return the path to the `.aab` file
+    ///
+    /// <https://stackoverflow.com/questions/57072558/whats-the-difference-between-gradlewassemblerelease-gradlewinstallrelease-and>
+    pub(crate) async fn android_gradle_bundle(&self) -> Result<PathBuf> {
+        let output = Command::new(self.gradle_exe()?)
+            .arg("bundleRelease")
+            .current_dir(self.root_dir())
+            .output()
+            .await
+            .context("Failed to run gradle bundleRelease")?;
+
+        if !output.status.success() {
+            bail!(
+                "Failed to bundleRelease: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let app_release = self
+            .root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("bundle")
+            .join("release");
+
+        // Rename it to Name-arch.aab
+        let from = app_release.join("app-release.aab");
+        let to = app_release.join(format!("{}-{}.aab", self.bundled_app_name(), self.triple));
+
+        std::fs::rename(from, &to).context("Failed to rename aab")?;
+
+        Ok(to)
+    }
+
+    /// Install Android plugin artifacts by bundling source folders as Gradle submodules.
+    ///
+    /// This function handles both prebuilt AARs and source folders:
+    /// - If `artifact_path` is a file (ends in .aar), copy it to libs/ and add file dependency
+    /// - If `artifact_path` is a directory, copy it as a Gradle submodule and add project dependency
+    ///
+    /// All sources are bundled first, then a single Gradle build compiles everything in `assemble()`.
+    pub(crate) fn install_android_artifacts(
+        &self,
+        android_artifacts: &[AndroidArtifactMetadata],
+    ) -> Result<()> {
+        let libs_dir = self.root_dir().join("app").join("libs");
+        std::fs::create_dir_all(&libs_dir)?;
+
+        let plugins_dir = self.root_dir().join("plugins");
+        let build_gradle = self.root_dir().join("app").join("build.gradle.kts");
+        let settings_gradle = self.root_dir().join("settings.gradle");
+
+        for artifact in android_artifacts {
+            let artifact_path = PathBuf::from(artifact.artifact_path.as_str());
+            let plugin_name = artifact.plugin_name.as_str();
+
+            if artifact_path.is_dir() {
+                // It's a source folder - copy it as a Gradle submodule
+                tracing::debug!(
+                    "Bundling Android plugin '{}' from source: {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+
+                // Create module directory
+                let module_dir = plugins_dir.join(plugin_name);
+                self.copy_build_dir_recursive(&artifact_path, &module_dir)?;
+
+                // Strip version specifiers from build.gradle.kts to avoid conflicts with parent project
+                self.strip_gradle_plugin_versions(&module_dir)?;
+
+                // Add to settings.gradle
+                self.ensure_settings_gradle_include(&settings_gradle, plugin_name)?;
+
+                // Add project dependency to app/build.gradle.kts
+                let dep_line = format!("implementation(project(\":plugins:{}\"))", plugin_name);
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+
+                tracing::debug!(
+                    "Added Android plugin module :plugins:{} from {}",
+                    plugin_name,
+                    artifact_path.display()
+                );
+            } else if artifact_path.extension().is_some_and(|ext| ext == "aar") {
+                // It's a prebuilt AAR - copy directly to libs
+                if !artifact_path.exists() {
+                    anyhow::bail!(
+                        "Android plugin artifact not found: {}",
+                        artifact_path.display()
+                    );
+                }
+
+                let filename = artifact_path
+                    .file_name()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Android plugin artifact path has no filename: {}",
+                            artifact_path.display()
+                        )
+                    })?
+                    .to_owned();
+                let dest_file = libs_dir.join(&filename);
+                std::fs::copy(&artifact_path, &dest_file)?;
+                tracing::debug!(
+                    "Copied Android artifact {} -> {}",
+                    artifact_path.display(),
+                    dest_file.display()
+                );
+
+                let dep_line = format!(
+                    "implementation(files(\"libs/{}\"))",
+                    filename.to_string_lossy()
+                );
+                self.ensure_gradle_dependency(&build_gradle, &dep_line)?;
+            } else {
+                anyhow::bail!(
+                    "Android artifact path is neither a directory nor an AAR file: {}",
+                    artifact_path.display()
+                );
+            }
+
+            // Add any extra Gradle dependencies specified by the plugin
+            for dependency in artifact
+                .gradle_dependencies
+                .as_str()
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+            {
+                self.ensure_gradle_dependency(&build_gradle, dependency)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Check if the android tooling is installed
+    ///
+    /// looks for the android sdk + ndk
+    ///
+    /// will do its best to fill in the missing bits by exploring the sdk structure
+    /// IE will attempt to use the Java installed from android studio if possible.
+    pub async fn verify_android_tooling(&self) -> Result<()> {
+        let linker = self
+            .workspace
+            .android_tools()?
+            .android_cc(&self.triple, self.min_sdk_version_or_default());
+
+        tracing::debug!("Verifying android linker: {linker:?}");
+
+        if linker.exists() {
+            return Ok(());
+        }
+
+        bail!(
+            "Android linker not found at {linker:?}. Please set the `ANDROID_NDK_HOME` environment variable to the root of your NDK installation."
+        );
+    }
+
+    pub(crate) fn start_android_sim(&self) -> Result<()> {
+        let tools = self.workspace.android_tools()?;
+        tokio::spawn(async move {
+            let emulator = tools.emulator();
+            let avds = Command::new(&emulator)
+                .arg("-list-avds")
+                .output()
+                .await
+                .unwrap();
+            let avds = String::from_utf8_lossy(&avds.stdout);
+            let avd = avds.trim().lines().next().map(|s| s.trim().to_string());
+            if let Some(avd) = avd {
+                tracing::info!("Booting Android emulator: \"{avd}\"");
+                Command::new(&emulator)
+                    .arg("-avd")
+                    .arg(avd)
+                    .args(["-netdelay", "none", "-netspeed", "full"])
+                    .stdout(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                    .stderr(std::process::Stdio::null()) // prevent accumulating huge amounts of mem usage
+                    .output()
+                    .await
+                    .unwrap();
+            } else {
+                tracing::warn!(
+                    "No Android emulators found. Please create one using `emulator -avd <name>`"
+                );
+            }
+        });
+        Ok(())
+    }
+
+    pub(crate) fn gradle_exe(&self) -> Result<PathBuf> {
+        // make sure we can execute the gradlew script
+        #[cfg(unix)]
+        {
+            use std::os::unix::prelude::PermissionsExt;
+            std::fs::set_permissions(
+                self.root_dir().join("gradlew"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .context("Failed to make gradlew executable")?;
+        }
+
+        let gradle_exec_name = match cfg!(windows) {
+            true => "gradlew.bat",
+            false => "gradlew",
+        };
+
+        Ok(self.root_dir().join(gradle_exec_name))
+    }
+
+    pub(crate) fn debug_apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("debug")
+            .join("app-debug.apk")
+    }
+
+    pub(crate) fn release_apk_path(&self) -> PathBuf {
+        self.root_dir()
+            .join("app")
+            .join("build")
+            .join("outputs")
+            .join("apk")
+            .join("release")
+            .join("app-release.apk")
+    }
+
+    pub(crate) fn android_apk_path(&self) -> PathBuf {
+        let assembled_release = self.release && self.config.bundle.android.is_some();
+        if assembled_release {
+            self.release_apk_path()
+        } else {
+            self.debug_apk_path()
+        }
+    }
+
+    /// Set the environment variables required for building on Android.
+    ///
+    /// This involves setting sysroots, CC, CXX, AR, and other environment variables along with
+    /// vars that cc-rs uses for its C/C++ compilation.
+    ///
+    /// We pulled the environment setup from `cargo ndk` and attempt to mimic its behavior to retain
+    /// compatibility with existing crates that work with `cargo ndk`.
+    ///
+    /// <https://github.com/bbqsrc/cargo-ndk/blob/1d1a6dc70a99b7f95bc71ed07bf893ef37966efc/src/cargo.rs#L97-L102>
+    ///
+    /// cargo-ndk is MIT licensed.
+    ///
+    /// <https://github.com/bbqsrc/cargo-ndk>
+    pub(crate) fn android_env_vars(&self) -> Result<Vec<(Cow<'static, str>, OsString)>> {
+        // Derived from getenv_with_target_prefixes in `cc` crate.
+        fn cc_env(var_base: &str, triple: &str) -> (String, Option<String>) {
+            #[inline]
+            fn env_var_with_key(key: String) -> Option<(String, String)> {
+                std::env::var(&key).map(|value| (key, value)).ok()
+            }
+
+            let triple_u = triple.replace('-', "_");
+            let most_specific_key = format!("{}_{}", var_base, triple);
+
+            env_var_with_key(most_specific_key.to_string())
+                .or_else(|| env_var_with_key(format!("{}_{}", var_base, triple_u)))
+                .or_else(|| env_var_with_key(format!("TARGET_{}", var_base)))
+                .or_else(|| env_var_with_key(var_base.to_string()))
+                .map(|(key, value)| (key, Some(value)))
+                .unwrap_or_else(|| (most_specific_key, None))
+        }
+
+        fn cargo_env_target_cfg(triple: &str, key: &str) -> String {
+            format!("CARGO_TARGET_{}_{}", &triple.replace('-', "_"), key).to_uppercase()
+        }
+
+        fn clang_target(rust_target: &str, api_level: u8) -> String {
+            let target = match rust_target {
+                "arm-linux-androideabi" => "armv7a-linux-androideabi",
+                "armv7-linux-androideabi" => "armv7a-linux-androideabi",
+                _ => rust_target,
+            };
+            format!("--target={target}{api_level}")
+        }
+
+        fn sysroot_target(rust_target: &str) -> &str {
+            (match rust_target {
+                "armv7-linux-androideabi" => "arm-linux-androideabi",
+                _ => rust_target,
+            }) as _
+        }
+        fn rt_builtins(rust_target: &str) -> &str {
+            (match rust_target {
+                "armv7-linux-androideabi" => "arm",
+                "aarch64-linux-android" => "aarch64",
+                "i686-linux-android" => "i686",
+                "x86_64-linux-android" => "x86_64",
+                _ => rust_target,
+            }) as _
+        }
+
+        let mut env_vars: Vec<(Cow<'static, str>, OsString)> = vec![];
+
+        let min_sdk_version = self.min_sdk_version_or_default();
+
+        let tools = self.workspace.android_tools()?;
+        let linker = tools.android_cc(&self.triple, min_sdk_version);
+        let ar_path = tools.ar_path();
+        let target_cc = tools.target_cc();
+        let target_cxx = tools.target_cxx();
+        let java_home = tools.java_home();
+        let ndk_home = tools.ndk.clone();
+        let sdk_root = tools.sdk();
+        tracing::debug!(
+            r#"Using android:
+            min_sdk_version: {min_sdk_version}
+            linker: {linker:?}
+            ar_path: {ar_path:?}
+            target_cc: {target_cc:?}
+            target_cxx: {target_cxx:?}
+            java_home: {java_home:?}
+            sdk_root: {sdk_root:?}
+            "#
+        );
+
+        if let Some(java_home) = &java_home {
+            tracing::debug!("Setting JAVA_HOME to {java_home:?}");
+            env_vars.push(("JAVA_HOME".into(), java_home.clone().into_os_string()));
+            env_vars.push((
+                "DX_ANDROID_JAVA_HOME".into(),
+                java_home.clone().into_os_string(),
+            ));
+        }
+
+        env_vars.push((
+            "DX_ANDROID_NDK_HOME".into(),
+            ndk_home.clone().into_os_string(),
+        ));
+        env_vars.push((
+            "DX_ANDROID_SDK_ROOT".into(),
+            sdk_root.clone().into_os_string(),
+        ));
+        env_vars.push(("ANDROID_NDK_HOME".into(), ndk_home.clone().into_os_string()));
+        env_vars.push(("ANDROID_SDK_ROOT".into(), sdk_root.clone().into_os_string()));
+        env_vars.push(("ANDROID_HOME".into(), sdk_root.into_os_string()));
+        env_vars.push(("NDK_HOME".into(), ndk_home.clone().into_os_string()));
+
+        let triple = self.triple.to_string();
+
+        // Environment variables for the `cc` crate
+        let (cc_key, _cc_value) = cc_env("CC", &triple);
+        let (cflags_key, cflags_value) = cc_env("CFLAGS", &triple);
+        let (cxx_key, _cxx_value) = cc_env("CXX", &triple);
+        let (cxxflags_key, cxxflags_value) = cc_env("CXXFLAGS", &triple);
+        let (ar_key, _ar_value) = cc_env("AR", &triple);
+        let (ranlib_key, _ranlib_value) = cc_env("RANLIB", &triple);
+
+        // Environment variables for cargo
+        let cargo_ar_key = cargo_env_target_cfg(&triple, "ar");
+        let cargo_rust_flags_key = cargo_env_target_cfg(&triple, "rustflags");
+        let bindgen_clang_args_key =
+            format!("BINDGEN_EXTRA_CLANG_ARGS_{}", &triple.replace('-', "_"));
+
+        let clang_target = clang_target(&self.triple.to_string(), min_sdk_version as _);
+        let target_cc = tools.target_cc();
+        let target_cflags = match cflags_value {
+            Some(v) => format!("{clang_target} {v}"),
+            None => clang_target.to_string(),
+        };
+        let target_cxx = tools.target_cxx();
+        let target_cxxflags = match cxxflags_value {
+            Some(v) => format!("{clang_target} {v}"),
+            None => clang_target.to_string(),
+        };
+        let cargo_ndk_sysroot_path_key = "CARGO_NDK_SYSROOT_PATH";
+        let cargo_ndk_sysroot_path = tools.sysroot();
+        let cargo_ndk_sysroot_target_key = "CARGO_NDK_SYSROOT_TARGET";
+        let cargo_ndk_sysroot_target = sysroot_target(&triple);
+        let cargo_ndk_sysroot_libs_path_key = "CARGO_NDK_SYSROOT_LIBS_PATH";
+        let cargo_ndk_sysroot_libs_path = cargo_ndk_sysroot_path
+            .join("usr")
+            .join("lib")
+            .join(cargo_ndk_sysroot_target);
+        let target_ar = tools.ar_path();
+        let target_ranlib = tools.ranlib();
+        let clang_folder = tools.clang_folder();
+
+        // choose the clang target with the highest version
+        // Should we filter for only numbers?
+        let clang_rt = std::fs::read_dir(&clang_folder)
+            .map(|dir| {
+                let clang_builtins_target = dir
+                    .filter_map(|a| a.ok())
+                    .max_by(|a, b| a.file_name().cmp(&b.file_name()))
+                    .map(|s| s.path())
+                    .unwrap_or_else(|| clang_folder.join("clang"));
+
+                format!(
+                    "-L{} -lstatic=clang_rt.builtins-{}-android",
+                    clang_builtins_target.join("lib").join("linux").display(),
+                    rt_builtins(&triple)
+                )
+            })
+            .unwrap_or_default();
+
+        let extra_include: String = format!(
+            "{}/usr/include/{}",
+            &cargo_ndk_sysroot_path.display(),
+            &cargo_ndk_sysroot_target
+        );
+
+        let bindgen_args = format!(
+            "--sysroot={} -I{}",
+            &cargo_ndk_sysroot_path.display(),
+            extra_include
+        );
+
+        // Load up the OpenSSL environment variables, using our defaults if not set.
+        // if the user specifies `/vendor`, then they get vendored, unless OPENSSL_NO_VENDOR is passed (implicitly...)
+        let openssl_lib_dir = std::env::var("OPENSSL_LIB_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_lib_dir(&self.triple));
+        let openssl_include_dir = std::env::var("OPENSSL_INCLUDE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| AndroidTools::openssl_include_dir());
+        let openssl_libs =
+            std::env::var("OPENSSL_LIBS").unwrap_or_else(|_| "ssl:crypto".to_string());
+
+        for env in [
+            (cc_key, target_cc.clone().into_os_string()),
+            (cflags_key, target_cflags.into()),
+            (cxx_key, target_cxx.into_os_string()),
+            (cxxflags_key, target_cxxflags.into()),
+            (ar_key, target_ar.clone().into()),
+            (ranlib_key, target_ranlib.into_os_string()),
+            (cargo_ar_key, target_ar.into_os_string()),
+            (
+                cargo_ndk_sysroot_path_key.to_string(),
+                cargo_ndk_sysroot_path.clone().into_os_string(),
+            ),
+            (
+                cargo_ndk_sysroot_libs_path_key.to_string(),
+                cargo_ndk_sysroot_libs_path.into_os_string(),
+            ),
+            (
+                cargo_ndk_sysroot_target_key.to_string(),
+                cargo_ndk_sysroot_target.into(),
+            ),
+            (cargo_rust_flags_key, clang_rt.into()),
+            (bindgen_clang_args_key, bindgen_args.into()),
+            (
+                "ANDROID_NATIVE_API_LEVEL".to_string(),
+                min_sdk_version.to_string().into(),
+            ),
+            (
+                format!(
+                    "CARGO_TARGET_{}_LINKER",
+                    self.triple
+                        .to_string()
+                        .to_ascii_uppercase()
+                        .replace("-", "_")
+                ),
+                linker.into_os_string(),
+            ),
+            (
+                "ANDROID_NDK_ROOT".to_string(),
+                ndk_home.clone().into_os_string(),
+            ),
+            (
+                "OPENSSL_LIB_DIR".to_string(),
+                openssl_lib_dir.into_os_string(),
+            ),
+            (
+                "OPENSSL_INCLUDE_DIR".to_string(),
+                openssl_include_dir.into_os_string(),
+            ),
+            ("OPENSSL_LIBS".to_string(), openssl_libs.into()),
+            // Set the wry env vars - this is where wry will dump its kotlin files.
+            // Their setup is really annoying and requires us to hardcode `dx` to specific versions of tao/wry.
+            (
+                "WRY_ANDROID_PACKAGE".to_string(),
+                "dev.dioxus.main".to_string().into(),
+            ),
+            (
+                "WRY_ANDROID_LIBRARY".to_string(),
+                self.android_lib_name().into(),
+            ),
+            ("WRY_ANDROID_KOTLIN_FILES_OUT_DIR".to_string(), {
+                let kotlin_dir = self.wry_android_kotlin_files_out_dir();
+                // Ensure the directory exists for WRY's canonicalize check
+                if let Err(e) = std::fs::create_dir_all(&kotlin_dir) {
+                    tracing::error!("Failed to create kotlin directory {:?}: {}", kotlin_dir, e);
+                    return Err(anyhow::anyhow!("Failed to create kotlin directory: {}", e));
+                }
+                tracing::debug!("Created kotlin directory: {:?}", kotlin_dir);
+                kotlin_dir.into_os_string()
+            }),
+            // Found this through a comment related to bindgen using the wrong clang for cross compiles
+            //
+            // https://github.com/rust-lang/rust-bindgen/issues/2962#issuecomment-2438297124
+            //
+            // https://github.com/KyleMayes/clang-sys?tab=readme-ov-file#environment-variables
+            ("CLANG_PATH".into(), target_cc.with_extension("exe").into()),
+        ] {
+            env_vars.push((env.0.into(), env.1));
+        }
+
+        if std::env::var("MSYSTEM").is_ok() || std::env::var("CYGWIN").is_ok() {
+            for var in env_vars.iter_mut() {
+                // Convert windows paths to unix-style paths
+                // This is a workaround for the fact that the `cc` crate expects unix-style paths
+                // and will fail if it encounters windows-style paths.
+                var.1 = var.1.to_string_lossy().replace('\\', "/").into();
+            }
+        }
+
+        Ok(env_vars)
+    }
+
+    /// Strip version specifiers from build.gradle.kts plugins block.
+    ///
+    /// When a plugin module is included as a subproject, having version specifiers in the
+    /// plugins block causes conflicts because the parent project already has the plugins
+    /// on the classpath. This function removes version specifications like:
+    /// - `version "8.4.2"` or `version "1.9.24"`
+    /// - Entire version calls from plugin declarations
+    pub(crate) fn strip_gradle_plugin_versions(&self, module_dir: &Path) -> Result<()> {
+        use std::fs;
+
+        let build_gradle = module_dir.join("build.gradle.kts");
+        if !build_gradle.exists() {
+            return Ok(());
+        }
+
+        let contents = fs::read_to_string(&build_gradle)?;
+
+        // Remove version specifications from plugin declarations
+        // Matches: id("com.android.library") version "8.4.2" -> id("com.android.library")
+        // Matches: kotlin("android") version "1.9.24" -> kotlin("android")
+        let version_pattern = regex::Regex::new(r#"\s+version\s+"[^"]+""#).expect("Invalid regex");
+        let cleaned = version_pattern.replace_all(&contents, "");
+
+        if cleaned != contents {
+            fs::write(&build_gradle, cleaned.as_ref())?;
+            tracing::debug!(
+                "Stripped version specifiers from {}",
+                build_gradle.display()
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Add a module include to settings.gradle if not already present.
+    pub(crate) fn ensure_settings_gradle_include(
+        &self,
+        settings_gradle: &Path,
+        plugin_name: &str,
+    ) -> Result<()> {
+        use std::fs;
+
+        let include_line = format!("include ':plugins:{}'", plugin_name);
+        let mut contents = fs::read_to_string(settings_gradle)?;
+
+        if contents.contains(&include_line) {
+            return Ok(());
+        }
+
+        // Add the include at the end
+        contents.push_str(&format!("\n{}\n", include_line));
+        fs::write(settings_gradle, contents)?;
+
+        Ok(())
+    }
+
     fn wry_android_kotlin_files_out_dir(&self) -> PathBuf {
         let mut kotlin_dir = self
             .root_dir()
@@ -1014,22 +1014,22 @@ impl BuildRequest {
         Ok(())
     }
 
+    /// Returns the min sdk version set in config. If not set 24 is returned as a default.
+    fn min_sdk_version_or_default(&self) -> u32 {
+        self.config
+            .application
+            .android_min_sdk_version
+            .unwrap_or(28)
+    }
+
     /// Android native library name (without `lib` prefix and `.so` extension).
     /// Defaults to `"main"` per NativeActivity convention, overridable via `[android] lib_name`.
-    pub fn android_lib_name(&self) -> String {
+    pub(crate) fn android_lib_name(&self) -> String {
         self.config
             .android
             .lib_name
             .clone()
             .unwrap_or_else(|| "main".to_string())
-    }
-
-    /// Returns the min sdk version set in config. If not set 24 is returned as a default.
-    pub(crate) fn min_sdk_version_or_default(&self) -> u32 {
-        self.config
-            .application
-            .android_min_sdk_version
-            .unwrap_or(28)
     }
 }
 
@@ -1045,7 +1045,7 @@ pub(crate) struct AndroidTools {
 }
 
 impl AndroidTools {
-    pub fn current() -> Option<Arc<AndroidTools>> {
+    pub(crate) fn current() -> Option<Arc<AndroidTools>> {
         // We check for SDK first since users might install Android Studio and then install the SDK
         // After that they might install the NDK, so the SDK drives the source of truth.
         let sdk = Self::var_or_debug("ANDROID_SDK_ROOT")
@@ -1201,16 +1201,16 @@ impl AndroidTools {
             .join(format!("{}{}-clang{}", target, sdk_version, suffix))
     }
 
+    /// The sysroot is usually located in the NDK under:
+    /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
+    /// or similar, depending on the platform.
     pub(crate) fn sysroot(&self) -> PathBuf {
-        // The sysroot is usually located in the NDK under:
-        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/sysroot"
-        // or similar, depending on the platform.
         self.android_tools_dir().parent().unwrap().join("sysroot")
     }
 
+    /// /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
+    /// /Users/jonathankelley/Library/Android/sdk/
     pub(crate) fn sdk(&self) -> PathBuf {
-        // /Users/jonathankelley/Library/Android/sdk/ndk/25.2/... (25.2 is the ndk here)
-        // /Users/jonathankelley/Library/Android/sdk/
         self.sdk
             .clone()
             .unwrap_or_else(|| self.ndk.parent().unwrap().parent().unwrap().to_path_buf())
@@ -1220,10 +1220,10 @@ impl AndroidTools {
         self.sdk().join("emulator").join("emulator")
     }
 
-    pub(crate) fn clang_folder(&self) -> PathBuf {
-        // The clang folder is usually located in the NDK under:
-        // "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/<version>"
-        // or similar, depending on the platform.
+    /// The clang folder is usually located in the NDK under:
+    /// "~/Library/Android/sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/darwin-x86_64/lib/clang/<version>"
+    /// or similar, depending on the platform.
+    fn clang_folder(&self) -> PathBuf {
         self.android_tools_dir()
             .parent()
             .unwrap()
@@ -1231,28 +1231,27 @@ impl AndroidTools {
             .join("clang")
     }
 
-    pub(crate) fn ranlib(&self) -> PathBuf {
+    fn ranlib(&self) -> PathBuf {
         self.android_tools_dir().join("llvm-ranlib")
     }
 
-    pub(crate) fn ar_path(&self) -> PathBuf {
+    fn ar_path(&self) -> PathBuf {
         self.android_tools_dir().join("llvm-ar")
     }
 
-    pub(crate) fn target_cc(&self) -> PathBuf {
+    fn target_cc(&self) -> PathBuf {
         self.android_tools_dir().join("clang")
     }
 
-    pub(crate) fn target_cxx(&self) -> PathBuf {
+    fn target_cxx(&self) -> PathBuf {
         self.android_tools_dir().join("clang++")
     }
 
-    pub(crate) fn java_home(&self) -> Option<PathBuf> {
+    fn java_home(&self) -> Option<PathBuf> {
         self.java_home.clone()
     }
 
     pub(crate) fn android_jnilib(triple: &Triple) -> &'static str {
-        use target_lexicon::Architecture;
         match triple.architecture {
             Architecture::Arm(_) => "armeabi-v7a",
             Architecture::Aarch64(_) => "arm64-v8a",

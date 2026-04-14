@@ -587,6 +587,7 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
             .join(format!("{}_bg", self.executable_name()))
             .with_extension("wasm")
     }
+
     pub(crate) fn path_is_in_public_dir(&self, path: &Path) -> bool {
         let Some(static_dir) = self.user_public_dir() else {
             return false;
