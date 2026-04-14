@@ -5,6 +5,68 @@ use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
 use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
 
+/// Create an action that runs async work on demand, triggered by user interaction.
+///
+/// Unlike [`use_resource`](crate::use_resource) which runs automatically when its reactive
+/// dependencies change, `use_action` only runs when you explicitly call it. This makes it
+/// the right choice for mutations, form submissions, button clicks, and any async work that
+/// should happen in response to a user event rather than on mount or state change.
+///
+/// The closure you pass must return a `Future` whose output is `Result<T, E>`. The action
+/// tracks the lifecycle for you: pending, ready, or errored.
+///
+/// ## Basic usage
+///
+/// Pass a server function (or any async closure) directly:
+///
+/// ```rust
+/// let mut save = use_action(save_to_database);
+///
+/// rsx! {
+///     button { onclick: move |_| save.call(form_data.clone()), "Save" }
+///
+///     if save.pending() {
+///         p { "Saving..." }
+///     }
+///
+///     if let Some(result) = save.value() {
+///         match result {
+///             Ok(data) => rsx! { p { "Saved: {data}" } },
+///             Err(err) => rsx! { p { "Error: {err}" } },
+///         }
+///     }
+/// }
+/// ```
+///
+/// # With inline async closures
+///
+/// ```rust
+/// let mut fetch_dog = use_action(move |breed: String| async move {
+///     reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
+///         .await?
+///         .json::<DogImage>()
+///         .await
+/// });
+/// ```
+///
+/// ## Automatic cancellation
+///
+/// Calling an action while a previous call is still pending automatically cancels the
+/// in-flight task. Only the most recent call's result is kept. You can also cancel or
+/// reset manually:
+///
+/// ```rust
+/// save.cancel(); // cancel in-flight work, reset state
+/// save.reset();  // same — cancel and clear the value
+/// ```
+///
+/// ## When to use `use_action` vs `use_resource`
+///
+/// | | `use_action` | `use_resource` |
+/// |---|---|---|
+/// | **Runs** | When you call it | Automatically on mount / dependency change |
+/// | **Good for** | Mutations, form submits, button clicks | Loading data to display |
+/// | **Cancellation** | Auto-cancels previous call | Restarts on dependency change |
 pub fn use_action<E, C, M>(mut user_fn: C) -> Action<C::Input, C::Output>
 where
     E: Into<CapturedError> + 'static,
@@ -137,6 +199,13 @@ where
         }
     }
 }
+
+impl<I, T> PartialEq for Action<I, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.callback == other.callback
+    }
+}
+
 pub struct Dispatching<I> {
     _phantom: PhantomData<*const I>,
     receiver: Shared<Receiver<()>>,
