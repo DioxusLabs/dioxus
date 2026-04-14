@@ -956,7 +956,7 @@ impl BuildRequest {
                 let mut artifacts = self.cargo_build(&ctx).await?;
 
                 ctx.profile_phase("Post-processing executable");
-                self.post_process_executable(&mut artifacts).await?;
+                self.post_process_executable(&artifacts).await?;
 
                 ctx.profile_phase("Writing executable");
                 self.write_executable(&ctx, &mut artifacts)
@@ -1920,8 +1920,7 @@ impl BuildRequest {
             return Ok(());
         }
 
-        let exe = &artifacts.exe;
-
+        // Use the same format that rust itself does
         // https://github.com/rust-lang/rust/blob/cb80ff132a0e9aa71529b701427e4e6c243b58df/compiler/rustc_codegen_ssa/src/back/linker.rs#L1433-L1443
         let strip_arg = match self.get_strip_setting() {
             StripSetting::Debuginfo => Some("--strip-debug"),
@@ -1933,11 +1932,15 @@ impl BuildRequest {
             let rustc_objcopy = self.workspace.rustc_objcopy();
             let dylib_path = self.workspace.rustc_objcopy_dylib_path();
 
+            // Use rustc_objcopy in place.
+            // todo: actually use this to copy over the binary to our staging
             let mut command = Command::new(rustc_objcopy);
             command.env("LD_LIBRARY_PATH", &dylib_path);
-            command.arg(strip_arg).arg(exe).arg(exe);
+            command
+                .arg(strip_arg)
+                .arg(&artifacts.exe)
+                .arg(&artifacts.exe);
             let output = command.output().await?;
-
             if !output.status.success() {
                 if let Ok(stdout) = std::str::from_utf8(&output.stdout) {
                     tracing::error!("{}", stdout);
@@ -1945,7 +1948,7 @@ impl BuildRequest {
                 if let Ok(stderr) = std::str::from_utf8(&output.stderr) {
                     tracing::error!("{}", stderr);
                 }
-                return Err(anyhow::anyhow!("Failed to strip binary"));
+                bail!("Failed to strip binary");
             }
         }
 
