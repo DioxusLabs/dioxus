@@ -27,3 +27,4 @@ default = []
 
 [dev-dependencies]
 manganis = { workspace = true }
+tempfile = "3.19.1"

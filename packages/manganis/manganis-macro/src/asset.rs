@@ -1,4 +1,4 @@
-use crate::{AssetParseError, linker::generate_link_section, resolve_path};
+use crate::{AssetParseError, PathResolver, linker::generate_link_section};
 use macro_string::MacroString;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
@@ -45,7 +45,7 @@ impl Parse for AssetParser {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         // And then parse the options
         let (MacroString(src), path_expr) = input.call(crate::parse_with_tokens)?;
-        let asset = resolve_path(&src, path_expr.span());
+        let asset = PathResolver::new(&src, &path_expr.span()).resolve();
         let _comma = input.parse::<Token![,]>();
         let options = input.parse()?;
 
@@ -132,7 +132,7 @@ impl AssetParser {
                 let asset_tokens = self.expand_asset_tokens(asset);
                 quote! { ::core::option::Option::Some(#asset_tokens) }
             }
-            Err(AssetParseError::AssetDoesntExist { .. }) => {
+            Err(AssetParseError::DoesNotExist { .. }) => {
                 quote! { ::core::option::Option::<manganis::Asset>::None }
             }
             Err(err) => self.error_tokens(err),
