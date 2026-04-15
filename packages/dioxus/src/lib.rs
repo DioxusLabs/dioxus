@@ -168,7 +168,11 @@ pub mod prelude {
     pub use dioxus_signals::{self, *};
 
     #[cfg(feature = "signals")]
-    pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
+    pub use dioxus_stores::{
+        self, store, use_store, GlobalStore, LensOnly, Project, ProjectBTreeMap,
+        ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut, ProjectOption,
+        ProjectResult, ProjectSlice, ProjectVec, ReadStore, Store, WriteStore,
+    };
 
     #[cfg(feature = "macro")]
     #[cfg_attr(docsrs, doc(cfg(feature = "macro")))]

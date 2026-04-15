@@ -12,7 +12,7 @@ fn Counters() -> Element {
         }
         "{counts:?}"
         // Instead of passing up a signal, we can just write to the signal that lives in the parent
-        for index in 0..counts.len() {
+        for index in 0..counts.read().len() {
             Counter {
                 index,
                 counts

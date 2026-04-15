@@ -39,18 +39,19 @@ let clone: i32 = signal();
 println!("{}", signal);
 
 let signal_vec = use_signal(|| vec![1, 2, 3]);
-// And use vec methods like .get and .len without reading the signal explicitly
-let first = signal_vec.get(0);
-let last = signal_vec.last();
-let len = signal_vec.len();
+// Read once, then use the reference.
+let vec_ref = signal_vec.read();
+let first = vec_ref.get(0);
+let last = vec_ref.last();
+let len = vec_ref.len();
 
-// You can also iterate over signals directly
-for i in signal_vec.iter() {
+// You can also iterate over signals via .read().
+for i in signal_vec.read().iter() {
     println!("{}", i);
 }
 ```
 
-For a full list of all the helpers available, check out the [`Readable`], [`ReadableVecExt`], [`ReadableOptionExt`], [`Writable`], [`WritableVecExt`], and [`WritableOptionExt`] traits.
+For shape-aware helpers (`transpose`, `ok`, `err`, `index`, …), use the [`dioxus_stores::Project`]-family traits on a [`Store`] instead of a raw `Signal`.
 
 Just like `RefCell<T>`, Signal checks borrows at runtime. If you read and write to the signal at the same time, it will panic:
 

@@ -303,7 +303,7 @@ pub trait WritableExt: Writable {
     /// # use dioxus::prelude::*;
     /// fn List(list: Signal<Vec<i32>>) -> Element {
     ///     rsx! {
-    ///         for index in 0..list.len() {
+    ///         for index in 0..list.read().len() {
     ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
     ///             Item { item: list.map_mut(move |v| &v[index], move |v| &mut v[index]) }
     ///         }

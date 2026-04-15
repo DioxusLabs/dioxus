@@ -243,7 +243,7 @@ impl StoreSubscriptions {
 
     /// Hash an index into a PathKey using the hasher. The hash should be consistent
     /// across calls
-    pub(crate) fn hash(&self, index: &impl Hash) -> PathKey {
+    pub(crate) fn hash(&self, index: &(impl Hash + ?Sized)) -> PathKey {
         (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
     }
 

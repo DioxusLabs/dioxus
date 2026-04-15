@@ -20,7 +20,7 @@ pub struct MappedMutSignal<
     _marker: std::marker::PhantomData<O>,
 }
 
-impl<V, O, F, FMut> Clone for MappedMutSignal<O, V, F, FMut>
+impl<V, O: ?Sized, F, FMut> Clone for MappedMutSignal<O, V, F, FMut>
 where
     V: Clone,
     F: Clone,
@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<V, O, F, FMut> Copy for MappedMutSignal<O, V, F, FMut>
+impl<V, O: ?Sized, F, FMut> Copy for MappedMutSignal<O, V, F, FMut>
 where
     V: Copy,
     F: Copy,
@@ -56,6 +56,12 @@ where
             map_fn_mut,
             _marker: std::marker::PhantomData,
         }
+    }
+
+    /// Borrow the inner signal this was mapped from. Useful for walking a chain of
+    /// `MappedMutSignal` wrappers to reach properties of the original lens.
+    pub fn inner(&self) -> &V {
+        &self.value
     }
 }
 

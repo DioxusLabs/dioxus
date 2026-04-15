@@ -180,7 +180,7 @@ pub trait ReadableExt: Readable {
     /// # use dioxus::prelude::*;
     /// fn List(list: Signal<Vec<i32>>) -> Element {
     ///     rsx! {
-    ///         for index in 0..list.len() {
+    ///         for index in 0..list.read().len() {
     ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
     ///             Item { item: list.map(move |v| &v[index]) }
     ///         }
@@ -297,145 +297,13 @@ pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
 }
 impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
 
-/// An extension trait for `Readable<Vec<T>>` that provides some convenience methods.
-pub trait ReadableVecExt<T>: Readable<Target = Vec<T>> {
-    /// Returns the length of the inner vector.
-    #[track_caller]
-    fn len(&self) -> usize
-    where
-        T: 'static,
-    {
-        self.with(|v| v.len())
-    }
-
-    /// Returns true if the inner vector is empty.
-    #[track_caller]
-    fn is_empty(&self) -> bool
-    where
-        T: 'static,
-    {
-        self.with(|v| v.is_empty())
-    }
-
-    /// Get the first element of the inner vector.
-    #[track_caller]
-    fn first(&self) -> Option<ReadableRef<'_, Self, T>>
-    where
-        T: 'static,
-    {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.first())
-    }
-
-    /// Get the last element of the inner vector.
-    #[track_caller]
-    fn last(&self) -> Option<ReadableRef<'_, Self, T>>
-    where
-        T: 'static,
-    {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.last())
-    }
-
-    /// Get the element at the given index of the inner vector.
-    #[track_caller]
-    fn get(&self, index: usize) -> Option<ReadableRef<'_, Self, T>>
-    where
-        T: 'static,
-    {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.get(index))
-    }
-
-    /// Get an iterator over the values of the inner vector.
-    #[track_caller]
-    fn iter(&self) -> ReadableValueIterator<'_, Self>
-    where
-        Self: Sized,
-    {
-        ReadableValueIterator {
-            index: 0,
-            value: self,
-        }
-    }
-}
-
-/// An iterator over the values of a `Readable<Vec<T>>`.
-pub struct ReadableValueIterator<'a, R> {
-    index: usize,
-    value: &'a R,
-}
-
-impl<'a, T: 'static, R: Readable<Target = Vec<T>>> Iterator for ReadableValueIterator<'a, R> {
-    type Item = ReadableRef<'a, R, T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let index = self.index;
-        self.index += 1;
-        self.value.get(index)
-    }
-}
-
-impl<T, R> ReadableVecExt<T> for R where R: Readable<Target = Vec<T>> {}
-
-/// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
-pub trait ReadableOptionExt<T>: Readable<Target = Option<T>> {
-    /// Unwraps the inner value and clones it.
-    #[track_caller]
-    fn unwrap(&self) -> T
-    where
-        T: Clone + 'static,
-    {
-        self.as_ref().unwrap().clone()
-    }
-
-    /// Attempts to read the inner value of the Option.
-    #[track_caller]
-    fn as_ref(&self) -> Option<ReadableRef<'_, Self, T>>
-    where
-        T: 'static,
-    {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref())
-    }
-}
-
-impl<T, R> ReadableOptionExt<T> for R where R: Readable<Target = Option<T>> {}
-
-/// An extension trait for `Readable<Option<T>>` that provides some convenience methods.
-pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
-    /// Unwraps the inner value and clones it.
-    #[track_caller]
-    fn unwrap(&self) -> T
-    where
-        T: Clone + 'static,
-        E: 'static,
-    {
-        self.as_ref()
-            .unwrap_or_else(|_| panic!("Tried to unwrap a Result that was an error"))
-            .clone()
-    }
-
-    /// Attempts to read the inner value of the Option.
-    #[track_caller]
-    fn as_ref(&self) -> Result<ReadableRef<'_, Self, T>, ReadableRef<'_, Self, E>>
-    where
-        T: 'static,
-        E: 'static,
-    {
-        let read = self.read();
-        match read.deref() {
-            Ok(_) => Ok(<Self::Storage as AnyStorage>::map(read, |v| {
-                v.as_ref()
-                    .ok()
-                    .expect("Result variant changed between read and map")
-            })),
-            Err(_) => Err(<Self::Storage as AnyStorage>::map(read, |v| {
-                v.as_ref()
-                    .err()
-                    .expect("Result variant changed between read and map")
-            })),
-        }
-    }
-}
-
-impl<T, E, R> ReadableResultExt<T, E> for R where R: Readable<Target = Result<T, E>> {}
+// `ReadableVecExt` / `ReadableOptionExt` / `ReadableResultExt` have been
+// removed. Their convenience methods (`len`, `is_empty`, `unwrap`, …) are now
+// available uniformly via the `Project*` traits from `dioxus_stores` on any
+// type that implements `Project` (Store, SelectorScope, LensOnly, and any
+// signal wrapped in `LensOnly`). On raw `Readable` types (e.g. a bare
+// `Signal<Vec<T>>`), use `.read().len()` or wrap in `LensOnly::new(signal)`
+// to get the shape-trait methods back.
 
 /// An extension trait for [`Readable<String>`] that provides some convenience methods.
 pub trait ReadableStringExt: Readable<Target = String> {
@@ -463,46 +331,8 @@ pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
 
 impl<W> ReadableStrExt for W where W: Readable<Target: Deref<Target = str> + 'static> {}
 
-/// An extension trait for [`Readable<HashMap<K, V, H>>`] that provides some convenience methods.
-pub trait ReadableHashMapExt<K: 'static, V: 'static, H: 'static>:
-    Readable<Target = HashMap<K, V, H>>
-{
-    ext_methods! {
-        /// Check if the hashmap is empty.
-        fn is_empty(&self) -> bool = HashMap::is_empty;
-
-        /// Get the length of the hashmap.
-        fn len(&self) -> usize = HashMap::len;
-
-        /// Get the capacity of the hashmap.
-        fn capacity(&self) -> usize = HashMap::capacity;
-    }
-
-    /// Get the value for the given key.
-    #[track_caller]
-    fn get(&self, key: &K) -> Option<ReadableRef<'_, Self, V>>
-    where
-        K: std::hash::Hash + Eq,
-        H: std::hash::BuildHasher,
-    {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.get(key))
-    }
-
-    /// Check if the hashmap contains the given key.
-    #[track_caller]
-    fn contains_key(&self, key: &K) -> bool
-    where
-        K: std::hash::Hash + Eq,
-        H: std::hash::BuildHasher,
-    {
-        self.with(|v| v.contains_key(key))
-    }
-}
-
-impl<K: 'static, V: 'static, H: 'static, R> ReadableHashMapExt<K, V, H> for R where
-    R: Readable<Target = HashMap<K, V, H>>
-{
-}
+// `ReadableHashMapExt` removed — use `ProjectHashMap` on a `Store<HashMap<…>>`,
+// or `.read().len()` on a raw Readable.
 
 /// An extension trait for [`Readable<HashSet<V, H>>`] that provides some convenience methods.
 pub trait ReadableHashSetExt<V: 'static, H: 'static>: Readable<Target = HashSet<V, H>> {
