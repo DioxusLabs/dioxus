@@ -5,8 +5,8 @@ use std::{
 };
 
 use dioxus::signals::{
-    CopyValue, Readable, ReadableExt, ReadableRef, UnsyncStorage, WritableExt, WritableRef,
-    WriteLock,
+    AnyStorage, CopyValue, Readable, ReadableExt, ReadableRef, SyncStorage, UnsyncStorage,
+    WritableExt, WritableRef, WriteLock,
 };
 use generational_box::GenerationalRef;
 
@@ -50,7 +50,7 @@ impl<A> Signal<A> {
         A: Get<WriteLock<'static, T, UnsyncStorage>>,
         T: 'static,
     {
-        self.access.get()
+        WriteLock::downcast_lifetime(self.access.get())
     }
 }
 
@@ -66,8 +66,8 @@ impl<T> Clone for RwRoot<T> {
     }
 }
 
-impl<T> Get<GenerationalRef<'static, T>> for RwRoot<T> {
-    fn get(&self) -> GenerationalRef<'static, T> {
+impl<T> Get<GenerationalRef<Ref<'static, T>>> for RwRoot<T> {
+    fn get(&self) -> GenerationalRef<Ref<'static, T>> {
         self.cell.read_unchecked()
     }
 }
@@ -78,4 +78,8 @@ impl<T> Get<WriteLock<'static, T, UnsyncStorage>> for RwRoot<T> {
     }
 }
 
-fn main() {}
+fn main() {
+    let value = Signal::new(0);
+    let read = value.read();
+    let write = value.write();
+}
