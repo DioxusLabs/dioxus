@@ -5,9 +5,10 @@ use dioxus_core::{
 };
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteSignal,
+    ProjectOption, ProjectResult, Projected, Readable, ReadableExt, ReadableRef, Writable,
+    WritableExt, WritableRef, WriteSignal,
 };
-use dioxus_stores::{ProjectOption, ProjectResult, Projected, Store};
+use dioxus_stores::Store;
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
 // ---------------------------------------------------------------------------

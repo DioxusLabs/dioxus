@@ -1,104 +1,16 @@
-//! `Store<HashMap<K, V, St>, _>` — shape-agnostic methods live on the
-//! [`ProjectHashMap`](crate::ProjectHashMap) and
-//! [`ProjectHashMapMut`](crate::ProjectHashMapMut) traits. The store-specific
-//! accessors now also live on [`ProjectHashMap`]. This module keeps the
-//! `GetWrite` lens and store-specific boxed-signal conversions.
+//! Store-specific boxed-signal conversions for `HashMap` projections.
 
 use std::{
     borrow::Borrow,
     collections::HashMap,
     hash::{BuildHasher, Hash},
-    panic::Location,
 };
 
 use crate::{store::Store, ReadStore};
-use dioxus_signals::{
-    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
-    WriteLock, WriteSignal,
-};
-use generational_box::ValueDroppedError;
+use dioxus_signals::project::HashMapGetWrite;
+use dioxus_signals::{ReadSignal, Readable, UnsyncStorage, Writable, WriteSignal};
 
-/// A specific index in a `Readable` / `Writable` hashmap.
-#[derive(Clone, Copy)]
-pub struct GetWrite<Index, Write> {
-    index: Index,
-    write: Write,
-    created: &'static Location<'static>,
-}
-
-impl<Index, Write> GetWrite<Index, Write> {
-    pub(crate) fn new(index: Index, write: Write, created: &'static Location<'static>) -> Self {
-        Self {
-            index,
-            write,
-            created,
-        }
-    }
-}
-
-impl<Index, Write, K, V, St> Readable for GetWrite<Index, Write>
-where
-    Write: Readable<Target = HashMap<K, V, St>>,
-    Index: Hash + Eq + 'static,
-    K: Borrow<Index> + Eq + Hash + 'static,
-    St: BuildHasher + 'static,
-{
-    type Target = V;
-    type Storage = Write::Storage;
-
-    fn try_read_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
-    where
-        Self::Target: 'static,
-    {
-        self.write.try_read_unchecked().and_then(|value| {
-            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
-                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
-        })
-    }
-
-    fn try_peek_unchecked(&self) -> Result<dioxus_signals::ReadableRef<'static, Self>, BorrowError>
-    where
-        Self::Target: 'static,
-    {
-        self.write.try_peek_unchecked().and_then(|value| {
-            Self::Storage::try_map(value, |value: &Write::Target| value.get(&self.index))
-                .ok_or_else(|| BorrowError::Dropped(ValueDroppedError::new(self.created)))
-        })
-    }
-
-    fn subscribers(&self) -> dioxus_core::Subscribers
-    where
-        Self::Target: 'static,
-    {
-        self.write.subscribers()
-    }
-}
-
-impl<Index, Write, K, V, St> Writable for GetWrite<Index, Write>
-where
-    Write: Writable<Target = HashMap<K, V, St>>,
-    Index: Hash + Eq + 'static,
-    K: Borrow<Index> + Eq + Hash + 'static,
-    St: BuildHasher + 'static,
-{
-    type WriteMetadata = Write::WriteMetadata;
-
-    fn try_write_unchecked(
-        &self,
-    ) -> Result<dioxus_signals::WritableRef<'static, Self>, BorrowMutError>
-    where
-        Self::Target: 'static,
-    {
-        self.write.try_write_unchecked().and_then(|value| {
-            WriteLock::filter_map(value, |value: &mut Write::Target| {
-                value.get_mut(&self.index)
-            })
-            .ok_or_else(|| BorrowMutError::Dropped(ValueDroppedError::new(self.created)))
-        })
-    }
-}
-
-impl<Index, Write, K, V, St> ::std::convert::From<Store<V, GetWrite<Index, Write>>>
+impl<Index, Write, K, V, St> From<Store<V, HashMapGetWrite<Index, Write>>>
     for Store<V, WriteSignal<V>>
 where
     Write::WriteMetadata: 'static,
@@ -108,15 +20,12 @@ where
     St: BuildHasher + 'static,
     V: 'static,
 {
-    fn from(value: Store<V, GetWrite<Index, Write>>) -> Self {
-        value
-            .into_selector()
-            .map_writer(|writer| WriteSignal::new(writer))
-            .into()
+    fn from(value: Store<V, HashMapGetWrite<Index, Write>>) -> Self {
+        value.into_selector().map_writer(WriteSignal::new).into()
     }
 }
 
-impl<Index, Write, K, V, St> ::std::convert::From<Store<V, GetWrite<Index, Write>>> for ReadStore<V>
+impl<Index, Write, K, V, St> From<Store<V, HashMapGetWrite<Index, Write>>> for ReadStore<V>
 where
     Write: Readable<Target = HashMap<K, V, St>, Storage = UnsyncStorage> + 'static,
     Index: Hash + Eq + 'static,
@@ -124,10 +33,7 @@ where
     St: BuildHasher + 'static,
     V: 'static,
 {
-    fn from(value: Store<V, GetWrite<Index, Write>>) -> Self {
-        value
-            .into_selector()
-            .map_writer(|writer| ReadSignal::new(writer))
-            .into()
+    fn from(value: Store<V, HashMapGetWrite<Index, Write>>) -> Self {
+        value.into_selector().map_writer(ReadSignal::new).into()
     }
 }

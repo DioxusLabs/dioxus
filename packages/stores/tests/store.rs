@@ -520,3 +520,22 @@ fn raw_read_signal_projects_option_children() {
         assert_eq!(&*inner.read(), "hello");
     });
 }
+
+#[test]
+fn raw_signal_projects_signal_children() {
+    let mut dom = VirtualDom::new(|| rsx! { "" });
+    dom.rebuild_in_place();
+
+    dom.in_scope(ScopeId::APP, || {
+        let items = Signal::new(vec![Signal::new(1), Signal::new(2)]);
+
+        let first: WriteSignal<Signal<i32>> = items.iter().next().unwrap();
+        let mut inner = *first.read();
+
+        assert_eq!(*inner.read(), 1);
+
+        inner += 1;
+
+        assert_eq!(*(*first.read()).read(), 2);
+    });
+}

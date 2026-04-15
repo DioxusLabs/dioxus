@@ -1,9 +1,8 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
+use dioxus_signals::project::{hash_path_key, PathKey};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::hash::Hasher;
 use std::ops::BitOrAssign;
 use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
@@ -146,7 +145,6 @@ impl SubscriptionDepth {
     }
 }
 
-pub(crate) type PathKey = u16;
 #[cfg(feature = "large-path")]
 const PATH_LENGTH: usize = 32;
 #[cfg(not(feature = "large-path"))]
@@ -370,13 +368,6 @@ impl StoreSubscriptions {
     fn mark_node_subscribers_dirty(&self, key: &[PathKey]) {
         self.retain_subscribers(key, |reactive_context, _| reactive_context.mark_dirty());
     }
-}
-
-/// Hash an index into a `PathKey` using the deterministic default SipHasher.
-pub(crate) fn hash_path_key(index: &(impl Hash + ?Sized)) -> PathKey {
-    let mut hasher = DefaultHasher::new();
-    index.hash(&mut hasher);
-    (hasher.finish() % PathKey::MAX as u64) as PathKey
 }
 
 /// A subscriber list implementation that handles garbage collection of the subscription tree.

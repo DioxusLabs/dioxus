@@ -296,7 +296,8 @@ pub trait WritableExt: Writable {
     ///
     /// Anything that subscribes to the writable value will be rerun whenever the original value changes or you write to this
     /// scoped value, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
-    /// For fine grained scoped updates, use stores instead
+    /// For fine grained keyed updates, use the `Project*` traits with a
+    /// store-backed carrier.
     ///
     /// # Example
     /// ```rust

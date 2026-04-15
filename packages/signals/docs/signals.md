@@ -51,7 +51,10 @@ for i in signal_vec.read().iter() {
 }
 ```
 
-For shape-aware helpers (`transpose`, `ok`, `err`, `index`, …), use the [`dioxus_stores::Project`]-family traits on a [`Store`] instead of a raw `Signal`.
+For shape-aware helpers (`transpose`, `ok`, `err`, `index`, …), use the
+[`dioxus_signals::Project`]-family traits. Raw signals only get pathless
+projection semantics; a [`Store`](dioxus_stores::Store) adds the fine-grained
+scoped subscriptions.
 
 Just like `RefCell<T>`, Signal checks borrows at runtime. If you read and write to the signal at the same time, it will panic:
 

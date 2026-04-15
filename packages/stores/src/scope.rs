@@ -3,8 +3,9 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::subscriptions::{PathKey, StoreSubscriptions, TinyVec};
+use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::Subscribers;
+use dioxus_signals::project::PathKey;
 use dioxus_signals::{
     BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
     WritableRef,

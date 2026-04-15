@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::{
     mem::MaybeUninit,
     ops::{Deref, Index},
@@ -172,8 +172,8 @@ pub trait ReadableExt: Readable {
     /// into the readable value without creating a new signal or cloning the value.
     ///
     /// Anything that subscribes to the readable value will be rerun whenever the original value changes, even if the view does not
-    /// change. If you want to memorize the view, you can use a [`crate::Memo`] instead. For fine grained scoped updates, use
-    /// stores instead
+    /// change. If you want to memorize the view, you can use a [`crate::Memo`] instead. For fine grained keyed updates, use
+    /// the `Project*` traits with a store-backed carrier.
     ///
     /// # Example
     /// ```rust
@@ -299,10 +299,11 @@ impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
 
 // `ReadableVecExt` / `ReadableOptionExt` / `ReadableResultExt` have been
 // removed. Their convenience methods (`len`, `is_empty`, `unwrap`, …) are now
-// available uniformly via the `Project*` traits from `dioxus_stores` on any
-// type that implements `Project` (Store, SelectorScope, LensOnly, Signal,
-// ReadSignal, and WriteSignal). On other raw `Readable` types, use `.read()`
-// or wrap them in `LensOnly::new(...)` to get the shape-trait methods.
+// available uniformly via the `Project*` traits in this crate on any type that
+// implements `Project` (for example `Signal`, `ReadSignal`, `WriteSignal`, or
+// store-backed carriers from `dioxus-stores`). On other raw `Readable` types,
+// use `.read()`, or box them into `ReadSignal` / `WriteSignal` first if you
+// want projector-style shape methods.
 
 /// An extension trait for [`Readable<String>`] that provides some convenience methods.
 pub trait ReadableStringExt: Readable<Target = String> {
@@ -330,7 +331,7 @@ pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
 
 impl<W> ReadableStrExt for W where W: Readable<Target: Deref<Target = str> + 'static> {}
 
-// `ReadableHashMapExt` removed — use `ProjectHashMap` on a `Store<HashMap<…>>`,
+// `ReadableHashMapExt` removed — use `ProjectHashMap` on a `Project` carrier,
 // or `.read().len()` on a raw Readable.
 
 /// An extension trait for [`Readable<HashSet<V, H>>`] that provides some convenience methods.
