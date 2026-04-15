@@ -1,88 +1,17 @@
 //! `Store<BTreeMap<K, V>, _>` — shape-agnostic methods live on the
 //! [`ProjectBTreeMap`](crate::ProjectBTreeMap) /
 //! [`ProjectBTreeMapMut`](crate::ProjectBTreeMapMut) traits. The store-specific
-//! `iter` / `values` / `get` / `get_unchecked` (producing `GetWrite`-backed
-//! stores) and the `GetWrite` lens stay here.
+//! accessors now also live on [`ProjectBTreeMap`]. This module keeps the
+//! `GetWrite` lens and store-specific boxed-signal conversions.
 
-use std::{
-    borrow::Borrow, collections::BTreeMap, hash::Hash, iter::FusedIterator, panic::Location,
-};
+use std::{borrow::Borrow, collections::BTreeMap, panic::Location};
 
-use crate::{store::Store, ProjectBTreeMap, ReadStore};
+use crate::{store::Store, ReadStore};
 use dioxus_signals::{
-    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
-    Writable, WriteLock, WriteSignal,
+    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
+    WriteLock, WriteSignal,
 };
 use generational_box::ValueDroppedError;
-
-impl<Lens, K, V> Store<BTreeMap<K, V>, Lens>
-where
-    Lens: Readable<Target = BTreeMap<K, V>> + Copy + 'static,
-    K: 'static,
-    V: 'static,
-{
-    /// Iterate the map, producing one store per value.
-    pub fn iter(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
-    where
-        K: Hash + Ord + Clone,
-        Lens: Clone,
-    {
-        ProjectBTreeMap::<K, V>::len(self);
-        let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
-        keys.into_iter().map(move |key| {
-            let value = (*self).get_unchecked(key.clone());
-            (key, value)
-        })
-    }
-
-    /// Iterate the map values as stores.
-    pub fn values(
-        &self,
-    ) -> impl ExactSizeIterator<Item = Store<V, GetWrite<K, Lens>>>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
-    where
-        K: Hash + Ord + Clone,
-        Lens: Clone,
-    {
-        ProjectBTreeMap::<K, V>::len(self);
-        let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
-        keys.into_iter().map(move |key| (*self).get_unchecked(key))
-    }
-
-    /// Get a store for the value at `key` if it exists.
-    pub fn get<Q>(self, key: Q) -> Option<Store<V, GetWrite<Q, Lens>>>
-    where
-        Q: Hash + Ord + 'static,
-        K: Borrow<Q> + Ord,
-    {
-        ProjectBTreeMap::contains_key(&self, &key).then(|| self.get_unchecked(key))
-    }
-
-    /// Get a store for the value at `key` without checking existence.
-    #[track_caller]
-    pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
-    where
-        Q: Hash + Ord + 'static,
-        K: Borrow<Q> + Ord,
-    {
-        let created = Location::caller();
-        self.into_selector()
-            .hash_child_unmapped(key.borrow())
-            .map_writer(move |writer| GetWrite {
-                index: key,
-                write: writer,
-                created,
-            })
-            .into()
-    }
-}
 
 /// A specific index in a `Readable` / `Writable` BTreeMap.
 #[derive(Clone, Copy)]
@@ -90,6 +19,16 @@ pub struct GetWrite<Index, Write> {
     index: Index,
     write: Write,
     created: &'static Location<'static>,
+}
+
+impl<Index, Write> GetWrite<Index, Write> {
+    pub(crate) fn new(index: Index, write: Write, created: &'static Location<'static>) -> Self {
+        Self {
+            index,
+            write,
+            created,
+        }
+    }
 }
 
 impl<Index, Write, K, V> Readable for GetWrite<Index, Write>

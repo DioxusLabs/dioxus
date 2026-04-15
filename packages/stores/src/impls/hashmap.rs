@@ -1,95 +1,22 @@
 //! `Store<HashMap<K, V, St>, _>` — shape-agnostic methods live on the
 //! [`ProjectHashMap`](crate::ProjectHashMap) and
 //! [`ProjectHashMapMut`](crate::ProjectHashMapMut) traits. The store-specific
-//! `iter` / `values` / `get` / `get_unchecked` (producing `GetWrite`-backed
-//! stores) and the `GetWrite` lens itself stay here.
+//! accessors now also live on [`ProjectHashMap`]. This module keeps the
+//! `GetWrite` lens and store-specific boxed-signal conversions.
 
 use std::{
     borrow::Borrow,
     collections::HashMap,
     hash::{BuildHasher, Hash},
-    iter::FusedIterator,
     panic::Location,
 };
 
-use crate::{store::Store, ProjectHashMap, ReadStore};
+use crate::{store::Store, ReadStore};
 use dioxus_signals::{
-    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
-    Writable, WriteLock, WriteSignal,
+    AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
+    WriteLock, WriteSignal,
 };
 use generational_box::ValueDroppedError;
-
-impl<Lens, K, V, St> Store<HashMap<K, V, St>, Lens>
-where
-    Lens: Readable<Target = HashMap<K, V, St>> + Copy + 'static,
-    K: 'static,
-    V: 'static,
-    St: 'static,
-{
-    /// Iterate entries as `(key, value-store)` pairs.
-    pub fn iter(
-        &self,
-    ) -> impl ExactSizeIterator<Item = (K, Store<V, GetWrite<K, Lens>>)>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
-    where
-        K: Eq + Hash + Clone,
-        St: BuildHasher,
-        Lens: Clone,
-    {
-        ProjectHashMap::<K, V, St>::len(self);
-        let keys: Vec<_> = self.selector().peek_unchecked().keys().cloned().collect();
-        keys.into_iter()
-            .map(move |key| (key.clone(), (*self).get_unchecked(key)))
-    }
-
-    /// Iterate values as stores.
-    pub fn values(
-        &self,
-    ) -> impl ExactSizeIterator<Item = Store<V, GetWrite<K, Lens>>>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
-    where
-        K: Eq + Hash + Clone,
-        St: BuildHasher,
-        Lens: Clone,
-    {
-        ProjectHashMap::<K, V, St>::len(self);
-        let keys = self.selector().peek().keys().cloned().collect::<Vec<_>>();
-        keys.into_iter().map(move |key| (*self).get_unchecked(key))
-    }
-
-    /// Get a store for the value associated with `key`.
-    pub fn get<Q>(self, key: Q) -> Option<Store<V, GetWrite<Q, Lens>>>
-    where
-        Q: Hash + Eq + 'static,
-        K: Borrow<Q> + Eq + Hash,
-        St: BuildHasher,
-    {
-        ProjectHashMap::contains_key(&self, &key).then(|| self.get_unchecked(key))
-    }
-
-    /// Get a store for the value at `key` without existence check.
-    #[track_caller]
-    pub fn get_unchecked<Q>(self, key: Q) -> Store<V, GetWrite<Q, Lens>>
-    where
-        Q: Hash + Eq + 'static,
-        K: Borrow<Q> + Eq + Hash,
-        St: BuildHasher,
-    {
-        let location = Location::caller();
-        self.into_selector()
-            .hash_child_unmapped(key.borrow())
-            .map_writer(move |writer| GetWrite {
-                index: key,
-                write: writer,
-                created: location,
-            })
-            .into()
-    }
-}
 
 /// A specific index in a `Readable` / `Writable` hashmap.
 #[derive(Clone, Copy)]
@@ -97,6 +24,16 @@ pub struct GetWrite<Index, Write> {
     index: Index,
     write: Write,
     created: &'static Location<'static>,
+}
+
+impl<Index, Write> GetWrite<Index, Write> {
+    pub(crate) fn new(index: Index, write: Write, created: &'static Location<'static>) -> Self {
+        Self {
+            index,
+            write,
+            created,
+        }
+    }
 }
 
 impl<Index, Write, K, V, St> Readable for GetWrite<Index, Write>

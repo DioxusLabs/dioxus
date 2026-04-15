@@ -1,11 +1,13 @@
 use std::future::Future;
 
-use dioxus_core::{spawn, use_hook, ReactiveContext, RenderError, Subscribers, SuspendedFuture, Task};
+use dioxus_core::{
+    spawn, use_hook, ReactiveContext, RenderError, Subscribers, SuspendedFuture, Task,
+};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    Readable, ReadableExt, ReadableRef, Signal, Writable, WritableExt, WritableRef, WriteSignal,
+    Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteSignal,
 };
-use dioxus_stores::{MappedStore, ProjectOption, ProjectResult, Store};
+use dioxus_stores::{ProjectOption, ProjectResult, Projected, Store};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
 // ---------------------------------------------------------------------------
@@ -58,10 +60,10 @@ pub struct ResourceHandle {
 // ---------------------------------------------------------------------------
 // HandledLens — a transparent lens wrapper that carries a resource handle.
 //
-// `Resource<T, L>` is `LensOnly<HandledLens<L>>`. The `HandledLens` sits at the
-// bottom of the lens chain; store projections compose via `MappedMutSignal`
-// wrappers that preserve the inner lens verbatim, so the handle rides through
-// every projection automatically.
+// `Resource<T, L>` keeps the normal `Store` carrier, but swaps in a
+// `HandledLens<L>` at the bottom of the lens chain. Store projections compose
+// via mapped child lenses that preserve the inner lens verbatim, so the handle
+// rides through every projection automatically.
 // ---------------------------------------------------------------------------
 
 /// Lens wrapper that attaches a [`ResourceHandle`] to an underlying signal.
@@ -143,9 +145,9 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// Public type aliases — `Resource<T, L>` is a `LensOnly`, so all store-shape
-// projection traits (`ProjectOption`, `ProjectResult`, `ProjectDeref`, …)
-// apply without any per-method forwarders and with zero subscription overhead.
+// Public type aliases — resources reuse the normal store carrier, so the
+// projector shape traits (`ProjectOption`, `ProjectResult`, `ProjectDeref`,
+// …) apply without any per-method forwarders.
 // ---------------------------------------------------------------------------
 
 /// A reactive async value. `Resource` is a `Store` whose lens carries a
@@ -158,15 +160,24 @@ pub type Resource<T, L = WriteSignal<T>> = Store<T, HandledLens<L>>;
 pub type PendingResource<T> = Resource<Option<T>>;
 
 /// A resource projected to its resolved inner value.
-pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> = MappedStore<T, HandledLens<Lens>>;
+pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
+    Projected<Resource<Option<T>, Lens>, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>;
 
 /// Projection of a resolved resource into its `Ok` branch.
-pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
-    MappedStore<T, MappedMutSignal<Result<T, E>, HandledLens<Lens>>>;
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
+    ResolvedResource<Result<T, E>, Lens>,
+    T,
+    fn(&Result<T, E>) -> &T,
+    fn(&mut Result<T, E>) -> &mut T,
+>;
 
 /// Projection of a resolved resource into its `Err` branch.
-pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
-    MappedStore<E, MappedMutSignal<Result<T, E>, HandledLens<Lens>>>;
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
+    ResolvedResource<Result<T, E>, Lens>,
+    E,
+    fn(&Result<T, E>) -> &E,
+    fn(&mut Result<T, E>) -> &mut E,
+>;
 
 // ---------------------------------------------------------------------------
 // ResourceControls — handle-based methods. Local trait → blanket impl OK.
@@ -266,7 +277,10 @@ pub trait FallibleResourceExt: Sized {
     fn result(
         &self,
     ) -> Option<
-        Result<OkResource<Self::Ok, Self::Err, Self::InnerLens>, ErrResource<Self::Ok, Self::Err, Self::InnerLens>>,
+        Result<
+            OkResource<Self::Ok, Self::Err, Self::InnerLens>,
+            ErrResource<Self::Ok, Self::Err, Self::InnerLens>,
+        >,
     >;
 
     fn ready(&self) -> Result<OkResource<Self::Ok, Self::Err, Self::InnerLens>, RenderError>

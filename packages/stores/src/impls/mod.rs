@@ -6,3 +6,9 @@ mod option;
 mod result;
 mod slice;
 mod vec;
+
+pub use deref::*;
+pub use option::*;
+pub use result::*;
+pub use slice::*;
+pub use vec::*;

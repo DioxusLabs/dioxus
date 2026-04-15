@@ -300,10 +300,9 @@ impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
 // `ReadableVecExt` / `ReadableOptionExt` / `ReadableResultExt` have been
 // removed. Their convenience methods (`len`, `is_empty`, `unwrap`, …) are now
 // available uniformly via the `Project*` traits from `dioxus_stores` on any
-// type that implements `Project` (Store, SelectorScope, LensOnly, and any
-// signal wrapped in `LensOnly`). On raw `Readable` types (e.g. a bare
-// `Signal<Vec<T>>`), use `.read().len()` or wrap in `LensOnly::new(signal)`
-// to get the shape-trait methods back.
+// type that implements `Project` (Store, SelectorScope, LensOnly, Signal,
+// ReadSignal, and WriteSignal). On other raw `Readable` types, use `.read()`
+// or wrap them in `LensOnly::new(...)` to get the shape-trait methods.
 
 /// An extension trait for [`Readable<String>`] that provides some convenience methods.
 pub trait ReadableStringExt: Readable<Target = String> {

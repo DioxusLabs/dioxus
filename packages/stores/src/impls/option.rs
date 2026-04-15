@@ -1,23 +1,153 @@
-//! All `Store<Option<T>, _>` projection methods live on the
-//! [`ProjectOption`](crate::ProjectOption) trait in `project.rs`. Since
-//! `Store` implements [`Project`](crate::Project), every trait method is
-//! callable directly on `Store<Option<T>, _>`.
-//!
-//! `as_slice` stays here — it produces a `Store<[T], _>` (slice DST view),
-//! which doesn't fit the generic `Project::Child` shape.
+//! `Option`-shaped projector methods.
 
-use crate::{store::Store, MappedStore};
+use std::ops::DerefMut;
+
+use crate::{ProjectScope, Projected};
 use dioxus_signals::Readable;
 
-impl<Lens, T> Store<Option<T>, Lens>
-where
-    Lens: Readable<Target = Option<T>> + Copy + 'static,
-    T: 'static,
-{
-    /// Return an `[T]` view of the option: `&[value]` if `Some`, `&[]` if `None`.
-    pub fn as_slice(self) -> MappedStore<[T], Lens> {
+/// Projection methods for types targeting `Option<T>`.
+pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option<T>>> {
+    /// Is the option currently `Some`? Tracks shallowly.
+    fn is_some(&self) -> bool {
+        self.project_track_shallow();
+        self.project_peek().is_some()
+    }
+
+    /// Is the option currently `None`? Tracks shallowly.
+    fn is_none(&self) -> bool {
+        self.project_track_shallow();
+        self.project_peek().is_none()
+    }
+
+    /// Tracks shallowly and deeply if the option is `Some`.
+    fn is_some_and(&self, f: impl FnOnce(&T) -> bool) -> bool {
+        self.project_track_shallow();
+        if let Some(v) = &*self.project_peek() {
+            self.project_track();
+            f(v)
+        } else {
+            false
+        }
+    }
+
+    /// Tracks shallowly and deeply if the option is `Some`.
+    fn is_none_or(&self, f: impl FnOnce(&T) -> bool) -> bool {
+        self.project_track_shallow();
+        if let Some(v) = &*self.project_peek() {
+            self.project_track();
+            f(v)
+        } else {
+            true
+        }
+    }
+
+    /// Transpose `Self<Option<T>>` into `Option<Self<T>>`.
+    fn transpose(
+        self,
+    ) -> Option<Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>> {
+        if self.is_some() {
+            let map: fn(&Option<T>) -> &T = |v| {
+                v.as_ref()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
+            };
+            let map_mut: fn(&mut Option<T>) -> &mut T = |v| {
+                v.as_mut()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
+            };
+            Some(self.project_child(0, map, map_mut))
+        } else {
+            None
+        }
+    }
+
+    /// Unwrap to `Self<T>`; panics if currently `None`.
+    fn unwrap(self) -> Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T> {
+        self.transpose()
+            .unwrap_or_else(|| panic!("called `unwrap` on a `None` Option projection"))
+    }
+
+    /// Unwrap to `Self<T>`; panics with `msg` if currently `None`.
+    fn expect(
+        self,
+        msg: &'static str,
+    ) -> Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T> {
+        self.transpose().unwrap_or_else(|| panic!("{}", msg))
+    }
+
+    /// Return a `[T]` view of the option: `&[value]` if `Some`, `&[]` if `None`.
+    fn as_slice(
+        self,
+    ) -> Projected<Self, [T], fn(&Option<T>) -> &[T], fn(&mut Option<T>) -> &mut [T]>
+    where
+        T: Sized,
+    {
         let map: fn(&Option<T>) -> &[T] = |value| value.as_slice();
         let map_mut: fn(&mut Option<T>) -> &mut [T] = |value| value.as_mut_slice();
-        self.into_selector().map(map, map_mut).into()
+        self.project_map(map, map_mut)
+    }
+
+    /// Project through `Deref` on the contained value.
+    fn as_deref(
+        self,
+    ) -> Option<
+        Projected<
+            Self,
+            T::Target,
+            fn(&Option<T>) -> &T::Target,
+            fn(&mut Option<T>) -> &mut T::Target,
+        >,
+    >
+    where
+        T: DerefMut,
+        T::Target: 'static,
+    {
+        if self.is_some() {
+            let map: fn(&Option<T>) -> &T::Target = |v| {
+                (&**v
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value")))
+                    as &T::Target
+            };
+            let map_mut: fn(&mut Option<T>) -> &mut T::Target = |v| {
+                &mut **v
+                    .as_mut()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
+            };
+            Some(self.project_child(0, map, map_mut))
+        } else {
+            None
+        }
+    }
+
+    /// Filter the option by a predicate. Always tracks shallowly; tracks deeply when `Some`.
+    fn filter(
+        self,
+        f: impl FnOnce(&T) -> bool,
+    ) -> Option<Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>> {
+        if self.is_some_and(f) {
+            let map: fn(&Option<T>) -> &T = |v| {
+                v.as_ref()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
+            };
+            let map_mut: fn(&mut Option<T>) -> &mut T = |v| {
+                v.as_mut()
+                    .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
+            };
+            Some(self.project_child(0, map, map_mut))
+        } else {
+            None
+        }
+    }
+
+    /// Peek at the inner value if `Some`; tracks shallowly, and deeply when `Some`.
+    fn inspect(self, f: impl FnOnce(&T)) -> Self {
+        self.project_track_shallow();
+        if let Some(v) = &*self.project_peek() {
+            self.project_track();
+            f(v);
+        }
+        self
     }
 }
+
+impl<T: 'static, P> ProjectOption<T> for P where P: ProjectScope<Lens: Readable<Target = Option<T>>> {}
