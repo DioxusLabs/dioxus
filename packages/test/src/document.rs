@@ -254,6 +254,28 @@ impl TryIntoSelector for QueryByTestId {
 
 /// Returns a query selector matching elements with the given value in the `data-testid` attribute.
 ///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{by_testid, eq, inner_html, render};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              "data-testid": "the-label",
+///              "Label content"
+///         }
+///     }
+/// }
+///
+/// let mut tester = render(MyComponent).build();
+/// tester
+///     .query(by_testid("the-label"))
+///     .expect(inner_html(eq("Label content")))
+///     .immediately()
+///     .unwrap();
+/// ```
+///
 /// This attribute is a common convention for marking DOM components with which tests interact. Find
 /// more information [here](https://testing-library.com/docs/queries/bytestid/).
 pub fn by_testid(testid: impl AsRef<str>) -> impl TryIntoSelector {

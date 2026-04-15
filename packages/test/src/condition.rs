@@ -38,10 +38,16 @@ trait Waitable {
     }
 }
 
-pub trait Matchable<M> {
-    fn matches(&self, matcher: &M) -> ControlFlow<()>;
-}
-
+/// A represenation of a single element on the DOM which may already exist or may exist in the
+/// future.
+///
+/// A test can make assertions on the element with [ElementCondition::expect]. The test decides
+/// whether to make the assertion immediately or await it.
+///
+/// A test can interact with the element once it appears, such as with [ElementCondition::click].
+///
+/// A test can also fetch or await an `ElementCondition` directly to produce a [ResolvedElement]
+/// for further assertions.
 pub struct ElementCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
@@ -205,6 +211,10 @@ impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
     }
 }
 
+/// A representation of a concrete assertion on an element or set of elements using a [Matcher].
+///
+/// The test can decide whether to make this assertion immediately with
+/// [MatcherCondition::immediately] or to await it.
 pub struct MatcherCondition<'vdom, M, W> {
     element: W,
     matcher: M,
@@ -215,6 +225,117 @@ impl<'vdom, M, W> MatcherCondition<'vdom, M, W>
 where
     W: Matchable<M>,
 {
+    /// Assert that the matcher in this instance matches the element or set of elements immediately.
+    ///
+    /// This can be used, for example, to assert on the state of the DOM immediately after its
+    /// initial render.
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{render, inner_html, eq};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     rsx! {
+    ///         div {
+    ///              class: "test-component",
+    ///              "Hello, world!"
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[test]
+    /// # */
+    /// fn my_component_renders_correctly() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester
+    ///         .query(".test-component")
+    ///         .expect(inner_html(eq("Hello, world!")))
+    ///         .immediately()
+    ///         .unwrap();
+    /// }
+    /// # my_component_renders_correctly();
+    /// ```
+    ///
+    /// This can also be used if the state of the DOM has already advanced to a point where the
+    /// assertion should pass because the test has already used an asynchronous assertion on it.
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{by_testid, eq, inner_html, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     let mut text = use_signal(|| "Click me!");
+    ///     let mut label = use_signal(|| "Not clicked yet");
+    ///     rsx! {
+    ///         div {
+    ///              "data-testid": "the-label",
+    ///              {label}
+    ///         }
+    ///         button {
+    ///              class: "test-button",
+    ///              onclick: move |_| {
+    ///                  *text.write() = "Clicked";
+    ///                  *label.write() = "Now clicked";
+    ///              },
+    ///              {text}
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[tokio::test]
+    /// # */
+    /// async fn my_component_changes_button_text_on_click() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester.query(".test-button").click().await;
+    ///     tester.query(".test-button").expect(inner_html(eq("Clicked"))).await.unwrap();
+    ///     tester
+    ///         .query(by_testid("the-label"))
+    ///         .expect(inner_html(eq("Now clicked")))
+    ///         .immediately()
+    ///         .unwrap();
+    /// }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_changes_button_text_on_click());
+    /// ```
+    ///
+    /// This does not await any asynchronous actions, such as network activity to responding to user
+    /// interaction. For example, the following test will fail:
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{eq, inner_html, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     let mut text = use_signal(|| "Click me!");
+    ///     rsx! {
+    ///         button {
+    ///              class: "test-button",
+    ///              onclick: move |_| {
+    ///                  *text.write() = "Don't click any more!";
+    ///              },
+    ///              {text}
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[tokio::test]
+    /// # */
+    /// async fn my_component_changes_button_text_on_click() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester.query(".test-button").click().await;
+    ///     tester
+    ///         .query(".test-button")
+    ///         .expect(inner_html(eq("Don't click any more!")))
+    ///         .immediately()?;
+    ///     Ok(())
+    /// }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_changes_button_text_on_click()).err().unwrap();
+    /// ```
     pub fn immediately(&'vdom self) -> Result<(), TesterError> {
         match self.element.matches(&self.matcher) {
             ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
@@ -248,4 +369,12 @@ where
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move { self.to_waitable_future().await })
     }
+}
+
+/// A datum on which one can invoke a [Matcher].
+///
+/// This allows [MatchableCondition] to work with both [ElementCondition] and
+/// [AllElementsCondition].
+pub trait Matchable<M> {
+    fn matches(&self, matcher: &M) -> ControlFlow<()>;
 }
