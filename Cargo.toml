@@ -455,6 +455,7 @@ sqlx = { version = "0.8.6", features = [
     "runtime-tokio",
 ], optional = true }
 wasm-streams = "0.4.2"
+generational-box.workspace = true
 
 [dev-dependencies]
 dioxus = { workspace = true, features = ["router", "fullstack"] }

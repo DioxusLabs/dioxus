@@ -3707,6 +3707,7 @@ dependencies = [
  "form_urlencoded",
  "futures",
  "futures-util",
+ "generational-box",
  "getrandom 0.3.4",
  "http-range",
  "ouroboros",
