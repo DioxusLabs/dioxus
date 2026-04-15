@@ -44,7 +44,9 @@ pub type MappedProjectLens<
     U: ?Sized,
     F = fn(&<<P as ProjectLens>::Lens as Readable>::Target) -> &U,
     FMut = fn(&mut <<P as ProjectLens>::Lens as Readable>::Target) -> &mut U,
-> = MappedMutSignal<U, <P as ProjectLens>::Lens, F, FMut>;
+> where
+    P::Lens: Readable,
+= MappedMutSignal<U, <P as ProjectLens>::Lens, F, FMut>;
 
 /// Rebind a projector carrier to a mapped child lens.
 #[allow(type_alias_bounds)]
@@ -53,17 +55,20 @@ pub type Projected<
     U: ?Sized,
     F = fn(&<<P as ProjectLens>::Lens as Readable>::Target) -> &U,
     FMut = fn(&mut <<P as ProjectLens>::Lens as Readable>::Target) -> &mut U,
-> = <P as ProjectLens>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
+> where
+    P::Lens: Readable,
+= <P as ProjectLens>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
 
 /// Abstracts over "same projection semantics, different lens in the same storage".
 pub trait ProjectLens: Sized {
     /// The lens this projection reads/writes through.
-    type Lens: Readable;
+    type Lens;
 
     /// Rebind this carrier to a different lens/target pair while preserving
     /// its projection semantics.
     type Rebind<U: ?Sized + 'static, L>
     where
+        Self::Lens: Readable,
         L: Readable<Target = U, Storage = <Self::Lens as Readable>::Storage> + 'static;
 
     /// Borrow the underlying lens.
@@ -72,6 +77,7 @@ pub trait ProjectLens: Sized {
     /// Rebuild this carrier around a derived lens built from the current one.
     fn project_compose<U, L>(self, map: impl FnOnce(Self::Lens) -> L) -> Self::Rebind<U, L>
     where
+        Self::Lens: Readable,
         U: ?Sized + 'static,
         L: Readable<Target = U, Storage = <Self::Lens as Readable>::Storage> + 'static,
         Self: ProjectCompose<U, L>,
@@ -83,6 +89,7 @@ pub trait ProjectLens: Sized {
 /// Carrier-specific composition rules for a projected child lens.
 pub trait ProjectCompose<U: ?Sized + 'static, L>: ProjectLens
 where
+    Self::Lens: Readable,
     L: Readable<Target = U, Storage = <Self::Lens as Readable>::Storage> + 'static,
 {
     /// Rebuild this carrier around a derived lens built from the current one.
@@ -94,6 +101,7 @@ pub trait ProjectLensExt: ProjectLens {
     /// Map the lens without introducing a path-level child.
     fn project_map<U, F, FMut>(self, map: F, map_mut: FMut) -> Projected<Self, U, F, FMut>
     where
+        Self::Lens: Readable,
         U: ?Sized + 'static,
         <Self::Lens as Readable>::Target: 'static,
         F: Fn(&<Self::Lens as Readable>::Target) -> &U + 'static + Copy,
@@ -122,6 +130,7 @@ pub trait ProjectPathExt: ProjectPath + ProjectLens {
         map_mut: FMut,
     ) -> Projected<Self, U, F, FMut>
     where
+        Self::Lens: Readable,
         U: ?Sized + 'static,
         <Self::Lens as Readable>::Target: 'static,
         F: Fn(&<Self::Lens as Readable>::Target) -> &U + 'static + Copy,
