@@ -1,7 +1,6 @@
 use crate::Transportable;
-use dioxus_core::{suspend, use_hook, RenderError};
+use dioxus_core::{use_hook, RenderError};
 use dioxus_hooks::*;
-use dioxus_signals::ReadableExt;
 use std::future::Future;
 
 /// Runs a future with a manual list of dependencies and returns a resource with the result if the future is finished or a suspended error if it is still running.
@@ -61,7 +60,7 @@ use std::future::Future;
 #[track_caller]
 pub fn use_server_future<T, F, M>(
     mut future: impl FnMut() -> F + 'static,
-) -> Result<Resource<T>, RenderError>
+) -> Result<ResolvedResource<T>, RenderError>
 where
     F: Future<Output = T> + 'static,
     T: Transportable<M>,
@@ -128,12 +127,5 @@ where
     });
 
     // Suspend if the value isn't ready
-    if resource.state().cloned() == UseResourceState::Pending {
-        let task = resource.task();
-        if !task.paused() {
-            return Err(suspend(task).unwrap_err());
-        }
-    }
-
-    Ok(resource)
+    resource.suspend()
 }

@@ -3821,6 +3821,7 @@ dependencies = [
  "dioxus-history",
  "dioxus-hooks",
  "dioxus-signals",
+ "dioxus-stores",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3866,6 +3867,7 @@ dependencies = [
  "dioxus",
  "dioxus-core",
  "dioxus-signals",
+ "dioxus-stores",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -3874,6 +3876,7 @@ dependencies = [
  "slab",
  "tokio",
  "tracing",
+ "warnings",
  "web-sys",
 ]
 

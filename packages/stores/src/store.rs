@@ -14,7 +14,7 @@ use dioxus_signals::{
 use std::marker::PhantomData;
 
 /// A type alias for a store that has been mapped with a function
-pub(crate) type MappedStore<
+pub type MappedStore<
     T,
     Lens,
     F = fn(&<Lens as Readable>::Target) -> &T,
@@ -141,6 +141,25 @@ impl<T: 'static> Store<T> {
     }
 }
 
+impl<T: ?Sized, Lens> Store<T, Lens>
+where
+    Lens: Readable<Target = T>,
+    T: 'static,
+{
+    /// Creates a new `Store` backed by an arbitrary reactive source (`Lens`). This lets you
+    /// drive a store from any `Readable`/`Writable` — for example a [`dioxus_signals::Memo`] — so you
+    /// get the store's lazy per-field subscription tracking on top of your own source.
+    ///
+    /// Note that if the `Lens` is only `Readable` (like a `Memo`), the resulting store is read-only.
+    #[track_caller]
+    pub fn from_lens(lens: Lens) -> Self {
+        let store = StoreSubscriptions::new();
+        let path = TinyVec::new();
+        let selector = SelectorScope::new(path, store, lens);
+        selector.into()
+    }
+}
+
 impl<T: ?Sized, Lens> Store<T, Lens> {
     /// Get the underlying selector for this store. The selector provides low level access to the lazy tracking system
     /// of the store. This can be useful to create selectors for custom data structures in libraries. For most applications
@@ -152,6 +171,11 @@ impl<T: ?Sized, Lens> Store<T, Lens> {
     /// Convert the store into the underlying selector
     pub fn into_selector(self) -> SelectorScope<Lens> {
         self.selector
+    }
+
+    /// Borrow the lens backing this store. Mirrors [`SelectorScope::writer`].
+    pub fn lens(&self) -> &Lens {
+        self.selector.writer()
     }
 }
 

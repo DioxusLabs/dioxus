@@ -1,8 +1,8 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
+use dioxus_signals::project::{hash_path_key, PathKey};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::hash::BuildHasher;
 use std::ops::BitOrAssign;
 use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
@@ -145,7 +145,6 @@ impl SubscriptionDepth {
     }
 }
 
-pub(crate) type PathKey = u16;
 #[cfg(feature = "large-path")]
 const PATH_LENGTH: usize = 32;
 #[cfg(not(feature = "large-path"))]
@@ -208,7 +207,6 @@ impl Deref for TinyVec {
 #[derive(Default)]
 pub(crate) struct StoreSubscriptionsInner {
     root: SelectorNode,
-    hasher: std::collections::hash_map::RandomState,
 }
 
 #[derive(Default)]
@@ -236,15 +234,13 @@ impl StoreSubscriptions {
         Self {
             inner: CopyValue::new_maybe_sync(StoreSubscriptionsInner {
                 root: SelectorNode::default(),
-                hasher: std::collections::hash_map::RandomState::new(),
             }),
         }
     }
 
-    /// Hash an index into a PathKey using the hasher. The hash should be consistent
-    /// across calls
-    pub(crate) fn hash(&self, index: &impl Hash) -> PathKey {
-        (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
+    /// Hash an index into a `PathKey` using the deterministic default SipHasher.
+    pub(crate) fn hash(&self, index: &(impl Hash + ?Sized)) -> PathKey {
+        hash_path_key(index)
     }
 
     /// Subscribe shallowly to a specific path in the store.

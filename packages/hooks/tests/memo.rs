@@ -24,8 +24,8 @@ async fn memo_updates() {
             });
         });
 
-        let len = vec.len();
-        let len_memo = use_memo(move || vec.len());
+        let len = vec.read().len();
+        let len_memo = use_memo(move || vec.read().len());
 
         // Make sure memos that update in the middle of a component work
         if generation() < 2 {
@@ -33,7 +33,7 @@ async fn memo_updates() {
         }
 
         // The memo should always be up to date
-        assert_eq!(vec.len(), len_memo());
+        assert_eq!(vec.read().len(), len_memo());
 
         rsx! {
             for i in 0..len {

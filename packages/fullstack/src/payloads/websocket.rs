@@ -30,9 +30,11 @@ use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
 use dioxus_core::{use_hook, CapturedError, Result};
 use dioxus_fullstack_core::{HttpError, RequestError};
-use dioxus_hooks::{use_resource, Resource, UseWaker};
+use dioxus_hooks::{
+    use_resource, PendingResource, PendingResourceExt, Resource, ResourceControls, UseWaker,
+};
 use dioxus_hooks::{use_signal, use_waker};
-use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
+use dioxus_signals::{ReadSignal, ReadableExt, Signal, WritableExt};
 use futures::{
     stream::{SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryFutureExt,
@@ -117,7 +119,7 @@ where
     Enc: 'static,
 {
     #[allow(clippy::type_complexity)]
-    connection: Resource<Result<Rc<Websocket<In, Out, Enc>>, CapturedError>>,
+    connection: PendingResource<Result<Rc<Websocket<In, Out, Enc>>, CapturedError>>,
     waker: UseWaker<()>,
     status: Signal<WebsocketState>,
     status_read: ReadSignal<WebsocketState>,
@@ -128,7 +130,7 @@ impl<In, Out, E> UseWebsocket<In, Out, E> {
     /// `.try_recv()` will not fail due to the connection not being ready.
     pub async fn connect(&self) -> WebsocketState {
         // Wait for the connection to be established
-        while !self.connection.finished() {
+        while self.connection.running() {
             _ = self.waker.wait().await;
         }
 

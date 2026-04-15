@@ -296,14 +296,15 @@ pub trait WritableExt: Writable {
     ///
     /// Anything that subscribes to the writable value will be rerun whenever the original value changes or you write to this
     /// scoped value, even if the view does not change. If you want to memorize the view, you can use a [`crate::Memo`] instead.
-    /// For fine grained scoped updates, use stores instead
+    /// For fine grained keyed updates, use the `Project*` traits with a
+    /// store-backed carrier.
     ///
     /// # Example
     /// ```rust
     /// # use dioxus::prelude::*;
     /// fn List(list: Signal<Vec<i32>>) -> Element {
     ///     rsx! {
-    ///         for index in 0..list.len() {
+    ///         for index in 0..list.read().len() {
     ///             // We can use the `map` method to provide a view into the single item in the list that the child component will render
     ///             Item { item: list.map_mut(move |v| &v[index], move |v| &mut v[index]) }
     ///         }

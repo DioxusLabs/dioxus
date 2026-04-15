@@ -481,3 +481,61 @@ fn deep_parent_reader_sees_nested_vec_push() {
         assert_eq!(current_counter.other, 1);
     }
 }
+
+#[test]
+fn raw_signal_projects_vec_children() {
+    let mut dom = VirtualDom::new(|| rsx! { "" });
+    dom.rebuild_in_place();
+
+    dom.in_scope(ScopeId::APP, || {
+        let items = Signal::new(vec![1, 2, 3]);
+
+        assert_eq!(ProjectSlice::len(&items), 3);
+
+        let mut second = ProjectSlice::get(items, 1).unwrap();
+        assert_eq!(*second.read(), 2);
+
+        *second.write() = 20;
+
+        assert_eq!(&*items.read(), &[1, 20, 3]);
+        assert_eq!(
+            items.iter().map(|item| *item.read()).collect::<Vec<_>>(),
+            vec![1, 20, 3]
+        );
+    });
+}
+
+#[test]
+fn raw_read_signal_projects_option_children() {
+    let mut dom = VirtualDom::new(|| rsx! { "" });
+    dom.rebuild_in_place();
+
+    dom.in_scope(ScopeId::APP, || {
+        let value = Signal::new(Some(String::from("hello")));
+        let read_value: ReadSignal<Option<String>> = value.into();
+
+        assert!(ProjectOption::is_some(&read_value));
+
+        let inner = ProjectOption::unwrap(read_value);
+        assert_eq!(&*inner.read(), "hello");
+    });
+}
+
+#[test]
+fn raw_signal_projects_signal_children() {
+    let mut dom = VirtualDom::new(|| rsx! { "" });
+    dom.rebuild_in_place();
+
+    dom.in_scope(ScopeId::APP, || {
+        let items = Signal::new(vec![Signal::new(1), Signal::new(2)]);
+
+        let first: WriteSignal<Signal<i32>> = items.iter().next().unwrap();
+        let mut inner = *first.read();
+
+        assert_eq!(*inner.read(), 1);
+
+        inner += 1;
+
+        assert_eq!(*(*first.read()).read(), 2);
+    });
+}

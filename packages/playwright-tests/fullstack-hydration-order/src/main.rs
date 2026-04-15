@@ -28,7 +28,7 @@ pub fn Home() -> Element {
 fn MyStrings() -> Element {
     let strings = use_server_future(get_strings)?;
     let data = match &*strings.read() {
-        Some(Ok(data)) => data.clone(),
+        Ok(data) => data.clone(),
         _ => vec![],
     };
 
@@ -50,7 +50,7 @@ pub async fn get_strings() -> Result<Vec<String>, ServerFnError> {
 fn MyFloats() -> Element {
     let floats = use_server_future(get_floats)?;
     let data = match &*floats.read() {
-        Some(Ok(data)) => data.clone(),
+        Ok(data) => data.clone(),
         _ => vec![],
     };
 

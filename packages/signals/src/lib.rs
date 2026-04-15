@@ -37,6 +37,12 @@ pub use read::*;
 mod write;
 pub use write::*;
 
+pub mod project;
+pub use project::{
+    Project, ProjectBTreeMap, ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut,
+    ProjectIndex, ProjectOption, ProjectResult, ProjectSlice, ProjectVec, Projected,
+};
+
 mod props;
 pub use props::*;
 

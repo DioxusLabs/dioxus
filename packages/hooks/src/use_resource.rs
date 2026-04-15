@@ -1,559 +1,462 @@
-#![allow(missing_docs)]
-
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use std::future::Future;
 
 use dioxus_core::{
-    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
-    Subscribers, SuspendedFuture, Task,
+    spawn, use_hook, ReactiveContext, RenderError, Subscribers, SuspendedFuture, Task,
 };
-use dioxus_signals::*;
-use futures_util::{
-    future::{self},
-    pin_mut, FutureExt, StreamExt,
+use dioxus_signals::{
+    BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
+    ProjectOption, ProjectResult, Projected, Readable, ReadableExt, ReadableRef, Writable,
+    WritableExt, WritableRef, WriteSignal,
 };
-use std::{cell::Cell, future::Future, rc::Rc};
-use std::{fmt::Debug, ops::Deref};
+use dioxus_stores::Store;
+use futures_util::{pin_mut, FutureExt, StreamExt};
 
-#[doc = include_str!("../docs/use_resource.md")]
-#[doc = include_str!("../docs/rules_of_hooks.md")]
-#[doc = include_str!("../docs/moving_state_around.md")]
-#[doc(alias = "use_async_memo")]
-#[doc(alias = "use_memo_async")]
+// ---------------------------------------------------------------------------
+// `use_resource` hook
+// ---------------------------------------------------------------------------
+
+/// Spawn a reactive future and return a handle to its result.
 #[track_caller]
-pub fn use_resource<T, F>(mut future: impl FnMut() -> F + 'static) -> Resource<T>
+pub fn use_resource<T, F>(future: impl FnMut() -> F + 'static) -> PendingResource<T>
 where
     T: 'static,
     F: Future<Output = T> + 'static,
 {
     let location = std::panic::Location::caller();
+    use_hook(|| new_pending_resource(future, location))
+}
 
-    let mut value = use_signal(|| None);
-    let mut state = use_signal(|| UseResourceState::Pending);
-    let (rc, changed) = use_hook(|| {
-        let (rc, changed) = ReactiveContext::new_with_origin(location);
-        (rc, Rc::new(Cell::new(Some(changed))))
-    });
+fn run_future_in_context<T, F>(
+    rc: &ReactiveContext,
+    mut future: impl FnMut() -> F,
+    location: &'static std::panic::Location<'static>,
+) -> Task
+where
+    T: 'static,
+    F: Future<Output = T> + 'static,
+{
+    let rc = rc.clone();
+    let fut = rc.reset_and_run_in(&mut future);
 
-    let mut waker = use_waker::<()>();
-
-    let cb = use_callback(move |_| {
-        // Set the state to Pending when the task is restarted
-        state.set(UseResourceState::Pending);
-
-        // Create the user's task
-        let fut = rc.reset_and_run_in(&mut future);
-
-        // Spawn a wrapper task that polls the inner future and watches its dependencies
-        spawn(async move {
-            // Move the future here and pin it so we can poll it
-            let fut = fut;
-            pin_mut!(fut);
-
-            // Run each poll in the context of the reactive scope
-            // This ensures the scope is properly subscribed to the future's dependencies
-            let res = future::poll_fn(|cx| {
-                rc.run_in(|| {
-                    tracing::trace_span!("polling resource", location = %location)
-                        .in_scope(|| fut.poll_unpin(cx))
-                })
+    spawn(async move {
+        let fut = fut;
+        pin_mut!(fut);
+        std::future::poll_fn(|cx| {
+            rc.run_in(|| {
+                tracing::trace_span!("polling resource", location = %location)
+                    .in_scope(|| fut.poll_unpin(cx))
             })
-            .await;
-
-            // Set the value and state
-            state.set(UseResourceState::Ready);
-            value.set(Some(res));
-
-            // Notify that the value has changed
-            waker.wake(());
         })
-    });
-
-    let mut task = use_hook(|| Signal::new(cb(())));
-
-    use_hook(|| {
-        let mut changed = changed.take().unwrap();
-        spawn(async move {
-            loop {
-                // Wait for the dependencies to change
-                let _ = changed.next().await;
-
-                // Stop the old task
-                task.write().cancel();
-
-                // Start a new task
-                task.set(cb(()));
-            }
-        })
-    });
-
-    Resource {
-        task,
-        value,
-        state,
-        waker,
-        callback: cb,
-    }
+        .await;
+    })
 }
 
-/// A handle to a reactive future spawned with [`use_resource`] that can be used to modify or read the result of the future.
-///
-/// ## Example
-///
-/// Reading the result of a resource:
-/// ```rust, no_run
-/// # use dioxus::prelude::*;
-/// # use std::time::Duration;
-/// fn App() -> Element {
-///     let mut revision = use_signal(|| "1d03b42");
-///     let mut resource = use_resource(move || async move {
-///         // This will run every time the revision signal changes because we read the count inside the future
-///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-///     });
-///
-///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
-///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-///     match &*resource.read_unchecked() {
-///         Some(Ok(value)) => rsx! { "{value:?}" },
-///         Some(Err(err)) => rsx! { "Error: {err}" },
-///         None => rsx! { "Loading..." },
-///     }
-/// }
-/// ```
-#[derive(Debug)]
-pub struct Resource<T: 'static> {
-    waker: UseWaker<()>,
-    value: Signal<Option<T>>,
-    task: Signal<Task>,
-    state: Signal<UseResourceState>,
-    callback: Callback<(), Task>,
+/// Internal handle to the task + reactive context backing a resource.
+pub struct ResourceHandle {
+    task: Task,
+    rc: ReactiveContext,
+    wakers: Vec<std::task::Waker>,
 }
 
-impl<T> PartialEq for Resource<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-            && self.state == other.state
-            && self.task == other.task
-            && self.callback == other.callback
-    }
+// ---------------------------------------------------------------------------
+// HandledLens — a transparent lens wrapper that carries a resource handle.
+//
+// `Resource<T, L>` keeps the normal `Store` carrier, but swaps in a
+// `HandledLens<L>` at the bottom of the lens chain. Store projections compose
+// via mapped child lenses that preserve the inner lens verbatim, so the handle
+// rides through every projection automatically.
+// ---------------------------------------------------------------------------
+
+/// Lens wrapper that attaches a [`ResourceHandle`] to an underlying signal.
+/// Readable/Writable delegate to `inner`; the handle is reached via
+/// [`ResourceLike`].
+pub struct HandledLens<L> {
+    inner: L,
+    handle: CopyValue<ResourceHandle>,
 }
 
-impl<T> Clone for Resource<T> {
+impl<L: Copy> Copy for HandledLens<L> {}
+impl<L: Clone> Clone for HandledLens<L> {
     fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<T> Copy for Resource<T> {}
-
-/// A signal that represents the state of the resource
-// we might add more states (panicked, etc)
-#[derive(Clone, Copy, PartialEq, Hash, Eq, Debug)]
-pub enum UseResourceState {
-    /// The resource's future is still running
-    Pending,
-
-    /// The resource's future has been forcefully stopped
-    Stopped,
-
-    /// The resource's future has been paused, tempoarily
-    Paused,
-
-    /// The resource's future has completed
-    Ready,
-}
-
-impl<T> Resource<T> {
-    /// Restart the resource's future.
-    ///
-    /// This will cancel the current future and start a new one.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     rsx! {
-    ///         button {
-    ///             // We can get a signal with the value of the resource with the `value` method
-    ///             onclick: move |_| resource.restart(),
-    ///             "Restart resource"
-    ///         }
-    ///         "{resource:?}"
-    ///     }
-    /// }
-    /// ```
-    pub fn restart(&mut self) {
-        self.task.write().cancel();
-        let new_task = self.callback.call(());
-        self.task.set(new_task);
-    }
-
-    /// Forcefully cancel the resource's future.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     rsx! {
-    ///         button {
-    ///             // We can cancel the resource before it finishes with the `cancel` method
-    ///             onclick: move |_| resource.cancel(),
-    ///             "Cancel resource"
-    ///         }
-    ///         "{resource:?}"
-    ///     }
-    /// }
-    /// ```
-    pub fn cancel(&mut self) {
-        self.state.set(UseResourceState::Stopped);
-        self.task.write().cancel();
-    }
-
-    /// Pause the resource's future.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     rsx! {
-    ///         button {
-    ///             // We can pause the future with the `pause` method
-    ///             onclick: move |_| resource.pause(),
-    ///             "Pause"
-    ///         }
-    ///         button {
-    ///             // And resume it with the `resume` method
-    ///             onclick: move |_| resource.resume(),
-    ///             "Resume"
-    ///         }
-    ///         "{resource:?}"
-    ///     }
-    /// }
-    /// ```
-    pub fn pause(&mut self) {
-        self.state.set(UseResourceState::Paused);
-        self.task.write().pause();
-    }
-
-    /// Resume the resource's future.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     rsx! {
-    ///         button {
-    ///             // We can pause the future with the `pause` method
-    ///             onclick: move |_| resource.pause(),
-    ///             "Pause"
-    ///         }
-    ///         button {
-    ///             // And resume it with the `resume` method
-    ///             onclick: move |_| resource.resume(),
-    ///             "Resume"
-    ///         }
-    ///         "{resource:?}"
-    ///     }
-    /// }
-    /// ```
-    pub fn resume(&mut self) {
-        if self.finished() {
-            return;
-        }
-
-        self.state.set(UseResourceState::Pending);
-        self.task.write().resume();
-    }
-
-    /// Clear the resource's value. This will just reset the value. It will not modify any running tasks.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     rsx! {
-    ///         button {
-    ///             // We clear the value without modifying any running tasks with the `clear` method
-    ///             onclick: move |_| resource.clear(),
-    ///             "Clear"
-    ///         }
-    ///         "{resource:?}"
-    ///     }
-    /// }
-    /// ```
-    pub fn clear(&mut self) {
-        self.value.write().take();
-    }
-
-    /// Get a handle to the inner task backing this resource
-    /// Modify the task through this handle will cause inconsistent state
-    pub fn task(&self) -> Task {
-        self.task.cloned()
-    }
-
-    /// Is the resource's future currently running?
-    pub fn pending(&self) -> bool {
-        matches!(*self.state.peek(), UseResourceState::Pending)
-    }
-
-    /// Is the resource's future currently finished running?
-    ///
-    /// Reading this does not subscribe to the future's state
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     // We can use the `finished` method to check if the future is finished
-    ///     if resource.finished() {
-    ///         rsx! {
-    ///             "The resource is finished"
-    ///         }
-    ///     } else {
-    ///         rsx! {
-    ///             "The resource is still running"
-    ///         }
-    ///     }
-    /// }
-    /// ```
-    pub fn finished(&self) -> bool {
-        matches!(
-            *self.state.peek(),
-            UseResourceState::Ready | UseResourceState::Stopped
-        )
-    }
-
-    /// Get the current state of the resource's future. This method returns a [`ReadSignal`] which can be read to get the current state of the resource or passed to other hooks and components.
-    ///
-    /// ## Example
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     // We can read the current state of the future with the `state` method
-    ///     match resource.state().cloned() {
-    ///         UseResourceState::Pending => rsx! {
-    ///             "The resource is still pending"
-    ///         },
-    ///         UseResourceState::Paused => rsx! {
-    ///             "The resource has been paused"
-    ///         },
-    ///         UseResourceState::Stopped => rsx! {
-    ///             "The resource has been stopped"
-    ///         },
-    ///         UseResourceState::Ready => rsx! {
-    ///             "The resource is ready!"
-    ///         },
-    ///     }
-    /// }
-    /// ```
-    pub fn state(&self) -> ReadSignal<UseResourceState> {
-        self.state.into()
-    }
-
-    /// Get the current value of the resource's future.  This method returns a [`ReadSignal`] which can be read to get the current value of the resource or passed to other hooks and components.
-    ///
-    /// ## Example
-    ///
-    /// ```rust, no_run
-    /// # use dioxus::prelude::*;
-    /// # use std::time::Duration;
-    /// fn App() -> Element {
-    ///     let mut revision = use_signal(|| "1d03b42");
-    ///     let mut resource = use_resource(move || async move {
-    ///         // This will run every time the revision signal changes because we read the count inside the future
-    ///         reqwest::get(format!("https://github.com/DioxusLabs/awesome-dioxus/blob/{revision}/awesome.json")).await
-    ///     });
-    ///
-    ///     // We can get a signal with the value of the resource with the `value` method
-    ///     let value = resource.value();
-    ///
-    ///     // Since our resource may not be ready yet, the value is an Option. Our request may also fail, so the get function returns a Result
-    ///     // The complete type we need to match is `Option<Result<String, reqwest::Error>>`
-    ///     // We can use `read_unchecked` to keep our matching code in one statement while avoiding a temporary variable error (this is still completely safe because dioxus checks the borrows at runtime)
-    ///     match &*value.read_unchecked() {
-    ///         Some(Ok(value)) => rsx! { "{value:?}" },
-    ///         Some(Err(err)) => rsx! { "Error: {err}" },
-    ///         None => rsx! { "Loading..." },
-    ///     }
-    /// }
-    /// ```
-    pub fn value(&self) -> ReadSignal<Option<T>> {
-        self.value.into()
-    }
-
-    /// Suspend the resource's future and only continue rendering when the future is ready
-    pub fn suspend(&self) -> std::result::Result<MappedSignal<T, Signal<Option<T>>>, RenderError> {
-        match self.state.cloned() {
-            UseResourceState::Stopped | UseResourceState::Paused | UseResourceState::Pending => {
-                let task = self.task();
-                if task.paused() {
-                    Ok(self.value.map(|v| v.as_ref().unwrap()))
-                } else {
-                    Err(RenderError::Suspended(SuspendedFuture::new(task)))
-                }
-            }
-            _ => Ok(self.value.map(|v| v.as_ref().unwrap())),
+        HandledLens {
+            inner: self.inner.clone(),
+            handle: self.handle,
         }
     }
 }
-
-impl<T, E> Resource<Result<T, E>> {
-    /// Convert the `Resource<Result<T, E>>` into an `Option<Result<MappedSignal<T>, MappedSignal<E>>>`
-    #[allow(clippy::type_complexity)]
-    pub fn result(
-        &self,
-    ) -> Option<
-        Result<
-            MappedSignal<T, Signal<Option<Result<T, E>>>>,
-            MappedSignal<E, Signal<Option<Result<T, E>>>>,
-        >,
-    > {
-        let value: MappedSignal<T, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Ok(ref res)) => res,
-            _ => panic!("Resource is not ready"),
-        });
-
-        let error: MappedSignal<E, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Err(ref err)) => err,
-            _ => panic!("Resource is not ready"),
-        });
-
-        match &*self.value.peek() {
-            Some(Ok(_)) => Some(Ok(value)),
-            Some(Err(_)) => Some(Err(error)),
-            None => None,
-        }
+impl<L: PartialEq> PartialEq for HandledLens<L> {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
     }
 }
 
-impl<T> From<Resource<T>> for ReadSignal<Option<T>> {
-    fn from(val: Resource<T>) -> Self {
-        val.value.into()
-    }
-}
-
-impl<T> Readable for Resource<T> {
-    type Target = Option<T>;
-    type Storage = UnsyncStorage;
-
-    #[track_caller]
-    fn try_read_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_read_unchecked()
-    }
-
-    #[track_caller]
-    fn try_peek_unchecked(
-        &self,
-    ) -> Result<ReadableRef<'static, Self>, generational_box::BorrowError> {
-        self.value.try_peek_unchecked()
-    }
-
-    fn subscribers(&self) -> Subscribers {
-        self.value.subscribers()
-    }
-}
-
-impl<T> Writable for Resource<T> {
-    type WriteMetadata = <Signal<Option<T>> as Writable>::WriteMetadata;
-
-    fn try_write_unchecked(
-        &self,
-    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+impl<L: Readable> Readable for HandledLens<L> {
+    type Target = L::Target;
+    type Storage = L::Storage;
+    fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError>
     where
         Self::Target: 'static,
     {
-        self.value.try_write_unchecked()
+        self.inner.try_read_unchecked()
+    }
+    fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError>
+    where
+        Self::Target: 'static,
+    {
+        self.inner.try_peek_unchecked()
+    }
+    fn subscribers(&self) -> Subscribers
+    where
+        Self::Target: 'static,
+    {
+        self.inner.subscribers()
     }
 }
 
-impl<T> IntoAttributeValue for Resource<T>
+impl<L: Writable> Writable for HandledLens<L> {
+    type WriteMetadata = L::WriteMetadata;
+    fn try_write_unchecked(&self) -> Result<WritableRef<'static, Self>, BorrowMutError> {
+        self.inner.try_write_unchecked()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ResourceLike — "this lens chain bottoms out at a HandledLens".
+// ---------------------------------------------------------------------------
+
+/// Trait satisfied by any lens whose chain terminates at a [`HandledLens`].
+pub trait ResourceLike: Readable + Copy {
+    fn resource_handle(&self) -> CopyValue<ResourceHandle>;
+}
+
+impl<L: Readable + Copy> ResourceLike for HandledLens<L> {
+    fn resource_handle(&self) -> CopyValue<ResourceHandle> {
+        self.handle
+    }
+}
+
+impl<O: ?Sized, V, F, FMut> ResourceLike for MappedMutSignal<O, V, F, FMut>
 where
-    T: Clone + IntoAttributeValue,
+    V: ResourceLike,
+    Self: Readable + Copy,
 {
-    fn into_value(self) -> dioxus_core::AttributeValue {
-        self.with(|f| f.clone().into_value())
+    fn resource_handle(&self) -> CopyValue<ResourceHandle> {
+        self.inner().resource_handle()
     }
 }
 
-impl<T> IntoDynNode for Resource<T>
+// ---------------------------------------------------------------------------
+// Public type aliases — resources reuse the normal store carrier, so the
+// projector shape traits (`ProjectOption`, `ProjectResult`, `ProjectDeref`,
+// …) apply without any per-method forwarders.
+// ---------------------------------------------------------------------------
+
+/// A reactive async value. `Resource` is a `Store` whose lens carries a
+/// resource handle — so every store projection (transpose, ok, err, index,
+/// filter, …) lifts onto resources automatically through the `Project`
+/// shape traits.
+pub type Resource<T, L = WriteSignal<T>> = Store<T, HandledLens<L>>;
+
+/// A resource whose future hasn't necessarily resolved yet.
+pub type PendingResource<T> = Resource<Option<T>>;
+
+/// A resource projected to its resolved inner value.
+pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
+    Projected<Resource<Option<T>, Lens>, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>;
+
+/// Projection of a resolved resource into its `Ok` branch.
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
+    ResolvedResource<Result<T, E>, Lens>,
+    T,
+    fn(&Result<T, E>) -> &T,
+    fn(&mut Result<T, E>) -> &mut T,
+>;
+
+/// Projection of a resolved resource into its `Err` branch.
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
+    ResolvedResource<Result<T, E>, Lens>,
+    E,
+    fn(&Result<T, E>) -> &E,
+    fn(&mut Result<T, E>) -> &mut E,
+>;
+
+// ---------------------------------------------------------------------------
+// ResourceControls — handle-based methods. Local trait → blanket impl OK.
+// ---------------------------------------------------------------------------
+
+/// Control methods that work on any projection of a resource.
+pub trait ResourceControls {
+    fn restart(&self);
+    fn cancel(&self);
+    fn pause(&self);
+    fn resume(&self);
+    fn task(&self) -> Task;
+    fn finished(&self) -> bool;
+    fn pending(&self) -> bool;
+    /// Await the next completion of this resource's task.
+    fn wait(&self) -> ResourceFuture;
+}
+
+impl<T: ?Sized, L: ResourceLike> ResourceControls for Store<T, L>
 where
-    T: Clone + IntoDynNode,
+    L::Target: 'static,
 {
-    fn into_dyn_node(self) -> dioxus_core::DynamicNode {
-        self().into_dyn_node()
+    fn restart(&self) {
+        self.lens().resource_handle().read().rc.mark_dirty();
+    }
+    fn cancel(&self) {
+        self.lens().resource_handle().read().task.cancel();
+    }
+    fn pause(&self) {
+        self.lens().resource_handle().read().task.pause();
+    }
+    fn resume(&self) {
+        self.lens().resource_handle().read().task.resume();
+    }
+    fn task(&self) -> Task {
+        self.lens().resource_handle().read().task
+    }
+    fn finished(&self) -> bool {
+        !self.lens().resource_handle().read().task.paused()
+    }
+    fn pending(&self) -> bool {
+        self.lens().resource_handle().read().task.paused()
+    }
+    fn wait(&self) -> ResourceFuture {
+        ResourceFuture {
+            resource: self.lens().resource_handle(),
+        }
     }
 }
 
-/// Allow calling a signal with signal() syntax
-///
-/// Currently only limited to copy types, though could probably specialize for string/arc/rc
-impl<T: Clone> Deref for Resource<T> {
-    type Target = dyn Fn() -> Option<T>;
+// ---------------------------------------------------------------------------
+// PendingResourceExt / FallibleResourceExt — resource-shape-specific ext methods.
+// ---------------------------------------------------------------------------
 
-    fn deref(&self) -> &Self::Target {
-        unsafe { ReadableExt::deref_impl(self) }
+/// Methods for resources of shape `Option<T>`.
+pub trait PendingResourceExt: Sized {
+    type Inner: 'static;
+    type InnerLens: Readable<Target = Option<Self::Inner>> + Copy + 'static;
+
+    fn suspend(&self) -> Result<ResolvedResource<Self::Inner, Self::InnerLens>, RenderError>;
+    /// Is the resource's future currently running (value still unresolved)?
+    fn running(&self) -> bool;
+    /// Has the resource's future resolved?
+    fn resolved(&self) -> bool;
+}
+
+impl<T, Lens> PendingResourceExt for Store<Option<T>, HandledLens<Lens>>
+where
+    T: 'static,
+    Lens: Readable<Target = Option<T>> + Copy + 'static,
+{
+    type Inner = T;
+    type InnerLens = Lens;
+
+    fn suspend(&self) -> Result<ResolvedResource<T, Lens>, RenderError> {
+        let handle = self.lens().resource_handle();
+        (*self)
+            .transpose()
+            .ok_or_else(|| RenderError::Suspended(SuspendedFuture::new(handle.read().task)))
+    }
+
+    fn running(&self) -> bool {
+        self.is_none()
+    }
+
+    fn resolved(&self) -> bool {
+        self.is_some()
     }
 }
 
-impl<T> std::future::Future for Resource<T> {
+/// Methods for resources whose value is `Option<Result<T, E>>`.
+pub trait FallibleResourceExt: Sized {
+    type Ok: 'static;
+    type Err: 'static;
+    type InnerLens: Readable<Target = Option<Result<Self::Ok, Self::Err>>> + Copy + 'static;
+
+    fn result(
+        &self,
+    ) -> Option<
+        Result<
+            OkResource<Self::Ok, Self::Err, Self::InnerLens>,
+            ErrResource<Self::Ok, Self::Err, Self::InnerLens>,
+        >,
+    >;
+
+    fn ready(&self) -> Result<OkResource<Self::Ok, Self::Err, Self::InnerLens>, RenderError>
+    where
+        Self::Err: Clone + Into<RenderError>;
+
+    fn ok(&self) -> Result<Option<OkResource<Self::Ok, Self::Err, Self::InnerLens>>, RenderError>
+    where
+        Self::Err: Clone + Into<RenderError>;
+}
+
+impl<T, E, Lens> FallibleResourceExt for Store<Option<Result<T, E>>, HandledLens<Lens>>
+where
+    T: 'static,
+    E: 'static,
+    Lens: Readable<Target = Option<Result<T, E>>> + Copy + 'static,
+{
+    type Ok = T;
+    type Err = E;
+    type InnerLens = Lens;
+
+    fn result(&self) -> Option<Result<OkResource<T, E, Lens>, ErrResource<T, E, Lens>>> {
+        (*self).transpose().map(|resolved| resolved.transpose())
+    }
+
+    fn ready(&self) -> Result<OkResource<T, E, Lens>, RenderError>
+    where
+        E: Clone + Into<RenderError>,
+    {
+        self.suspend()?
+            .transpose()
+            .map_err(|err_store| err_store().into())
+    }
+
+    fn ok(&self) -> Result<Option<OkResource<T, E, Lens>>, RenderError>
+    where
+        E: Clone + Into<RenderError>,
+    {
+        match self.result() {
+            None => Ok(None),
+            Some(Ok(ok_store)) => Ok(Some(ok_store)),
+            Some(Err(err_store)) => Err(err_store().into()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resource future (future-of-resource-resolution).
+// ---------------------------------------------------------------------------
+
+/// A future that resolves when a resource's task next completes.
+pub struct ResourceFuture {
+    resource: CopyValue<ResourceHandle>,
+}
+
+impl std::future::Future for ResourceFuture {
     type Output = ();
-
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        match self.waker.clone().poll_unpin(cx) {
-            std::task::Poll::Ready(_) => std::task::Poll::Ready(()),
-            std::task::Poll::Pending => std::task::Poll::Pending,
+        let myself = self.get_mut();
+        let mut handle = myself.resource.write();
+        if !handle.task.paused() {
+            std::task::Poll::Ready(())
+        } else {
+            handle.wakers.push(cx.waker().clone());
+            std::task::Poll::Pending
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Constructors.
+// ---------------------------------------------------------------------------
+
+/// Build a [`PendingResource`] from a future-producing closure.
+#[track_caller]
+pub fn new_pending_resource<T, F>(
+    mut future: impl FnMut() -> F + 'static,
+    location: &'static std::panic::Location<'static>,
+) -> PendingResource<T>
+where
+    T: 'static,
+    F: Future<Output = T> + 'static,
+{
+    let mut state: Store<Option<T>, WriteSignal<Option<T>>> = Store::new(None);
+    let mut run_user_future = move || {
+        let fut = future();
+        async move {
+            let result = fut.await;
+            state.set(Some(result));
+        }
+    };
+    let (rc, mut changed) = ReactiveContext::new();
+
+    let mut task = run_future_in_context(&rc, &mut run_user_future, location);
+    let handle = ResourceHandle {
+        task: task.clone(),
+        wakers: Vec::new(),
+        rc: rc.clone(),
+    };
+    let mut handle = CopyValue::new(handle);
+
+    spawn(async move {
+        loop {
+            let _ = changed.next().await;
+            task.cancel();
+            task = run_future_in_context(
+                &rc,
+                &mut || {
+                    let future = run_user_future();
+                    async move {
+                        future.await;
+                        let wakers = std::mem::take(&mut handle.write().wakers);
+                        for waker in wakers {
+                            waker.wake();
+                        }
+                    }
+                },
+                location,
+            );
+            let mut h = handle.write();
+            h.task = task.clone();
+        }
+    });
+
+    // Wrap the store's lens with HandledLens so resource-specific methods can
+    // reach the task handle via the `ResourceLike` trait.
+    let selector = state.into_selector();
+    let handled = selector.map_writer(|inner| HandledLens { inner, handle });
+    handled.into()
+}
+
+// ---------------------------------------------------------------------------
+// Global resources — newtype wrapper around PendingResource to sidestep the
+// orphan rule on `InitializeFromFunction` (its trait generic `F` isn't wrapped
+// in any local type in the impl signature otherwise).
+// ---------------------------------------------------------------------------
+
+/// A globally-registered resource.
+pub struct LazyResource<T: 'static>(PendingResource<T>);
+
+impl<T: 'static> Copy for LazyResource<T> {}
+impl<T: 'static> Clone for LazyResource<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: 'static> LazyResource<T> {
+    /// Unwrap into the underlying [`PendingResource`].
+    pub fn get(self) -> PendingResource<T> {
+        self.0
+    }
+}
+
+impl<T: 'static> std::ops::Deref for LazyResource<T> {
+    type Target = PendingResource<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<F, T> InitializeFromFunction<F> for LazyResource<T>
+where
+    F: Future<Output = T> + 'static,
+    T: 'static,
+{
+    #[track_caller]
+    fn initialize_from_function(f: fn() -> F) -> Self {
+        let location = std::panic::Location::caller();
+        LazyResource(new_pending_resource(f, location))
+    }
+}
+
+/// A type alias for global resources.
+pub type GlobalResource<T, F> = Global<LazyResource<T>, F>;

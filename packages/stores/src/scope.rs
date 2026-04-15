@@ -3,8 +3,9 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::subscriptions::{PathKey, StoreSubscriptions, TinyVec};
+use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::Subscribers;
+use dioxus_signals::project::PathKey;
 use dioxus_signals::{
     BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
     WritableRef,
@@ -88,7 +89,7 @@ impl<Lens> SelectorScope<Lens> {
     /// Note the hash is lossy, so there may rarely be collisions. If a collision does occur, it may
     /// cause reruns in a part of the app that has not changed. As long as derived data is pure,
     /// this should not cause issues.
-    pub fn hash_child<U: ?Sized, T, F, FMut>(
+    pub fn hash_child<U: ?Sized, T: ?Sized, F, FMut>(
         self,
         index: &impl Hash,
         map: F,
@@ -104,7 +105,7 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Create a child selector scope for a specific index. The scope will only be marked as dirty when a
     /// write occurs to that index or its parents.
-    pub fn child<U: ?Sized, T, F, FMut>(
+    pub fn child<U: ?Sized, T: ?Sized, F, FMut>(
         self,
         index: PathKey,
         map: F,
@@ -119,9 +120,14 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Create a hashed child selector scope for a specific index without mapping the writer. The scope will only
     /// be marked as dirty when a write occurs to that index or its parents.
-    pub fn hash_child_unmapped(self, index: &impl Hash) -> SelectorScope<Lens> {
-        let hash = self.store.hash(index);
+    pub fn hash_child_unmapped(self, index: &(impl Hash + ?Sized)) -> SelectorScope<Lens> {
+        let hash = self.hash_key(index);
         self.child_unmapped(hash)
+    }
+
+    /// Hash an arbitrary key into this scope's path space.
+    pub fn hash_key(&self, index: &(impl Hash + ?Sized)) -> PathKey {
+        self.store.hash(index)
     }
 
     /// Create a child selector scope for a specific index without mapping the writer. The scope will only
@@ -132,7 +138,7 @@ impl<Lens> SelectorScope<Lens> {
     }
 
     /// Map the view into the writable data without creating a child selector scope
-    pub fn map<U: ?Sized, T, F, FMut>(
+    pub fn map<U: ?Sized, T: ?Sized, F, FMut>(
         self,
         map: F,
         map_mut: FMut,
@@ -167,6 +173,12 @@ impl<Lens> SelectorScope<Lens> {
     /// Mark this scope as dirty at and after the given index.
     pub fn mark_dirty_at_and_after_index(&self, index: usize) {
         self.store.mark_dirty_at_and_after_index(&self.path, index);
+    }
+
+    /// Borrow the lens/writer. Useful when you need properties of the lens itself
+    /// (for example, to walk a chain of mapped signals to reach the root lens).
+    pub fn writer(&self) -> &Lens {
+        &self.write
     }
 
     /// Map the writer to a new type.
