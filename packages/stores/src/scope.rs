@@ -120,8 +120,13 @@ impl<Lens> SelectorScope<Lens> {
     /// Create a hashed child selector scope for a specific index without mapping the writer. The scope will only
     /// be marked as dirty when a write occurs to that index or its parents.
     pub fn hash_child_unmapped(self, index: &(impl Hash + ?Sized)) -> SelectorScope<Lens> {
-        let hash = self.store.hash(index);
+        let hash = self.hash_key(index);
         self.child_unmapped(hash)
+    }
+
+    /// Hash an arbitrary key into this scope's path space.
+    pub fn hash_key(&self, index: &(impl Hash + ?Sized)) -> PathKey {
+        self.store.hash(index)
     }
 
     /// Create a child selector scope for a specific index without mapping the writer. The scope will only

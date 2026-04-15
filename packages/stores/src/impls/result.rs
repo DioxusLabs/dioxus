@@ -2,12 +2,12 @@
 
 use std::ops::DerefMut;
 
-use crate::{ProjectScope, Projected};
+use crate::{Project, ProjectPathExt, Projected};
 use dioxus_signals::{Readable, ReadableExt};
 
 /// Projection methods for types targeting `Result<T, E>`.
 pub trait ProjectResult<T: 'static, E: 'static>:
-    ProjectScope<Lens: Readable<Target = Result<T, E>>>
+    Project<Lens: Readable<Target = Result<T, E>>>
 {
     fn is_ok(&self) -> bool {
         self.project_track_shallow();
@@ -208,6 +208,6 @@ pub trait ProjectResult<T: 'static, E: 'static>:
 }
 
 impl<T: 'static, E: 'static, P> ProjectResult<T, E> for P where
-    P: ProjectScope<Lens: Readable<Target = Result<T, E>>>
+    P: Project<Lens: Readable<Target = Result<T, E>>>
 {
 }

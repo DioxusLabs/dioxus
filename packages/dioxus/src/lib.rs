@@ -171,8 +171,7 @@ pub mod prelude {
     pub use dioxus_stores::{
         self, store, use_store, GlobalStore, LensOnly, Project, ProjectBTreeMap,
         ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut, ProjectIndex,
-        ProjectMap, ProjectOption, ProjectResult, ProjectScope, ProjectSlice, ProjectVec,
-        ReadStore, Store, WriteStore,
+        ProjectOption, ProjectResult, ProjectSlice, ProjectVec, ReadStore, Store, WriteStore,
     };
 
     #[cfg(feature = "macro")]

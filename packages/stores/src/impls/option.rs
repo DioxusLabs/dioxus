@@ -2,11 +2,11 @@
 
 use std::ops::DerefMut;
 
-use crate::{ProjectScope, Projected};
+use crate::{Project, ProjectLensExt, ProjectPathExt, Projected};
 use dioxus_signals::{Readable, ReadableExt};
 
 /// Projection methods for types targeting `Option<T>`.
-pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option<T>>> {
+pub trait ProjectOption<T: 'static>: Project<Lens: Readable<Target = Option<T>>> {
     /// Is the option currently `Some`? Tracks shallowly.
     fn is_some(&self) -> bool {
         self.project_track_shallow();
@@ -131,4 +131,4 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     }
 }
 
-impl<T: 'static, P> ProjectOption<T> for P where P: ProjectScope<Lens: Readable<Target = Option<T>>> {}
+impl<T: 'static, P> ProjectOption<T> for P where P: Project<Lens: Readable<Target = Option<T>>> {}

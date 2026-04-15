@@ -2,12 +2,12 @@
 
 use std::ops::DerefMut;
 
-use crate::{ProjectMap, Projected};
+use crate::{ProjectLens, ProjectLensExt, Projected};
 use dioxus_signals::Readable;
 
 /// Project through a `DerefMut` target without introducing a new path subscription.
 pub trait ProjectDeref<U: ?Sized + 'static>:
-    ProjectMap<Lens: Readable<Target: DerefMut<Target = U>>>
+    ProjectLens<Lens: Readable<Target: DerefMut<Target = U>>>
 {
     /// Project through `DerefMut` to the inner target.
     fn deref(self) -> Projected<Self, U>
@@ -21,6 +21,6 @@ pub trait ProjectDeref<U: ?Sized + 'static>:
 }
 
 impl<U: ?Sized + 'static, P> ProjectDeref<U> for P where
-    P: ProjectMap<Lens: Readable<Target: DerefMut<Target = U>>>
+    P: ProjectLens<Lens: Readable<Target: DerefMut<Target = U>>>
 {
 }

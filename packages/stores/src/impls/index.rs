@@ -6,46 +6,77 @@ use std::{
     ops::{self, Index, IndexMut},
 };
 
-use crate::{store::Store, ProjectScope, ReadStore};
+use crate::{store::Store, ProjectHashExt, ProjectPath, ReadStore};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, UnsyncStorage, Writable,
     WriteLock, WriteSignal,
 };
 
+mod sealed {
+    pub trait Sealed<Idx, P> {}
+}
+
 /// The way a data structure scopes a projector to one of its indexed children.
-pub trait IndexSelector<Idx> {
+#[doc(hidden)]
+pub trait IndexSelector<Idx, P>: sealed::Sealed<Idx, P> {
     /// Given a projection and an index, scope it to the child at that index.
-    fn scope_project<P: ProjectScope>(project: P, index: &Idx) -> P;
+    fn scope_project(project: P, index: &Idx) -> P;
 }
 
-impl<T> IndexSelector<usize> for Vec<T> {
-    fn scope_project<P: ProjectScope>(project: P, index: &usize) -> P {
+impl<T, P> IndexSelector<usize, P> for Vec<T>
+where
+    P: ProjectPath,
+{
+    fn scope_project(project: P, index: &usize) -> P {
         project.project_key(*index as _)
     }
 }
 
-impl<T> IndexSelector<usize> for [T] {
-    fn scope_project<P: ProjectScope>(project: P, index: &usize) -> P {
+impl<T, P> sealed::Sealed<usize, P> for Vec<T> where P: ProjectPath {}
+
+impl<T, P> IndexSelector<usize, P> for [T]
+where
+    P: ProjectPath,
+{
+    fn scope_project(project: P, index: &usize) -> P {
         project.project_key(*index as _)
     }
 }
 
-impl<K, V, I> IndexSelector<I> for HashMap<K, V>
+impl<T, P> sealed::Sealed<usize, P> for [T] where P: ProjectPath {}
+
+impl<K, V, I, P> IndexSelector<I, P> for HashMap<K, V>
 where
     I: Hash,
+    P: ProjectPath,
 {
-    fn scope_project<P: ProjectScope>(project: P, index: &I) -> P {
+    fn scope_project(project: P, index: &I) -> P {
         project.project_hash_key(index)
     }
 }
 
-impl<K, V, I> IndexSelector<I> for BTreeMap<K, V>
+impl<K, V, I, P> sealed::Sealed<I, P> for HashMap<K, V>
 where
     I: Hash,
+    P: ProjectPath,
 {
-    fn scope_project<P: ProjectScope>(project: P, index: &I) -> P {
+}
+
+impl<K, V, I, P> IndexSelector<I, P> for BTreeMap<K, V>
+where
+    I: Hash,
+    P: ProjectPath,
+{
+    fn scope_project(project: P, index: &I) -> P {
         project.project_hash_key(index)
     }
+}
+
+impl<K, V, I, P> sealed::Sealed<I, P> for BTreeMap<K, V>
+where
+    I: Hash,
+    P: ProjectPath,
+{
 }
 
 /// A specific index in a `Readable` / `Writable` type

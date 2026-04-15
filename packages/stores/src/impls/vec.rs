@@ -1,10 +1,13 @@
 //! `Vec<T>` mutation-side projector methods.
 
-use crate::ProjectScope;
+use crate::{ProjectLens, ProjectReact};
 use dioxus_signals::{Writable, WritableExt};
 
 /// Mutation methods on vector-shaped projections.
-pub trait ProjectVec<T: 'static>: ProjectScope<Lens: Writable<Target = Vec<T>>> {
+pub trait ProjectVec<T: 'static>: ProjectLens + ProjectReact
+where
+    Self::Lens: Writable<Target = Vec<T>>,
+{
     /// Push an item to the end.
     fn push(&self, value: T) {
         self.project_mark_dirty_shallow();
@@ -50,4 +53,9 @@ pub trait ProjectVec<T: 'static>: ProjectScope<Lens: Writable<Target = Vec<T>>> 
     }
 }
 
-impl<T: 'static, P> ProjectVec<T> for P where P: ProjectScope<Lens: Writable<Target = Vec<T>>> {}
+impl<T: 'static, P> ProjectVec<T> for P
+where
+    P: ProjectLens + ProjectReact,
+    P::Lens: Writable<Target = Vec<T>>,
+{
+}

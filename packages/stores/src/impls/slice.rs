@@ -4,11 +4,11 @@ use std::iter::FusedIterator;
 use std::ops::Index;
 
 use crate::impls::index::IndexWrite;
-use crate::{ProjectIndex, ProjectScope};
+use crate::{Project, ProjectIndex};
 use dioxus_signals::{Readable, ReadableExt};
 
 /// Read-side methods on `Vec<T>` projections.
-pub trait ProjectSlice<T: 'static>: ProjectScope<Lens: Readable<Target = Vec<T>>> {
+pub trait ProjectSlice<T: 'static>: Project<Lens: Readable<Target = Vec<T>>> {
     /// Length; tracks shallowly.
     fn len(&self) -> usize {
         self.project_track_shallow();
@@ -63,4 +63,4 @@ pub trait ProjectSlice<T: 'static>: ProjectScope<Lens: Readable<Target = Vec<T>>
     }
 }
 
-impl<T: 'static, P> ProjectSlice<T> for P where P: ProjectScope<Lens: Readable<Target = Vec<T>>> {}
+impl<T: 'static, P> ProjectSlice<T> for P where P: Project<Lens: Readable<Target = Vec<T>>> {}

@@ -1,8 +1,9 @@
 use dioxus_core::{ReactiveContext, SubscriberList, Subscribers};
 use dioxus_signals::{CopyValue, ReadableExt, SyncStorage, Writable, WritableExt};
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::fmt::Debug;
-use std::hash::BuildHasher;
+use std::hash::Hasher;
 use std::ops::BitOrAssign;
 use std::{collections::HashMap, hash::Hash, ops::Deref, sync::Arc};
 
@@ -208,7 +209,6 @@ impl Deref for TinyVec {
 #[derive(Default)]
 pub(crate) struct StoreSubscriptionsInner {
     root: SelectorNode,
-    hasher: std::collections::hash_map::RandomState,
 }
 
 #[derive(Default)]
@@ -236,15 +236,13 @@ impl StoreSubscriptions {
         Self {
             inner: CopyValue::new_maybe_sync(StoreSubscriptionsInner {
                 root: SelectorNode::default(),
-                hasher: std::collections::hash_map::RandomState::new(),
             }),
         }
     }
 
-    /// Hash an index into a PathKey using the hasher. The hash should be consistent
-    /// across calls
+    /// Hash an index into a `PathKey` using the deterministic default SipHasher.
     pub(crate) fn hash(&self, index: &(impl Hash + ?Sized)) -> PathKey {
-        (self.inner.write_unchecked().hasher.hash_one(index) % PathKey::MAX as u64) as PathKey
+        hash_path_key(index)
     }
 
     /// Subscribe shallowly to a specific path in the store.
@@ -372,6 +370,13 @@ impl StoreSubscriptions {
     fn mark_node_subscribers_dirty(&self, key: &[PathKey]) {
         self.retain_subscribers(key, |reactive_context, _| reactive_context.mark_dirty());
     }
+}
+
+/// Hash an index into a `PathKey` using the deterministic default SipHasher.
+pub(crate) fn hash_path_key(index: &(impl Hash + ?Sized)) -> PathKey {
+    let mut hasher = DefaultHasher::new();
+    index.hash(&mut hasher);
+    (hasher.finish() % PathKey::MAX as u64) as PathKey
 }
 
 /// A subscriber list implementation that handles garbage collection of the subscription tree.

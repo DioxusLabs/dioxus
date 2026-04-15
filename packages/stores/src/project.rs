@@ -1,10 +1,10 @@
 //! Generic projection primitives.
 //!
-//! [`ProjectMap`] is the functional carrier/lens mapping layer.
-//! [`ProjectScope`] adds reactive path scoping, subscription tracking, and
-//! dirty marking on top.
-//! [`Project`] is the convenience umbrella for projector carriers that do
-//! both. It's implemented by:
+//! [`ProjectLens`] is the functional carrier/lens mapping layer.
+//! [`ProjectPath`] adds keyed path composition.
+//! [`ProjectReact`] adds subscription tracking and dirty marking on top.
+//! [`Project`] is the convenience umbrella for projector carriers that do the
+//! lens/path/reactive pieces. It's implemented by:
 //!
 //! - [`crate::scope::SelectorScope`] — for stores; records path keys in the
 //!   subscription tree so writes only notify interested subscribers.
@@ -15,9 +15,9 @@
 //!   mapped lenses while subscribing at whole-signal granularity.
 //!
 //! Shape-specific projection methods (`transpose` / `ok` / `err` / `index` /
-//! `deref` / …) are defined as default methods on traits bounded by
-//! [`ProjectMap`] or [`ProjectScope`], so adding a new shape adds code once
-//! and it works on both `Store` and resource-backed types automatically.
+//! `deref` / …) are defined as default methods on traits bounded by the core
+//! projector traits, so adding a new shape adds code once and it works on both
+//! `Store` and resource-backed types automatically.
 
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
@@ -30,7 +30,7 @@ use crate::impls::btreemap::GetWrite as BTreeMapGetWrite;
 use crate::impls::hashmap::GetWrite as HashMapGetWrite;
 use crate::impls::index::{IndexSelector, IndexWrite};
 use crate::scope::SelectorScope;
-use crate::subscriptions::PathKey;
+use crate::subscriptions::{hash_path_key, PathKey};
 use dioxus_core::{ReactiveContext, Subscribers};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, BoxedSignalStorage, MappedMutSignal, ReadSignal,
@@ -42,31 +42,32 @@ use dioxus_signals::{
 // ---------------------------------------------------------------------------
 
 /// The lens produced by mapping a projector through `F` / `FMut`.
+#[doc(hidden)]
 #[allow(type_alias_bounds)]
 pub type MappedProjectLens<
-    P: ProjectMap,
+    P: ProjectLens,
     U: ?Sized,
-    F = fn(&<<P as ProjectMap>::Lens as Readable>::Target) -> &U,
-    FMut = fn(&mut <<P as ProjectMap>::Lens as Readable>::Target) -> &mut U,
-> = MappedMutSignal<U, <P as ProjectMap>::Lens, F, FMut>;
+    F = fn(&<<P as ProjectLens>::Lens as Readable>::Target) -> &U,
+    FMut = fn(&mut <<P as ProjectLens>::Lens as Readable>::Target) -> &mut U,
+> = MappedMutSignal<U, <P as ProjectLens>::Lens, F, FMut>;
 
 /// Rebind a projector carrier to a mapped child lens.
 #[allow(type_alias_bounds)]
 pub type Projected<
-    P: ProjectMap,
+    P: ProjectLens,
     U: ?Sized,
-    F = fn(&<<P as ProjectMap>::Lens as Readable>::Target) -> &U,
-    FMut = fn(&mut <<P as ProjectMap>::Lens as Readable>::Target) -> &mut U,
-> = <P as ProjectMap>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
+    F = fn(&<<P as ProjectLens>::Lens as Readable>::Target) -> &U,
+    FMut = fn(&mut <<P as ProjectLens>::Lens as Readable>::Target) -> &mut U,
+> = <P as ProjectLens>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
 
 /// Abstracts over "same projection semantics, different lens in the same storage".
-pub trait ProjectMap: Sized {
+pub trait ProjectLens: Sized {
     /// The lens this projection reads/writes through.
     type Lens: Readable;
 
     /// Rebind this carrier to a different lens/target pair while preserving
     /// its projection semantics.
-    type Rebind<U: ?Sized + 'static, L>: Project<
+    type Rebind<U: ?Sized + 'static, L>: ProjectLens<
         Lens: Readable<Target = U, Storage = <Self::Lens as Readable>::Storage>,
     >
     where
@@ -78,6 +79,12 @@ pub trait ProjectMap: Sized {
         U: ?Sized + 'static,
         L: Readable<Target = U, Storage = <Self::Lens as Readable>::Storage> + 'static;
 
+    /// Borrow the underlying lens.
+    fn project_lens(&self) -> &Self::Lens;
+}
+
+/// Convenience methods built on top of [`ProjectLens`].
+pub trait ProjectLensExt: ProjectLens {
     /// Map the lens without introducing a path-level child (used for things
     /// like `Deref` / `as_slice` that project to a different view of the same
     /// cell without new subscription granularity).
@@ -90,20 +97,18 @@ pub trait ProjectMap: Sized {
     {
         self.project_compose::<U, _>(|lens| MappedMutSignal::new(lens, map, map_mut))
     }
-
-    /// Borrow the underlying lens.
-    fn project_lens(&self) -> &Self::Lens;
 }
 
-/// Reactive path scoping, subscription tracking, and dirty marking for a
-/// projector carrier.
-pub trait ProjectScope: ProjectMap {
+impl<T> ProjectLensExt for T where T: ProjectLens {}
+
+/// Keyed path composition for a projector carrier.
+pub trait ProjectPath: Sized {
     /// Scope this projection to a keyed child without changing the lens type.
     fn project_key(self, key: PathKey) -> Self;
+}
 
-    /// Scope this projection to a hashed child without changing the lens type.
-    fn project_hash_key<K: Hash + ?Sized>(self, key: &K) -> Self;
-
+/// Convenience methods built on top of [`ProjectPath`].
+pub trait ProjectPathExt: ProjectPath + ProjectLens {
     /// Scope into a keyed child, wrapping the lens with a new map/map_mut.
     /// `SelectorScope` interprets the key as a position in the subscription
     /// tree; `LensOnly` ignores it.
@@ -121,35 +126,50 @@ pub trait ProjectScope: ProjectMap {
     {
         self.project_key(key).project_map(map, map_mut)
     }
+}
 
-    /// Track this projection's scope shallowly (no-op for LensOnly).
+impl<T> ProjectPathExt for T where T: ProjectPath + ProjectLens {}
+
+/// Convenience methods for hashing arbitrary keys into the projector path space.
+pub trait ProjectHashExt: ProjectPath {
+    /// Scope this projection to a hashed child without changing the lens type.
+    fn project_hash_key<K: Hash + ?Sized>(self, key: &K) -> Self {
+        let key = hash_path_key(key);
+        self.project_key(key)
+    }
+}
+
+impl<T> ProjectHashExt for T where T: ProjectPath {}
+
+/// Subscription tracking and dirty marking for a projector carrier.
+pub trait ProjectReact {
+    /// Track only exact writes at this node.
     fn project_track_shallow(&self);
 
-    /// Track this projection recursively (no-op for LensOnly).
+    /// Track writes at this node and any descendant.
     fn project_track(&self);
 
-    /// Mark this scope as dirty at the root path (no-op for LensOnly — the
-    /// signal write itself notifies its subscribers).
+    /// Mark this node and all descendants dirty.
     fn project_mark_dirty(&self);
 
-    /// Mark this scope shallow-dirty (length/structure changed but not every element).
+    /// Mark just this node dirty.
     fn project_mark_dirty_shallow(&self);
 
-    /// Mark elements at and after `index` dirty (for sequence structures).
+    /// Mark indexed descendants at and after the provided index dirty.
     fn project_mark_dirty_at_and_after_index(&self, index: usize);
 }
 
 /// Convenience umbrella for carriers that support both lens mapping and
 /// reactive path scoping.
-pub trait Project: ProjectScope {}
+pub trait Project: ProjectLens + ProjectPath + ProjectReact {}
 
-impl<T> Project for T where T: ProjectScope {}
+impl<T> Project for T where T: ProjectLens + ProjectPath + ProjectReact {}
 
 // ---------------------------------------------------------------------------
 // SelectorScope impl — tracked
 // ---------------------------------------------------------------------------
 
-impl<Lens> ProjectMap for SelectorScope<Lens>
+impl<Lens> ProjectLens for SelectorScope<Lens>
 where
     Lens: Readable,
     Lens::Target: 'static,
@@ -174,7 +194,7 @@ where
     }
 }
 
-impl<Lens> ProjectScope for SelectorScope<Lens>
+impl<Lens> ProjectPath for SelectorScope<Lens>
 where
     Lens: Readable,
     Lens::Target: 'static,
@@ -182,11 +202,13 @@ where
     fn project_key(self, key: PathKey) -> Self {
         self.child_unmapped(key)
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, key: &K) -> Self {
-        self.hash_child_unmapped(key)
-    }
-
+impl<Lens> ProjectReact for SelectorScope<Lens>
+where
+    Lens: Readable,
+    Lens::Target: 'static,
+{
     fn project_track_shallow(&self) {
         SelectorScope::track_shallow(self);
     }
@@ -216,7 +238,7 @@ where
 
 use crate::store::Store;
 
-impl<T, Lens> ProjectMap for Store<T, Lens>
+impl<T, Lens> ProjectLens for Store<T, Lens>
 where
     T: ?Sized + 'static,
     Lens: Readable<Target = T> + 'static,
@@ -241,7 +263,7 @@ where
     }
 }
 
-impl<T, Lens> ProjectScope for Store<T, Lens>
+impl<T, Lens> ProjectPath for Store<T, Lens>
 where
     T: ?Sized + 'static,
     Lens: Readable<Target = T> + 'static,
@@ -249,11 +271,13 @@ where
     fn project_key(self, key: PathKey) -> Self {
         self.into_selector().project_key(key).into()
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, key: &K) -> Self {
-        self.into_selector().project_hash_key(key).into()
-    }
-
+impl<T, Lens> ProjectReact for Store<T, Lens>
+where
+    T: ?Sized + 'static,
+    Lens: Readable<Target = T> + 'static,
+{
     fn project_track_shallow(&self) {
         self.selector().project_track_shallow();
     }
@@ -382,7 +406,7 @@ where
     }
 }
 
-impl<L> ProjectMap for LensOnly<L>
+impl<L> ProjectLens for LensOnly<L>
 where
     L: Readable,
     L::Target: 'static,
@@ -409,7 +433,7 @@ where
     }
 }
 
-impl<L> ProjectScope for LensOnly<L>
+impl<L> ProjectPath for LensOnly<L>
 where
     L: Readable,
     L::Target: 'static,
@@ -417,28 +441,34 @@ where
     fn project_key(self, _key: PathKey) -> Self {
         self
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, _key: &K) -> Self {
-        self
-    }
-
+impl<L> ProjectReact for LensOnly<L>
+where
+    L: Readable,
+    L::Target: 'static,
+{
     fn project_track_shallow(&self) {
         if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.lens.subscribers());
         }
     }
+
     fn project_track(&self) {
         if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.lens.subscribers());
         }
     }
+
     fn project_mark_dirty(&self) {
         // LensOnly has no path tree — a signal write notifies all subscribers,
         // so we have nothing extra to do here. The caller pairs this with
         // `project_lens().write_unchecked()`, which uses the underlying
         // signal's normal write path and notifies subscribers.
     }
+
     fn project_mark_dirty_shallow(&self) {}
+
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
 }
 
@@ -446,7 +476,7 @@ where
 // Raw signal carriers — whole-signal tracking, pathless child scoping.
 // ---------------------------------------------------------------------------
 
-impl<T, S> ProjectMap for Signal<T, S>
+impl<T, S> ProjectLens for Signal<T, S>
 where
     S: AnyStorage,
     Signal<T, S>: Writable<Target = T, Storage = S> + 'static,
@@ -472,7 +502,7 @@ where
     }
 }
 
-impl<T, S> ProjectScope for Signal<T, S>
+impl<T, S> ProjectPath for Signal<T, S>
 where
     S: AnyStorage,
     Signal<T, S>: Writable<Target = T, Storage = S> + 'static,
@@ -481,11 +511,14 @@ where
     fn project_key(self, _key: PathKey) -> Self {
         self
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, _key: &K) -> Self {
-        self
-    }
-
+impl<T, S> ProjectReact for Signal<T, S>
+where
+    S: AnyStorage,
+    Signal<T, S>: Writable<Target = T, Storage = S> + 'static,
+    T: 'static,
+{
     fn project_track_shallow(&self) {
         if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.subscribers());
@@ -505,7 +538,7 @@ where
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
 }
 
-impl<T: ?Sized + 'static, S> ProjectMap for ReadSignal<T, S>
+impl<T: ?Sized + 'static, S> ProjectLens for ReadSignal<T, S>
 where
     S: AnyStorage + BoxedSignalStorage<T>,
     ReadSignal<T, S>: Readable<Target = T, Storage = S> + 'static,
@@ -530,7 +563,7 @@ where
     }
 }
 
-impl<T: ?Sized + 'static, S> ProjectScope for ReadSignal<T, S>
+impl<T: ?Sized + 'static, S> ProjectPath for ReadSignal<T, S>
 where
     S: AnyStorage + BoxedSignalStorage<T>,
     ReadSignal<T, S>: Readable<Target = T, Storage = S> + 'static,
@@ -538,11 +571,13 @@ where
     fn project_key(self, _key: PathKey) -> Self {
         self
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, _key: &K) -> Self {
-        self
-    }
-
+impl<T: ?Sized + 'static, S> ProjectReact for ReadSignal<T, S>
+where
+    S: AnyStorage + BoxedSignalStorage<T>,
+    ReadSignal<T, S>: Readable<Target = T, Storage = S> + 'static,
+{
     fn project_track_shallow(&self) {
         if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.subscribers());
@@ -562,7 +597,7 @@ where
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
 }
 
-impl<T: ?Sized + 'static, S> ProjectMap for WriteSignal<T, S>
+impl<T: ?Sized + 'static, S> ProjectLens for WriteSignal<T, S>
 where
     S: AnyStorage + BoxedSignalStorage<T>,
     WriteSignal<T, S>: Writable<Target = T, Storage = S> + 'static,
@@ -587,7 +622,7 @@ where
     }
 }
 
-impl<T: ?Sized + 'static, S> ProjectScope for WriteSignal<T, S>
+impl<T: ?Sized + 'static, S> ProjectPath for WriteSignal<T, S>
 where
     S: AnyStorage + BoxedSignalStorage<T>,
     WriteSignal<T, S>: Writable<Target = T, Storage = S> + 'static,
@@ -595,11 +630,13 @@ where
     fn project_key(self, _key: PathKey) -> Self {
         self
     }
+}
 
-    fn project_hash_key<K: Hash + ?Sized>(self, _key: &K) -> Self {
-        self
-    }
-
+impl<T: ?Sized + 'static, S> ProjectReact for WriteSignal<T, S>
+where
+    S: AnyStorage + BoxedSignalStorage<T>,
+    WriteSignal<T, S>: Writable<Target = T, Storage = S> + 'static,
+{
     fn project_track_shallow(&self) {
         if let Some(rc) = ReactiveContext::current() {
             rc.subscribe(self.subscribers());
@@ -624,8 +661,9 @@ where
 // ---------------------------------------------------------------------------
 
 /// Projection through `IndexMut` to a child at `index`.
-pub trait ProjectIndex<Idx>:
-    ProjectScope<Lens: Readable<Target: IndexMut<Idx> + IndexSelector<Idx>>>
+pub trait ProjectIndex<Idx>: ProjectLens + ProjectPath
+where
+    Self::Lens: Readable<Target: IndexMut<Idx> + IndexSelector<Idx, Self>>,
 {
     /// Project into the item at `index`.
     fn index(
@@ -640,13 +678,15 @@ pub trait ProjectIndex<Idx>:
         Self::Lens: 'static,
         <Self::Lens as Readable>::Target: 'static,
     {
-        <<Self::Lens as Readable>::Target as IndexSelector<Idx>>::scope_project(self, &index)
+        <<Self::Lens as Readable>::Target as IndexSelector<Idx, Self>>::scope_project(self, &index)
             .project_compose(|lens| IndexWrite::new(index, lens))
     }
 }
 
-impl<Idx, P> ProjectIndex<Idx> for P where
-    P: ProjectScope<Lens: Readable<Target: IndexMut<Idx> + IndexSelector<Idx>>>
+impl<Idx, P> ProjectIndex<Idx> for P
+where
+    P: ProjectLens + ProjectPath,
+    P::Lens: Readable<Target: IndexMut<Idx> + IndexSelector<Idx, P>>,
 {
 }
 
@@ -655,8 +695,9 @@ impl<Idx, P> ProjectIndex<Idx> for P where
 // ---------------------------------------------------------------------------
 
 /// Read-side methods on `HashMap<K, V, St>` projections.
-pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>:
-    ProjectScope<Lens: Readable<Target = HashMap<K, V, St>>>
+pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>: Project
+where
+    Self::Lens: Readable<Target = HashMap<K, V, St>>,
 {
     /// Map length; tracks shallowly.
     fn len(&self) -> usize {
@@ -762,13 +803,15 @@ where
     K: 'static,
     V: 'static,
     St: 'static,
-    P: ProjectScope<Lens: Readable<Target = HashMap<K, V, St>>>,
+    P: Project,
+    P::Lens: Readable<Target = HashMap<K, V, St>>,
 {
 }
 
 /// Mutation methods on `HashMap<K, V, St>` projections.
-pub trait ProjectHashMapMut<K: 'static, V: 'static, St: 'static>:
-    ProjectScope<Lens: Writable<Target = HashMap<K, V, St>>>
+pub trait ProjectHashMapMut<K: 'static, V: 'static, St: 'static>: Project
+where
+    Self::Lens: Writable<Target = HashMap<K, V, St>>,
 {
     /// Insert a key-value pair; marks shape dirty + existing child at the hash path dirty.
     fn insert(&self, key: K, value: V)
@@ -811,7 +854,8 @@ where
     K: 'static,
     V: 'static,
     St: 'static,
-    P: ProjectScope<Lens: Writable<Target = HashMap<K, V, St>>>,
+    P: Project,
+    P::Lens: Writable<Target = HashMap<K, V, St>>,
 {
 }
 
@@ -820,8 +864,9 @@ where
 // ---------------------------------------------------------------------------
 
 /// Read-side methods on `BTreeMap<K, V>` projections.
-pub trait ProjectBTreeMap<K: 'static, V: 'static>:
-    ProjectScope<Lens: Readable<Target = BTreeMap<K, V>>>
+pub trait ProjectBTreeMap<K: 'static, V: 'static>: Project
+where
+    Self::Lens: Readable<Target = BTreeMap<K, V>>,
 {
     /// Map length; tracks shallowly.
     fn len(&self) -> usize {
@@ -923,13 +968,15 @@ impl<K, V, P> ProjectBTreeMap<K, V> for P
 where
     K: 'static,
     V: 'static,
-    P: ProjectScope<Lens: Readable<Target = BTreeMap<K, V>>>,
+    P: Project,
+    P::Lens: Readable<Target = BTreeMap<K, V>>,
 {
 }
 
 /// Mutation methods on `BTreeMap<K, V>` projections.
-pub trait ProjectBTreeMapMut<K: 'static, V: 'static>:
-    ProjectScope<Lens: Writable<Target = BTreeMap<K, V>>>
+pub trait ProjectBTreeMapMut<K: 'static, V: 'static>: Project
+where
+    Self::Lens: Writable<Target = BTreeMap<K, V>>,
 {
     /// Insert a key-value pair; marks shape dirty.
     fn insert(&self, key: K, value: V) -> Option<V>
@@ -972,6 +1019,7 @@ impl<K, V, P> ProjectBTreeMapMut<K, V> for P
 where
     K: 'static,
     V: 'static,
-    P: ProjectScope<Lens: Writable<Target = BTreeMap<K, V>>>,
+    P: Project,
+    P::Lens: Writable<Target = BTreeMap<K, V>>,
 {
 }
