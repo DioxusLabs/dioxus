@@ -3,26 +3,26 @@
 use std::ops::DerefMut;
 
 use crate::{ProjectScope, Projected};
-use dioxus_signals::Readable;
+use dioxus_signals::{Readable, ReadableExt};
 
 /// Projection methods for types targeting `Option<T>`.
 pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option<T>>> {
     /// Is the option currently `Some`? Tracks shallowly.
     fn is_some(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_some()
+        self.project_lens().peek_unchecked().is_some()
     }
 
     /// Is the option currently `None`? Tracks shallowly.
     fn is_none(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_none()
+        self.project_lens().peek_unchecked().is_none()
     }
 
     /// Tracks shallowly and deeply if the option is `Some`.
     fn is_some_and(&self, f: impl FnOnce(&T) -> bool) -> bool {
         self.project_track_shallow();
-        if let Some(v) = &*self.project_peek() {
+        if let Some(v) = &*self.project_lens().peek_unchecked() {
             self.project_track();
             f(v)
         } else {
@@ -33,7 +33,7 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     /// Tracks shallowly and deeply if the option is `Some`.
     fn is_none_or(&self, f: impl FnOnce(&T) -> bool) -> bool {
         self.project_track_shallow();
-        if let Some(v) = &*self.project_peek() {
+        if let Some(v) = &*self.project_lens().peek_unchecked() {
             self.project_track();
             f(v)
         } else {
@@ -42,9 +42,7 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     }
 
     /// Transpose `Self<Option<T>>` into `Option<Self<T>>`.
-    fn transpose(
-        self,
-    ) -> Option<Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>> {
+    fn transpose(self) -> Option<Projected<Self, T>> {
         if self.is_some() {
             let map: fn(&Option<T>) -> &T = |v| {
                 v.as_ref()
@@ -61,23 +59,18 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     }
 
     /// Unwrap to `Self<T>`; panics if currently `None`.
-    fn unwrap(self) -> Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T> {
+    fn unwrap(self) -> Projected<Self, T> {
         self.transpose()
             .unwrap_or_else(|| panic!("called `unwrap` on a `None` Option projection"))
     }
 
     /// Unwrap to `Self<T>`; panics with `msg` if currently `None`.
-    fn expect(
-        self,
-        msg: &'static str,
-    ) -> Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T> {
+    fn expect(self, msg: &'static str) -> Projected<Self, T> {
         self.transpose().unwrap_or_else(|| panic!("{}", msg))
     }
 
     /// Return a `[T]` view of the option: `&[value]` if `Some`, `&[]` if `None`.
-    fn as_slice(
-        self,
-    ) -> Projected<Self, [T], fn(&Option<T>) -> &[T], fn(&mut Option<T>) -> &mut [T]>
+    fn as_slice(self) -> Projected<Self, [T]>
     where
         T: Sized,
     {
@@ -87,16 +80,7 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     }
 
     /// Project through `Deref` on the contained value.
-    fn as_deref(
-        self,
-    ) -> Option<
-        Projected<
-            Self,
-            T::Target,
-            fn(&Option<T>) -> &T::Target,
-            fn(&mut Option<T>) -> &mut T::Target,
-        >,
-    >
+    fn as_deref(self) -> Option<Projected<Self, T::Target>>
     where
         T: DerefMut,
         T::Target: 'static,
@@ -120,10 +104,7 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     }
 
     /// Filter the option by a predicate. Always tracks shallowly; tracks deeply when `Some`.
-    fn filter(
-        self,
-        f: impl FnOnce(&T) -> bool,
-    ) -> Option<Projected<Self, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>> {
+    fn filter(self, f: impl FnOnce(&T) -> bool) -> Option<Projected<Self, T>> {
         if self.is_some_and(f) {
             let map: fn(&Option<T>) -> &T = |v| {
                 v.as_ref()
@@ -142,7 +123,7 @@ pub trait ProjectOption<T: 'static>: ProjectScope<Lens: Readable<Target = Option
     /// Peek at the inner value if `Some`; tracks shallowly, and deeply when `Some`.
     fn inspect(self, f: impl FnOnce(&T)) -> Self {
         self.project_track_shallow();
-        if let Some(v) = &*self.project_peek() {
+        if let Some(v) = &*self.project_lens().peek_unchecked() {
             self.project_track();
             f(v);
         }

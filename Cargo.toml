@@ -615,11 +615,6 @@ path = "examples/04-managing-state/memo_chain.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "memo_store"
-path = "examples/04-managing-state/memo_store.rs"
-doc-scrape-examples = true
-
-[[example]]
 name = "global"
 path = "examples/04-managing-state/global.rs"
 doc-scrape-examples = true

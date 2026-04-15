@@ -3,7 +3,7 @@
 use std::ops::DerefMut;
 
 use crate::{ProjectScope, Projected};
-use dioxus_signals::Readable;
+use dioxus_signals::{Readable, ReadableExt};
 
 /// Projection methods for types targeting `Result<T, E>`.
 pub trait ProjectResult<T: 'static, E: 'static>:
@@ -11,17 +11,17 @@ pub trait ProjectResult<T: 'static, E: 'static>:
 {
     fn is_ok(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_ok()
+        self.project_lens().peek_unchecked().is_ok()
     }
 
     fn is_err(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_err()
+        self.project_lens().peek_unchecked().is_err()
     }
 
     fn is_ok_and(&self, f: impl FnOnce(&T) -> bool) -> bool {
         self.project_track_shallow();
-        match &*self.project_peek() {
+        match &*self.project_lens().peek_unchecked() {
             Ok(v) => {
                 self.project_track();
                 f(v)
@@ -32,7 +32,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
 
     fn is_err_and(&self, f: impl FnOnce(&E) -> bool) -> bool {
         self.project_track_shallow();
-        match &*self.project_peek() {
+        match &*self.project_lens().peek_unchecked() {
             Err(e) => {
                 self.project_track();
                 f(e)
@@ -41,10 +41,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    fn ok(
-        self,
-    ) -> Option<Projected<Self, T, fn(&Result<T, E>) -> &T, fn(&mut Result<T, E>) -> &mut T>> {
+    fn ok(self) -> Option<Projected<Self, T>> {
         if self.is_ok() {
             let map: fn(&Result<T, E>) -> &T = |r| {
                 r.as_ref()
@@ -60,10 +57,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    fn err(
-        self,
-    ) -> Option<Projected<Self, E, fn(&Result<T, E>) -> &E, fn(&mut Result<T, E>) -> &mut E>> {
+    fn err(self) -> Option<Projected<Self, E>> {
         if self.is_err() {
             let map: fn(&Result<T, E>) -> &E = |r| {
                 if let Err(e) = r {
@@ -86,12 +80,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     }
 
     #[allow(clippy::type_complexity)]
-    fn transpose(
-        self,
-    ) -> Result<
-        Projected<Self, T, fn(&Result<T, E>) -> &T, fn(&mut Result<T, E>) -> &mut T>,
-        Projected<Self, E, fn(&Result<T, E>) -> &E, fn(&mut Result<T, E>) -> &mut E>,
-    > {
+    fn transpose(self) -> Result<Projected<Self, T>, Projected<Self, E>> {
         if self.is_ok() {
             let map: fn(&Result<T, E>) -> &T =
                 |r| r.as_ref().unwrap_or_else(|_| panic!("unreachable"));
@@ -118,7 +107,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     }
 
     /// Unwrap into `Self<T>`; panics if currently `Err`.
-    fn unwrap(self) -> Projected<Self, T, fn(&Result<T, E>) -> &T, fn(&mut Result<T, E>) -> &mut T>
+    fn unwrap(self) -> Projected<Self, T>
     where
         E: std::fmt::Debug,
     {
@@ -129,10 +118,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     }
 
     /// Unwrap into `Self<T>`; panics with `msg` if currently `Err`.
-    fn expect(
-        self,
-        msg: &'static str,
-    ) -> Projected<Self, T, fn(&Result<T, E>) -> &T, fn(&mut Result<T, E>) -> &mut T>
+    fn expect(self, msg: &'static str) -> Projected<Self, T>
     where
         E: std::fmt::Debug,
     {
@@ -143,9 +129,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     }
 
     /// Unwrap into `Self<E>`; panics if currently `Ok`.
-    fn unwrap_err(
-        self,
-    ) -> Projected<Self, E, fn(&Result<T, E>) -> &E, fn(&mut Result<T, E>) -> &mut E>
+    fn unwrap_err(self) -> Projected<Self, E>
     where
         T: std::fmt::Debug,
     {
@@ -156,10 +140,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     }
 
     /// Unwrap into `Self<E>`; panics with `msg` if currently `Ok`.
-    fn expect_err(
-        self,
-        msg: &'static str,
-    ) -> Projected<Self, E, fn(&Result<T, E>) -> &E, fn(&mut Result<T, E>) -> &mut E>
+    fn expect_err(self, msg: &'static str) -> Projected<Self, E>
     where
         T: std::fmt::Debug,
     {
@@ -172,7 +153,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     /// Inspect the inner `Ok` value if present; tracks shallowly, and deeply when `Ok`.
     fn inspect(self, f: impl FnOnce(&T)) -> Self {
         self.project_track_shallow();
-        if let Ok(v) = &*self.project_peek() {
+        if let Ok(v) = &*self.project_lens().peek_unchecked() {
             self.project_track();
             f(v);
         }
@@ -182,7 +163,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
     /// Inspect the inner `Err` value if present; tracks shallowly, and deeply when `Err`.
     fn inspect_err(self, f: impl FnOnce(&E)) -> Self {
         self.project_track_shallow();
-        if let Err(e) = &*self.project_peek() {
+        if let Err(e) = &*self.project_lens().peek_unchecked() {
             self.project_track();
             f(e);
         }
@@ -191,17 +172,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
 
     /// Project through `Deref` on the `Ok` / `Err` variants.
     #[allow(clippy::type_complexity)]
-    fn as_deref(
-        self,
-    ) -> Result<
-        Projected<
-            Self,
-            T::Target,
-            fn(&Result<T, E>) -> &T::Target,
-            fn(&mut Result<T, E>) -> &mut T::Target,
-        >,
-        Projected<Self, E, fn(&Result<T, E>) -> &E, fn(&mut Result<T, E>) -> &mut E>,
-    >
+    fn as_deref(self) -> Result<Projected<Self, T::Target>, Projected<Self, E>>
     where
         T: DerefMut,
         T::Target: 'static,

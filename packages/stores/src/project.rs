@@ -43,13 +43,21 @@ use dioxus_signals::{
 
 /// The lens produced by mapping a projector through `F` / `FMut`.
 #[allow(type_alias_bounds)]
-pub type MappedProjectLens<P: ProjectMap, U: ?Sized, F, FMut> =
-    MappedMutSignal<U, <P as ProjectMap>::Lens, F, FMut>;
+pub type MappedProjectLens<
+    P: ProjectMap,
+    U: ?Sized,
+    F = fn(&<<P as ProjectMap>::Lens as Readable>::Target) -> &U,
+    FMut = fn(&mut <<P as ProjectMap>::Lens as Readable>::Target) -> &mut U,
+> = MappedMutSignal<U, <P as ProjectMap>::Lens, F, FMut>;
 
 /// Rebind a projector carrier to a mapped child lens.
 #[allow(type_alias_bounds)]
-pub type Projected<P: ProjectMap, U: ?Sized, F, FMut> =
-    <P as ProjectMap>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
+pub type Projected<
+    P: ProjectMap,
+    U: ?Sized,
+    F = fn(&<<P as ProjectMap>::Lens as Readable>::Target) -> &U,
+    FMut = fn(&mut <<P as ProjectMap>::Lens as Readable>::Target) -> &mut U,
+> = <P as ProjectMap>::Rebind<U, MappedProjectLens<P, U, F, FMut>>;
 
 /// Abstracts over "same projection semantics, different lens in the same storage".
 pub trait ProjectMap: Sized {
@@ -85,21 +93,6 @@ pub trait ProjectMap: Sized {
 
     /// Borrow the underlying lens.
     fn project_lens(&self) -> &Self::Lens;
-
-    /// Write to the lens without any tracking/notifying (fine-grained
-    /// dirty-marking is done by `project_mark_dirty*`).
-    fn project_write_untracked(&self) -> WritableRef<'static, Self::Lens>
-    where
-        Self::Lens: Writable,
-        <Self::Lens as Readable>::Target: 'static;
-
-    /// Read the current value without tracking.
-    fn project_peek(&self) -> ReadableRef<'static, Self::Lens>
-    where
-        <Self::Lens as Readable>::Target: 'static,
-    {
-        self.project_lens().peek_unchecked()
-    }
 }
 
 /// Reactive path scoping, subscription tracking, and dirty marking for a
@@ -144,10 +137,6 @@ pub trait ProjectScope: ProjectMap {
 
     /// Mark elements at and after `index` dirty (for sequence structures).
     fn project_mark_dirty_at_and_after_index(&self, index: usize);
-
-    /// Mark the child at a hashed key dirty (for map-like structures).
-    /// No-op for LensOnly; SelectorScope hashes the key and marks the child path.
-    fn project_mark_hash_child_dirty<K: Hash + ?Sized>(&self, key: &K);
 }
 
 /// Convenience umbrella for carriers that support both lens mapping and
@@ -183,14 +172,6 @@ where
     fn project_lens(&self) -> &Lens {
         self.writer()
     }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, Lens>
-    where
-        Lens: Writable,
-        Lens::Target: 'static,
-    {
-        self.write_untracked()
-    }
 }
 
 impl<Lens> ProjectScope for SelectorScope<Lens>
@@ -225,11 +206,6 @@ where
     fn project_mark_dirty_at_and_after_index(&self, index: usize) {
         SelectorScope::mark_dirty_at_and_after_index(self, index);
     }
-
-    fn project_mark_hash_child_dirty<K: std::hash::Hash + ?Sized>(&self, key: &K) {
-        let child = self.as_ref().hash_child_unmapped(key);
-        SelectorScope::mark_dirty(&child);
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -262,14 +238,6 @@ where
 
     fn project_lens(&self) -> &Lens {
         self.selector().project_lens()
-    }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, Lens>
-    where
-        Lens: Writable,
-        Lens::Target: 'static,
-    {
-        self.selector().project_write_untracked()
     }
 }
 
@@ -304,10 +272,6 @@ where
 
     fn project_mark_dirty_at_and_after_index(&self, index: usize) {
         self.selector().project_mark_dirty_at_and_after_index(index);
-    }
-
-    fn project_mark_hash_child_dirty<K: std::hash::Hash + ?Sized>(&self, key: &K) {
-        self.selector().project_mark_hash_child_dirty(key);
     }
 }
 
@@ -443,18 +407,6 @@ where
     fn project_lens(&self) -> &L {
         &self.lens
     }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, L>
-    where
-        L: Writable,
-        L::Target: 'static,
-    {
-        // For LensOnly, this WILL notify subscribers via the signal's normal
-        // write path (there's no separate "tracked" write). That's fine: the
-        // whole point of LensOnly is to forego the path-level granularity and
-        // just use the signal's own subscription list.
-        self.lens.write_unchecked()
-    }
 }
 
 impl<L> ProjectScope for LensOnly<L>
@@ -483,13 +435,11 @@ where
     fn project_mark_dirty(&self) {
         // LensOnly has no path tree — a signal write notifies all subscribers,
         // so we have nothing extra to do here. The caller pairs this with
-        // `project_write_untracked` which itself only bypasses tracking; when
-        // combined, the caller is responsible for using a normal write to
-        // notify subscribers (see the LensOnly convention below).
+        // `project_lens().write_unchecked()`, which uses the underlying
+        // signal's normal write path and notifies subscribers.
     }
     fn project_mark_dirty_shallow(&self) {}
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
-    fn project_mark_hash_child_dirty<K: std::hash::Hash + ?Sized>(&self, _key: &K) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -519,14 +469,6 @@ where
 
     fn project_lens(&self) -> &Self::Lens {
         self
-    }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, Self::Lens>
-    where
-        Self::Lens: Writable,
-        <Self::Lens as Readable>::Target: 'static,
-    {
-        self.write_unchecked()
     }
 }
 
@@ -561,8 +503,6 @@ where
     fn project_mark_dirty_shallow(&self) {}
 
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
-
-    fn project_mark_hash_child_dirty<K: Hash + ?Sized>(&self, _key: &K) {}
 }
 
 impl<T: ?Sized + 'static, S> ProjectMap for ReadSignal<T, S>
@@ -587,14 +527,6 @@ where
 
     fn project_lens(&self) -> &Self::Lens {
         self
-    }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, Self::Lens>
-    where
-        Self::Lens: Writable,
-        <Self::Lens as Readable>::Target: 'static,
-    {
-        unreachable!("ReadSignal projections are read-only")
     }
 }
 
@@ -628,8 +560,6 @@ where
     fn project_mark_dirty_shallow(&self) {}
 
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
-
-    fn project_mark_hash_child_dirty<K: Hash + ?Sized>(&self, _key: &K) {}
 }
 
 impl<T: ?Sized + 'static, S> ProjectMap for WriteSignal<T, S>
@@ -654,14 +584,6 @@ where
 
     fn project_lens(&self) -> &Self::Lens {
         self
-    }
-
-    fn project_write_untracked(&self) -> WritableRef<'static, Self::Lens>
-    where
-        Self::Lens: Writable,
-        <Self::Lens as Readable>::Target: 'static,
-    {
-        self.write_unchecked()
     }
 }
 
@@ -695,8 +617,6 @@ where
     fn project_mark_dirty_shallow(&self) {}
 
     fn project_mark_dirty_at_and_after_index(&self, _index: usize) {}
-
-    fn project_mark_hash_child_dirty<K: Hash + ?Sized>(&self, _key: &K) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -741,13 +661,13 @@ pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>:
     /// Map length; tracks shallowly.
     fn len(&self) -> usize {
         self.project_track_shallow();
-        self.project_peek().len()
+        self.project_lens().peek_unchecked().len()
     }
 
     /// Is the map empty? Tracks shallowly.
     fn is_empty(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_empty()
+        self.project_lens().peek_unchecked().is_empty()
     }
 
     /// Check whether a key exists; tracks shallowly.
@@ -758,7 +678,7 @@ pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>:
         St: BuildHasher,
     {
         self.project_track_shallow();
-        self.project_peek().contains_key(key)
+        self.project_lens().peek_unchecked().contains_key(key)
     }
 
     /// Iterate entries as `(key, value-projection)` pairs.
@@ -775,7 +695,12 @@ pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>:
         Self::Lens: 'static,
     {
         ProjectHashMap::<K, V, St>::len(self);
-        let keys: Vec<_> = self.project_peek().keys().cloned().collect();
+        let keys: Vec<_> = self
+            .project_lens()
+            .peek_unchecked()
+            .keys()
+            .cloned()
+            .collect();
         let this = self.clone();
         keys.into_iter()
             .map(move |key| (key.clone(), this.clone().get_unchecked(key)))
@@ -795,7 +720,12 @@ pub trait ProjectHashMap<K: 'static, V: 'static, St: 'static>:
         Self::Lens: 'static,
     {
         ProjectHashMap::<K, V, St>::len(self);
-        let keys = self.project_peek().keys().cloned().collect::<Vec<_>>();
+        let keys = self
+            .project_lens()
+            .peek_unchecked()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         let this = self.clone();
         keys.into_iter()
             .map(move |key| this.clone().get_unchecked(key))
@@ -845,10 +775,11 @@ pub trait ProjectHashMapMut<K: 'static, V: 'static, St: 'static>:
     where
         K: Eq + Hash,
         St: BuildHasher,
+        Self: Clone,
     {
         self.project_mark_dirty_shallow();
-        self.project_mark_hash_child_dirty(&key);
-        self.project_write_untracked().insert(key, value);
+        self.clone().project_hash_key(&key).project_mark_dirty();
+        self.project_lens().write_unchecked().insert(key, value);
     }
 
     /// Remove a key; marks shape dirty.
@@ -859,19 +790,19 @@ pub trait ProjectHashMapMut<K: 'static, V: 'static, St: 'static>:
         St: BuildHasher,
     {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().remove(key)
+        self.project_lens().write_unchecked().remove(key)
     }
 
     /// Clear the map; marks shape dirty.
     fn clear(&self) {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().clear();
+        self.project_lens().write_unchecked().clear();
     }
 
     /// Retain only entries matching `f`; marks shape dirty.
     fn retain(&self, mut f: impl FnMut(&K, &V) -> bool) {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().retain(|k, v| f(k, v));
+        self.project_lens().write_unchecked().retain(|k, v| f(k, v));
     }
 }
 
@@ -895,13 +826,13 @@ pub trait ProjectBTreeMap<K: 'static, V: 'static>:
     /// Map length; tracks shallowly.
     fn len(&self) -> usize {
         self.project_track_shallow();
-        self.project_peek().len()
+        self.project_lens().peek_unchecked().len()
     }
 
     /// Is the map empty? Tracks shallowly.
     fn is_empty(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_empty()
+        self.project_lens().peek_unchecked().is_empty()
     }
 
     /// Check whether a key exists; tracks shallowly.
@@ -911,7 +842,7 @@ pub trait ProjectBTreeMap<K: 'static, V: 'static>:
         K: Borrow<Q> + Ord,
     {
         self.project_track_shallow();
-        self.project_peek().contains_key(key)
+        self.project_lens().peek_unchecked().contains_key(key)
     }
 
     /// Iterate the map, producing one value projection per key.
@@ -927,7 +858,12 @@ pub trait ProjectBTreeMap<K: 'static, V: 'static>:
         Self::Lens: 'static,
     {
         ProjectBTreeMap::<K, V>::len(self);
-        let keys: Vec<_> = self.project_peek().keys().cloned().collect();
+        let keys: Vec<_> = self
+            .project_lens()
+            .peek_unchecked()
+            .keys()
+            .cloned()
+            .collect();
         let this = self.clone();
         keys.into_iter().map(move |key| {
             let value = this.clone().get_unchecked(key.clone());
@@ -948,7 +884,12 @@ pub trait ProjectBTreeMap<K: 'static, V: 'static>:
         Self::Lens: 'static,
     {
         ProjectBTreeMap::<K, V>::len(self);
-        let keys = self.project_peek().keys().cloned().collect::<Vec<_>>();
+        let keys = self
+            .project_lens()
+            .peek_unchecked()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         let this = self.clone();
         keys.into_iter()
             .map(move |key| this.clone().get_unchecked(key))
@@ -994,10 +935,11 @@ pub trait ProjectBTreeMapMut<K: 'static, V: 'static>:
     fn insert(&self, key: K, value: V) -> Option<V>
     where
         K: Ord + Hash,
+        Self: Clone,
     {
         self.project_mark_dirty_shallow();
-        self.project_mark_hash_child_dirty(&key);
-        self.project_write_untracked().insert(key, value)
+        self.clone().project_hash_key(&key).project_mark_dirty();
+        self.project_lens().write_unchecked().insert(key, value)
     }
 
     /// Remove a key; marks shape dirty.
@@ -1007,13 +949,13 @@ pub trait ProjectBTreeMapMut<K: 'static, V: 'static>:
         K: Borrow<Q> + Ord,
     {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().remove(key)
+        self.project_lens().write_unchecked().remove(key)
     }
 
     /// Clear the map; marks shape dirty.
     fn clear(&self) {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().clear();
+        self.project_lens().write_unchecked().clear();
     }
 
     /// Retain only entries matching `f`; marks shape dirty.
@@ -1022,7 +964,7 @@ pub trait ProjectBTreeMapMut<K: 'static, V: 'static>:
         K: Ord,
     {
         self.project_mark_dirty_shallow();
-        self.project_write_untracked().retain(|k, v| f(k, v));
+        self.project_lens().write_unchecked().retain(|k, v| f(k, v));
     }
 }
 

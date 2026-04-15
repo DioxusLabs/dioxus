@@ -10,14 +10,7 @@ pub trait ProjectDeref<U: ?Sized + 'static>:
     ProjectMap<Lens: Readable<Target: DerefMut<Target = U>>>
 {
     /// Project through `DerefMut` to the inner target.
-    fn deref(
-        self,
-    ) -> Projected<
-        Self,
-        U,
-        fn(&<Self::Lens as Readable>::Target) -> &U,
-        fn(&mut <Self::Lens as Readable>::Target) -> &mut U,
-    >
+    fn deref(self) -> Projected<Self, U>
     where
         <Self::Lens as Readable>::Target: 'static,
     {

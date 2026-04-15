@@ -5,20 +5,20 @@ use std::ops::Index;
 
 use crate::impls::index::IndexWrite;
 use crate::{ProjectIndex, ProjectScope};
-use dioxus_signals::Readable;
+use dioxus_signals::{Readable, ReadableExt};
 
 /// Read-side methods on `Vec<T>` projections.
 pub trait ProjectSlice<T: 'static>: ProjectScope<Lens: Readable<Target = Vec<T>>> {
     /// Length; tracks shallowly.
     fn len(&self) -> usize {
         self.project_track_shallow();
-        self.project_peek().len()
+        self.project_lens().peek_unchecked().len()
     }
 
     /// Is the slice empty? Tracks shallowly.
     fn is_empty(&self) -> bool {
         self.project_track_shallow();
-        self.project_peek().is_empty()
+        self.project_lens().peek_unchecked().is_empty()
     }
 
     /// Iterate items, producing one indexed projection per element.
