@@ -16,7 +16,7 @@ fn main() {
 fn app() -> Element {
     let mut running = use_signal(|| true);
     let mut count = use_signal(|| 0);
-    let mut saved_values = use_signal(|| vec![0.to_string()]);
+    let saved_values = use_signal(|| vec![0.to_string()]);
 
     // use_memo will recompute the value of the signal whenever the captured signals change
     let doubled_count = use_memo(move || count() * 2);

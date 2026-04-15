@@ -16,7 +16,7 @@ fn main() {
 
 fn app() -> Element {
     // Element data is stored as Rc<MountedData> so we can clone it and pass it around
-    let mut elements = use_signal(Vec::<Rc<MountedData>>::new);
+    let elements = use_signal(Vec::<Rc<MountedData>>::new);
     let mut running = use_signal(|| true);
 
     use_future(move || async move {

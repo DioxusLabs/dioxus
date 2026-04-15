@@ -64,10 +64,10 @@ fn app() -> Element {
                                     th { class: "pb-3 px-2 font-medium", "Security" }
                                 }
                             }
-                            match scan.value() {
+                            match scan.result() {
                                 None if scan.pending() => rsx! { "Scanning..." },
                                 None => rsx! { "Press Scan to start scanning" },
-                                Some(Err(_err)) => rsx! { "Failed to scan" },
+                                Some(Err(error)) => rsx! { "Failed to scan: {error}" },
                                 Some(Ok(peripherals)) => rsx! {
                                     tbody {
                                         for peripheral in peripherals.read().iter().rev() {

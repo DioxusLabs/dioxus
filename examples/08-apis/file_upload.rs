@@ -20,7 +20,7 @@ struct UploadedFile {
 
 fn app() -> Element {
     let mut enable_directory_upload = use_signal(|| false);
-    let mut files_uploaded = use_signal(|| Vec::new() as Vec<UploadedFile>);
+    let files_uploaded = use_signal(|| Vec::new() as Vec<UploadedFile>);
     let mut hovered = use_signal(|| false);
 
     let upload_files = move |files: Vec<FileData>| async move {

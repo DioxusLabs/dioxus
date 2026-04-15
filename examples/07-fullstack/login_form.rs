@@ -34,7 +34,7 @@ fn app() -> Element {
             },
             "Get Sensitive Data",
         }
-        pre { "Response from locked API: {fetch_sensitive.value():?}"}
+        pre { "Response from locked API: {fetch_sensitive.result():?}"}
         form {
             onsubmit: move |evt: FormEvent| async move {
                 // Prevent the browser from navigating away.

@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let mut emails_sent = use_signal(|| Vec::new() as Vec<String>);
+    let emails_sent = use_signal(|| Vec::new() as Vec<String>);
 
     // Wait for responses to the compose channel, and then push them to the emails_sent signal.
     let handle = use_coroutine(move |mut rx: UnboundedReceiver<String>| async move {

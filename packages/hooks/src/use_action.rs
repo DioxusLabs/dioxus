@@ -1,6 +1,8 @@
 use crate::{use_callback, use_signal};
-use dioxus_core::{use_hook, Callback, CapturedError, Result, Task};
-use dioxus_signals::{ReadSignal, ReadableBoxExt, ReadableExt, Signal, WritableExt};
+use dioxus_core::{Callback, CapturedError, Result, Task};
+use dioxus_signals::{
+    ProjectOption, ProjectResult, ReadSignal, ReadableExt, Signal, WritableExt,
+};
 use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
 use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
@@ -14,39 +16,25 @@ where
     C::Output: 'static,
     C: 'static,
 {
-    let mut value = use_signal(|| None as Option<C::Output>);
-    let mut error = use_signal(|| None as Option<CapturedError>);
+    let mut result = use_signal(|| None as Option<Result<C::Output>>);
     let mut task = use_signal(|| None as Option<Task>);
-    let mut state = use_signal(|| ActionState::Unset);
     let callback = use_callback(move |input: C::Input| {
         // Cancel any existing task
         if let Some(task) = task.take() {
             task.cancel();
         }
 
+        // Clear any previously completed value while this action is running.
+        result.set(None);
+
         let (tx, rx) = futures_channel::oneshot::channel();
         let rx = rx.shared();
 
         // Spawn a new task, and *then* fire off the async
-        let result = user_fn.call(input);
+        let action_result = user_fn.call(input);
         let new_task = dioxus_core::spawn(async move {
-            // Set the state to pending
-            state.set(ActionState::Pending);
-
-            // Create a new task
-            let result = result.await;
-            match result {
-                Ok(res) => {
-                    error.set(None);
-                    value.set(Some(res));
-                    state.set(ActionState::Ready);
-                }
-                Err(err) => {
-                    error.set(Some(err.into()));
-                    value.set(None);
-                    state.set(ActionState::Errored);
-                }
-            }
+            result.set(Some(action_result.await.map_err(Into::into)));
+            task.set(None);
 
             tx.send(()).ok();
         });
@@ -56,68 +44,54 @@ where
         rx
     });
 
-    // Create a reader that maps the Option<T> to T, unwrapping the Option
-    // This should only be handed out if we know the value is Some. We never set the value back to None, only modify the state of the action
-    let reader = use_hook(|| value.boxed().map(|v| v.as_ref().unwrap()).boxed());
-
     Action {
-        value,
-        error,
+        result,
         task,
         callback,
-        reader,
         _phantom: PhantomData,
-        state,
     }
 }
 
 pub struct Action<I, T: 'static> {
-    reader: ReadSignal<T>,
-    error: Signal<Option<CapturedError>>,
-    value: Signal<Option<T>>,
+    result: Signal<Option<Result<T>>>,
     task: Signal<Option<Task>>,
     callback: Callback<I, Shared<Receiver<()>>>,
-    state: Signal<ActionState>,
     _phantom: PhantomData<*const I>,
 }
 
 impl<I: 'static, O: 'static> Action<I, O> {
+    /// Returns the current completed result as projected read signals.
+    ///
+    /// `None` means the action is unset, has been reset, or is currently pending.
+    pub fn result(&self) -> Option<Result<ReadSignal<O>, ReadSignal<CapturedError>>> {
+        self.result
+            .transpose()
+            .map(|resolved| resolved.transpose())
+            .map(|result| result.map(Into::into).map_err(Into::into))
+    }
+
+    /// Returns the current completed value, cloning any captured error.
     pub fn value(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
-        if !matches!(
-            *self.state.read(),
-            ActionState::Ready | ActionState::Errored
-        ) {
-            return None;
-        }
-
-        if let Some(err) = self.error.cloned() {
-            return Some(Err(err));
-        }
-
-        if self.value.read().is_none() {
-            return None;
-        }
-
-        Some(Ok(self.reader))
+        self.result()
+            .map(|result| result.map_err(|error| error.cloned()))
     }
 
+    /// Returns `true` while the action is running.
     pub fn pending(&self) -> bool {
-        *self.state.read() == ActionState::Pending
+        self.task.read().is_some()
     }
 
-    /// Clear the current value and error, setting the state to Reset
+    /// Clear the current value and cancel any running task.
     pub fn reset(&mut self) {
-        self.state.set(ActionState::Reset);
         if let Some(t) = self.task.take() {
             t.cancel()
         }
+        self.result.set(None);
     }
 
+    /// Cancel the running task, if any, and clear the current value.
     pub fn cancel(&mut self) {
-        if let Some(t) = self.task.take() {
-            t.cancel()
-        }
-        self.state.set(ActionState::Reset);
+        self.reset();
     }
 }
 
@@ -128,12 +102,11 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if f.alternate() {
             f.debug_struct("Action")
-                .field("state", &self.state.read())
-                .field("value", &self.value.read())
-                .field("error", &self.error.read())
+                .field("pending", &self.task.read().is_some())
+                .field("result", &self.result.read())
                 .finish()
         } else {
-            std::fmt::Debug::fmt(&self.value.read().as_ref(), f)
+            std::fmt::Debug::fmt(&self.result.read().as_ref(), f)
         }
     }
 }
@@ -167,18 +140,6 @@ impl<I, T> Clone for Action<I, T> {
     fn clone(&self) -> Self {
         *self
     }
-}
-
-/// The state of an action
-///
-/// We can never reset the state to Unset, only to Reset, otherwise the value reader would panic.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-enum ActionState {
-    Unset,
-    Pending,
-    Ready,
-    Errored,
-    Reset,
 }
 
 pub trait ActionCallback<M, E> {

@@ -837,16 +837,19 @@ impl<T: 'static, P> ProjectOption<T> for P where P: Project<Lens: Readable<Targe
 pub trait ProjectResult<T: 'static, E: 'static>:
     Project<Lens: Readable<Target = Result<T, E>>>
 {
+    /// Returns `true` if the projected result is `Ok`.
     fn is_ok(&self) -> bool {
         self.project_track_shallow();
         self.project_lens().peek_unchecked().is_ok()
     }
 
+    /// Returns `true` if the projected result is `Err`.
     fn is_err(&self) -> bool {
         self.project_track_shallow();
         self.project_lens().peek_unchecked().is_err()
     }
 
+    /// Returns `true` if the projected result is `Ok` and the predicate matches the inner value.
     fn is_ok_and(&self, f: impl FnOnce(&T) -> bool) -> bool {
         self.project_track_shallow();
         match &*self.project_lens().peek_unchecked() {
@@ -858,6 +861,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
+    /// Returns `true` if the projected result is `Err` and the predicate matches the inner error.
     fn is_err_and(&self, f: impl FnOnce(&E) -> bool) -> bool {
         self.project_track_shallow();
         match &*self.project_lens().peek_unchecked() {
@@ -869,6 +873,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
+    /// Projects the `Ok` variant when present.
     fn ok(self) -> Option<Projected<Self, T>>
     where
         Self: ProjectCompose<T, MappedProjectLens<Self, T>>,
@@ -888,6 +893,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
+    /// Projects the `Err` variant when present.
     fn err(self) -> Option<Projected<Self, E>>
     where
         Self: ProjectCompose<E, MappedProjectLens<Self, E>>,
@@ -913,6 +919,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
         }
     }
 
+    /// Transposes `Self<Result<T, E>>` into `Result<Self<T>, Self<E>>`.
     #[allow(clippy::type_complexity)]
     fn transpose(self) -> Result<Projected<Self, T>, Projected<Self, E>>
     where

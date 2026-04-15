@@ -23,6 +23,20 @@ struct Item {
 
 fn app() -> Element {
     let mut items = use_signal(initial_kanban_data);
+    let visible_items = items
+        .read()
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            (
+                index,
+                item.id,
+                item.name.clone(),
+                item.category.clone(),
+                item.contents.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
 
     rsx! {
         div {
@@ -43,15 +57,19 @@ fn app() -> Element {
                     ondragover: |e| e.prevent_default(),
                     ondrop: move |e| {
                         if let Some(item_id) = e.data_transfer().get_data("text/plain").and_then(|data| data.parse::<usize>().ok()) {
-                            if let Some(pos) = items.iter().position(|item| item.id == item_id) {
+                            let pos = {
+                                let items = items.read();
+                                items.iter().position(|item| item.id == item_id)
+                            };
+                            if let Some(pos) = pos {
                                 items.write()[pos].category = category.to_string();
                             }
                         }
                     },
                     h2 { "Category: {category}" }
-                    for (index, item) in items.iter().enumerate().filter(|item| item.1.category == category) {
+                    for (index, item_id, item_name, _, item_contents) in visible_items.clone().into_iter().filter(|(_, _, _, item_category, _)| item_category == category) {
                         div {
-                            key: "{item.id}",
+                            key: "{item_id}",
                             width: "200px",
                             height: "50px",
                             border: "1px solid black",
@@ -64,10 +82,10 @@ fn app() -> Element {
                                 let id = items.read()[index].id.to_string();
                                 e.data_transfer().set_data("text/plain", &id).unwrap();
                             },
-                            pre { webkit_user_select: "none", "{item.name}" }
+                            pre { webkit_user_select: "none", "{item_name}" }
                             input {
                                 r#type: "text",
-                                value: "{item.contents}",
+                                value: "{item_contents}",
                                 oninput: move |e| {
                                     items.write()[index].contents = e.value();
                                 }
