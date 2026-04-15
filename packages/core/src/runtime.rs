@@ -413,7 +413,7 @@ fn MyComponent() -> Element {{
             let mut listeners = vec![];
             let mount_id;
 
-            // We do this in its own block to prevent moutns from staying open while we call user code
+            // We do this in its own block to prevent mounts from staying open while we call user code
             {
                 let mounts = self.mounts.borrow();
                 let Some(mount) = mounts.get(path.mount.0) else {
