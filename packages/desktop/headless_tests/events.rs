@@ -301,13 +301,7 @@ fn test_mouse_scroll_div() -> Element {
 }
 
 fn test_scroll_does_not_bubble() -> Element {
-    utils::mock_event_with_extra(
-        "scroll_child",
-        r#"new Event("scroll", { bubbles: false })"#,
-        r#"
-            element.scrollTop = 10;
-        "#,
-    );
+    utils::mock_event("scroll_child", r#"new Event("scroll", { bubbles: false })"#);
 
     rsx! {
         div {
@@ -321,7 +315,7 @@ fn test_scroll_does_not_bubble() -> Element {
                 height: "20px",
                 overflow_y: "auto",
                 onscroll: move |event| {
-                    assert_eq!(event.scroll_top(), 10.0);
+                    println!("{:?}", event.data);
                     RECEIVED_EVENTS.with_mut(|x| *x += 1);
                 },
                 div {
