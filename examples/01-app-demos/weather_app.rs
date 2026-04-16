@@ -32,9 +32,9 @@ fn app() -> Element {
                                     Ok(weather) => rsx! {
                                         CountryData {
                                             country: country.read().clone(),
-                                            weather: weather.cloned(),
+                                            weather: (*weather.read()).clone(),
                                         }
-                                        Forecast { weather: weather.cloned() }
+                                        Forecast { weather: (*weather.read()).clone() }
                                         div { height: "20px", margin_top: "10px",
                                             if weather.pending() {
                                                 "Fetching weather data..."
@@ -147,7 +147,7 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                 }
                 ul { class: "bg-white border border-gray-100 w-full mt-2 max-h-72 overflow-auto",
                     match locations {
-                        Ok(locs) if locs.is_empty() => rsx! {
+                        Ok(locs) if locs.read().is_empty() => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "No locations found"
                             }

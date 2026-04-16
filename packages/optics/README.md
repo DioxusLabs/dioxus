@@ -78,7 +78,7 @@ with_runtime(|| {
     let todos = app.clone().map_ref_mut(app_todos, app_todos_mut);
     assert_eq!(todos.read().len(), 1);
 
-    for todo in todos.each::<Todo>().iter() {
+    for todo in todos.each().iter() {
         *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
     }
 });

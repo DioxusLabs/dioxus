@@ -8,8 +8,8 @@ mod signal;
 mod subscribed;
 
 pub use collection::{
-    BTreeMapKey, EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp, GetProjection,
-    HashMapKey, VecIndex,
+    BTreeMapKey, BTreeMapTarget, EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp,
+    GetProjection, HashMapKey, HashMapTarget, VecIndex, VecTarget,
 };
 pub use combinator::{
     Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,

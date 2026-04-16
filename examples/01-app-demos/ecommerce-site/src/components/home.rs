@@ -13,9 +13,9 @@ pub(crate) fn Home() -> Element {
     rsx! {
         Nav {}
         section { class: "p-10",
-            for product in products.iter() {
+            for product in products.read().iter().cloned() {
                 ProductItem {
-                    product: product.clone()
+                    product
                 }
             }
         }

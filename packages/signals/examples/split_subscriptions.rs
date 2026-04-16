@@ -87,8 +87,11 @@ fn ReadsManySignals() -> Element {
             },
             "Increase First Item"
         }
-        for signal in data.many_signals.iter() {
-            Child { count: signal() }
+        for signal in dioxus_optics::Optic::from_access(data.many_signals)
+            .each()
+            .iter()
+        {
+            Child { count: *signal.read() }
         }
     }
 }

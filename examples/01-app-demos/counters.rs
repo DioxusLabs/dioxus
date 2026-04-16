@@ -1,6 +1,7 @@
 //! A simple counters example that stores a list of items in a vec and then iterates over them.
 
 use dioxus::prelude::*;
+use dioxus_optics::Optic;
 
 const STYLE: Asset = asset!("/examples/assets/counter.css");
 
@@ -25,9 +26,9 @@ fn app() -> Element {
 
         h3 { "Total: {sum}" }
 
-        // Calling `iter` on a Signal<Vec<>> gives you a GenerationalRef to each entry in the vec
+        // Iterating via the optics facade yields an `Optic` scoped to each entry in the vec
         // We enumerate to get the idx of each counter, which we use later to modify the vec
-        for (i, counter) in counters.iter().enumerate() {
+        for (i, counter) in Optic::from_access(counters).each().iter().enumerate() {
             // We need a key to uniquely identify each counter. You really shouldn't be using the index, so we're using
             // the counter value itself.
             //

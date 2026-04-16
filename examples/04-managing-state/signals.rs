@@ -8,6 +8,7 @@
 
 use async_std::task::sleep;
 use dioxus::prelude::*;
+use dioxus_optics::Optic;
 
 fn main() {
     dioxus::launch(app);
@@ -16,7 +17,7 @@ fn main() {
 fn app() -> Element {
     let mut running = use_signal(|| true);
     let mut count = use_signal(|| 0);
-    let saved_values = use_signal(|| vec![0.to_string()]);
+    let mut saved_values = use_signal(|| vec![0.to_string()]);
 
     // use_memo will recompute the value of the signal whenever the captured signals change
     let doubled_count = use_memo(move || count() * 2);
@@ -63,7 +64,7 @@ fn app() -> Element {
         }
 
         // We can cleanly map signals with iterators
-        for value in saved_values.iter() {
+        for value in Optic::from_access(saved_values).each().iter() {
             h3 { "Saved value: {value}" }
         }
 

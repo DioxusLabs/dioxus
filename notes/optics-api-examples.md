@@ -143,7 +143,7 @@ let todos = Optic::new(vec![
     Todo { done: false, title: "write code".into() },
     Todo { done: false, title: "ship".into() },
 ])
-.each::<Todo>();
+.each();
 
 let second_title: String = todos
     .index(1)
@@ -177,7 +177,7 @@ let users = Optic::new(HashMap::from([
     ("alice".to_string(), User { active: true }),
     ("bob".to_string(), User { active: false }),
 ]))
-.each_hash_map::<String, User, std::collections::hash_map::RandomState>();
+.each_hash_map();
 
 let alice = users.get("alice").unwrap();
 *alice.clone().map_ref_mut(user_active, user_active_mut).write() = false;

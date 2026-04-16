@@ -1,12 +1,21 @@
 #![allow(unused)]
 
 use dioxus::prelude::*;
+use dioxus_signals::MappedMutSignal;
 use dioxus_stores::*;
 
 #[derive(Store)]
 struct TodoItem {
     checked: bool,
     contents: String,
+}
+
+fn string_as_str(s: &String) -> &str {
+    s.as_str()
+}
+
+fn string_as_str_mut(s: &mut String) -> &mut str {
+    s.as_mut_str()
 }
 
 fn app() -> Element {
@@ -23,10 +32,10 @@ fn app() -> Element {
             item,
         }
         TakesStr {
-            item: item.contents().deref(),
+            item: MappedMutSignal::new(item.contents(), string_as_str, string_as_str_mut),
         }
         TakesStrStore {
-            item: item.contents().deref(),
+            item: Store::from_lens(MappedMutSignal::new(item.contents(), string_as_str, string_as_str_mut)),
         }
     }
 }

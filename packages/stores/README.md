@@ -52,11 +52,9 @@ fn Tree(value: Store<CounterTree>) -> Element {
             "Push child"
         }
         ul {
-            // Iterating over the children gives us stores scoped to each child.
-            for value in children.iter() {
-                li {
-                    Tree { value }
-                }
+            // Iterating over the children gives us optics scoped to each child.
+            for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+                li { "child {i}" }
             }
         }
     }

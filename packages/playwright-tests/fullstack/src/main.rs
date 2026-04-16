@@ -73,7 +73,7 @@ fn OnMounted() -> Element {
 #[component]
 fn DefaultServerFnCodec() -> Element {
     let resource = use_server_future(|| get_server_data_empty_vec(Vec::new()))?;
-    let empty_vec = resource.unwrap();
+    let empty_vec = (*resource.read()).clone().unwrap();
     assert!(empty_vec.is_empty());
 
     rsx! {}
@@ -146,7 +146,8 @@ fn Errors() -> Element {
 
 #[component]
 pub fn ThrowsError() -> Element {
-    use_server_future(server_error)?()?;
+    let resource = use_server_future(server_error)?;
+    (*resource.read()).clone()?;
     rsx! {
         "success"
     }

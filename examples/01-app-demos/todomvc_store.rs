@@ -4,6 +4,7 @@
 //! maintaining fine grained reactivity.
 
 use dioxus::prelude::*;
+use dioxus_optics::Optic;
 use std::{collections::HashMap, vec};
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
@@ -28,10 +29,11 @@ struct TodoState {
 impl<Lens> Store<TodoState, Lens> {
     fn active_items(&self) -> Vec<u32> {
         let filter = self.filter().cloned();
-        let mut active_ids: Vec<u32> = self
-            .todos()
+        let todos_store = self.todos();
+        let map = todos_store.read();
+        let mut active_ids: Vec<u32> = map
             .iter()
-            .filter_map(|(id, item)| item.active(filter).then_some(id))
+            .filter_map(|(id, item)| todo_item_active(item, filter).then_some(*id))
             .collect();
         active_ids.sort_unstable();
         active_ids
@@ -39,20 +41,33 @@ impl<Lens> Store<TodoState, Lens> {
 
     fn incomplete_count(&self) -> usize {
         self.todos()
+            .read()
             .values()
-            .filter(|item| item.incomplete())
+            .filter(|item| !item.checked)
             .count()
     }
 
     fn toggle_all(&mut self) {
         let check = self.incomplete_count() != 0;
-        for item in self.todos().values() {
-            item.checked().set(check);
+        let mut todos = self.todos();
+        let keys: Vec<u32> = todos.read().keys().copied().collect();
+        for key in keys {
+            if let Some(item) = todos.write().get_mut(&key) {
+                item.checked = check;
+            }
         }
     }
 
     fn has_todos(&self) -> bool {
-        !self.todos().is_empty()
+        !self.todos().read().is_empty()
+    }
+}
+
+fn todo_item_active(item: &TodoItem, filter: FilterState) -> bool {
+    match filter {
+        FilterState::All => true,
+        FilterState::Active => !item.checked,
+        FilterState::Completed => item.checked,
     }
 }
 
@@ -178,7 +193,7 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
         if evt.key() == Key::Enter && !draft.is_empty() {
             let id = todo_id();
             let todo = TodoItem::new(draft.take());
-            todos.todos().insert(id, todo);
+            todos.todos().write().insert(id, todo);
             todo_id += 1;
         }
     };
@@ -205,17 +220,29 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
-    // When we get an item out of the store, it will only subscribe to that specific item.
-    // Since we only get the single todo item, the component will only rerender when that item changes.
-    let entry = todos.todos().get(id).unwrap();
-    let checked = entry.checked();
-    let contents = entry.contents();
+    // Project into the specific todo by id through an optic chain — this gives us
+    // path-granular subscriptions just like `.get(id).unwrap()` used to.
+    let entry = Optic::from_access(todos.todos())
+        .each_hash_map()
+        .get(&id)
+        .to_option()
+        .expect("todo id is in the map");
+    let checked_optic =
+        entry
+            .clone()
+            .map_ref_mut(|t: &TodoItem| &t.checked, |t: &mut TodoItem| &mut t.checked);
+    let contents_optic = entry.map_ref_mut(
+        |t: &TodoItem| &t.contents,
+        |t: &mut TodoItem| &mut t.contents,
+    );
+    let checked = *checked_optic.read();
+    let contents = contents_optic.clone();
 
     rsx! {
         li {
             // Dioxus lets you use if statements in rsx to conditionally render attributes
             // These will get merged into a single class attribute
-            class: if checked() { "completed" },
+            class: if checked { "completed" },
             class: if is_editing() { "editing" },
 
             // Some basic controls for the todo
@@ -225,7 +252,11 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                     r#type: "checkbox",
                     id: "cbg-{id}",
                     checked: "{checked}",
-                    oninput: move |evt| entry.checked().set(evt.checked())
+                    oninput: move |evt| {
+                        if let Some(mut w) = checked_optic.write_opt() {
+                            *w = evt.checked();
+                        }
+                    }
                 }
                 label {
                     r#for: "cbg-{id}",
@@ -237,7 +268,7 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                     class: "destroy",
                     onclick: move |evt| {
                         evt.prevent_default();
-                        todos.todos().remove(&id);
+                        todos.todos().write().remove(&id);
                     },
                 }
             }
@@ -247,7 +278,11 @@ fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
                 input {
                     class: "edit",
                     value: "{contents}",
-                    oninput: move |evt| entry.contents().set(evt.value()),
+                    oninput: move |evt| {
+                        if let Some(mut w) = contents_optic.write_opt() {
+                            *w = evt.value();
+                        }
+                    },
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
@@ -267,7 +302,8 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
     // We use a memo to calculate whether we should show the "Clear completed" button.
     // This will recompute whenever the number of todos change or the checked state of an existing
     // todo changes
-    let show_clear_completed = use_memo(move || todos.todos().values().any(|todo| todo.complete()));
+    let show_clear_completed =
+        use_memo(move || todos.todos().read().values().any(|todo| todo.checked));
     let mut filter = todos.filter();
 
     rsx! {
@@ -304,7 +340,7 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
             if show_clear_completed() {
                 button {
                     class: "clear-completed",
-                    onclick: move |_| todos.todos().retain(|_, todo| !todo.checked),
+                    onclick: move |_| todos.todos().write().retain(|_, todo| !todo.checked),
                     "Clear completed"
                 }
             }

@@ -60,10 +60,10 @@ async fn action_projects_ok_and_err_results() {
 
     dom.in_scope(ScopeId::APP, || {
         let ok = action.result().unwrap().unwrap();
-        assert_eq!(ok.cloned(), "done");
+        assert_eq!(&*ok.read(), "done");
 
         let ok_value = action.value().unwrap().unwrap();
-        assert_eq!(ok_value.cloned(), "done");
+        assert_eq!(&*ok_value.read(), "done");
     });
 
     dom.in_scope(ScopeId::APP, || {
@@ -84,7 +84,7 @@ async fn action_projects_ok_and_err_results() {
 
     dom.in_scope(ScopeId::APP, || {
         let err = action.result().unwrap().unwrap_err();
-        assert_eq!(err.cloned().to_string(), "boom");
+        assert_eq!((*err.read()).to_string(), "boom");
 
         let err_value = action.value().unwrap().unwrap_err();
         assert_eq!(err_value.to_string(), "boom");

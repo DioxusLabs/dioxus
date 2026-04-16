@@ -30,7 +30,7 @@ fn main() {
 }
 
 fn app() -> Element {
-    let events = use_signal(Vec::new);
+    let mut events = use_signal(Vec::new);
 
     use_future(move || async move {
         // Call the SSE endpoint to get a stream of events

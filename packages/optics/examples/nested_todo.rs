@@ -79,16 +79,16 @@ fn app() -> Element {
     let active = user.clone().map_some().map_ref_mut(user_active, user_active_mut);
     let name = user.map_some().map_ref_mut(user_name, user_name_mut);
 
-    // Vec<Todo> -> per-item child optics via `each::<Todo>`.
+    // Vec<Todo> -> per-item child optics via `each`.
     let todos = root
         .clone()
         .map_ref_mut(state_todos, state_todos_mut)
-        .each::<Todo>();
+        .each();
 
     // HashMap<String, String> -> keyed child optics via `each_hash_map`.
     let tags = root
         .map_ref_mut(state_tags, state_tags_mut)
-        .each_hash_map::<String, String, std::collections::hash_map::RandomState>();
+        .each_hash_map();
 
     // Each of these `read_opt`/`read` calls registers a subscription on the
     // root signal, so writes from anywhere below re-render the whole tree.

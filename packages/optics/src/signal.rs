@@ -1,15 +1,13 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    future::Future,
-    hash::BuildHasher,
-    marker::PhantomData,
-};
+use std::{future::Future, marker::PhantomData};
 
 use dioxus_core::current_owner;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
 use crate::{
-    collection::{EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp, GetProjection},
+    collection::{
+        BTreeMapTarget, EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp,
+        GetProjection, HashMapTarget, VecTarget,
+    },
     combinator::{
         Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
         OptPrismOp, Prism, PrismOp, RefOp, SomePrism, ValueAccess,
@@ -31,6 +29,8 @@ pub struct Optic<A, Path = Required> {
     pub(crate) access: A,
     pub(crate) _marker: PhantomData<fn() -> Path>,
 }
+
+impl<A: Copy, Path> Copy for Optic<A, Path> {}
 
 impl<A: Clone, Path> Clone for Optic<A, Path> {
     fn clone(&self) -> Self {
@@ -352,11 +352,14 @@ impl<A> Optic<A, Required> {
     }
 
     /// Treat a `Vec<T>` child as an iterable collection of child optics.
+    ///
+    /// The item type is inferred from `A::Target` via [`VecTarget`], so call
+    /// sites write `.each()` without turbofish.
     #[must_use]
-    pub fn each<T>(self) -> Optic<EachVec<A, T>>
+    pub fn each(self) -> Optic<EachVec<A, <A::Target as VecTarget>::Item>>
     where
-        A: Access<Target = Vec<T>>,
-        T: 'static,
+        A: Access,
+        A::Target: VecTarget,
     {
         Optic {
             access: EachVec {
@@ -368,13 +371,24 @@ impl<A> Optic<A, Required> {
     }
 
     /// Treat a `HashMap<K, V, S>` child as a keyed collection of child optics.
+    ///
+    /// Key/value/hasher types are inferred from `A::Target` via
+    /// [`HashMapTarget`], so call sites write `.each_hash_map()` without
+    /// turbofish.
     #[must_use]
-    pub fn each_hash_map<K, V, S>(self) -> Optic<EachHashMap<A, K, V, S>>
+    pub fn each_hash_map(
+        self,
+    ) -> Optic<
+        EachHashMap<
+            A,
+            <A::Target as HashMapTarget>::Key,
+            <A::Target as HashMapTarget>::Value,
+            <A::Target as HashMapTarget>::Hasher,
+        >,
+    >
     where
-        A: Access<Target = HashMap<K, V, S>>,
-        K: Eq + std::hash::Hash + 'static,
-        V: 'static,
-        S: BuildHasher + 'static,
+        A: Access,
+        A::Target: HashMapTarget,
     {
         Optic {
             access: EachHashMap {
@@ -436,12 +450,22 @@ impl<A> Optic<A, Required> {
     }
 
     /// Treat a `BTreeMap<K, V>` child as a keyed collection of child optics.
+    ///
+    /// Key/value types are inferred from `A::Target` via [`BTreeMapTarget`],
+    /// so call sites write `.each_btree_map()` without turbofish.
     #[must_use]
-    pub fn each_btree_map<K, V>(self) -> Optic<EachBTreeMap<A, K, V>>
+    pub fn each_btree_map(
+        self,
+    ) -> Optic<
+        EachBTreeMap<
+            A,
+            <A::Target as BTreeMapTarget>::Key,
+            <A::Target as BTreeMapTarget>::Value,
+        >,
+    >
     where
-        A: Access<Target = BTreeMap<K, V>>,
-        K: Ord + 'static,
-        V: 'static,
+        A: Access,
+        A::Target: BTreeMapTarget,
     {
         Optic {
             access: EachBTreeMap {

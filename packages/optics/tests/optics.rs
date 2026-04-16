@@ -315,7 +315,7 @@ fn each_projects_vec_children() {
             ],
         });
 
-        let each_todo = app.map_ref_mut(app_todos, app_todos_mut).each::<Todo>();
+        let each_todo = app.map_ref_mut(app_todos, app_todos_mut).each();
         for todo in each_todo.iter() {
             *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
         }
@@ -345,7 +345,7 @@ fn vec_collection_supports_lookup_and_mutation_helpers() {
                 title: "ship".into(),
             },
         ])
-        .each::<Todo>();
+        .each();
 
         assert_eq!(todos.len(), 2);
         assert!(!todos.is_empty());
@@ -406,7 +406,7 @@ fn vec_collection_supports_lookup_and_mutation_helpers() {
 #[test]
 fn optional_vec_lookup_chains_without_turbofish() {
     with_runtime(|| {
-        let nested = Optic::new(vec![vec![10, 20], vec![30]]).each::<Vec<i32>>();
+        let nested = Optic::new(vec![vec![10, 20], vec![30]]).each();
 
         let second = nested.get(0).get(1).to_option().unwrap();
         assert_eq!(*second.read(), 20);
@@ -423,7 +423,7 @@ fn optional_hash_map_lookup_chains_without_special_traits() {
             "outer".to_string(),
             HashMap::from([("inner".to_string(), 10)]),
         )]))
-        .each_hash_map::<String, HashMap<String, i32>, std::collections::hash_map::RandomState>();
+        .each_hash_map();
 
         let value = nested.get("outer").get("inner").to_option().unwrap();
         assert_eq!(*value.read(), 10);
@@ -440,7 +440,7 @@ fn optional_btree_map_lookup_chains_without_special_traits() {
             "outer".to_string(),
             BTreeMap::from([("inner".to_string(), 10)]),
         )]))
-        .each_btree_map::<String, BTreeMap<String, i32>>();
+        .each_btree_map();
 
         let value = nested.get("outer").get("inner").to_option().unwrap();
         assert_eq!(*value.read(), 10);
@@ -457,7 +457,7 @@ fn hash_map_projection_supports_lookup_iteration_and_mutation() {
             ("alice".to_string(), User { active: true }),
             ("bob".to_string(), User { active: false }),
         ]))
-        .each_hash_map::<String, User, std::collections::hash_map::RandomState>();
+        .each_hash_map();
 
         assert_eq!(users.len(), 2);
         assert!(users.contains_key("alice"));
@@ -526,7 +526,7 @@ fn btree_map_projection_supports_lookup_iteration_and_mutation() {
             ("alice".to_string(), User { active: true }),
             ("bob".to_string(), User { active: false }),
         ]))
-        .each_btree_map::<String, User>();
+        .each_btree_map();
 
         assert_eq!(users.len(), 2);
         assert!(users.contains_key("alice"));
@@ -795,7 +795,7 @@ fn optics_compose_over_signal_root() {
         *active.write_opt().unwrap() = false;
         assert!(!*active.read_opt().unwrap());
 
-        let todos = optic.map_ref_mut(app_todos, app_todos_mut).each::<Todo>();
+        let todos = optic.map_ref_mut(app_todos, app_todos_mut).each();
         todos.push(Todo {
             done: true,
             title: "ship".into(),
@@ -1027,7 +1027,7 @@ fn optics_each_over_signal_vec() {
                 title: "ship".into(),
             },
         ]);
-        let todos = Optic::from_access(signal).each::<Todo>();
+        let todos = Optic::from_access(signal).each();
         for todo in todos.iter() {
             *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
         }

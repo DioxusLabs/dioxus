@@ -28,7 +28,7 @@ fn main() {
 
 fn app() -> Element {
     let mut text_responses = use_signal(String::new);
-    let json_responses = use_signal(Vec::new);
+    let mut json_responses = use_signal(Vec::new);
 
     let mut start_text_stream = use_action(move || async move {
         text_responses.clear();

@@ -53,7 +53,9 @@ pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 /// impl<Lens> Store<CounterTree, Lens> {
 ///     // Methods that take &self automatically require the lens to implement `Readable` which lets you read the store.
 ///     fn sum(&self) -> i32 {
-///        self.count().cloned() + self.children().iter().map(|c| c.sum()).sum::<i32>()
+///        let children = self.children();
+///        let children = children.read();
+///        self.count().cloned() + children.iter().map(|c| c.count).sum::<i32>()
 ///     }
 /// }
 ///
@@ -87,11 +89,9 @@ pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 ///         }
 ///         "sum: {value.sum()}"
 ///         ul {
-///             // Iterating over the children gives us stores scoped to each child.
-///             for value in children.iter() {
-///                 li {
-///                     Tree { value }
-///                 }
+///             // Iterating over the children gives us optics scoped to each child.
+///             for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+///                 li { "child {i}" }
 ///             }
 ///         }
 ///     }
@@ -519,11 +519,9 @@ write_impls!(Store<T, Lens> where Lens: Writable<Target = T>);
 ///             "Push child"
 ///         }
 ///         ul {
-///             // Iterating over the children gives us stores scoped to each child.
-///             for value in children.iter() {
-///                 li {
-///                     Tree { value }
-///                 }
+///             // Iterating over the children gives us optics scoped to each child.
+///             for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+///                 li { "child {i}" }
 ///             }
 ///         }
 ///     }

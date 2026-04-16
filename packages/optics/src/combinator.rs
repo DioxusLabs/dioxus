@@ -359,6 +359,8 @@ pub struct PrismOp<P> {
     pub(crate) prism: P,
 }
 
+impl<P: Copy> Copy for PrismOp<P> {}
+
 impl<P: Clone> Clone for PrismOp<P> {
     fn clone(&self) -> Self {
         Self { prism: self.prism.clone() }
@@ -435,6 +437,8 @@ where
 pub struct OptPrismOp<P> {
     pub(crate) prism: P,
 }
+
+impl<P: Copy> Copy for OptPrismOp<P> {}
 
 impl<P: Clone> Clone for OptPrismOp<P> {
     fn clone(&self) -> Self {
@@ -522,9 +526,11 @@ impl<T> Default for SomePrism<T> {
     }
 }
 
+impl<T> Copy for SomePrism<T> {}
+
 impl<T> Clone for SomePrism<T> {
     fn clone(&self) -> Self {
-        Self(PhantomData)
+        *self
     }
 }
 
@@ -558,9 +564,11 @@ impl<T, E> Default for OkPrism<T, E> {
     }
 }
 
+impl<T, E> Copy for OkPrism<T, E> {}
+
 impl<T, E> Clone for OkPrism<T, E> {
     fn clone(&self) -> Self {
-        Self(PhantomData)
+        *self
     }
 }
 
@@ -594,9 +602,11 @@ impl<T, E> Default for ErrPrism<T, E> {
     }
 }
 
+impl<T, E> Copy for ErrPrism<T, E> {}
+
 impl<T, E> Clone for ErrPrism<T, E> {
     fn clone(&self) -> Self {
-        Self(PhantomData)
+        *self
     }
 }
 
@@ -632,13 +642,11 @@ impl<S, V> InlinePrism<S, V> {
     }
 }
 
+impl<S, V> Copy for InlinePrism<S, V> {}
+
 impl<S, V> Clone for InlinePrism<S, V> {
     fn clone(&self) -> Self {
-        Self {
-            try_ref: self.try_ref,
-            try_mut: self.try_mut,
-            try_into: self.try_into,
-        }
+        *self
     }
 }
 

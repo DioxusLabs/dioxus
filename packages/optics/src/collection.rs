@@ -37,6 +37,85 @@ impl<X> Resolve<FlattenSomeOp> for Option<X> {
 }
 
 // ============================================================================
+// Container target traits
+// ============================================================================
+//
+// These traits let `.each()` / `.each_hash_map()` / `.each_btree_map()` infer
+// their item/key/value types from the accessor's `Target` associated type
+// rather than require turbofish. Rust won't drive inference backwards from a
+// `A: Access<Target = Vec<T>>` where-clause to pick `T`, but it *will* project
+// forward through an associated type — so these traits expose the item type
+// as a projection of the concrete container.
+
+mod sealed {
+    pub trait Sealed {}
+}
+
+/// Projection trait that exposes the item type of a `Vec`. Implemented only
+/// for `Vec<T>`; used so `each()` can recover `T` from `A::Target` without
+/// turbofish.
+pub trait VecTarget: sealed::Sealed {
+    /// The element type of the underlying `Vec`.
+    type Item: 'static;
+}
+
+impl<T: 'static> sealed::Sealed for Vec<T> {}
+impl<T: 'static> VecTarget for Vec<T> {
+    type Item = T;
+}
+
+/// Projection trait that exposes the key/value/hasher types of a `HashMap`.
+pub trait HashMapTarget: sealed::Sealed {
+    /// Key type of the underlying `HashMap`.
+    type Key: Eq + Hash + 'static;
+    /// Value type of the underlying `HashMap`.
+    type Value: 'static;
+    /// Hasher type of the underlying `HashMap`.
+    type Hasher: BuildHasher + 'static;
+}
+
+impl<K, V, S> sealed::Sealed for HashMap<K, V, S>
+where
+    K: Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+}
+impl<K, V, S> HashMapTarget for HashMap<K, V, S>
+where
+    K: Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+    type Key = K;
+    type Value = V;
+    type Hasher = S;
+}
+
+/// Projection trait that exposes the key/value types of a `BTreeMap`.
+pub trait BTreeMapTarget: sealed::Sealed {
+    /// Key type of the underlying `BTreeMap`.
+    type Key: Ord + 'static;
+    /// Value type of the underlying `BTreeMap`.
+    type Value: 'static;
+}
+
+impl<K, V> sealed::Sealed for BTreeMap<K, V>
+where
+    K: Ord + 'static,
+    V: 'static,
+{
+}
+impl<K, V> BTreeMapTarget for BTreeMap<K, V>
+where
+    K: Ord + 'static,
+    V: 'static,
+{
+    type Key = K;
+    type Value = V;
+}
+
+// ============================================================================
 // Vec
 // ============================================================================
 

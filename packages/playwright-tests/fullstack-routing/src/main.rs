@@ -61,7 +61,7 @@ fn ThrowsAsyncError() -> Element {
         Err(ServerFnError::new("Async error from a server function"))
     }
 
-    use_server_future(error_after_delay)?()?;
+    (*use_server_future(error_after_delay)?.read()).clone()?;
     rsx! {
         "Hello, world!"
     }

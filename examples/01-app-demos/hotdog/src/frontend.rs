@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     backend::{list_dogs, remove_dog, save_dog},
@@ -12,7 +11,7 @@ pub fn Favorites() -> Element {
 
     rsx! {
         div { id: "favorites",
-            for (id , url) in favorites.cloned() {
+            for (id , url) in favorites.read().iter().cloned() {
                 div { class: "favorite-dog", key: "{id}",
                     img { src: "{url}" }
                     button {
@@ -64,7 +63,7 @@ pub fn DogView() -> Element {
             }
             button {
                 id: "save",
-                onclick: move |_| async move { _ = save_dog(img_src()).await },
+                onclick: move |_| async move { _ = save_dog((*img_src.read()).clone()).await },
                 "save!"
             }
         }

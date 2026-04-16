@@ -15,7 +15,18 @@
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-stores)",
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks -p dioxus-fullstack-core)",
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks --lib)",
-      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks --lib -p dioxus-fullstack-core --lib)"
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks --lib -p dioxus-fullstack-core --lib)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build --lib -p dioxus-hooks -p dioxus-stores -p dioxus-optics -p dioxus-signals)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-stores --doc)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo check --example suspense)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo check --workspace --examples)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo check --workspace --examples --keep-going)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo check --example weather_app)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo check --workspace --examples --bins --keep-going)",
+      "Bash(git restore *)",
+      "Bash(git checkout *)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-optics -p dioxus-stores -p dioxus-hooks)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p hotdog)"
     ]
   }
 }

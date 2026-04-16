@@ -195,6 +195,39 @@ pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Optic<
 >;
 
 // ---------------------------------------------------------------------------
+// HasResourceHandle — finds the resource handle through a Store carrier or
+// through any optic chain (Combinator / Optic) wrapping one.
+// ---------------------------------------------------------------------------
+
+/// Anything that can surface a [`ResourceHandle`] — either a `Store<_, L>`
+/// where `L: ResourceLike`, or any optics chain (`Combinator` / `Optic`)
+/// whose root is such a store.
+pub trait HasResourceHandle {
+    fn resource_handle(&self) -> CopyValue<ResourceHandle>;
+}
+
+impl<T: ?Sized, L: ResourceLike> HasResourceHandle for Store<T, L>
+where
+    L::Target: 'static,
+{
+    fn resource_handle(&self) -> CopyValue<ResourceHandle> {
+        self.lens().resource_handle()
+    }
+}
+
+impl<A: HasResourceHandle, Op> HasResourceHandle for Combinator<A, Op> {
+    fn resource_handle(&self) -> CopyValue<ResourceHandle> {
+        self.parent().resource_handle()
+    }
+}
+
+impl<A: HasResourceHandle, P> HasResourceHandle for Optic<A, P> {
+    fn resource_handle(&self) -> CopyValue<ResourceHandle> {
+        self.access().resource_handle()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // ResourceControls — handle-based methods. Local trait → blanket impl OK.
 // ---------------------------------------------------------------------------
 
@@ -211,34 +244,31 @@ pub trait ResourceControls {
     fn wait(&self) -> ResourceFuture;
 }
 
-impl<T: ?Sized, L: ResourceLike> ResourceControls for Store<T, L>
-where
-    L::Target: 'static,
-{
+impl<T: HasResourceHandle> ResourceControls for T {
     fn restart(&self) {
-        self.lens().resource_handle().read().rc.mark_dirty();
+        self.resource_handle().read().rc.mark_dirty();
     }
     fn cancel(&self) {
-        self.lens().resource_handle().read().task.cancel();
+        self.resource_handle().read().task.cancel();
     }
     fn pause(&self) {
-        self.lens().resource_handle().read().task.pause();
+        self.resource_handle().read().task.pause();
     }
     fn resume(&self) {
-        self.lens().resource_handle().read().task.resume();
+        self.resource_handle().read().task.resume();
     }
     fn task(&self) -> Task {
-        self.lens().resource_handle().read().task
+        self.resource_handle().read().task
     }
     fn finished(&self) -> bool {
-        !self.lens().resource_handle().read().task.paused()
+        !self.resource_handle().read().task.paused()
     }
     fn pending(&self) -> bool {
-        self.lens().resource_handle().read().task.paused()
+        self.resource_handle().read().task.paused()
     }
     fn wait(&self) -> ResourceFuture {
         ResourceFuture {
-            resource: self.lens().resource_handle(),
+            resource: self.resource_handle(),
         }
     }
 }
