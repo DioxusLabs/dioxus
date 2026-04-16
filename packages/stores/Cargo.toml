@@ -11,6 +11,7 @@ description = "Server function macros for Dioxus"
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-optics = { workspace = true }
 dioxus-signals = { workspace = true }
 dioxus-stores-macro = { workspace = true, optional = true }
 generational-box.workspace = true

@@ -5,11 +5,11 @@ use std::{
     marker::PhantomData,
 };
 
-use dioxus_signals::WriteLock;
-use generational_box::AnyStorage;
+use generational_box::{AnyStorage, WriteLock};
 
 use crate::{
     combinator::{Access, AccessMut, Combinator, Resolve, ValueAccess},
+    path::{hash_key, PathBuffer, PathSegment, Pathed},
     signal::Optic,
 };
 
@@ -89,6 +89,13 @@ where
             .try_read()
             .and_then(|r| A::Storage::try_map(r, move |v| v.get(index)))
     }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, T>> {
+        let index = self.index;
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, move |v| v.get(index)))
+    }
 }
 
 impl<A, T> AccessMut for VecIndex<A, T>
@@ -127,6 +134,16 @@ where
 {
     fn value(&self) -> Option<T> {
         self.try_read().as_deref().cloned()
+    }
+}
+
+impl<A, T> Pathed for VecIndex<A, T>
+where
+    A: Pathed,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Index(self.index as u64));
     }
 }
 
@@ -282,6 +299,13 @@ where
             .try_read()
             .and_then(|r| A::Storage::try_map(r, move |map| map.get(&key)))
     }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, V>> {
+        let key = self.key.clone();
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, move |map| map.get(&key)))
+    }
 }
 
 impl<A, K, V, S> AccessMut for HashMapKey<A, K, V, S>
@@ -326,6 +350,17 @@ where
 {
     fn value(&self) -> Option<V> {
         self.try_read().as_deref().cloned()
+    }
+}
+
+impl<A, K, V, S> Pathed for HashMapKey<A, K, V, S>
+where
+    A: Pathed,
+    K: Hash,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Key(hash_key(&self.key)));
     }
 }
 
@@ -526,6 +561,13 @@ where
             .try_read()
             .and_then(|r| A::Storage::try_map(r, move |map| map.get(&key)))
     }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, V>> {
+        let key = self.key.clone();
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, move |map| map.get(&key)))
+    }
 }
 
 impl<A, K, V> AccessMut for BTreeMapKey<A, K, V>
@@ -567,6 +609,17 @@ where
 {
     fn value(&self) -> Option<V> {
         self.try_read().as_deref().cloned()
+    }
+}
+
+impl<A, K, V> Pathed for BTreeMapKey<A, K, V>
+where
+    A: Pathed,
+    K: Hash,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Key(hash_key(&self.key)));
     }
 }
 
@@ -837,6 +890,12 @@ where
             .try_read()
             .and_then(|r| A::Storage::try_map(r, |o| o.as_ref()))
     }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, X>> {
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, |o| o.as_ref()))
+    }
 }
 
 impl<A, X: 'static> AccessMut for Combinator<A, FlattenSomeOp>
@@ -851,6 +910,16 @@ where
         self.parent
             .try_write()
             .and_then(|w| WriteLock::filter_map(w, |o| o.as_mut()))
+    }
+}
+
+impl<A> Pathed for Combinator<A, FlattenSomeOp>
+where
+    A: Pathed,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Flatten);
     }
 }
 

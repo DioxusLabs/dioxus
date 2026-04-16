@@ -11,12 +11,12 @@ keywords = ["optics", "lens", "signal", "reactive", "experimental"]
 rust-version = "1.79.0"
 
 [dependencies]
-dioxus-signals = { workspace = true }
+dioxus-core = { workspace = true }
 generational-box = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-dioxus-core = { workspace = true }
+dioxus-signals = { workspace = true }
 dioxus-stores = { workspace = true }
 
 [package.metadata.docs.rs]

@@ -5,8 +5,8 @@ use std::{
     marker::PhantomData,
 };
 
-use dioxus_signals::{CopyValue, WriteLock};
-use generational_box::AnyStorage;
+use dioxus_core::current_owner;
+use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
 use crate::{
     collection::{EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp, GetProjection},
@@ -14,6 +14,8 @@ use crate::{
         Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
         OptPrismOp, Prism, PrismOp, RefOp, SomePrism, ValueAccess,
     },
+    path::Pathed,
+    subscribed::{Subscribed, SubscriptionTree},
 };
 
 /// Marker for an optics path that is expected to exist (user-facing `read()` /
@@ -39,18 +41,21 @@ impl<A: Clone, Path> Clone for Optic<A, Path> {
     }
 }
 
-impl<T: 'static> Optic<CopyValue<T>> {
-    /// Create a new root optic backed by a [`CopyValue`].
+impl<T: 'static> Optic<GenerationalBox<T, UnsyncStorage>> {
+    /// Create a new root optic backed by a [`GenerationalBox`] allocated in
+    /// the current Dioxus scope's owner.
     #[must_use]
+    #[track_caller]
     pub fn new(value: T) -> Self {
+        let owner = current_owner::<UnsyncStorage>();
         Self {
-            access: CopyValue::new(value),
+            access: owner.insert_rc(value),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T: 'static> From<T> for Optic<CopyValue<T>> {
+impl<T: 'static> From<T> for Optic<GenerationalBox<T, UnsyncStorage>> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
@@ -183,6 +188,41 @@ impl<A, Path> Optic<A, Path> {
     {
         Optic {
             access: self.access.get_projection(key),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Wrap this optic in a [`Subscribed`] carrier that performs
+    /// path-granular subscription tracking.
+    ///
+    /// Reads through the returned optic subscribe the current
+    /// [`ReactiveContext`](dioxus_core::ReactiveContext) at this accessor's
+    /// path; writes wake subscribers on overlapping paths. The tree is
+    /// fresh — use [`Optic::subscribed_with`] to share a tree between
+    /// multiple chains (for cross-chain reactivity).
+    ///
+    /// Plain optics that never call `.subscribed()` pay zero cost for this
+    /// machinery.
+    #[must_use]
+    pub fn subscribed(self) -> Optic<Subscribed<A>, Path>
+    where
+        A: Pathed,
+    {
+        Optic {
+            access: Subscribed::new(self.access),
+            _marker: PhantomData,
+        }
+    }
+
+    /// Wrap this optic in a [`Subscribed`] carrier sharing an existing
+    /// subscription tree.
+    #[must_use]
+    pub fn subscribed_with(self, tree: SubscriptionTree) -> Optic<Subscribed<A>, Path>
+    where
+        A: Pathed,
+    {
+        Optic {
+            access: Subscribed::with_tree(self.access, tree),
             _marker: PhantomData,
         }
     }

@@ -331,6 +331,63 @@ where
         self.selector.try_write_unchecked()
     }
 }
+
+impl<T, Lens> dioxus_optics::Access for Store<T, Lens>
+where
+    Lens: Readable<Target = T>,
+    T: 'static,
+{
+    type Target = T;
+    type Storage = Lens::Storage;
+
+    fn try_read(
+        &self,
+    ) -> Option<
+        <Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>,
+    > {
+        <Self as Readable>::try_read_unchecked(self).ok()
+    }
+
+    fn try_peek(
+        &self,
+    ) -> Option<
+        <Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>,
+    > {
+        <Self as Readable>::try_peek_unchecked(self).ok()
+    }
+}
+
+impl<T, Lens> dioxus_optics::AccessMut for Store<T, Lens>
+where
+    Lens: Writable<Target = T>,
+    T: 'static,
+{
+    type WriteMetadata = Lens::WriteMetadata;
+
+    fn try_write(
+        &self,
+    ) -> Option<
+        dioxus_signals::WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>,
+    > {
+        <Self as Writable>::try_write_unchecked(self).ok()
+    }
+}
+
+impl<T, Lens> dioxus_optics::ValueAccess<T> for Store<T, Lens>
+where
+    Lens: Readable<Target = T>,
+    T: Clone + 'static,
+{
+    fn value(&self) -> T {
+        <Self as Readable>::try_read_unchecked(self)
+            .expect("optics: store read failed")
+            .clone()
+    }
+}
+
+impl<T, Lens> dioxus_optics::Pathed for Store<T, Lens> {
+    fn visit_path(&self, _sink: &mut dioxus_optics::PathBuffer) {}
+}
 impl<T, Lens> IntoAttributeValue for Store<T, Lens>
 where
     Self: Readable<Target = T>,

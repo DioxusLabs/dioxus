@@ -14,6 +14,7 @@ rust-version = "1.79.0"
 
 [dependencies]
 dioxus-core = { workspace = true }
+dioxus-optics = { workspace = true }
 generational-box = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true, features = ["derive"], optional = true }

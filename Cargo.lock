@@ -4306,6 +4306,7 @@ version = "0.7.5"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-optics",
  "futures-channel",
  "futures-util",
  "generational-box",
@@ -4337,6 +4338,7 @@ version = "0.7.5"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-optics",
  "dioxus-signals",
  "dioxus-stores-macro",
  "generational-box",

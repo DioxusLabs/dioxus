@@ -1,8 +1,8 @@
 use std::{future::Future, marker::PhantomData};
 
-use dioxus_signals::WriteLock;
-use generational_box::AnyStorage;
+use generational_box::{AnyStorage, WriteLock};
 
+use crate::path::{hash_field_fn, hash_prism_type, PathBuffer, PathSegment, Pathed};
 use crate::resource::{AsFuture, AwaitTransform};
 
 // ============================================================================
@@ -23,8 +23,20 @@ pub trait Access {
     /// Backing storage the read reference uses.
     type Storage: AnyStorage;
 
-    /// Borrow the projected child if the path currently resolves.
+    /// Borrow the projected child if the path currently resolves. Reactive
+    /// roots (like `Signal`) subscribe the current reactive context here.
     fn try_read(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>>;
+
+    /// Like [`try_read`](Self::try_read) but does **not** subscribe the
+    /// current reactive context to the underlying reactive root.
+    ///
+    /// Used by [`Subscribed`](crate::Subscribed) so that path-granular
+    /// subscription can replace (rather than layer on top of) the root's
+    /// one-big-subscription behavior. The default forwards to `try_read` —
+    /// override in bridges that expose a peek-style read.
+    fn try_peek(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+        self.try_read()
+    }
 }
 
 /// Write access to a projected child path. Same `Option` semantics as [`Access`].
@@ -183,6 +195,22 @@ where
             .try_read()
             .map(|r| A::Storage::map(r, self.op.read))
     }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, U>> {
+        self.parent
+            .try_peek()
+            .map(|r| A::Storage::map(r, self.op.read))
+    }
+}
+
+impl<A, S, U> Pathed for Combinator<A, RefOp<S, U>>
+where
+    A: Pathed,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Field(hash_field_fn(self.op.read)));
+    }
 }
 
 impl<A, S: 'static, U: 'static> Access for Combinator<A, LensOp<S, U>>
@@ -195,6 +223,12 @@ where
     fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, U>> {
         self.parent
             .try_read()
+            .map(|r| A::Storage::map(r, self.op.read))
+    }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, U>> {
+        self.parent
+            .try_peek()
             .map(|r| A::Storage::map(r, self.op.read))
     }
 }
@@ -211,6 +245,16 @@ where
         self.parent
             .try_write()
             .map(|w| WriteLock::map(w, self.op.write))
+    }
+}
+
+impl<A, S, U> Pathed for Combinator<A, LensOp<S, U>>
+where
+    A: Pathed,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Field(hash_field_fn(self.op.read)));
     }
 }
 
@@ -260,6 +304,24 @@ where
         self.parent
             .try_read()
             .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, P::Variant>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+}
+
+impl<A, P> Pathed for Combinator<A, PrismOp<P>>
+where
+    A: Pathed,
+    P: Prism + 'static,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Variant(hash_prism_type::<P>()));
     }
 }
 
@@ -319,6 +381,24 @@ where
         self.parent
             .try_read()
             .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+
+    fn try_peek(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, P::Variant>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_peek()
+            .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+}
+
+impl<A, P> Pathed for Combinator<A, OptPrismOp<P>>
+where
+    A: Pathed,
+    P: Prism + 'static,
+{
+    fn visit_path(&self, sink: &mut PathBuffer) {
+        self.parent.visit_path(sink);
+        sink.push(PathSegment::Variant(hash_prism_type::<P>()));
     }
 }
 
@@ -504,89 +584,52 @@ impl<S: 'static, V: 'static> Prism for InlinePrism<S, V> {
 }
 
 // ============================================================================
-// Bridge: dioxus_signals::Readable / Writable carriers implement Access
+// Root carrier: GenerationalBox<T> implements Access / AccessMut / ValueAccess
 // ============================================================================
 
-/// Marker routing every [`dioxus_signals::Readable`] into [`Access`] without
-/// triggering coherence conflicts with per-Op impls.
-pub trait ReadCarrier {
-    type Target: 'static;
-    type Storage: AnyStorage;
+use generational_box::GenerationalBox;
 
-    fn read_carrier(&self) -> <Self::Storage as AnyStorage>::Ref<'static, Self::Target>;
-}
-
-/// Marker routing every [`dioxus_signals::Writable`] into [`AccessMut`].
-pub trait WriteCarrier: ReadCarrier {
-    type WriteMetadata;
-
-    fn write_carrier(
-        &self,
-    ) -> WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>;
-}
-
-impl<R> ReadCarrier for R
+impl<T: 'static, S> Access for GenerationalBox<T, S>
 where
-    R: dioxus_signals::Readable,
-    R::Target: Sized + 'static,
+    S: generational_box::Storage<T>,
 {
-    type Target = R::Target;
-    type Storage = R::Storage;
+    type Target = T;
+    type Storage = S;
 
-    fn read_carrier(&self) -> <Self::Storage as AnyStorage>::Ref<'static, Self::Target> {
-        <R as dioxus_signals::Readable>::try_read_unchecked(self)
-            .expect("optics: carrier read failed")
+    fn try_read(&self) -> Option<<S as AnyStorage>::Ref<'static, T>> {
+        Some(self.read())
     }
+    // GenerationalBox has no reactive subscription of its own, so `try_peek`
+    // uses the same path.
 }
 
-impl<W> WriteCarrier for W
+impl<T: 'static, S> AccessMut for GenerationalBox<T, S>
 where
-    W: dioxus_signals::Writable,
-    W::Target: Sized + 'static,
+    S: generational_box::Storage<T>,
 {
-    type WriteMetadata = <W as dioxus_signals::Writable>::WriteMetadata;
-
-    fn write_carrier(
-        &self,
-    ) -> WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata> {
-        <W as dioxus_signals::Writable>::try_write_unchecked(self)
-            .expect("optics: carrier write failed")
-    }
-}
-
-impl<R> Access for R
-where
-    R: ReadCarrier,
-{
-    type Target = <R as ReadCarrier>::Target;
-    type Storage = <R as ReadCarrier>::Storage;
-
-    fn try_read(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
-        Some(ReadCarrier::read_carrier(self))
-    }
-}
-
-impl<W> AccessMut for W
-where
-    W: WriteCarrier,
-{
-    type WriteMetadata = <W as WriteCarrier>::WriteMetadata;
+    type WriteMetadata = ();
 
     fn try_write(
         &self,
-    ) -> Option<WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>> {
-        Some(WriteCarrier::write_carrier(self))
+    ) -> Option<WriteLock<'static, T, S, ()>> {
+        Some(WriteLock::new(self.write()))
     }
 }
 
-impl<R, T> ValueAccess<T> for R
+impl<T, S> ValueAccess<T> for GenerationalBox<T, S>
 where
-    R: dioxus_signals::Readable<Target = T>,
     T: Clone + 'static,
+    S: generational_box::Storage<T>,
 {
     fn value(&self) -> T {
-        <R as dioxus_signals::Readable>::try_read_unchecked(self)
-            .expect("optics: carrier read failed")
-            .clone()
+        (*self.read()).clone()
     }
+}
+
+/// Roots contribute no path segments.
+impl<T, S> Pathed for GenerationalBox<T, S>
+where
+    S: generational_box::Storage<T>,
+{
+    fn visit_path(&self, _sink: &mut PathBuffer) {}
 }

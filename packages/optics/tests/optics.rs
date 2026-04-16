@@ -683,6 +683,98 @@ fn with_runtime<R>(f: impl FnOnce() -> R) -> R {
 }
 
 #[test]
+fn subscribed_fires_only_overlapping_paths() {
+    use dioxus_core::ReactiveContext;
+    use dioxus_optics::SubscriptionTree;
+
+    with_runtime(|| {
+        let signal = Signal::new(App {
+            user: Some(User { active: true }),
+            todos: vec![Todo {
+                done: false,
+                title: "x".into(),
+            }],
+        });
+        let root = Optic::from_access(signal);
+        let tree = SubscriptionTree::new();
+
+        // Two subscribed optics sharing one tree, at disjoint paths.
+        let active_optic = root
+            .clone()
+            .map_ref_mut(app_user, app_user_mut)
+            .map_some()
+            .map_ref_mut(user_active, user_active_mut)
+            .subscribed_with(tree.clone());
+
+        let todos_optic = root
+            .map_ref_mut(app_todos, app_todos_mut)
+            .subscribed_with(tree.clone());
+
+        let active_fires = Arc::new(AtomicUsize::new(0));
+        let todos_fires = Arc::new(AtomicUsize::new(0));
+
+        // Subscribe a reactive context at the `active` path.
+        let active_rc = {
+            let active_fires = active_fires.clone();
+            ReactiveContext::new_with_callback(
+                move || {
+                    active_fires.fetch_add(1, Ordering::SeqCst);
+                },
+                ScopeId::ROOT,
+                std::panic::Location::caller(),
+            )
+        };
+        active_rc.reset_and_run_in(|| {
+            let _ = active_optic.read_opt();
+        });
+
+        // Subscribe a separate reactive context at the `todos` path.
+        let todos_rc = {
+            let todos_fires = todos_fires.clone();
+            ReactiveContext::new_with_callback(
+                move || {
+                    todos_fires.fetch_add(1, Ordering::SeqCst);
+                },
+                ScopeId::ROOT,
+                std::panic::Location::caller(),
+            )
+        };
+        todos_rc.reset_and_run_in(|| {
+            let _ = todos_optic.read().len();
+        });
+
+        // Write through `active_optic` — only the active subscriber should
+        // fire. The todos subscriber sits on a disjoint path.
+        *active_optic.write_opt().unwrap() = false;
+        assert_eq!(active_fires.load(Ordering::SeqCst), 1);
+        assert_eq!(todos_fires.load(Ordering::SeqCst), 0);
+
+        // Write through `todos_optic` — only the todos subscriber fires.
+        todos_optic.write().push(Todo {
+            done: true,
+            title: "y".into(),
+        });
+        assert_eq!(active_fires.load(Ordering::SeqCst), 1);
+        assert_eq!(todos_fires.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn plain_signal_reads_do_not_touch_subscription_tree() {
+    // The `Pathed` impl on plain signals is a trivial empty-path visitor;
+    // plain reads / writes never allocate a PathBuffer or consult a tree.
+    // This test just proves a non-subscribed optic chain still works the
+    // same as before and doesn't require `.subscribed()`.
+    with_runtime(|| {
+        let signal = Signal::new(User { active: true });
+        let active = Optic::from_access(signal).map_ref_mut(user_active, user_active_mut);
+        assert!(*active.read());
+        *active.write() = false;
+        assert!(!*active.read());
+    });
+}
+
+#[test]
 fn optics_compose_over_signal_root() {
     with_runtime(|| {
         let signal = Signal::new(App {

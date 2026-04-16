@@ -7,8 +7,8 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use dioxus_signals::{CopyValue, ReadableExt, UnsyncStorage, WritableExt, WriteLock};
-use generational_box::AnyStorage;
+use dioxus_core::current_owner;
+use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
 use crate::combinator::{
     Access, AccessMut, FutureAccess, LensOp, Resolve, ValueAccess,
@@ -17,7 +17,7 @@ use crate::combinator::{
 /// Resource carrier that offers an immediate optional value and an eventual
 /// future value.
 pub struct Resource<T> {
-    cell: CopyValue<Option<T>>,
+    cell: GenerationalBox<Option<T>, UnsyncStorage>,
     waiters: Rc<RefCell<Vec<Waker>>>,
 }
 
@@ -38,29 +38,33 @@ impl<T: 'static> Default for Resource<T> {
 
 impl<T: Clone + 'static> ValueAccess<Option<T>> for Resource<T> {
     fn value(&self) -> Option<T> {
-        self.cell.read_unchecked().clone()
+        (*self.cell.read()).clone()
     }
 }
 
 impl<T: 'static> Resource<T> {
     #[must_use]
+    #[track_caller]
     pub fn pending() -> Self {
+        let owner = current_owner::<UnsyncStorage>();
         Self {
-            cell: CopyValue::new(None),
+            cell: owner.insert_rc(None),
             waiters: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
     #[must_use]
+    #[track_caller]
     pub fn resolved(value: T) -> Self {
+        let owner = current_owner::<UnsyncStorage>();
         Self {
-            cell: CopyValue::new(Some(value)),
+            cell: owner.insert_rc(Some(value)),
             waiters: Rc::new(RefCell::new(Vec::new())),
         }
     }
 
     pub fn resolve(&self, value: T) {
-        *self.cell.write_unchecked() = Some(value);
+        *self.cell.write() = Some(value);
         let waiters = std::mem::take(&mut *self.waiters.borrow_mut());
         for waiter in waiters {
             waiter.wake();
@@ -73,7 +77,7 @@ impl<T: 'static> Access for Resource<T> {
     type Storage = UnsyncStorage;
 
     fn try_read(&self) -> Option<<UnsyncStorage as AnyStorage>::Ref<'static, T>> {
-        UnsyncStorage::try_map(self.cell.read_unchecked(), |o| o.as_ref())
+        UnsyncStorage::try_map(self.cell.read(), |o| o.as_ref())
     }
 }
 
@@ -81,7 +85,7 @@ impl<T: 'static> AccessMut for Resource<T> {
     type WriteMetadata = ();
 
     fn try_write(&self) -> Option<WriteLock<'static, T, UnsyncStorage, ()>> {
-        WriteLock::filter_map(self.cell.write_unchecked(), |o| o.as_mut())
+        WriteLock::filter_map(WriteLock::new(self.cell.write()), |o| o.as_mut())
     }
 }
 
@@ -96,7 +100,7 @@ impl<T: Clone + 'static> FutureAccess<AsFuture<ResourceFuture<T>>> for Resource<
 
 /// Future yielded by [`Resource`].
 pub struct ResourceFuture<T> {
-    cell: CopyValue<Option<T>>,
+    cell: GenerationalBox<Option<T>, UnsyncStorage>,
     waiters: Rc<RefCell<Vec<Waker>>>,
 }
 
@@ -104,7 +108,7 @@ impl<T: Clone + 'static> Future for ResourceFuture<T> {
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<T> {
-        match self.cell.read_unchecked().as_ref() {
+        match self.cell.read().as_ref() {
             Some(v) => Poll::Ready(v.clone()),
             None => {
                 let mut waiters = self.waiters.borrow_mut();

@@ -14,12 +14,14 @@ pub use error::*;
 pub use references::*;
 pub use sync::SyncStorage;
 pub use unsync::UnsyncStorage;
+pub use write_lock::WriteLock;
 
 mod entry;
 mod error;
 mod references;
 mod sync;
 mod unsync;
+mod write_lock;
 
 /// The type erased id of a generational box.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

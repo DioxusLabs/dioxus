@@ -7,7 +7,8 @@
       "Bash(perl:*)",
       "Bash(awk '{p+=$4; f+=$6} END {print \"passed:\", p, \"failed:\", f}')",
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-optics --example nested_todo)",
-      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-optics --example page_router)"
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-optics --example page_router)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-optics)"
     ]
   }
 }
