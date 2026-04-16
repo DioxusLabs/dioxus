@@ -298,12 +298,11 @@ pub trait ReadableBoxExt: Readable<Storage = UnsyncStorage> {
 impl<R: Readable<Storage = UnsyncStorage> + ?Sized> ReadableBoxExt for R {}
 
 // `ReadableVecExt` / `ReadableOptionExt` / `ReadableResultExt` have been
-// removed. Their convenience methods (`len`, `is_empty`, `unwrap`, …) are now
-// available uniformly via the `Project*` traits in this crate on any type that
-// implements `Project` (for example `Signal`, `ReadSignal`, `WriteSignal`, or
-// store-backed carriers from `dioxus-stores`). On other raw `Readable` types,
-// use `.read()`, or box them into `ReadSignal` / `WriteSignal` first if you
-// want projector-style shape methods.
+// removed. For path-granular reactivity, wrap the readable in a
+// `dioxus_optics::Optic::from_access(signal)` chain and use
+// `each` / `each_hash_map` / `each_btree_map` / `try_some` / `try_ok`.
+// For ad-hoc reads, use `.read()` and call standard collection / `Option`
+// / `Result` methods on the dereferenced value.
 
 /// An extension trait for [`Readable<String>`] that provides some convenience methods.
 pub trait ReadableStringExt: Readable<Target = String> {
@@ -331,8 +330,14 @@ pub trait ReadableStrExt: Readable<Target: Deref<Target = str> + 'static> {
 
 impl<W> ReadableStrExt for W where W: Readable<Target: Deref<Target = str> + 'static> {}
 
-// `ReadableHashMapExt` removed — use `ProjectHashMap` on a `Project` carrier,
-// or `.read().len()` on a raw Readable.
+// `ReadableHashMapExt` removed — read the value with `signal.read()` and
+// call standard `HashMap` methods, or wrap the signal in a
+// `dioxus_optics::Optic::from_access(...).each_hash_map(...)` chain for
+// path-granular access.
+
+// `transpose` / `is_some` / `is_ok` etc. are not Readable extension
+// methods. Wrap a Readable in `dioxus_optics::Optic::from_access(...)`
+// and use `Optic::try_some` / `Optic::try_ok`.
 
 /// An extension trait for [`Readable<HashSet<V, H>>`] that provides some convenience methods.
 pub trait ReadableHashSetExt<V: 'static, H: 'static>: Readable<Target = HashSet<V, H>> {

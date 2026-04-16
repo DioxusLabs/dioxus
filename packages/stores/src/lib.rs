@@ -4,8 +4,6 @@
 #![warn(missing_docs)]
 #![allow(clippy::type_complexity)]
 
-mod impls;
-mod project;
 mod store;
 pub use store::*;
 pub mod scope;

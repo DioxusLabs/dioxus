@@ -6,8 +6,8 @@ use std::{fmt::Debug, hash::Hash};
 use dioxus_core::Subscribers;
 use dioxus_optics::{Combinator, LensOp, PathSegment, SubscriptionTree};
 use dioxus_signals::{
-    BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableExt, ReadableRef,
-    SyncStorage, Writable, WritableExt, WritableRef,
+    BorrowError, BorrowMutError, CopyValue, Readable, ReadableExt, ReadableRef, SyncStorage,
+    Writable, WritableExt, WritableRef,
 };
 
 /// SelectorScope is the primitive that backs the store system.
@@ -75,37 +75,6 @@ impl<Lens> SelectorScope<Lens> {
         f(read.as_slice())
     }
 
-    /// Create a child selector scope for a hash key. The scope will only be marked as dirty when a
-    /// write occurs to that key or its parents.
-    pub fn hash_child<U: ?Sized, T: ?Sized, F, FMut>(
-        self,
-        index: &impl Hash,
-        map: F,
-        map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
-    where
-        F: Fn(&T) -> &U,
-        FMut: Fn(&mut T) -> &mut U,
-    {
-        let segment = PathSegment::hashed(index);
-        self.child(segment, map, map_mut)
-    }
-
-    /// Create a child selector scope for a specific path segment. The scope will only be marked as
-    /// dirty when a write occurs to that segment or its parents.
-    pub fn child<U: ?Sized, T: ?Sized, F, FMut>(
-        self,
-        segment: PathSegment,
-        map: F,
-        map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
-    where
-        F: Fn(&T) -> &U,
-        FMut: Fn(&mut T) -> &mut U,
-    {
-        self.child_unmapped(segment).map(map, map_mut)
-    }
-
     /// Create a child selector scope whose lens is an optics
     /// [`LensOp`]-backed [`Combinator`] over the parent. This is the shape
     /// the `#[derive(Store)]` macro emits, so generated `.field()` methods
@@ -124,18 +93,12 @@ impl<Lens> SelectorScope<Lens> {
             .map_writer(|w| Combinator::new(w, LensOp::new(read, write)))
     }
 
-    /// Create a hashed child selector scope for a specific index without mapping the writer.
-    pub fn hash_child_unmapped(self, index: &(impl Hash + ?Sized)) -> SelectorScope<Lens> {
-        let segment = self.hash_key(index);
-        self.child_unmapped(segment)
-    }
-
     /// Hash an arbitrary key into this scope's path space.
     pub fn hash_key(&self, index: &(impl Hash + ?Sized)) -> PathSegment {
         PathSegment::hashed(index)
     }
 
-    /// Create a child selector scope for a specific segment without mapping the writer.
+    /// Extend this scope's path with one segment without re-mapping the writer.
     pub fn child_unmapped(self, segment: PathSegment) -> SelectorScope<Lens> {
         let new_path: Vec<PathSegment> = {
             let read = self.path.read();
@@ -149,19 +112,6 @@ impl<Lens> SelectorScope<Lens> {
             store: self.store,
             write: self.write,
         }
-    }
-
-    /// Map the view into the writable data without creating a child selector scope
-    pub fn map<U: ?Sized, T: ?Sized, F, FMut>(
-        self,
-        map: F,
-        map_mut: FMut,
-    ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
-    where
-        F: Fn(&T) -> &U,
-        FMut: Fn(&mut T) -> &mut U,
-    {
-        self.map_writer(move |write| MappedMutSignal::new(write, map, map_mut))
     }
 
     /// Track this scope shallowly.

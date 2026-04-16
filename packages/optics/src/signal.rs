@@ -41,6 +41,32 @@ impl<A: Clone, Path> Clone for Optic<A, Path> {
     }
 }
 
+impl<A, Path> std::fmt::Debug for Optic<A, Path>
+where
+    A: Access,
+    A::Target: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.access.try_read() {
+            Some(value) => f.debug_tuple("Optic").field(&*value).finish(),
+            None => f.debug_struct("Optic").field("path", &"absent").finish(),
+        }
+    }
+}
+
+impl<A, Path> std::fmt::Display for Optic<A, Path>
+where
+    A: Access,
+    A::Target: std::fmt::Display,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.access.try_read() {
+            Some(value) => std::fmt::Display::fmt(&*value, f),
+            None => Ok(()),
+        }
+    }
+}
+
 impl<T: 'static> Optic<GenerationalBox<T, UnsyncStorage>> {
     /// Create a new root optic backed by a [`GenerationalBox`] allocated in
     /// the current Dioxus scope's owner.
@@ -356,6 +382,56 @@ impl<A> Optic<A, Required> {
                 _marker: PhantomData,
             },
             _marker: PhantomData,
+        }
+    }
+
+    /// Peek the current `Option<T>` value and, if it's `Some`, return a
+    /// [`Required`]-tagged optic projecting the inner `T`. If the value
+    /// is `None`, return `None`.
+    ///
+    /// Equivalent to `self.map_some::<T>().to_option()` and exposed as a
+    /// dedicated method so the intent reads cleanly at call sites.
+    #[must_use]
+    pub fn try_some<T>(
+        self,
+    ) -> Option<Optic<Combinator<A, PrismOp<SomePrism<T>>>, Required>>
+    where
+        A: Access<Target = Option<T>>,
+        T: 'static,
+    {
+        self.map_some::<T>().to_option()
+    }
+
+    /// Peek the current `Result<T, E>` value and return a
+    /// [`Required`]-tagged optic for the matching variant — `Ok(optic)`
+    /// for the `Ok` payload, `Err(optic)` for the `Err` payload.
+    #[must_use]
+    pub fn try_ok<T, E>(
+        self,
+    ) -> Result<
+        Optic<Combinator<A, PrismOp<OkPrism<T, E>>>, Required>,
+        Optic<Combinator<A, PrismOp<ErrPrism<T, E>>>, Required>,
+    >
+    where
+        A: Access<Target = Result<T, E>> + Clone,
+        T: 'static,
+        E: 'static,
+    {
+        let is_ok = self
+            .access
+            .try_read()
+            .map(|r| r.is_ok())
+            .unwrap_or(false);
+        if is_ok {
+            Ok(self
+                .map_ok::<T, E>()
+                .to_option()
+                .expect("Result was Ok at peek time but absent on read"))
+        } else {
+            Err(self
+                .map_err::<T, E>()
+                .to_option()
+                .expect("Result was Err at peek time but absent on read"))
         }
     }
 

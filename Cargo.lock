@@ -3868,6 +3868,7 @@ version = "0.7.5"
 dependencies = [
  "dioxus",
  "dioxus-core",
+ "dioxus-optics",
  "dioxus-signals",
  "dioxus-stores",
  "futures-channel",

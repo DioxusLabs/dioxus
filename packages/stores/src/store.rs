@@ -1,8 +1,8 @@
 use crate::scope::SelectorScope;
-use dioxus_optics::SubscriptionTree;
 use dioxus_core::{
     use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
 };
+use dioxus_optics::SubscriptionTree;
 use dioxus_signals::{
     read_impls, write_impls, BorrowError, BorrowMutError, BoxedSignalStorage, CopyValue,
     CreateBoxedSignalStorage, Global, InitializeFromFunction, MappedMutSignal, ReadSignal,
@@ -10,14 +10,6 @@ use dioxus_signals::{
     WritableRef, WriteSignal,
 };
 use std::marker::PhantomData;
-
-/// A type alias for a store that has been mapped with a function
-pub type MappedStore<
-    T,
-    Lens,
-    F = fn(&<Lens as Readable>::Target) -> &T,
-    FMut = fn(&mut <Lens as Readable>::Target) -> &mut T,
-> = Store<T, MappedMutSignal<T, Lens, F, FMut>>;
 
 /// A type alias for a boxed read-only store.
 pub type ReadStore<T, S = UnsyncStorage> = Store<T, ReadSignal<T, S>>;
@@ -204,7 +196,11 @@ where
 }
 impl<T: ?Sized, Lens> Copy for Store<T, Lens> where Lens: Copy {}
 
-impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
+// Coercions for `Store<T, MappedMutSignal<…>>`. The macro doesn't emit this
+// shape any more, but downstream callers can still construct it (for
+// example, by chaining `WritableExt::map_mut` over a Combinator-backed
+// store), so we keep the boxed-coercion path.
+impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>>
     for WriteStore<T, S>
 where
     Lens: Writable<Storage = S> + 'static,
@@ -213,14 +209,14 @@ where
     S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
-    fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
+    fn from(value: Store<T, MappedMutSignal<T, Lens, __F, __FMut>>) -> Self {
         Store {
             selector: value.selector.map_writer(::std::convert::Into::into),
             _phantom: ::std::marker::PhantomData,
         }
     }
 }
-impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<MappedStore<T, Lens, __F, __FMut>>
+impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>>
     for ReadStore<T, S>
 where
     Lens: Writable<Storage = S> + 'static,
@@ -229,7 +225,7 @@ where
     S: BoxedSignalStorage<T> + CreateBoxedSignalStorage<MappedMutSignal<T, Lens, __F, __FMut>>,
     T: 'static,
 {
-    fn from(value: MappedStore<T, Lens, __F, __FMut>) -> Self {
+    fn from(value: Store<T, MappedMutSignal<T, Lens, __F, __FMut>>) -> Self {
         Store {
             selector: value.selector.map_writer(::std::convert::Into::into),
             _phantom: ::std::marker::PhantomData,
@@ -276,7 +272,7 @@ where
 // ---------------------------------------------------------------------------
 // Coercions for the optic-backed lens shape emitted by the macro.
 // `Store<T, Combinator<Lens, LensOp<S, T>>>` boxes to ReadStore / WriteStore
-// the same way the legacy `MappedStore` does.
+// via the Combinator → WriteSignal / ReadSignal `From` impls in `dioxus-signals`.
 // ---------------------------------------------------------------------------
 
 impl<T, S, Lens, Source>
@@ -577,3 +573,7 @@ impl<T: 'static> InitializeFromFunction<T> for Store<T> {
         Store::new(f())
     }
 }
+
+// Variant-projection helpers (`transpose`, `is_some`, `each`, `iter`, …)
+// live on `dioxus_optics::Optic`. Wrap a store in `Optic::from_access(store)`
+// to use them.

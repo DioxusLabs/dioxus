@@ -37,14 +37,6 @@ pub use read::*;
 mod write;
 pub use write::*;
 
-pub mod project;
-pub use project::{
-    BTreeMapGetFutureProject, FlattenSomeFuture, FutureProject, HashMapGetFutureProject,
-    IndexFutureProject, Project, ProjectAwait, ProjectAwaitExt, ProjectAwaitFlattenExt,
-    ProjectBTreeMap, ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut,
-    ProjectIndex, ProjectOption, ProjectResult, ProjectSlice, ProjectVec, Projected,
-};
-
 mod props;
 pub use props::*;
 

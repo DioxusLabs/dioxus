@@ -11,7 +11,11 @@
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-optics)",
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks)",
       "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks -p dioxus-fullstack)",
-      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-stores --tests)"
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-stores --tests)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo test -p dioxus-stores)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks -p dioxus-fullstack-core)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks --lib)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-hooks --lib -p dioxus-fullstack-core --lib)"
     ]
   }
 }

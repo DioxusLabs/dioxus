@@ -3,10 +3,12 @@ use std::future::Future;
 use dioxus_core::{
     spawn, use_hook, ReactiveContext, RenderError, Subscribers, SuspendedFuture, Task,
 };
+use dioxus_optics::{
+    AsFuture, Combinator, ErrPrism, FutureAccess, OkPrism, Optic, PrismOp, Required, SomePrism,
+};
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    ProjectAwait, ProjectOption, ProjectResult, Projected, Readable, ReadableExt, ReadableRef,
-    Writable, WritableExt, WritableRef, WriteSignal,
+    Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteSignal,
 };
 use dioxus_stores::Store;
 use futures_util::{pin_mut, FutureExt, StreamExt};
@@ -146,60 +148,50 @@ where
 }
 
 // ---------------------------------------------------------------------------
-// Public type aliases — resources reuse the normal store carrier, so the
-// projector shape traits (`ProjectOption`, `ProjectResult`, `ProjectDeref`,
-// …) apply without any per-method forwarders.
+// Public type aliases — resources reuse the normal store carrier. The optic
+// helpers (`map_some`, `map_ok`, `map_err`, `each`, `each_hash_map`, …) lift
+// onto resources automatically through the `Access` / `Pathed` traits in
+// `dioxus_optics`.
 // ---------------------------------------------------------------------------
 
 /// A reactive async value. `Resource` is a `Store` whose lens carries a
-/// resource handle — so every store projection (transpose, ok, err, index,
-/// filter, …) lifts onto resources automatically through the `Project`
-/// shape traits.
+/// resource handle.
 pub type Resource<T, L = WriteSignal<T>> = Store<T, HandledLens<L>>;
 
 /// A resource whose future hasn't necessarily resolved yet.
 pub type PendingResource<T> = Resource<Option<T>>;
 
-/// A resource projected to its resolved inner value.
-pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
-    Projected<Resource<Option<T>, Lens>, T>;
-
-/// Projection of a resolved resource into its `Ok` branch.
-//
-// Hand-written instead of `Projected<ResolvedResource<Result<T, E>, Lens>, T>`
-// and with explicit `F`/`FMut` instead of `MappedMutSignal`'s defaults to
-// dodge a stable rustc 1.95 ICE (`impl_trait_overcaptures.rs:220` —
-// `Some(Late) vs None`) triggered by nesting `Mapped<_, Mapped<_, _>>` whose
-// default `F = fn(&<V as Readable>::Target) -> &O` chains through itself.
-pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Store<
-    T,
-    MappedMutSignal<
-        T,
-        MappedMutSignal<
-            Result<T, E>,
-            HandledLens<Lens>,
-            fn(&Option<Result<T, E>>) -> &Result<T, E>,
-            fn(&mut Option<Result<T, E>>) -> &mut Result<T, E>,
-        >,
-        fn(&Result<T, E>) -> &T,
-        fn(&mut Result<T, E>) -> &mut T,
-    >,
+/// A resource projected to its resolved inner value via the optics
+/// `Some` prism.
+pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> = Optic<
+    Combinator<Store<Option<T>, HandledLens<Lens>>, PrismOp<SomePrism<T>>>,
+    Required,
 >;
 
-/// Projection of a resolved resource into its `Err` branch.
-pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Store<
-    E,
-    MappedMutSignal<
-        E,
-        MappedMutSignal<
-            Result<T, E>,
-            HandledLens<Lens>,
-            fn(&Option<Result<T, E>>) -> &Result<T, E>,
-            fn(&mut Option<Result<T, E>>) -> &mut Result<T, E>,
+/// Projection of a resolved resource into its `Ok` branch via the optics
+/// `Some` + `Ok` prisms.
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Optic<
+    Combinator<
+        Combinator<
+            Store<Option<Result<T, E>>, HandledLens<Lens>>,
+            PrismOp<SomePrism<Result<T, E>>>,
         >,
-        fn(&Result<T, E>) -> &E,
-        fn(&mut Result<T, E>) -> &mut E,
+        PrismOp<OkPrism<T, E>>,
     >,
+    Required,
+>;
+
+/// Projection of a resolved resource into its `Err` branch via the
+/// optics `Some` + `Err` prisms.
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Optic<
+    Combinator<
+        Combinator<
+            Store<Option<Result<T, E>>, HandledLens<Lens>>,
+            PrismOp<SomePrism<Result<T, E>>>,
+        >,
+        PrismOp<ErrPrism<T, E>>,
+    >,
+    Required,
 >;
 
 // ---------------------------------------------------------------------------
@@ -253,6 +245,11 @@ where
 
 // ---------------------------------------------------------------------------
 // PendingResourceExt / FallibleResourceExt — resource-shape-specific ext methods.
+//
+// `transpose` / `is_some` / `is_none` come from
+// `dioxus_stores::StoreOptionExt` / `StoreResultExt` (via the imports
+// above). Those traits are the Store-flavored counterparts to optics'
+// `Optic::try_some` / `Optic::try_ok`.
 // ---------------------------------------------------------------------------
 
 /// Methods for resources of shape `Option<T>`.
@@ -277,17 +274,17 @@ where
 
     fn suspend(&self) -> Result<ResolvedResource<T, Lens>, RenderError> {
         let handle = self.lens().resource_handle();
-        (*self)
-            .transpose()
+        Optic::from_access(*self)
+            .try_some::<T>()
             .ok_or_else(|| RenderError::Suspended(SuspendedFuture::new(handle.read().task)))
     }
 
     fn running(&self) -> bool {
-        self.is_none()
+        self.lens().peek_unchecked().is_none()
     }
 
     fn resolved(&self) -> bool {
-        self.is_some()
+        self.lens().peek_unchecked().is_some()
     }
 }
 
@@ -326,7 +323,9 @@ where
     type InnerLens = Lens;
 
     fn result(&self) -> Option<Result<OkResource<T, E, Lens>, ErrResource<T, E, Lens>>> {
-        (*self).transpose().map(|resolved| resolved.transpose())
+        Optic::from_access(*self)
+            .try_some::<Result<T, E>>()
+            .map(|resolved| resolved.try_ok::<T, E>())
     }
 
     fn ready(&self) -> Result<OkResource<T, E, Lens>, RenderError>
@@ -334,8 +333,8 @@ where
         E: Clone + Into<RenderError>,
     {
         self.suspend()?
-            .transpose()
-            .map_err(|err_store| err_store().into())
+            .try_ok::<T, E>()
+            .map_err(|err_optic| (*err_optic.read()).clone().into())
     }
 
     fn ok(&self) -> Result<Option<OkResource<T, E, Lens>>, RenderError>
@@ -344,8 +343,8 @@ where
     {
         match self.result() {
             None => Ok(None),
-            Some(Ok(ok_store)) => Ok(Some(ok_store)),
-            Some(Err(err_store)) => Err(err_store().into()),
+            Some(Ok(ok_optic)) => Ok(Some(ok_optic)),
+            Some(Err(err_optic)) => Err((*err_optic.read()).clone().into()),
         }
     }
 }
@@ -378,8 +377,9 @@ impl std::future::Future for ResourceFuture {
 
 /// A future that resolves to the value of a resource once its task completes.
 ///
-/// Created by [`ProjectAwait::project_future`] on a [`Resource`] (or any
-/// `Store` whose lens is [`ResourceLike`]).
+/// Created by [`FutureAccess::future`] on a [`HandledLens`] (the lens any
+/// `Resource` carries) and exposed through any optic chain that reaches a
+/// resource carrier.
 pub struct ResourceValueFuture<L: Readable> {
     handle: CopyValue<ResourceHandle>,
     lens: L,
@@ -407,18 +407,17 @@ where
     }
 }
 
-impl<L> ProjectAwait for HandledLens<L>
+impl<L> FutureAccess<AsFuture<ResourceValueFuture<HandledLens<L>>>>
+    for HandledLens<L>
 where
     L: Readable + Copy + Unpin + 'static,
     L::Target: Clone + Sized + 'static,
 {
-    type Output = L::Target;
-    type Future = ResourceValueFuture<HandledLens<L>>;
-    fn project_future(self) -> Self::Future {
-        ResourceValueFuture {
+    fn future(&self) -> AsFuture<ResourceValueFuture<HandledLens<L>>> {
+        AsFuture(ResourceValueFuture {
             handle: self.handle,
-            lens: self,
-        }
+            lens: *self,
+        })
     }
 }
 

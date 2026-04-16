@@ -1,6 +1,9 @@
 use crate::{use_callback, use_signal};
 use dioxus_core::{Callback, CapturedError, Result, Task};
-use dioxus_signals::{ProjectOption, ProjectResult, ReadSignal, ReadableExt, Signal, WritableExt};
+use dioxus_optics::{
+    Combinator, ErrPrism, OkPrism, Optic, PrismOp, Required, SomePrism,
+};
+use dioxus_signals::{ReadableExt, Signal, WritableExt};
 use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
 use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
@@ -57,21 +60,44 @@ pub struct Action<I, T: 'static> {
     _phantom: PhantomData<*const I>,
 }
 
+/// `Ok` projection of [`Action::result`].
+pub type ActionOk<O> = Optic<
+    Combinator<
+        Combinator<
+            Signal<Option<Result<O, CapturedError>>>,
+            PrismOp<SomePrism<Result<O, CapturedError>>>,
+        >,
+        PrismOp<OkPrism<O, CapturedError>>,
+    >,
+    Required,
+>;
+
+/// `Err` projection of [`Action::result`].
+pub type ActionErr<O> = Optic<
+    Combinator<
+        Combinator<
+            Signal<Option<Result<O, CapturedError>>>,
+            PrismOp<SomePrism<Result<O, CapturedError>>>,
+        >,
+        PrismOp<ErrPrism<O, CapturedError>>,
+    >,
+    Required,
+>;
+
 impl<I: 'static, O: 'static> Action<I, O> {
-    /// Returns the current completed result as projected read signals.
+    /// Returns the current completed result as optic projections.
     ///
     /// `None` means the action is unset, has been reset, or is currently pending.
-    pub fn result(&self) -> Option<Result<ReadSignal<O>, ReadSignal<CapturedError>>> {
-        self.result
-            .transpose()
-            .map(|resolved| resolved.transpose())
-            .map(|result| result.map(Into::into).map_err(Into::into))
+    pub fn result(&self) -> Option<Result<ActionOk<O>, ActionErr<O>>> {
+        Optic::from_access(self.result)
+            .try_some::<Result<O, CapturedError>>()
+            .map(|resolved| resolved.try_ok::<O, CapturedError>())
     }
 
     /// Returns the current completed value, cloning any captured error.
-    pub fn value(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
+    pub fn value(&self) -> Option<Result<ActionOk<O>, CapturedError>> {
         self.result()
-            .map(|result| result.map_err(|error| error.cloned()))
+            .map(|result| result.map_err(|error| (*error.read()).clone()))
     }
 
     /// Returns `true` while the action is running.

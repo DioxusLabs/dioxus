@@ -484,22 +484,29 @@ fn deep_parent_reader_sees_nested_vec_push() {
 
 #[test]
 fn raw_signal_projects_vec_children() {
+    use dioxus_optics::Optic;
+
     let mut dom = VirtualDom::new(|| rsx! { "" });
     dom.rebuild_in_place();
 
     dom.in_scope(ScopeId::APP, || {
         let items = Signal::new(vec![1, 2, 3]);
 
-        assert_eq!(ProjectSlice::len(&items), 3);
+        // Wrap the raw signal in an optic chain and project the Vec children.
+        let vec_optic = Optic::from_access(items).each::<i32>();
+        assert_eq!(vec_optic.len(), 3);
 
-        let mut second = ProjectSlice::get(items, 1).unwrap();
+        let second = vec_optic.get(1).to_option().expect("index 1 exists");
         assert_eq!(*second.read(), 2);
 
         *second.write() = 20;
 
         assert_eq!(&*items.read(), &[1, 20, 3]);
         assert_eq!(
-            items.iter().map(|item| *item.read()).collect::<Vec<_>>(),
+            vec_optic
+                .iter()
+                .map(|item| *item.read())
+                .collect::<Vec<_>>(),
             vec![1, 20, 3]
         );
     });
@@ -507,6 +514,8 @@ fn raw_signal_projects_vec_children() {
 
 #[test]
 fn raw_read_signal_projects_option_children() {
+    use dioxus_optics::Optic;
+
     let mut dom = VirtualDom::new(|| rsx! { "" });
     dom.rebuild_in_place();
 
@@ -514,9 +523,10 @@ fn raw_read_signal_projects_option_children() {
         let value = Signal::new(Some(String::from("hello")));
         let read_value: ReadSignal<Option<String>> = value.into();
 
-        assert!(ProjectOption::is_some(&read_value));
-
-        let inner = ProjectOption::unwrap(read_value);
+        // map_some + to_option materializes the present-ness as a `Required` optic.
+        let inner = Optic::from_access(read_value)
+            .try_some::<String>()
+            .expect("read_value should be Some");
         assert_eq!(&*inner.read(), "hello");
     });
 }

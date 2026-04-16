@@ -1,6 +1,5 @@
 use dioxus_core::{CapturedError, RenderError, Result};
 use dioxus_hooks::OkResource;
-use dioxus_signals::ProjectResult;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{cmp::PartialEq, future::Future};
 
@@ -41,6 +40,8 @@ where
         let fut = future();
         async move { fut.await.map_err(|e| CapturedError::from(e.into())) }
     })?;
-    let ok = resolved.transpose().map_err(|e| RenderError::Error(e()))?;
+    let ok = resolved
+        .try_ok::<T, CapturedError>()
+        .map_err(|err_optic| RenderError::Error((*err_optic.read()).clone()))?;
     Ok(ok)
 }
