@@ -1,0 +1,21 @@
+[package]
+name = "dioxus-optics"
+authors = ["Jonathan Kelley", "Evan Almloff"]
+version = { workspace = true }
+edition = "2021"
+description = "Experimental carrier-generic optics for Dioxus."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["optics", "lens", "signal", "reactive", "experimental"]
+rust-version = "1.79.0"
+
+[dependencies]
+dioxus-signals = { workspace = true }
+generational-box = { workspace = true }
+
+[dev-dependencies]
+dioxus-core = { workspace = true }
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]

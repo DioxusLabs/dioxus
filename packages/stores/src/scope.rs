@@ -197,7 +197,6 @@ impl<Lens> SelectorScope<Lens> {
     {
         self.write.write_unchecked()
     }
-
 }
 
 impl<Lens: Readable> Readable for SelectorScope<Lens> {

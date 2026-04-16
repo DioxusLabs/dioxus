@@ -63,6 +63,16 @@ where
     pub fn inner(&self) -> &V {
         &self.value
     }
+
+    /// Borrow the read-projection function.
+    pub fn map_fn(&self) -> &F {
+        &self.map_fn
+    }
+
+    /// Decompose into `(inner, map_fn, map_fn_mut)`.
+    pub fn into_parts(self) -> (V, F, FMut) {
+        (self.value, self.map_fn, self.map_fn_mut)
+    }
 }
 
 impl<V, O, F, FMut> Readable for MappedMutSignal<O, V, F, FMut>

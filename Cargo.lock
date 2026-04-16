@@ -3702,6 +3702,7 @@ dependencies = [
  "ciborium",
  "dioxus",
  "dioxus-html",
+ "dioxus-optics",
  "dioxus-ssr",
  "dioxus-stores",
  "form_urlencoded",
@@ -4028,6 +4029,15 @@ dependencies = [
  "keyboard-types",
  "rustc-hash 2.1.1",
  "tracing",
+]
+
+[[package]]
+name = "dioxus-optics"
+version = "0.7.5"
+dependencies = [
+ "dioxus-core",
+ "dioxus-signals",
+ "generational-box",
 ]
 
 [[package]]

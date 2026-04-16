@@ -5,8 +5,8 @@ use dioxus_core::{
 };
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    ProjectOption, ProjectResult, Projected, Readable, ReadableExt, ReadableRef, Writable,
-    WritableExt, WritableRef, WriteSignal,
+    ProjectAwait, ProjectOption, ProjectResult, Projected, Readable, ReadableExt, ReadableRef,
+    Writable, WritableExt, WritableRef, WriteSignal,
 };
 use dioxus_stores::Store;
 use futures_util::{pin_mut, FutureExt, StreamExt};
@@ -162,23 +162,15 @@ pub type PendingResource<T> = Resource<Option<T>>;
 
 /// A resource projected to its resolved inner value.
 pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
-    Projected<Resource<Option<T>, Lens>, T, fn(&Option<T>) -> &T, fn(&mut Option<T>) -> &mut T>;
+    Projected<Resource<Option<T>, Lens>, T>;
 
 /// Projection of a resolved resource into its `Ok` branch.
-pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
-    ResolvedResource<Result<T, E>, Lens>,
-    T,
-    fn(&Result<T, E>) -> &T,
-    fn(&mut Result<T, E>) -> &mut T,
->;
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
+    Projected<ResolvedResource<Result<T, E>, Lens>, T>;
 
 /// Projection of a resolved resource into its `Err` branch.
-pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Projected<
-    ResolvedResource<Result<T, E>, Lens>,
-    E,
-    fn(&Result<T, E>) -> &E,
-    fn(&mut Result<T, E>) -> &mut E,
->;
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
+    Projected<ResolvedResource<Result<T, E>, Lens>, E>;
 
 // ---------------------------------------------------------------------------
 // ResourceControls — handle-based methods. Local trait → blanket impl OK.
@@ -350,6 +342,52 @@ impl std::future::Future for ResourceFuture {
         } else {
             handle.wakers.push(cx.waker().clone());
             std::task::Poll::Pending
+        }
+    }
+}
+
+/// A future that resolves to the value of a resource once its task completes.
+///
+/// Created by [`ProjectAwait::project_future`] on a [`Resource`] (or any
+/// `Store` whose lens is [`ResourceLike`]).
+pub struct ResourceValueFuture<L: Readable> {
+    handle: CopyValue<ResourceHandle>,
+    lens: L,
+}
+
+impl<L> std::future::Future for ResourceValueFuture<L>
+where
+    L: Readable + Copy + Unpin + 'static,
+    L::Target: Clone + 'static,
+{
+    type Output = L::Target;
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let myself = self.get_mut();
+        let mut handle = myself.handle.write();
+        if !handle.task.paused() {
+            drop(handle);
+            std::task::Poll::Ready(myself.lens.peek().clone())
+        } else {
+            handle.wakers.push(cx.waker().clone());
+            std::task::Poll::Pending
+        }
+    }
+}
+
+impl<L> ProjectAwait for HandledLens<L>
+where
+    L: Readable + Copy + Unpin + 'static,
+    L::Target: Clone + Sized + 'static,
+{
+    type Output = L::Target;
+    type Future = ResourceValueFuture<HandledLens<L>>;
+    fn project_future(self) -> Self::Future {
+        ResourceValueFuture {
+            handle: self.handle,
+            lens: self,
         }
     }
 }

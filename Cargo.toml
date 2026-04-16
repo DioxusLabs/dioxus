@@ -35,6 +35,7 @@ members = [
     "packages/rsx-rosetta",
     "packages/rsx",
     "packages/signals",
+    "packages/optics",
     "packages/stores",
     "packages/stores-macro",
     "packages/const-serialize",
@@ -140,6 +141,7 @@ dioxus-rsx = { path = "packages/rsx", version = "0.7.4" }
 dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.4" }
 dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.4" }
 dioxus-signals = { path = "packages/signals", version = "0.7.4" }
+dioxus-optics = { path = "packages/optics", version = "0.7.4" }
 dioxus-stores = { path = "packages/stores", version = "0.7.4" }
 dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.4" }
 dioxus-devtools = { path = "packages/devtools", version = "0.7.4" }
@@ -461,6 +463,7 @@ generational-box.workspace = true
 dioxus = { workspace = true, features = ["router", "fullstack"] }
 dioxus-html = { workspace = true, features = ["serialize"] }
 dioxus-stores = { workspace = true }
+dioxus-optics = { workspace = true }
 dioxus-ssr = { workspace = true }
 futures-util = { workspace = true }
 separator = { workspace = true }

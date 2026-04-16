@@ -2,7 +2,9 @@
 
 use crate::scope::SelectorScope;
 use crate::store::Store;
-use dioxus_signals::project::{PathKey, ProjectCompose, ProjectLens, ProjectPath, ProjectReact};
+use dioxus_signals::project::{
+    PathKey, ProjectAwait, ProjectCompose, ProjectLens, ProjectPath, ProjectReact,
+};
 use dioxus_signals::Readable;
 
 impl<Lens> ProjectLens for SelectorScope<Lens>
@@ -132,5 +134,19 @@ where
 
     fn project_mark_dirty_at_and_after_index(&self, index: usize) {
         self.selector().project_mark_dirty_at_and_after_index(index);
+    }
+}
+
+/// Forward [`ProjectAwait`] from a [`Store`]'s lens. This lets any awaitable
+/// lens (e.g. a resource lens) propagate through the store wrapper.
+impl<T, Lens> ProjectAwait for Store<T, Lens>
+where
+    T: ?Sized + 'static,
+    Lens: ProjectAwait + Clone + 'static,
+{
+    type Output = Lens::Output;
+    type Future = Lens::Future;
+    fn project_future(self) -> Self::Future {
+        self.lens().clone().project_future()
     }
 }

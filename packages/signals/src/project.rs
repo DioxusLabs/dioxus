@@ -11,10 +11,13 @@
 use std::borrow::Borrow;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
+use std::future::Future;
 use std::hash::{BuildHasher, Hash, Hasher};
 use std::iter::FusedIterator;
 use std::ops::{DerefMut, Index, IndexMut};
 use std::panic::Location;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use crate::{
     AnyStorage, BorrowError, BorrowMutError, BoxedSignalStorage, CreateBoxedSignalStorage,
@@ -1639,4 +1642,307 @@ where
     P: Project,
     P::Lens: Writable<Target = BTreeMap<K, V>>,
 {
+}
+
+/// A carrier that exposes its current/eventual value as a future.
+///
+/// This is the async sibling of [`ProjectLens`]: where `ProjectLens` gives you
+/// a synchronous, subscribable view, `ProjectAwait` gives you a one-shot future
+/// that resolves to the carrier's value. Implementors decide what "resolved"
+/// means — for resources it's "the backing task finished".
+pub trait ProjectAwait {
+    /// The resolved value yielded by the future.
+    type Output;
+    /// The future returned by [`project_future`](Self::project_future).
+    type Future: Future<Output = Self::Output>;
+    /// Build a future that resolves to the carrier's value.
+    fn project_future(self) -> Self::Future;
+}
+
+/// Future adapter that projects its parent future's output through `map` at
+/// resolve time. This is the awaited-side analogue of
+/// [`MappedMutSignal`](crate::MappedMutSignal).
+pub struct FutureProject<Fut, S, U: ?Sized> {
+    future: Fut,
+    map: fn(&S) -> &U,
+}
+
+impl<Fut, S, U: ?Sized> FutureProject<Fut, S, U> {
+    /// Wrap `future` with a projection through `map` applied at resolve time.
+    pub fn new(future: Fut, map: fn(&S) -> &U) -> Self {
+        Self { future, map }
+    }
+}
+
+impl<Fut, S, U> Future for FutureProject<Fut, S, U>
+where
+    Fut: Future<Output = S> + Unpin,
+    U: Clone,
+{
+    type Output = U;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<U> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.future).poll(cx) {
+            Poll::Ready(s) => Poll::Ready((this.map)(&s).clone()),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Future adapter that flattens `Option<Option<T>>` into `Option<T>` at
+/// resolve time.
+pub struct FlattenSomeFuture<Fut> {
+    future: Fut,
+}
+
+impl<Fut> FlattenSomeFuture<Fut> {
+    /// Wrap `future` with an `Option<Option<_>>::flatten` applied at resolve time.
+    pub fn new(future: Fut) -> Self {
+        Self { future }
+    }
+}
+
+impl<Fut, X> Future for FlattenSomeFuture<Fut>
+where
+    Fut: Future<Output = Option<Option<X>>> + Unpin,
+{
+    type Output = Option<X>;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<X>> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.future).poll(cx) {
+            Poll::Ready(v) => Poll::Ready(v.flatten()),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Convenience methods for [`ProjectAwait`] carriers.
+pub trait ProjectAwaitExt: ProjectAwait + Sized
+where
+    Self::Future: Unpin,
+{
+    /// Project the resolved value through `map` at await time.
+    fn project_await_map<U>(
+        self,
+        map: fn(&Self::Output) -> &U,
+    ) -> FutureProject<Self::Future, Self::Output, U>
+    where
+        U: Clone,
+    {
+        FutureProject::new(self.project_future(), map)
+    }
+}
+
+impl<T> ProjectAwaitExt for T
+where
+    T: ProjectAwait,
+    T::Future: Unpin,
+{
+}
+
+/// Convenience methods for [`ProjectAwait`] carriers whose output is
+/// `Option<Option<T>>`.
+pub trait ProjectAwaitFlattenExt<T>: ProjectAwait<Output = Option<Option<T>>> + Sized
+where
+    Self::Future: Unpin,
+{
+    /// Flatten the resolved `Option<Option<T>>` into `Option<T>` at await time.
+    fn project_await_flatten(self) -> FlattenSomeFuture<Self::Future> {
+        FlattenSomeFuture::new(self.project_future())
+    }
+}
+
+impl<P, T> ProjectAwaitFlattenExt<T> for P
+where
+    P: ProjectAwait<Output = Option<Option<T>>>,
+    P::Future: Unpin,
+{
+}
+
+/// Forward [`ProjectAwait`] through a [`MappedMutSignal`] by composing the
+/// read-projection fn into a [`FutureProject`] adapter at await time.
+///
+/// This makes any lens chain produced by [`ProjectLensExt::project_map`] /
+/// [`ProjectPathExt::project_child`] over an awaitable parent automatically
+/// awaitable as well.
+impl<O, V, FMut> ProjectAwait for MappedMutSignal<O, V, fn(&<V as Readable>::Target) -> &O, FMut>
+where
+    V: Readable + ProjectAwait<Output = <V as Readable>::Target>,
+    V::Future: Unpin,
+    <V as Readable>::Target: Sized + 'static,
+    O: Clone + 'static,
+{
+    type Output = O;
+    type Future = FutureProject<V::Future, <V as Readable>::Target, O>;
+    fn project_future(self) -> Self::Future {
+        let (value, map_fn, _) = self.into_parts();
+        FutureProject::new(value.project_future(), map_fn)
+    }
+}
+
+/// Future adapter that indexes into the resolved value at await time.
+pub struct IndexFutureProject<Fut, Idx> {
+    future: Fut,
+    index: Idx,
+}
+
+impl<Fut, Idx> IndexFutureProject<Fut, Idx> {
+    /// Wrap `future` with an `Index<Idx>` projection applied at resolve time.
+    pub fn new(future: Fut, index: Idx) -> Self {
+        Self { future, index }
+    }
+}
+
+impl<Fut, Idx, S, U> Future for IndexFutureProject<Fut, Idx>
+where
+    Fut: Future<Output = S> + Unpin,
+    Idx: Clone + Unpin,
+    S: Index<Idx, Output = U>,
+    U: Clone,
+{
+    type Output = U;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<U> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.future).poll(cx) {
+            Poll::Ready(s) => Poll::Ready(s[this.index.clone()].clone()),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Forward [`ProjectAwait`] through an [`IndexWrite`] by indexing the resolved
+/// value at await time.
+impl<Idx, Write, S, U> ProjectAwait for IndexWrite<Idx, Write>
+where
+    Write: ProjectAwait<Output = S>,
+    Write::Future: Unpin,
+    Idx: Clone + Unpin + 'static,
+    S: Index<Idx, Output = U> + 'static,
+    U: Clone + Sized + 'static,
+{
+    type Output = U;
+    type Future = IndexFutureProject<Write::Future, Idx>;
+    fn project_future(self) -> Self::Future {
+        IndexFutureProject::new(self.write.project_future(), self.index)
+    }
+}
+
+/// Future adapter that looks up a key in the resolved `HashMap` at await time.
+pub struct HashMapGetFutureProject<Fut, Q> {
+    future: Fut,
+    key: Q,
+    created: &'static Location<'static>,
+}
+
+impl<Fut, Q> HashMapGetFutureProject<Fut, Q> {
+    /// Wrap `future` with a `HashMap::get(&key)` projection applied at resolve
+    /// time. Panics on resolve if the key is missing.
+    pub fn new(future: Fut, key: Q, created: &'static Location<'static>) -> Self {
+        Self {
+            future,
+            key,
+            created,
+        }
+    }
+}
+
+impl<Fut, Q, K, V, St> Future for HashMapGetFutureProject<Fut, Q>
+where
+    Fut: Future<Output = HashMap<K, V, St>> + Unpin,
+    Q: Hash + Eq + Unpin,
+    K: Borrow<Q> + Eq + Hash,
+    St: BuildHasher,
+    V: Clone,
+{
+    type Output = V;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<V> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.future).poll(cx) {
+            Poll::Ready(map) => match map.get(&this.key) {
+                Some(v) => Poll::Ready(v.clone()),
+                None => panic!(
+                    "HashMap key not present at resolve time (projection created at {})",
+                    this.created
+                ),
+            },
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Forward [`ProjectAwait`] through a [`HashMapGetWrite`] by looking up the
+/// captured key in the resolved map at await time.
+impl<Q, Write, K, V, St> ProjectAwait for HashMapGetWrite<Q, Write>
+where
+    Write: ProjectAwait<Output = HashMap<K, V, St>>,
+    Write::Future: Unpin,
+    Q: Hash + Eq + Unpin + 'static,
+    K: Borrow<Q> + Eq + Hash + 'static,
+    St: BuildHasher + 'static,
+    V: Clone + 'static,
+{
+    type Output = V;
+    type Future = HashMapGetFutureProject<Write::Future, Q>;
+    fn project_future(self) -> Self::Future {
+        HashMapGetFutureProject::new(self.write.project_future(), self.index, self.created)
+    }
+}
+
+/// Future adapter that looks up a key in the resolved `BTreeMap` at await time.
+pub struct BTreeMapGetFutureProject<Fut, Q> {
+    future: Fut,
+    key: Q,
+    created: &'static Location<'static>,
+}
+
+impl<Fut, Q> BTreeMapGetFutureProject<Fut, Q> {
+    /// Wrap `future` with a `BTreeMap::get(&key)` projection applied at resolve
+    /// time. Panics on resolve if the key is missing.
+    pub fn new(future: Fut, key: Q, created: &'static Location<'static>) -> Self {
+        Self {
+            future,
+            key,
+            created,
+        }
+    }
+}
+
+impl<Fut, Q, K, V> Future for BTreeMapGetFutureProject<Fut, Q>
+where
+    Fut: Future<Output = BTreeMap<K, V>> + Unpin,
+    Q: Ord + Unpin,
+    K: Borrow<Q> + Ord,
+    V: Clone,
+{
+    type Output = V;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<V> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.future).poll(cx) {
+            Poll::Ready(map) => match map.get(&this.key) {
+                Some(v) => Poll::Ready(v.clone()),
+                None => panic!(
+                    "BTreeMap key not present at resolve time (projection created at {})",
+                    this.created
+                ),
+            },
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+/// Forward [`ProjectAwait`] through a [`BTreeMapGetWrite`] by looking up the
+/// captured key in the resolved map at await time.
+impl<Q, Write, K, V> ProjectAwait for BTreeMapGetWrite<Q, Write>
+where
+    Write: ProjectAwait<Output = BTreeMap<K, V>>,
+    Write::Future: Unpin,
+    Q: Ord + Unpin + 'static,
+    K: Borrow<Q> + Ord + 'static,
+    V: Clone + 'static,
+{
+    type Output = V;
+    type Future = BTreeMapGetFutureProject<Write::Future, Q>;
+    fn project_future(self) -> Self::Future {
+        BTreeMapGetFutureProject::new(self.write.project_future(), self.index, self.created)
+    }
 }

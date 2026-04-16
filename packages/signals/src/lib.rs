@@ -39,7 +39,9 @@ pub use write::*;
 
 pub mod project;
 pub use project::{
-    Project, ProjectBTreeMap, ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut,
+    BTreeMapGetFutureProject, FlattenSomeFuture, FutureProject, HashMapGetFutureProject,
+    IndexFutureProject, Project, ProjectAwait, ProjectAwaitExt, ProjectAwaitFlattenExt,
+    ProjectBTreeMap, ProjectBTreeMapMut, ProjectDeref, ProjectHashMap, ProjectHashMapMut,
     ProjectIndex, ProjectOption, ProjectResult, ProjectSlice, ProjectVec, Projected,
 };
 
