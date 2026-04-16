@@ -1,50 +1,80 @@
-use std::{cell::Ref, future::Future, marker::PhantomData};
+use std::{future::Future, marker::PhantomData};
 
-use dioxus_signals::{UnsyncStorage, WriteLock};
-use generational_box::GenerationalRef;
+use dioxus_signals::WriteLock;
+use generational_box::AnyStorage;
 
 use crate::resource::{AsFuture, AwaitTransform};
 
-/// Low-level live read access for a projected child.
-pub trait ReadProjection<T: 'static> {
-    /// Borrow the projected child.
-    fn read_projection(&self) -> GenerationalRef<Ref<'static, T>>;
+// ============================================================================
+// Core traits
+// ============================================================================
+
+/// Read access to a projected child path.
+///
+/// `try_read` returns `None` when the path does not currently resolve — for
+/// example, a prism into the wrong enum variant, an absent optional field, or
+/// a missing collection key. Carriers whose path always resolves (a signal
+/// root, a field lens on a required parent) still return `Option` — the
+/// `Option` is always `Some` in those cases, and user-facing `read()` on a
+/// [`Required`](crate::Required) `Optic` unwraps it.
+pub trait Access {
+    /// Value type produced by this projection.
+    type Target: 'static;
+    /// Backing storage the read reference uses.
+    type Storage: AnyStorage;
+
+    /// Borrow the projected child if the path currently resolves.
+    fn try_read(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>>;
 }
 
-/// Low-level live write access for a projected child.
-pub trait WriteProjection<T: 'static> {
-    /// Borrow the projected child mutably.
-    fn write_projection(&self) -> WriteLock<'static, T, UnsyncStorage>;
+/// Write access to a projected child path. Same `Option` semantics as [`Access`].
+pub trait AccessMut: Access {
+    /// Additional data carried alongside the mutable reference (subscription
+    /// drop guards, etc.).
+    type WriteMetadata;
+
+    /// Mutably borrow the projected child if the path currently resolves.
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>>;
 }
 
-/// Low-level optional live read access for a projected child.
-pub trait ReadProjectionOpt<T: 'static> {
-    /// Borrow the projected child if it exists.
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, T>>>;
+/// Owned value extraction for a projected child.
+///
+/// This is a separate channel from [`Access`] because carriers may want to
+/// clone, resolve from a cache, or flatten differently at the value level
+/// than at the reference level.
+pub trait ValueAccess<T> {
+    /// Materialize the current owned value for this projection.
+    fn value(&self) -> T;
 }
 
-/// Low-level optional live write access for a projected child.
-pub trait WriteProjectionOpt<T: 'static> {
-    /// Borrow the projected child mutably if it exists.
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, T, UnsyncStorage>>;
-}
-
-/// Low-level owned value extraction for a projected child.
-pub trait ValueProjection<T> {
-    /// Clone or otherwise materialize the current owned value.
-    fn value_projection(&self) -> T;
-}
-
-/// Low-level future extraction for a projected child.
-pub trait FutureProjection<Fut>
+/// Future extraction for a projected child.
+pub trait FutureAccess<Fut>
 where
     Fut: Future,
 {
-    /// Produce the future for this projected child.
-    fn future_projection(&self) -> Fut;
+    /// Produce the future that resolves the current projection.
+    fn future(&self) -> Fut;
 }
 
-/// Generic combinator that applies an optics operation to its parent carrier.
+/// Owned-value transform applied by an op.
+///
+/// Used by [`Combinator`]'s [`ValueAccess`] and [`FutureAccess`] impls to
+/// route owned values through ops like field lenses and prisms.
+pub trait Resolve<Op> {
+    /// The owned input consumed before the op runs.
+    type Input;
+
+    /// Apply the op to the owned input.
+    fn resolve(input: Self::Input, op: &Op) -> Self;
+}
+
+// ============================================================================
+// Combinator
+// ============================================================================
+
+/// Applies an optics operation to a parent accessor.
 pub struct Combinator<A, Op> {
     pub(crate) parent: A,
     pub(crate) op: Op,
@@ -59,499 +89,504 @@ impl<A: Clone, Op: Clone> Clone for Combinator<A, Op> {
     }
 }
 
-/// Convert one carrier output into another through an operation `Op`.
-pub trait Transform<Op> {
-    /// The input required before the operation is applied.
-    type Input;
-
-    /// Apply the transform.
-    fn transform(input: Self::Input, op: &Op) -> Self;
-}
-
-/// Convert an owned resolved value into another owned value through `Op`.
-pub trait Resolve<Op> {
-    /// The owned input consumed before the operation is applied.
-    type Input;
-
-    /// Apply the owned transform.
-    fn resolve(input: Self::Input, op: &Op) -> Self;
-}
-
-impl<A, Op, Out> ValueProjection<Out> for Combinator<A, Op>
+impl<A, Op, Out> ValueAccess<Out> for Combinator<A, Op>
 where
-    Out: Transform<Op>,
-    A: ValueProjection<Out::Input>,
+    Out: Resolve<Op>,
+    A: ValueAccess<Out::Input>,
 {
-    fn value_projection(&self) -> Out {
-        Out::transform(self.parent.value_projection(), &self.op)
+    fn value(&self) -> Out {
+        Out::resolve(self.parent.value(), &self.op)
     }
 }
 
-impl<A, Op, Fut, Out> FutureProjection<AsFuture<AwaitTransform<Fut, Op, Out>>> for Combinator<A, Op>
+impl<A, Op, Fut, Out> FutureAccess<AsFuture<AwaitTransform<Fut, Op, Out>>> for Combinator<A, Op>
 where
-    A: FutureProjection<AsFuture<Fut>>,
+    A: FutureAccess<AsFuture<Fut>>,
     Fut: Future<Output = Out::Input>,
     Op: Clone,
     Out: Resolve<Op>,
 {
-    fn future_projection(&self) -> AsFuture<AwaitTransform<Fut, Op, Out>> {
+    fn future(&self) -> AsFuture<AwaitTransform<Fut, Op, Out>> {
         AsFuture(AwaitTransform::new(
-            self.parent.future_projection().0,
+            self.parent.future().0,
             self.op.clone(),
         ))
     }
 }
 
-/// Field projection from `S` to `U` through paired read/write functions.
+// ============================================================================
+// Field lenses: RefOp (read-only) and LensOp (read+write)
+// ============================================================================
+
+/// Read-only field projection from `S` to `U`.
+#[derive(Clone)]
+pub struct RefOp<S, U> {
+    pub(crate) read: fn(&S) -> &U,
+}
+
+/// Read+write field projection from `S` to `U`.
 #[derive(Clone)]
 pub struct LensOp<S, U> {
     pub(crate) read: fn(&S) -> &U,
     pub(crate) write: fn(&mut S) -> &mut U,
 }
 
-impl<S: 'static, U: 'static> Transform<LensOp<S, U>> for GenerationalRef<Ref<'static, U>> {
-    type Input = GenerationalRef<Ref<'static, S>>;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
-        GenerationalRef::map(input, |r| Ref::map(r, op.read))
-    }
-}
-
-impl<S, U> Transform<LensOp<S, U>> for U
+impl<S, U> Resolve<RefOp<S, U>> for U
 where
     U: Clone,
 {
     type Input = S;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
+    fn resolve(input: S, op: &RefOp<S, U>) -> Self {
         (op.read)(&input).clone()
     }
 }
 
-impl<S, U> Transform<LensOp<S, U>> for Option<U>
+impl<S, U> Resolve<RefOp<S, U>> for Option<U>
 where
     U: Clone,
 {
     type Input = Option<S>;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
-        input.map(|value| (op.read)(&value).clone())
+    fn resolve(input: Option<S>, op: &RefOp<S, U>) -> Self {
+        input.map(|v| (op.read)(&v).clone())
     }
 }
 
-impl<S: 'static, U: 'static> Transform<LensOp<S, U>> for WriteLock<'static, U, UnsyncStorage> {
-    type Input = WriteLock<'static, S, UnsyncStorage>;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
-        WriteLock::map(input, op.write)
-    }
-}
-
-impl<S: 'static, U: 'static> Transform<LensOp<S, U>> for Option<GenerationalRef<Ref<'static, U>>> {
-    type Input = Option<GenerationalRef<Ref<'static, S>>>;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
-        input.map(|inner| GenerationalRef::map(inner, |r| Ref::map(r, op.read)))
-    }
-}
-
-impl<S: 'static, U: 'static> Transform<LensOp<S, U>>
-    for Option<WriteLock<'static, U, UnsyncStorage>>
-{
-    type Input = Option<WriteLock<'static, S, UnsyncStorage>>;
-
-    fn transform(input: Self::Input, op: &LensOp<S, U>) -> Self {
-        input.map(|inner| WriteLock::map(inner, op.write))
-    }
-}
-
-impl<A, S: 'static, U: 'static> ReadProjection<U> for Combinator<A, LensOp<S, U>>
+impl<S, U> Resolve<LensOp<S, U>> for U
 where
-    A: ReadProjection<S>,
+    U: Clone,
 {
-    fn read_projection(&self) -> GenerationalRef<Ref<'static, U>> {
-        let input = self.parent.read_projection();
-        GenerationalRef::map(input, |r| Ref::map(r, self.op.read))
+    type Input = S;
+    fn resolve(input: S, op: &LensOp<S, U>) -> Self {
+        (op.read)(&input).clone()
     }
 }
 
-impl<A, S: 'static, U: 'static> WriteProjection<U> for Combinator<A, LensOp<S, U>>
+impl<S, U> Resolve<LensOp<S, U>> for Option<U>
 where
-    A: WriteProjection<S>,
+    U: Clone,
 {
-    fn write_projection(&self) -> WriteLock<'static, U, UnsyncStorage> {
-        WriteLock::map(self.parent.write_projection(), self.op.write)
+    type Input = Option<S>;
+    fn resolve(input: Option<S>, op: &LensOp<S, U>) -> Self {
+        input.map(|v| (op.read)(&v).clone())
     }
 }
 
-impl<A, S: 'static, U: 'static> ReadProjectionOpt<U> for Combinator<A, LensOp<S, U>>
+impl<A, S: 'static, U: 'static> Access for Combinator<A, RefOp<S, U>>
 where
-    A: ReadProjectionOpt<S>,
+    A: Access<Target = S>,
 {
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, U>>> {
+    type Target = U;
+    type Storage = A::Storage;
+
+    fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, U>> {
         self.parent
-            .read_projection_opt()
-            .map(|inner| GenerationalRef::map(inner, |r| Ref::map(r, self.op.read)))
+            .try_read()
+            .map(|r| A::Storage::map(r, self.op.read))
     }
 }
 
-impl<A, S: 'static, U: 'static> WriteProjectionOpt<U> for Combinator<A, LensOp<S, U>>
+impl<A, S: 'static, U: 'static> Access for Combinator<A, LensOp<S, U>>
 where
-    A: WriteProjectionOpt<S>,
+    A: Access<Target = S>,
 {
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, U, UnsyncStorage>> {
+    type Target = U;
+    type Storage = A::Storage;
+
+    fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, U>> {
         self.parent
-            .write_projection_opt()
-            .map(|inner| WriteLock::map(inner, self.op.write))
+            .try_read()
+            .map(|r| A::Storage::map(r, self.op.read))
     }
 }
 
-/// Option-lifting operation used by required-path `map_some`.
-pub struct UnwrapSomeOp<T>(pub(crate) PhantomData<fn() -> T>);
+impl<A, S: 'static, U: 'static> AccessMut for Combinator<A, LensOp<S, U>>
+where
+    A: AccessMut<Target = S>,
+{
+    type WriteMetadata = A::WriteMetadata;
 
-impl<T> Clone for UnwrapSomeOp<T> {
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, U, A::Storage, A::WriteMetadata>> {
+        self.parent
+            .try_write()
+            .map(|w| WriteLock::map(w, self.op.write))
+    }
+}
+
+// ============================================================================
+// Prism: partial projection into a sum-type variant
+// ============================================================================
+
+/// Partial projection into one variant of a sum type.
+///
+/// `Prism` is the primitive behind `map_some`, `map_ok`, `map_err`, and any
+/// user-defined enum variant projection. Methods take `&self` so implementors
+/// can carry runtime state (e.g. closures for
+/// [`map_variant_with`](crate::Optic::map_variant_with)); stateless prisms
+/// are typically zero-sized types that also implement [`Default`].
+pub trait Prism {
+    /// The whole sum-type being projected into.
+    type Source: 'static;
+    /// The variant payload produced when the path matches.
+    type Variant: 'static;
+
+    fn try_ref<'a>(&self, source: &'a Self::Source) -> Option<&'a Self::Variant>;
+    fn try_mut<'a>(&self, source: &'a mut Self::Source) -> Option<&'a mut Self::Variant>;
+    fn try_into_variant(&self, source: Self::Source) -> Option<Self::Variant>;
+}
+
+/// Op wrapping a [`Prism`] for use inside a [`Combinator`].
+pub struct PrismOp<P> {
+    pub(crate) prism: P,
+}
+
+impl<P: Clone> Clone for PrismOp<P> {
+    fn clone(&self) -> Self {
+        Self { prism: self.prism.clone() }
+    }
+}
+
+impl<A, P> Access for Combinator<A, PrismOp<P>>
+where
+    A: Access<Target = P::Source>,
+    P: Prism,
+{
+    type Target = P::Variant;
+    type Storage = A::Storage;
+
+    fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, P::Variant>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_read()
+            .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+}
+
+impl<A, P> AccessMut for Combinator<A, PrismOp<P>>
+where
+    A: AccessMut<Target = P::Source>,
+    P: Prism,
+{
+    type WriteMetadata = A::WriteMetadata;
+
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_write()
+            .and_then(|w| WriteLock::filter_map(w, |s| prism.try_mut(s)))
+    }
+}
+
+impl<P> Resolve<PrismOp<P>> for Option<P::Variant>
+where
+    P: Prism,
+{
+    type Input = P::Source;
+    fn resolve(input: P::Source, op: &PrismOp<P>) -> Self {
+        op.prism.try_into_variant(input)
+    }
+}
+
+/// Variant projection applied to an already-optional parent.
+///
+/// Shares the same [`Access`] / [`AccessMut`] impls with [`PrismOp`] (both
+/// just thread `Option<Ref>` through the prism); distinct only so that the
+/// owned-value plumbing ([`Resolve`]) can accept an `Option<Source>` input
+/// rather than a bare `Source`.
+pub struct OptPrismOp<P> {
+    pub(crate) prism: P,
+}
+
+impl<P: Clone> Clone for OptPrismOp<P> {
+    fn clone(&self) -> Self {
+        Self { prism: self.prism.clone() }
+    }
+}
+
+impl<A, P> Access for Combinator<A, OptPrismOp<P>>
+where
+    A: Access<Target = P::Source>,
+    P: Prism,
+{
+    type Target = P::Variant;
+    type Storage = A::Storage;
+
+    fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, P::Variant>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_read()
+            .and_then(|r| A::Storage::try_map(r, |s| prism.try_ref(s)))
+    }
+}
+
+impl<A, P> AccessMut for Combinator<A, OptPrismOp<P>>
+where
+    A: AccessMut<Target = P::Source>,
+    P: Prism,
+{
+    type WriteMetadata = A::WriteMetadata;
+
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
+        let prism = &self.op.prism;
+        self.parent
+            .try_write()
+            .and_then(|w| WriteLock::filter_map(w, |s| prism.try_mut(s)))
+    }
+}
+
+impl<P> Resolve<OptPrismOp<P>> for Option<P::Variant>
+where
+    P: Prism,
+{
+    type Input = Option<P::Source>;
+    fn resolve(input: Option<P::Source>, op: &OptPrismOp<P>) -> Self {
+        input.and_then(|s| op.prism.try_into_variant(s))
+    }
+}
+
+// ============================================================================
+// Stdlib prisms
+// ============================================================================
+
+/// Prism onto the `Some` variant of `Option<T>`.
+pub struct SomePrism<T>(PhantomData<fn() -> T>);
+
+impl<T> SomePrism<T> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> Default for SomePrism<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Clone for SomePrism<T> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: 'static> Transform<UnwrapSomeOp<T>> for Option<GenerationalRef<Ref<'static, T>>> {
-    type Input = GenerationalRef<Ref<'static, Option<T>>>;
+impl<T: 'static> Prism for SomePrism<T> {
+    type Source = Option<T>;
+    type Variant = T;
 
-    fn transform(input: Self::Input, _: &UnwrapSomeOp<T>) -> Self {
-        input.try_map(|r| Ref::filter_map(r, |o| o.as_ref()).ok())
+    fn try_ref<'a>(&self, source: &'a Option<T>) -> Option<&'a T> {
+        source.as_ref()
+    }
+    fn try_mut<'a>(&self, source: &'a mut Option<T>) -> Option<&'a mut T> {
+        source.as_mut()
+    }
+    fn try_into_variant(&self, source: Option<T>) -> Option<T> {
+        source
     }
 }
 
-impl<T: 'static> Transform<UnwrapSomeOp<T>> for Option<WriteLock<'static, T, UnsyncStorage>> {
-    type Input = WriteLock<'static, Option<T>, UnsyncStorage>;
+/// Prism onto the `Ok` variant of `Result<T, E>`.
+pub struct OkPrism<T, E>(PhantomData<fn() -> (T, E)>);
 
-    fn transform(input: Self::Input, _: &UnwrapSomeOp<T>) -> Self {
-        WriteLock::filter_map(input, |o| o.as_mut())
+impl<T, E> OkPrism<T, E> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl<T> Transform<UnwrapSomeOp<T>> for Option<T> {
-    type Input = Option<T>;
-
-    fn transform(input: Self::Input, _: &UnwrapSomeOp<T>) -> Self {
-        input
+impl<T, E> Default for OkPrism<T, E> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl<A, T: 'static> ReadProjectionOpt<T> for Combinator<A, UnwrapSomeOp<T>>
-where
-    A: ReadProjection<Option<T>>,
-{
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        self.parent
-            .read_projection()
-            .try_map(|r| Ref::filter_map(r, |o| o.as_ref()).ok())
-    }
-}
-
-impl<A, T: 'static> WriteProjectionOpt<T> for Combinator<A, UnwrapSomeOp<T>>
-where
-    A: WriteProjection<Option<T>>,
-{
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, T, UnsyncStorage>> {
-        WriteLock::filter_map(self.parent.write_projection(), |o| o.as_mut())
-    }
-}
-
-/// Option-lifting operation used by optional-path `map_some`.
-pub struct UnwrapSomeOptionalOp<T>(pub(crate) PhantomData<fn() -> T>);
-
-impl<T> Clone for UnwrapSomeOptionalOp<T> {
+impl<T, E> Clone for OkPrism<T, E> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: 'static> Transform<UnwrapSomeOptionalOp<T>> for Option<GenerationalRef<Ref<'static, T>>> {
-    type Input = Option<GenerationalRef<Ref<'static, Option<T>>>>;
+impl<T: 'static, E: 'static> Prism for OkPrism<T, E> {
+    type Source = Result<T, E>;
+    type Variant = T;
 
-    fn transform(input: Self::Input, _: &UnwrapSomeOptionalOp<T>) -> Self {
-        input.and_then(|inner| inner.try_map(|r| Ref::filter_map(r, |o| o.as_ref()).ok()))
+    fn try_ref<'a>(&self, source: &'a Result<T, E>) -> Option<&'a T> {
+        source.as_ref().ok()
+    }
+    fn try_mut<'a>(&self, source: &'a mut Result<T, E>) -> Option<&'a mut T> {
+        source.as_mut().ok()
+    }
+    fn try_into_variant(&self, source: Result<T, E>) -> Option<T> {
+        source.ok()
     }
 }
 
-impl<T: 'static> Transform<UnwrapSomeOptionalOp<T>>
-    for Option<WriteLock<'static, T, UnsyncStorage>>
-{
-    type Input = Option<WriteLock<'static, Option<T>, UnsyncStorage>>;
+/// Prism onto the `Err` variant of `Result<T, E>`.
+pub struct ErrPrism<T, E>(PhantomData<fn() -> (T, E)>);
 
-    fn transform(input: Self::Input, _: &UnwrapSomeOptionalOp<T>) -> Self {
-        input.and_then(|inner| WriteLock::filter_map(inner, |o| o.as_mut()))
+impl<T, E> ErrPrism<T, E> {
+    pub const fn new() -> Self {
+        Self(PhantomData)
     }
 }
 
-impl<T> Transform<UnwrapSomeOptionalOp<T>> for Option<T> {
-    type Input = Option<Option<T>>;
-
-    fn transform(input: Self::Input, _: &UnwrapSomeOptionalOp<T>) -> Self {
-        input.flatten()
+impl<T, E> Default for ErrPrism<T, E> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-impl<A, T: 'static> ReadProjectionOpt<T> for Combinator<A, UnwrapSomeOptionalOp<T>>
-where
-    A: ReadProjectionOpt<Option<T>>,
-{
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        self.parent
-            .read_projection_opt()
-            .and_then(|inner| inner.try_map(|r| Ref::filter_map(r, |o| o.as_ref()).ok()))
-    }
-}
-
-impl<A, T: 'static> WriteProjectionOpt<T> for Combinator<A, UnwrapSomeOptionalOp<T>>
-where
-    A: WriteProjectionOpt<Option<T>>,
-{
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, T, UnsyncStorage>> {
-        self.parent
-            .write_projection_opt()
-            .and_then(|inner| WriteLock::filter_map(inner, |o| o.as_mut()))
-    }
-}
-
-/// `Result<T, E>::Ok(T)` projection used by required-path `map_ok`.
-pub struct UnwrapOkOp<T, E>(pub(crate) PhantomData<fn() -> Result<T, E>>);
-
-impl<T, E> Clone for UnwrapOkOp<T, E> {
+impl<T, E> Clone for ErrPrism<T, E> {
     fn clone(&self) -> Self {
         Self(PhantomData)
     }
 }
 
-impl<T: 'static, E: 'static> Transform<UnwrapOkOp<T, E>>
-    for Option<GenerationalRef<Ref<'static, T>>>
-{
-    type Input = GenerationalRef<Ref<'static, Result<T, E>>>;
+impl<T: 'static, E: 'static> Prism for ErrPrism<T, E> {
+    type Source = Result<T, E>;
+    type Variant = E;
 
-    fn transform(input: Self::Input, _: &UnwrapOkOp<T, E>) -> Self {
-        input.try_map(|r| Ref::filter_map(r, |result| result.as_ref().ok()).ok())
+    fn try_ref<'a>(&self, source: &'a Result<T, E>) -> Option<&'a E> {
+        source.as_ref().err()
+    }
+    fn try_mut<'a>(&self, source: &'a mut Result<T, E>) -> Option<&'a mut E> {
+        source.as_mut().err()
+    }
+    fn try_into_variant(&self, source: Result<T, E>) -> Option<E> {
+        source.err()
     }
 }
 
-impl<T: 'static, E: 'static> Transform<UnwrapOkOp<T, E>>
-    for Option<WriteLock<'static, T, UnsyncStorage>>
-{
-    type Input = WriteLock<'static, Result<T, E>, UnsyncStorage>;
+/// Inline prism built from caller-supplied `fn` pointers.
+pub struct InlinePrism<S, V> {
+    pub(crate) try_ref: fn(&S) -> Option<&V>,
+    pub(crate) try_mut: fn(&mut S) -> Option<&mut V>,
+    pub(crate) try_into: fn(S) -> Option<V>,
+}
 
-    fn transform(input: Self::Input, _: &UnwrapOkOp<T, E>) -> Self {
-        WriteLock::filter_map(input, |result| result.as_mut().ok())
+impl<S, V> InlinePrism<S, V> {
+    pub const fn new(
+        try_ref: fn(&S) -> Option<&V>,
+        try_mut: fn(&mut S) -> Option<&mut V>,
+        try_into: fn(S) -> Option<V>,
+    ) -> Self {
+        Self { try_ref, try_mut, try_into }
     }
 }
 
-impl<T, E> Transform<UnwrapOkOp<T, E>> for Option<T> {
-    type Input = Result<T, E>;
-
-    fn transform(input: Self::Input, _: &UnwrapOkOp<T, E>) -> Self {
-        input.ok()
-    }
-}
-
-impl<A, T: 'static, E: 'static> ReadProjectionOpt<T> for Combinator<A, UnwrapOkOp<T, E>>
-where
-    A: ReadProjection<Result<T, E>>,
-{
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        self.parent
-            .read_projection()
-            .try_map(|r| Ref::filter_map(r, |result| result.as_ref().ok()).ok())
-    }
-}
-
-impl<A, T: 'static, E: 'static> WriteProjectionOpt<T> for Combinator<A, UnwrapOkOp<T, E>>
-where
-    A: WriteProjection<Result<T, E>>,
-{
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, T, UnsyncStorage>> {
-        WriteLock::filter_map(self.parent.write_projection(), |result| {
-            result.as_mut().ok()
-        })
-    }
-}
-
-/// `Result<T, E>::Ok(T)` projection used by optional-path `map_ok`.
-pub struct UnwrapOkOptionalOp<T, E>(pub(crate) PhantomData<fn() -> Result<T, E>>);
-
-impl<T, E> Clone for UnwrapOkOptionalOp<T, E> {
+impl<S, V> Clone for InlinePrism<S, V> {
     fn clone(&self) -> Self {
-        Self(PhantomData)
+        Self {
+            try_ref: self.try_ref,
+            try_mut: self.try_mut,
+            try_into: self.try_into,
+        }
     }
 }
 
-impl<T: 'static, E: 'static> Transform<UnwrapOkOptionalOp<T, E>>
-    for Option<GenerationalRef<Ref<'static, T>>>
-{
-    type Input = Option<GenerationalRef<Ref<'static, Result<T, E>>>>;
+impl<S: 'static, V: 'static> Prism for InlinePrism<S, V> {
+    type Source = S;
+    type Variant = V;
 
-    fn transform(input: Self::Input, _: &UnwrapOkOptionalOp<T, E>) -> Self {
-        input.and_then(|inner| {
-            inner.try_map(|r| Ref::filter_map(r, |result| result.as_ref().ok()).ok())
-        })
+    fn try_ref<'a>(&self, s: &'a S) -> Option<&'a V> {
+        (self.try_ref)(s)
+    }
+    fn try_mut<'a>(&self, s: &'a mut S) -> Option<&'a mut V> {
+        (self.try_mut)(s)
+    }
+    fn try_into_variant(&self, s: S) -> Option<V> {
+        (self.try_into)(s)
     }
 }
 
-impl<T: 'static, E: 'static> Transform<UnwrapOkOptionalOp<T, E>>
-    for Option<WriteLock<'static, T, UnsyncStorage>>
-{
-    type Input = Option<WriteLock<'static, Result<T, E>, UnsyncStorage>>;
+// ============================================================================
+// Bridge: dioxus_signals::Readable / Writable carriers implement Access
+// ============================================================================
 
-    fn transform(input: Self::Input, _: &UnwrapOkOptionalOp<T, E>) -> Self {
-        input.and_then(|inner| WriteLock::filter_map(inner, |result| result.as_mut().ok()))
-    }
+/// Marker routing every [`dioxus_signals::Readable`] into [`Access`] without
+/// triggering coherence conflicts with per-Op impls.
+pub trait ReadCarrier {
+    type Target: 'static;
+    type Storage: AnyStorage;
+
+    fn read_carrier(&self) -> <Self::Storage as AnyStorage>::Ref<'static, Self::Target>;
 }
 
-impl<T, E> Transform<UnwrapOkOptionalOp<T, E>> for Option<T> {
-    type Input = Option<Result<T, E>>;
+/// Marker routing every [`dioxus_signals::Writable`] into [`AccessMut`].
+pub trait WriteCarrier: ReadCarrier {
+    type WriteMetadata;
 
-    fn transform(input: Self::Input, _: &UnwrapOkOptionalOp<T, E>) -> Self {
-        input.and_then(Result::ok)
-    }
+    fn write_carrier(
+        &self,
+    ) -> WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>;
 }
 
-impl<A, T: 'static, E: 'static> ReadProjectionOpt<T> for Combinator<A, UnwrapOkOptionalOp<T, E>>
+impl<R> ReadCarrier for R
 where
-    A: ReadProjectionOpt<Result<T, E>>,
+    R: dioxus_signals::Readable,
+    R::Target: Sized + 'static,
 {
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, T>>> {
-        self.parent.read_projection_opt().and_then(|inner| {
-            inner.try_map(|r| Ref::filter_map(r, |result| result.as_ref().ok()).ok())
-        })
+    type Target = R::Target;
+    type Storage = R::Storage;
+
+    fn read_carrier(&self) -> <Self::Storage as AnyStorage>::Ref<'static, Self::Target> {
+        <R as dioxus_signals::Readable>::try_read_unchecked(self)
+            .expect("optics: carrier read failed")
     }
 }
 
-impl<A, T: 'static, E: 'static> WriteProjectionOpt<T> for Combinator<A, UnwrapOkOptionalOp<T, E>>
+impl<W> WriteCarrier for W
 where
-    A: WriteProjectionOpt<Result<T, E>>,
+    W: dioxus_signals::Writable,
+    W::Target: Sized + 'static,
 {
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, T, UnsyncStorage>> {
-        self.parent
-            .write_projection_opt()
-            .and_then(|inner| WriteLock::filter_map(inner, |result| result.as_mut().ok()))
+    type WriteMetadata = <W as dioxus_signals::Writable>::WriteMetadata;
+
+    fn write_carrier(
+        &self,
+    ) -> WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata> {
+        <W as dioxus_signals::Writable>::try_write_unchecked(self)
+            .expect("optics: carrier write failed")
     }
 }
 
-/// `Result<T, E>::Err(E)` projection used by required-path `map_err`.
-pub struct UnwrapErrOp<T, E>(pub(crate) PhantomData<fn() -> Result<T, E>>);
-
-impl<T, E> Clone for UnwrapErrOp<T, E> {
-    fn clone(&self) -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<T: 'static, E: 'static> Transform<UnwrapErrOp<T, E>>
-    for Option<GenerationalRef<Ref<'static, E>>>
-{
-    type Input = GenerationalRef<Ref<'static, Result<T, E>>>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOp<T, E>) -> Self {
-        input.try_map(|r| Ref::filter_map(r, |result| result.as_ref().err()).ok())
-    }
-}
-
-impl<T: 'static, E: 'static> Transform<UnwrapErrOp<T, E>>
-    for Option<WriteLock<'static, E, UnsyncStorage>>
-{
-    type Input = WriteLock<'static, Result<T, E>, UnsyncStorage>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOp<T, E>) -> Self {
-        WriteLock::filter_map(input, |result| result.as_mut().err())
-    }
-}
-
-impl<T, E> Transform<UnwrapErrOp<T, E>> for Option<E> {
-    type Input = Result<T, E>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOp<T, E>) -> Self {
-        input.err()
-    }
-}
-
-impl<A, T: 'static, E: 'static> ReadProjectionOpt<E> for Combinator<A, UnwrapErrOp<T, E>>
+impl<R> Access for R
 where
-    A: ReadProjection<Result<T, E>>,
+    R: ReadCarrier,
 {
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, E>>> {
-        self.parent
-            .read_projection()
-            .try_map(|r| Ref::filter_map(r, |result| result.as_ref().err()).ok())
+    type Target = <R as ReadCarrier>::Target;
+    type Storage = <R as ReadCarrier>::Storage;
+
+    fn try_read(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+        Some(ReadCarrier::read_carrier(self))
     }
 }
 
-impl<A, T: 'static, E: 'static> WriteProjectionOpt<E> for Combinator<A, UnwrapErrOp<T, E>>
+impl<W> AccessMut for W
 where
-    A: WriteProjection<Result<T, E>>,
+    W: WriteCarrier,
 {
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, E, UnsyncStorage>> {
-        WriteLock::filter_map(self.parent.write_projection(), |result| {
-            result.as_mut().err()
-        })
+    type WriteMetadata = <W as WriteCarrier>::WriteMetadata;
+
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>> {
+        Some(WriteCarrier::write_carrier(self))
     }
 }
 
-/// `Result<T, E>::Err(E)` projection used by optional-path `map_err`.
-pub struct UnwrapErrOptionalOp<T, E>(pub(crate) PhantomData<fn() -> Result<T, E>>);
-
-impl<T, E> Clone for UnwrapErrOptionalOp<T, E> {
-    fn clone(&self) -> Self {
-        Self(PhantomData)
-    }
-}
-
-impl<T: 'static, E: 'static> Transform<UnwrapErrOptionalOp<T, E>>
-    for Option<GenerationalRef<Ref<'static, E>>>
-{
-    type Input = Option<GenerationalRef<Ref<'static, Result<T, E>>>>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOptionalOp<T, E>) -> Self {
-        input.and_then(|inner| {
-            inner.try_map(|r| Ref::filter_map(r, |result| result.as_ref().err()).ok())
-        })
-    }
-}
-
-impl<T: 'static, E: 'static> Transform<UnwrapErrOptionalOp<T, E>>
-    for Option<WriteLock<'static, E, UnsyncStorage>>
-{
-    type Input = Option<WriteLock<'static, Result<T, E>, UnsyncStorage>>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOptionalOp<T, E>) -> Self {
-        input.and_then(|inner| WriteLock::filter_map(inner, |result| result.as_mut().err()))
-    }
-}
-
-impl<T, E> Transform<UnwrapErrOptionalOp<T, E>> for Option<E> {
-    type Input = Option<Result<T, E>>;
-
-    fn transform(input: Self::Input, _: &UnwrapErrOptionalOp<T, E>) -> Self {
-        input.and_then(Result::err)
-    }
-}
-
-impl<A, T: 'static, E: 'static> ReadProjectionOpt<E> for Combinator<A, UnwrapErrOptionalOp<T, E>>
+impl<R, T> ValueAccess<T> for R
 where
-    A: ReadProjectionOpt<Result<T, E>>,
+    R: dioxus_signals::Readable<Target = T>,
+    T: Clone + 'static,
 {
-    fn read_projection_opt(&self) -> Option<GenerationalRef<Ref<'static, E>>> {
-        self.parent.read_projection_opt().and_then(|inner| {
-            inner.try_map(|r| Ref::filter_map(r, |result| result.as_ref().err()).ok())
-        })
-    }
-}
-
-impl<A, T: 'static, E: 'static> WriteProjectionOpt<E> for Combinator<A, UnwrapErrOptionalOp<T, E>>
-where
-    A: WriteProjectionOpt<Result<T, E>>,
-{
-    fn write_projection_opt(&self) -> Option<WriteLock<'static, E, UnsyncStorage>> {
-        self.parent
-            .write_projection_opt()
-            .and_then(|inner| WriteLock::filter_map(inner, |result| result.as_mut().err()))
+    fn value(&self) -> T {
+        <R as dioxus_signals::Readable>::try_read_unchecked(self)
+            .expect("optics: carrier read failed")
+            .clone()
     }
 }

@@ -1,29 +1,27 @@
 use std::{
-    cell::Ref,
     collections::{BTreeMap, HashMap},
     future::Future,
     hash::BuildHasher,
     marker::PhantomData,
 };
 
-use dioxus_signals::{
-    CopyValue, ReadableExt, ReadableRef, UnsyncStorage, WritableExt, WritableRef, WriteLock,
-};
-use generational_box::GenerationalRef;
+use dioxus_signals::{CopyValue, WriteLock};
+use generational_box::AnyStorage;
 
 use crate::{
-    collection::{EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp},
+    collection::{EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp, GetProjection},
     combinator::{
-        Combinator, FutureProjection, LensOp, ReadProjection, ReadProjectionOpt, UnwrapErrOp,
-        UnwrapErrOptionalOp, UnwrapOkOp, UnwrapOkOptionalOp, UnwrapSomeOp, UnwrapSomeOptionalOp,
-        ValueProjection, WriteProjection, WriteProjectionOpt,
+        Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
+        OptPrismOp, Prism, PrismOp, RefOp, SomePrism, ValueAccess,
     },
 };
 
-/// Marker for an optics path that is expected to exist.
+/// Marker for an optics path that is expected to exist (user-facing `read()` /
+/// `write()` unwrap the underlying `Option`).
 pub struct Required;
 
-/// Marker for an optics path that may be absent.
+/// Marker for an optics path that may be absent (user-facing `read_opt()` /
+/// `write_opt()` return `Option` directly).
 pub struct Optional;
 
 /// Experimental carrier-generic optics wrapper.
@@ -41,20 +39,18 @@ impl<A: Clone, Path> Clone for Optic<A, Path> {
     }
 }
 
-impl<T: 'static> Optic<RwRoot<T>> {
-    /// Create a new root optic backed by a `CopyValue`.
+impl<T: 'static> Optic<CopyValue<T>> {
+    /// Create a new root optic backed by a [`CopyValue`].
     #[must_use]
     pub fn new(value: T) -> Self {
         Self {
-            access: RwRoot {
-                cell: CopyValue::new(value),
-            },
+            access: CopyValue::new(value),
             _marker: PhantomData,
         }
     }
 }
 
-impl<T: 'static> From<T> for Optic<RwRoot<T>> {
+impl<T: 'static> From<T> for Optic<CopyValue<T>> {
     fn from(value: T) -> Self {
         Self::new(value)
     }
@@ -62,6 +58,10 @@ impl<T: 'static> From<T> for Optic<RwRoot<T>> {
 
 impl<A> Optic<A> {
     /// Wrap an arbitrary access carrier in the optics facade.
+    ///
+    /// Accepts any [`dioxus_signals::Readable`] — `CopyValue`, `Signal`,
+    /// `SyncSignal`, `Memo`, `ReadSignal`, `WriteSignal`, `Store`,
+    /// `GlobalSignal`, `GlobalMemo`, etc.
     #[must_use]
     pub fn from_access(access: A) -> Self {
         Self {
@@ -70,6 +70,10 @@ impl<A> Optic<A> {
         }
     }
 }
+
+// ============================================================================
+// Methods available regardless of Path
+// ============================================================================
 
 impl<A, Path> Optic<A, Path> {
     /// Borrow the underlying access carrier.
@@ -85,56 +89,58 @@ impl<A, Path> Optic<A, Path> {
     /// Extract the current owned value produced by this optics path.
     pub fn value<Value>(&self) -> Value
     where
-        A: ValueProjection<Value>,
+        A: ValueAccess<Value>,
     {
-        self.access.value_projection()
+        self.access.value()
     }
 
     /// Extract the future produced by this optics path.
     pub fn future<Fut>(&self) -> Fut
     where
-        A: FutureProjection<Fut>,
+        A: FutureAccess<Fut>,
         Fut: Future,
     {
-        self.access.future_projection()
-    }
-
-    /// Read through the carrier as a normal root value.
-    pub fn read<T>(&self) -> ReadableRef<'_, CopyValue<T>>
-    where
-        A: ReadProjection<T>,
-        T: 'static,
-    {
-        self.access.read_projection()
-    }
-
-    /// Write through the carrier as a normal root value.
-    pub fn write<T>(&self) -> WritableRef<'_, CopyValue<T>>
-    where
-        A: WriteProjection<T>,
-        T: 'static,
-    {
-        WriteLock::downcast_lifetime(self.access.write_projection())
+        self.access.future()
     }
 
     /// Read an optional child projection.
-    pub fn read_opt<T>(&self) -> Option<ReadableRef<'_, CopyValue<T>>>
+    pub fn read_opt(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, A::Target>>
     where
-        A: ReadProjectionOpt<T>,
-        T: 'static,
+        A: Access,
     {
-        self.access.read_projection_opt()
+        self.access.try_read()
     }
 
     /// Write an optional child projection.
-    pub fn write_opt<T>(&self) -> Option<WritableRef<'_, CopyValue<T>>>
+    pub fn write_opt(
+        &self,
+    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>>
     where
-        A: WriteProjectionOpt<T>,
-        T: 'static,
+        A: AccessMut,
     {
-        self.access
-            .write_projection_opt()
-            .map(WriteLock::downcast_lifetime)
+        self.access.try_write()
+    }
+
+    /// Project a child field through a read-only function.
+    ///
+    /// Use this for carriers that only expose [`Access`] — for example a
+    /// [`dioxus_signals::Memo`].
+    #[must_use]
+    pub fn map_ref<T, U>(
+        self,
+        read: fn(&T) -> &U,
+    ) -> Optic<Combinator<A, RefOp<T, U>>, Path>
+    where
+        T: 'static,
+        U: 'static,
+    {
+        Optic {
+            access: Combinator {
+                parent: self.access,
+                op: RefOp { read },
+            },
+            _marker: PhantomData,
+        }
     }
 
     /// Project a child field through paired read/write functions.
@@ -168,61 +174,122 @@ impl<A, Path> Optic<A, Path> {
             _marker: PhantomData,
         }
     }
+
+    /// Project a child from a collection or keyed container lookup.
+    #[must_use]
+    pub fn get<Key>(&self, key: Key) -> Optic<<A as GetProjection<Key>>::Child, Optional>
+    where
+        A: GetProjection<Key>,
+    {
+        Optic {
+            access: self.access.get_projection(key),
+            _marker: PhantomData,
+        }
+    }
 }
 
+// ============================================================================
+// Required-only conveniences: read / write unwrap, each*, map_some / map_ok
+// ============================================================================
+
 impl<A> Optic<A, Required> {
+    /// Read through the carrier. Panics if the projected path is currently
+    /// absent — if the path is optional, use `read_opt` instead.
+    pub fn read(&self) -> <A::Storage as AnyStorage>::Ref<'static, A::Target>
+    where
+        A: Access,
+    {
+        self.access
+            .try_read()
+            .expect("optics: required path produced no value")
+    }
+
+    /// Write through the carrier. Panics if the path is currently absent.
+    pub fn write(&self) -> WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>
+    where
+        A: AccessMut,
+    {
+        self.access
+            .try_write()
+            .expect("optics: required path produced no value")
+    }
+
     /// Lift `Option<T>` from inside the carrier to an optional child path.
     #[must_use]
-    pub fn map_some<T>(self) -> Optic<Combinator<A, UnwrapSomeOp<T>>, Optional>
+    pub fn map_some<T>(self) -> Optic<Combinator<A, PrismOp<SomePrism<T>>>, Optional>
     where
         T: 'static,
     {
-        Optic {
-            access: Combinator {
-                parent: self.access,
-                op: UnwrapSomeOp(PhantomData),
-            },
-            _marker: PhantomData,
-        }
+        self.map_variant::<SomePrism<T>>()
     }
 
     /// Lift `Result<T, E>::Ok(T)` into an optional child path.
     #[must_use]
-    pub fn map_ok<T, E>(self) -> Optic<Combinator<A, UnwrapOkOp<T, E>>, Optional>
+    pub fn map_ok<T, E>(self) -> Optic<Combinator<A, PrismOp<OkPrism<T, E>>>, Optional>
     where
         T: 'static,
         E: 'static,
     {
+        self.map_variant::<OkPrism<T, E>>()
+    }
+
+    /// Lift `Result<T, E>::Err(E)` into an optional child path.
+    #[must_use]
+    pub fn map_err<T, E>(self) -> Optic<Combinator<A, PrismOp<ErrPrism<T, E>>>, Optional>
+    where
+        T: 'static,
+        E: 'static,
+    {
+        self.map_variant::<ErrPrism<T, E>>()
+    }
+
+    /// Project into a variant of any sum type through a user-defined [`Prism`].
+    #[must_use]
+    pub fn map_variant<P>(self) -> Optic<Combinator<A, PrismOp<P>>, Optional>
+    where
+        P: Prism + Default,
+    {
+        self.map_variant_with_prism(P::default())
+    }
+
+    /// Project into a variant through a specific prism instance.
+    #[must_use]
+    pub fn map_variant_with_prism<P>(
+        self,
+        prism: P,
+    ) -> Optic<Combinator<A, PrismOp<P>>, Optional>
+    where
+        P: Prism,
+    {
         Optic {
             access: Combinator {
                 parent: self.access,
-                op: UnwrapOkOp(PhantomData),
+                op: PrismOp { prism },
             },
             _marker: PhantomData,
         }
     }
 
-    /// Lift `Result<T, E>::Err(E)` into an optional child path.
+    /// Project into a variant using inline `fn` pointers.
     #[must_use]
-    pub fn map_err<T, E>(self) -> Optic<Combinator<A, UnwrapErrOp<T, E>>, Optional>
+    pub fn map_variant_with<S, V>(
+        self,
+        try_ref: fn(&S) -> Option<&V>,
+        try_mut: fn(&mut S) -> Option<&mut V>,
+        try_into: fn(S) -> Option<V>,
+    ) -> Optic<Combinator<A, PrismOp<InlinePrism<S, V>>>, Optional>
     where
-        T: 'static,
-        E: 'static,
+        S: 'static,
+        V: 'static,
     {
-        Optic {
-            access: Combinator {
-                parent: self.access,
-                op: UnwrapErrOp(PhantomData),
-            },
-            _marker: PhantomData,
-        }
+        self.map_variant_with_prism(InlinePrism::new(try_ref, try_mut, try_into))
     }
 
     /// Treat a `Vec<T>` child as an iterable collection of child optics.
     #[must_use]
     pub fn each<T>(self) -> Optic<EachVec<A, T>>
     where
-        A: ReadProjection<Vec<T>>,
+        A: Access<Target = Vec<T>>,
         T: 'static,
     {
         Optic {
@@ -238,7 +305,7 @@ impl<A> Optic<A, Required> {
     #[must_use]
     pub fn each_hash_map<K, V, S>(self) -> Optic<EachHashMap<A, K, V, S>>
     where
-        A: ReadProjection<HashMap<K, V, S>>,
+        A: Access<Target = HashMap<K, V, S>>,
         K: Eq + std::hash::Hash + 'static,
         V: 'static,
         S: BuildHasher + 'static,
@@ -256,7 +323,7 @@ impl<A> Optic<A, Required> {
     #[must_use]
     pub fn each_btree_map<K, V>(self) -> Optic<EachBTreeMap<A, K, V>>
     where
-        A: ReadProjection<BTreeMap<K, V>>,
+        A: Access<Target = BTreeMap<K, V>>,
         K: Ord + 'static,
         V: 'static,
     {
@@ -270,91 +337,94 @@ impl<A> Optic<A, Required> {
     }
 }
 
+// ============================================================================
+// Optional-only conveniences: to_option, optional-chained variants
+// ============================================================================
+
 impl<A> Optic<A, Optional> {
+    /// Materialize the current optional path as `Option<Optic<_, Required>>`.
+    ///
+    /// If the path currently resolves, returns a `Required`-tagged optic whose
+    /// subsequent `read`/`write` calls will unwrap. If the path shape later
+    /// changes to absent, those calls panic.
+    pub fn to_option(self) -> Option<Optic<A, Required>>
+    where
+        A: Access,
+    {
+        self.access.try_read().is_some().then(|| Optic {
+            access: self.access,
+            _marker: PhantomData,
+        })
+    }
+
     /// Lift `Option<T>` from inside an already-optional child path.
     #[must_use]
-    pub fn map_some<T>(self) -> Optic<Combinator<A, UnwrapSomeOptionalOp<T>>, Optional>
+    pub fn map_some<T>(self) -> Optic<Combinator<A, OptPrismOp<SomePrism<T>>>, Optional>
     where
         T: 'static,
     {
-        Optic {
-            access: Combinator {
-                parent: self.access,
-                op: UnwrapSomeOptionalOp(PhantomData),
-            },
-            _marker: PhantomData,
-        }
+        self.map_variant::<SomePrism<T>>()
     }
 
     /// Lift `Result<T, E>::Ok(T)` from inside an already-optional child path.
     #[must_use]
-    pub fn map_ok<T, E>(self) -> Optic<Combinator<A, UnwrapOkOptionalOp<T, E>>, Optional>
+    pub fn map_ok<T, E>(self) -> Optic<Combinator<A, OptPrismOp<OkPrism<T, E>>>, Optional>
     where
         T: 'static,
         E: 'static,
     {
-        Optic {
-            access: Combinator {
-                parent: self.access,
-                op: UnwrapOkOptionalOp(PhantomData),
-            },
-            _marker: PhantomData,
-        }
+        self.map_variant::<OkPrism<T, E>>()
     }
 
     /// Lift `Result<T, E>::Err(E)` from inside an already-optional child path.
     #[must_use]
-    pub fn map_err<T, E>(self) -> Optic<Combinator<A, UnwrapErrOptionalOp<T, E>>, Optional>
+    pub fn map_err<T, E>(self) -> Optic<Combinator<A, OptPrismOp<ErrPrism<T, E>>>, Optional>
     where
         T: 'static,
         E: 'static,
     {
+        self.map_variant::<ErrPrism<T, E>>()
+    }
+
+    /// Project into a variant through a user-defined [`Prism`].
+    #[must_use]
+    pub fn map_variant<P>(self) -> Optic<Combinator<A, OptPrismOp<P>>, Optional>
+    where
+        P: Prism + Default,
+    {
+        self.map_variant_with_prism(P::default())
+    }
+
+    /// Project into a variant through a specific prism instance.
+    #[must_use]
+    pub fn map_variant_with_prism<P>(
+        self,
+        prism: P,
+    ) -> Optic<Combinator<A, OptPrismOp<P>>, Optional>
+    where
+        P: Prism,
+    {
         Optic {
             access: Combinator {
                 parent: self.access,
-                op: UnwrapErrOptionalOp(PhantomData),
+                op: OptPrismOp { prism },
             },
             _marker: PhantomData,
         }
     }
-}
 
-/// Root read/write carrier used by [`Optic::new`].
-pub struct RwRoot<T> {
-    pub(crate) cell: CopyValue<T>,
-}
-
-impl<T> Clone for RwRoot<T> {
-    fn clone(&self) -> Self {
-        Self {
-            cell: self.cell.clone(),
-        }
-    }
-}
-
-impl<T> ValueProjection<T> for RwRoot<T>
-where
-    T: Clone + 'static,
-{
-    fn value_projection(&self) -> T {
-        self.cell.read_unchecked().clone()
-    }
-}
-
-impl<T> ReadProjection<T> for RwRoot<T>
-where
-    T: 'static,
-{
-    fn read_projection(&self) -> GenerationalRef<Ref<'static, T>> {
-        self.cell.read_unchecked()
-    }
-}
-
-impl<T> WriteProjection<T> for RwRoot<T>
-where
-    T: 'static,
-{
-    fn write_projection(&self) -> WriteLock<'static, T, UnsyncStorage> {
-        self.cell.write_unchecked()
+    /// Project into a variant using inline `fn` pointers.
+    #[must_use]
+    pub fn map_variant_with<S, V>(
+        self,
+        try_ref: fn(&S) -> Option<&V>,
+        try_mut: fn(&mut S) -> Option<&mut V>,
+        try_into: fn(S) -> Option<V>,
+    ) -> Optic<Combinator<A, OptPrismOp<InlinePrism<S, V>>>, Optional>
+    where
+        S: 'static,
+        V: 'static,
+    {
+        self.map_variant_with_prism(InlinePrism::new(try_ref, try_mut, try_into))
     }
 }

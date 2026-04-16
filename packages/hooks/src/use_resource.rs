@@ -165,12 +165,42 @@ pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
     Projected<Resource<Option<T>, Lens>, T>;
 
 /// Projection of a resolved resource into its `Ok` branch.
-pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
-    Projected<ResolvedResource<Result<T, E>, Lens>, T>;
+//
+// Hand-written instead of `Projected<ResolvedResource<Result<T, E>, Lens>, T>`
+// and with explicit `F`/`FMut` instead of `MappedMutSignal`'s defaults to
+// dodge a stable rustc 1.95 ICE (`impl_trait_overcaptures.rs:220` —
+// `Some(Late) vs None`) triggered by nesting `Mapped<_, Mapped<_, _>>` whose
+// default `F = fn(&<V as Readable>::Target) -> &O` chains through itself.
+pub type OkResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Store<
+    T,
+    MappedMutSignal<
+        T,
+        MappedMutSignal<
+            Result<T, E>,
+            HandledLens<Lens>,
+            fn(&Option<Result<T, E>>) -> &Result<T, E>,
+            fn(&mut Option<Result<T, E>>) -> &mut Result<T, E>,
+        >,
+        fn(&Result<T, E>) -> &T,
+        fn(&mut Result<T, E>) -> &mut T,
+    >,
+>;
 
 /// Projection of a resolved resource into its `Err` branch.
-pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> =
-    Projected<ResolvedResource<Result<T, E>, Lens>, E>;
+pub type ErrResource<T, E, Lens = WriteSignal<Option<Result<T, E>>>> = Store<
+    E,
+    MappedMutSignal<
+        E,
+        MappedMutSignal<
+            Result<T, E>,
+            HandledLens<Lens>,
+            fn(&Option<Result<T, E>>) -> &Result<T, E>,
+            fn(&mut Option<Result<T, E>>) -> &mut Result<T, E>,
+        >,
+        fn(&Result<T, E>) -> &E,
+        fn(&mut Result<T, E>) -> &mut E,
+    >,
+>;
 
 // ---------------------------------------------------------------------------
 // ResourceControls — handle-based methods. Local trait → blanket impl OK.

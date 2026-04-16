@@ -5,7 +5,9 @@
       "Bash(git stash:*)",
       "Bash(perl -i -pe 's/type Child<U: \\\\?Sized \\\\+ '\\\\''static, F: '\\\\''static, FMut: '\\\\''static>/type Child<U: ?Sized + '\\\\''static, F: Copy + '\\\\''static, FMut: Copy + '\\\\''static>/g' packages/stores/src/project.rs)",
       "Bash(perl:*)",
-      "Bash(awk '{p+=$4; f+=$6} END {print \"passed:\", p, \"failed:\", f}')"
+      "Bash(awk '{p+=$4; f+=$6} END {print \"passed:\", p, \"failed:\", f}')",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-optics --example nested_todo)",
+      "Bash(RUSTFLAGS=\"--cap-lints=allow\" cargo build -p dioxus-optics --example page_router)"
     ]
   }
 }

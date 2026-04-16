@@ -4035,8 +4035,10 @@ dependencies = [
 name = "dioxus-optics"
 version = "0.7.5"
 dependencies = [
+ "dioxus",
  "dioxus-core",
  "dioxus-signals",
+ "dioxus-stores",
  "generational-box",
 ]
 

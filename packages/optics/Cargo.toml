@@ -15,7 +15,9 @@ dioxus-signals = { workspace = true }
 generational-box = { workspace = true }
 
 [dev-dependencies]
+dioxus = { workspace = true }
 dioxus-core = { workspace = true }
+dioxus-stores = { workspace = true }
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
