@@ -44,10 +44,92 @@ trait Waitable {
 /// A test can make assertions on the element with [ElementCondition::expect]. The test decides
 /// whether to make the assertion immediately or await it.
 ///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{render, inner_html, eq};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              class: "test-component",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn my_component_renders_correctly() {
+///     let mut tester = render(MyComponent).build();
+///     let element = tester.query(".test-component");
+///     // This works only if the element has already been rendered.
+///     tester.query(".test-component").expect(inner_html(eq("Hello, world!"))).immediately().unwrap();
+///     // This waits for the element to appear
+///     tester.query(".test-component").expect(inner_html(eq("Hello, world!"))).await.unwrap();
+/// }
+/// # my_component_renders_correctly();
+/// ```
+///
 /// A test can interact with the element once it appears, such as with [ElementCondition::click].
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{render, inner_html, eq};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         button {
+///              class: "test-button",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn my_component_has_a_button() {
+///     let mut tester = render(MyComponent).build();
+///     let element = tester.query(".test-component");
+///     tester.query(".test-component").click().await.unwrap();
+/// }
+/// # my_component_has_a_button();
+/// ```
 ///
 /// A test can also fetch or await an `ElementCondition` directly to produce a [ResolvedElement]
 /// for further assertions.
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{render, inner_html, eq};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              class: "test-component",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn my_component_renders_correctly() {
+///     let mut tester = render(MyComponent).build();
+///     let element = tester.query(".test-component");
+///     // This works only if the element has already been rendered.
+///     let content = element.immediately().unwrap().inner_html();
+///     // This waits for the element to appear
+///     let content = element.await.unwrap().inner_html();
+///     assert_eq!(content, "Hello, world!");
+/// }
+/// # my_component_renders_correctly();
+/// ```
 pub struct ElementCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
