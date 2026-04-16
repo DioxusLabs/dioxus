@@ -42,8 +42,5 @@ fn dynamic_initial_value() {
     let mut dom = VirtualDom::new(app);
     dom.rebuild(&mut dioxus_core::NoOpMutations);
 
-    assert_eq!(
-        dioxus_ssr::render(&dom),
-        r#"<input value="dynamic"/>"#
-    );
+    assert_eq!(dioxus_ssr::render(&dom), r#"<input value="dynamic"/>"#);
 }

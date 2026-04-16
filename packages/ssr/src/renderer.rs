@@ -146,7 +146,7 @@ impl Renderer {
                 Segment::Attr(idx) => {
                     let attrs = &*template.dynamic_attrs[*idx];
                     for attr in attrs {
-                        let translated_name = ssr_attr_name(&attr.name);
+                        let translated_name = ssr_attr_name(attr.name);
                         if attr.name == "dangerous_inner_html" {
                             inner_html = Some(attr);
                         } else if attr.namespace == Some("style") {
@@ -497,7 +497,7 @@ pub(crate) fn write_attribute<W: Write + ?Sized>(
     buf: &mut W,
     attr: &Attribute,
 ) -> std::fmt::Result {
-    let name = ssr_attr_name(&attr.name);
+    let name = ssr_attr_name(attr.name);
     match &attr.value {
         AttributeValue::Text(value) => write!(
             buf,
