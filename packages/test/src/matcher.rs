@@ -1,5 +1,5 @@
 use crate::element::ResolvedElement;
-use std::{marker::PhantomData, ops::ControlFlow};
+use std::ops::ControlFlow;
 
 /// A representation of a condition to be expected on the DOM.
 pub trait Matcher<T> {
@@ -60,9 +60,9 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
 
 /// Returns a [Matcher] which matches any data not matched by the given [Matcher] `inner`.
 pub fn not<T>(inner: impl Matcher<T>) -> impl Matcher<T> {
-    struct NotMatcher<T, InnerMatcher: Matcher<T>>(InnerMatcher, PhantomData<T>);
+    struct NotMatcher<InnerMatcher>(InnerMatcher);
 
-    impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<T, InnerMatcher> {
+    impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<InnerMatcher> {
         fn matches(&self, actual: T) -> ControlFlow<()> {
             match self.0.matches(actual) {
                 ControlFlow::Continue(_) => ControlFlow::Break(()),
@@ -71,7 +71,7 @@ pub fn not<T>(inner: impl Matcher<T>) -> impl Matcher<T> {
         }
     }
 
-    NotMatcher(inner, Default::default())
+    NotMatcher(inner)
 }
 
 /// A [Matcher] which matches a `Vec` with no elements.

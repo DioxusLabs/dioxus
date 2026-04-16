@@ -46,7 +46,7 @@ trait Waitable {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{render, inner_html, eq};
+/// use dioxus_test::{eq, inner_html, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -63,27 +63,28 @@ trait Waitable {
 /// # */
 /// async fn my_component_renders_correctly() {
 ///     let mut tester = render(MyComponent).build();
-///     let element = tester.query(".test-component");
+///
 ///     // This works only if the element has already been rendered.
 ///     tester.query(".test-component").expect(inner_html(eq("Hello, world!"))).immediately().unwrap();
 ///     // This waits for the element to appear
 ///     tester.query(".test-component").expect(inner_html(eq("Hello, world!"))).await.unwrap();
 /// }
-/// # my_component_renders_correctly();
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
 /// ```
 ///
 /// A test can interact with the element once it appears, such as with [ElementCondition::click].
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{render, inner_html, eq};
+/// use dioxus_test::{eq, inner_html, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
 ///     rsx! {
 ///         button {
 ///              class: "test-button",
-///              "Hello, world!"
+///              onclick: move |_| {},
+///              "Click me"
 ///         }
 ///     }
 /// }
@@ -93,10 +94,9 @@ trait Waitable {
 /// # */
 /// async fn my_component_has_a_button() {
 ///     let mut tester = render(MyComponent).build();
-///     let element = tester.query(".test-component");
-///     tester.query(".test-component").click().await.unwrap();
+///     tester.query(".test-button").click().await.unwrap();
 /// }
-/// # my_component_has_a_button();
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_has_a_button());
 /// ```
 ///
 /// A test can also fetch or await an `ElementCondition` directly to produce a [ResolvedElement]
@@ -104,7 +104,7 @@ trait Waitable {
 ///
 /// ```
 /// use dioxus::prelude::*;
-/// use dioxus_test::{render, inner_html, eq};
+/// use dioxus_test::{eq, inner_html, render};
 ///
 /// #[component]
 /// fn MyComponent() -> Element {
@@ -122,13 +122,14 @@ trait Waitable {
 /// async fn my_component_renders_correctly() {
 ///     let mut tester = render(MyComponent).build();
 ///     let element = tester.query(".test-component");
+///
 ///     // This works only if the element has already been rendered.
 ///     let content = element.immediately().unwrap().inner_html();
 ///     // This waits for the element to appear
 ///     let content = element.await.unwrap().inner_html();
 ///     assert_eq!(content, "Hello, world!");
 /// }
-/// # my_component_renders_correctly();
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
 /// ```
 pub struct ElementCondition<'vdom> {
     data: &'vdom mut DocumentTester,
@@ -215,6 +216,37 @@ impl<'vdom> ElementCondition<'vdom> {
     }
 }
 
+/// A represenation of a set of elements on the DOM matching a query, currently or in the future.
+///
+/// A test can make assertions on the elements with [AllElementsCondition::expect]. The test decides
+/// whether to make the assertion immediately or await it.
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{empty, eq, inner_html, not, render};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              class: "test-component",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn my_component_renders_correctly() {
+///     let mut tester = render(MyComponent).build();
+///
+///     tester.query_all(".test-component").expect(not(empty())).immediately().unwrap();
+///
+///     tester.query_all(".this-selector-does-not-exist").expect(empty()).await.unwrap();
+/// }
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
+/// ```
 pub struct AllElementsCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
@@ -307,14 +339,15 @@ impl<'vdom, M, W> MatcherCondition<'vdom, M, W>
 where
     W: Matchable<M>,
 {
-    /// Assert that the matcher in this instance matches the element or set of elements immediately.
+    /// Asserts that the matcher in this instance matches the element or set of elements
+    /// immediately.
     ///
     /// This can be used, for example, to assert on the state of the DOM immediately after its
     /// initial render.
     ///
     /// ```
     /// use dioxus::prelude::*;
-    /// use dioxus_test::{render, inner_html, eq};
+    /// use dioxus_test::{eq, inner_html, render};
     ///
     /// #[component]
     /// fn MyComponent() -> Element {
