@@ -451,6 +451,37 @@ where
     }
 }
 
+// Optic-backed lenses (the shape `#[derive(Store)]` emits) box the same way
+// as `MappedMutSignal`: just hand them to `WriteSignal::new_maybe_sync` /
+// `ReadSignal::new_maybe_sync` via the Readable/Writable bridge.
+impl<V, Source, O, S>
+    From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>> for WriteSignal<O, S>
+where
+    V: Writable<Target = Source, Storage = S> + 'static,
+    Source: 'static,
+    O: 'static,
+    S: CreateBoxedSignalStorage<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>>
+        + BoxedSignalStorage<O>,
+{
+    fn from(value: dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>) -> Self {
+        Self::new_maybe_sync(value)
+    }
+}
+
+impl<V, Source, O, S>
+    From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>> for ReadSignal<O, S>
+where
+    V: Writable<Target = Source, Storage = S> + 'static,
+    Source: 'static,
+    O: 'static,
+    S: CreateBoxedSignalStorage<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>>
+        + BoxedSignalStorage<O>,
+{
+    fn from(value: dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>) -> Self {
+        Self::new_maybe_sync(value)
+    }
+}
+
 /// A trait for creating boxed readable and writable signals. This is implemented for
 /// [UnsyncStorage] and [SyncStorage].
 ///

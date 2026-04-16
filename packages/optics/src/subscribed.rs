@@ -132,6 +132,90 @@ impl SubscriptionTree {
         Self::default()
     }
 
+    /// Subscribe the current [`ReactiveContext`] (if any) shallowly at `path`.
+    ///
+    /// Shallow subscribers only fire on an exact-path write.
+    pub fn track(&self, path: &[PathSegment]) {
+        self.subscribe(path, Depth::Shallow);
+    }
+
+    /// Subscribe the current [`ReactiveContext`] (if any) deeply at `path`.
+    ///
+    /// Deep subscribers fire on an exact-path write *or* on a descendant write.
+    pub fn track_deep(&self, path: &[PathSegment]) {
+        self.subscribe(path, Depth::Deep);
+    }
+
+    /// Mark `path` (and all subscribers that care about it) dirty.
+    pub fn notify(&self, path: &[PathSegment]) {
+        self.mark_dirty(path);
+    }
+
+    /// Mark only the node at `path` (and its deep ancestors) dirty — not
+    /// descendants. Matches the stores `mark_node_dirty` behavior: useful
+    /// when the write only changed the node's own value, not any of its
+    /// children.
+    pub fn notify_node(&self, path: &[PathSegment]) {
+        for i in 0..path.len() {
+            self.retain_at(&path[..i], |_, depth| !depth.is_deep());
+        }
+        self.retain_at(path, |_, _| false);
+    }
+
+    /// Mark dirty every child of `path` whose segment is numerically `>= cutoff`.
+    ///
+    /// This supports insertion into ordered containers: inserting at position
+    /// `i` shifts items `i..len`, so their subscriptions must rerun. Children
+    /// whose segment wasn't constructed via [`PathSegment::index`] are also
+    /// compared by their raw `u64` — hashed keys get mixed into the
+    /// comparison but will virtually never clear the cutoff, so they stay put.
+    pub fn notify_from(&self, path: &[PathSegment], cutoff: u64) {
+        let children: Vec<Vec<PathSegment>> = {
+            let inner = self.inner.lock().unwrap();
+            let Some(node) = inner.root.get(path) else {
+                return;
+            };
+            node.children
+                .iter()
+                .filter(|(seg, _)| seg.0 >= cutoff)
+                .map(|(seg, child)| {
+                    let mut paths = Vec::new();
+                    let mut child_path = path.to_vec();
+                    child_path.push(*seg);
+                    paths.push(child_path.clone());
+                    child.descendant_paths(&child_path, &mut paths);
+                    paths
+                })
+                .flatten()
+                .collect()
+        };
+        for p in children {
+            self.notify_node(&p);
+        }
+    }
+
+    /// Produce a [`dioxus_core::Subscribers`] list that subscribers can
+    /// register against to receive shallow notifications on `path`.
+    pub fn shallow_subscribers(&self, path: &[PathSegment]) -> dioxus_core::Subscribers {
+        Arc::new(TreeSubscribers {
+            tree: self.clone(),
+            path: path.to_vec(),
+            depth: Depth::Shallow,
+        })
+        .into()
+    }
+
+    /// Produce a [`dioxus_core::Subscribers`] list for deep notifications at
+    /// `path` (subscribers also fire on descendant writes).
+    pub fn deep_subscribers(&self, path: &[PathSegment]) -> dioxus_core::Subscribers {
+        Arc::new(TreeSubscribers {
+            tree: self.clone(),
+            path: path.to_vec(),
+            depth: Depth::Deep,
+        })
+        .into()
+    }
+
     /// Register the current [`ReactiveContext`] (if any) as a subscriber at
     /// `path`. A shallow subscription only fires when `path` is written
     /// exactly; a deep subscription also fires on descendant writes.

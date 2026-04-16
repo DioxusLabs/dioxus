@@ -3,12 +3,11 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use crate::subscriptions::{StoreSubscriptions, TinyVec};
 use dioxus_core::Subscribers;
-use dioxus_signals::project::PathKey;
+use dioxus_optics::{Combinator, LensOp, PathSegment, SubscriptionTree};
 use dioxus_signals::{
-    BorrowError, BorrowMutError, MappedMutSignal, Readable, ReadableRef, Writable, WritableExt,
-    WritableRef,
+    BorrowError, BorrowMutError, CopyValue, MappedMutSignal, Readable, ReadableExt, ReadableRef,
+    SyncStorage, Writable, WritableExt, WritableRef,
 };
 
 /// SelectorScope is the primitive that backs the store system.
@@ -21,52 +20,22 @@ use dioxus_signals::{
 /// the selector is read to, it will track the current path in the subscription tree. When it is written to
 /// it marks itself and all its children as dirty.
 ///
-/// When you derive the [`Store`](dioxus_stores_macro::Store) macro on your data structure,
-/// it generates methods that map the lock to a new type and scope the path to a specific part of the subscription structure.
-/// For example, a `Counter` store might look like this:
+/// The subscription tree and path machinery are both provided by
+/// [`dioxus_optics`](dioxus_optics). A `SelectorScope` is effectively a
+/// store-flavored adapter that wires the `Readable` / `Writable` signal
+/// traits to the optics path-subscription system.
 ///
-/// ```rust, ignore
-/// #[derive(Store)]
-/// struct Counter {
-///     count: i32,
-/// }
-///
-/// impl CounterStoreExt for Store<Counter> {
-///     fn count(
-///         self,
-///     ) -> dioxus_stores::Store<
-///         i32,
-///         dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<i32, __W>,
-///     > {
-///         let __map_field: fn(&CounterTree) -> &i32 = |value| &value.count;
-///         let __map_mut_field: fn(&mut CounterTree) -> &mut i32 = |value| &mut value.count;
-///         let scope = self.selector().scope(0u32, __map_field, __map_mut_field);
-///         dioxus_stores::Store::new(scope)
-///     }
-/// }
-/// ```
-///
-/// The `count` method maps the lock to the `i32` type and creates a child `0` path in the subscription tree. Only writes
-/// to that `0` path or its parents will trigger a re-render of the components that read the `count` field.
-#[derive(PartialEq)]
+/// The path itself lives behind a [`CopyValue`] so the whole `SelectorScope`
+/// stays `Copy` whenever its `Lens` is — preserving the ergonomic of moving
+/// stores into closures by-copy that downstream callers (the macro,
+/// `use_resource`, `UseWebsocket`, etc.) rely on.
 pub struct SelectorScope<Lens> {
-    path: TinyVec,
-    store: StoreSubscriptions,
+    path: CopyValue<Vec<PathSegment>, SyncStorage>,
+    store: CopyValue<SubscriptionTree, SyncStorage>,
     write: Lens,
 }
 
-impl<Lens> Debug for SelectorScope<Lens> {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        f.debug_struct("SelectorScope")
-            .field("path", &self.path)
-            .finish()
-    }
-}
-
-impl<Lens> Clone for SelectorScope<Lens>
-where
-    Lens: Clone,
-{
+impl<Lens: Clone> Clone for SelectorScope<Lens> {
     fn clone(&self) -> Self {
         Self {
             path: self.path,
@@ -76,19 +45,38 @@ where
     }
 }
 
-impl<Lens> Copy for SelectorScope<Lens> where Lens: Copy {}
+impl<Lens: Copy> Copy for SelectorScope<Lens> {}
+
+impl<Lens: PartialEq> PartialEq for SelectorScope<Lens> {
+    fn eq(&self, other: &Self) -> bool {
+        self.path == other.path && self.write == other.write
+    }
+}
+
+impl<Lens> Debug for SelectorScope<Lens> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("SelectorScope")
+            .field("path", &*self.path.read())
+            .finish()
+    }
+}
 
 impl<Lens> SelectorScope<Lens> {
-    pub(crate) fn new(path: TinyVec, store: StoreSubscriptions, write: Lens) -> Self {
-        Self { path, store, write }
+    pub(crate) fn new(path: Vec<PathSegment>, store: SubscriptionTree, write: Lens) -> Self {
+        Self {
+            path: CopyValue::new_maybe_sync(path),
+            store: CopyValue::new_maybe_sync(store),
+            write,
+        }
+    }
+
+    fn with_path<R>(&self, f: impl FnOnce(&[PathSegment]) -> R) -> R {
+        let read = self.path.read();
+        f(read.as_slice())
     }
 
     /// Create a child selector scope for a hash key. The scope will only be marked as dirty when a
     /// write occurs to that key or its parents.
-    ///
-    /// Note the hash is lossy, so there may rarely be collisions. If a collision does occur, it may
-    /// cause reruns in a part of the app that has not changed. As long as derived data is pure,
-    /// this should not cause issues.
     pub fn hash_child<U: ?Sized, T: ?Sized, F, FMut>(
         self,
         index: &impl Hash,
@@ -99,15 +87,15 @@ impl<Lens> SelectorScope<Lens> {
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
     {
-        let hash = self.store.hash(index);
-        self.child(hash, map, map_mut)
+        let segment = PathSegment::hashed(index);
+        self.child(segment, map, map_mut)
     }
 
-    /// Create a child selector scope for a specific index. The scope will only be marked as dirty when a
-    /// write occurs to that index or its parents.
+    /// Create a child selector scope for a specific path segment. The scope will only be marked as
+    /// dirty when a write occurs to that segment or its parents.
     pub fn child<U: ?Sized, T: ?Sized, F, FMut>(
         self,
-        index: PathKey,
+        segment: PathSegment,
         map: F,
         map_mut: FMut,
     ) -> SelectorScope<MappedMutSignal<U, Lens, F, FMut>>
@@ -115,26 +103,52 @@ impl<Lens> SelectorScope<Lens> {
         F: Fn(&T) -> &U,
         FMut: Fn(&mut T) -> &mut U,
     {
-        self.child_unmapped(index).map(map, map_mut)
+        self.child_unmapped(segment).map(map, map_mut)
     }
 
-    /// Create a hashed child selector scope for a specific index without mapping the writer. The scope will only
-    /// be marked as dirty when a write occurs to that index or its parents.
+    /// Create a child selector scope whose lens is an optics
+    /// [`LensOp`]-backed [`Combinator`] over the parent. This is the shape
+    /// the `#[derive(Store)]` macro emits, so generated `.field()` methods
+    /// produce optic-backed lenses end-to-end.
+    pub fn child_with_optic<T, U>(
+        self,
+        segment: PathSegment,
+        read: fn(&T) -> &U,
+        write: fn(&mut T) -> &mut U,
+    ) -> SelectorScope<Combinator<Lens, LensOp<T, U>>>
+    where
+        T: 'static,
+        U: 'static,
+    {
+        self.child_unmapped(segment)
+            .map_writer(|w| Combinator::new(w, LensOp::new(read, write)))
+    }
+
+    /// Create a hashed child selector scope for a specific index without mapping the writer.
     pub fn hash_child_unmapped(self, index: &(impl Hash + ?Sized)) -> SelectorScope<Lens> {
-        let hash = self.hash_key(index);
-        self.child_unmapped(hash)
+        let segment = self.hash_key(index);
+        self.child_unmapped(segment)
     }
 
     /// Hash an arbitrary key into this scope's path space.
-    pub fn hash_key(&self, index: &(impl Hash + ?Sized)) -> PathKey {
-        self.store.hash(index)
+    pub fn hash_key(&self, index: &(impl Hash + ?Sized)) -> PathSegment {
+        PathSegment::hashed(index)
     }
 
-    /// Create a child selector scope for a specific index without mapping the writer. The scope will only
-    /// be marked as dirty when a write occurs to that index or its parents.
-    pub fn child_unmapped(mut self, index: PathKey) -> SelectorScope<Lens> {
-        self.path.push(index);
-        self
+    /// Create a child selector scope for a specific segment without mapping the writer.
+    pub fn child_unmapped(self, segment: PathSegment) -> SelectorScope<Lens> {
+        let new_path: Vec<PathSegment> = {
+            let read = self.path.read();
+            let mut next = Vec::with_capacity(read.len() + 1);
+            next.extend_from_slice(&read);
+            next.push(segment);
+            next
+        };
+        SelectorScope {
+            path: CopyValue::new_maybe_sync(new_path),
+            store: self.store,
+            write: self.write,
+        }
     }
 
     /// Map the view into the writable data without creating a child selector scope
@@ -152,33 +166,42 @@ impl<Lens> SelectorScope<Lens> {
 
     /// Track this scope shallowly.
     pub fn track_shallow(&self) {
-        self.store.track(&self.path);
+        self.with_path(|p| self.store.read().track(p));
     }
 
-    /// Track this scope recursively.
+    /// Track this scope recursively (deep subscription).
     pub fn track(&self) {
-        self.store.track_deep(&self.path);
+        self.with_path(|p| self.store.read().track_deep(p));
     }
 
     /// Mark this scope as dirty recursively.
     pub fn mark_dirty(&self) {
-        self.store.mark_dirty(&self.path);
+        self.with_path(|p| self.store.read().notify(p));
     }
 
-    /// Mark this scope as dirty shallowly.
+    /// Mark this scope as dirty shallowly (no descendants).
     pub fn mark_dirty_shallow(&self) {
-        self.store.mark_node_dirty(&self.path);
+        self.with_path(|p| self.store.read().notify_node(p));
     }
 
-    /// Mark this scope as dirty at and after the given index.
+    /// Mark every child of this scope whose numeric index is `>= index` dirty.
     pub fn mark_dirty_at_and_after_index(&self, index: usize) {
-        self.store.mark_dirty_at_and_after_index(&self.path, index);
+        self.with_path(|p| self.store.read().notify_from(p, index as u64));
     }
 
-    /// Borrow the lens/writer. Useful when you need properties of the lens itself
-    /// (for example, to walk a chain of mapped signals to reach the root lens).
+    /// Borrow the lens/writer.
     pub fn writer(&self) -> &Lens {
         &self.write
+    }
+
+    /// Snapshot the underlying subscription tree for this scope.
+    pub fn subscription_tree(&self) -> SubscriptionTree {
+        self.store.read().clone()
+    }
+
+    /// Run a closure with the scope's accumulated path segments.
+    pub fn with_path_segments<R>(&self, f: impl FnOnce(&[PathSegment]) -> R) -> R {
+        self.with_path(f)
     }
 
     /// Map the writer to a new type.
@@ -213,7 +236,7 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
     }
 
     fn subscribers(&self) -> Subscribers {
-        self.store.shallow_subscribers(&self.path)
+        self.with_path(|p| self.store.read().shallow_subscribers(p))
     }
 }
 

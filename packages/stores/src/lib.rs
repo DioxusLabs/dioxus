@@ -7,7 +7,6 @@
 mod impls;
 mod project;
 mod store;
-mod subscriptions;
 pub use store::*;
 pub mod scope;
 
@@ -18,5 +17,6 @@ pub use dioxus_stores_macro::{store, Store};
 #[doc(hidden)]
 pub mod macro_helpers {
     pub use dioxus_core;
+    pub use dioxus_optics;
     pub use dioxus_signals;
 }

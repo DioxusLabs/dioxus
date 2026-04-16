@@ -1,7 +1,5 @@
-use crate::{
-    scope::SelectorScope,
-    subscriptions::{StoreSubscriptions, TinyVec},
-};
+use crate::scope::SelectorScope;
+use dioxus_optics::SubscriptionTree;
 use dioxus_core::{
     use_hook, AttributeValue, DynamicNode, IntoAttributeValue, IntoDynNode, Subscribers, SuperInto,
 };
@@ -117,11 +115,10 @@ impl<T: 'static, S: Storage<T>> Store<T, CopyValue<T, S>> {
     /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
     pub fn new_maybe_sync(value: T) -> Self {
-        let store = StoreSubscriptions::new();
+        let store = SubscriptionTree::new();
         let value = CopyValue::new_maybe_sync(value);
 
-        let path = TinyVec::new();
-        let selector = SelectorScope::new(path, store, value);
+        let selector = SelectorScope::new(Vec::new(), store, value);
         selector.into()
     }
 }
@@ -131,12 +128,11 @@ impl<T: 'static> Store<T> {
     /// inside of an initialization closure like the closure passed to [`use_hook`].
     #[track_caller]
     pub fn new(value: T) -> Self {
-        let store = StoreSubscriptions::new();
+        let store = SubscriptionTree::new();
         let value = CopyValue::new_maybe_sync(value);
         let value = value.into();
 
-        let path = TinyVec::new();
-        let selector = SelectorScope::new(path, store, value);
+        let selector = SelectorScope::new(Vec::new(), store, value);
         selector.into()
     }
 }
@@ -153,9 +149,8 @@ where
     /// Note that if the `Lens` is only `Readable` (like a `Memo`), the resulting store is read-only.
     #[track_caller]
     pub fn from_lens(lens: Lens) -> Self {
-        let store = StoreSubscriptions::new();
-        let path = TinyVec::new();
-        let selector = SelectorScope::new(path, store, lens);
+        let store = SubscriptionTree::new();
+        let selector = SelectorScope::new(Vec::new(), store, lens);
         selector.into()
     }
 }
@@ -278,6 +273,54 @@ where
     }
 }
 
+// ---------------------------------------------------------------------------
+// Coercions for the optic-backed lens shape emitted by the macro.
+// `Store<T, Combinator<Lens, LensOp<S, T>>>` boxes to ReadStore / WriteStore
+// the same way the legacy `MappedStore` does.
+// ---------------------------------------------------------------------------
+
+impl<T, S, Lens, Source>
+    ::std::convert::From<
+        Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+    > for WriteStore<T, S>
+where
+    Lens: Writable<Target = Source, Storage = S> + 'static,
+    Source: 'static,
+    T: 'static,
+    S: BoxedSignalStorage<T>
+        + CreateBoxedSignalStorage<dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+{
+    fn from(
+        value: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+    ) -> Self {
+        Store {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T, S, Lens, Source>
+    ::std::convert::From<
+        Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+    > for ReadStore<T, S>
+where
+    Lens: Writable<Target = Source, Storage = S> + 'static,
+    Source: 'static,
+    T: 'static,
+    S: BoxedSignalStorage<T>
+        + CreateBoxedSignalStorage<dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+{
+    fn from(
+        value: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
+    ) -> Self {
+        Store {
+            selector: value.selector.map_writer(::std::convert::Into::into),
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+}
+
 #[doc(hidden)]
 pub struct SuperIntoReadSignalMarker;
 impl<T, S, Lens> SuperInto<ReadSignal<T, S>, SuperIntoReadSignalMarker> for Store<T, Lens>
@@ -386,7 +429,13 @@ where
 }
 
 impl<T, Lens> dioxus_optics::Pathed for Store<T, Lens> {
-    fn visit_path(&self, _sink: &mut dioxus_optics::PathBuffer) {}
+    fn visit_path(&self, sink: &mut dioxus_optics::PathBuffer) {
+        self.selector.with_path_segments(|segs| {
+            for seg in segs {
+                sink.push(*seg);
+            }
+        });
+    }
 }
 impl<T, Lens> IntoAttributeValue for Store<T, Lens>
 where

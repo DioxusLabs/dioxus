@@ -9,7 +9,7 @@ use generational_box::{AnyStorage, WriteLock};
 
 use crate::{
     combinator::{Access, AccessMut, Combinator, Resolve, ValueAccess},
-    path::{hash_key, PathBuffer, PathSegment, Pathed},
+    path::{PathBuffer, PathSegment, Pathed},
     signal::Optic,
 };
 
@@ -143,7 +143,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Index(self.index as u64));
+        sink.push(PathSegment::index(self.index as u64));
     }
 }
 
@@ -360,7 +360,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Key(hash_key(&self.key)));
+        sink.push(PathSegment::hashed(&self.key));
     }
 }
 
@@ -619,7 +619,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Key(hash_key(&self.key)));
+        sink.push(PathSegment::hashed(&self.key));
     }
 }
 
@@ -913,13 +913,15 @@ where
     }
 }
 
+// `flatten_some` collapses `Option<Option<X>>` into `Option<X>` — it doesn't
+// narrow the data, so its subscription path is identical to the parent's.
+// No segment is added.
 impl<A> Pathed for Combinator<A, FlattenSomeOp>
 where
     A: Pathed,
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Flatten);
     }
 }
 

@@ -9,10 +9,9 @@
 //! in `dioxus-stores`.
 
 use std::borrow::Borrow;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
-use std::hash::{BuildHasher, Hash, Hasher};
+use std::hash::{BuildHasher, Hash};
 use std::iter::FusedIterator;
 use std::ops::{DerefMut, Index, IndexMut};
 use std::panic::Location;
@@ -25,18 +24,18 @@ use crate::{
     UnsyncStorage, Writable, WritableExt, WritableRef, WriteLock, WriteSignal,
 };
 use dioxus_core::{ReactiveContext, Subscribers};
+use dioxus_optics::PathSegment;
 use generational_box::ValueDroppedError;
 
-/// The path segment type used by projector carriers.
+/// The path segment type used by projector carriers — re-exported from
+/// `dioxus-optics` so signals and stores share one opaque path identifier.
 #[doc(hidden)]
-pub type PathKey = u16;
+pub type PathKey = PathSegment;
 
-/// Hash an index into a `PathKey` using the deterministic default SipHasher.
+/// Hash an index into a [`PathKey`] using the deterministic default SipHasher.
 #[doc(hidden)]
-pub fn hash_path_key(index: &(impl Hash + ?Sized)) -> PathKey {
-    let mut hasher = DefaultHasher::new();
-    index.hash(&mut hasher);
-    (hasher.finish() % PathKey::MAX as u64) as PathKey
+pub fn hash_path_key<K: Hash + ?Sized>(index: &K) -> PathKey {
+    PathSegment::hashed(index)
 }
 
 /// The lens produced by mapping a projector through `F` / `FMut`.
@@ -402,7 +401,7 @@ where
     P: ProjectPath,
 {
     fn scope_project(project: P, index: &usize) -> P {
-        project.project_key(*index as _)
+        project.project_key(PathSegment::index(*index as u64))
     }
 }
 
@@ -413,7 +412,7 @@ where
     P: ProjectPath,
 {
     fn scope_project(project: P, index: &usize) -> P {
-        project.project_key(*index as _)
+        project.project_key(PathSegment::index(*index as u64))
     }
 }
 
@@ -753,7 +752,7 @@ pub trait ProjectOption<T: 'static>: Project<Lens: Readable<Target = Option<T>>>
                 v.as_mut()
                     .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
             };
-            Some(self.project_child(0, map, map_mut))
+            Some(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             None
         }
@@ -806,7 +805,7 @@ pub trait ProjectOption<T: 'static>: Project<Lens: Readable<Target = Option<T>>>
                     .as_mut()
                     .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
             };
-            Some(self.project_child(0, map, map_mut))
+            Some(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             None
         }
@@ -826,7 +825,7 @@ pub trait ProjectOption<T: 'static>: Project<Lens: Readable<Target = Option<T>>>
                 v.as_mut()
                     .unwrap_or_else(|| panic!("Tried to access `Some` on an Option value"))
             };
-            Some(self.project_child(0, map, map_mut))
+            Some(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             None
         }
@@ -899,7 +898,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                 r.as_mut()
                     .unwrap_or_else(|_| panic!("Tried to access `Ok` on a `Result` value"))
             };
-            Some(self.project_child(0, map, map_mut))
+            Some(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             None
         }
@@ -925,7 +924,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                     panic!("Tried to access `Err` on a `Result` value")
                 }
             };
-            Some(self.project_child(1, map, map_mut))
+            Some(self.project_child(PathSegment::index(1), map, map_mut))
         } else {
             None
         }
@@ -943,7 +942,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                 |r| r.as_ref().unwrap_or_else(|_| panic!("unreachable"));
             let map_mut: fn(&mut Result<T, E>) -> &mut T =
                 |r| r.as_mut().unwrap_or_else(|_| panic!("unreachable"));
-            Ok(self.project_child(0, map, map_mut))
+            Ok(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             let map: fn(&Result<T, E>) -> &E = |r| {
                 if let Err(e) = r {
@@ -959,7 +958,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                     panic!("unreachable")
                 }
             };
-            Err(self.project_child(1, map, map_mut))
+            Err(self.project_child(PathSegment::index(1), map, map_mut))
         }
     }
 
@@ -1053,7 +1052,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                 Ok(t) => &mut **t,
                 Err(_) => panic!("Tried to access `Ok` on an `Err` value"),
             };
-            Ok(self.project_child(0, map, map_mut))
+            Ok(self.project_child(PathSegment::index(0), map, map_mut))
         } else {
             let map: fn(&Result<T, E>) -> &E = |r| {
                 if let Err(e) = r {
@@ -1069,7 +1068,7 @@ pub trait ProjectResult<T: 'static, E: 'static>:
                     panic!("Tried to access `Err` on an `Ok` value")
                 }
             };
-            Err(self.project_child(1, map, map_mut))
+            Err(self.project_child(PathSegment::index(1), map, map_mut))
         }
     }
 }

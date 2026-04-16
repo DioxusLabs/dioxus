@@ -2,7 +2,7 @@ use std::{future::Future, marker::PhantomData};
 
 use generational_box::{AnyStorage, WriteLock};
 
-use crate::path::{hash_field_fn, hash_prism_type, PathBuffer, PathSegment, Pathed};
+use crate::path::{PathBuffer, PathSegment, Pathed};
 use crate::resource::{AsFuture, AwaitTransform};
 
 // ============================================================================
@@ -92,12 +92,38 @@ pub struct Combinator<A, Op> {
     pub(crate) op: Op,
 }
 
+impl<A, Op> Combinator<A, Op> {
+    /// Build a combinator from a parent accessor and an operation. Used by
+    /// the stores derive macro to construct lens chains from generated code.
+    pub fn new(parent: A, op: Op) -> Self {
+        Self { parent, op }
+    }
+
+    /// Borrow the parent accessor.
+    pub fn parent(&self) -> &A {
+        &self.parent
+    }
+
+    /// Borrow the operation.
+    pub fn op(&self) -> &Op {
+        &self.op
+    }
+}
+
+impl<A: Copy, Op: Copy> Copy for Combinator<A, Op> {}
+
 impl<A: Clone, Op: Clone> Clone for Combinator<A, Op> {
     fn clone(&self) -> Self {
         Self {
             parent: self.parent.clone(),
             op: self.op.clone(),
         }
+    }
+}
+
+impl<A: PartialEq, Op: PartialEq> PartialEq for Combinator<A, Op> {
+    fn eq(&self, other: &Self) -> bool {
+        self.parent == other.parent && self.op == other.op
     }
 }
 
@@ -131,16 +157,64 @@ where
 // ============================================================================
 
 /// Read-only field projection from `S` to `U`.
-#[derive(Clone)]
 pub struct RefOp<S, U> {
     pub(crate) read: fn(&S) -> &U,
 }
 
+impl<S, U> Copy for RefOp<S, U> {}
+impl<S, U> Clone for RefOp<S, U> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S, U> RefOp<S, U> {
+    /// Construct a read-only field projection from a `fn` pointer.
+    pub const fn new(read: fn(&S) -> &U) -> Self {
+        Self { read }
+    }
+
+    /// The underlying read function.
+    pub const fn read_fn(&self) -> fn(&S) -> &U {
+        self.read
+    }
+}
+
 /// Read+write field projection from `S` to `U`.
-#[derive(Clone)]
 pub struct LensOp<S, U> {
     pub(crate) read: fn(&S) -> &U,
     pub(crate) write: fn(&mut S) -> &mut U,
+}
+
+impl<S, U> Copy for LensOp<S, U> {}
+impl<S, U> Clone for LensOp<S, U> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S, U> LensOp<S, U> {
+    /// Construct a field lens from a paired read/write function pair.
+    pub const fn new(read: fn(&S) -> &U, write: fn(&mut S) -> &mut U) -> Self {
+        Self { read, write }
+    }
+
+    /// The underlying read function.
+    pub const fn read_fn(&self) -> fn(&S) -> &U {
+        self.read
+    }
+
+    /// The underlying mutable-read function.
+    pub const fn write_fn(&self) -> fn(&mut S) -> &mut U {
+        self.write
+    }
+}
+
+impl<S, U> PartialEq for LensOp<S, U> {
+    fn eq(&self, other: &Self) -> bool {
+        (self.read as *const ()) == (other.read as *const ())
+            && (self.write as *const ()) == (other.write as *const ())
+    }
 }
 
 impl<S, U> Resolve<RefOp<S, U>> for U
@@ -209,7 +283,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Field(hash_field_fn(self.op.read)));
+        sink.push(PathSegment::field_fn(self.op.read));
     }
 }
 
@@ -254,7 +328,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Field(hash_field_fn(self.op.read)));
+        sink.push(PathSegment::field_fn(self.op.read));
     }
 }
 
@@ -321,7 +395,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Variant(hash_prism_type::<P>()));
+        sink.push(PathSegment::prism_type::<P>());
     }
 }
 
@@ -398,7 +472,7 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
-        sink.push(PathSegment::Variant(hash_prism_type::<P>()));
+        sink.push(PathSegment::prism_type::<P>());
     }
 }
 

@@ -60,8 +60,20 @@ fn derive_store_struct(
 
     let generics = &input.generics;
     let (_, ty_generics, _) = generics.split_for_impl();
-    let (extension_impl_generics, extension_ty_generics, extension_where_clause) =
+    let (extension_impl_generics, extension_ty_generics, _user_where_clause) =
         extension_generics.split_for_impl();
+    // The optic-backed lens needs the source type (the derived struct) to be
+    // `'static`. Splice that bound in alongside the user's bounds so derives
+    // on generic structs work without the user repeating `T: 'static`.
+    let extension_where_clause = match extension_generics.where_clause.as_ref() {
+        Some(wc) => {
+            let mut wc = wc.clone();
+            wc.predicates
+                .push(parse_quote!(#struct_name #ty_generics: 'static));
+            quote! { #wc }
+        }
+        None => quote! { where #struct_name #ty_generics: 'static },
+    };
 
     // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed struct
     let mut implementations = Vec::new();
@@ -250,9 +262,10 @@ fn generate_field_methods(
         ) -> #store_type {
             let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
             let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-            // Map the field into a child selector that tracks the field
-            let scope = self.into_selector().child(
-                #ordinal,
+            // Build a Combinator+LensOp chain so the lens is an optic chain
+            // end-to-end (composable with `dioxus-optics` ops).
+            let scope = self.into_selector().child_with_optic(
+                dioxus_stores::macro_helpers::dioxus_optics::PathSegment::index(#ordinal as u64),
                 __map_field,
                 __map_mut_field,
             );
@@ -559,9 +572,9 @@ fn select_enum_variant_field(
             _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
         };
         // Each field within the variant gets its own reactive scope. Writing to one field will not notify the enum or
-        // other fields
-        let scope = self.into_selector().child(
-            #ordinal,
+        // other fields. The lens is a Combinator+LensOp chain over the parent.
+        let scope = self.into_selector().child_with_optic(
+            dioxus_stores::macro_helpers::dioxus_optics::PathSegment::index(#ordinal as u64),
             __map_field,
             __map_mut_field,
         );
@@ -582,8 +595,16 @@ fn mapped_type(
     ty_generics: &syn::TypeGenerics,
     field_type: &syn::Type,
 ) -> TokenStream2 {
-    // The zoomed in store type is a MappedMutSignal with function pointers to map the reference to the enum into a reference to the field
-    let write_type = quote! { dioxus_stores::macro_helpers::dioxus_signals::MappedMutSignal<#field_type, __Lens, fn(&#item #ty_generics) -> &#field_type, fn(&mut #item #ty_generics) -> &mut #field_type> };
+    // The zoomed-in store type wraps a `Combinator<__Lens, LensOp<Item, Field>>`
+    // — an optics chain — instead of a `MappedMutSignal`. The Readable /
+    // Writable bridge in `dioxus-signals/src/optics_impls.rs` lets the
+    // Combinator slot in as a Store lens.
+    let write_type = quote! {
+        dioxus_stores::macro_helpers::dioxus_optics::Combinator<
+            __Lens,
+            dioxus_stores::macro_helpers::dioxus_optics::LensOp<#item #ty_generics, #field_type>,
+        >
+    };
     quote! { dioxus_stores::Store<#field_type, #write_type> }
 }
 

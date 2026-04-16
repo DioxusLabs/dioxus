@@ -15,7 +15,7 @@ pub use combinator::{
     Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
     OptPrismOp, Prism, PrismOp, RefOp, Resolve, SomePrism, ValueAccess,
 };
-pub use path::{hash_field_fn, hash_key, hash_prism_type, PathBuffer, PathSegment, Pathed};
+pub use path::{PathBuffer, PathSegment, Pathed};
 pub use resource::{AsFuture, AwaitTransform, FutureProject, Resource, ResourceFuture};
 pub use signal::{Optic, Optional, Required};
 pub use subscribed::{Subscribed, SubscriptionTree};
