@@ -96,7 +96,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             // the html-parser crate we use uses a HashMap for attributes. This leads to a
             // non-deterministic order of attributes.
             // Sort them here
-            attributes.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+            attributes.sort_by_key(|a| a.name.to_string());
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
 

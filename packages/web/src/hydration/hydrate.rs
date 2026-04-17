@@ -37,6 +37,12 @@ struct RecoveryAnchor {
     next_sibling: Option<web_sys::Node>,
 }
 
+#[derive(Default)]
+struct HydrationOutputs {
+    ids: Vec<u32>,
+    to_mount: Vec<ElementId>,
+}
+
 const RECOVERY_FRAGMENT_ID: ElementId = ElementId(u32::MAX as usize);
 
 #[derive(Debug)]
@@ -229,8 +235,7 @@ impl WebsysDom {
         validation: &mut impl HydrationSession,
         recovery: Option<RecoveryAnchor>,
     ) -> Result<(), RehydrationError> {
-        let mut ids = Vec::new();
-        let mut to_mount = Vec::new();
+        let mut outputs = HydrationOutputs::default();
         let suspense_path = if scope_id == dom.base_scope().id() {
             None
         } else {
@@ -245,7 +250,7 @@ impl WebsysDom {
             },
             |validation| {
                 let scope = dom.get_scope(scope_id).ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(scope, dom, &mut ids, &mut to_mount, validation)
+                self.rehydrate_scope(scope, dom, &mut outputs, validation)
             },
         )?;
 
@@ -308,10 +313,10 @@ impl WebsysDom {
             return Ok(());
         }
 
-        self.interpreter.base().hydrate(ids, under);
+        self.interpreter.base().hydrate(outputs.ids, under);
 
         #[cfg(feature = "mounted")]
-        for id in to_mount {
+        for id in outputs.to_mount {
             self.send_mount_event(id);
         }
 
@@ -369,8 +374,7 @@ impl WebsysDom {
         &mut self,
         scope: &ScopeState,
         dom: &VirtualDom,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
+        outputs: &mut HydrationOutputs,
         validation: &mut impl HydrationSession,
     ) -> Result<(), RehydrationError> {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
@@ -383,15 +387,14 @@ impl WebsysDom {
             }
         }
 
-        self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount, validation)
+        self.rehydrate_vnode(dom, scope.root_node(), outputs, validation)
     }
 
     fn rehydrate_vnode(
         &mut self,
         dom: &VirtualDom,
         vnode: &VNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
+        outputs: &mut HydrationOutputs,
         validation: &mut impl HydrationSession,
     ) -> Result<(), RehydrationError> {
         for (i, root) in vnode.template.roots.iter().enumerate() {
@@ -399,8 +402,7 @@ impl WebsysDom {
                 dom,
                 vnode,
                 root,
-                ids,
-                to_mount,
+                outputs,
                 Some(vnode.mounted_root(i, dom).ok_or(VNodeNotInitialized)?),
                 validation,
             )?;
@@ -413,8 +415,7 @@ impl WebsysDom {
         dom: &VirtualDom,
         vnode: &VNode,
         node: &TemplateNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
+        outputs: &mut HydrationOutputs,
         root_id: Option<ElementId>,
         validation: &mut impl HydrationSession,
     ) -> Result<(), RehydrationError> {
@@ -437,19 +438,17 @@ impl WebsysDom {
                             let value = &attribute.value;
                             if let AttributeValue::Listener(_) = value {
                                 if attribute.name == "onmounted" {
-                                    to_mount.push(id);
+                                    outputs.to_mount.push(id);
                                 }
                             }
                         }
                     }
                 }
                 if let Some(id) = mounted_id {
-                    ids.push(id.0 as u32);
+                    outputs.ids.push(id.0 as u32);
                 }
                 for child in *children {
-                    self.rehydrate_template_node(
-                        dom, vnode, child, ids, to_mount, None, validation,
-                    )?;
+                    self.rehydrate_template_node(dom, vnode, child, outputs, None, validation)?;
                 }
                 Ok::<(), RehydrationError>(())
             })?,
@@ -458,13 +457,12 @@ impl WebsysDom {
                 &vnode.dynamic_nodes[*id],
                 *id,
                 vnode,
-                ids,
-                to_mount,
+                outputs,
                 validation,
             )?,
             TemplateNode::Text { text } => validation.text(text, |_| {
                 if let Some(id) = root_id {
-                    ids.push(id.0 as u32);
+                    outputs.ids.push(id.0 as u32);
                 }
                 Ok::<(), RehydrationError>(())
             })?,
@@ -478,13 +476,12 @@ impl WebsysDom {
         dynamic: &DynamicNode,
         dynamic_node_index: usize,
         vnode: &VNode,
-        ids: &mut Vec<u32>,
-        to_mount: &mut Vec<ElementId>,
+        outputs: &mut HydrationOutputs,
         validation: &mut impl HydrationSession,
     ) -> Result<(), RehydrationError> {
         match dynamic {
             dioxus_core::DynamicNode::Text(text) => validation.text(&text.value, |_| {
-                ids.push(
+                outputs.ids.push(
                     vnode
                         .mounted_dynamic_node(dynamic_node_index, dom)
                         .ok_or(VNodeNotInitialized)?
@@ -493,7 +490,7 @@ impl WebsysDom {
                 Ok::<(), RehydrationError>(())
             })?,
             dioxus_core::DynamicNode::Placeholder(_) => validation.placeholder(|_| {
-                ids.push(
+                outputs.ids.push(
                     vnode
                         .mounted_dynamic_node(dynamic_node_index, dom)
                         .ok_or(VNodeNotInitialized)?
@@ -506,12 +503,12 @@ impl WebsysDom {
                     let scope = comp
                         .mounted_scope(dynamic_node_index, vnode, dom)
                         .ok_or(VNodeNotInitialized)?;
-                    self.rehydrate_scope(scope, dom, ids, to_mount, validation)
+                    self.rehydrate_scope(scope, dom, outputs, validation)
                 })?
             }
             dioxus_core::DynamicNode::Fragment(fragment) => {
                 for vnode in fragment {
-                    self.rehydrate_vnode(dom, vnode, ids, to_mount, validation)?;
+                    self.rehydrate_vnode(dom, vnode, outputs, validation)?;
                 }
             }
         }

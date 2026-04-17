@@ -456,8 +456,8 @@ impl HydrationValidationSession {
             if expected_content != actual_content {
                 self.push_node_mismatch(
                     format!(
-                        "Expected {expected_desc}, found text {}.",
-                        format!("{:?}", truncate(&actual_content, 50))
+                        "Expected {expected_desc}, found text {:?}.",
+                        truncate(&actual_content, 50)
                     ),
                     expected_rsx.to_string(),
                     Some(dom_node),

@@ -860,10 +860,10 @@ impl AppServer {
         pid: Option<u32>,
     ) {
         match build_id {
-            BuildId::PRIMARY => {
+            BuildId::PRIMARY
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
-                if self.client.build.bundle != BundleFormat::Web {
+                if self.client.build.bundle != BundleFormat::Web => {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
                     }
@@ -871,7 +871,6 @@ impl AppServer {
                         self.client.pid = Some(pid);
                     }
                 }
-            }
             BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.aslr_reference = aslr_reference;
