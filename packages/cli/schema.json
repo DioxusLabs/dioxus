@@ -542,7 +542,7 @@
           ]
         },
         "name": {
-          "description": "Display name of the application`",
+          "description": "Display name of the application",
           "type": [
             "string",
             "null"
