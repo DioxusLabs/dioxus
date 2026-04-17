@@ -20,7 +20,7 @@ mod macro_tests {
         #[store]
         impl Store<TodoItem> {
             fn is_checked(&self) -> bool {
-                self.checked().cloned()
+                self.checked().cloned().value()
             }
 
             fn check(&mut self) {
@@ -37,15 +37,15 @@ mod macro_tests {
         // that returns a store scoped to that field.
         let checked = store.checked();
         let contents = store.contents();
-        let checked: bool = checked.cloned();
-        let contents: String = contents.cloned();
+        let checked: bool = checked.cloned().value();
+        let contents: String = contents.cloned().value();
 
         // It also generates a `transpose` method returns a variant of your structure
         // with stores wrapping each of your data types. This can be very useful when destructuring
         // or matching your type
         let TodoItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked.cloned();
-        let contents: String = contents.cloned();
+        let checked: bool = checked.cloned().value();
+        let contents: String = contents.cloned().value();
 
         let is_checked = store.is_checked();
         store.check();
@@ -64,7 +64,7 @@ mod macro_tests {
             where
                 T: 'static,
             {
-                self.checked().cloned()
+                self.checked().cloned().value()
             }
 
             fn check(&mut self)
@@ -82,12 +82,12 @@ mod macro_tests {
 
         let checked = store.checked();
         let contents = store.contents();
-        let checked: bool = checked.cloned();
-        let contents: String = contents.cloned();
+        let checked: bool = checked.cloned().value();
+        let contents: String = contents.cloned().value();
 
         let ItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked.cloned();
-        let contents: String = contents.cloned();
+        let checked: bool = checked.cloned().value();
+        let contents: String = contents.cloned().value();
 
         let is_checked = store.is_checked();
         store.check();
@@ -109,7 +109,7 @@ mod macro_tests {
             where
                 T: 'static,
             {
-                self.checked().cloned()
+                self.checked().cloned().value()
             }
 
             fn check(&mut self)
@@ -127,11 +127,11 @@ mod macro_tests {
 
         let checked = store.checked();
         let contents = store.contents();
-        let checked: bool = checked.cloned();
+        let checked: bool = checked.cloned().value();
         let contents: &'static str = *contents.read();
 
         let ItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked.cloned();
+        let checked: bool = checked.cloned().value();
         let contents: &'static str = *contents.read();
 
         let is_checked = store.is_checked();
@@ -149,7 +149,7 @@ mod macro_tests {
         });
 
         let Item { contents } = store.transpose();
-        let contents: String = contents.cloned();
+        let contents: String = contents.cloned().value();
     }
 
     fn derive_tuple() {
@@ -159,13 +159,13 @@ mod macro_tests {
         let store = use_store(|| Item(true, "Hello".to_string()));
 
         let first = store.field_0();
-        let first: bool = first.cloned();
+        let first: bool = first.cloned().value();
 
         let transposed = store.transpose();
         let first = transposed.0;
         let second = transposed.1;
-        let first: bool = first.cloned();
-        let second: String = second.cloned();
+        let first: bool = first.cloned().value();
+        let second: String = second.cloned().value();
     }
 
     fn derive_enum() {
@@ -199,27 +199,27 @@ mod macro_tests {
         let barfoo = store.is_bar_foo();
 
         let foo = store.bar().unwrap();
-        let foo: String = foo.cloned();
+        let foo: String = foo.cloned().value();
         let bar = store.bar_foo().unwrap();
-        let bar: String = bar.cloned();
+        let bar: String = bar.cloned().value();
 
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
             EnumStoreTransposed::Foo => {}
             Bar(bar) => {
-                let bar: String = bar.cloned();
+                let bar: String = bar.cloned().value();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo.cloned();
-                let bar: String = bar.cloned();
+                let foo: i32 = foo.cloned().value();
+                let bar: String = bar.cloned().value();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo.cloned();
-                let bar: String = bar.cloned();
+                let foo: u32 = foo.cloned().value();
+                let bar: String = bar.cloned().value();
             }
             BarFoo { foo } => {
-                let foo: String = foo.cloned();
+                let foo: String = foo.cloned().value();
             }
         }
 
@@ -264,27 +264,27 @@ mod macro_tests {
         let barfoo = store.is_bar_foo();
 
         let foo = store.bar().unwrap();
-        let foo: String = foo.cloned();
+        let foo: String = foo.cloned().value();
         let bar = store.bar_foo().unwrap();
-        let bar: String = bar.cloned();
+        let bar: String = bar.cloned().value();
 
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
             EnumStoreTransposed::Foo => {}
             Bar(bar) => {
-                let bar: String = bar.cloned();
+                let bar: String = bar.cloned().value();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo.cloned();
-                let bar: String = bar.cloned();
+                let foo: i32 = foo.cloned().value();
+                let bar: String = bar.cloned().value();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo.cloned();
-                let bar: String = bar.cloned();
+                let foo: u32 = foo.cloned().value();
+                let bar: String = bar.cloned().value();
             }
             BarFoo { foo } => {
-                let foo: String = foo.cloned();
+                let foo: String = foo.cloned().value();
             }
         }
 
@@ -344,11 +344,11 @@ mod macro_tests {
                 let bar: &'static str = *bar.read();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo.cloned();
+                let foo: i32 = foo.cloned().value();
                 let bar: &'static str = *bar.read();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo.cloned();
+                let foo: u32 = foo.cloned().value();
                 let bar: &'static str = *bar.read();
             }
             BarFoo { foo } => {
@@ -373,10 +373,10 @@ mod macro_tests {
         match transposed {
             Enum::Foo => {}
             Bar(bar) => {
-                let bar: String = bar.cloned();
+                let bar: String = bar.cloned().value();
             }
             BarFoo { foo } => {
-                let foo: String = foo.cloned();
+                let foo: String = foo.cloned().value();
             }
         }
     }

@@ -207,6 +207,23 @@ where
         self.len() == 0
     }
 
+    /// Build a derived optic whose value is the index of the first element
+    /// matching `predicate` (or `None` if nothing matches). The predicate
+    /// iterates the underlying `Vec<T>` snapshot and receives `&T`.
+    #[must_use]
+    pub fn position<F>(&self, predicate: F) -> Optic<Position<A, F>>
+    where
+        F: Fn(&T) -> bool,
+    {
+        Optic {
+            access: Position {
+                parent: self.access.parent.clone(),
+                predicate,
+            },
+            _marker: PhantomData,
+        }
+    }
+
     /// Borrow the child at `index` as a Required optic. Panics on
     /// out-of-bounds access through `read`/`write`.
     ///
@@ -1254,4 +1271,345 @@ where
     Combinator<A, Op>: Access<Target = T>,
     T: Resolve<Op>,
 {
+}
+
+// ============================================================================
+// Derived scalar optics — `.len()` / `.is_empty()` / `.cloned()` /
+// `.position()` return an [`Optic`] whose [`ValueAccess`] impl computes the
+// result on demand. That way the derivation stays in the optic chain: the
+// caller can compose further combinators, subscribe reactively, or call
+// `.value()` / `use_memo(…)` to materialize a plain scalar.
+//
+// Each combinator is a zero-cost newtype carrier over the parent `Access` —
+// it reads the projected collection, computes the scalar, and stops there.
+// ============================================================================
+
+/// Scalar-producing carrier for [`Optic::len`] on `Vec` / `HashMap` /
+/// `BTreeMap` targets. Exposes a `usize` via [`ValueAccess`].
+pub struct Len<Parent> {
+    pub(crate) parent: Parent,
+}
+
+impl<Parent: Clone> Clone for Len<Parent> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+        }
+    }
+}
+impl<Parent: Copy> Copy for Len<Parent> {}
+
+/// Scalar-producing carrier for [`Optic::is_empty`]. Exposes `bool` via
+/// [`ValueAccess`].
+pub struct IsEmpty<Parent> {
+    pub(crate) parent: Parent,
+}
+
+impl<Parent: Clone> Clone for IsEmpty<Parent> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+        }
+    }
+}
+impl<Parent: Copy> Copy for IsEmpty<Parent> {}
+
+/// Scalar-producing carrier for [`Optic::cloned`]. Exposes `A::Target` via
+/// [`ValueAccess`], using `Clone::clone` on each `value()` call.
+pub struct Cloned<Parent> {
+    pub(crate) parent: Parent,
+}
+
+impl<Parent: Clone> Clone for Cloned<Parent> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+        }
+    }
+}
+impl<Parent: Copy> Copy for Cloned<Parent> {}
+
+impl<A> ValueAccess<A::Target> for Cloned<A>
+where
+    A: Access,
+    A::Target: Clone,
+{
+    fn value(&self) -> A::Target {
+        self.parent
+            .try_read()
+            .expect("optics: required path produced no value")
+            .clone()
+    }
+}
+
+/// Scalar-producing carrier for [`Optic::position`] on `Vec<T>` targets.
+/// Exposes `Option<usize>` via [`ValueAccess`].
+pub struct Position<Parent, F> {
+    pub(crate) parent: Parent,
+    pub(crate) predicate: F,
+}
+
+impl<Parent: Clone, F: Clone> Clone for Position<Parent, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+            predicate: self.predicate.clone(),
+        }
+    }
+}
+
+impl<A, T, F> ValueAccess<Option<usize>> for Position<A, F>
+where
+    A: Access<Target = Vec<T>>,
+    T: 'static,
+    F: Fn(&T) -> bool,
+{
+    fn value(&self) -> Option<usize> {
+        self.parent
+            .try_read()?
+            .iter()
+            .position(|item| (self.predicate)(item))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Vec<T>: Len / IsEmpty / Position
+// ---------------------------------------------------------------------------
+
+impl<A> ValueAccess<usize> for Len<A>
+where
+    A: Access,
+    A::Target: CollectionLen,
+{
+    fn value(&self) -> usize {
+        self.parent
+            .try_read()
+            .expect("optics: required path produced no value")
+            .collection_len()
+    }
+}
+
+impl<A> ValueAccess<bool> for IsEmpty<A>
+where
+    A: Access,
+    A::Target: CollectionLen,
+{
+    fn value(&self) -> bool {
+        self.parent
+            .try_read()
+            .expect("optics: required path produced no value")
+            .collection_is_empty()
+    }
+}
+
+/// Shape trait so `Len` / `IsEmpty` can support `Vec`, `HashMap`, and
+/// `BTreeMap` through a single `ValueAccess` impl. Implemented once per
+/// supported container type below.
+pub trait CollectionLen {
+    fn collection_len(&self) -> usize;
+    fn collection_is_empty(&self) -> bool;
+}
+
+impl<T> CollectionLen for Vec<T> {
+    fn collection_len(&self) -> usize {
+        self.len()
+    }
+    fn collection_is_empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl<K, V, S> CollectionLen for HashMap<K, V, S>
+where
+    S: BuildHasher,
+{
+    fn collection_len(&self) -> usize {
+        self.len()
+    }
+    fn collection_is_empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl<K, V> CollectionLen for BTreeMap<K, V> {
+    fn collection_len(&self) -> usize {
+        self.len()
+    }
+    fn collection_is_empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Vec/HashMap/BTreeMap-flavored constructors on `Optic<A, Path>`.
+//
+// These live on extension traits so one `Optic<A, Path>` doesn't collect
+// three same-named inherent methods (one per Target) — the compiler can't
+// prove `Vec<T>` / `HashMap<_, _>` / `BTreeMap<_, _>` disjoint from impl
+// headers alone.
+// ---------------------------------------------------------------------------
+
+/// Shortcuts on any optic whose target is a `Vec<T>`. Re-exported through
+/// [`crate::prelude`].
+pub trait OpticVecExt<T> {
+    /// Build a derived optic whose value is the projected vector's length.
+    fn len(&self) -> Optic<Len<Self>>
+    where
+        Self: Sized;
+    /// Build a derived optic whose value is `true` when the projected
+    /// vector is empty.
+    fn is_empty(&self) -> Optic<IsEmpty<Self>>
+    where
+        Self: Sized;
+    /// Build a derived optic whose value is the index of the first element
+    /// matching `predicate` (or `None` if none match). The predicate
+    /// iterates the underlying `Vec<T>` snapshot and receives `&T`.
+    fn position<F>(&self, predicate: F) -> Optic<Position<Self, F>>
+    where
+        Self: Sized,
+        F: Fn(&T) -> bool;
+}
+
+impl<A, T> OpticVecExt<T> for A
+where
+    A: Clone + Access<Target = Vec<T>>,
+    T: 'static,
+{
+    fn len(&self) -> Optic<Len<Self>> {
+        Optic {
+            access: Len {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn is_empty(&self) -> Optic<IsEmpty<Self>> {
+        Optic {
+            access: IsEmpty {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn position<F>(&self, predicate: F) -> Optic<Position<Self, F>>
+    where
+        F: Fn(&T) -> bool,
+    {
+        Optic {
+            access: Position {
+                parent: self.clone(),
+                predicate,
+            },
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Shortcuts on any optic whose target is a `HashMap<K, V, S>`.
+pub trait OpticHashMapExt<K, V, S> {
+    /// Derived optic whose value is the projected map's entry count.
+    fn len(&self) -> Optic<Len<Self>>
+    where
+        Self: Sized;
+    /// Derived optic whose value is `true` when the projected map is empty.
+    fn is_empty(&self) -> Optic<IsEmpty<Self>>
+    where
+        Self: Sized;
+    /// Optic-facing values view. Equivalent to `self.iter().values()`.
+    fn values(&self) -> Optic<Values<EachHashMap<Self, K, V, S>>>
+    where
+        Self: Sized;
+}
+
+impl<A, K, V, S> OpticHashMapExt<K, V, S> for A
+where
+    A: Clone + Access<Target = HashMap<K, V, S>>,
+    K: Clone + Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+    fn len(&self) -> Optic<Len<Self>> {
+        Optic {
+            access: Len {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn is_empty(&self) -> Optic<IsEmpty<Self>> {
+        Optic {
+            access: IsEmpty {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn values(&self) -> Optic<Values<EachHashMap<Self, K, V, S>>> {
+        Optic {
+            access: Values {
+                parent: EachHashMap {
+                    parent: self.clone(),
+                    _marker: PhantomData,
+                },
+            },
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Shortcuts on any optic whose target is a `BTreeMap<K, V>`.
+pub trait OpticBTreeMapExt<K, V> {
+    /// Derived optic whose value is the projected map's entry count.
+    fn len(&self) -> Optic<Len<Self>>
+    where
+        Self: Sized;
+    /// Derived optic whose value is `true` when the projected map is empty.
+    fn is_empty(&self) -> Optic<IsEmpty<Self>>
+    where
+        Self: Sized;
+    /// Optic-facing values view. Equivalent to `self.iter().values()`.
+    fn values(&self) -> Optic<Values<EachBTreeMap<Self, K, V>>>
+    where
+        Self: Sized;
+}
+
+impl<A, K, V> OpticBTreeMapExt<K, V> for A
+where
+    A: Clone + Access<Target = BTreeMap<K, V>>,
+    K: Clone + Ord + 'static,
+    V: 'static,
+{
+    fn len(&self) -> Optic<Len<Self>> {
+        Optic {
+            access: Len {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn is_empty(&self) -> Optic<IsEmpty<Self>> {
+        Optic {
+            access: IsEmpty {
+                parent: self.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
+    fn values(&self) -> Optic<Values<EachBTreeMap<Self, K, V>>> {
+        Optic {
+            access: Values {
+                parent: EachBTreeMap {
+                    parent: self.clone(),
+                    _marker: PhantomData,
+                },
+            },
+            _marker: PhantomData,
+        }
+    }
 }

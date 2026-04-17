@@ -55,7 +55,7 @@ pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 ///     fn sum(&self) -> i32 {
 ///        let children = self.children();
 ///        let children = children.read();
-///        self.count().cloned() + children.iter().map(|c| c.count).sum::<i32>()
+///        self.count().cloned().value() + children.iter().map(|c| c.count).sum::<i32>()
 ///     }
 /// }
 ///

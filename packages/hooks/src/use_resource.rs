@@ -5,7 +5,9 @@ use dioxus_core::{
 };
 use dioxus_optics::{
     AsFuture, Combinator, ErrPrism, FutureAccess, OkPrism, Optic, PrismOp, Required, SomePrism,
+    ValueAccess,
 };
+use std::marker::PhantomData;
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
     Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteSignal,
@@ -238,8 +240,37 @@ pub trait ResourceControls {
     fn task(&self) -> Task;
     fn finished(&self) -> bool;
     fn pending(&self) -> bool;
+    /// Build a derived optic whose value is `true` while the backing task is
+    /// actively running — e.g. during the initial fetch or any background
+    /// refetch triggered by a dependency change. Use `.value()` to
+    /// materialize the flag, or compose with further combinators to keep
+    /// the derivation inside the optic chain.
+    fn loading(&self) -> Optic<ResourceLoading>;
     /// Await the next completion of this resource's task.
     fn wait(&self) -> ResourceFuture;
+}
+
+/// Scalar-producing carrier for [`ResourceControls::loading`]. Exposes
+/// `bool` via [`ValueAccess`] by peeking the backing task's paused state.
+pub struct ResourceLoading {
+    handle: CopyValue<ResourceHandle>,
+    _not_send: PhantomData<*const ()>,
+}
+
+impl Clone for ResourceLoading {
+    fn clone(&self) -> Self {
+        Self {
+            handle: self.handle,
+            _not_send: PhantomData,
+        }
+    }
+}
+impl Copy for ResourceLoading {}
+
+impl ValueAccess<bool> for ResourceLoading {
+    fn value(&self) -> bool {
+        !self.handle.read().task.paused()
+    }
 }
 
 impl<T: HasResourceHandle> ResourceControls for T {
@@ -263,6 +294,12 @@ impl<T: HasResourceHandle> ResourceControls for T {
     }
     fn pending(&self) -> bool {
         self.resource_handle().read().task.paused()
+    }
+    fn loading(&self) -> Optic<ResourceLoading> {
+        Optic::from_access(ResourceLoading {
+            handle: self.resource_handle(),
+            _not_send: PhantomData,
+        })
     }
     fn wait(&self) -> ResourceFuture {
         ResourceFuture {

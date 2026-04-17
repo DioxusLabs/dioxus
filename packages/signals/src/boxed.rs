@@ -505,6 +505,23 @@ where
     }
 }
 
+// Any optic whose inner carrier is a [`ValueAccess`] producer (e.g. the
+// derived scalars `.cloned()` / `.is_empty()` / `.len()` / `.position(..)` /
+// `.loading()` / `.any(..)` or a BTreeMap value accessor) converts into a
+// `ReadSignal<T>` by memoizing the computation. The resulting signal tracks
+// the same reactive dependencies the optic would on a direct read, and
+// re-emits only when the derived value actually changes (thanks to
+// [`Memo`]'s `PartialEq` gate).
+impl<A, T> From<dioxus_optics::Optic<A>> for ReadSignal<T>
+where
+    A: dioxus_optics::ValueAccess<T> + 'static,
+    T: PartialEq + 'static,
+{
+    fn from(value: dioxus_optics::Optic<A>) -> Self {
+        Memo::new(move || value.value::<T>()).into()
+    }
+}
+
 /// A trait for creating boxed readable and writable signals. This is implemented for
 /// [UnsyncStorage] and [SyncStorage].
 ///

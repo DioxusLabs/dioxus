@@ -4,7 +4,7 @@ use dioxus_core::current_owner;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
 use crate::{
-    collection::{FlattenSome, FlattenSomeOp, GetProjection},
+    collection::{Cloned, FlattenSome, FlattenSomeOp, GetProjection},
     combinator::{
         Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
         OptPrismOp, Prism, PrismOp, RefOp, SomePrism, ValueAccess,
@@ -290,6 +290,22 @@ impl<A> Optic<A, Required> {
             .expect("optics: required path produced no value")
     }
 
+    /// Build a derived optic whose value is the projected target cloned
+    /// out on each read. Use `.value()` to materialize the clone, or
+    /// compose with further combinators to stay inside the optic chain.
+    #[must_use]
+    pub fn cloned(&self) -> Optic<Cloned<A>>
+    where
+        A: Clone,
+    {
+        Optic {
+            access: Cloned {
+                parent: self.access.clone(),
+            },
+            _marker: PhantomData,
+        }
+    }
+
     /// Lift `Option<T>` from inside the carrier to an optional child path.
     #[must_use]
     pub fn map_some<T>(self) -> Optic<Combinator<A, PrismOp<SomePrism<T>>>, Optional>
@@ -421,6 +437,22 @@ impl<A> Optic<A, Optional> {
             access: self.access,
             _marker: PhantomData,
         })
+    }
+
+    /// Assert that the optional path resolves now and convert the optic to a
+    /// [`Required`] tag. Panics if the path is currently absent.
+    ///
+    /// Equivalent to `self.to_option().expect(...)`. Useful when a caller has
+    /// already confirmed the projection's presence (for example, a HashMap
+    /// `.get(key)` that is known to hit) and wants to drop the `Option`
+    /// shape without peeling it manually.
+    #[track_caller]
+    pub fn unwrap(self) -> Optic<A, Required>
+    where
+        A: Access,
+    {
+        self.to_option()
+            .expect("optics: called `unwrap` on an absent optional path")
     }
 
     /// Lift `Option<T>` from inside an already-optional child path.

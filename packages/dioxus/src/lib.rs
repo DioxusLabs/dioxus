@@ -168,6 +168,19 @@ pub mod prelude {
     pub use dioxus_signals::{self, *};
 
     #[cfg(feature = "signals")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "signals")))]
+    #[doc(inline)]
+    pub use dioxus_signals::dioxus_optics::{
+        self, Access, AccessMut, Any, AsFuture, AwaitTransform, BTreeMapKey, Cloned, Combinator,
+        EachBTreeMap, EachHashMap, EachVec, ErrPrism, FlattenSome, FlattenSomeOp, FutureAccess,
+        FutureProject, GetProjection, HasSubscriptionTree, HashMapKey, InlinePrism, IsEmpty,
+        IterShape, Len, LensOp, OkPrism, OptPrismOp, Optic, OpticBTreeMapExt, OpticExt,
+        OpticHashMapExt, OpticIter, OpticMutExt, OpticVecExt, Optional, PathBuffer, PathSegment,
+        Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, SomePrism, Subscribed,
+        SubscriptionTree, ValueAccess, Values, VecIndex, PATH_LEN,
+    };
+
+    #[cfg(feature = "signals")]
     pub use dioxus_stores::{self, store, use_store, GlobalStore, ReadStore, Store, WriteStore};
 
     #[cfg(feature = "macro")]

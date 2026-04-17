@@ -1158,3 +1158,37 @@ fn drop_in_api_signal_iteration() {
         assert_eq!(collected, vec![1, 2, 3]);
     });
 }
+
+#[test]
+fn derived_optics_convert_to_read_signal() {
+    use dioxus_optics::prelude::*;
+    use dioxus_signals::{ReadSignal, ReadableExt};
+
+    fn takes_bool(sig: ReadSignal<bool>) -> bool {
+        sig.cloned()
+    }
+    fn takes_usize(sig: ReadSignal<usize>) -> usize {
+        sig.cloned()
+    }
+    fn takes_opt_usize(sig: ReadSignal<Option<usize>>) -> Option<usize> {
+        sig.cloned()
+    }
+    fn takes_string(sig: ReadSignal<String>) -> String {
+        sig.cloned()
+    }
+
+    with_runtime(|| {
+        let items: Signal<Vec<i32>> = Signal::new(vec![1, 2, 3]);
+
+        assert!(!takes_bool(items.is_empty().into()));
+        assert_eq!(takes_usize(items.len().into()), 3);
+        assert_eq!(takes_opt_usize(items.position(|x| *x == 2).into()), Some(1));
+        assert_eq!(takes_opt_usize(items.position(|x| *x == 99).into()), None);
+
+        // Optic::cloned produces a derived `Optic<Cloned<A>>` which memoizes
+        // into a ReadSignal<T> through the generic `From` impl above.
+        let name: Signal<String> = Signal::new("Alice".to_string());
+        let as_optic = Optic::from_access(name);
+        assert_eq!(takes_string(as_optic.cloned().into()), "Alice");
+    });
+}

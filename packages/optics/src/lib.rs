@@ -10,8 +10,9 @@ mod signal;
 mod subscribed;
 
 pub use collection::{
-    Any, BTreeMapKey, EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp,
-    GetProjection, HashMapKey, Values, VecIndex,
+    Any, BTreeMapKey, Cloned, CollectionLen, EachBTreeMap, EachHashMap, EachVec, FlattenSome,
+    FlattenSomeOp, GetProjection, HashMapKey, IsEmpty, Len, OpticBTreeMapExt, OpticHashMapExt,
+    OpticVecExt, Position, Values, VecIndex,
 };
 pub use combinator::{
     Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
@@ -27,9 +28,12 @@ pub use subscribed::{HasSubscriptionTree, Subscribed, SubscriptionTree};
 /// Common imports for the experimental optics API.
 pub mod prelude {
     pub use crate::{
-        Access, AccessMut, AsFuture, AwaitTransform, FutureAccess, FutureProject,
-        HasSubscriptionTree, InlinePrism, Optic, OpticExt, OpticIter, OpticMutExt, Optional,
-        Pathed, Prism, Required, Resource, ResourceFuture, SomePrism, Subscribed, SubscriptionTree,
-        ValueAccess,
+        Access, AccessMut, Any, AsFuture, AwaitTransform, BTreeMapKey, Cloned, Combinator,
+        EachBTreeMap, EachHashMap, EachVec, ErrPrism, FlattenSome, FlattenSomeOp, FutureAccess,
+        FutureProject, GetProjection, HasSubscriptionTree, HashMapKey, InlinePrism, IsEmpty,
+        IterShape, Len, LensOp, OkPrism, OptPrismOp, Optic, OpticBTreeMapExt, OpticExt,
+        OpticHashMapExt, OpticIter, OpticMutExt, OpticVecExt, Optional, PathBuffer, PathSegment,
+        Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, Resource, ResourceFuture,
+        SomePrism, Subscribed, SubscriptionTree, ValueAccess, Values, VecIndex, PATH_LEN,
     };
 }
