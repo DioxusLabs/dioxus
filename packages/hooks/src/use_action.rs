@@ -5,6 +5,68 @@ use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};
 use std::{marker::PhantomData, pin::Pin, prelude::rust_2024::Future, task::Poll};
 
+/// Create an action that runs async work on demand, triggered by user interaction.
+///
+/// Unlike [`use_resource`](crate::use_resource()) which runs automatically when its reactive
+/// dependencies change, `use_action` only runs when you explicitly call it. This makes it
+/// the right choice for mutations, form submissions, button clicks, and any async work that
+/// should happen in response to a user event rather than on mount or state change.
+///
+/// The closure you pass must return a `Future` whose output is `Result<T, E>`. The action
+/// tracks the lifecycle for you: pending, ready, or errored.
+///
+/// ## Basic usage
+///
+/// Pass a server function (or any async closure) directly:
+///
+/// ```rust, ignore
+/// let mut save = use_action(save_to_database);
+///
+/// rsx! {
+///     button { onclick: move |_| save.call(form_data.clone()), "Save" }
+///
+///     if save.pending() {
+///         p { "Saving..." }
+///     }
+///
+///     if let Some(result) = save.value() {
+///         match result {
+///             Ok(data) => rsx! { p { "Saved: {data}" } },
+///             Err(err) => rsx! { p { "Error: {err}" } },
+///         }
+///     }
+/// }
+/// ```
+///
+/// # With inline async closures
+///
+/// ```rust, ignore
+/// let mut fetch_dog = use_action(move |breed: String| async move {
+///     reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
+///         .await?
+///         .json::<DogImage>()
+///         .await
+/// });
+/// ```
+///
+/// ## Automatic cancellation
+///
+/// Calling an action while a previous call is still pending automatically cancels the
+/// in-flight task. Only the most recent call's result is kept. You can also cancel or
+/// reset manually:
+///
+/// ```rust, ignore
+/// save.cancel(); // cancel in-flight work, reset state
+/// save.reset();  // same — cancel and clear the value
+/// ```
+///
+/// ## When to use `use_action` vs `use_resource`
+///
+/// | | `use_action` | `use_resource` |
+/// |---|---|---|
+/// | **Runs** | When you call it | Automatically on mount / dependency change |
+/// | **Good for** | Mutations, form submits, button clicks | Loading data to display |
+/// | **Cancellation** | Auto-cancels previous call | Restarts on dependency change |
 pub fn use_action<E, C, M>(mut user_fn: C) -> Action<C::Input, C::Output>
 where
     E: Into<CapturedError> + 'static,
@@ -71,6 +133,11 @@ where
     }
 }
 
+/// A handle to an async action created by [`use_action`].
+///
+/// Call it with `.call(...)` to dispatch work, read results with `.value()`,
+/// and check progress with `.pending()`. Implements `Copy` so it can be moved
+/// into multiple event handlers freely.
 pub struct Action<I, T: 'static> {
     reader: ReadSignal<T>,
     error: Signal<Option<CapturedError>>,
@@ -81,7 +148,25 @@ pub struct Action<I, T: 'static> {
     _phantom: PhantomData<*const I>,
 }
 
+/// The internal state of an action
+///
+/// We can never reset the state to Unset, only to Reset, otherwise the value reader would panic.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
+enum ActionState {
+    Unset,
+    Pending,
+    Ready,
+    Errored,
+    Reset,
+}
+
 impl<I: 'static, O: 'static> Action<I, O> {
+    /// The result of the most recent call, if it has completed.
+    ///
+    /// Returns `None` while the action is pending or has never been called.
+    /// Returns `Some(Ok(signal))` on success or `Some(Err(e))` on failure.
+    /// The returned `ReadSignal` is reactive — reading it in RSX will
+    /// subscribe the component to updates.
     pub fn value(&self) -> Option<Result<ReadSignal<O>, CapturedError>> {
         if !matches!(
             *self.state.read(),
@@ -101,11 +186,12 @@ impl<I: 'static, O: 'static> Action<I, O> {
         Some(Ok(self.reader))
     }
 
+    /// Returns `true` while a call is in flight.
     pub fn pending(&self) -> bool {
         *self.state.read() == ActionState::Pending
     }
 
-    /// Clear the current value and error, setting the state to Reset
+    /// Clear the result and cancel any in-flight work.
     pub fn reset(&mut self) {
         self.state.set(ActionState::Reset);
         if let Some(t) = self.task.take() {
@@ -113,6 +199,7 @@ impl<I: 'static, O: 'static> Action<I, O> {
         }
     }
 
+    /// Cancel the in-flight task without clearing the previous result's state.
     pub fn cancel(&mut self) {
         if let Some(t) = self.task.take() {
             t.cancel()
@@ -137,6 +224,13 @@ where
         }
     }
 }
+
+impl<I, T> PartialEq for Action<I, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.callback == other.callback
+    }
+}
+
 pub struct Dispatching<I> {
     _phantom: PhantomData<*const I>,
     receiver: Shared<Receiver<()>>,
@@ -169,110 +263,74 @@ impl<I, T> Clone for Action<I, T> {
     }
 }
 
-/// The state of an action
-///
-/// We can never reset the state to Unset, only to Reset, otherwise the value reader would panic.
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-enum ActionState {
-    Unset,
-    Pending,
-    Ready,
-    Errored,
-    Reset,
-}
-
-pub trait ActionCallback<M, E> {
+pub trait ActionCallback<Marker, Err> {
     type Input;
     type Output;
     fn call(
         &mut self,
         input: Self::Input,
-    ) -> impl Future<Output = Result<Self::Output, E>> + 'static;
+    ) -> impl Future<Output = Result<Self::Output, Err>> + 'static;
 }
 
-impl<F, O, G, E> ActionCallback<(O,), E> for F
-where
-    F: FnMut() -> G,
-    G: Future<Output = Result<O, E>> + 'static,
-{
-    type Input = ();
-    type Output = O;
-    fn call(
-        &mut self,
-        _input: Self::Input,
-    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
-        (self)()
-    }
+macro_rules! impl_action_callback {
+    // Base case: zero args
+    () => {
+        impl<Func, Out, Fut, Err> ActionCallback<(Out,), Err> for Func
+        where
+            Func: FnMut() -> Fut,
+            Fut: Future<Output = Result<Out, Err>> + 'static,
+        {
+            type Input = ();
+            type Output = Out;
+            fn call(
+                &mut self,
+                _input: Self::Input,
+            ) -> impl Future<Output = Result<Self::Output, Err>> + 'static {
+                (self)()
+            }
+        }
+
+        impl<Out> Action<(), Out> {
+            /// Dispatch the action with no arguments.
+            pub fn call(&mut self) -> Dispatching<()> {
+                Dispatching::new((self.callback).call(()))
+            }
+        }
+    };
+
+    // N-arg case
+    ($($arg:ident),+) => {
+        impl<Func, Out, $($arg,)+ Fut, Err> ActionCallback<($($arg,)+ Out), Err> for Func
+        where
+            Func: FnMut($($arg),+) -> Fut,
+            Fut: Future<Output = Result<Out, Err>> + 'static,
+        {
+            type Input = ($($arg,)+);
+            type Output = Out;
+            fn call(
+                &mut self,
+                input: Self::Input,
+            ) -> impl Future<Output = Result<Self::Output, Err>> + 'static {
+                #[allow(non_snake_case)]
+                let ($($arg,)+) = input;
+                (self)($($arg),+)
+            }
+        }
+
+        impl<$($arg: 'static,)+ Out> Action<($($arg,)+), Out> {
+            /// Dispatch the action with the given arguments.
+            #[allow(non_snake_case)]
+            pub fn call(&mut self, $($arg: $arg),+) -> Dispatching<()> {
+                Dispatching::new((self.callback).call(($($arg,)+)))
+            }
+        }
+    };
 }
 
-impl<F, O, A, G, E> ActionCallback<(A, O), E> for F
-where
-    F: FnMut(A) -> G,
-    G: Future<Output = Result<O, E>> + 'static,
-{
-    type Input = (A,);
-    type Output = O;
-    fn call(
-        &mut self,
-        input: Self::Input,
-    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
-        let (a,) = input;
-        (self)(a)
-    }
-}
-
-impl<O, A, B, F, G, E> ActionCallback<(A, B, O), E> for F
-where
-    F: FnMut(A, B) -> G,
-    G: Future<Output = Result<O, E>> + 'static,
-{
-    type Input = (A, B);
-    type Output = O;
-    fn call(
-        &mut self,
-        input: Self::Input,
-    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
-        let (a, b) = input;
-        (self)(a, b)
-    }
-}
-
-impl<O, A, B, C, F, G, E> ActionCallback<(A, B, C, O), E> for F
-where
-    F: FnMut(A, B, C) -> G,
-    G: Future<Output = Result<O, E>> + 'static,
-{
-    type Input = (A, B, C);
-    type Output = O;
-    fn call(
-        &mut self,
-        input: Self::Input,
-    ) -> impl Future<Output = Result<Self::Output, E>> + 'static {
-        let (a, b, c) = input;
-        (self)(a, b, c)
-    }
-}
-
-impl<O> Action<(), O> {
-    pub fn call(&mut self) -> Dispatching<()> {
-        Dispatching::new((self.callback).call(()))
-    }
-}
-
-impl<A: 'static, O> Action<(A,), O> {
-    pub fn call(&mut self, _a: A) -> Dispatching<()> {
-        Dispatching::new((self.callback).call((_a,)))
-    }
-}
-
-impl<A: 'static, B: 'static, O> Action<(A, B), O> {
-    pub fn call(&mut self, _a: A, _b: B) -> Dispatching<()> {
-        Dispatching::new((self.callback).call((_a, _b)))
-    }
-}
-
-impl<A: 'static, B: 'static, C: 'static, O> Action<(A, B, C), O> {
-    pub fn call(&mut self, _a: A, _b: B, _c: C) -> Dispatching<()> {
-        Dispatching::new((self.callback).call((_a, _b, _c)))
-    }
-}
+impl_action_callback!();
+impl_action_callback!(A);
+impl_action_callback!(A, B);
+impl_action_callback!(A, B, C);
+impl_action_callback!(A, B, C, D);
+impl_action_callback!(A, B, C, D, E);
+impl_action_callback!(A, B, C, D, E, F);

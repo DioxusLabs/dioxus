@@ -29,37 +29,27 @@
 //! build system.
 
 use std::{
+    fs::OpenOptions,
     io::{Cursor, Read, Seek, Write},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
-use crate::opt::AssetManifest;
+use crate::opt::AppManifest;
 use crate::Result;
 use anyhow::{bail, Context};
 use const_serialize::{deserialize_const, serialize_const, ConstVec};
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
-use manganis_core::{AndroidArtifactMetadata, SwiftPackageMetadata, SymbolData};
+use manganis_core::SymbolData;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
 use pdb::FallibleIterator;
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
-
-/// Extract all manganis symbols and their sections from the given object file.
-fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
-    file: &'b File<'a, R>,
-) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
-    file.symbols().filter_map(move |symbol| {
-        let name = symbol.name().ok()?;
-        let version = looks_like_manganis_symbol(name)?;
-        let section_index = symbol.section_index()?;
-        let section = file.section_by_index(section_index).ok()?;
-        Some((version, symbol, section))
-    })
-}
 
 #[derive(Copy, Clone)]
 enum ManganisVersion {
     /// The legacy version of the manganis format published with 0.7.0 and 0.7.1
     Legacy,
+
     /// The new version of the manganis format 0.7.2 onward
     /// This now includes both assets (old BundledAsset format) and permissions (SymbolData format)
     New,
@@ -696,37 +686,25 @@ fn find_wasm_symbol_offsets<'a, R: ReadRef<'a>>(
     Ok(offsets)
 }
 
-/// Result of extracting symbols from a binary file
-#[derive(Debug, Clone)]
-pub(crate) struct SymbolExtractionResult {
-    /// Assets found in the binary
-    pub assets: Vec<BundledAsset>,
-
-    /// Android plugin artifacts discovered in the binary
-    pub android_artifacts: Vec<AndroidArtifactMetadata>,
-
-    /// Swift packages discovered in the binary
-    pub swift_packages: Vec<SwiftPackageMetadata>,
-}
-
 /// Find all assets in the given file, hash them, and write them back to the file.
 /// Also extracts Android/Swift plugin metadata for FFI bindings.
-pub(crate) async fn extract_symbols_from_file(
-    path: impl AsRef<Path>,
-) -> Result<SymbolExtractionResult> {
+pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<AppManifest> {
     let path = path.as_ref();
-    let mut file = open_file_for_writing_with_timeout(
-        path,
-        std::fs::OpenOptions::new().write(true).read(true),
-    )
-    .await?;
+    let mut file =
+        open_file_for_writing_with_timeout(path, OpenOptions::new().write(true).read(true)).await?;
 
     let mut file_contents = Vec::new();
     file.read_to_end(&mut file_contents)?;
-    let mut reader = Cursor::new(&file_contents);
-    let read_cache = ReadCache::new(&mut reader);
-    let object_file = object::File::parse(&read_cache)?;
-    let offsets = find_symbol_offsets(path, &file_contents, &object_file)?;
+
+    let (offsets, obj_format) = {
+        let mut reader = Cursor::new(&file_contents);
+        let read_cache = ReadCache::new(&mut reader);
+        let object_file = object::File::parse(&read_cache)?;
+        (
+            find_symbol_offsets(path, &file_contents, &object_file)?,
+            object_file.format(),
+        )
+    };
 
     let mut assets = Vec::new();
     let mut android_artifacts = Vec::new();
@@ -824,7 +802,11 @@ pub(crate) async fn extract_symbols_from_file(
 
         match entry.representation {
             AssetRepresentation::RawBundled => {
-                tracing::debug!("Writing asset to offset {offset}: {:?}", asset);
+                tracing::debug!(
+                    "Writing asset to offset {offset}: {:?} - {:?}",
+                    asset.absolute_source_path(),
+                    asset.bundled_path()
+                );
                 let new_data = version.serialize_asset(&asset);
                 if new_data.len() > version.size() {
                     tracing::warn!(
@@ -861,14 +843,15 @@ pub(crate) async fn extract_symbols_from_file(
         .context("Failed to sync file after writing assets")?;
 
     // If the file is a macos binary, we need to re-sign the modified binary
-    if object_file.format() == object::BinaryFormat::MachO && !assets.is_empty() {
+    if obj_format == object::BinaryFormat::MachO && !assets.is_empty() {
         // Spawn the codesign command to re-sign the binary
-        let output = std::process::Command::new("codesign")
+        let output = tokio::process::Command::new("codesign")
             .arg("--force")
             .arg("--sign")
             .arg("-") // Sign with an empty identity
             .arg(path)
             .output()
+            .await
             .context("Failed to run codesign - is `codesign` in your path?")?;
         if !output.status.success() {
             bail!(
@@ -878,23 +861,15 @@ pub(crate) async fn extract_symbols_from_file(
         }
     }
 
-    Ok(SymbolExtractionResult {
-        assets,
-        android_artifacts,
-        swift_packages,
-    })
-}
+    let mut manifest = AppManifest::new();
 
-/// Find all assets in the given file, hash them, and write them back to the file.
-/// Then return an `AssetManifest` containing all the assets found in the file.
-///
-/// This is a convenience function that extracts symbols and returns only assets.
-pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<AssetManifest> {
-    let result = extract_symbols_from_file(path).await?;
-    let mut manifest = AssetManifest::default();
-    for asset in result.assets {
+    for asset in assets {
         manifest.insert_asset(asset);
     }
+
+    manifest.android_artifacts = android_artifacts;
+    manifest.swift_sources = swift_packages;
+
     Ok(manifest)
 }
 
@@ -903,10 +878,10 @@ pub(crate) async fn extract_assets_from_file(path: impl AsRef<Path>) -> Result<A
 /// This is useful on windows where antivirus software might grab the executable before we have a chance to read it.
 async fn open_file_for_writing_with_timeout(
     file: &Path,
-    options: &mut std::fs::OpenOptions,
+    options: &mut OpenOptions,
 ) -> Result<std::fs::File> {
-    let start_time = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(5);
+    let start_time = Instant::now();
+    let timeout = Duration::from_secs(5);
     loop {
         match options.open(file) {
             Ok(file) => return Ok(file),
@@ -916,7 +891,7 @@ async fn open_file_for_writing_with_timeout(
                     tracing::trace!(
                         "Failed to open file because another process is using it. Retrying..."
                     );
-                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 } else {
                     return Err(e.into());
                 }
@@ -945,4 +920,17 @@ fn write_serialized_bytes(
     }
 
     Ok(())
+}
+
+/// Extract all manganis symbols and their sections from the given object file.
+fn manganis_symbols<'a, 'b, R: ReadRef<'a>>(
+    file: &'b File<'a, R>,
+) -> impl Iterator<Item = (ManganisVersion, Symbol<'a, 'b, R>, Section<'a, 'b, R>)> + 'b {
+    file.symbols().filter_map(move |symbol| {
+        let name = symbol.name().ok()?;
+        let version = looks_like_manganis_symbol(name)?;
+        let section_index = symbol.section_index()?;
+        let section = file.section_by_index(section_index).ok()?;
+        Some((version, symbol, section))
+    })
 }

@@ -80,6 +80,8 @@ impl LinkAction {
         })
     }
 
+    /// Write the required set of environment variables such that the child process has
+    /// enough information to perform the linking itself.
     pub(crate) fn write_env_vars(
         &self,
         env_vars: &mut Vec<(Cow<'static, str>, OsString)>,

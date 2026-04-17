@@ -1,4 +1,5 @@
-use manganis_core::BundledAsset;
+use manganis::SwiftPackageMetadata;
+use manganis_core::{AndroidArtifactMetadata, BundledAsset};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -14,16 +15,33 @@ mod json;
 pub(crate) use file::process_file_to;
 pub(crate) use hash::add_hash_to_asset;
 
-/// A manifest of all assets collected from dependencies
+/// A manifest of all assets collected from dependencies. This is persisted to disk for users to be
+/// able to pick up the result of asset extraction.
 ///
 /// This will be filled in primarily by incremental compilation artifacts.
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
-pub(crate) struct AssetManifest {
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
+pub(crate) struct AppManifest {
+    /// Stable since 0.7.0
+    pub cli_version: String,
+
     /// Map of bundled asset name to the asset itself
-    assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
+    pub assets: BTreeMap<PathBuf, HashSet<BundledAsset>>,
+
+    pub android_artifacts: Vec<AndroidArtifactMetadata>,
+
+    pub swift_sources: Vec<SwiftPackageMetadata>,
 }
 
-impl AssetManifest {
+impl AppManifest {
+    pub fn new() -> Self {
+        Self {
+            cli_version: crate::VERSION.to_string(),
+            android_artifacts: Default::default(),
+            swift_sources: Default::default(),
+            assets: Default::default(),
+        }
+    }
+
     /// Manually add an asset to the manifest
     pub fn register_asset(
         &mut self,

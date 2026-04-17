@@ -7,7 +7,7 @@ use tar::Archive;
 use tempfile::NamedTempFile;
 
 /// Pinned binaryen version (contains wasm-opt).
-const BINARYEN_VERSION: &str = "127";
+const BINARYEN_VERSION: &str = "129";
 
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
