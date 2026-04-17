@@ -14,6 +14,12 @@
 use std::any::TypeId;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
+/// Maximum optic-chain depth supported by [`PathBuffer`].
+///
+/// Picked to match the inline-storage size of the old `dioxus-stores`
+/// `TinyVec`. A chain deeper than this panics on `PathBuffer::push`.
+pub const PATH_LEN: usize = 32;
+
 /// Opaque child-of-parent identifier used as one layer of a subscription path.
 ///
 /// Structurally a `u64` (fn-pointer hash, `TypeId` hash, integer index, or
@@ -51,31 +57,87 @@ impl PathSegment {
     }
 }
 
-/// Collector that accumulates [`PathSegment`]s as an optic chain is walked.
-#[derive(Default, Clone)]
+/// Stack-allocated, fixed-capacity collector that accumulates
+/// [`PathSegment`]s as an optic chain is walked.
+///
+/// `Copy`, no heap allocation, capacity [`PATH_LEN`]. Modeled after the old
+/// `dioxus-stores` `TinyVec` so optic mappings don't pay a per-read alloc
+/// and don't require any owner-bound storage to subscribe.
+#[derive(Clone, Copy)]
 pub struct PathBuffer {
-    segments: Vec<PathSegment>,
+    len: u8,
+    segments: [PathSegment; PATH_LEN],
+}
+
+impl Default for PathBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PathBuffer {
     /// Create an empty path buffer.
-    pub fn new() -> Self {
-        Self { segments: Vec::new() }
+    #[inline]
+    pub const fn new() -> Self {
+        Self {
+            len: 0,
+            segments: [PathSegment(0); PATH_LEN],
+        }
     }
 
-    /// Append one segment.
-    pub fn push(&mut self, segment: PathSegment) {
-        self.segments.push(segment);
+    /// Append one segment. Panics if the buffer is already at [`PATH_LEN`].
+    #[inline]
+    pub const fn push(&mut self, segment: PathSegment) {
+        assert!(
+            (self.len as usize) < PATH_LEN,
+            "optics: path depth exceeded PATH_LEN",
+        );
+        self.segments[self.len as usize] = segment;
+        self.len += 1;
     }
 
-    /// Borrow the accumulated path.
+    /// Borrow the accumulated path as a slice.
+    #[inline]
     pub fn segments(&self) -> &[PathSegment] {
-        &self.segments
+        &self.segments[..self.len as usize]
     }
 
-    /// Reset the buffer without deallocating its backing storage.
+    /// Number of segments currently stored.
+    #[inline]
+    pub const fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    /// Returns `true` if the buffer holds no segments.
+    #[inline]
+    pub const fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Reset the buffer.
+    #[inline]
     pub fn clear(&mut self) {
-        self.segments.clear();
+        self.len = 0;
+    }
+}
+
+impl std::fmt::Debug for PathBuffer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.segments().iter()).finish()
+    }
+}
+
+impl PartialEq for PathBuffer {
+    fn eq(&self, other: &Self) -> bool {
+        self.segments() == other.segments()
+    }
+}
+
+impl Eq for PathBuffer {}
+
+impl Hash for PathBuffer {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.segments().hash(state);
     }
 }
 

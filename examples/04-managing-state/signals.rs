@@ -8,7 +8,7 @@
 
 use async_std::task::sleep;
 use dioxus::prelude::*;
-use dioxus_optics::Optic;
+use dioxus_optics::OpticIter;
 
 fn main() {
     dioxus::launch(app);
@@ -64,7 +64,7 @@ fn app() -> Element {
         }
 
         // We can cleanly map signals with iterators
-        for value in Optic::from_access(saved_values).each().iter() {
+        for value in saved_values.iter() {
             h3 { "Saved value: {value}" }
         }
 

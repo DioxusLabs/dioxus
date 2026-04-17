@@ -10,9 +10,8 @@ use std::{
 use dioxus_core::current_owner;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
-use crate::combinator::{
-    Access, AccessMut, FutureAccess, LensOp, Resolve, ValueAccess,
-};
+use crate::combinator::{Access, AccessMut, FutureAccess, LensOp, Resolve, ValueAccess};
+use crate::subscribed::{HasSubscriptionTree, SubscriptionTree};
 
 /// Resource carrier that offers an immediate optional value and an eventual
 /// future value.
@@ -86,6 +85,17 @@ impl<T: 'static> AccessMut for Resource<T> {
 
     fn try_write(&self) -> Option<WriteLock<'static, T, UnsyncStorage, ()>> {
         WriteLock::filter_map(WriteLock::new(self.cell.write()), |o| o.as_mut())
+    }
+}
+
+// Resource doesn't carry its own `SubscriptionTree`; callers who want
+// path-granular reactivity through resource-rooted optic chains explicitly
+// wrap in `.subscribed()` (which allocates a fresh tree). This impl makes
+// that opt-in discoverable — macro-emitted accessors that require
+// `HasSubscriptionTree` will still compile on `Resource<T>`.
+impl<T> HasSubscriptionTree for Resource<T> {
+    fn subscription_tree(&self) -> SubscriptionTree {
+        SubscriptionTree::new()
     }
 }
 

@@ -1,8 +1,6 @@
 use crate::{use_callback, use_signal};
 use dioxus_core::{Callback, CapturedError, Result, Task};
-use dioxus_optics::{
-    Combinator, ErrPrism, OkPrism, Optic, PrismOp, Required, SomePrism,
-};
+use dioxus_optics::{Combinator, ErrPrism, OkPrism, Optic, PrismOp, Required, SomePrism};
 use dioxus_signals::{ReadableExt, Signal, WritableExt};
 use futures_channel::oneshot::Receiver;
 use futures_util::{future::Shared, FutureExt};

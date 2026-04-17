@@ -177,8 +177,15 @@ impl<Lens: Readable> Readable for SelectorScope<Lens> {
     type Storage = Lens::Storage;
 
     fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
+        // `self.track()` subscribes the current reactive context at this
+        // scope's path. Use `try_peek_unchecked` on the inner so any nested
+        // `SelectorScope` / `Subscribed` it wraps does **not** additionally
+        // subscribe at its own (broader) path. Otherwise a chain like
+        // `Store<T, Combinator<Store<X>, LensOp<X, T>>>` would subscribe at
+        // both the leaf field path *and* the root path — making every sibling
+        // of the leaf wake on a root write.
         self.track();
-        self.write.try_read_unchecked()
+        self.write.try_peek_unchecked()
     }
 
     fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Lens>, BorrowError> {
@@ -195,6 +202,14 @@ impl<Lens: Writable> Writable for SelectorScope<Lens> {
 
     fn try_write_unchecked(&self) -> Result<WritableRef<'static, Lens>, BorrowMutError> {
         self.mark_dirty();
+        self.write.try_write_unchecked()
+    }
+
+    fn try_write_silent(&self) -> Result<WritableRef<'static, Lens>, BorrowMutError> {
+        // Silent write: skip `mark_dirty` at our scope path. Caller (usually
+        // a wrapping `Subscribed` that fires at a leaf path) is responsible
+        // for notifying subscribers; firing here would wake every
+        // descendant of this scope path too.
         self.write.try_write_unchecked()
     }
 }

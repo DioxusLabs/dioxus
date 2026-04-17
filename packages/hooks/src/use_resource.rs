@@ -163,10 +163,8 @@ pub type PendingResource<T> = Resource<Option<T>>;
 
 /// A resource projected to its resolved inner value via the optics
 /// `Some` prism.
-pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> = Optic<
-    Combinator<Store<Option<T>, HandledLens<Lens>>, PrismOp<SomePrism<T>>>,
-    Required,
->;
+pub type ResolvedResource<T, Lens = WriteSignal<Option<T>>> =
+    Optic<Combinator<Store<Option<T>, HandledLens<Lens>>, PrismOp<SomePrism<T>>>, Required>;
 
 /// Projection of a resolved resource into its `Ok` branch via the optics
 /// `Some` + `Ok` prisms.
@@ -437,8 +435,7 @@ where
     }
 }
 
-impl<L> FutureAccess<AsFuture<ResourceValueFuture<HandledLens<L>>>>
-    for HandledLens<L>
+impl<L> FutureAccess<AsFuture<ResourceValueFuture<HandledLens<L>>>> for HandledLens<L>
 where
     L: Readable + Copy + Unpin + 'static,
     L::Target: Clone + Sized + 'static,

@@ -35,17 +35,17 @@ mod macro_tests {
 
         // The store macro creates an extension trait with methods for each field
         // that returns a store scoped to that field.
-        let checked: Store<bool, _> = store.checked();
-        let contents: Store<String, _> = store.contents();
-        let checked: bool = checked();
-        let contents: String = contents();
+        let checked = store.checked();
+        let contents = store.contents();
+        let checked: bool = checked.cloned();
+        let contents: String = contents.cloned();
 
         // It also generates a `transpose` method returns a variant of your structure
         // with stores wrapping each of your data types. This can be very useful when destructuring
         // or matching your type
         let TodoItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked();
-        let contents: String = contents();
+        let checked: bool = checked.cloned();
+        let contents: String = contents.cloned();
 
         let is_checked = store.is_checked();
         store.check();
@@ -80,14 +80,14 @@ mod macro_tests {
             contents: "Learn about stores".to_string(),
         });
 
-        let checked: Store<bool, _> = store.checked();
-        let contents: Store<String, _> = store.contents();
-        let checked: bool = checked();
-        let contents: String = contents();
+        let checked = store.checked();
+        let contents = store.contents();
+        let checked: bool = checked.cloned();
+        let contents: String = contents.cloned();
 
         let ItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked();
-        let contents: String = contents();
+        let checked: bool = checked.cloned();
+        let contents: String = contents.cloned();
 
         let is_checked = store.is_checked();
         store.check();
@@ -125,14 +125,14 @@ mod macro_tests {
             contents: "Learn about stores",
         });
 
-        let checked: Store<bool, _> = store.checked();
-        let contents: Store<&'static str, _> = store.contents();
-        let checked: bool = checked();
-        let contents: &'static str = contents();
+        let checked = store.checked();
+        let contents = store.contents();
+        let checked: bool = checked.cloned();
+        let contents: &'static str = *contents.read();
 
         let ItemStoreTransposed { checked, contents } = store.transpose();
-        let checked: bool = checked();
-        let contents: &'static str = contents();
+        let checked: bool = checked.cloned();
+        let contents: &'static str = *contents.read();
 
         let is_checked = store.is_checked();
         store.check();
@@ -149,7 +149,7 @@ mod macro_tests {
         });
 
         let Item { contents } = store.transpose();
-        let contents: String = contents();
+        let contents: String = contents.cloned();
     }
 
     fn derive_tuple() {
@@ -159,13 +159,13 @@ mod macro_tests {
         let store = use_store(|| Item(true, "Hello".to_string()));
 
         let first = store.field_0();
-        let first: bool = first();
+        let first: bool = first.cloned();
 
         let transposed = store.transpose();
         let first = transposed.0;
         let second = transposed.1;
-        let first: bool = first();
-        let second: String = second();
+        let first: bool = first.cloned();
+        let second: String = second.cloned();
     }
 
     fn derive_enum() {
@@ -199,27 +199,27 @@ mod macro_tests {
         let barfoo = store.is_bar_foo();
 
         let foo = store.bar().unwrap();
-        let foo: String = foo();
+        let foo: String = foo.cloned();
         let bar = store.bar_foo().unwrap();
-        let bar: String = bar();
+        let bar: String = bar.cloned();
 
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
             EnumStoreTransposed::Foo => {}
             Bar(bar) => {
-                let bar: String = bar();
+                let bar: String = bar.cloned();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo();
-                let bar: String = bar();
+                let foo: i32 = foo.cloned();
+                let bar: String = bar.cloned();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo();
-                let bar: String = bar();
+                let foo: u32 = foo.cloned();
+                let bar: String = bar.cloned();
             }
             BarFoo { foo } => {
-                let foo: String = foo();
+                let foo: String = foo.cloned();
             }
         }
 
@@ -264,27 +264,27 @@ mod macro_tests {
         let barfoo = store.is_bar_foo();
 
         let foo = store.bar().unwrap();
-        let foo: String = foo();
+        let foo: String = foo.cloned();
         let bar = store.bar_foo().unwrap();
-        let bar: String = bar();
+        let bar: String = bar.cloned();
 
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
             EnumStoreTransposed::Foo => {}
             Bar(bar) => {
-                let bar: String = bar();
+                let bar: String = bar.cloned();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo();
-                let bar: String = bar();
+                let foo: i32 = foo.cloned();
+                let bar: String = bar.cloned();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo();
-                let bar: String = bar();
+                let foo: u32 = foo.cloned();
+                let bar: String = bar.cloned();
             }
             BarFoo { foo } => {
-                let foo: String = foo();
+                let foo: String = foo.cloned();
             }
         }
 
@@ -332,27 +332,27 @@ mod macro_tests {
         let barfoo = store.is_bar_foo();
 
         let foo = store.bar().unwrap();
-        let foo: &'static str = foo();
+        let foo: &'static str = *foo.read();
         let bar = store.bar_foo().unwrap();
-        let bar: &'static str = bar();
+        let bar: &'static str = *bar.read();
 
         let transposed = store.transpose();
         use EnumStoreTransposed::*;
         match transposed {
             EnumStoreTransposed::Foo => {}
             Bar(bar) => {
-                let bar: &'static str = bar();
+                let bar: &'static str = *bar.read();
             }
             Baz { foo, bar } => {
-                let foo: i32 = foo();
-                let bar: &'static str = bar();
+                let foo: i32 = foo.cloned();
+                let bar: &'static str = *bar.read();
             }
             FooBar(foo, bar) => {
-                let foo: u32 = foo();
-                let bar: &'static str = bar();
+                let foo: u32 = foo.cloned();
+                let bar: &'static str = *bar.read();
             }
             BarFoo { foo } => {
-                let foo: &'static str = foo();
+                let foo: &'static str = *foo.read();
             }
         }
     }
@@ -373,11 +373,56 @@ mod macro_tests {
         match transposed {
             Enum::Foo => {}
             Bar(bar) => {
-                let bar: String = bar();
+                let bar: String = bar.cloned();
             }
             BarFoo { foo } => {
-                let foo: String = foo();
+                let foo: String = foo.cloned();
             }
         }
+    }
+
+    // Goal-3 regression: the derive macro emits a parallel Optic-flavored
+    // extension trait so `.checked()` / `.contents()` work when chained off
+    // any optic (not just `Store<TodoItem, _>`). A chain that exits Store-land
+    // — e.g. a `HashMap` lookup through `.iter().get(...)` — used to force a
+    // hand-rolled `map_ref_mut`; now the derived accessors apply directly.
+    #[test]
+    fn derive_accessors_work_on_optic_carrier() {
+        use dioxus_core::{ScopeId, VNode, VirtualDom};
+        use dioxus_optics::{Optic, OpticExt, OpticIter};
+
+        #[derive(Store, Clone, Debug, PartialEq)]
+        struct TodoItem {
+            checked: bool,
+            contents: String,
+        }
+
+        let mut dom = VirtualDom::new(VNode::empty);
+        dom.rebuild_in_place();
+        dom.in_scope(ScopeId::ROOT, || {
+            let mut state =
+                Signal::new(HashMap::<u32, TodoItem>::from([(
+                    1,
+                    TodoItem { checked: false, contents: "x".into() },
+                )]));
+
+            // The Optic leaves Store-land the moment we take a HashMap key —
+            // this is exactly the chain todomvc_store uses.
+            let entry = state
+                .iter()
+                .get(&1)
+                .to_option()
+                .expect("key 1 present");
+
+            // `.checked()` / `.contents()` resolve via the macro-emitted
+            // `TodoItemOpticExt` impl on `Optic<A, Required>` where A: Access.
+            let checked_optic = entry.clone().checked();
+            assert_eq!(*checked_optic.read(), false);
+            *checked_optic.write() = true;
+            assert_eq!(*checked_optic.read(), true);
+
+            let contents_optic = entry.contents();
+            assert_eq!(&*contents_optic.read(), "x");
+        });
     }
 }

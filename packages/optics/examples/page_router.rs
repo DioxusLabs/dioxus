@@ -56,47 +56,99 @@ impl Prism for ProfilePrism {
     type Variant = ProfileData;
 
     fn try_ref<'a>(&self, p: &'a Page) -> Option<&'a ProfileData> {
-        if let Page::Profile(x) = p { Some(x) } else { None }
+        if let Page::Profile(x) = p {
+            Some(x)
+        } else {
+            None
+        }
     }
     fn try_mut<'a>(&self, p: &'a mut Page) -> Option<&'a mut ProfileData> {
-        if let Page::Profile(x) = p { Some(x) } else { None }
+        if let Page::Profile(x) = p {
+            Some(x)
+        } else {
+            None
+        }
     }
     fn try_into_variant(&self, p: Page) -> Option<ProfileData> {
-        if let Page::Profile(x) = p { Some(x) } else { None }
+        if let Page::Profile(x) = p {
+            Some(x)
+        } else {
+            None
+        }
     }
 }
 
 // Inline prisms for the remaining two variants — no struct required. The same
 // fn pointers are passed through `map_variant_with` below.
 fn settings_ref(p: &Page) -> Option<&Settings> {
-    if let Page::Settings(s) = p { Some(s) } else { None }
+    if let Page::Settings(s) = p {
+        Some(s)
+    } else {
+        None
+    }
 }
 fn settings_mut(p: &mut Page) -> Option<&mut Settings> {
-    if let Page::Settings(s) = p { Some(s) } else { None }
+    if let Page::Settings(s) = p {
+        Some(s)
+    } else {
+        None
+    }
 }
 fn settings_into(p: Page) -> Option<Settings> {
-    if let Page::Settings(s) = p { Some(s) } else { None }
+    if let Page::Settings(s) = p {
+        Some(s)
+    } else {
+        None
+    }
 }
 
 fn error_ref(p: &Page) -> Option<&String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 fn error_mut(p: &mut Page) -> Option<&mut String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 fn error_into(p: Page) -> Option<String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 
 // Field-level accessors for the struct payloads.
-fn profile_name(p: &ProfileData) -> &String { &p.name }
-fn profile_name_mut(p: &mut ProfileData) -> &mut String { &mut p.name }
-fn profile_followers(p: &ProfileData) -> &u32 { &p.followers }
-fn profile_followers_mut(p: &mut ProfileData) -> &mut u32 { &mut p.followers }
-fn settings_dark(s: &Settings) -> &bool { &s.dark_mode }
-fn settings_dark_mut(s: &mut Settings) -> &mut bool { &mut s.dark_mode }
-fn settings_notifications(s: &Settings) -> &bool { &s.notifications }
-fn settings_notifications_mut(s: &mut Settings) -> &mut bool { &mut s.notifications }
+fn profile_name(p: &ProfileData) -> &String {
+    &p.name
+}
+fn profile_name_mut(p: &mut ProfileData) -> &mut String {
+    &mut p.name
+}
+fn profile_followers(p: &ProfileData) -> &u32 {
+    &p.followers
+}
+fn profile_followers_mut(p: &mut ProfileData) -> &mut u32 {
+    &mut p.followers
+}
+fn settings_dark(s: &Settings) -> &bool {
+    &s.dark_mode
+}
+fn settings_dark_mut(s: &mut Settings) -> &mut bool {
+    &mut s.dark_mode
+}
+fn settings_notifications(s: &Settings) -> &bool {
+    &s.notifications
+}
+fn settings_notifications_mut(s: &mut Settings) -> &mut bool {
+    &mut s.notifications
+}
 
 fn app() -> Element {
     let mut page = use_signal(|| {
@@ -105,21 +157,15 @@ fn app() -> Element {
             followers: 42,
         })
     });
-    let root = Optic::from_access(page);
-
     // One optic per variant. Each is Optional — the underlying prism might
     // decide the current `Page` is not that variant.
-    let profile = root.clone().map_variant::<ProfilePrism>();
-    let settings = root
-        .clone()
-        .map_variant_with(settings_ref, settings_mut, settings_into);
-    let error = root.map_variant_with(error_ref, error_mut, error_into);
+    let profile = page.map_variant::<ProfilePrism>();
+    let settings = page.map_variant_with(settings_ref, settings_mut, settings_into);
+    let error = page.map_variant_with(error_ref, error_mut, error_into);
 
     // Compose one more layer: project into individual fields of each variant's
     // payload. The resulting optics read and write the root signal directly.
-    let profile_name = profile
-        .clone()
-        .map_ref_mut(profile_name, profile_name_mut);
+    let profile_name = profile.clone().map_ref_mut(profile_name, profile_name_mut);
     let profile_followers = profile.map_ref_mut(profile_followers, profile_followers_mut);
     let dark_mode = settings
         .clone()

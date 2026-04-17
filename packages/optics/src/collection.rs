@@ -11,6 +11,7 @@ use crate::{
     combinator::{Access, AccessMut, Combinator, Resolve, ValueAccess},
     path::{PathBuffer, PathSegment, Pathed},
     signal::Optic,
+    subscribed::{HasSubscriptionTree, SubscriptionTree},
 };
 
 /// Collection/key lookup projection that always returns an optional child path.
@@ -34,85 +35,6 @@ impl<X> Resolve<FlattenSomeOp> for Option<X> {
     fn resolve(input: Self::Input, _: &FlattenSomeOp) -> Self {
         input.flatten()
     }
-}
-
-// ============================================================================
-// Container target traits
-// ============================================================================
-//
-// These traits let `.each()` / `.each_hash_map()` / `.each_btree_map()` infer
-// their item/key/value types from the accessor's `Target` associated type
-// rather than require turbofish. Rust won't drive inference backwards from a
-// `A: Access<Target = Vec<T>>` where-clause to pick `T`, but it *will* project
-// forward through an associated type — so these traits expose the item type
-// as a projection of the concrete container.
-
-mod sealed {
-    pub trait Sealed {}
-}
-
-/// Projection trait that exposes the item type of a `Vec`. Implemented only
-/// for `Vec<T>`; used so `each()` can recover `T` from `A::Target` without
-/// turbofish.
-pub trait VecTarget: sealed::Sealed {
-    /// The element type of the underlying `Vec`.
-    type Item: 'static;
-}
-
-impl<T: 'static> sealed::Sealed for Vec<T> {}
-impl<T: 'static> VecTarget for Vec<T> {
-    type Item = T;
-}
-
-/// Projection trait that exposes the key/value/hasher types of a `HashMap`.
-pub trait HashMapTarget: sealed::Sealed {
-    /// Key type of the underlying `HashMap`.
-    type Key: Eq + Hash + 'static;
-    /// Value type of the underlying `HashMap`.
-    type Value: 'static;
-    /// Hasher type of the underlying `HashMap`.
-    type Hasher: BuildHasher + 'static;
-}
-
-impl<K, V, S> sealed::Sealed for HashMap<K, V, S>
-where
-    K: Eq + Hash + 'static,
-    V: 'static,
-    S: BuildHasher + 'static,
-{
-}
-impl<K, V, S> HashMapTarget for HashMap<K, V, S>
-where
-    K: Eq + Hash + 'static,
-    V: 'static,
-    S: BuildHasher + 'static,
-{
-    type Key = K;
-    type Value = V;
-    type Hasher = S;
-}
-
-/// Projection trait that exposes the key/value types of a `BTreeMap`.
-pub trait BTreeMapTarget: sealed::Sealed {
-    /// Key type of the underlying `BTreeMap`.
-    type Key: Ord + 'static;
-    /// Value type of the underlying `BTreeMap`.
-    type Value: 'static;
-}
-
-impl<K, V> sealed::Sealed for BTreeMap<K, V>
-where
-    K: Ord + 'static,
-    V: 'static,
-{
-}
-impl<K, V> BTreeMapTarget for BTreeMap<K, V>
-where
-    K: Ord + 'static,
-    V: 'static,
-{
-    type Key = K;
-    type Value = V;
 }
 
 // ============================================================================
@@ -184,12 +106,17 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, T, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, T, A::Storage, A::WriteMetadata>> {
         let index = self.index;
         self.parent
             .try_write()
+            .and_then(|w| WriteLock::filter_map(w, move |v| v.get_mut(index)))
+    }
+
+    fn try_write_silent(&self) -> Option<WriteLock<'static, T, A::Storage, A::WriteMetadata>> {
+        let index = self.index;
+        self.parent
+            .try_write_silent()
             .and_then(|w| WriteLock::filter_map(w, move |v| v.get_mut(index)))
     }
 }
@@ -226,101 +153,178 @@ where
     }
 }
 
+impl<A, T> HasSubscriptionTree for VecIndex<A, T>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
+    }
+}
+
+impl<A, T> HasSubscriptionTree for EachVec<A, T>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
+    }
+}
+
 impl<A, T> Optic<EachVec<A, T>>
 where
     A: Clone + Access<Target = Vec<T>>,
     T: 'static,
 {
     /// Return the current vector length.
-    pub fn len(&self) -> usize {
+    ///
+    /// Subscribes **shallowly** at the parent carrier's path when the parent
+    /// exposes a [`SubscriptionTree`] via [`HasSubscriptionTree`]: `len` only
+    /// re-runs on writes that change the vector's shape (push / pop / clear
+    /// / insert / remove / retain), **not** on writes that mutate an
+    /// individual element through `.index(i).write()`. For parents that
+    /// don't carry a tree (bare `Signal<Vec<_>>`) this falls back to a plain
+    /// deep read of the vector.
+    pub fn len(&self) -> usize
+    where
+        A: Pathed + crate::subscribed::HasSubscriptionTree,
+    {
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        self.access.parent.subscription_tree().track(buf.segments());
         self.access
             .parent
-            .try_read()
+            .try_peek()
             .expect("optics: collection parent path produced no value")
             .len()
     }
 
     /// Return `true` if the projected vector is empty.
-    pub fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool
+    where
+        A: Pathed + crate::subscribed::HasSubscriptionTree,
+    {
         self.len() == 0
     }
 
     /// Borrow the child at `index` as a Required optic. Panics on
     /// out-of-bounds access through `read`/`write`.
-    pub fn index(&self, index: usize) -> Optic<VecIndex<A, T>> {
+    ///
+    /// The returned child is wrapped in a [`Subscribed`](crate::Subscribed)
+    /// using the parent carrier's own `SubscriptionTree` (via
+    /// [`HasSubscriptionTree`](crate::HasSubscriptionTree)), so reads
+    /// subscribe at the element's exact path `[..parent, index(i)]` and
+    /// writes fire at that path — **not** at the Vec's root. A sibling's
+    /// `len` or `index(j)` reader doesn't wake on this write.
+    pub fn index(&self, index: usize) -> Optic<crate::subscribed::Subscribed<VecIndex<A, T>>>
+    where
+        A: Pathed + crate::subscribed::HasSubscriptionTree,
+    {
+        let tree = self.access.parent.subscription_tree();
+        let child = VecIndex {
+            parent: self.access.parent.clone(),
+            index,
+            _marker: PhantomData,
+        };
         Optic {
-            access: VecIndex {
-                parent: self.access.parent.clone(),
-                index,
-                _marker: PhantomData,
-            },
+            access: crate::subscribed::Subscribed::with_tree(child, tree),
             _marker: PhantomData,
         }
-    }
-
-    /// Iterate the child item optics.
-    pub fn iter(&self) -> impl Iterator<Item = Optic<VecIndex<A, T>>> + '_ {
-        let len = self.len();
-        let parent = self.access.parent.clone();
-        (0..len).map(move |index| Optic {
-            access: VecIndex {
-                parent: parent.clone(),
-                index,
-                _marker: PhantomData,
-            },
-            _marker: PhantomData,
-        })
     }
 }
 
 impl<A, T> Optic<EachVec<A, T>>
 where
-    A: AccessMut<Target = Vec<T>>,
+    A: AccessMut<Target = Vec<T>> + Pathed + crate::subscribed::HasSubscriptionTree,
     T: 'static,
 {
+    /// Push `value` onto the vector. Fires **shallow** subscribers at the
+    /// parent carrier's path (length changed) — does *not* fire element
+    /// subscribers at other indices.
     pub fn push(&self, value: T) {
-        let mut items = self
-            .access
-            .parent
-            .try_write()
-            .expect("optics: collection parent path produced no value");
-        items.push(value);
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        let tree = self.access.parent.subscription_tree();
+        {
+            let mut items = self
+                .access
+                .parent
+                .try_write_silent()
+                .expect("optics: collection parent path produced no value");
+            items.push(value);
+        }
+        tree.notify_node(buf.segments());
     }
 
+    /// Remove and return the item at `index`. Fires shallow (length changed)
+    /// plus shifts subscribers for every sibling at `>= index`.
     pub fn remove(&self, index: usize) -> T {
-        let mut items = self
-            .access
-            .parent
-            .try_write()
-            .expect("optics: collection parent path produced no value");
-        items.remove(index)
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        let tree = self.access.parent.subscription_tree();
+        let removed = {
+            let mut items = self
+                .access
+                .parent
+                .try_write_silent()
+                .expect("optics: collection parent path produced no value");
+            items.remove(index)
+        };
+        tree.notify_node(buf.segments());
+        tree.notify_from(buf.segments(), index as u64);
+        removed
     }
 
+    /// Insert `value` at `index`. Fires shallow + shifts subscribers for every
+    /// sibling at `>= index`.
     pub fn insert(&self, index: usize, value: T) {
-        let mut items = self
-            .access
-            .parent
-            .try_write()
-            .expect("optics: collection parent path produced no value");
-        items.insert(index, value);
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        let tree = self.access.parent.subscription_tree();
+        {
+            let mut items = self
+                .access
+                .parent
+                .try_write_silent()
+                .expect("optics: collection parent path produced no value");
+            items.insert(index, value);
+        }
+        tree.notify_node(buf.segments());
+        tree.notify_from(buf.segments(), index as u64);
     }
 
+    /// Clear the vector. Fires every subscriber at or below the parent's
+    /// path — length changed *and* all existing element indices are gone.
     pub fn clear(&self) {
-        let mut items = self
-            .access
-            .parent
-            .try_write()
-            .expect("optics: collection parent path produced no value");
-        items.clear();
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        let tree = self.access.parent.subscription_tree();
+        {
+            let mut items = self
+                .access
+                .parent
+                .try_write_silent()
+                .expect("optics: collection parent path produced no value");
+            items.clear();
+        }
+        tree.notify(buf.segments());
     }
 
+    /// Retain elements matching `f`. Fires as a full mark-dirty (length may
+    /// change, every surviving item may have shifted).
     pub fn retain(&self, f: impl FnMut(&T) -> bool) {
-        let mut items = self
-            .access
-            .parent
-            .try_write()
-            .expect("optics: collection parent path produced no value");
-        items.retain(f);
+        let mut buf = PathBuffer::new();
+        self.access.parent.visit_path(&mut buf);
+        let tree = self.access.parent.subscription_tree();
+        {
+            let mut items = self
+                .access
+                .parent
+                .try_write_silent()
+                .expect("optics: collection parent path produced no value");
+            items.retain(f);
+        }
+        tree.notify(buf.segments());
     }
 }
 
@@ -396,9 +400,7 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, V, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, V, A::Storage, A::WriteMetadata>> {
         let key = self.key.clone();
         self.parent
             .try_write()
@@ -440,6 +442,24 @@ where
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
         sink.push(PathSegment::hashed(&self.key));
+    }
+}
+
+impl<A, K, V, S> HasSubscriptionTree for HashMapKey<A, K, V, S>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
+    }
+}
+
+impl<A, K, V, S> HasSubscriptionTree for EachHashMap<A, K, V, S>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
     }
 }
 
@@ -487,57 +507,20 @@ where
         }
     }
 
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (K, Optic<HashMapKey<A, K, V, S>>)> + DoubleEndedIterator + '_
+    /// Project to a values-only view of this map. The returned optic stays
+    /// in the chain so derivations like [`any`](Optic::any) build a new
+    /// `Optic` instead of materializing here. Iterate it for the per-key
+    /// child optics via `.iter()` or `(&values).into_iter()`.
+    pub fn values(&self) -> Optic<Values<EachHashMap<A, K, V, S>>>
     where
         K: Clone,
     {
-        let keys: Vec<K> = {
-            let map = self
-                .access
-                .parent
-                .try_read()
-                .expect("optics: collection parent path produced no value");
-            map.keys().cloned().collect()
-        };
-        let parent = self.access.parent.clone();
-        keys.into_iter().map(move |key| {
-            let child = Optic {
-                access: HashMapKey {
-                    parent: parent.clone(),
-                    key: key.clone(),
-                    _marker: PhantomData,
-                },
-                _marker: PhantomData,
-            };
-            (key, child)
-        })
-    }
-
-    pub fn values(
-        &self,
-    ) -> impl Iterator<Item = Optic<HashMapKey<A, K, V, S>>> + DoubleEndedIterator + '_
-    where
-        K: Clone,
-    {
-        let keys: Vec<K> = {
-            let map = self
-                .access
-                .parent
-                .try_read()
-                .expect("optics: collection parent path produced no value");
-            map.keys().cloned().collect()
-        };
-        let parent = self.access.parent.clone();
-        keys.into_iter().map(move |key| Optic {
-            access: HashMapKey {
-                parent: parent.clone(),
-                key,
-                _marker: PhantomData,
+        Optic {
+            access: Values {
+                parent: self.access.clone(),
             },
             _marker: PhantomData,
-        })
+        }
     }
 }
 
@@ -657,9 +640,7 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, V, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, V, A::Storage, A::WriteMetadata>> {
         let key = self.key.clone();
         self.parent
             .try_write()
@@ -699,6 +680,24 @@ where
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
         sink.push(PathSegment::hashed(&self.key));
+    }
+}
+
+impl<A, K, V> HasSubscriptionTree for BTreeMapKey<A, K, V>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
+    }
+}
+
+impl<A, K, V> HasSubscriptionTree for EachBTreeMap<A, K, V>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
     }
 }
 
@@ -743,57 +742,20 @@ where
         }
     }
 
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (K, Optic<BTreeMapKey<A, K, V>>)> + DoubleEndedIterator + '_
+    /// Project to a values-only view of this map. The returned optic stays
+    /// in the chain so derivations like [`any`](Optic::any) build a new
+    /// `Optic` instead of materializing here. Iterate it for the per-key
+    /// child optics via `.iter()` or `(&values).into_iter()`.
+    pub fn values(&self) -> Optic<Values<EachBTreeMap<A, K, V>>>
     where
         K: Clone,
     {
-        let keys: Vec<K> = {
-            let map = self
-                .access
-                .parent
-                .try_read()
-                .expect("optics: collection parent path produced no value");
-            map.keys().cloned().collect()
-        };
-        let parent = self.access.parent.clone();
-        keys.into_iter().map(move |key| {
-            let child = Optic {
-                access: BTreeMapKey {
-                    parent: parent.clone(),
-                    key: key.clone(),
-                    _marker: PhantomData,
-                },
-                _marker: PhantomData,
-            };
-            (key, child)
-        })
-    }
-
-    pub fn values(
-        &self,
-    ) -> impl Iterator<Item = Optic<BTreeMapKey<A, K, V>>> + DoubleEndedIterator + '_
-    where
-        K: Clone,
-    {
-        let keys: Vec<K> = {
-            let map = self
-                .access
-                .parent
-                .try_read()
-                .expect("optics: collection parent path produced no value");
-            map.keys().cloned().collect()
-        };
-        let parent = self.access.parent.clone();
-        keys.into_iter().map(move |key| Optic {
-            access: BTreeMapKey {
-                parent: parent.clone(),
-                key,
-                _marker: PhantomData,
+        Optic {
+            access: Values {
+                parent: self.access.clone(),
             },
             _marker: PhantomData,
-        })
+        }
     }
 }
 
@@ -983,9 +945,7 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, X, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, X, A::Storage, A::WriteMetadata>> {
         self.parent
             .try_write()
             .and_then(|w| WriteLock::filter_map(w, |o| o.as_mut()))
@@ -1001,6 +961,289 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.parent.visit_path(sink);
+    }
+}
+
+// ============================================================================
+// Values: optic-chain values view + the Any aggregator built on top of it.
+//
+// `Values<Parent>` lets `.values()` stay inside the optic chain so reactive
+// derivations like `.any()` produce a new `Optic<bool>` (via `ValueAccess`)
+// instead of materializing the iteration here. Iteration is still available
+// through `IntoIterator for &Optic<Values<...>>` and the inherent `iter()`
+// helper.
+// ============================================================================
+
+/// Values-only view of a keyed collection optic. Iterate via `IntoIterator`
+/// on `&Optic<Values<...>>` (or via the inherent `.iter()` helper); chain
+/// optic-aware combinators like [`any`](Optic::any) for in-chain
+/// derivations.
+pub struct Values<Parent> {
+    pub(crate) parent: Parent,
+}
+
+impl<Parent: Clone> Clone for Values<Parent> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+        }
+    }
+}
+
+impl<Parent: Copy> Copy for Values<Parent> {}
+
+/// Carrier built by [`Optic::any`] on a values view. Reading via
+/// [`ValueAccess::value`] iterates the parent collection's snapshot of
+/// children, applies the predicate, and returns `true` if any child's
+/// derived value is `true`.
+pub struct Any<Parent, F> {
+    pub(crate) parent: Parent,
+    pub(crate) predicate: F,
+}
+
+impl<Parent: Clone, F: Clone> Clone for Any<Parent, F> {
+    fn clone(&self) -> Self {
+        Self {
+            parent: self.parent.clone(),
+            predicate: self.predicate.clone(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// HashMap: Values + Any
+// ---------------------------------------------------------------------------
+
+impl<A, K, V, S> Optic<Values<EachHashMap<A, K, V, S>>>
+where
+    A: Clone + Access<Target = HashMap<K, V, S>>,
+    K: Clone + Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+    /// Build a derived optic whose value is `true` if any element's
+    /// predicate-derived value is `true`. The predicate is handed the per-key
+    /// child optic and is expected to return another optic that resolves to
+    /// `bool` (e.g. `|todo| todo.checked()`).
+    pub fn any<F, R, RPath>(&self, predicate: F) -> Optic<Any<EachHashMap<A, K, V, S>, F>>
+    where
+        F: Fn(Optic<HashMapKey<A, K, V, S>>) -> Optic<R, RPath>,
+        R: ValueAccess<bool>,
+    {
+        Optic {
+            access: Any {
+                parent: self.access.parent.clone(),
+                predicate,
+            },
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<A, K, V, S> IntoIterator for Optic<Values<EachHashMap<A, K, V, S>>>
+where
+    A: 'static + Clone + Access<Target = HashMap<K, V, S>>,
+    K: Clone + Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+    type Item = Optic<HashMapKey<A, K, V, S>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let parent = self.access.parent.parent;
+        let keys: Vec<K> = parent
+            .try_read()
+            .expect("optics: collection parent path produced no value")
+            .keys()
+            .cloned()
+            .collect();
+        Box::new(keys.into_iter().map(move |key| Optic {
+            access: HashMapKey {
+                parent: parent.clone(),
+                key,
+                _marker: PhantomData,
+            },
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<'a, A, K, V, S> IntoIterator for &'a Optic<Values<EachHashMap<A, K, V, S>>>
+where
+    A: Clone + Access<Target = HashMap<K, V, S>>,
+    K: Clone + Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+{
+    type Item = Optic<HashMapKey<A, K, V, S>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let parent = self.access.parent.parent.clone();
+        let keys: Vec<K> = parent
+            .try_read()
+            .expect("optics: collection parent path produced no value")
+            .keys()
+            .cloned()
+            .collect();
+        Box::new(keys.into_iter().map(move |key| Optic {
+            access: HashMapKey {
+                parent: parent.clone(),
+                key,
+                _marker: PhantomData,
+            },
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<A, K, V, S, F, R, RPath> ValueAccess<bool> for Any<EachHashMap<A, K, V, S>, F>
+where
+    A: Clone + Access<Target = HashMap<K, V, S>>,
+    K: Clone + Eq + Hash + 'static,
+    V: 'static,
+    S: BuildHasher + 'static,
+    F: Fn(Optic<HashMapKey<A, K, V, S>>) -> Optic<R, RPath>,
+    R: ValueAccess<bool>,
+{
+    fn value(&self) -> bool {
+        let keys: Vec<K> = {
+            let map = self
+                .parent
+                .parent
+                .try_read()
+                .expect("optics: collection parent path produced no value");
+            map.keys().cloned().collect()
+        };
+        let parent = self.parent.parent.clone();
+        keys.into_iter().any(|key| {
+            let child = Optic {
+                access: HashMapKey {
+                    parent: parent.clone(),
+                    key,
+                    _marker: PhantomData,
+                },
+                _marker: PhantomData,
+            };
+            (self.predicate)(child).value()
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BTreeMap: Values + Any
+// ---------------------------------------------------------------------------
+
+impl<A, K, V> Optic<Values<EachBTreeMap<A, K, V>>>
+where
+    A: Clone + Access<Target = BTreeMap<K, V>>,
+    K: Clone + Ord + 'static,
+    V: 'static,
+{
+    /// Build a derived optic whose value is `true` if any element's
+    /// predicate-derived value is `true`. See the
+    /// `HashMap` variant for usage.
+    pub fn any<F, R, RPath>(&self, predicate: F) -> Optic<Any<EachBTreeMap<A, K, V>, F>>
+    where
+        F: Fn(Optic<BTreeMapKey<A, K, V>>) -> Optic<R, RPath>,
+        R: ValueAccess<bool>,
+    {
+        Optic {
+            access: Any {
+                parent: self.access.parent.clone(),
+                predicate,
+            },
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<A, K, V> IntoIterator for Optic<Values<EachBTreeMap<A, K, V>>>
+where
+    A: 'static + Clone + Access<Target = BTreeMap<K, V>>,
+    K: Clone + Ord + 'static,
+    V: 'static,
+{
+    type Item = Optic<BTreeMapKey<A, K, V>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let parent = self.access.parent.parent;
+        let keys: Vec<K> = parent
+            .try_read()
+            .expect("optics: collection parent path produced no value")
+            .keys()
+            .cloned()
+            .collect();
+        Box::new(keys.into_iter().map(move |key| Optic {
+            access: BTreeMapKey {
+                parent: parent.clone(),
+                key,
+                _marker: PhantomData,
+            },
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<'a, A, K, V> IntoIterator for &'a Optic<Values<EachBTreeMap<A, K, V>>>
+where
+    A: Clone + Access<Target = BTreeMap<K, V>>,
+    K: Clone + Ord + 'static,
+    V: 'static,
+{
+    type Item = Optic<BTreeMapKey<A, K, V>>;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let parent = self.access.parent.parent.clone();
+        let keys: Vec<K> = parent
+            .try_read()
+            .expect("optics: collection parent path produced no value")
+            .keys()
+            .cloned()
+            .collect();
+        Box::new(keys.into_iter().map(move |key| Optic {
+            access: BTreeMapKey {
+                parent: parent.clone(),
+                key,
+                _marker: PhantomData,
+            },
+            _marker: PhantomData,
+        }))
+    }
+}
+
+impl<A, K, V, F, R, RPath> ValueAccess<bool> for Any<EachBTreeMap<A, K, V>, F>
+where
+    A: Clone + Access<Target = BTreeMap<K, V>>,
+    K: Clone + Ord + 'static,
+    V: 'static,
+    F: Fn(Optic<BTreeMapKey<A, K, V>>) -> Optic<R, RPath>,
+    R: ValueAccess<bool>,
+{
+    fn value(&self) -> bool {
+        let keys: Vec<K> = {
+            let map = self
+                .parent
+                .parent
+                .try_read()
+                .expect("optics: collection parent path produced no value");
+            map.keys().cloned().collect()
+        };
+        let parent = self.parent.parent.clone();
+        keys.into_iter().any(|key| {
+            let child = Optic {
+                access: BTreeMapKey {
+                    parent: parent.clone(),
+                    key,
+                    _marker: PhantomData,
+                },
+                _marker: PhantomData,
+            };
+            (self.predicate)(child).value()
+        })
     }
 }
 

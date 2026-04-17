@@ -309,6 +309,17 @@ where
             .try_write_unchecked()
             .map(|w| w.map_metadata(|data| Box::new(data) as Box<dyn Any>))
     }
+
+    fn try_write_silent(
+        &self,
+    ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        W::Target: 'static,
+    {
+        self.value
+            .try_write_silent()
+            .map(|w| w.map_metadata(|data| Box::new(data) as Box<dyn Any>))
+    }
 }
 
 impl<T: ?Sized, S: BoxedSignalStorage<T>> Clone for WriteSignal<T, S> {
@@ -406,6 +417,18 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
             .unwrap()
             .try_write_unchecked()
     }
+
+    fn try_write_silent(
+        &self,
+    ) -> Result<crate::WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        T: 'static,
+    {
+        self.value
+            .try_peek_unchecked()
+            .unwrap()
+            .try_write_silent()
+    }
 }
 
 // We can't implement From<impl Writable<Target = T, Storage = S>> for Write<T, S>
@@ -454,8 +477,8 @@ where
 // Optic-backed lenses (the shape `#[derive(Store)]` emits) box the same way
 // as `MappedMutSignal`: just hand them to `WriteSignal::new_maybe_sync` /
 // `ReadSignal::new_maybe_sync` via the Readable/Writable bridge.
-impl<V, Source, O, S>
-    From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>> for WriteSignal<O, S>
+impl<V, Source, O, S> From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>>
+    for WriteSignal<O, S>
 where
     V: Writable<Target = Source, Storage = S> + 'static,
     Source: 'static,
@@ -468,8 +491,8 @@ where
     }
 }
 
-impl<V, Source, O, S>
-    From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>> for ReadSignal<O, S>
+impl<V, Source, O, S> From<dioxus_optics::Combinator<V, dioxus_optics::LensOp<Source, O>>>
+    for ReadSignal<O, S>
 where
     V: Writable<Target = Source, Storage = S> + 'static,
     Source: 'static,

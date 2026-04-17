@@ -78,7 +78,7 @@ pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 ///     rsx! {
 ///         button {
 ///             // Incrementing the count will only rerun parts of the app that have read the count field
-///             onclick: move |_| count += 1,
+///             onclick: move |_| *count.write() += 1,
 ///             "Increment"
 ///         }
 ///         button {
@@ -90,7 +90,7 @@ pub type SyncStore<T> = Store<T, CopyValue<T, SyncStorage>>;
 ///         "sum: {value.sum()}"
 ///         ul {
 ///             // Iterating over the children gives us optics scoped to each child.
-///             for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+///             for (i, _) in (&dioxus_optics::OpticIter::iter(children)).into_iter().enumerate() {
 ///                 li { "child {i}" }
 ///             }
 ///         }
@@ -175,6 +175,98 @@ impl<T: ?Sized, Lens> From<SelectorScope<Lens>> for Store<T, Lens> {
     }
 }
 
+// Macro-emitted field accessors return `Optic<Subscribed<Lens>, Required>`.
+// This conversion rebuilds a `Store<T, Lens>` from one: it peels off the
+// Subscribed wrapper, reuses its tree (so subscribers installed via the
+// macro-chain share the tree of the original store / optic), and threads
+// the visited path into a fresh `SelectorScope`. The result is that a
+// `Store<T, Lens>` value can be recovered from the optic chain produced by
+// the derive macro.
+impl<T: ?Sized, Lens>
+    ::std::convert::From<
+        dioxus_optics::Optic<dioxus_optics::Subscribed<Lens>, dioxus_optics::Required>,
+    > for Store<T, Lens>
+where
+    Lens: dioxus_optics::Pathed,
+{
+    fn from(
+        optic: dioxus_optics::Optic<dioxus_optics::Subscribed<Lens>, dioxus_optics::Required>,
+    ) -> Self {
+        let subscribed = optic.into_access();
+        let mut buf = dioxus_optics::PathBuffer::new();
+        <dioxus_optics::Subscribed<Lens> as dioxus_optics::Pathed>::visit_path(
+            &subscribed,
+            &mut buf,
+        );
+        let path: Vec<_> = buf.segments().to_vec();
+        let (lens, tree) = subscribed.into_parts();
+        let selector = SelectorScope::new(path, tree, lens);
+        selector.into()
+    }
+}
+
+// Component props typed `Store<T>` (default `Lens = WriteSignal<T>`) accept
+// macro-derived Optic chains via this SuperInto impl, which boxes the
+// Combinator-backed lens into a WriteSignal in one step.
+#[doc(hidden)]
+pub struct SuperIntoStoreFromOpticMarker;
+
+impl<T, S, Lens, Source>
+    SuperInto<
+        Store<T, WriteSignal<T, S>>,
+        SuperIntoStoreFromOpticMarker,
+    >
+    for dioxus_optics::Optic<
+        dioxus_optics::Subscribed<
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        >,
+        dioxus_optics::Required,
+    >
+where
+    Lens: Writable<Target = Source, Storage = S> + dioxus_optics::Pathed + 'static,
+    Source: 'static,
+    T: 'static,
+    S: BoxedSignalStorage<T>
+        + CreateBoxedSignalStorage<
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        >,
+{
+    fn super_into(self) -> Store<T, WriteSignal<T, S>> {
+        // Chain: Optic<Subscribed<Combinator<...>>> → Store<T, Combinator<...>> → boxed WriteStore<T, S>.
+        let with_combinator: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>> = self.into();
+        with_combinator.into()
+    }
+}
+
+#[doc(hidden)]
+pub struct SuperIntoReadStoreFromOpticMarker;
+
+impl<T, S, Lens, Source>
+    SuperInto<
+        Store<T, ReadSignal<T, S>>,
+        SuperIntoReadStoreFromOpticMarker,
+    >
+    for dioxus_optics::Optic<
+        dioxus_optics::Subscribed<
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        >,
+        dioxus_optics::Required,
+    >
+where
+    Lens: Writable<Target = Source, Storage = S> + dioxus_optics::Pathed + 'static,
+    Source: 'static,
+    T: 'static,
+    S: BoxedSignalStorage<T>
+        + CreateBoxedSignalStorage<
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        >,
+{
+    fn super_into(self) -> Store<T, ReadSignal<T, S>> {
+        let with_combinator: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>> = self.into();
+        with_combinator.into()
+    }
+}
+
 impl<T: ?Sized, Lens> PartialEq for Store<T, Lens>
 where
     Lens: PartialEq,
@@ -200,8 +292,8 @@ impl<T: ?Sized, Lens> Copy for Store<T, Lens> where Lens: Copy {}
 // shape any more, but downstream callers can still construct it (for
 // example, by chaining `WritableExt::map_mut` over a Combinator-backed
 // store), so we keep the boxed-coercion path.
-impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>>
-    for WriteStore<T, S>
+impl<__F, __FMut, T: ?Sized, S, Lens>
+    ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>> for WriteStore<T, S>
 where
     Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
@@ -216,8 +308,8 @@ where
         }
     }
 }
-impl<__F, __FMut, T: ?Sized, S, Lens> ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>>
-    for ReadStore<T, S>
+impl<__F, __FMut, T: ?Sized, S, Lens>
+    ::std::convert::From<Store<T, MappedMutSignal<T, Lens, __F, __FMut>>> for ReadStore<T, S>
 where
     Lens: Writable<Storage = S> + 'static,
     __F: Fn(&Lens::Target) -> &T + 'static,
@@ -369,6 +461,9 @@ where
     fn try_write_unchecked(&self) -> Result<WritableRef<'static, Self>, BorrowMutError> {
         self.selector.try_write_unchecked()
     }
+    fn try_write_silent(&self) -> Result<WritableRef<'static, Self>, BorrowMutError> {
+        self.selector.try_write_silent()
+    }
 }
 
 impl<T, Lens> dioxus_optics::Access for Store<T, Lens>
@@ -381,17 +476,13 @@ where
 
     fn try_read(
         &self,
-    ) -> Option<
-        <Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>,
-    > {
+    ) -> Option<<Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>> {
         <Self as Readable>::try_read_unchecked(self).ok()
     }
 
     fn try_peek(
         &self,
-    ) -> Option<
-        <Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>,
-    > {
+    ) -> Option<<Self::Storage as dioxus_signals::AnyStorage>::Ref<'static, Self::Target>> {
         <Self as Readable>::try_peek_unchecked(self).ok()
     }
 }
@@ -405,10 +496,19 @@ where
 
     fn try_write(
         &self,
-    ) -> Option<
-        dioxus_signals::WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>,
-    > {
+    ) -> Option<dioxus_signals::WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>>
+    {
         <Self as Writable>::try_write_unchecked(self).ok()
+    }
+
+    fn try_write_silent(
+        &self,
+    ) -> Option<dioxus_signals::WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>>
+    {
+        // Critical: skip the `SelectorScope`'s eager `mark_dirty` so an
+        // outer `Subscribed` chain fires exactly once at the leaf path,
+        // instead of that + a redundant root fire here.
+        <Self as Writable>::try_write_silent(self).ok()
     }
 }
 
@@ -431,6 +531,18 @@ impl<T, Lens> dioxus_optics::Pathed for Store<T, Lens> {
                 sink.push(*seg);
             }
         });
+    }
+}
+
+// The store's SelectorScope already owns a SubscriptionTree; hand it out so
+// macro-emitted field accessors can wrap their Combinator child in a
+// Subscribed that shares the same tree (i.e. subscribers installed through a
+// chained `.checked()` fire when something writes through the root store,
+// closing the gap that the ignored `len_is_shallow_but_push_marks_it_dirty`
+// test documents).
+impl<T, Lens> dioxus_optics::HasSubscriptionTree for Store<T, Lens> {
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.selector.subscription_tree()
     }
 }
 impl<T, Lens> IntoAttributeValue for Store<T, Lens>
@@ -509,7 +621,7 @@ write_impls!(Store<T, Lens> where Lens: Writable<Target = T>);
 ///     rsx! {
 ///         button {
 ///             // Incrementing the count will only rerun parts of the app that have read the count field
-///             onclick: move |_| count += 1,
+///             onclick: move |_| *count.write() += 1,
 ///             "Increment"
 ///         }
 ///         button {
@@ -520,7 +632,7 @@ write_impls!(Store<T, Lens> where Lens: Writable<Target = T>);
 ///         }
 ///         ul {
 ///             // Iterating over the children gives us optics scoped to each child.
-///             for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+///             for (i, _) in (&dioxus_optics::OpticIter::iter(children)).into_iter().enumerate() {
 ///                 li { "child {i}" }
 ///             }
 ///         }
@@ -558,7 +670,7 @@ pub fn use_store_sync<T: Send + Sync + 'static>(init: impl FnOnce() -> T) -> Syn
 ///
 ///     rsx! {
 ///         button {
-///             onclick: move |_| count += 1,
+///             onclick: move |_| *count.write() += 1,
 ///             "{count}"
 ///         }
 ///     }

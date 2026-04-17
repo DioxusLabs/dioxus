@@ -4,16 +4,14 @@ use dioxus_core::current_owner;
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage, WriteLock};
 
 use crate::{
-    collection::{
-        BTreeMapTarget, EachBTreeMap, EachHashMap, EachVec, FlattenSome, FlattenSomeOp,
-        GetProjection, HashMapTarget, VecTarget,
-    },
+    collection::{FlattenSome, FlattenSomeOp, GetProjection},
     combinator::{
         Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
         OptPrismOp, Prism, PrismOp, RefOp, SomePrism, ValueAccess,
     },
+    iter::{IterShape, OpticIter},
     path::Pathed,
-    subscribed::{Subscribed, SubscriptionTree},
+    subscribed::{HasSubscriptionTree, Subscribed, SubscriptionTree},
 };
 
 /// Marker for an optics path that is expected to exist (user-facing `read()` /
@@ -143,9 +141,7 @@ impl<A, Path> Optic<A, Path> {
     }
 
     /// Write an optional child projection.
-    pub fn write_opt(
-        &self,
-    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>>
+    pub fn write_opt(&self) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>>
     where
         A: AccessMut,
     {
@@ -157,10 +153,7 @@ impl<A, Path> Optic<A, Path> {
     /// Use this for carriers that only expose [`Access`] — for example a
     /// [`dioxus_signals::Memo`].
     #[must_use]
-    pub fn map_ref<T, U>(
-        self,
-        read: fn(&T) -> &U,
-    ) -> Optic<Combinator<A, RefOp<T, U>>, Path>
+    pub fn map_ref<T, U>(self, read: fn(&T) -> &U) -> Optic<Combinator<A, RefOp<T, U>>, Path>
     where
         T: 'static,
         U: 'static,
@@ -252,6 +245,23 @@ impl<A, Path> Optic<A, Path> {
             _marker: PhantomData,
         }
     }
+
+    /// Step into the projected collection, returning a reusable
+    /// `Optic<Each*<...>>` carrier. Dispatches based on the target shape:
+    /// `Vec<T>` → [`EachVec`](crate::EachVec), `HashMap<K, V, S>` →
+    /// [`EachHashMap`](crate::EachHashMap), `BTreeMap<K, V>` →
+    /// [`EachBTreeMap`](crate::EachBTreeMap).
+    ///
+    /// Replaces the older `.each()` / `.each_hash_map()` /
+    /// `.each_btree_map()` entry methods.
+    #[must_use]
+    pub fn iter(&self) -> Optic<<A::Target as IterShape>::Each<A>, Required>
+    where
+        A: Access + Clone,
+        A::Target: IterShape,
+    {
+        OpticIter::iter(self.access.clone())
+    }
 }
 
 // ============================================================================
@@ -320,10 +330,7 @@ impl<A> Optic<A, Required> {
 
     /// Project into a variant through a specific prism instance.
     #[must_use]
-    pub fn map_variant_with_prism<P>(
-        self,
-        prism: P,
-    ) -> Optic<Combinator<A, PrismOp<P>>, Optional>
+    pub fn map_variant_with_prism<P>(self, prism: P) -> Optic<Combinator<A, PrismOp<P>>, Optional>
     where
         P: Prism,
     {
@@ -351,54 +358,6 @@ impl<A> Optic<A, Required> {
         self.map_variant_with_prism(InlinePrism::new(try_ref, try_mut, try_into))
     }
 
-    /// Treat a `Vec<T>` child as an iterable collection of child optics.
-    ///
-    /// The item type is inferred from `A::Target` via [`VecTarget`], so call
-    /// sites write `.each()` without turbofish.
-    #[must_use]
-    pub fn each(self) -> Optic<EachVec<A, <A::Target as VecTarget>::Item>>
-    where
-        A: Access,
-        A::Target: VecTarget,
-    {
-        Optic {
-            access: EachVec {
-                parent: self.access,
-                _marker: PhantomData,
-            },
-            _marker: PhantomData,
-        }
-    }
-
-    /// Treat a `HashMap<K, V, S>` child as a keyed collection of child optics.
-    ///
-    /// Key/value/hasher types are inferred from `A::Target` via
-    /// [`HashMapTarget`], so call sites write `.each_hash_map()` without
-    /// turbofish.
-    #[must_use]
-    pub fn each_hash_map(
-        self,
-    ) -> Optic<
-        EachHashMap<
-            A,
-            <A::Target as HashMapTarget>::Key,
-            <A::Target as HashMapTarget>::Value,
-            <A::Target as HashMapTarget>::Hasher,
-        >,
-    >
-    where
-        A: Access,
-        A::Target: HashMapTarget,
-    {
-        Optic {
-            access: EachHashMap {
-                parent: self.access,
-                _marker: PhantomData,
-            },
-            _marker: PhantomData,
-        }
-    }
-
     /// Peek the current `Option<T>` value and, if it's `Some`, return a
     /// [`Required`]-tagged optic projecting the inner `T`. If the value
     /// is `None`, return `None`.
@@ -406,9 +365,7 @@ impl<A> Optic<A, Required> {
     /// Equivalent to `self.map_some::<T>().to_option()` and exposed as a
     /// dedicated method so the intent reads cleanly at call sites.
     #[must_use]
-    pub fn try_some<T>(
-        self,
-    ) -> Option<Optic<Combinator<A, PrismOp<SomePrism<T>>>, Required>>
+    pub fn try_some<T>(self) -> Option<Optic<Combinator<A, PrismOp<SomePrism<T>>>, Required>>
     where
         A: Access<Target = Option<T>>,
         T: 'static,
@@ -431,11 +388,7 @@ impl<A> Optic<A, Required> {
         T: 'static,
         E: 'static,
     {
-        let is_ok = self
-            .access
-            .try_read()
-            .map(|r| r.is_ok())
-            .unwrap_or(false);
+        let is_ok = self.access.try_read().map(|r| r.is_ok()).unwrap_or(false);
         if is_ok {
             Ok(self
                 .map_ok::<T, E>()
@@ -446,33 +399,6 @@ impl<A> Optic<A, Required> {
                 .map_err::<T, E>()
                 .to_option()
                 .expect("Result was Err at peek time but absent on read"))
-        }
-    }
-
-    /// Treat a `BTreeMap<K, V>` child as a keyed collection of child optics.
-    ///
-    /// Key/value types are inferred from `A::Target` via [`BTreeMapTarget`],
-    /// so call sites write `.each_btree_map()` without turbofish.
-    #[must_use]
-    pub fn each_btree_map(
-        self,
-    ) -> Optic<
-        EachBTreeMap<
-            A,
-            <A::Target as BTreeMapTarget>::Key,
-            <A::Target as BTreeMapTarget>::Value,
-        >,
-    >
-    where
-        A: Access,
-        A::Target: BTreeMapTarget,
-    {
-        Optic {
-            access: EachBTreeMap {
-                parent: self.access,
-                _marker: PhantomData,
-            },
-            _marker: PhantomData,
         }
     }
 }
@@ -566,5 +492,110 @@ impl<A> Optic<A, Optional> {
         V: 'static,
     {
         self.map_variant_with_prism(InlinePrism::new(try_ref, try_mut, try_into))
+    }
+}
+
+// ============================================================================
+// Optic<A, Path> implements Access / AccessMut / ValueAccess / FutureAccess /
+// Pathed by delegating to its inner accessor `A`. This lets `Optic<...>` slot
+// into the same blanket impls (e.g. `OpticExt`, the `#[derive(Store)]`
+// extension trait) as a raw `Signal`, `Store`, `Resource`, etc., so a chain
+// like `store.iter().get(&id).to_option().expect(...).checked()` keeps
+// reaching the macro-generated field accessors.
+// ============================================================================
+
+impl<A, Path> Access for Optic<A, Path>
+where
+    A: Access,
+{
+    type Target = A::Target;
+    type Storage = A::Storage;
+
+    #[inline]
+    fn try_read(
+        &self,
+    ) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+        self.access.try_read()
+    }
+
+    #[inline]
+    fn try_peek(
+        &self,
+    ) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+        self.access.try_peek()
+    }
+}
+
+impl<A, Path> AccessMut for Optic<A, Path>
+where
+    A: AccessMut,
+{
+    type WriteMetadata = A::WriteMetadata;
+
+    #[inline]
+    fn try_write(
+        &self,
+    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
+        self.access.try_write()
+    }
+
+    #[inline]
+    fn try_write_silent(
+        &self,
+    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
+        self.access.try_write_silent()
+    }
+}
+
+impl<A, Path, T> ValueAccess<T> for Optic<A, Path>
+where
+    A: ValueAccess<T>,
+{
+    #[inline]
+    fn value(&self) -> T {
+        self.access.value()
+    }
+}
+
+impl<A, Path, Fut> FutureAccess<Fut> for Optic<A, Path>
+where
+    A: FutureAccess<Fut>,
+    Fut: Future,
+{
+    #[inline]
+    fn future(&self) -> Fut {
+        self.access.future()
+    }
+}
+
+impl<A, Path> Pathed for Optic<A, Path>
+where
+    A: Pathed,
+{
+    #[inline]
+    fn visit_path(&self, sink: &mut crate::path::PathBuffer) {
+        self.access.visit_path(sink);
+    }
+}
+
+impl<A, Path> HasSubscriptionTree for Optic<A, Path>
+where
+    A: HasSubscriptionTree,
+{
+    #[inline]
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.access.subscription_tree()
+    }
+}
+
+// `GenerationalBox` is the storage used by `Optic::new` roots. It doesn't
+// carry a real subscription tree on its own — give it a fresh one so methods
+// bounded on `HasSubscriptionTree` (e.g. collection `.len()`, `.is_empty()`)
+// still compile on test-style `Optic::new(...)` chains.
+impl<T, S: 'static> HasSubscriptionTree
+    for generational_box::GenerationalBox<T, S>
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        SubscriptionTree::new()
     }
 }

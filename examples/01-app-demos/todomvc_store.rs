@@ -4,7 +4,7 @@
 //! maintaining fine grained reactivity.
 
 use dioxus::prelude::*;
-use dioxus_optics::Optic;
+use dioxus_optics::OpticIter;
 use std::{collections::HashMap, vec};
 
 const STYLE: Asset = asset!("/examples/assets/todomvc.css");
@@ -49,7 +49,7 @@ impl<Lens> Store<TodoState, Lens> {
 
     fn toggle_all(&mut self) {
         let check = self.incomplete_count() != 0;
-        let mut todos = self.todos();
+        let todos = self.todos();
         let keys: Vec<u32> = todos.read().keys().copied().collect();
         for key in keys {
             if let Some(item) = todos.write().get_mut(&key) {
@@ -220,21 +220,18 @@ fn TodoHeader(mut todos: Store<TodoState>) -> Element {
 fn TodoEntry(mut todos: Store<TodoState>, id: u32) -> Element {
     let mut is_editing = use_signal(|| false);
 
-    // Project into the specific todo by id through an optic chain — this gives us
-    // path-granular subscriptions just like `.get(id).unwrap()` used to.
-    let entry = Optic::from_access(todos.todos())
-        .each_hash_map()
+    // Project into the specific todo by id through an optic chain. The
+    // `#[derive(Store)]` on `TodoItem` generates `.checked()` / `.contents()`
+    // on any carrier whose target is `TodoItem` — including this Optic — so
+    // no manual `map_ref_mut` is needed.
+    let entry = todos
+        .todos()
+        .iter()
         .get(&id)
         .to_option()
         .expect("todo id is in the map");
-    let checked_optic =
-        entry
-            .clone()
-            .map_ref_mut(|t: &TodoItem| &t.checked, |t: &mut TodoItem| &mut t.checked);
-    let contents_optic = entry.map_ref_mut(
-        |t: &TodoItem| &t.contents,
-        |t: &mut TodoItem| &mut t.contents,
-    );
+    let checked_optic = entry.clone().checked();
+    let contents_optic = entry.contents();
     let checked = *checked_optic.read();
     let contents = contents_optic.clone();
 
@@ -302,8 +299,14 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
     // We use a memo to calculate whether we should show the "Clear completed" button.
     // This will recompute whenever the number of todos change or the checked state of an existing
     // todo changes
-    let show_clear_completed =
-        use_memo(move || todos.todos().read().values().any(|todo| todo.checked));
+    let show_clear_completed = use_memo(move || {
+        todos
+            .todos()
+            .iter()
+            .values()
+            .any(|todo| todo.checked())
+            .value()
+    });
     let mut filter = todos.filter();
 
     rsx! {
@@ -327,7 +330,7 @@ fn ListFooter(mut todos: Store<TodoState>, active_todo_count: ReadSignal<usize>)
                     li {
                         a {
                             href: url,
-                            class: if filter() == state { "selected" },
+                            class: if filter.cloned() == state { "selected" },
                             onclick: move |evt| {
                                 evt.prevent_default();
                                 filter.set(state)

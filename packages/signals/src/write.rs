@@ -50,6 +50,28 @@ pub trait Writable: Readable {
     ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
     where
         Self::Target: 'static;
+
+    /// Return a mutable guard to the underlying value **without notifying
+    /// this carrier's subscribers at its natural path**. Intended for chain
+    /// composition: when a `Subscribed` wrapper fires subscribers at a
+    /// leaf path, the inner carrier should **not** re-fire its own
+    /// subscribers at its root path, or the outer write would notify
+    /// every descendant of that root (including siblings of the leaf).
+    ///
+    /// The default implementation delegates to [`try_write_unchecked`] —
+    /// i.e. carriers that only notify on the returned guard's `Drop`
+    /// (like `Signal`/`CopyValue`) need no override. Carriers that
+    /// eagerly `mark_dirty` on call (like `SelectorScope` / `Store` /
+    /// `Subscribed`) should override to skip their own fire and just
+    /// return the inner write guard.
+    fn try_write_silent(
+        &self,
+    ) -> Result<WritableRef<'static, Self>, generational_box::BorrowMutError>
+    where
+        Self::Target: 'static,
+    {
+        self.try_write_unchecked()
+    }
 }
 
 /// A mutable reference to a writable value. This reference acts similarly to [`std::cell::RefMut`], but it has extra debug information

@@ -341,14 +341,13 @@ fn deep_grandparent_reader_sees_descendant_write() {
     }
 }
 
-// FIXME: writes through `Optic::from_access(store).each().index(0).write()`
-// fire the underlying Store's subscribers at the base path (because the
-// SelectorScope's mark_dirty doesn't see the optic's extended path
-// segments). Restoring the assertion requires teaching `Subscribed<A>` to
-// reuse the Store's own `SubscriptionTree` instead of building a parallel
-// one — design pass tracked separately.
+// `.len()` on a collection optic subscribes **shallowly** at the parent
+// carrier's path so that writes to individual elements (via
+// `.index(i).write()`) don't wake length readers. `.push()` explicitly
+// fires a shallow notify at that same path so length readers do wake —
+// without also waking every sibling-index subscriber. This matches the
+// classic store reactivity model exactly.
 #[test]
-#[ignore = "optic-path → store-tree integration pending"]
 fn len_is_shallow_but_push_marks_it_dirty() {
     fn initial_items() -> Vec<i32> {
         vec![1, 2, 3]
@@ -365,17 +364,25 @@ fn len_is_shallow_but_push_marks_it_dirty() {
     #[component]
     fn len_reader(value: Store<Vec<i32>>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().len += 1;
-        let len = dioxus_optics::Optic::from_access(value).each().len();
+        let len = dioxus_optics::Optic::from_access(value).iter().len();
         rsx! {
             "len = {len}"
         }
     }
 
+    // Read `first` inside this component so the PARENT never subscribes to
+    // the store — that way parent reruns don't force every child to
+    // re-invoke, and we're testing the subscription model in isolation
+    // rather than Dioxus's component memoization.
     #[component]
-    fn first_reader(value: i32, counter: Rc<RefCell<RunCounter>>) -> Element {
+    fn first_reader(value: Store<Vec<i32>>, counter: Rc<RefCell<RunCounter>>) -> Element {
         counter.borrow_mut().first += 1;
+        let first = *dioxus_optics::Optic::from_access(value)
+            .iter()
+            .index(0)
+            .read();
         rsx! {
-            "first = {value}"
+            "first = {first}"
         }
     }
 
@@ -383,10 +390,9 @@ fn len_is_shallow_but_push_marks_it_dirty() {
     let mut dom = VirtualDom::new_with_props(
         |counter: Rc<RefCell<RunCounter>>| {
             let items = STORE.resolve();
-            let first = *dioxus_optics::Optic::from_access(items).each().index(0).read();
             rsx! {
                 len_reader { value: items, counter: counter.clone() }
-                first_reader { value: first, counter: counter.clone() }
+                first_reader { value: items, counter: counter.clone() }
             }
         },
         counter.clone(),
@@ -401,7 +407,10 @@ fn len_is_shallow_but_push_marks_it_dirty() {
 
     dom.in_scope(ScopeId::APP, || {
         let items = STORE.resolve();
-        *dioxus_optics::Optic::from_access(items).each().index(0).write() = 10;
+        *dioxus_optics::Optic::from_access(items)
+            .iter()
+            .index(0)
+            .write() = 10;
     });
 
     dom.render_immediate(&mut NoOpMutations);
@@ -414,7 +423,7 @@ fn len_is_shallow_but_push_marks_it_dirty() {
 
     dom.in_scope(ScopeId::APP, || {
         let items = STORE.resolve();
-        dioxus_optics::Optic::from_access(items).each().push(4);
+        dioxus_optics::Optic::from_access(items).iter().push(4);
     });
 
     dom.render_immediate(&mut NoOpMutations);
@@ -503,7 +512,7 @@ fn raw_signal_projects_vec_children() {
         let items = Signal::new(vec![1, 2, 3]);
 
         // Wrap the raw signal in an optic chain and project the Vec children.
-        let vec_optic = Optic::from_access(items).each();
+        let vec_optic = Optic::from_access(items).iter();
         assert_eq!(vec_optic.len(), 3);
 
         let second = vec_optic.get(1).to_option().expect("index 1 exists");
@@ -513,8 +522,8 @@ fn raw_signal_projects_vec_children() {
 
         assert_eq!(&*items.read(), &[1, 20, 3]);
         assert_eq!(
-            vec_optic
-                .iter()
+            (&vec_optic)
+                .into_iter()
                 .map(|item| *item.read())
                 .collect::<Vec<_>>(),
             vec![1, 20, 3]
@@ -549,11 +558,8 @@ fn raw_signal_projects_signal_children() {
     dom.in_scope(ScopeId::APP, || {
         let items = Signal::new(vec![Signal::new(1), Signal::new(2)]);
 
-        let first = dioxus_optics::Optic::from_access(items)
-            .each()
-            .iter()
-            .next()
-            .unwrap();
+        let each = dioxus_optics::Optic::from_access(items).iter();
+        let first = (&each).into_iter().next().unwrap();
         let mut inner = *first.read();
 
         assert_eq!(*inner.read(), 1);

@@ -11,7 +11,7 @@ use std::{
 use dioxus_core::{ScopeId, VNode, VirtualDom};
 use dioxus_optics::{
     AsFuture, AwaitTransform, FlattenSomeOp, FutureAccess, FutureProject, OkPrism, OptPrismOp,
-    Optic, Prism, PrismOp, Resource, ResourceFuture, SomePrism, ValueAccess,
+    Optic, OpticExt, OpticIter, Prism, PrismOp, Resource, ResourceFuture, SomePrism, ValueAccess,
 };
 use dioxus_signals::{CopyValue, Memo, ReadableExt, Signal, SyncSignal};
 use dioxus_stores::Store;
@@ -85,9 +85,7 @@ impl ValueAccess<Option<Option<i32>>> for NestedOptionCarrier {
 #[derive(Clone)]
 struct NestedOptionFutureCarrier(Option<Option<i32>>);
 
-impl FutureAccess<AsFuture<std::future::Ready<Option<Option<i32>>>>>
-    for NestedOptionFutureCarrier
-{
+impl FutureAccess<AsFuture<std::future::Ready<Option<Option<i32>>>>> for NestedOptionFutureCarrier {
     fn future(&self) -> AsFuture<std::future::Ready<Option<Option<i32>>>> {
         AsFuture(ready(self.0))
     }
@@ -315,18 +313,18 @@ fn each_projects_vec_children() {
             ],
         });
 
-        let each_todo = app.map_ref_mut(app_todos, app_todos_mut).each();
-        for todo in each_todo.iter() {
+        let each_todo = app.map_ref_mut(app_todos, app_todos_mut).iter();
+        for todo in &each_todo {
             *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
         }
 
-        let titles: Vec<String> = each_todo
-            .iter()
+        let titles: Vec<String> = (&each_todo)
+            .into_iter()
             .map(|todo| todo.map_ref_mut(todo_title, todo_title_mut).read().clone())
             .collect();
         assert_eq!(titles, vec!["write code".to_string(), "ship".to_string()]);
 
-        for todo in each_todo.iter() {
+        for todo in &each_todo {
             assert!(*todo.map_ref_mut(todo_done, todo_done_mut).read());
         }
     });
@@ -345,7 +343,7 @@ fn vec_collection_supports_lookup_and_mutation_helpers() {
                 title: "ship".into(),
             },
         ])
-        .each();
+        .iter();
 
         assert_eq!(todos.len(), 2);
         assert!(!todos.is_empty());
@@ -406,7 +404,7 @@ fn vec_collection_supports_lookup_and_mutation_helpers() {
 #[test]
 fn optional_vec_lookup_chains_without_turbofish() {
     with_runtime(|| {
-        let nested = Optic::new(vec![vec![10, 20], vec![30]]).each();
+        let nested = Optic::new(vec![vec![10, 20], vec![30]]).iter();
 
         let second = nested.get(0).get(1).to_option().unwrap();
         assert_eq!(*second.read(), 20);
@@ -423,7 +421,7 @@ fn optional_hash_map_lookup_chains_without_special_traits() {
             "outer".to_string(),
             HashMap::from([("inner".to_string(), 10)]),
         )]))
-        .each_hash_map();
+        .iter();
 
         let value = nested.get("outer").get("inner").to_option().unwrap();
         assert_eq!(*value.read(), 10);
@@ -440,7 +438,7 @@ fn optional_btree_map_lookup_chains_without_special_traits() {
             "outer".to_string(),
             BTreeMap::from([("inner".to_string(), 10)]),
         )]))
-        .each_btree_map();
+        .iter();
 
         let value = nested.get("outer").get("inner").to_option().unwrap();
         assert_eq!(*value.read(), 10);
@@ -457,7 +455,7 @@ fn hash_map_projection_supports_lookup_iteration_and_mutation() {
             ("alice".to_string(), User { active: true }),
             ("bob".to_string(), User { active: false }),
         ]))
-        .each_hash_map();
+        .iter();
 
         assert_eq!(users.len(), 2);
         assert!(users.contains_key("alice"));
@@ -491,12 +489,13 @@ fn hash_map_projection_supports_lookup_iteration_and_mutation() {
             .read_opt()
             .is_none());
 
-        let mut keys = users.iter().map(|(key, _)| key).collect::<Vec<_>>();
+        let mut keys = (&users).into_iter().map(|(key, _)| key).collect::<Vec<_>>();
         keys.sort();
         assert_eq!(keys, vec!["alice".to_string(), "bob".to_string()]);
 
         let active_count = users
             .values()
+            .into_iter()
             .filter(|user| {
                 *user
                     .clone()
@@ -526,7 +525,7 @@ fn btree_map_projection_supports_lookup_iteration_and_mutation() {
             ("alice".to_string(), User { active: true }),
             ("bob".to_string(), User { active: false }),
         ]))
-        .each_btree_map();
+        .iter();
 
         assert_eq!(users.len(), 2);
         assert!(users.contains_key("alice"));
@@ -558,11 +557,12 @@ fn btree_map_projection_supports_lookup_iteration_and_mutation() {
             .read_opt()
             .is_none());
 
-        let keys = users.iter().map(|(key, _)| key).collect::<Vec<_>>();
+        let keys = (&users).into_iter().map(|(key, _)| key).collect::<Vec<_>>();
         assert_eq!(keys, vec!["alice".to_string(), "bob".to_string()]);
 
         let active_values = users
             .values()
+            .into_iter()
             .map(|user| *user.map_ref_mut(user_active, user_active_mut).read())
             .collect::<Vec<_>>();
         assert_eq!(active_values, vec![true, true]);
@@ -695,18 +695,16 @@ fn subscribed_fires_only_overlapping_paths() {
                 title: "x".into(),
             }],
         });
-        let root = Optic::from_access(signal);
         let tree = SubscriptionTree::new();
 
         // Two subscribed optics sharing one tree, at disjoint paths.
-        let active_optic = root
-            .clone()
+        let active_optic = signal
             .map_ref_mut(app_user, app_user_mut)
             .map_some()
             .map_ref_mut(user_active, user_active_mut)
             .subscribed_with(tree.clone());
 
-        let todos_optic = root
+        let todos_optic = signal
             .map_ref_mut(app_todos, app_todos_mut)
             .subscribed_with(tree.clone());
 
@@ -767,7 +765,7 @@ fn plain_signal_reads_do_not_touch_subscription_tree() {
     // same as before and doesn't require `.subscribed()`.
     with_runtime(|| {
         let signal = Signal::new(User { active: true });
-        let active = Optic::from_access(signal).map_ref_mut(user_active, user_active_mut);
+        let active = signal.map_ref_mut(user_active, user_active_mut);
         assert!(*active.read());
         *active.write() = false;
         assert!(!*active.read());
@@ -784,10 +782,8 @@ fn optics_compose_over_signal_root() {
                 title: "write code".into(),
             }],
         });
-        let optic = Optic::from_access(signal);
 
-        let active = optic
-            .clone()
+        let active = signal
             .map_ref_mut(app_user, app_user_mut)
             .map_some()
             .map_ref_mut(user_active, user_active_mut);
@@ -795,7 +791,7 @@ fn optics_compose_over_signal_root() {
         *active.write_opt().unwrap() = false;
         assert!(!*active.read_opt().unwrap());
 
-        let todos = optic.map_ref_mut(app_todos, app_todos_mut).each();
+        let todos = signal.map_ref_mut(app_todos, app_todos_mut).iter();
         todos.push(Todo {
             done: true,
             title: "ship".into(),
@@ -808,9 +804,8 @@ fn optics_compose_over_signal_root() {
 fn optics_compose_over_sync_signal_root() {
     with_runtime(|| {
         let signal: SyncSignal<User> = SyncSignal::new_maybe_sync(User { active: true });
-        let optic = Optic::from_access(signal);
 
-        let active = optic.map_ref_mut(user_active, user_active_mut);
+        let active = signal.map_ref_mut(user_active, user_active_mut);
         assert!(*active.read());
         *active.write() = false;
         assert!(!*active.read());
@@ -826,7 +821,7 @@ fn optics_compose_over_memo_root_read_only() {
         });
 
         // map_ref yields a read-only projection — suitable for Memo.
-        let active_via_ref = Optic::from_access(memo).map_ref(user_active);
+        let active_via_ref = memo.map_ref(user_active);
         assert!(*active_via_ref.read());
         assert!(active_via_ref.value::<bool>());
     });
@@ -836,7 +831,7 @@ fn optics_compose_over_memo_root_read_only() {
 fn optics_compose_over_copy_value_root() {
     with_runtime(|| {
         let cell = CopyValue::new(User { active: true });
-        let active = Optic::from_access(cell).map_ref_mut(user_active, user_active_mut);
+        let active = cell.map_ref_mut(user_active, user_active_mut);
 
         *active.write() = false;
         assert!(!*active.read());
@@ -908,19 +903,39 @@ impl Prism for ProfilePrism {
 }
 
 fn page_error_ref(p: &Page) -> Option<&String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 fn page_error_mut(p: &mut Page) -> Option<&mut String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 fn page_error_into(p: Page) -> Option<String> {
-    if let Page::Error(m) = p { Some(m) } else { None }
+    if let Page::Error(m) = p {
+        Some(m)
+    } else {
+        None
+    }
 }
 
-fn profile_name(p: &ProfileData) -> &String { &p.name }
-fn profile_name_mut(p: &mut ProfileData) -> &mut String { &mut p.name }
-fn profile_followers(p: &ProfileData) -> &u32 { &p.followers }
-fn profile_followers_mut(p: &mut ProfileData) -> &mut u32 { &mut p.followers }
+fn profile_name(p: &ProfileData) -> &String {
+    &p.name
+}
+fn profile_name_mut(p: &mut ProfileData) -> &mut String {
+    &mut p.name
+}
+fn profile_followers(p: &ProfileData) -> &u32 {
+    &p.followers
+}
+fn profile_followers_mut(p: &mut ProfileData) -> &mut u32 {
+    &mut p.followers
+}
 
 #[test]
 fn prism_projects_into_named_variant_of_user_enum() {
@@ -932,9 +947,7 @@ fn prism_projects_into_named_variant_of_user_enum() {
 
         // Named prism: project Page -> ProfileData -> String
         let profile = page.clone().map_variant::<ProfilePrism>();
-        let name = profile
-            .clone()
-            .map_ref_mut(profile_name, profile_name_mut);
+        let name = profile.clone().map_ref_mut(profile_name, profile_name_mut);
 
         assert_eq!(&*name.read_opt().unwrap(), "Alice");
         *name.write_opt().unwrap() = "Alicia".into();
@@ -958,11 +971,9 @@ fn prism_projects_inline_via_map_variant_with() {
         let page = Optic::new(Page::Error("offline".to_string()));
 
         // Inline prism: no named struct needed.
-        let message = page.clone().map_variant_with(
-            page_error_ref,
-            page_error_mut,
-            page_error_into,
-        );
+        let message =
+            page.clone()
+                .map_variant_with(page_error_ref, page_error_mut, page_error_into);
         assert_eq!(&*message.read_opt().unwrap(), "offline");
         *message.write_opt().unwrap() = "recovered".into();
         assert_eq!(&*message.read_opt().unwrap(), "recovered");
@@ -979,9 +990,27 @@ fn prism_value_projection_yields_optional_clone() {
         let page = Optic::new(Page::Settings(Settings { dark_mode: true }));
         let dark_mode_value: Option<Settings> = page
             .map_variant_with(
-                |p: &Page| if let Page::Settings(s) = p { Some(s) } else { None },
-                |p: &mut Page| if let Page::Settings(s) = p { Some(s) } else { None },
-                |p: Page| if let Page::Settings(s) = p { Some(s) } else { None },
+                |p: &Page| {
+                    if let Page::Settings(s) = p {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                },
+                |p: &mut Page| {
+                    if let Page::Settings(s) = p {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                },
+                |p: Page| {
+                    if let Page::Settings(s) = p {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                },
             )
             .value::<Option<Settings>>();
         assert_eq!(dark_mode_value, Some(Settings { dark_mode: true }));
@@ -1027,12 +1056,105 @@ fn optics_each_over_signal_vec() {
                 title: "ship".into(),
             },
         ]);
-        let todos = Optic::from_access(signal).each();
-        for todo in todos.iter() {
+        let todos = signal.iter();
+        for todo in &todos {
             *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
         }
-        for todo in todos.iter() {
+        for todo in &todos {
             assert!(*todo.map_ref_mut(todo_done, todo_done_mut).read());
         }
+    });
+}
+
+// ----------------------------------------------------------------------------
+// Drop-in coverage tests: Goal 1 (direct on signal), Goal 2 (unified .iter()),
+// Goal 3 (stack PathBuffer). Added by the resource-store drop-in pass.
+// ----------------------------------------------------------------------------
+
+#[test]
+fn path_buffer_is_copy() {
+    fn _assert<T: Copy>() {}
+    _assert::<dioxus_optics::PathBuffer>();
+}
+
+#[test]
+#[should_panic(expected = "PATH_LEN")]
+fn path_buffer_overflow_panics() {
+    let mut buf = dioxus_optics::PathBuffer::new();
+    for i in 0..(dioxus_optics::PATH_LEN as u64 + 1) {
+        buf.push(dioxus_optics::PathSegment::index(i));
+    }
+}
+
+#[test]
+fn collection_dispatch_inference_vec_hashmap_btreemap() {
+    use dioxus_optics::OpticIter;
+
+    with_runtime(|| {
+        // Vec — yields child Optics with no key.
+        let vec_signal = Signal::new(vec![10u32, 20, 30]);
+        let vec_each = vec_signal.iter();
+        let vec_items: Vec<u32> = (&vec_each).into_iter().map(|c| *c.read()).collect();
+        assert_eq!(vec_items, vec![10, 20, 30]);
+        // Carrier reusable: iterate again.
+        let vec_again: Vec<u32> = (&vec_each).into_iter().map(|c| *c.read()).collect();
+        assert_eq!(vec_again, vec![10, 20, 30]);
+
+        // HashMap — yields (key, child Optic).
+        let map_signal = Signal::new(HashMap::from([
+            ("a".to_string(), 1u32),
+            ("b".to_string(), 2),
+        ]));
+        let map_each = map_signal.iter();
+        let mut keys: Vec<String> = (&map_each).into_iter().map(|(k, _)| k).collect();
+        keys.sort();
+        assert_eq!(keys, vec!["a".to_string(), "b".to_string()]);
+        // Reusable.
+        let _ = (&map_each).into_iter().count();
+
+        // BTreeMap — yields (key, child Optic) in sorted order.
+        let btree_signal = Signal::new(BTreeMap::from([
+            ("a".to_string(), 1u32),
+            ("b".to_string(), 2),
+        ]));
+        let btree_each = btree_signal.iter();
+        let bkeys: Vec<String> = (&btree_each).into_iter().map(|(k, _)| k).collect();
+        assert_eq!(bkeys, vec!["a".to_string(), "b".to_string()]);
+    });
+}
+
+#[test]
+fn direct_on_signal_no_from_access_wrapper() {
+    use dioxus_optics::OpticExt;
+
+    with_runtime(|| {
+        let app = Signal::new(App {
+            user: Some(User { active: false }),
+            todos: vec![Todo {
+                done: false,
+                title: "x".into(),
+            }],
+        });
+
+        // map_ref_mut directly on the signal — no Optic::from_access.
+        let todos = app.map_ref_mut(app_todos, app_todos_mut);
+        let todo0 = todos.iter();
+        for child in &todo0 {
+            *child.map_ref_mut(todo_done, todo_done_mut).write() = true;
+        }
+        assert!(app.read().todos[0].done);
+    });
+}
+
+#[test]
+fn drop_in_api_signal_iteration() {
+    use dioxus_optics::OpticIter;
+
+    with_runtime(|| {
+        let sig: Signal<Vec<i32>> = Signal::new(vec![1, 2, 3]);
+        let each = sig.iter();
+        assert_eq!(each.len(), 3);
+        let collected: Vec<i32> = (&each).into_iter().map(|opt| *opt.read()).collect();
+        assert_eq!(collected, vec![1, 2, 3]);
     });
 }

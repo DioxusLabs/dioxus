@@ -14,23 +14,32 @@ compose across:
 - await-time projection
 
 The same mapping helpers (`map_ref`, `map_ref_mut`, `map_some`, `map_ok`,
-`map_err`, `map_variant`, `map_variant_with`, `each`, `each_hash_map`,
-`each_btree_map`, `get`, `flatten_some`, `to_option`) work uniformly over any
-carrier that implements `dioxus_signals::Readable` — including `CopyValue`,
-`Signal`, `SyncSignal`, `Memo`, `ReadSignal`, `WriteSignal`, `GlobalSignal`,
-`GlobalMemo`, and `dioxus_stores::Store`. Write helpers apply whenever the
-underlying carrier is also `Writable`; `map_ref` gives a read-only path
-appropriate for `Memo`.
+`map_err`, `map_variant`, `map_variant_with`, `iter`, `get`, `flatten_some`,
+`to_option`) work uniformly over any carrier that implements
+`dioxus_signals::Readable` — including `CopyValue`, `Signal`, `SyncSignal`,
+`Memo`, `ReadSignal`, `WriteSignal`, `GlobalSignal`, `GlobalMemo`, and
+`dioxus_stores::Store`. The helpers are exposed as the [`OpticExt`] /
+[`OpticIter`] / [`OpticMutExt`] extension traits so call sites read as
+`signal.map_ref(...)` / `signal.iter()` without first wrapping the carrier.
+`iter` dispatches on the target shape (`Vec<T>`, `HashMap<K, V, S>`,
+`BTreeMap<K, V>`) and returns a reusable carrier that implements
+`IntoIterator` for `&Self` so it can be iterated any number of times.
+Write helpers apply whenever the underlying carrier is also `Writable`;
+`map_ref` gives a read-only path appropriate for `Memo`.
 
 Enum variants project through the `Prism` primitive. `map_some` / `map_ok` /
 `map_err` are sugar over prisms for `Option` and `Result`; `map_variant::<P>()`
 and `map_variant_with(try_ref, try_mut, try_into)` cover any user-defined sum
 type. See `examples/page_router.rs` for a multi-variant walkthrough.
 
-`Optic::new` allocates a `CopyValue` through a Dioxus runtime owner, so
-standalone examples create a tiny `VirtualDom` and run optics code inside its
-root scope. Use `Optic::from_access(signal)` to wrap any existing reactive
-source.
+In application code, just call the helpers directly on a `Signal` / `Store` /
+`Memo` / etc. — `signal.map_ref_mut(...)`, `store.iter()`, `memo.map_some()`.
+The blanket `OpticExt` / `OpticIter` / `OpticMutExt` impls cover every
+[`Access`] / [`AccessMut`] carrier; you only need `Optic::from_access` when
+wrapping a custom carrier (an `Access` impl that lives outside the standard
+reactive types). `Optic::new(value)` allocates a `CopyValue` through a Dioxus
+runtime owner and is mostly useful for standalone examples that build a tiny
+`VirtualDom` and run optics code inside its root scope.
 
 ## Example
 
@@ -78,7 +87,7 @@ with_runtime(|| {
     let todos = app.clone().map_ref_mut(app_todos, app_todos_mut);
     assert_eq!(todos.read().len(), 1);
 
-    for todo in todos.each().iter() {
+    for todo in &todos.iter() {
         *todo.map_ref_mut(todo_done, todo_done_mut).write() = true;
     }
 });

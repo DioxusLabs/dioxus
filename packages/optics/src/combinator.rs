@@ -4,6 +4,7 @@ use generational_box::{AnyStorage, WriteLock};
 
 use crate::path::{PathBuffer, PathSegment, Pathed};
 use crate::resource::{AsFuture, AwaitTransform};
+use crate::subscribed::{HasSubscriptionTree, SubscriptionTree};
 
 // ============================================================================
 // Core traits
@@ -49,6 +50,18 @@ pub trait AccessMut: Access {
     fn try_write(
         &self,
     ) -> Option<WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>>;
+
+    /// Mutably borrow **without** firing this carrier's subscribers at its
+    /// natural path. Used by collection operations (`push` / `insert` /
+    /// `remove`) that need to fire `notify_node` (shallow) or `notify_from`
+    /// (shift) semantics themselves; firing a regular deep mark_dirty
+    /// through `try_write` would wake every element subscriber in addition.
+    /// Default delegates to `try_write`.
+    fn try_write_silent(
+        &self,
+    ) -> Option<WriteLock<'static, Self::Target, Self::Storage, Self::WriteMetadata>> {
+        self.try_write()
+    }
 }
 
 /// Owned value extraction for a projected child.
@@ -112,6 +125,17 @@ impl<A, Op> Combinator<A, Op> {
 
 impl<A: Copy, Op: Copy> Copy for Combinator<A, Op> {}
 
+// Forwarding impl so a chain of optic ops over a Subscribed-rooted carrier
+// can still surface the tree to the outermost derive-Store field accessor.
+impl<A, Op> HasSubscriptionTree for Combinator<A, Op>
+where
+    A: HasSubscriptionTree,
+{
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.parent.subscription_tree()
+    }
+}
+
 impl<A: Clone, Op: Clone> Clone for Combinator<A, Op> {
     fn clone(&self) -> Self {
         Self {
@@ -145,10 +169,7 @@ where
     Out: Resolve<Op>,
 {
     fn future(&self) -> AsFuture<AwaitTransform<Fut, Op, Out>> {
-        AsFuture(AwaitTransform::new(
-            self.parent.future().0,
-            self.op.clone(),
-        ))
+        AsFuture(AwaitTransform::new(self.parent.future().0, self.op.clone()))
     }
 }
 
@@ -313,11 +334,15 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, U, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, U, A::Storage, A::WriteMetadata>> {
         self.parent
             .try_write()
+            .map(|w| WriteLock::map(w, self.op.write))
+    }
+
+    fn try_write_silent(&self) -> Option<WriteLock<'static, U, A::Storage, A::WriteMetadata>> {
+        self.parent
+            .try_write_silent()
             .map(|w| WriteLock::map(w, self.op.write))
     }
 }
@@ -363,7 +388,9 @@ impl<P: Copy> Copy for PrismOp<P> {}
 
 impl<P: Clone> Clone for PrismOp<P> {
     fn clone(&self) -> Self {
-        Self { prism: self.prism.clone() }
+        Self {
+            prism: self.prism.clone(),
+        }
     }
 }
 
@@ -408,9 +435,7 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
         let prism = &self.op.prism;
         self.parent
             .try_write()
@@ -442,7 +467,9 @@ impl<P: Copy> Copy for OptPrismOp<P> {}
 
 impl<P: Clone> Clone for OptPrismOp<P> {
     fn clone(&self) -> Self {
-        Self { prism: self.prism.clone() }
+        Self {
+            prism: self.prism.clone(),
+        }
     }
 }
 
@@ -487,9 +514,7 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, P::Variant, A::Storage, A::WriteMetadata>> {
         let prism = &self.op.prism;
         self.parent
             .try_write()
@@ -638,7 +663,11 @@ impl<S, V> InlinePrism<S, V> {
         try_mut: fn(&mut S) -> Option<&mut V>,
         try_into: fn(S) -> Option<V>,
     ) -> Self {
-        Self { try_ref, try_mut, try_into }
+        Self {
+            try_ref,
+            try_mut,
+            try_into,
+        }
     }
 }
 
@@ -691,9 +720,7 @@ where
 {
     type WriteMetadata = ();
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, T, S, ()>> {
+    fn try_write(&self) -> Option<WriteLock<'static, T, S, ()>> {
         Some(WriteLock::new(self.write()))
     }
 }

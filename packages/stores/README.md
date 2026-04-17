@@ -42,7 +42,7 @@ fn Tree(value: Store<CounterTree>) -> Element {
     rsx! {
         button {
             // Incrementing the count will only rerun parts of the app that have read the count field
-            onclick: move |_| count += 1,
+            onclick: move |_| *count.write() += 1,
             "Increment"
         }
         button {
@@ -53,7 +53,7 @@ fn Tree(value: Store<CounterTree>) -> Element {
         }
         ul {
             // Iterating over the children gives us optics scoped to each child.
-            for (i, _) in dioxus_optics::Optic::from_access(children).each().iter().enumerate() {
+            for (i, _) in (&dioxus_optics::OpticIter::iter(children)).into_iter().enumerate() {
                 li { "child {i}" }
             }
         }

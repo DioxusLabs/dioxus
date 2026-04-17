@@ -26,7 +26,7 @@ fn app() -> Element {
             "Destroy"
         }
 
-        for i in 0..vec.len() {
+        for i in 0..vec.read().len() {
             Child { count: vec.map_mut(move |v| &v[i], move |v| &mut v[i]) }
         }
     }

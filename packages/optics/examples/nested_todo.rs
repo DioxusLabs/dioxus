@@ -39,27 +39,64 @@ struct Todo {
 }
 
 // Paired read/write accessors — the only boilerplate the optics helpers need.
-fn state_user(s: &AppState) -> &Option<User> { &s.user }
-fn state_user_mut(s: &mut AppState) -> &mut Option<User> { &mut s.user }
-fn state_todos(s: &AppState) -> &Vec<Todo> { &s.todos }
-fn state_todos_mut(s: &mut AppState) -> &mut Vec<Todo> { &mut s.todos }
-fn state_tags(s: &AppState) -> &HashMap<String, String> { &s.tags }
-fn state_tags_mut(s: &mut AppState) -> &mut HashMap<String, String> { &mut s.tags }
-fn user_active(u: &User) -> &bool { &u.active }
-fn user_active_mut(u: &mut User) -> &mut bool { &mut u.active }
-fn user_name(u: &User) -> &String { &u.name }
-fn user_name_mut(u: &mut User) -> &mut String { &mut u.name }
-fn todo_title(t: &Todo) -> &String { &t.title }
-fn todo_title_mut(t: &mut Todo) -> &mut String { &mut t.title }
-fn todo_done(t: &Todo) -> &bool { &t.done }
-fn todo_done_mut(t: &mut Todo) -> &mut bool { &mut t.done }
+fn state_user(s: &AppState) -> &Option<User> {
+    &s.user
+}
+fn state_user_mut(s: &mut AppState) -> &mut Option<User> {
+    &mut s.user
+}
+fn state_todos(s: &AppState) -> &Vec<Todo> {
+    &s.todos
+}
+fn state_todos_mut(s: &mut AppState) -> &mut Vec<Todo> {
+    &mut s.todos
+}
+fn state_tags(s: &AppState) -> &HashMap<String, String> {
+    &s.tags
+}
+fn state_tags_mut(s: &mut AppState) -> &mut HashMap<String, String> {
+    &mut s.tags
+}
+fn user_active(u: &User) -> &bool {
+    &u.active
+}
+fn user_active_mut(u: &mut User) -> &mut bool {
+    &mut u.active
+}
+fn user_name(u: &User) -> &String {
+    &u.name
+}
+fn user_name_mut(u: &mut User) -> &mut String {
+    &mut u.name
+}
+fn todo_title(t: &Todo) -> &String {
+    &t.title
+}
+fn todo_title_mut(t: &mut Todo) -> &mut String {
+    &mut t.title
+}
+fn todo_done(t: &Todo) -> &bool {
+    &t.done
+}
+fn todo_done_mut(t: &mut Todo) -> &mut bool {
+    &mut t.done
+}
 
 fn initial_state() -> AppState {
     AppState {
-        user: Some(User { name: "Alice".into(), active: true }),
+        user: Some(User {
+            name: "Alice".into(),
+            active: true,
+        }),
         todos: vec![
-            Todo { title: "Learn optics".into(), done: false },
-            Todo { title: "Ship a demo".into(), done: false },
+            Todo {
+                title: "Learn optics".into(),
+                done: false,
+            },
+            Todo {
+                title: "Ship a demo".into(),
+                done: false,
+            },
         ],
         tags: HashMap::from([
             ("urgent".to_string(), "#e33".to_string()),
@@ -72,23 +109,20 @@ fn app() -> Element {
     // Single reactive source of truth. Every widget below mutates this signal
     // through an optic path instead of pulling it apart into per-field signals.
     let mut state = use_signal(initial_state);
-    let root = Optic::from_access(state);
 
     // Option<User> -> User via `map_some`, then projections onto `.active` / `.name`.
-    let user = root.clone().map_ref_mut(state_user, state_user_mut);
-    let active = user.clone().map_some().map_ref_mut(user_active, user_active_mut);
+    let user = state.map_ref_mut(state_user, state_user_mut);
+    let active = user
+        .clone()
+        .map_some()
+        .map_ref_mut(user_active, user_active_mut);
     let name = user.map_some().map_ref_mut(user_name, user_name_mut);
 
-    // Vec<Todo> -> per-item child optics via `each`.
-    let todos = root
-        .clone()
-        .map_ref_mut(state_todos, state_todos_mut)
-        .each();
+    // Vec<Todo> -> per-item child optics via `iter`.
+    let todos = state.map_ref_mut(state_todos, state_todos_mut).iter();
 
-    // HashMap<String, String> -> keyed child optics via `each_hash_map`.
-    let tags = root
-        .map_ref_mut(state_tags, state_tags_mut)
-        .each_hash_map();
+    // HashMap<String, String> -> keyed child optics via `iter`.
+    let tags = state.map_ref_mut(state_tags, state_tags_mut).iter();
 
     // Each of these `read_opt`/`read` calls registers a subscription on the
     // root signal, so writes from anywhere below re-render the whole tree.
@@ -146,7 +180,7 @@ fn app() -> Element {
                 h2 { "Todos (Vec<Todo>)" }
                 p { "Count: " b { "{todos.len()}" } }
                 ul {
-                    for (idx, todo) in todos.iter().enumerate() {
+                    for (idx, todo) in (&todos).into_iter().enumerate() {
                         {
                             // Build the per-field optic chains for this row.
                             // Each chain still reads & writes through the root signal.
@@ -201,7 +235,7 @@ fn app() -> Element {
             section {
                 h2 { "Tags (HashMap<String, String>)" }
                 ul {
-                    for (key, tag) in tags.iter() {
+                    for (key, tag) in &tags {
                         {
                             let color = tag.read().clone();
                             rsx! {

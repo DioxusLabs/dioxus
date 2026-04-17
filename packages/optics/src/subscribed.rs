@@ -15,11 +15,11 @@
 use std::{
     collections::{HashMap, HashSet},
     ops::BitOrAssign,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
-use dioxus_core::{ReactiveContext, SubscriberList};
-use generational_box::{AnyStorage, WriteLock};
+use dioxus_core::{current_owner, ReactiveContext, SubscriberList};
+use generational_box::{AnyStorage, GenerationalBox, SyncStorage, WriteLock};
 
 use crate::combinator::{Access, AccessMut, ValueAccess};
 use crate::path::{PathBuffer, PathSegment, Pathed};
@@ -31,7 +31,7 @@ struct Node {
     children: HashMap<PathSegment, Node>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Depth {
     /// Subscriber only cares about exact-path writes.
     Shallow,
@@ -76,10 +76,7 @@ impl Node {
     fn get_mut(&mut self, path: &[PathSegment]) -> Option<&mut Node> {
         match path {
             [] => Some(self),
-            [first, rest @ ..] => self
-                .children
-                .get_mut(first)
-                .and_then(|n| n.get_mut(rest)),
+            [first, rest @ ..] => self.children.get_mut(first).and_then(|n| n.get_mut(rest)),
         }
     }
 
@@ -101,15 +98,11 @@ impl Node {
         }
     }
 
-    fn descendant_paths(
-        &self,
-        current: &[PathSegment],
-        out: &mut Vec<Vec<PathSegment>>,
-    ) {
+    fn descendant_paths(&self, current: &PathBuffer, out: &mut Vec<PathBuffer>) {
         for (seg, child) in &self.children {
-            let mut p = current.to_vec();
+            let mut p = *current;
             p.push(*seg);
-            out.push(p.clone());
+            out.push(p);
             child.descendant_paths(&p, out);
         }
     }
@@ -120,16 +113,37 @@ struct TreeInner {
     root: Node,
 }
 
-/// Shared subscription tree — cheaply cloneable.
-#[derive(Default, Clone)]
+/// Shared subscription tree — `Copy` (backed by a `GenerationalBox` slot
+/// in sync storage so the whole optic chain composes as a `Copy` value
+/// just like the old `dioxus-stores` subscriptions did).
 pub struct SubscriptionTree {
-    inner: Arc<Mutex<TreeInner>>,
+    inner: GenerationalBox<TreeInner, SyncStorage>,
+}
+
+impl Copy for SubscriptionTree {}
+
+impl Clone for SubscriptionTree {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl Default for SubscriptionTree {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SubscriptionTree {
-    /// Create an empty subscription tree.
+    /// Create an empty subscription tree. Allocates a slot in the current
+    /// Dioxus scope's sync-storage owner, so this must be called inside a
+    /// hook / component initialization (matches `Store::new` / `use_store`).
+    #[track_caller]
     pub fn new() -> Self {
-        Self::default()
+        let owner = current_owner::<SyncStorage>();
+        Self {
+            inner: owner.insert_rc(TreeInner::default()),
+        }
     }
 
     /// Subscribe the current [`ReactiveContext`] (if any) shallowly at `path`.
@@ -170,27 +184,31 @@ impl SubscriptionTree {
     /// compared by their raw `u64` — hashed keys get mixed into the
     /// comparison but will virtually never clear the cutoff, so they stay put.
     pub fn notify_from(&self, path: &[PathSegment], cutoff: u64) {
-        let children: Vec<Vec<PathSegment>> = {
-            let inner = self.inner.lock().unwrap();
+        let children: Vec<PathBuffer> = {
+            let Ok(inner) = self.inner.try_read() else {
+                return;
+            };
             let Some(node) = inner.root.get(path) else {
                 return;
             };
             node.children
                 .iter()
                 .filter(|(seg, _)| seg.0 >= cutoff)
-                .map(|(seg, child)| {
+                .flat_map(|(seg, child)| {
                     let mut paths = Vec::new();
-                    let mut child_path = path.to_vec();
+                    let mut child_path = PathBuffer::new();
+                    for s in path {
+                        child_path.push(*s);
+                    }
                     child_path.push(*seg);
-                    paths.push(child_path.clone());
+                    paths.push(child_path);
                     child.descendant_paths(&child_path, &mut paths);
                     paths
                 })
-                .flatten()
                 .collect()
         };
         for p in children {
-            self.notify_node(&p);
+            self.notify_node(p.segments());
         }
     }
 
@@ -199,7 +217,7 @@ impl SubscriptionTree {
     pub fn shallow_subscribers(&self, path: &[PathSegment]) -> dioxus_core::Subscribers {
         Arc::new(TreeSubscribers {
             tree: self.clone(),
-            path: path.to_vec(),
+            path: path_buffer_from_slice(path),
             depth: Depth::Shallow,
         })
         .into()
@@ -210,7 +228,7 @@ impl SubscriptionTree {
     pub fn deep_subscribers(&self, path: &[PathSegment]) -> dioxus_core::Subscribers {
         Arc::new(TreeSubscribers {
             tree: self.clone(),
-            path: path.to_vec(),
+            path: path_buffer_from_slice(path),
             depth: Depth::Deep,
         })
         .into()
@@ -223,7 +241,7 @@ impl SubscriptionTree {
         if ReactiveContext::current().is_some() {
             let subscribers: dioxus_core::Subscribers = Arc::new(TreeSubscribers {
                 tree: self.clone(),
-                path: path.to_vec(),
+                path: path_buffer_from_slice(path),
                 depth,
             })
             .into();
@@ -248,15 +266,18 @@ impl SubscriptionTree {
 
         // Descendants: all subscribers.
         let descendants = {
-            let inner = self.inner.lock().unwrap();
+            let Ok(inner) = self.inner.try_read() else {
+                return;
+            };
             let mut out = Vec::new();
             if let Some(node) = inner.root.get(path) {
-                node.descendant_paths(path, &mut out);
+                let base = path_buffer_from_slice(path);
+                node.descendant_paths(&base, &mut out);
             }
             out
         };
         for p in descendants {
-            self.retain_at(&p, |_, _| false);
+            self.retain_at(p.segments(), |_, _| false);
         }
     }
 
@@ -269,7 +290,9 @@ impl SubscriptionTree {
     ) {
         // Take subscribers out under a short borrow so mark_dirty can rerun user code.
         let taken = {
-            let mut inner = self.inner.lock().unwrap();
+            let Ok(mut inner) = self.inner.try_write() else {
+                return;
+            };
             match inner.root.get_mut(path) {
                 Some(node) => std::mem::take(&mut node.subscribers),
                 None => return,
@@ -285,7 +308,9 @@ impl SubscriptionTree {
         }
         // Restore survivors; user code may have added new subscribers while
         // we were iterating, so extend rather than overwrite.
-        let mut inner = self.inner.lock().unwrap();
+        let Ok(mut inner) = self.inner.try_write() else {
+            return;
+        };
         if let Some(node) = inner.root.get_mut(path) {
             for (rc, depth) in kept {
                 node.subscribers
@@ -299,20 +324,36 @@ impl SubscriptionTree {
 
 struct TreeSubscribers {
     tree: SubscriptionTree,
-    path: Vec<PathSegment>,
+    path: PathBuffer,
     depth: Depth,
 }
 
 impl TreeSubscribers {
     fn prefixes(&self) -> impl Iterator<Item = &[PathSegment]> {
-        (0..=self.path.len()).rev().map(move |n| &self.path[..n])
+        let segs = self.path.segments();
+        (0..=segs.len()).rev().map(move |n| &segs[..n])
     }
+}
+
+fn path_buffer_from_slice(path: &[PathSegment]) -> PathBuffer {
+    let mut buf = PathBuffer::new();
+    for seg in path {
+        buf.push(*seg);
+    }
+    buf
 }
 
 impl SubscriberList for TreeSubscribers {
     fn add(&self, subscriber: ReactiveContext) {
-        let mut inner = self.tree.inner.lock().unwrap();
-        let node = inner.root.get_mut_or_default(&self.path);
+        // The backing `GenerationalBox` can be dropped out from under us
+        // when the owning scope (and hence the `SubscriptionTree`) has
+        // already torn down — e.g. during a ReactiveContext's post-scope
+        // cleanup. In that case there's nothing to update; just return.
+        // Matches the old `dioxus-stores` `StoreSubscribers` behavior.
+        let Ok(mut inner) = self.tree.inner.try_write() else {
+            return;
+        };
+        let node = inner.root.get_mut_or_default(self.path.segments());
         node.subscribers
             .entry(subscriber)
             .and_modify(|d| *d |= self.depth)
@@ -320,32 +361,38 @@ impl SubscriberList for TreeSubscribers {
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
-        let mut inner = self.tree.inner.lock().unwrap();
-        let mut empty = Vec::new();
+        let Ok(mut inner) = self.tree.inner.try_write() else {
+            return;
+        };
+        let mut empty: Vec<PathBuffer> = Vec::new();
+        let path_len = self.path.len();
         for prefix in self.prefixes() {
             if let Some(node) = inner.root.get_mut(prefix) {
                 if let Some(depth) = node.subscribers.get(subscriber).copied() {
-                    if prefix.len() == self.path.len() || depth.is_deep() {
+                    if prefix.len() == path_len || depth.is_deep() {
                         node.subscribers.remove(subscriber);
                         if node.is_empty() {
-                            empty.push(prefix.to_vec());
+                            empty.push(path_buffer_from_slice(prefix));
                         }
                     }
                 }
             }
         }
         for prefix in empty {
-            inner.root.prune(&prefix);
+            inner.root.prune(prefix.segments());
         }
     }
 
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
-        let inner = self.tree.inner.lock().unwrap();
+        let Ok(inner) = self.tree.inner.try_read() else {
+            return;
+        };
         let mut seen: HashSet<ReactiveContext> = HashSet::new();
+        let path_len = self.path.len();
         for prefix in self.prefixes() {
             if let Some(node) = inner.root.get(prefix) {
                 for (rc, depth) in &node.subscribers {
-                    let include = prefix.len() == self.path.len() || depth.is_deep();
+                    let include = prefix.len() == path_len || depth.is_deep();
                     if include && seen.insert(*rc) {
                         f(rc);
                     }
@@ -369,10 +416,12 @@ impl<A: Clone> Clone for Subscribed<A> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            tree: self.tree.clone(),
+            tree: self.tree,
         }
     }
 }
+
+impl<A: Copy> Copy for Subscribed<A> {}
 
 impl<A> Subscribed<A> {
     /// Wrap `inner` with a fresh subscription tree.
@@ -393,6 +442,21 @@ impl<A> Subscribed<A> {
         &self.tree
     }
 
+    /// Borrow the inner accessor. Useful for readable / writable bridges
+    /// that want to forward `try_read` / `try_peek` calls to the underlying
+    /// carrier without going through the path-subscription machinery.
+    pub fn inner(&self) -> &A {
+        &self.inner
+    }
+
+    /// Consume the wrapper and return its constituent parts — the inner
+    /// accessor and the shared subscription tree. Used by `dioxus-stores`
+    /// to rebuild a `Store<T, Lens>` with `Lens = A` that keeps
+    /// path-granular subscriptions wired through the same tree.
+    pub fn into_parts(self) -> (A, SubscriptionTree) {
+        (self.inner, self.tree)
+    }
+
     fn collect_path(&self) -> PathBuffer
     where
         A: Pathed,
@@ -400,6 +464,46 @@ impl<A> Subscribed<A> {
         let mut buf = PathBuffer::new();
         self.inner.visit_path(&mut buf);
         buf
+    }
+
+    /// Borrow the path this subscription wraps, as a fresh [`PathBuffer`].
+    ///
+    /// Useful for callers who want to hand the same path to another chain
+    /// (e.g. to set up a sibling `Subscribed::with_tree` sharing this tree).
+    pub fn path(&self) -> PathBuffer
+    where
+        A: Pathed,
+    {
+        self.collect_path()
+    }
+
+    /// Notify shallow subscribers at this carrier's exact path — does not
+    /// touch descendant subscribers. Use from collection-op write paths
+    /// (`push`, `clear`, `retain`) where the length/shape of the container
+    /// changed but existing child values did not.
+    ///
+    /// Mirrors `SelectorScope::mark_dirty_shallow` on the stores side.
+    pub fn notify_node_dirty(&self)
+    where
+        A: Pathed,
+    {
+        let path = self.collect_path();
+        self.tree.notify_node(path.segments());
+    }
+
+    /// Notify shallow-and-deeper subscribers for children whose segment is
+    /// numerically `>= cutoff`. Use for ordered-container insertion: after
+    /// inserting at index `i`, every sibling from `i..len` shifted and needs
+    /// to re-run.
+    ///
+    /// Mirrors `SelectorScope::mark_dirty_at_and_after_index` on the stores
+    /// side.
+    pub fn notify_from(&self, cutoff: u64)
+    where
+        A: Pathed,
+    {
+        let path = self.collect_path();
+        self.tree.notify_from(path.segments(), cutoff);
     }
 }
 
@@ -412,10 +516,12 @@ where
 
     fn try_read(&self) -> Option<<A::Storage as AnyStorage>::Ref<'static, A::Target>> {
         // Subscribe path-granularly, then read *without* going through the
-        // root's own reactive subscription. The path-tree is our only
-        // reactivity source on a `Subscribed` optic.
+        // root's own reactive subscription. Deep tracking matches
+        // `SelectorScope::track()` so readers fire on exact-path writes **or**
+        // descendant writes (e.g. subscribing to `todos` sees writes to a
+        // specific todo).
         let path = self.collect_path();
-        self.tree.subscribe(path.segments(), Depth::Shallow);
+        self.tree.subscribe(path.segments(), Depth::Deep);
         self.inner.try_peek()
     }
 
@@ -430,16 +536,24 @@ where
 {
     type WriteMetadata = A::WriteMetadata;
 
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
         // Notify subscribers *before* returning the write guard so that any
         // reactive context that reruns in response to the mark_dirty sees the
         // updated value. This matches how `Signal::write` drop-guards behave
         // for non-granular subscribers.
         let path = self.collect_path();
         self.tree.mark_dirty(path.segments());
-        self.inner.try_write()
+        // Silent write on the inner to avoid a second fire at its own (broader)
+        // path — `mark_dirty` already covered everyone who cares.
+        self.inner.try_write_silent()
+    }
+
+    fn try_write_silent(
+        &self,
+    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
+        // Chain-silent write: we don't fire our tree either. The outermost
+        // `Subscribed` at the call site is expected to fire explicitly.
+        self.inner.try_write_silent()
     }
 }
 
@@ -449,7 +563,7 @@ where
 {
     fn value(&self) -> T {
         let path = self.collect_path();
-        self.tree.subscribe(path.segments(), Depth::Shallow);
+        self.tree.subscribe(path.segments(), Depth::Deep);
         self.inner.value()
     }
 }
@@ -460,5 +574,29 @@ where
 {
     fn visit_path(&self, sink: &mut PathBuffer) {
         self.inner.visit_path(sink);
+    }
+}
+
+/// Carriers that already carry a [`SubscriptionTree`] expose it through this
+/// trait so downstream combinators (e.g. `#[derive(Store)]` field accessors)
+/// can rewrap projected children in a new `Subscribed` that shares the same
+/// tree. Sharing is what keeps path-granular reactivity working across
+/// arbitrarily deep chains without allocating a fresh tree per projection.
+///
+/// Non-root carriers (Signal, Memo, CopyValue, Resource, etc.) get a
+/// convenience impl in the signals / resource bridges that builds a fresh
+/// tree on demand — calling `.subscription_tree()` on a raw Signal is a
+/// deliberate opt-in: you want tree-backed reactivity from here on.
+pub trait HasSubscriptionTree {
+    /// Return (or construct) the tree that subsequent projections should
+    /// subscribe against. For carriers that already hold a tree this is a
+    /// cheap clone of an `Arc`; for bare-reactive roots it creates a new
+    /// `SubscriptionTree`.
+    fn subscription_tree(&self) -> SubscriptionTree;
+}
+
+impl<A> HasSubscriptionTree for Subscribed<A> {
+    fn subscription_tree(&self) -> SubscriptionTree {
+        self.tree.clone()
     }
 }

@@ -67,6 +67,7 @@ fn ReadsSecond() -> Element {
 
 #[component]
 fn ReadsManySignals() -> Element {
+    use dioxus_optics::OpticIter;
     println!("running many signals");
     let mut data = use_context::<ApplicationData>();
 
@@ -87,10 +88,7 @@ fn ReadsManySignals() -> Element {
             },
             "Increase First Item"
         }
-        for signal in dioxus_optics::Optic::from_access(data.many_signals)
-            .each()
-            .iter()
-        {
+        for signal in &data.many_signals.iter() {
             Child { count: *signal.read() }
         }
     }

@@ -3,7 +3,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, ToTokens};
 use syn::{
     parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Fields, Generics,
-    Ident, Index, LitInt,
+    Ident, Index,
 };
 
 pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
@@ -40,8 +40,13 @@ pub(crate) fn derive_store(input: DeriveInput) -> syn::Result<TokenStream2> {
 }
 
 // For structs, we derive two items:
-// - An extension trait with methods to access the fields of the struct as stores and a `transpose` method
-// - A transposed version of the struct with all fields wrapped in stores
+// - A carrier-generic extension trait with one method per field returning an
+//   `Optic<Subscribed<Combinator<__Lens, LensOp<Self, Field>>>, Required>` —
+//   works on any `__Lens: Access<Target = Self> + HasSubscriptionTree`, so
+//   Signal / Memo / Store / Optic / Resource-rooted chains all pick up the
+//   same `.field()` accessors.
+// - A transposed version of the struct with each field replaced by the Optic
+//   projection type above.
 fn derive_store_struct(
     input: &DeriveInput,
     structure: &DataStruct,
@@ -62,17 +67,25 @@ fn derive_store_struct(
     let (_, ty_generics, _) = generics.split_for_impl();
     let (extension_impl_generics, extension_ty_generics, _user_where_clause) =
         extension_generics.split_for_impl();
-    // The optic-backed lens needs the source type (the derived struct) to be
-    // `'static`. Splice that bound in alongside the user's bounds so derives
-    // on generic structs work without the user repeating `T: 'static`.
+    // The carrier-generic extension trait needs the source type to be
+    // `'static` for optics combinators to hold it, and the lens itself must
+    // be an `Access<Target = Self>` that already carries (or can lazily
+    // produce) a `SubscriptionTree`.
     let extension_where_clause = match extension_generics.where_clause.as_ref() {
         Some(wc) => {
             let mut wc = wc.clone();
             wc.predicates
                 .push(parse_quote!(#struct_name #ty_generics: 'static));
+            wc.predicates.push(
+                parse_quote!(__Lens: dioxus_stores::macro_helpers::dioxus_optics::Access<Target = #struct_name #ty_generics> + dioxus_stores::macro_helpers::dioxus_optics::HasSubscriptionTree),
+            );
             quote! { #wc }
         }
-        None => quote! { where #struct_name #ty_generics: 'static },
+        None => quote! {
+            where
+                #struct_name #ty_generics: 'static,
+                __Lens: dioxus_stores::macro_helpers::dioxus_optics::Access<Target = #struct_name #ty_generics> + dioxus_stores::macro_helpers::dioxus_optics::HasSubscriptionTree,
+        },
     };
 
     // We collect the definitions and implementations for the extension trait methods along with the types of the fields in the transposed struct
@@ -92,8 +105,9 @@ fn derive_store_struct(
         );
     }
 
-    // Add a transpose method to turn the stored struct into a struct with all fields as stores
-    // We need the copy bound here because the store will be copied into the selector for each field
+    // Add a transpose method to produce a shape-matching struct whose fields
+    // are the Optic projections. `Copy` requirement matches the old behavior
+    // (we clone `self` once per field to thread it into each accessor).
     let definition = quote! {
         fn transpose(
             self,
@@ -105,7 +119,7 @@ fn derive_store_struct(
         .enumerate()
         .map(|(i, field)| function_name_from_field(i, field))
         .collect::<Vec<_>>();
-    // Construct the transposed struct with the fields as stores from the field variables in scope
+    // Construct the transposed struct with each field projected from `self`.
     let construct = match &structure.fields {
         Fields::Named(_) => {
             quote! { #transposed_name { #(#field_names),* } }
@@ -121,7 +135,6 @@ fn derive_store_struct(
         fn transpose(
             self,
         ) -> #transposed_name #extension_ty_generics where Self: ::std::marker::Copy {
-            // Convert each field into the corresponding store
             #(
                 let #field_names = self.#field_names();
             )*
@@ -141,7 +154,11 @@ fn derive_store_struct(
         &transposed_fields,
     );
 
-    // Expand to the extension trait and its implementation for the store alongside the transposed struct
+    // Expand to the extension trait and its single blanket impl on `__Lens`.
+    // Unlike the old dual-trait (Store + Optic) setup, there's exactly one
+    // method set now — carriers differ only in what `HasSubscriptionTree`
+    // returns (a shared clone for `Subscribed` roots, a fresh tree for bare
+    // `Signal`/`Memo`/etc.).
     Ok(quote! {
         #visibility trait #extension_trait_name #extension_impl_generics #extension_where_clause {
             #(
@@ -149,7 +166,7 @@ fn derive_store_struct(
             )*
         }
 
-        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#struct_name #ty_generics, __Lens> #extension_where_clause {
+        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for __Lens #extension_where_clause {
             #(
                 #implementations
             )*
@@ -243,34 +260,35 @@ fn generate_field_methods(
     );
     let function_name = function_name_from_field(field_index, field);
     let field_type = &field.ty;
-    let store_type = mapped_type(struct_name, ty_generics, field_type);
+    let return_type = mapped_type(struct_name, ty_generics, field_type);
 
-    transposed_fields.push(store_type.clone());
-
-    // Each field gets its own reactive scope within the child based on the field's index
-    let ordinal = LitInt::new(&field_index.to_string(), field.span());
+    transposed_fields.push(return_type.clone());
 
     let definition = quote! {
         fn #function_name(
             self,
-        ) -> #store_type;
+        ) -> #return_type;
     };
     definitions.push(definition);
     let implementation = quote! {
         fn #function_name(
             self,
-        ) -> #store_type {
-            let __map_field: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
-            let __map_mut_field: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
-            // Build a Combinator+LensOp chain so the lens is an optic chain
-            // end-to-end (composable with `dioxus-optics` ops).
-            let scope = self.into_selector().child_with_optic(
-                dioxus_stores::macro_helpers::dioxus_optics::PathSegment::index(#ordinal as u64),
-                __map_field,
-                __map_mut_field,
+        ) -> #return_type {
+            let __read: fn(&#struct_name #ty_generics) -> &#field_type = |value| &value.#field_accessor;
+            let __write: fn(&mut #struct_name #ty_generics) -> &mut #field_type = |value| &mut value.#field_accessor;
+            // Extract the parent's subscription tree so the projected child
+            // shares it — that's what keeps path-granular reactivity stable
+            // across derive-Store field chains. `HasSubscriptionTree` is
+            // trivial for `Subscribed` roots (clone of an Arc) and creates a
+            // fresh tree for bare `Signal`/`Memo`/etc. carriers.
+            let __tree = dioxus_stores::macro_helpers::dioxus_optics::HasSubscriptionTree::subscription_tree(&self);
+            let __lens = dioxus_stores::macro_helpers::dioxus_optics::Combinator::new(
+                self,
+                dioxus_stores::macro_helpers::dioxus_optics::LensOp::new(__read, __write),
             );
-            // Convert the selector into a store
-            ::std::convert::Into::into(scope)
+            dioxus_stores::macro_helpers::dioxus_optics::Optic::from_access(
+                dioxus_stores::macro_helpers::dioxus_optics::Subscribed::with_tree(__lens, __tree),
+            )
         }
     };
     implementations.push(implementation);
@@ -303,8 +321,15 @@ fn derive_store_enum(
     let mut transposed_variants = Vec::new();
     let mut transposed_match_arms = Vec::new();
 
-    // The generated items that check the variant of the enum need to read the enum which requires these extra bounds
-    let readable_bounds = quote! { __Lens: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #enum_name #ty_generics>, #enum_name #ty_generics: 'static };
+    // The generated items need to read the enum via its `Access` impl *and*
+    // produce Subscribed-wrapped children, so require both `Access` and
+    // `HasSubscriptionTree` on the carrier.
+    let access_bounds = quote! {
+        __Lens:
+            dioxus_stores::macro_helpers::dioxus_optics::Access<Target = #enum_name #ty_generics>
+            + dioxus_stores::macro_helpers::dioxus_optics::HasSubscriptionTree,
+        #enum_name #ty_generics: 'static
+    };
 
     for variant in variants {
         let variant_name = &variant.ident;
@@ -315,7 +340,7 @@ fn derive_store_enum(
             &is_fn,
             variant_name,
             enum_name,
-            readable_bounds.clone(),
+            access_bounds.clone(),
             &mut definitions,
             &mut implementations,
         );
@@ -325,12 +350,13 @@ fn derive_store_enum(
         let fields = &variant.fields;
         for (i, field) in fields.iter().enumerate() {
             let field_type = &field.ty;
-            let store_type = mapped_type(enum_name, &ty_generics, field_type);
+            let projection_type = mapped_type(enum_name, &ty_generics, field_type);
 
             // Push the field for the transposed enum
-            transposed_fields.push(store_type.clone());
+            transposed_fields.push(projection_type.clone());
 
-            // Generate the code to get Store<Field, W> from the enum
+            // Generate the code to get the Optic<Subscribed<...>> for this
+            // variant field from the enum carrier.
             let select_field = select_enum_variant_field(
                 enum_name,
                 &ty_generics,
@@ -340,14 +366,14 @@ fn derive_store_enum(
                 fields.len(),
             );
 
-            // If there is only one field, generate a field() -> Option<Store<O, W>> method
+            // If there is only one field, generate a field() -> Option<Optic<...>> method
             if fields.len() == 1 {
                 generate_as_variant_method(
                     &is_fn,
                     &snake_case_variant,
                     &select_field,
-                    &store_type,
-                    &readable_bounds,
+                    &projection_type,
+                    &access_bounds,
                     &mut definitions,
                     &mut implementations,
                 );
@@ -429,18 +455,19 @@ fn derive_store_enum(
     let definition = quote! {
         fn transpose(
             self,
-        ) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy;
+        ) -> #transposed_name #extension_ty_generics where #access_bounds, Self: ::std::marker::Copy;
     };
     definitions.push(definition);
     let implementation = quote! {
         fn transpose(
             self,
-        ) -> #transposed_name #extension_ty_generics where #readable_bounds, Self: ::std::marker::Copy {
-            // We only do a shallow read of the store to get the current variant. We only need to rerun
-            // this match when the variant changes, not when the fields change
-            self.selector().track_shallow();
-            let read = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
-            match &*read {
+        ) -> #transposed_name #extension_ty_generics where #access_bounds, Self: ::std::marker::Copy {
+            // Peek (not read) so the match doesn't subscribe to the whole
+            // enum — the per-variant Optic projections each subscribe
+            // path-granularly on their own reads.
+            let peeked = <Self as dioxus_stores::macro_helpers::dioxus_optics::Access>::try_peek(&self)
+                .expect("derive(Store) transpose: carrier path is currently absent");
+            match &*peeked {
                 #(#transposed_match_arms)*
                 // The enum may be #[non_exhaustive]
                 #[allow(unreachable)]
@@ -476,7 +503,7 @@ fn derive_store_enum(
             )*
         }
 
-        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for dioxus_stores::Store<#enum_name #ty_generics, __Lens> #extension_where_clause {
+        impl #extension_impl_generics #extension_trait_name #extension_ty_generics for __Lens #extension_where_clause {
             #(
                 #implementations
             )*
@@ -505,10 +532,13 @@ fn generate_is_variant_method(
         fn #is_fn(
             &self,
         ) -> bool where #readable_bounds {
-            // Reading the current variant only tracks the shallow value of the store. Writing to a specific
-            // variant will not cause the variant to change, so we don't need to subscribe deeply
-            self.selector().track_shallow();
-            let ref_self = dioxus_stores::macro_helpers::dioxus_signals::ReadableExt::peek(self.selector());
+            // Subscribe at the carrier's own path with the standard deep
+            // semantics — checking the variant is a regular read through
+            // `Access::try_read`. Child projections (via `#snake_case_variant`)
+            // install their own path-granular Subscribed so writing within a
+            // variant doesn't spuriously re-run this check.
+            let ref_self = <Self as dioxus_stores::macro_helpers::dioxus_optics::Access>::try_read(self)
+                .expect("derive(Store) is_variant: carrier path is currently absent");
             matches!(&*ref_self, #enum_name::#variant_name { .. })
         }
     };
@@ -561,24 +591,27 @@ fn select_enum_variant_field(
     } else {
         quote!( { #function_name, .. })
     };
-    let ordinal = LitInt::new(&field_index.to_string(), variant_name.span());
     quote! {
-        let __map_field: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
+        let __read: fn(&#enum_name #ty_generics) -> &#field_type = |value| match value {
             #enum_name::#variant_name #match_field => #function_name,
             _ => panic!("Selector that was created to match {} read after variant changed", stringify!(#variant_name)),
         };
-        let __map_mut_field: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
+        let __write: fn(&mut #enum_name #ty_generics) -> &mut #field_type = |value| match value {
             #enum_name::#variant_name #match_field => #function_name,
             _ => panic!("Selector that was created to match {} written after variant changed", stringify!(#variant_name)),
         };
-        // Each field within the variant gets its own reactive scope. Writing to one field will not notify the enum or
-        // other fields. The lens is a Combinator+LensOp chain over the parent.
-        let scope = self.into_selector().child_with_optic(
-            dioxus_stores::macro_helpers::dioxus_optics::PathSegment::index(#ordinal as u64),
-            __map_field,
-            __map_mut_field,
+        // Same pattern as struct-field projection: extract the parent's
+        // subscription tree (shared for `Subscribed` roots, fresh for bare
+        // reactive carriers) and wrap the Combinator+LensOp child in a
+        // Subscribed<...> so reads/writes track at the variant-field path.
+        let __tree = dioxus_stores::macro_helpers::dioxus_optics::HasSubscriptionTree::subscription_tree(&self);
+        let __lens = dioxus_stores::macro_helpers::dioxus_optics::Combinator::new(
+            self,
+            dioxus_stores::macro_helpers::dioxus_optics::LensOp::new(__read, __write),
         );
-        ::std::convert::Into::into(scope)
+        dioxus_stores::macro_helpers::dioxus_optics::Optic::from_access(
+            dioxus_stores::macro_helpers::dioxus_optics::Subscribed::with_tree(__lens, __tree),
+        )
     }
 }
 
@@ -595,18 +628,24 @@ fn mapped_type(
     ty_generics: &syn::TypeGenerics,
     field_type: &syn::Type,
 ) -> TokenStream2 {
-    // The zoomed-in store type wraps a `Combinator<__Lens, LensOp<Item, Field>>`
-    // — an optics chain — instead of a `MappedMutSignal`. The Readable /
-    // Writable bridge in `dioxus-signals/src/optics_impls.rs` lets the
-    // Combinator slot in as a Store lens.
-    let write_type = quote! {
-        dioxus_stores::macro_helpers::dioxus_optics::Combinator<
-            __Lens,
-            dioxus_stores::macro_helpers::dioxus_optics::LensOp<#item #ty_generics, #field_type>,
+    // Each field accessor returns an `Optic<Subscribed<Combinator<__Lens,
+    // LensOp<Item, Field>>>, Required>`. The `Subscribed` wraps the outside
+    // of the chain so its `Pathed` walk includes the LensOp's segment (the
+    // field identity). Sharing the parent's tree via `HasSubscriptionTree`
+    // is what keeps path-granular reactivity intact across chained calls.
+    quote! {
+        dioxus_stores::macro_helpers::dioxus_optics::Optic<
+            dioxus_stores::macro_helpers::dioxus_optics::Subscribed<
+                dioxus_stores::macro_helpers::dioxus_optics::Combinator<
+                    __Lens,
+                    dioxus_stores::macro_helpers::dioxus_optics::LensOp<#item #ty_generics, #field_type>,
+                >,
+            >,
+            dioxus_stores::macro_helpers::dioxus_optics::Required,
         >
-    };
-    quote! { dioxus_stores::Store<#field_type, #write_type> }
+    }
 }
+
 
 /// Take the generics from the original type with only generic fields into the generics for the transposed type
 fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
