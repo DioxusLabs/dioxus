@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use image::load_from_memory;
 use image::GenericImageView;
 use image::ImageReader;
@@ -42,7 +42,7 @@ impl DioxusIconTrait for DioxusTrayIcon {
     {
         #[cfg(not(target_os = "windows"))]
         {
-            Err(anyhow!("not implemented"))
+            Err(anyhow::anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         DioxusTrayIcon::from_resource(32512, None).map_err(Into::into)
@@ -80,7 +80,7 @@ impl DioxusIconTrait for DioxusMenuIcon {
     {
         #[cfg(not(target_os = "windows"))]
         {
-            Err(anyhow!("not implemented"))
+            Err(anyhow::anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         DioxusMenuIcon::from_resource(32512, None).map_err(Into::into)
@@ -119,7 +119,7 @@ impl DioxusIconTrait for Icon {
     {
         #[cfg(not(target_os = "windows"))]
         {
-            Err(anyhow!("not implemented"))
+            Err(anyhow::anyhow!("not implemented"))
         }
         #[cfg(target_os = "windows")]
         Icon::from_resource(32512, None).map_err(Into::into)
@@ -147,6 +147,8 @@ impl DioxusIconTrait for Icon {
 }
 
 /// Provides the default icon of the app
+///
+/// Currently implemented for windows only.
 pub fn default_icon<T: DioxusIconTrait>() -> Result<T> {
     T::get_icon()
 }

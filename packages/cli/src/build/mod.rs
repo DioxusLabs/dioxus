@@ -12,6 +12,7 @@
 mod android;
 mod apple;
 mod web;
+mod windows;
 
 mod assets;
 mod builder;
@@ -27,4 +28,3 @@ pub(crate) use builder::*;
 pub(crate) use context::*;
 pub(crate) use patch::*;
 pub(crate) use request::*;
-pub(crate) mod winres;
