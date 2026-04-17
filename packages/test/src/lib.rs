@@ -23,7 +23,7 @@
 //!
 //! ```
 //! use dioxus::prelude::*;
-//! use dioxus_test::{render, inner_html, eq};
+//! use dioxus_test::{eq, inner_html, render};
 //!
 //! #[component]
 //! fn MyComponent() -> Element {

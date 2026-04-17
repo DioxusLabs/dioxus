@@ -184,16 +184,83 @@ impl<'vdom> ElementCondition<'vdom> {
         Self { data, query }
     }
 
+    /// Simulates the user clicking on the element this instance represents.
+    ///
+    /// This runs the event loop until the element appears, if necessary, up to [MAX_TRIES] times.
+    /// It returns `Err` if the element does not appear.
     pub async fn click(self) -> Result<(), TesterError> {
         let element = self.into_future().await?;
         element.click();
         Ok(())
     }
 
+    /// Synonym for [ElementCondition::click].
     pub fn tap(self) -> impl Future<Output = Result<(), TesterError>> + 'vdom {
         self.click()
     }
 
+    /// Asserts that the given [Matcher] matches this element, either immediately or in the future.
+    ///
+    /// The test can require that the element already be present and matched:
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{eq, inner_html, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     rsx! {
+    ///         div {
+    ///              class: "test-component",
+    ///              "Hello, world!"
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[test]
+    /// # */
+    /// fn my_component_renders_correctly() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester
+    ///         .query(".test-component")
+    ///         .expect(inner_html(eq("Hello, world!")))
+    ///         .immediately()
+    ///         .unwrap();
+    /// }
+    /// # my_component_renders_correctly();
+    /// ```
+    ///
+    /// Or the test can wait for the element to exist (if necessary) and the condition to be
+    /// matched using `await`:
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{eq, inner_html, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     rsx! {
+    ///         div {
+    ///              class: "test-component",
+    ///              "Hello, world!"
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[tokio::test]
+    /// # */
+    /// async fn my_component_renders_correctly() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester
+    ///         .query(".test-component")
+    ///         .expect(inner_html(eq("Hello, world!")))
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
+    /// ```
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
         M: for<'a> Matcher<ResolvedElement<'a>>,
@@ -205,6 +272,31 @@ impl<'vdom> ElementCondition<'vdom> {
         }
     }
 
+    /// Resolves the element represented by this instance without running the event loop.
+    ///
+    /// This can be used to obtain a [ResolvedElement] on which the test can operate when one knows
+    /// that the element must already exist.
+    ///
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # use dioxus_test::*;
+    /// #[component]
+    /// fn AComponent() -> Element {
+    ///    rsx! {
+    ///        button {
+    ///            onclick: move |_| {},
+    ///            "Click me!"
+    ///        }
+    ///    }
+    /// }
+    /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut tester = dioxus_test::render(AComponent).build();
+    /// let query = tester.query("button");
+    /// query.immediately()?.click();
+    /// # Ok(())
+    /// # }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(run_test()).unwrap();
+    /// ```
     pub fn immediately(&'vdom self) -> Result<ResolvedElement<'vdom>, TesterError> {
         match self.check() {
             ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
@@ -257,6 +349,69 @@ impl<'vdom> AllElementsCondition<'vdom> {
         Self { data, query }
     }
 
+    /// Asserts that the given [Matcher] matches this element collection, either immediately or in
+    /// the future.
+    ///
+    /// The test can require that the element already be present and matched:
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{empty, eq, inner_html, not, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     rsx! {
+    ///         div {
+    ///              class: "test-component",
+    ///              "Hello, world!"
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[test]
+    /// # */
+    /// fn my_component_renders_correctly() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester
+    ///         .query_all(".test-component")
+    ///         .expect(not(empty()))
+    ///         .immediately()
+    ///         .unwrap();
+    /// }
+    /// # my_component_renders_correctly();
+    /// ```
+    ///
+    /// Or the test can wait for the element to exist (if necessary) and the condition to be
+    /// matched using `await`:
+    ///
+    /// ```
+    /// use dioxus::prelude::*;
+    /// use dioxus_test::{empty, eq, inner_html, not, render};
+    ///
+    /// #[component]
+    /// fn MyComponent() -> Element {
+    ///     rsx! {
+    ///         div {
+    ///              class: "test-component",
+    ///              "Hello, world!"
+    ///         }
+    ///     }
+    /// }
+    ///
+    /// # /* Make sure this also compiles as a doctest.
+    /// #[tokio::test]
+    /// # */
+    /// async fn my_component_renders_correctly() {
+    ///     let mut tester = render(MyComponent).build();
+    ///     tester
+    ///         .query_all(".test-component")
+    ///         .expect(not(empty()))
+    ///         .await
+    ///         .unwrap();
+    /// }
+    /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
+    /// ```
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
     where
         M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
