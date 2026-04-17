@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     backend::{list_dogs, remove_dog, save_dog},
@@ -7,11 +8,11 @@ use crate::{
 
 #[component]
 pub fn Favorites() -> Element {
-    let favorites = use_loader(list_dogs)?;
+    let mut favorites = use_loader(list_dogs)?;
 
     rsx! {
         div { id: "favorites",
-            for (id , url) in favorites.read().iter().cloned() {
+            for (id , url) in favorites.cloned() {
                 div { class: "favorite-dog", key: "{id}",
                     img { src: "{url}" }
                     button {
@@ -41,14 +42,18 @@ pub fn NavBar() -> Element {
 
 #[component]
 pub fn DogView() -> Element {
-    let img_src = use_loader(|| async move {
-        anyhow::Ok(
-            reqwest::get("https://dog.ceo/api/breeds/image/random")
-                .await?
-                .json::<serde_json::Value>()
-                .await?["message"]
-                .to_string(),
-        )
+    let mut img_src = use_loader(|| async move {
+        #[derive(Deserialize, Serialize, Debug, PartialEq)]
+        struct DogApi {
+            message: String,
+        }
+        let json = reqwest::get("https://dog.ceo/api/breeds/image/random")
+            .await?
+            .json::<DogApi>()
+            .await?;
+        let url = json.message;
+
+        dioxus::Ok(url)
     })?;
 
     rsx! {
@@ -63,7 +68,7 @@ pub fn DogView() -> Element {
             }
             button {
                 id: "save",
-                onclick: move |_| async move { _ = save_dog((*img_src.read()).clone()).await },
+                onclick: move |_| async move { _ = save_dog(img_src()).await },
                 "save!"
             }
         }

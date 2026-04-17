@@ -37,7 +37,7 @@ fn app() -> Element {
     rsx! {
         h1 { "Fullstack Middleware Example" }
         button { onclick: move |_| per_route.call(), "Fetch Data" }
-        pre { "{per_route.result():#?}" }
+        pre { "{per_route.value():#?}" }
     }
 }
 

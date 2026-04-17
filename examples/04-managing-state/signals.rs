@@ -8,7 +8,6 @@
 
 use async_std::task::sleep;
 use dioxus::prelude::*;
-use dioxus_optics::OpticIter;
 
 fn main() {
     dioxus::launch(app);

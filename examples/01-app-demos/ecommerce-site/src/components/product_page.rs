@@ -17,7 +17,7 @@ pub fn ProductPage(product_id: ReadSignal<usize>) -> Element {
         image,
         rating,
         ..
-    } = (*product.read()).clone();
+    } = product();
 
     rsx! {
         section { class: "py-20",

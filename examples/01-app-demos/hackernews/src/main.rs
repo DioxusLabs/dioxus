@@ -66,7 +66,7 @@ fn Stories() -> Element {
 
     rsx! {
         div {
-            for story in stories.read().iter().copied() {
+            for story in stories() {
                 ChildrenOrLoading { key: "{story}",
                     StoryListing { story }
                 }
@@ -87,7 +87,7 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
         kids,
         id,
         ..
-    } = (*story.read()).item.clone();
+    } = story().item;
 
     let url = url.as_deref().unwrap_or_default();
     let hostname = url
@@ -134,7 +134,7 @@ fn StoryListing(story: ReadSignal<i64>) -> Element {
 
 #[component]
 fn Preview(story_id: ReadSignal<i64>) -> Element {
-    let story = (*use_loader(move || get_story(story_id()))?.read()).clone();
+    let story = use_loader(move || get_story(story_id()))?.cloned();
     rsx! {
         div { padding: "0.5rem",
             div { font_size: "1.5rem", a { href: story.item.url, "{story.item.title}" } }
@@ -166,7 +166,7 @@ fn Comment(comment: ReadSignal<i64>) -> Element {
         id,
         kids,
         ..
-    } = (*comment.read()).clone();
+    } = comment();
 
     rsx! {
         div { padding: "0.5rem",

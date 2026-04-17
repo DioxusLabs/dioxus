@@ -26,8 +26,8 @@ fn app() -> Element {
         button { onclick: move |_| user_from_server_fn.call(123), "Fetch Data" }
         button { onclick: move |_| user_from_reqwest.call(456), "Fetch From Endpoint" }
         div { display: "flex", flex_direction: "column",
-            pre { "User from server: {user_from_server_fn.result():?}", }
-            pre { "User from server: {user_from_reqwest.result():?}", }
+            pre { "User from server: {user_from_server_fn.value():?}", }
+            pre { "User from server: {user_from_reqwest.value():?}", }
         }
     }
 }

@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use dioxus::prelude::*;
+use dioxus::{fullstack::Loading, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -32,21 +32,21 @@ fn app() -> Element {
                                     Ok(weather) => rsx! {
                                         CountryData {
                                             country: country.read().clone(),
-                                            weather: (*weather.read()).clone(),
+                                            weather: weather.cloned(),
                                         }
-                                        Forecast { weather: (*weather.read()).clone() }
+                                        Forecast { weather: weather.cloned() }
                                         div { height: "20px", margin_top: "10px",
-                                            if weather.pending() {
+                                            if weather.loading() {
                                                 "Fetching weather data..."
                                             }
                                         }
                                     },
-                                    Err(RenderError::Error(_)) => rsx! {
-                                        div { "Failed to load weather data." }
-                                    },
-                                    Err(RenderError::Suspended(_)) => rsx! {
+                                    Err(Loading::Pending(_)) => rsx! {
                                         div { "Loading weather data..." }
                                     },
+                                    Err(Loading::Failed(_)) => rsx! {
+                                        div { "Failed to load weather data." }
+                                    }
                                 }
                             }
                         }
@@ -147,7 +147,7 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                 }
                 ul { class: "bg-white border border-gray-100 w-full mt-2 max-h-72 overflow-auto",
                     match locations {
-                        Ok(locs) if locs.read().is_empty() => rsx! {
+                        Ok(locs) if locs.is_empty() => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "No locations found"
                             }
@@ -162,16 +162,16 @@ fn SearchBox(mut country: WriteSignal<WeatherLocation>) -> Element {
                                 }
                             }
                         },
-                        Err(RenderError::Suspended(_)) => rsx! {
+                        Err(Loading::Pending(_)) => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
                                 "Searching..."
                             }
                         },
-                        Err(RenderError::Error(error)) => rsx! {
+                        Err(Loading::Failed(handle)) => rsx! {
                             li { class: "pl-8 pr-2 py-1 border-b-2 border-gray-100 relative",
-                                "Failed to search: {error:?}"
+                                "Failed to search: {handle.error():?}"
                             }
-                        },
+                        }
                     }
                 }
             }

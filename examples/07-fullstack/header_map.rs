@@ -21,17 +21,11 @@ fn app() -> Element {
     rsx! {
         h1 { "Header Map Example" }
         button { onclick: move |_| headers.call(), "Get Headers" }
-        match headers.result() {
-            Some(Ok(headers)) => rsx! {
-                p { "Response from server:" }
-                pre { "{headers}" }
-            },
-            Some(Err(error)) => rsx! {
-                p { "Request failed: {error}" }
-            },
-            None => rsx! {
-                p { "No headers yet" }
-            },
+        if let Some(Ok(headers)) = headers.value() {
+            p { "Response from server:" }
+            pre { "{headers}" }
+        } else {
+            p { "No headers yet" }
         }
     }
 }

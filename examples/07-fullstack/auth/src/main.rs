@@ -105,9 +105,9 @@ fn app() -> Element {
                 "Fetch User Info"
             }
 
-            pre { "Logged in: {login.result():?}" }
-            pre { "User name: {user_name.result():?}" }
-            pre { "Permissions: {permissions.result():?}" }
+            pre { "Logged in: {login.value():?}" }
+            pre { "User name: {user_name.value():?}" }
+            pre { "Permissions: {permissions.value():?}" }
         }
     }
 }

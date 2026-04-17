@@ -80,7 +80,7 @@ fn app() -> Element {
                     },
                     "Drop files here"
                 }
-                pre { "{upload_as_file_upload.result():?}" }
+                pre { "{upload_as_file_upload.value():?}" }
             }
 
             div {
@@ -99,10 +99,10 @@ fn app() -> Element {
             div {
                 h3 { "Download a file from the server" }
                 button { onclick: move |_| download_file.call(), "Download file" }
-                match download_file.result() {
-                    Some(Ok(content)) => rsx! { pre { "{content}" } },
-                    Some(Err(error)) => rsx! { pre { "Error downloading file: {error}" } },
-                    None => rsx! {},
+                if let Some(Ok(content)) = &download_file.value() {
+                    pre { "{content}" }
+                } else if let Some(Err(e)) = &download_file.value() {
+                    pre { "Error downloading file: {e}" }
                 }
             }
         }
