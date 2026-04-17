@@ -58,19 +58,19 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
     ContainingStringMatcher(substring)
 }
 
-/// Returns a [Matcher] which matches any data not matched by the given [Matcher] `inner`.
-pub fn not<T>(inner: impl Matcher<T>) -> impl Matcher<T> {
-    struct NotMatcher<InnerMatcher>(InnerMatcher);
+pub struct NotMatcher<InnerMatcher>(InnerMatcher);
 
-    impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<InnerMatcher> {
-        fn matches(&self, actual: T) -> ControlFlow<()> {
-            match self.0.matches(actual) {
-                ControlFlow::Continue(_) => ControlFlow::Break(()),
-                ControlFlow::Break(_) => ControlFlow::Continue(()),
-            }
+impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<InnerMatcher> {
+    fn matches(&self, actual: T) -> ControlFlow<()> {
+        match self.0.matches(actual) {
+            ControlFlow::Continue(_) => ControlFlow::Break(()),
+            ControlFlow::Break(_) => ControlFlow::Continue(()),
         }
     }
+}
 
+/// Returns a [Matcher] which matches any data not matched by the given [Matcher] `inner`.
+pub fn not<M>(inner: M) -> NotMatcher<M> {
     NotMatcher(inner)
 }
 
