@@ -451,7 +451,7 @@ impl WebsysDom {
                         dom, vnode, child, ids, to_mount, None, validation,
                     )?;
                 }
-                Ok(())
+                Ok::<(), RehydrationError>(())
             })?,
             TemplateNode::Dynamic { id } => self.rehydrate_dynamic_node(
                 dom,
@@ -466,7 +466,7 @@ impl WebsysDom {
                 if let Some(id) = root_id {
                     ids.push(id.0 as u32);
                 }
-                Ok(())
+                Ok::<(), RehydrationError>(())
             })?,
         }
         Ok(())
@@ -490,7 +490,7 @@ impl WebsysDom {
                         .ok_or(VNodeNotInitialized)?
                         .0 as u32,
                 );
-                Ok(())
+                Ok::<(), RehydrationError>(())
             })?,
             dioxus_core::DynamicNode::Placeholder(_) => validation.placeholder(|_| {
                 ids.push(
@@ -499,7 +499,7 @@ impl WebsysDom {
                         .ok_or(VNodeNotInitialized)?
                         .0 as u32,
                 );
-                Ok(())
+                Ok::<(), RehydrationError>(())
             })?,
             dioxus_core::DynamicNode::Component(comp) => {
                 validation.component(comp.name, |validation| {
