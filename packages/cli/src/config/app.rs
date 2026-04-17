@@ -4,10 +4,11 @@ use std::path::PathBuf;
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct ApplicationConfig {
-    /// The path where global assets will be added when components are added with `dx components add`
+    /// Display name of the application
     #[serde(default)]
     pub(crate) name: Option<String>,
 
+    /// The path where global assets will be added when components are added with `dx components add`
     #[serde(default)]
     pub(crate) asset_dir: Option<PathBuf>,
 

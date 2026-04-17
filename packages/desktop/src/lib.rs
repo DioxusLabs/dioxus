@@ -27,8 +27,6 @@ mod shortcut;
 mod waker;
 mod webview;
 
-pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
-
 // mobile shortcut is only supported on mobile platforms
 #[cfg(any(target_os = "ios", target_os = "android"))]
 mod mobile_shortcut;
@@ -53,6 +51,7 @@ pub mod trayicon;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
+pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
 };

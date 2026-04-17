@@ -541,6 +541,12 @@
             "null"
           ]
         },
+          "description": "Display name of the application`",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "out_dir": {
           "type": [
             "string",
@@ -649,6 +655,12 @@
             "type": "string"
           }
         },
+        "file_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "icon": {
           "type": [
             "array",
@@ -680,6 +692,12 @@
             }
           ]
         },
+        "original_file_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "publisher": {
           "type": [
             "string",
@@ -696,6 +714,18 @@
           }
         },
         "short_description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "trademark": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "version": {
           "type": [
             "string",
             "null"
