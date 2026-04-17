@@ -58,6 +58,7 @@ features = [
     "DataTransferItemList",
     "DataTransferItem",
     "Document",
+    "DocumentFragment",
     "DomRectReadOnly",
     "DragEvent",
     "FocusEvent",

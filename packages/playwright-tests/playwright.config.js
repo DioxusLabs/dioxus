@@ -144,6 +144,7 @@ if (process.platform === "win32") {
     },
     {
       cwd: path.join(process.cwd(), "fullstack-hydration-recovery"),
+      // This is intentionally the only non-`--release` webServer because recovery validation is `debug_assertions`-gated.
       command:
         'cargo run --package dioxus-cli -- run --force-sequential --web --addr "127.0.0.1" --port 7978',
       port: 7978,

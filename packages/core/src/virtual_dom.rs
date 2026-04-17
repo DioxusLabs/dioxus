@@ -215,6 +215,11 @@ pub struct VirtualDom {
     rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
 }
 
+/// An error that can occur when trying to create DOM nodes for an existing scope's vdom tree. This can only occur
+/// if the scope has never been rendered before, so it has no cached vdom tree to walk.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreateScopeDomError;
+
 impl VirtualDom {
     /// Create a new VirtualDom with a component that does not have special props.
     ///
@@ -603,14 +608,20 @@ impl VirtualDom {
     ///
     /// Returns the number of nodes created on the stack (for use with
     /// [`WriteMutations::append_children`]).
-    pub fn create_scope_dom(&mut self, to: &mut impl WriteMutations, scope_id: ScopeId) -> usize {
+    pub fn create_scope_dom(
+        &mut self,
+        to: &mut impl WriteMutations,
+        scope_id: ScopeId,
+    ) -> Result<usize, CreateScopeDomError> {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
+        // Cloning the cached node tree is acceptable here because this only
+        // runs on the recovery path after normal hydration has already failed.
         let existing_nodes = self.scopes[scope_id.0]
             .last_rendered_node
             .clone()
-            .expect("scope should have rendered nodes during hydration");
+            .ok_or(CreateScopeDomError)?;
 
-        self.create_scope(Some(to), scope_id, existing_nodes, None)
+        Ok(self.create_scope(Some(to), scope_id, existing_nodes, None))
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
