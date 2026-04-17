@@ -36,6 +36,8 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
   expect(serverHtml).toContain("Server placeholder content");
   expect(serverHtml).toContain('title="Server value title"');
   expect(serverHtml).toContain('data-side="server"');
+  expect(serverHtml).toContain("Shared inner html");
+  expect(serverHtml).toContain('style="width:100px;height:40px;"');
   expect(serverHtml).toContain('id="server-extra-node"');
   expect(serverHtml).not.toContain('role="status"');
   expect(serverHtml).not.toContain('title="Client attribute title"');
@@ -136,6 +138,16 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
       "Streaming mismatch",
     ),
   ).toBeTruthy();
+  expect(
+    hasMismatch(
+      "these values differ [style:",
+    ),
+  ).toBeTruthy();
+  expect(
+    mismatchMessages().every(
+      (message) => !message.includes("dangerous-inner-html-stable-shell"),
+    ),
+  ).toBeTruthy();
 
   const recoveryButton = page.locator("#recovery-button");
   await expect(recoveryButton).toHaveCount(1);
@@ -163,6 +175,15 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
     "Client value title",
   );
   await expect(attributeValueMismatch).toHaveAttribute("data-side", "client");
+
+  const dangerousInnerHtml = page.locator("#dangerous-inner-html-stable");
+  await expect(dangerousInnerHtml.locator("#dangerous-inner-html-child")).toHaveText(
+    "Shared inner html",
+  );
+
+  const styleMismatch = page.locator("#style-mismatch");
+  await expect(styleMismatch).toHaveCSS("width", "200px");
+  await expect(styleMismatch).toHaveCSS("height", "50px");
 
   const whitespaceMismatch = page.locator("#whitespace-mismatch");
   await expect.poll(() => whitespaceMismatch.evaluate((node) => node.textContent)).toBe(

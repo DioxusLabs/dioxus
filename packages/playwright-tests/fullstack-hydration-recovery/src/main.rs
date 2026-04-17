@@ -24,6 +24,8 @@ fn App() -> Element {
             TextMismatch {}
             AttributeMismatch {}
             AttributeValueMismatch {}
+            DangerousInnerHtmlStable {}
+            StyleMismatch {}
             WhitespaceMismatch {}
             ExtraNodeMismatch {}
             PlaceholderMismatch {}
@@ -165,6 +167,49 @@ fn AttributeValueMismatch() -> Element {
                 title,
                 "data-side": data_side,
                 "Attribute value branch"
+            }
+        }
+    }
+}
+
+#[component]
+fn DangerousInnerHtmlStable() -> Element {
+    let inner_html = "<strong id='dangerous-inner-html-child'>Shared inner html</strong>";
+
+    rsx! {
+        section {
+            id: "dangerous-inner-html-stable-shell",
+            h2 { "Dangerous inner html stable" }
+            div {
+                id: "dangerous-inner-html-stable",
+                dangerous_inner_html: inner_html,
+            }
+        }
+    }
+}
+
+#[component]
+fn StyleMismatch() -> Element {
+    let width = if cfg!(target_arch = "wasm32") {
+        "200px"
+    } else {
+        "100px"
+    };
+    let height = if cfg!(target_arch = "wasm32") {
+        "50px"
+    } else {
+        "40px"
+    };
+
+    rsx! {
+        section {
+            id: "style-mismatch-shell",
+            h2 { "Style mismatch" }
+            div {
+                id: "style-mismatch",
+                width,
+                height,
+                "Style branch"
             }
         }
     }

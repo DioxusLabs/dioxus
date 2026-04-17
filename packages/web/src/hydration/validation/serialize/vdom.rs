@@ -9,6 +9,9 @@ use super::{
     placeholder_node, text_attribute,
 };
 
+const DANGEROUS_INNER_HTML_ATTRIBUTE: &str = "dangerous_inner_html";
+const STYLE_NAMESPACE: &str = "style";
+
 pub(crate) fn serialize_template_subtree(
     dom: &VirtualDom,
     vnode: &VNode,
@@ -78,18 +81,42 @@ fn serialize_template_attributes(
     vnode: &VNode,
 ) -> Vec<RsxAttribute> {
     let mut rendered = Vec::new();
+    let mut static_styles = String::new();
+    let mut dynamic_styles = String::new();
 
     for attr in attrs {
         match attr {
-            TemplateAttribute::Static { name, value, .. } => {
-                if let Some(rendered_attr) = render_static_template_attribute(name, value) {
+            TemplateAttribute::Static {
+                name,
+                value,
+                namespace,
+            } => {
+                if *namespace == Some(STYLE_NAMESPACE) {
+                    append_style_declaration(&mut static_styles, name, value);
+                    continue;
+                }
+
+                if let Some(rendered_attr) =
+                    render_static_template_attribute(name, value, *namespace)
+                {
                     rendered.push(rendered_attr);
                 }
             }
             TemplateAttribute::Dynamic { id } => {
                 let mut dynamic_attrs: Vec<_> = vnode.dynamic_attrs[*id]
                     .iter()
-                    .filter_map(render_dynamic_template_attribute)
+                    .filter_map(|attr| {
+                        if attr.namespace == Some(STYLE_NAMESPACE) {
+                            append_dynamic_style_declaration(
+                                &mut dynamic_styles,
+                                attr.name,
+                                &attr.value,
+                            );
+                            return None;
+                        }
+
+                        render_dynamic_template_attribute(attr)
+                    })
                     .collect();
                 dynamic_attrs.sort_by_key(|attr| attr.name.to_string());
                 rendered.extend(dynamic_attrs);
@@ -97,11 +124,25 @@ fn serialize_template_attributes(
         }
     }
 
+    if !static_styles.is_empty() || !dynamic_styles.is_empty() {
+        rendered.push(text_attribute(
+            STYLE_NAMESPACE,
+            &format!("{static_styles}{dynamic_styles}"),
+        ));
+    }
+
     rendered
 }
 
-fn render_static_template_attribute(name: &str, value: &str) -> Option<RsxAttribute> {
-    if is_internal_attribute_name(name) {
+fn render_static_template_attribute(
+    name: &str,
+    value: &str,
+    namespace: Option<&str>,
+) -> Option<RsxAttribute> {
+    if is_internal_attribute_name(name)
+        || name == DANGEROUS_INNER_HTML_ATTRIBUTE
+        || matches!(namespace, Some(ns) if ns == STYLE_NAMESPACE)
+    {
         return None;
     }
 
@@ -110,6 +151,7 @@ fn render_static_template_attribute(name: &str, value: &str) -> Option<RsxAttrib
 
 fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
     if is_internal_attribute_name(attr.name)
+        || attr.name == DANGEROUS_INNER_HTML_ATTRIBUTE
         || matches!(
             attr.value,
             AttributeValue::Listener(_) | AttributeValue::None
@@ -138,4 +180,24 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
     };
 
     Some(rendered_value)
+}
+
+fn append_style_declaration(into: &mut String, name: &str, value: &str) {
+    into.push_str(name);
+    into.push(':');
+    into.push_str(value);
+    into.push(';');
+}
+
+fn append_dynamic_style_declaration(into: &mut String, name: &str, value: &AttributeValue) {
+    into.push_str(name);
+    into.push(':');
+    match value {
+        AttributeValue::Text(value) => into.push_str(value),
+        AttributeValue::Float(value) => into.push_str(&value.to_string()),
+        AttributeValue::Int(value) => into.push_str(&value.to_string()),
+        AttributeValue::Bool(value) => into.push_str(&value.to_string()),
+        AttributeValue::Any(_) | AttributeValue::Listener(_) | AttributeValue::None => {}
+    }
+    into.push(';');
 }
