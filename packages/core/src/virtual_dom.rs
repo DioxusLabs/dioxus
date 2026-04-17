@@ -614,8 +614,6 @@ impl VirtualDom {
         scope_id: ScopeId,
     ) -> Result<usize, CreateScopeDomError> {
         let _runtime = RuntimeGuard::new(self.runtime.clone());
-        // Cloning the cached node tree is acceptable here because this only
-        // runs on the recovery path after normal hydration has already failed.
         let existing_nodes = self.scopes[scope_id.0]
             .last_rendered_node
             .clone()
