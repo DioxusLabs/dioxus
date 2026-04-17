@@ -14,6 +14,7 @@ dioxus-core = { workspace = true }
 dioxus-core-types = { workspace = true }
 dioxus-autofmt = { workspace = true, optional = true }
 dioxus-rsx = { workspace = true, optional = true }
+dioxus-rsx-rosetta = { workspace = true, optional = true }
 dioxus-cli-config = { workspace = true, features = ["web"] }
 dioxus-html = { workspace = true }
 dioxus-history = { workspace = true }
@@ -99,7 +100,7 @@ lazy-js-bundle = { workspace = true }
 [features]
 default = ["mounted", "devtools", "document"]
 hydrate = ["web-sys/Comment", "dep:serde", "dep:dioxus-fullstack-core"]
-debug-hydration-validation = ["dep:dioxus-autofmt", "dep:dioxus-rsx", "dep:syn"]
+debug-hydration-validation = ["dep:dioxus-autofmt", "dep:dioxus-rsx", "dep:dioxus-rsx-rosetta", "dep:syn"]
 mounted = [
     "web-sys/Element",
     "web-sys/Element",

@@ -17,7 +17,7 @@ use self::{
     serialize::{
         dom::{serialize_dom_nodes, serialize_dom_subtree, should_skip_validation_node},
         format_rsx_nodes, missing_node, placeholder_node,
-        vdom::serialize_template_subtree,
+        vdom::{serialize_dangerous_inner_html, serialize_template_subtree},
     },
 };
 
@@ -182,6 +182,13 @@ impl super::HydrationSession for HydrationValidationSession {
             &dynamic_attrs,
             &expected_rsx,
         );
+        if let Some(expected_inner_html) = serialize_dangerous_inner_html(attrs, vnode) {
+            self.validate_dangerous_inner_html(
+                current_node.as_ref(),
+                &expected_inner_html,
+                &expected_rsx,
+            );
+        }
         self.push_element_context(expected_rsx, current_node);
 
         let has_children = !children.is_empty();
@@ -463,6 +470,40 @@ impl HydrationValidationSession {
                     Some(dom_node),
                 );
             }
+        }
+    }
+
+    pub fn validate_dangerous_inner_html(
+        &mut self,
+        dom_node: Option<&web_sys::Node>,
+        expected_inner_html_rsx: &str,
+        expected_rsx: &str,
+    ) {
+        let Some(dom_node) = dom_node else {
+            return;
+        };
+
+        let Some(element) = dom_node.dyn_ref::<web_sys::Element>() else {
+            return;
+        };
+
+        let mut children = Vec::new();
+        let mut child = element.first_child();
+        while let Some(node) = child {
+            children.push(node.clone());
+            child = node.next_sibling();
+        }
+
+        let actual_inner_html_rsx = serialize_dom_nodes(&children);
+        if normalize_debug_rsx(expected_inner_html_rsx)
+            != normalize_debug_rsx(&actual_inner_html_rsx)
+        {
+            self.push_element_mismatch(
+                "Expected dangerous_inner_html content to match, but the rendered children differ."
+                    .to_string(),
+                expected_rsx.to_string(),
+                Some(dom_node),
+            );
         }
     }
 

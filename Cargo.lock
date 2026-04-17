@@ -6535,6 +6535,7 @@ dependencies = [
  "dioxus-html",
  "dioxus-interpreter-js",
  "dioxus-rsx",
+ "dioxus-rsx-rosetta",
  "dioxus-signals",
  "dioxus-ssr",
  "dioxus-web",

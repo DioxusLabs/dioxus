@@ -25,6 +25,7 @@ fn App() -> Element {
             AttributeMismatch {}
             AttributeValueMismatch {}
             DangerousInnerHtmlStable {}
+            DangerousInnerHtmlMismatch {}
             StyleMismatch {}
             WhitespaceMismatch {}
             ExtraNodeMismatch {}
@@ -182,6 +183,26 @@ fn DangerousInnerHtmlStable() -> Element {
             h2 { "Dangerous inner html stable" }
             div {
                 id: "dangerous-inner-html-stable",
+                dangerous_inner_html: inner_html,
+            }
+        }
+    }
+}
+
+#[component]
+fn DangerousInnerHtmlMismatch() -> Element {
+    let inner_html = if cfg!(target_arch = "wasm32") {
+        "<strong id='dangerous-inner-html-mismatch-child'>Client dangerous inner html</strong>"
+    } else {
+        "<em id='dangerous-inner-html-mismatch-child'>Server dangerous inner html</em>"
+    };
+
+    rsx! {
+        section {
+            id: "dangerous-inner-html-mismatch-shell",
+            h2 { "Dangerous inner html mismatch" }
+            div {
+                id: "dangerous-inner-html-mismatch",
                 dangerous_inner_html: inner_html,
             }
         }

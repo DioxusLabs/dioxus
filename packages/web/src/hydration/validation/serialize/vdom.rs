@@ -2,6 +2,7 @@ use dioxus_core::{
     Attribute, AttributeValue, DynamicNode, TemplateAttribute, TemplateNode, VNode, VirtualDom,
 };
 use dioxus_rsx::{Attribute as RsxAttribute, BodyNode, TextNode};
+use dioxus_rsx_rosetta::{rsx_from_html, Dom};
 use syn::parse_quote;
 
 use super::{
@@ -37,7 +38,7 @@ fn serialize_template_node_items(
             ..
         } => {
             let attributes = serialize_template_attributes(attrs, vnode);
-            let mut child_items = Vec::new();
+            let mut child_items = dangerous_inner_html_nodes(attrs, vnode);
             for child in *children {
                 child_items.extend(serialize_template_node_items(dom, vnode, child));
             }
@@ -134,6 +135,15 @@ fn serialize_template_attributes(
     rendered
 }
 
+pub(crate) fn serialize_dangerous_inner_html(
+    attrs: &'static [TemplateAttribute],
+    vnode: &VNode,
+) -> Option<String> {
+    dangerous_inner_html_value(attrs, vnode)
+        .map(parse_inner_html_nodes)
+        .map(format_rsx_nodes)
+}
+
 fn render_static_template_attribute(
     name: &str,
     value: &str,
@@ -180,6 +190,67 @@ fn render_dynamic_template_attribute(attr: &Attribute) -> Option<RsxAttribute> {
     };
 
     Some(rendered_value)
+}
+
+fn dangerous_inner_html_nodes(attrs: &'static [TemplateAttribute], vnode: &VNode) -> Vec<BodyNode> {
+    dangerous_inner_html_value(attrs, vnode)
+        .map(parse_inner_html_nodes)
+        .unwrap_or_default()
+}
+
+fn dangerous_inner_html_value<'a>(
+    attrs: &'static [TemplateAttribute],
+    vnode: &'a VNode,
+) -> Option<String> {
+    let mut static_inner_html = None;
+    let mut dynamic_inner_html = None;
+
+    for attr in attrs {
+        match attr {
+            TemplateAttribute::Static {
+                name,
+                value,
+                namespace: None,
+            } if *name == DANGEROUS_INNER_HTML_ATTRIBUTE => {
+                static_inner_html = Some((*value).to_string());
+            }
+            TemplateAttribute::Dynamic { id } => {
+                for attr in vnode.dynamic_attrs[*id].iter() {
+                    if attr.name == DANGEROUS_INNER_HTML_ATTRIBUTE {
+                        dynamic_inner_html =
+                            Some(dangerous_inner_html_value_to_string(&attr.value));
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    static_inner_html.or(dynamic_inner_html)
+}
+
+fn dangerous_inner_html_value_to_string(value: &AttributeValue) -> String {
+    match value {
+        AttributeValue::Text(value) => value.clone(),
+        AttributeValue::Float(value) => value.to_string(),
+        AttributeValue::Int(value) => value.to_string(),
+        AttributeValue::Bool(value) => value.to_string(),
+        AttributeValue::Any(_) | AttributeValue::Listener(_) | AttributeValue::None => {
+            String::new()
+        }
+    }
+}
+
+fn parse_inner_html_nodes(inner_html: String) -> Vec<BodyNode> {
+    if inner_html.is_empty() {
+        return Vec::new();
+    }
+
+    Dom::parse(&inner_html)
+        .ok()
+        .map(|dom| rsx_from_html(&dom))
+        .map(|body| body.body.roots)
+        .unwrap_or_else(|| vec![BodyNode::Text(TextNode::from_text(&inner_html))])
 }
 
 fn append_style_declaration(into: &mut String, name: &str, value: &str) {

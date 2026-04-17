@@ -37,6 +37,7 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
   expect(serverHtml).toContain('title="Server value title"');
   expect(serverHtml).toContain('data-side="server"');
   expect(serverHtml).toContain("Shared inner html");
+  expect(serverHtml).toContain("Server dangerous inner html");
   expect(serverHtml).toContain('style="width:100px;height:40px;"');
   expect(serverHtml).toContain('id="server-extra-node"');
   expect(serverHtml).not.toContain('role="status"');
@@ -144,6 +145,12 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
     ),
   ).toBeTruthy();
   expect(
+    hasMismatch(
+      "Expected dangerous_inner_html content to match",
+      "Client dangerous inner html",
+    ),
+  ).toBeTruthy();
+  expect(
     mismatchMessages().every(
       (message) => !message.includes("dangerous-inner-html-stable-shell"),
     ),
@@ -181,6 +188,14 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
     "Shared inner html",
   );
 
+  const dangerousInnerHtmlMismatch = page.locator("#dangerous-inner-html-mismatch");
+  await expect(
+    dangerousInnerHtmlMismatch.locator("#dangerous-inner-html-mismatch-child"),
+  ).toHaveText("Client dangerous inner html");
+  await expect(
+    dangerousInnerHtmlMismatch.locator("#dangerous-inner-html-mismatch-child"),
+  ).toHaveJSProperty("tagName", "STRONG");
+
   const styleMismatch = page.locator("#style-mismatch");
   await expect(styleMismatch).toHaveCSS("width", "200px");
   await expect(styleMismatch).toHaveCSS("height", "50px");
@@ -199,6 +214,7 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
     "Server placeholder content",
   );
   await expect(page.locator("body")).not.toContainText("Server extra node");
+  await expect(page.locator("body")).not.toContainText("Server dangerous inner html");
 
   await recoveryButton.click();
   await expect(recoveryButton).toHaveText("Recovered 1");
