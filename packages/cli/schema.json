@@ -541,6 +541,7 @@
             "null"
           ]
         },
+        "name": {
           "description": "Display name of the application`",
           "type": [
             "string",
