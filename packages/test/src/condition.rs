@@ -251,6 +251,48 @@ impl<'vdom> ElementCondition<'vdom> {
     /// }
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
     /// ```
+    ///
+    /// > Warning! Be aware when awaiting the expectation that it will pass _as soon as that
+    /// > expectation is true_. This can lead to the test passing even when the implementation is
+    /// > wrong. Namely, suppose the test asserts that the state of a label is left unchanged after
+    /// > clicking a button.
+    /// >
+    /// > ```
+    /// > use dioxus::prelude::*;
+    /// > use dioxus_test::{eq, inner_html, render};
+    /// >
+    /// > #[component]
+    /// > fn MyComponent() -> Element {
+    /// >     let mut text = use_signal(|| "Click me!");
+    /// >     rsx! {
+    /// >         button {
+    /// >              class: "test-button",
+    /// >              onclick: move |_| {
+    /// >                  *text.write() = "Don't click any more!";
+    /// >              },
+    /// >              {text}
+    /// >         }
+    /// >     }
+    /// > }
+    /// >
+    /// > # /* Make sure this also compiles as a doctest.
+    /// > #[tokio::test]
+    /// > # */
+    /// > async fn my_component_does_not_change_label_on_click() {
+    /// >     let mut tester = render(MyComponent).build();
+    /// >     tester.query(".test-button").click().await;
+    /// >     tester
+    /// >         .query(".test-button")
+    /// >         // This should be wrong -- we actually _do_ change the label.
+    /// >         .expect(inner_html(eq("Click me!")))
+    /// >         .await
+    /// >         .unwrap();
+    /// > }
+    /// > # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_does_not_change_label_on_click());
+    /// > ```
+    /// >
+    /// > Because the assertion is true at the moment of the click, the test passes despite the
+    /// > implemenation being wrong!
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
         M: for<'a> Matcher<ResolvedElement<'a>>,
