@@ -125,6 +125,10 @@ impl DocumentTester {
     }
 
     /// Returns an element referencing the root DOM node managed by this tester.
+    ///
+    /// This allows interacting with and asserting on the root element. However, there is no support
+    /// for awaiting expectations. If the test must await an expectation on the root element use
+    /// [Self::query] with the CSS selector `:root`.
     pub fn root<'vdom>(&'vdom self) -> ResolvedElement<'vdom> {
         ResolvedElement {
             document: &self.document,
