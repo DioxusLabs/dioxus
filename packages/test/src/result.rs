@@ -1,5 +1,8 @@
 pub type Result<T> = std::result::Result<T, TesterError>;
 
+/// An error during resolution of a DOM element or making an assertion.
+///
+/// This normally indicates that the test should fail.
 #[derive(Debug, Clone)]
 pub enum TesterError {
     /// The given CSS selector had invalid syntax.

@@ -148,16 +148,19 @@ impl DocumentTester {
         self.document.query_selector_all_raw(query).to_vec()
     }
 
-    /// Returns the first element in the DOM satisfying the given query, waiting as necessary.
+    /// Returns a representation of first element in the DOM satisfying the given query.
     ///
     /// The query can be anything which dereferences to a `str`, including `&str` and `String`. This
     /// method then interprets it as a CSS selector. Alternatively, one can select by testid with
     /// [by_testid].
     ///
-    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
-    /// the limit and the element is still not present, it returns an error.
+    /// The test can:
     ///
-    /// Returns an error if the Query contains a syntactically invalid CSS selector.
+    /// - await the matching element by driving the event loop until it appears,
+    /// - immediately resolve the element in order to assert on or interact with it, or
+    /// - make an assertion and drive the event loop until that assertion to be true.
+    ///
+    /// See [ElementCondition] for more.
     ///
     /// ```rust
     /// # use dioxus::prelude::*;
@@ -185,6 +188,8 @@ impl DocumentTester {
     /// # }
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(run_test()).unwrap();
     /// ```
+    ///
+    /// Panics if the query contains a syntactically invalid CSS selector.
     pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
         let error = query.to_tester_error();
         let selector = query
@@ -193,17 +198,17 @@ impl DocumentTester {
         ElementCondition::new(self, selector, error)
     }
 
-    /// Returns all elements in the DOM satisfying the given query, waiting as necessary until the
-    /// set is nonempty.
+    /// Returns a representation of elements in the DOM satisfying the given query.
     ///
     /// The query can be anything which dereferences to a `str`, including `&str` and `String`. This
     /// method then interprets it as a CSS selector. Alternatively, one can select by testid with
     /// [by_testid].
     ///
-    /// This makes up to [MAX_TRIES] queries, running [Self::pump] between each one. If it reaches
-    /// the limit and no matching elements are present, it returns an empty list.
+    /// The test can immediately resolve the set of elements in order to assert on or interact with
+    /// them, or it can make an assertion and drive the event loop until that assertion to be true.
+    /// See [AllElementsCondition] for more.
     ///
-    /// Returns an error if the Query contains a syntactically invalid CSS selector.
+    /// Panics if the query contains a syntactically invalid CSS selector.
     pub fn query_all(&mut self, query: impl TryIntoSelector) -> AllElementsCondition<'_> {
         let selector = query
             .try_into_selector(&self.document)

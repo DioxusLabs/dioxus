@@ -133,6 +133,32 @@ trait Waitable: EventLoopDriver {
 /// }
 /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
 /// ```
+///
+/// This will drive the event loop up to [MAX_TRIES] to await the appearance of the element. If the
+/// element does not appear by then, the attempt to await the element returns an error.
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{eq, inner_html, render};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {}
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn should_fail() -> Result<(), Box<dyn std::error::Error>> {
+///     let mut tester = render(MyComponent).build();
+///     let element = tester.query(".nonexistent-component");
+///
+///     let content = element.await?.inner_html();
+///     assert_eq!(content, "Hello, world!");
+///     Ok(())
+/// }
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(should_fail()).err().unwrap();
+/// ```
 pub struct ElementCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
@@ -390,6 +416,9 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 /// }
 /// # my_component_renders_correctly();
 /// ```
+///
+/// Unlike [ElementCondition], there is no notion of waiting for the matched elements to appear. The
+/// must use [AllElementsCondition::expect] to await a condition on the set of elements.
 pub struct AllElementsCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
@@ -513,8 +542,39 @@ where
 
 /// A representation of a concrete assertion on an element or set of elements using a [Matcher].
 ///
-/// The test can decide whether to make this assertion immediately with
-/// [MatcherCondition::immediately] or to await it.
+/// This can be awaited like a `Future`, in which case it resolves to a `Result<(), TesterError>`:
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{eq, inner_html, render, TesterError};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              class: "test-component",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[tokio::test]
+/// # */
+/// async fn my_component_renders_correctly() -> Result<(), TesterError> {
+///     let mut tester = render(MyComponent).build();
+///     tester
+///         .query(".test-component")
+///         .expect(inner_html(eq("Hello, world!")))
+///         .await
+/// }
+/// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
+/// ```
+///
+/// This will then drive the event loop up to [MAX_TRIES] times until the condition is true. If it
+/// is not true in that time, the assertion fails and this instance resolves to a `Result::Err`.
+///
+/// The test can make this assertion immediately with [MatcherCondition::immediately].
 pub struct MatcherCondition<'vdom, M, W> {
     element: W,
     matcher: M,
