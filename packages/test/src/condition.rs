@@ -443,7 +443,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
 
     pub fn immediately(&'vdom self) -> Result<Vec<ResolvedElement<'vdom>>, TesterError> {
         match self.check() {
-            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Continue(_) => unreachable!(),
             ControlFlow::Break(node_ids) => Ok(node_ids
                 .into_iter()
                 .map(|node_id| self.data.node_id_to_element(node_id))
@@ -634,7 +634,9 @@ where
     /// ```
     pub fn immediately(&'vdom self) -> Result<(), TesterError> {
         match self.element.matches(&self.matcher) {
-            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure("TODO".into())),
+            ControlFlow::Continue(_) => Err(TesterError::AssertionFailure(
+                self.element.explain_match_failure(&self.matcher),
+            )),
             ControlFlow::Break(_) => Ok(()),
         }
     }
