@@ -9,7 +9,8 @@ use object::{
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::{Deref, Range},
+    io::Read,
+    ops::Range,
     path::Path,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -716,6 +717,21 @@ pub fn create_wasm_jump_table(patch: &Path, cache: &HotpatchModuleCache) -> Resu
     // Clear the start function from the patch - we don't want any code automatically running!
     new.start = None;
 
+    // Export __wasm_apply_global_relocs if it exists. wasm-ld generates this synthetic
+    // function to relocate GOT.func.internal globals by __table_base, but refuses to
+    // export it via --export or --export-if-defined since it's not a linker symbol.
+    // Without this export, the runtime can't call it, leaving GOT.func.internal globals
+    // unrelocated — they contain element-segment-relative offsets instead of absolute
+    // table indices, causing call_indirect type mismatches in PIC-compiled workspace code.
+    const APPLY_RELOCS: &str = "__wasm_apply_global_relocs";
+    if let Some(func) = new
+        .funcs
+        .iter()
+        .find(|f| f.name.as_deref() == Some(APPLY_RELOCS))
+    {
+        new.exports.add(APPLY_RELOCS, func.id());
+    }
+
     // Update the wasm module on the filesystem to use the newly lifted version
     let lib = patch.to_path_buf();
     std::fs::write(&lib, new.emit_wasm())?;
@@ -846,15 +862,7 @@ pub fn create_undefined_symbol_stub(
     let mut defined_symbols = HashSet::new();
 
     for path in sorted {
-        let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
-        let file = File::parse(bytes.deref() as &[u8])?;
-        for symbol in file.symbols() {
-            if symbol.is_undefined() {
-                undefined_symbols.insert(symbol.name()?.to_string());
-            } else if symbol.is_global() {
-                defined_symbols.insert(symbol.name()?.to_string());
-            }
-        }
+        collect_stub_symbols_from_path(path, &mut undefined_symbols, &mut defined_symbols)?;
     }
     let undefined_symbols: Vec<_> = undefined_symbols
         .difference(&defined_symbols)
@@ -1251,6 +1259,54 @@ pub fn create_undefined_symbol_stub(
     Ok(obj.write()?)
 }
 
+fn collect_stub_symbols_from_path(
+    path: &Path,
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let bytes = std::fs::read(path).with_context(|| format!("failed to read {path:?}"))?;
+
+    if path
+        .extension()
+        .is_some_and(|ext| matches!(ext.to_str(), Some("rlib" | "a")))
+    {
+        let mut archive = ar::Archive::new(std::io::Cursor::new(bytes));
+        while let Some(entry) = archive.next_entry() {
+            let mut entry = entry?;
+            let name = std::str::from_utf8(entry.header().identifier()).unwrap_or_default();
+
+            if name.ends_with(".rmeta") || !(name.ends_with(".o") || name.ends_with(".obj")) {
+                continue;
+            }
+
+            let mut entry_bytes = Vec::with_capacity(entry.header().size() as usize);
+            entry.read_to_end(&mut entry_bytes)?;
+            collect_stub_symbols_from_bytes(&entry_bytes, undefined_symbols, defined_symbols)?;
+        }
+
+        return Ok(());
+    }
+
+    collect_stub_symbols_from_bytes(&bytes, undefined_symbols, defined_symbols)
+}
+
+fn collect_stub_symbols_from_bytes(
+    bytes: &[u8],
+    undefined_symbols: &mut HashSet<String>,
+    defined_symbols: &mut HashSet<String>,
+) -> Result<()> {
+    let file = File::parse(bytes)?;
+    for symbol in file.symbols() {
+        if symbol.is_undefined() {
+            undefined_symbols.insert(symbol.name()?.to_string());
+        } else if symbol.is_global() {
+            defined_symbols.insert(symbol.name()?.to_string());
+        }
+    }
+
+    Ok(())
+}
+
 /// Prepares the base module before running wasm-bindgen.
 ///
 /// This tries to work around how wasm-bindgen works by intelligently promoting non-wasm-bindgen functions
@@ -1420,8 +1476,25 @@ fn name_is_bindgen_symbol(name: &str) -> bool {
         || name.contains("__wbindgen_externref")
         || name.contains("wasm_bindgen8describe6inform")
         || name.contains("wasm_bindgen..describe..WasmDescribe")
-        || name.contains("wasm_bindgen..closure..WasmClosure$GT$8describe")
-        || name.contains("wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe")
+        || (name.contains("wasm_bindgen..closure..WasmClosure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7closure16Closure") && name.contains("describe"))
+        || (name.contains("wasm_bindgen7convert8closures") && name.contains("describe_invoke"))
+}
+
+// Test for bindgen symbols. As we find more bad symbols, add them here
+#[test]
+fn bindgen_symbol_catch() {
+    let symbol = "_ZN12wasm_bindgen7convert8closures1_142_$LT$impl$u20$wasm_bindgen..closure..WasmClosure$u20$for$u20$dyn$u20$core..ops..function..FnMut$LT$$LP$$RP$$GT$$u2b$Output$u20$$u3d$$u20$R$GT$15describe_invoke17h4373f8b6570333dcE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // matches_legacy_wasm_bindgen_closure_describe_symbols
+    let symbol = "_ZN12wasm_bindgen7closure16Closure$LT$T$GT$4wrap8describe17h1234567890abcdefE";
+    assert!(name_is_bindgen_symbol(symbol));
+
+    // does_not_match_saved_runtime_exports
+    assert!(!name_is_bindgen_symbol("__wbindgen_malloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_realloc"));
+    assert!(!name_is_bindgen_symbol("__wbindgen_free"));
 }
 
 /// Manually parse the data section from a wasm module

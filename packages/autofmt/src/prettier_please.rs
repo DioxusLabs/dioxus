@@ -7,6 +7,10 @@ impl Writer<'_> {
     pub fn unparse_expr(&mut self, expr: &Expr) -> String {
         unparse_expr(expr, self.raw_src, &self.out.indent)
     }
+
+    pub fn unparse_pat(&self, pat: &syn::Pat) -> String {
+        unparse_pat(pat)
+    }
 }
 
 // we use weird unicode alternatives to avoid conflicts with the actual rsx! macro
@@ -161,6 +165,32 @@ pub fn unparse_inner(expr: &Expr) -> String {
     let file = wrapped(expr);
     let wrapped = prettyplease::unparse(&file);
     unwrapped(wrapped)
+}
+
+/// Unparse a pattern into a properly formatted string using prettyplease.
+///
+/// Wraps the pattern in `fn main() { for PAT in () {} }`, formats with prettyplease,
+/// then extracts just the pattern text between "for " and " in".
+pub fn unparse_pat(pat: &syn::Pat) -> String {
+    let file = File {
+        shebang: None,
+        attrs: vec![],
+        items: vec![Item::Verbatim(quote::quote! {
+            fn main() {
+                for #pat in () {}
+            }
+        })],
+    };
+    let formatted = prettyplease::unparse(&file);
+    let after_for = formatted
+        .find("for ")
+        .map(|i| i + 4)
+        .expect("prettyplease output missing 'for' keyword in pattern wrapper");
+    let before_in = formatted[after_for..]
+        .find(" in ")
+        .map(|i| i + after_for)
+        .expect("prettyplease output missing 'in' keyword in pattern wrapper");
+    formatted[after_for..before_in].trim().to_string()
 }
 
 // Split off the fn main and then cut the tabs off the front

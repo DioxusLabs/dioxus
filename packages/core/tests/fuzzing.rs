@@ -287,6 +287,10 @@ fn create() {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         vdom.rebuild(&mut NoOpMutations);
+
+        vdom.in_scope(ScopeId::APP, || {
+            assert!(consume_context::<ErrorContext>().error().is_none())
+        })
     }
 }
 
@@ -317,6 +321,10 @@ fn diff() {
                 ));
             }
         }
+
+        vdom.in_scope(ScopeId::APP, || {
+            assert!(consume_context::<ErrorContext>().error().is_none())
+        })
     }
 }
 

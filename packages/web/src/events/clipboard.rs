@@ -3,12 +3,6 @@ use web_sys::Event;
 
 use super::{Synthetic, WebEventExt};
 
-impl From<&Event> for Synthetic<Event> {
-    fn from(e: &Event) -> Self {
-        Synthetic::new(e.clone())
-    }
-}
-
 impl HasClipboardData for Synthetic<Event> {
     fn as_any(&self) -> &dyn std::any::Any {
         &self.event

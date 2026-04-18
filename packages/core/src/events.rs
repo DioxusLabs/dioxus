@@ -469,7 +469,7 @@ impl<Args, Ret> Clone for Callback<Args, Ret> {
     }
 }
 
-impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
+impl<Args, Ret> PartialEq for Callback<Args, Ret> {
     fn eq(&self, other: &Self) -> bool {
         self.callback.ptr_eq(&other.callback) && self.origin == other.origin
     }

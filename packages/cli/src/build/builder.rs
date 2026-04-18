@@ -1,16 +1,15 @@
+use crate::{opt::process_file_to, BuildPhaseProfile};
 use crate::{
-    build::cache::ObjectCache, serve::WebServer, verbosity_or_default, BuildArtifacts,
-    BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result,
-    RustcArgs, StructuredOutput,
+    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
+    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, StructuredOutput,
 };
 use anyhow::{bail, Context, Error};
-use dioxus_cli_opt::process_file_to;
 use futures_util::{future::OptionFuture, pin_mut, FutureExt};
 use itertools::Itertools;
 use std::{
     collections::HashSet,
     env,
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, SystemTime},
 };
 use std::{
     net::SocketAddr,
@@ -98,10 +97,10 @@ pub(crate) struct AppBuilder {
     pub compiled_crates: usize,
     pub expected_crates: usize,
     pub bundling_progress: f64,
-    pub compile_start: Option<Instant>,
-    pub compile_end: Option<Instant>,
-    pub bundle_start: Option<Instant>,
-    pub bundle_end: Option<Instant>,
+    pub compile_start: Option<SystemTime>,
+    pub compile_end: Option<SystemTime>,
+    pub bundle_start: Option<SystemTime>,
+    pub bundle_end: Option<SystemTime>,
 
     /// The debugger for the app - must be enabled with the `d` key
     pub(crate) pid: Option<u32>,
@@ -110,8 +109,8 @@ pub(crate) struct AppBuilder {
     /// Each patch includes objects from ALL crates in this set.
     pub modified_crates: HashSet<String>,
 
-    /// Cache of the latest `.rcgu.o` files for each modified workspace crate.
-    pub object_cache: ObjectCache,
+    /// The build profiling spans for us to generate a flamegraph from.
+    pub profile_spans: Vec<BuildPhaseProfile>,
 }
 
 impl AppBuilder {
@@ -153,7 +152,7 @@ impl AppBuilder {
             expected_crates: 1,
             bundling_progress: 0.0,
             builds_opened: 0,
-            compile_start: Some(Instant::now()),
+            compile_start: Some(SystemTime::now()),
             aslr_reference: None,
             compile_end: None,
             bundle_start: None,
@@ -169,7 +168,7 @@ impl AppBuilder {
             patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
-            object_cache: ObjectCache::new(&request.session_cache_dir()),
+            profile_spans: Vec::new(),
         })
     }
 
@@ -181,19 +180,13 @@ impl AppBuilder {
     }
 
     pub(crate) fn start(&mut self, mode: BuildMode, build_id: BuildId) {
-        self.build_task = tokio::spawn({
-            let request = self.build.clone();
-            let tx = self.tx.clone();
-            async move {
-                let ctx = BuildContext {
-                    mode,
-                    build_id,
-                    tx: tx.clone(),
-                };
-                request.verify_tooling(&ctx).await?;
-                request.prebuild(&ctx).await?;
-                request.build(&ctx).await
-            }
+        let request = self.build.clone();
+        let tx = self.tx.clone();
+        self.build_task = tokio::spawn(async move {
+            let ctx = BuildContext::new(tx, mode, build_id);
+            request.verify_tooling(&ctx).await?;
+            request.prebuild(&ctx).await?;
+            request.build(ctx).await
         });
     }
 
@@ -260,69 +253,88 @@ impl AppBuilder {
         // doing so will cause the changes to be lost since this wait call is called under a cancellable task
         // todo - move this handling to a separate function that won't be cancelled
         match &update {
-            BuilderUpdate::Progress { stage } => {
+            BuilderUpdate::Progress { .. } if self.is_finished() => {
                 // Prevent updates from flowing in after the build has already finished
-                if !self.is_finished() {
-                    self.stage = stage.clone();
+            }
+            BuilderUpdate::Progress { stage } => {
+                self.stage = stage.clone();
 
-                    match stage {
-                        BuildStage::Initializing => {
-                            self.compiled_crates = 0;
-                            self.bundling_progress = 0.0;
-                        }
-                        BuildStage::Starting { crate_count, .. } => {
-                            self.expected_crates = *crate_count.max(&1);
-                        }
-                        BuildStage::InstallingTooling => {}
-                        BuildStage::Compiling { current, total, .. } => {
-                            self.compiled_crates = *current;
-                            self.expected_crates = *total.max(&1);
-
-                            if self.compile_start.is_none() {
-                                self.compile_start = Some(Instant::now());
-                            }
-                        }
-                        BuildStage::Bundling => {
-                            self.complete_compile();
-                            self.bundling_progress = 0.0;
-                            self.bundle_start = Some(Instant::now());
-                        }
-                        BuildStage::OptimizingWasm => {}
-                        BuildStage::CopyingAssets { current, total, .. } => {
-                            self.bundling_progress = *current as f64 / *total as f64;
-                        }
-                        BuildStage::Success => {
-                            self.compiled_crates = self.expected_crates;
-                            self.bundling_progress = 1.0;
-                        }
-                        BuildStage::Failed => {
-                            self.compiled_crates = self.expected_crates;
-                            self.bundling_progress = 1.0;
-                        }
-                        BuildStage::Aborted => {}
-                        BuildStage::Restarting => {
-                            self.compiled_crates = 0;
-                            self.expected_crates = 1;
-                            self.bundling_progress = 0.0;
-                        }
-                        BuildStage::RunningBindgen => {}
-                        _ => {}
+                match stage {
+                    BuildStage::Initializing => {
+                        self.profile_spans.clear();
+                        self.compiled_crates = 0;
+                        self.bundling_progress = 0.0;
                     }
+                    BuildStage::Starting { crate_count, .. } => {
+                        self.expected_crates = *crate_count.max(&1);
+                    }
+                    BuildStage::InstallingTooling => {}
+                    BuildStage::Compiling { current, total, .. } => {
+                        self.compiled_crates = *current;
+                        self.expected_crates = *total.max(&1);
+
+                        if self.compile_start.is_none() {
+                            self.compile_start = Some(SystemTime::now());
+                        }
+                    }
+                    BuildStage::Bundling => {
+                        self.bundling_progress = 0.0;
+                        self.bundle_start = Some(SystemTime::now());
+
+                        if self.compile_end.is_none() {
+                            self.compiled_crates = self.expected_crates;
+                            self.compile_end = Some(SystemTime::now());
+                        }
+                    }
+                    BuildStage::OptimizingWasm => {}
+                    BuildStage::CopyingAssets { current, total, .. } => {
+                        self.bundling_progress = *current as f64 / *total as f64;
+                    }
+                    BuildStage::Success => {
+                        self.compiled_crates = self.expected_crates;
+                        self.bundling_progress = 1.0;
+                    }
+                    BuildStage::Failed => {
+                        self.compiled_crates = self.expected_crates;
+                        self.bundling_progress = 1.0;
+                    }
+                    BuildStage::Aborted => {}
+                    BuildStage::Restarting => {
+                        self.compiled_crates = 0;
+                        self.expected_crates = 1;
+                        self.bundling_progress = 0.0;
+                    }
+                    BuildStage::RunningBindgen => {}
+                    _ => {}
                 }
             }
-            BuilderUpdate::CompilerMessage { .. } => {}
-            BuilderUpdate::BuildReady { .. } => {
+            BuilderUpdate::BuildReady { ref bundle } => {
+                // Log the build completion as a telemetry event + provide analytics on build phases
+                self.log_flamegraph_and_telemetry(bundle);
+
+                // And then update the build state
                 self.compiled_crates = self.expected_crates;
                 self.bundling_progress = 1.0;
                 self.stage = BuildStage::Success;
 
-                self.complete_compile();
-                self.bundle_end = Some(Instant::now());
+                self.bundle_end = Some(SystemTime::now());
+                if self.compile_end.is_none() {
+                    self.compiled_crates = self.expected_crates;
+                    self.compile_end = Some(SystemTime::now());
+                }
             }
             BuilderUpdate::BuildFailed { .. } => {
                 tracing::debug!("Setting builder to failed state");
                 self.stage = BuildStage::Failed;
             }
+            BuilderUpdate::ProfilePhase { profile } => {
+                // Collapse consecutive entries with the same label so e.g. per-crate "Compiling"
+                // calls show up as a single span instead of hundreds.
+                if self.profile_spans.last().map(|p| p.label) != Some(profile.label) {
+                    self.profile_spans.push(profile.clone());
+                }
+            }
+            BuilderUpdate::CompilerMessage { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
@@ -332,6 +344,23 @@ impl AppBuilder {
         update
     }
 
+    /// Kick off a thin (hotpatch) rebuild in response to a file change, replacing any in-flight
+    /// build with one that produces a relinkable patch dylib (later applied by [`AppBuilder::hotpatch`]).
+    ///
+    /// Bails early if there's no prior fat build to link against, or if we're missing the ASLR
+    /// reference on a non-wasm target (which means no client is connected yet to report it).
+    ///
+    /// Updates the cumulative `modified_crates` set: every patch is self-contained and contains
+    /// the latest version of *every* crate modified since the fat build, not just the one that
+    /// changed this iteration. We BFS `workspace_dependents_of` from `changed_crates` to catch
+    /// the cascade — e.g. editing a leaf crate forces parent crates' generic instantiations to
+    /// change too. (`compile_workspace_deps` does its own walk to decide what to *compile* now;
+    /// this set tracks what to *link* into the patch.)
+    ///
+    /// Then aborts any in-flight build and spawns a fresh task with [`BuildMode::Thin`], handing
+    /// it the fat build's `workspace_rustc_args`/`artifact_paths` (so rustc gets re-invoked with
+    /// identical flags), the `HotpatchModuleCache` (symbol map for `create_jump_table`), and the
+    /// current `object_cache` (per-crate `.rcgu.o` files used for assembly diffing).
     pub(crate) fn patch_rebuild(
         &mut self,
         changed_files: Vec<PathBuf>,
@@ -405,22 +434,22 @@ impl AppBuilder {
 
         // Abort all the ongoing builds, cleaning up any loose artifacts and waiting to cleanly exit
         self.abort_all(BuildStage::Restarting);
+        self.compile_start = Some(SystemTime::now());
+        self.profile_spans.clear();
         self.build_task = tokio::spawn({
             let request = self.build.clone();
-            let ctx = BuildContext {
-                build_id,
-                tx: self.tx.clone(),
-                mode: BuildMode::Thin {
+            let ctx = BuildContext::new(
+                self.tx.clone(),
+                BuildMode::Thin {
                     changed_files,
-                    changed_crates,
                     modified_crates: self.modified_crates.clone(),
-                    workspace_rustc_args: artifacts.workspace_rustc_args,
+                    workspace_rustc_args: artifacts.workspace_rustc,
                     aslr_reference,
                     cache,
-                    object_cache: self.object_cache.clone(),
                 },
-            };
-            async move { request.build(&ctx).await }
+                build_id,
+            );
+            async move { request.build(ctx).await }
         });
     }
 
@@ -434,15 +463,14 @@ impl AppBuilder {
 
         // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
         self.modified_crates.clear();
-        self.object_cache = ObjectCache::new(&self.build.session_cache_dir());
+        self.profile_spans.clear();
         self.build_task = tokio::spawn({
             let request = self.build.clone();
-            let ctx = BuildContext {
-                tx: self.tx.clone(),
-                mode,
-                build_id,
-            };
-            async move { request.build(&ctx).await }
+            let tx = self.tx.clone();
+            async move {
+                let ctx = BuildContext::new(tx, mode, build_id);
+                request.build(ctx).await
+            }
         });
     }
 
@@ -475,9 +503,12 @@ impl AppBuilder {
                             current,
                             total,
                             krate,
+                            fresh,
                             ..
                         } => {
-                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
+                            if !fresh {
+                                tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
+                            }
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -509,7 +540,7 @@ impl AppBuilder {
                 }
                 BuilderUpdate::BuildFailed { err } => {
                     // Flush remaining compiler messages
-                    while let Ok(Some(msg)) = self.rx.try_next() {
+                    while let Ok(msg) = self.rx.try_recv() {
                         if let BuilderUpdate::CompilerMessage { message } = msg {
                             tracing::info!(json = %StructuredOutput::RustcOutput { message: message.clone() }, %message);
                         }
@@ -517,6 +548,7 @@ impl AppBuilder {
 
                     return Err(err);
                 }
+                BuilderUpdate::ProfilePhase { .. } => {}
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
@@ -533,7 +565,7 @@ impl AppBuilder {
     ///
     /// Note that Dioxus apps *should not* rely on this vars being set, but libraries like Bevy do.
     pub(crate) fn child_environment_variables(
-        &mut self,
+        &self,
         devserver_ip: Option<SocketAddr>,
         start_fullstack_on_address: Option<SocketAddr>,
         always_on_top: bool,
@@ -602,22 +634,16 @@ impl AppBuilder {
             ));
         }
 
-        // If there's any CARGO vars in the rustc_wrapper files, push those too.
-        // Read from any per-crate args file in the directory (they all share the same CARGO_ envs).
-        if let Ok(entries) = std::fs::read_dir(self.build.rustc_wrapper_args_dir()) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|e| e == "json") {
-                    if let Ok(contents) = std::fs::read_to_string(&path) {
-                        if let Ok(args) = serde_json::from_str::<RustcArgs>(&contents) {
-                            for (key, value) in args.envs {
-                                if key.starts_with("CARGO_") {
-                                    envs.push((key, value));
-                                }
-                            }
-                            break; // Only need one file for CARGO_ env vars
-                        }
-                    }
+        // If there's any CARGO vars in the captured rustc args, push those too.
+        // Any captured invocation is sufficient since the CARGO_ environment is shared.
+        if let Some(args) = self
+            .artifacts
+            .as_ref()
+            .and_then(|artifacts| artifacts.workspace_rustc.rustc_args.values().next())
+        {
+            for (key, value) in args.envs.iter().cloned() {
+                if key.starts_with("CARGO_") {
+                    envs.push((key, value));
                 }
             }
         }
@@ -732,6 +758,56 @@ impl AppBuilder {
         }
     }
 
+    /// Apply the artifacts produced by a thin (hotpatch) build to the currently running app and
+    /// return a [`JumpTable`] that the runtime can use to swap function pointers in place.
+    ///
+    /// This is the CLI-side counterpart to `subsecond`'s runtime patch loader. A thin build
+    /// produces a self-contained dylib (`patch_exe`) that links against the symbols already
+    /// resident in the running process. To make that dylib actually take effect, this function
+    /// has to do four things, in order:
+    ///
+    /// 1. **Reconcile new assets.** Walks `res.assets` and, for any `asset!()` reference that
+    ///    wasn't in the previous build, processes the source file (via `process_file_to`, which
+    ///    runs the asset through the appropriate optimizer — esbuild for JS/CSS, image
+    ///    re-encoding, etc.) and copies it into the live `asset_dir`. New assets are also
+    ///    inserted into `self.artifacts.assets` so subsequent patches see them as already-known.
+    ///    On Android the asset is additionally `adb push`'d to `/data/local/tmp/dx/assets/...`
+    ///    so the on-device app can read it.
+    ///
+    /// 2. **Extend the file watcher set.** New `include!()` / `include_str!()` / `include_bytes!()`
+    ///    targets discovered in `res.depinfo.files` are appended to the existing artifacts'
+    ///    depinfo so the file watcher will pick up future edits to them.
+    ///
+    /// 3. **Build the jump table.** Calls [`BuildRequest::create_jump_table`] with the new dylib
+    ///    and the [`HotpatchModuleCache`] (which holds the symbol map from the original fat
+    ///    build). The cache is what lets us resolve "function `foo` in the new dylib" to "the
+    ///    address of `foo` in the running process" so the runtime can patch the call sites. On
+    ///    Android the dylib itself is also pushed to the device and `jump_table.lib` is
+    ///    rewritten to point at the on-device path, since the runtime will `dlopen` it from
+    ///    there rather than from the host filesystem.
+    ///
+    /// 4. **Commit local state.** The jump table is appended to `self.patches` (the cumulative
+    ///    history of patches applied to this run of the app — used so that a fresh client
+    ///    connecting mid-session can be brought up to date by replaying every patch in order),
+    ///    and `self.object_cache` is overwritten with `res.object_cache` so the next thin build
+    ///    diffs against the objects this patch produced rather than the previous tip.
+    ///
+    /// The returned [`JumpTable`] is what gets shipped to the runtime over the devserver
+    /// websocket; the runtime then `dlopen`s `jump_table.lib` and rewrites the trampolines
+    /// described by the table.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there are no prior `artifacts` to patch against (i.e. no fat build
+    /// has completed yet), if `create_jump_table` fails (typically a symbol-resolution failure
+    /// indicating the patch references something that doesn't exist in the base binary), or if
+    /// the Android `adb push` of the dylib fails. Failures while copying individual assets are
+    /// logged and skipped rather than aborting the patch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `res.mode` is [`BuildMode::Thin`] but `changed_files` is empty — every thin
+    /// build is triggered by at least one file change, so this should be unreachable in practice.
     pub(crate) async fn hotpatch(
         &mut self,
         res: &BuildArtifacts,
@@ -739,7 +815,7 @@ impl AppBuilder {
     ) -> Result<JumpTable> {
         let original = self.build.main_exe();
         let new = self.build.patch_exe(res.time_start);
-        let asset_dir = self.build.asset_dir();
+        let asset_dir = self.build.bundle_asset_dir();
 
         // Hotpatch asset!() calls
         for bundled in res.assets.unique_assets() {
@@ -760,7 +836,8 @@ impl AppBuilder {
             let to = asset_dir.join(bundled.bundled_path());
 
             tracing::debug!("Copying asset from patch: {}", from.display());
-            if let Err(e) = dioxus_cli_opt::process_file_to(bundled.options(), &from, &to) {
+            let esbuild = crate::esbuild::Esbuild::path_if_installed();
+            if let Err(e) = process_file_to(bundled.options(), &from, &to, esbuild.as_deref()) {
                 tracing::error!("Failed to copy asset: {e}");
                 continue;
             }
@@ -818,9 +895,6 @@ impl AppBuilder {
         // Commit this patch
         self.patches.push(jump_table.clone());
 
-        // Sync the updated object cache back from the build artifacts.
-        self.object_cache = res.object_cache.clone();
-
         Ok(jump_table)
     }
 
@@ -846,7 +920,7 @@ impl AppBuilder {
         // we won't actually be using the build dir.
         let asset_dir = match self.runtime_asset_dir.as_ref() {
             Some(dir) => dir.to_path_buf().join("assets/"),
-            None => self.build.asset_dir(),
+            None => self.build.bundle_asset_dir(),
         };
 
         // Canonicalize the path as Windows may use long-form paths "\\\\?\\C:\\".
@@ -869,7 +943,8 @@ impl AppBuilder {
             // the asset would be in a new location because the contents and hash have changed. Since we are
             // hotreloading, we need to use the old asset location it was originally written to.
             let options = *resource.options();
-            let res = process_file_to(&options, &changed_file, &output_path);
+            let esbuild = crate::esbuild::Esbuild::path_if_installed();
+            let res = process_file_to(&options, &changed_file, &output_path, esbuild.as_deref());
             let bundled_name = PathBuf::from(resource.bundled_path());
             if let Err(e) = res {
                 tracing::debug!("Failed to hotreload asset {e}");
@@ -1553,32 +1628,23 @@ impl AppBuilder {
         main_exe
     }
 
-    fn complete_compile(&mut self) {
-        if self.compile_end.is_none() {
-            self.compiled_crates = self.expected_crates;
-            self.compile_end = Some(Instant::now());
-        }
-    }
-
     /// Get the total duration of the build, if all stages have completed
     pub(crate) fn total_build_time(&self) -> Option<Duration> {
         Some(self.compile_duration()? + self.bundle_duration()?)
     }
 
     pub(crate) fn compile_duration(&self) -> Option<Duration> {
-        Some(
-            self.compile_end
-                .unwrap_or_else(Instant::now)
-                .duration_since(self.compile_start?),
-        )
+        self.compile_end
+            .unwrap_or_else(SystemTime::now)
+            .duration_since(self.compile_start?)
+            .ok()
     }
 
     pub(crate) fn bundle_duration(&self) -> Option<Duration> {
-        Some(
-            self.bundle_end
-                .unwrap_or_else(Instant::now)
-                .duration_since(self.bundle_start?),
-        )
+        self.bundle_end
+            .unwrap_or_else(SystemTime::now)
+            .duration_since(self.bundle_start?)
+            .ok()
     }
 
     /// Return a number between 0 and 1 representing the progress of the app build
@@ -1606,6 +1672,21 @@ impl AppBuilder {
     }
 
     pub(crate) async fn open_debugger(&mut self, server: &WebServer) -> Result<()> {
+        // Get the preferred editor from workspace settings, defaulting to VS Code
+        use crate::settings::SupportedEditor;
+        let preferred_editor = self
+            .build
+            .workspace
+            .settings
+            .preferred_editor
+            .unwrap_or(SupportedEditor::Vscode);
+
+        // Map the editor to its binary and URL scheme
+        let (editor_binary, url_scheme) = match preferred_editor {
+            SupportedEditor::Vscode => ("code", "vscode"),
+            SupportedEditor::Cursor => ("cursor", "cursor"),
+        };
+
         let url = match self.build.bundle {
             BundleFormat::MacOS
             | BundleFormat::Windows
@@ -1617,7 +1698,7 @@ impl AppBuilder {
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                    "{url_scheme}://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 
@@ -1632,7 +1713,7 @@ impl AppBuilder {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
                     None => "".to_owned(),
                 };
-                format!("vscode://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+                format!("{url_scheme}://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
             }
 
             BundleFormat::Ios => {
@@ -1642,7 +1723,7 @@ impl AppBuilder {
                 };
 
                 format!(
-                    "vscode://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
+                    "{url_scheme}://vadimcn.vscode-lldb/launch/config?{{'request':'attach','pid':{pid}}}"
                 )
             }
 
@@ -1737,7 +1818,7 @@ impl AppBuilder {
 
                 let program_path = self.build.main_exe();
                 format!(
-                    r#"vscode://vadimcn.vscode-lldb/launch/config?{{
+                    r#"{url_scheme}://vadimcn.vscode-lldb/launch/config?{{
                         'name':'Attach to Android',
                         'type':'lldb',
                         'request':'attach',
@@ -1764,7 +1845,7 @@ impl AppBuilder {
 
         tracing::info!("Opening debugger for [{}]: {url}", self.build.bundle);
 
-        _ = tokio::process::Command::new("code")
+        _ = tokio::process::Command::new(editor_binary)
             .arg("--open-url")
             .arg(url)
             .spawn();
@@ -1847,5 +1928,283 @@ impl AppBuilder {
         }
 
         Ok(pid)
+    }
+
+    /// Log the profile flamegraph for this build run, and then emit a telemetry event.
+    ///
+    /// This works by walking the profile_spans vec, calculating the deltas, and then rendering out
+    /// the flamegraph via a debug!()
+    ///
+    /// The flamegraph looks something like this:
+    ///
+    /// ```txt
+    /// 17:22:56 [dev] Flamegraph for fat - time taken: 11371ms
+    ///        0ms   0.0% Verify Tooling       |█                                                                                               |
+    ///        0ms   0.0% Installing Tooling   |█                                                                                               |
+    ///      100ms   0.9% Prebuild             |██                                                                                              |
+    ///      307ms   2.7% Workspace precompile | ███                                                                                            |
+    ///     1400ms  12.3% Compiling            |   █████████████                                                                                |
+    ///     1325ms  11.7% Fat Linking          |               ████████████                                                                     |
+    ///      915ms   8.0% Extracting assets    |                          █████████                                                             |
+    ///     1529ms  13.4% Writing executable   |                                  ██████████████                                                |
+    ///     4685ms  41.2% Wasm Bindgen         |                                               █████████████████████████████████████████        |
+    ///     1061ms   9.3% Creating Patch Cache |                                                                                       █████████|
+    /// ```
+    fn log_flamegraph_and_telemetry(&self, bundle: &BuildArtifacts) {
+        let Some(start) = self.compile_start else {
+            tracing::debug!("no compile start?");
+            return;
+        };
+
+        // Record the build duration as a telemetry event. Capture `now` once and use
+        // it as the end of the final phase too, so the flamegraph bars stay
+        // internally consistent with `time_taken`.
+        let now = SystemTime::now();
+        let time_taken = now
+            .duration_since(start)
+            .unwrap_or_default()
+            .as_millis()
+            .max(1);
+
+        tracing::debug!(
+            telemetry = %serde_json::json!({
+                "event": "build_and_bundle_complete",
+                "time_taken": time_taken,
+                "mode": match bundle.mode {
+                    BuildMode::Base { .. } => "base",
+                    BuildMode::Fat => "fat",
+                    BuildMode::Thin { .. } => "thin",
+                },
+                "blah": 123,
+                "triple": self.build.triple.to_string(),
+                "format": self.build.bundle.to_string(),
+                "num_dependencies": self.build.workspace.krates.len(),
+            }),
+            "Build completed in {time_taken}ms",
+        );
+
+        // Render the flamegraph out by walking the span history. This is pretty naive
+        // and doesn't support nested span contexts (yet!) - all phases live on one row
+        // and a phase ends where the next one begins.
+        use std::fmt::Write as _;
+
+        let total_ms = time_taken as usize;
+        let timeline_width = 96usize;
+        let max_label_width = self
+            .profile_spans
+            .iter()
+            .map(|phase| phase.label.len())
+            .max()
+            .unwrap_or(0)
+            .min(28);
+
+        // The final phase runs right up until `now`. Don't use `compile_end` here:
+        // it's set when the Bundling stage starts, so it predates the bundling phases
+        // themselves and would zero out the last bar.
+        let phase_end = now;
+
+        let mut flamegraph = format!(
+            "Flamegraph for {} - time taken: {}ms",
+            match bundle.mode {
+                BuildMode::Base { .. } => "base",
+                BuildMode::Fat => "fat",
+                BuildMode::Thin { .. } => "thin",
+            },
+            time_taken
+        );
+
+        let mut phase_iter = self.profile_spans.iter().peekable();
+        while let Some(phase) = phase_iter.next() {
+            let end_time = phase_iter.peek().map(|f| f.start).unwrap_or(phase_end);
+
+            let offset_ms = phase
+                .start
+                .duration_since(start)
+                .unwrap_or_default()
+                .as_millis() as usize;
+            let dur_ms = end_time
+                .duration_since(phase.start)
+                .unwrap_or_default()
+                .as_millis() as usize;
+            let pct = (dur_ms as f64) * 100.0 / (total_ms as f64);
+
+            let bar_start = ((offset_ms * timeline_width) / total_ms).min(timeline_width - 1);
+            let bar_end = (((offset_ms + dur_ms) * timeline_width).div_ceil(total_ms))
+                .max(bar_start + 1)
+                .min(timeline_width);
+
+            let mut bar = vec![' '; timeline_width];
+            for ch in &mut bar[bar_start..bar_end] {
+                *ch = '█';
+            }
+            let bar: String = bar.into_iter().collect();
+
+            // Labels are ASCII so byte slicing is safe; truncate so the bar column
+            // stays aligned across rows.
+            let label = if phase.label.len() > max_label_width {
+                &phase.label[..max_label_width]
+            } else {
+                phase.label
+            };
+
+            let _ = write!(
+                flamegraph,
+                "\n  {:>6}ms {:>5.1}% {:<width$} |{}|",
+                dur_ms,
+                pct,
+                label,
+                bar,
+                width = max_label_width
+            );
+        }
+
+        tracing::debug!("{}", flamegraph);
+    }
+
+    /// Pre-render the static routes, performing static-site generation
+    pub(crate) async fn pre_render_static_routes(
+        &mut self,
+        devserver_ip: Option<SocketAddr>,
+        updates: Option<&futures_channel::mpsc::UnboundedSender<BuilderUpdate>>,
+    ) -> anyhow::Result<()> {
+        use super::{BuildId, BuilderUpdate};
+        use anyhow::Context;
+        use dioxus_cli_config::{server_ip, server_port};
+        use dioxus_dx_wire_format::BuildStage;
+        use futures_util::{stream::FuturesUnordered, StreamExt};
+        use std::{
+            net::{IpAddr, Ipv4Addr, SocketAddr},
+            time::Duration,
+        };
+        use tokio::process::Command;
+
+        if let Some(updates) = updates {
+            updates
+                .unbounded_send(BuilderUpdate::Progress {
+                    stage: BuildStage::Prerendering,
+                })
+                .unwrap();
+        }
+        let server_exe = self.build.main_exe();
+
+        // Use the address passed in through environment variables or default to localhost:9999. We need
+        // to default to a value that is different than the CLI default address to avoid conflicts
+        let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+        let port = server_port().unwrap_or(9999);
+        let fullstack_address = SocketAddr::new(ip, port);
+        let address = fullstack_address.ip().to_string();
+        let port = fullstack_address.port().to_string();
+
+        // Borrow port and address so we can easily move them into multiple tasks below
+        let address = &address;
+        let port = &port;
+
+        tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
+
+        let vars = self.child_environment_variables(
+            devserver_ip,
+            Some(fullstack_address),
+            false,
+            BuildId::SECONDARY,
+        );
+
+        // Run the server executable
+        let _child = Command::new(&server_exe)
+            .envs(vars)
+            .current_dir(server_exe.parent().unwrap())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true)
+            .spawn()?;
+
+        // Borrow reqwest_client so we only move the reference into the futures
+        let reqwest_client = reqwest::Client::new();
+        let reqwest_client = &reqwest_client;
+
+        // Get the routes from the `/static_routes` endpoint
+        let mut routes = None;
+
+        // The server may take a few seconds to start up. Try fetching the route up to 5 times with a one second delay
+        const RETRY_ATTEMPTS: usize = 5;
+        for i in 0..=RETRY_ATTEMPTS {
+            tracing::debug!(
+                "Attempting to get static routes from server. Attempt {i} of {RETRY_ATTEMPTS}"
+            );
+
+            let request = reqwest_client
+                .post(format!("http://{address}:{port}/api/static_routes"))
+                .body("{}".to_string())
+                .send()
+                .await;
+            match request {
+                Ok(request) => {
+                    routes = Some(request
+                    .json::<Vec<String>>()
+                    .await
+                    .inspect(|text| tracing::debug!("Got static routes: {text:?}"))
+                    .context("Failed to parse static routes from the server. Make sure your server function returns Vec<String> with the (default) json encoding")?);
+                    break;
+                }
+                Err(err) => {
+                    // If the request fails, try  up to 5 times with a one second delay
+                    // If it fails 5 times, return the error
+                    if i == RETRY_ATTEMPTS {
+                        return Err(err).context("Failed to get static routes from server. Make sure you have a server function at the `/api/static_routes` endpoint that returns Vec<String> of static routes.");
+                    }
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        let routes = routes.expect(
+            "static routes should exist or an error should have been returned on the last attempt",
+        );
+
+        // Create a pool of futures that cache each route
+        let mut resolved_routes = routes
+            .into_iter()
+            .map(|route| async move {
+                tracing::info!("Rendering {route} for SSG");
+
+                // For each route, ping the server to force it to cache the response for ssg
+                let request = reqwest_client
+                    .get(format!("http://{address}:{port}{route}"))
+                    .header("Accept", "text/html")
+                    .send()
+                    .await?;
+
+                // If it takes longer than 30 seconds to resolve the route, log a warning
+                let warning_task = tokio::spawn({
+                    let route = route.clone();
+                    async move {
+                        tokio::time::sleep(Duration::from_secs(30)).await;
+                        tracing::warn!("Route {route} has been rendering for 30 seconds");
+                    }
+                });
+
+                // Wait for the streaming response to completely finish before continuing. We don't use the html it returns directly
+                // because it may contain artifacts of intermediate streaming steps while the page is loading. The SSG app should write
+                // the final clean HTML to the disk automatically after the request completes.
+                let _html = request.text().await?;
+
+                // Cancel the warning task if it hasn't already run
+                warning_task.abort();
+
+                Ok::<_, reqwest::Error>(route)
+            })
+            .collect::<FuturesUnordered<_>>();
+
+        while let Some(route) = resolved_routes.next().await {
+            match route {
+                Ok(route) => tracing::debug!("ssg success: {route:?}"),
+                Err(err) => tracing::error!("ssg error: {err:?}"),
+            }
+        }
+
+        tracing::info!("SSG complete");
+
+        drop(_child);
+
+        Ok(())
     }
 }

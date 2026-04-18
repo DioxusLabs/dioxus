@@ -67,43 +67,43 @@ fn extend_manifest_config_toml(manifest: &mut Manifest, path: &Path) {
 /// Merge the new profiles into the target profiles. Keep the existing values if they exist.
 fn merge_profiles(target: &mut Profiles, new: Profiles) {
     if let Some(new_release) = new.release {
-        if target.release.is_none() {
-            target.release = Some(new_release);
+        if let Some(profile) = target.release.as_mut() {
+            merge_profile(profile, new_release);
         } else {
-            merge_profile(target.release.as_mut().unwrap(), new_release);
+            target.release = Some(new_release);
         }
     }
 
     if let Some(new_dev) = new.dev {
-        if target.dev.is_none() {
-            target.dev = Some(new_dev);
+        if let Some(profile) = target.dev.as_mut() {
+            merge_profile(profile, new_dev);
         } else {
-            merge_profile(target.dev.as_mut().unwrap(), new_dev);
+            target.dev = Some(new_dev);
         }
     }
 
     if let Some(new_test) = new.test {
-        if target.test.is_none() {
-            target.test = Some(new_test);
+        if let Some(profile) = target.test.as_mut() {
+            merge_profile(profile, new_test);
         } else {
-            merge_profile(target.test.as_mut().unwrap(), new_test);
+            target.test = Some(new_test);
         }
     }
 
     if let Some(new_bench) = new.bench {
-        if target.bench.is_none() {
-            target.bench = Some(new_bench);
+        if let Some(profile) = target.bench.as_mut() {
+            merge_profile(profile, new_bench);
         } else {
-            merge_profile(target.bench.as_mut().unwrap(), new_bench);
+            target.bench = Some(new_bench);
         }
     }
 
     #[allow(deprecated)]
     if let Some(new_doc) = new.doc {
-        if target.doc.is_none() {
-            target.doc = Some(new_doc);
+        if let Some(profile) = target.doc.as_mut() {
+            merge_profile(profile, new_doc);
         } else {
-            merge_profile(target.doc.as_mut().unwrap(), new_doc);
+            target.doc = Some(new_doc);
         }
     }
 
