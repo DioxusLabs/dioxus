@@ -7,9 +7,12 @@ use std::{marker::PhantomData, ops::ControlFlow, pin::Pin};
 // TODO: Make this configurable.
 const MAX_TRIES: usize = 5;
 
-trait Waitable {
-    type Output;
+trait EventLoopDriver {
     fn pump(&mut self) -> impl Future<Output = ()>;
+}
+
+trait Waitable: EventLoopDriver {
+    type Output;
     fn check(&self) -> ControlFlow<Self::Output>;
     fn describe_failure(&self) -> TesterError;
 
@@ -269,12 +272,14 @@ impl<'vdom> ElementCondition<'vdom> {
     }
 }
 
-impl<'vdom> Waitable for ElementCondition<'vdom> {
-    type Output = usize;
-
+impl<'vdom> EventLoopDriver for ElementCondition<'vdom> {
     async fn pump(&mut self) {
         let _ = self.data.pump().await;
     }
+}
+
+impl<'vdom> Waitable for ElementCondition<'vdom> {
+    type Output = usize;
 
     fn check(&self) -> ControlFlow<Self::Output> {
         if let Some(element) = self.data.get_element(&self.query) {
@@ -357,6 +362,34 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
 /// }
 /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
 /// ```
+///
+/// The test can also resolve the elements into a `Vec` of [ResolvedElement] with
+/// [AllElementsCondition::immediately].
+///
+/// ```
+/// use dioxus::prelude::*;
+/// use dioxus_test::{empty, eq, inner_html, not, render};
+///
+/// #[component]
+/// fn MyComponent() -> Element {
+///     rsx! {
+///         div {
+///              class: "test-component",
+///              "Hello, world!"
+///         }
+///     }
+/// }
+///
+/// # /* Make sure this also compiles as a doctest.
+/// #[test]
+/// # */
+/// fn my_component_renders_correctly() {
+///     let mut tester = render(MyComponent).build();
+///     let elements = tester.query_all(".test-component");
+///     assert!(!elements.immediately().is_empty());
+/// }
+/// # my_component_renders_correctly();
+/// ```
 pub struct AllElementsCondition<'vdom> {
     data: &'vdom mut DocumentTester,
     query: SelectorList,
@@ -400,8 +433,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
     /// # my_component_renders_correctly();
     /// ```
     ///
-    /// Or the test can wait for the element to exist (if necessary) and the condition to be
-    /// matched using `await`:
+    /// Or the test can wait for the condition to be matched using `await`:
     ///
     /// ```
     /// use dioxus::prelude::*;
@@ -441,30 +473,18 @@ impl<'vdom> AllElementsCondition<'vdom> {
         }
     }
 
-    pub fn immediately(&'vdom self) -> Result<Vec<ResolvedElement<'vdom>>, TesterError> {
-        match self.check() {
-            ControlFlow::Continue(_) => unreachable!(),
-            ControlFlow::Break(node_ids) => Ok(node_ids
-                .into_iter()
-                .map(|node_id| self.data.node_id_to_element(node_id))
-                .collect()),
-        }
+    pub fn immediately(&'vdom self) -> Vec<ResolvedElement<'vdom>> {
+        let node_ids = self.data.get_elements(&self.query);
+        node_ids
+            .into_iter()
+            .map(|node_id| self.data.node_id_to_element(node_id))
+            .collect()
     }
 }
 
-impl<'vdom> Waitable for AllElementsCondition<'vdom> {
-    type Output = Vec<usize>;
-
+impl<'vdom> EventLoopDriver for AllElementsCondition<'vdom> {
     async fn pump(&mut self) {
         let _ = self.data.pump().await;
-    }
-
-    fn check(&self) -> ControlFlow<Self::Output> {
-        ControlFlow::Break(self.data.get_elements(&self.query))
-    }
-
-    fn describe_failure(&self) -> TesterError {
-        unreachable!()
     }
 }
 
@@ -488,21 +508,6 @@ where
             .map(|node_id| self.data.node_id_to_element(node_id))
             .collect();
         matcher.explain_failure(resolved)
-    }
-}
-
-impl<'vdom> IntoFuture for AllElementsCondition<'vdom> {
-    type Output = Result<Vec<ResolvedElement<'vdom>>, TesterError>;
-    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'vdom>>;
-
-    fn into_future(mut self) -> Self::IntoFuture {
-        Box::pin(async move {
-            let node_ids = self.to_waitable_future().await?;
-            Ok(node_ids
-                .into_iter()
-                .map(|node_id| self.data.node_id_to_element(node_id))
-                .collect())
-        })
     }
 }
 
@@ -642,15 +647,20 @@ where
     }
 }
 
+impl<'vdom, M, W> EventLoopDriver for MatcherCondition<'vdom, M, W>
+where
+    W: EventLoopDriver,
+{
+    fn pump(&mut self) -> impl Future<Output = ()> {
+        self.element.pump()
+    }
+}
+
 impl<'vdom, M, W> Waitable for MatcherCondition<'vdom, M, W>
 where
-    W: Waitable + Matchable<M>,
+    W: EventLoopDriver + Matchable<M>,
 {
     type Output = ();
-
-    async fn pump(&mut self) {
-        self.element.pump().await;
-    }
 
     fn check(&self) -> ControlFlow<Self::Output> {
         self.element.matches(&self.matcher)
