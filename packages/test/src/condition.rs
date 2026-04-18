@@ -613,21 +613,11 @@ where
     M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
 {
     fn matches(&self, matcher: &M) -> ControlFlow<()> {
-        let elements = self.data.get_elements(&self.query);
-        let resolved: Vec<ResolvedElement<'_>> = elements
-            .into_iter()
-            .map(|node_id| self.data.node_id_to_element(node_id))
-            .collect();
-        matcher.matches(resolved)
+        matcher.matches(self.immediately())
     }
 
     fn explain_match_failure(&self, matcher: &M) -> String {
-        let elements = self.data.get_elements(&self.query);
-        let resolved: Vec<ResolvedElement<'_>> = elements
-            .into_iter()
-            .map(|node_id| self.data.node_id_to_element(node_id))
-            .collect();
-        matcher.explain_failure(resolved)
+        matcher.explain_failure(self.immediately())
     }
 }
 
