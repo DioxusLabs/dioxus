@@ -2,14 +2,20 @@ use crate::element::ResolvedElement;
 use std::ops::ControlFlow;
 
 /// A representation of a condition to be expected on the DOM.
-pub trait Matcher<T> {
+pub trait Matcher<T: std::fmt::Debug> {
     fn matches(&self, actual: T) -> ControlFlow<()>;
+
+    fn describe(&self) -> String;
+
+    fn explain_failure(&self, actual: T) -> String {
+        format!("\nExpected: {}\n  but was: {actual:?}\n", self.describe())
+    }
 }
 
 /// Returns a [Matcher] which matches an element whose inner HTML is matched by the [Matcher]
 /// `inner`.
 pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<ResolvedElement<'vdom>> {
-    struct InnerHtmlMatcher<InnerMatcher: Matcher<String>>(InnerMatcher);
+    struct InnerHtmlMatcher<InnerMatcher>(InnerMatcher);
 
     impl<'vdom, InnerMatcher: Matcher<String>> Matcher<ResolvedElement<'vdom>>
         for InnerHtmlMatcher<InnerMatcher>
@@ -18,6 +24,10 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
             let inner_html = element.inner_html();
             self.0.matches(inner_html)
         }
+
+        fn describe(&self) -> String {
+            format!("inner HTML {}", self.0.describe())
+        }
     }
 
     InnerHtmlMatcher(inner)
@@ -25,16 +35,20 @@ pub fn inner_html(inner: impl Matcher<String>) -> impl for<'vdom> Matcher<Resolv
 
 /// Returns a [Matcher] which matches a value which equals the given value in the sense of
 /// [`PartialEq`].
-pub fn eq<T, A: PartialEq<T>>(value: T) -> impl Matcher<A> {
+pub fn eq<T: std::fmt::Debug, A: PartialEq<T> + std::fmt::Debug>(value: T) -> impl Matcher<A> {
     struct EqualsMatcher<T>(T);
 
-    impl<T, A: PartialEq<T>> Matcher<A> for EqualsMatcher<T> {
+    impl<T: std::fmt::Debug, A: PartialEq<T> + std::fmt::Debug> Matcher<A> for EqualsMatcher<T> {
         fn matches(&self, actual: A) -> ControlFlow<()> {
             if actual == self.0 {
                 ControlFlow::Break(())
             } else {
                 ControlFlow::Continue(())
             }
+        }
+
+        fn describe(&self) -> String {
+            format!("equal to {:?}", self.0)
         }
     }
 
@@ -43,7 +57,7 @@ pub fn eq<T, A: PartialEq<T>>(value: T) -> impl Matcher<A> {
 
 /// Returns a [Matcher] which matches a `String` containing the given `substring`.
 pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<String> + 'a {
-    struct ContainingStringMatcher<Expected: AsRef<str>>(Expected);
+    struct ContainingStringMatcher<Expected>(Expected);
 
     impl<Expected: AsRef<str>> Matcher<String> for ContainingStringMatcher<Expected> {
         fn matches(&self, actual: String) -> ControlFlow<()> {
@@ -53,6 +67,10 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
                 ControlFlow::Continue(())
             }
         }
+
+        fn describe(&self) -> String {
+            format!("contains string {}", self.0.as_ref())
+        }
     }
 
     ContainingStringMatcher(substring)
@@ -60,12 +78,16 @@ pub fn contains_string<'a>(substring: impl AsRef<str> + 'a) -> impl Matcher<Stri
 
 pub struct NotMatcher<InnerMatcher>(InnerMatcher);
 
-impl<T, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<InnerMatcher> {
+impl<T: std::fmt::Debug, InnerMatcher: Matcher<T>> Matcher<T> for NotMatcher<InnerMatcher> {
     fn matches(&self, actual: T) -> ControlFlow<()> {
         match self.0.matches(actual) {
             ControlFlow::Continue(_) => ControlFlow::Break(()),
             ControlFlow::Break(_) => ControlFlow::Continue(()),
         }
+    }
+
+    fn describe(&self) -> String {
+        format!("not {}", self.0.describe())
     }
 }
 
@@ -79,13 +101,17 @@ pub fn not<M>(inner: M) -> NotMatcher<M> {
 /// Returned by [empty].
 pub struct EmptyMatcher;
 
-impl<T> Matcher<Vec<T>> for EmptyMatcher {
+impl<T: std::fmt::Debug> Matcher<Vec<T>> for EmptyMatcher {
     fn matches(&self, actual: Vec<T>) -> ControlFlow<()> {
         if actual.is_empty() {
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
         }
+    }
+
+    fn describe(&self) -> String {
+        "an empty collection".into()
     }
 }
 

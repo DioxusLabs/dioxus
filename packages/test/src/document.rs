@@ -186,10 +186,11 @@ impl DocumentTester {
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(run_test()).unwrap();
     /// ```
     pub fn query(&mut self, query: impl TryIntoSelector) -> ElementCondition<'_> {
+        let error = query.to_tester_error();
         let selector = query
             .try_into_selector(&self.document)
             .expect("Invalid CSS selector");
-        ElementCondition::new(self, selector)
+        ElementCondition::new(self, selector, error)
     }
 
     /// Returns all elements in the DOM satisfying the given query, waiting as necessary until the
@@ -230,6 +231,8 @@ impl DocumentTester {
 /// function [by_testid].
 pub trait TryIntoSelector {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError>;
+
+    fn to_tester_error(&self) -> TesterError;
 }
 
 impl<T: AsRef<str>> TryIntoSelector for T {
@@ -240,6 +243,10 @@ impl<T: AsRef<str>> TryIntoSelector for T {
                 TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self.as_ref()))
             })
     }
+
+    fn to_tester_error(&self) -> TesterError {
+        TesterError::NoSuchElementWithCssSelector(self.as_ref().into())
+    }
 }
 
 struct QueryByTestId(String);
@@ -249,6 +256,10 @@ impl TryIntoSelector for QueryByTestId {
         Ok(document
             .try_parse_selector_list(&format!(r#"[data-testid="{}"]"#, self.0))
             .expect("Selector with testid should always parse"))
+    }
+
+    fn to_tester_error(&self) -> TesterError {
+        TesterError::NoSuchElementWithTestId(self.0.clone())
     }
 }
 

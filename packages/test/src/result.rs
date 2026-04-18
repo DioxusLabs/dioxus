@@ -1,6 +1,6 @@
 pub type Result<T> = std::result::Result<T, TesterError>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TesterError {
     /// The given CSS selector had invalid syntax.
     InvalidCssSelector(String),
