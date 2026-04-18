@@ -280,7 +280,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// > # */
     /// > async fn my_component_does_not_change_label_on_click() {
     /// >     let mut tester = render(MyComponent).build();
-    /// >     tester.query(".test-button").click().await;
+    /// >     tester.query(".test-button").click().await.unwrap();
     /// >     tester
     /// >         .query(".test-button")
     /// >         // This should be wrong -- we actually _do_ change the label.
@@ -293,6 +293,52 @@ impl<'vdom> ElementCondition<'vdom> {
     /// >
     /// > Because the assertion is true at the moment of the click, the test passes despite the
     /// > implemenation being wrong!
+    /// >
+    /// > To fix this, first await an actual effect of the interaction which implies that the event
+    /// > handler actually ran. _Then_ assert on the state.
+    /// >
+    /// > ```
+    /// > use dioxus::prelude::*;
+    /// > use dioxus_test::{by_testid, eq, inner_html, render};
+    /// >
+    /// > #[component]
+    /// > fn MyComponent() -> Element {
+    /// >     let mut label_text = use_signal(|| "Not yet clicked");
+    /// >     let mut text = use_signal(|| "Click me!");
+    /// >     rsx! {
+    /// >         div {
+    /// >              "data-testid": "test-label",
+    /// >              {label_text}
+    /// >         }
+    /// >         button {
+    /// >              class: "test-button",
+    /// >              onclick: move |_| {
+    /// >                  *label_text.write() = "Already clicked";
+    /// >              },
+    /// >              {text}
+    /// >         }
+    /// >     }
+    /// > }
+    /// >
+    /// > # /* Make sure this also compiles as a doctest.
+    /// > #[tokio::test]
+    /// > # */
+    /// > async fn my_component_does_not_change_label_on_click() {
+    /// >     let mut tester = render(MyComponent).build();
+    /// >     tester.query(".test-button").click().await.unwrap();
+    /// >     tester
+    /// >         .query(by_testid("test-label"))
+    /// >         .expect(inner_html(eq("Already clicked")))
+    /// >         .await
+    /// >         .unwrap();
+    /// >     tester
+    /// >         .query(".test-button")
+    /// >         .expect(inner_html(eq("Click me!")))
+    /// >         .immediately()
+    /// >         .unwrap();
+    /// > }
+    /// > # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_does_not_change_label_on_click());
+    /// > ```
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, ElementCondition<'vdom>>
     where
         M: for<'a> Matcher<ResolvedElement<'a>>,
@@ -533,6 +579,9 @@ impl<'vdom> AllElementsCondition<'vdom> {
     /// }
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
     /// ```
+    ///
+    /// > Warning! The same warning applies as with [ElementCondition] about awaiting an expecation:
+    /// > The test may spuriously pass despite the implementation being wrong.
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
     where
         M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
