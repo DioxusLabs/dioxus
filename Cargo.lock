@@ -4348,14 +4348,14 @@ dependencies = [
 
 [[package]]
 name = "dioxus-test"
-version = "0.7.3"
+version = "0.7.5"
 dependencies = [
  "blitz-dom",
  "dioxus",
  "dioxus-core",
  "dioxus-html",
  "dioxus-native-dom",
- "taffy 0.9.2",
+ "taffy",
  "tokio",
  "tracing",
 ]
