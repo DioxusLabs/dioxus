@@ -5,7 +5,7 @@ use std::{marker::PhantomData, ops::ControlFlow, pin::Pin};
 /// The maximum number of attempts [DocumentTester] will make to find a given element or make a
 /// given assertion on the DOM before concluding that the element will not appear.
 // TODO: Make this configurable.
-const MAX_TRIES: usize = 5;
+pub const MAX_TRIES: usize = 5;
 
 trait EventLoopDriver {
     fn pump(&mut self) -> impl Future<Output = ()>;

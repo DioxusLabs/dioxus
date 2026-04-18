@@ -140,7 +140,8 @@ mod element;
 mod matcher;
 mod result;
 
-pub use condition::{AllElementsCondition, ElementCondition};
+pub use condition::{AllElementsCondition, ElementCondition, MAX_TRIES};
 pub use document::{DocumentTester, by_testid, render};
+pub use element::ResolvedElement;
 pub use matcher::{Matcher, contains_string, empty, eq, inner_html, not};
 pub use result::{Result, TesterError};

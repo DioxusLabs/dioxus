@@ -22,8 +22,8 @@ impl<'doc> ResolvedElement<'doc> {
     ///
     /// The exact location of the click is unspecified.
     ///
-    /// If the element has an `onclick` handler, it will be invoked once [crate::Tester::pump] is
-    /// called.
+    /// If the element has an `onclick` handler, it will be invoked once
+    /// [crate::DocumentTester::pump] is called.
     pub fn click(&self) {
         self.send_event(
             "click",
@@ -39,8 +39,8 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Sends an event with the given `name` to this element.
     ///
-    /// The event is registered with the Dioxus runtime. A subsequent call to [crate::Tester::pump]
-    /// causes the event handler to be invoked, if one is present.
+    /// The event is registered with the Dioxus runtime. A subsequent call to
+    /// [crate::DocumentTester::pump] causes the event handler to be invoked, if one is present.
     ///
     /// If no event handler is registered corresponding to the event `name`, then this method has no
     /// effect.
