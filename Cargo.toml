@@ -216,7 +216,7 @@ tracing = "0.1.41"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.20", default-features = false }
 toml = "0.8.23"
-tokio = { version = "1.48", features = ["time"] }
+tokio = "1.48"
 tokio-util = { version = "0.7.15" }
 tokio-stream = { version = "0.1.17" }
 slab = "0.4.10"
