@@ -378,10 +378,7 @@ impl<'vdom> ElementCondition<'vdom> {
     pub fn immediately(&'vdom self) -> Result<ResolvedElement<'vdom>, TesterError> {
         match self.check() {
             ControlFlow::Continue(_) => Err(self.error.clone()),
-            ControlFlow::Break(b) => {
-                let node = self.data.node_id_to_element(b);
-                Ok(node)
-            }
+            ControlFlow::Break(b) => Ok(self.data.node_id_to_element(b)),
         }
     }
 }
@@ -415,20 +412,14 @@ where
     fn matches(&self, matcher: &M) -> ControlFlow<()> {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(n) => {
-                let node = self.data.node_id_to_element(n);
-                matcher.matches(node)
-            }
+            ControlFlow::Break(n) => matcher.matches(self.data.node_id_to_element(n)),
         }
     }
 
     fn explain_match_failure(&self, matcher: &M) -> String {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => self.error.to_string(),
-            ControlFlow::Break(n) => {
-                let node = self.data.node_id_to_element(n);
-                matcher.explain_failure(node)
-            }
+            ControlFlow::Break(n) => matcher.explain_failure(self.data.node_id_to_element(n)),
         }
     }
 }
