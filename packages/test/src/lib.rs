@@ -132,7 +132,7 @@
 //! it were reachable even though it would not be in reality.
 //!
 //! The layout system is limited by what the Blitz layout system can support. Since Blitz is not
-//! complete as of the time of writing, computed layouts will often not be as in reality.
+//! complete as of the time of writing, computed layouts may not match the web or desktop renderers.
 
 mod condition;
 mod document;
