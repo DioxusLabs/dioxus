@@ -502,31 +502,31 @@ impl FfiBridgeParser {
             let (binding, arg_expr) = match &arg.ty {
                 ForeignType::Bool => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Bool(if #name { 1 } else { 0 }); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I8 | ForeignType::U8 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Byte(#name as i8); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I16 | ForeignType::U16 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Short(#name as i16); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I32 | ForeignType::U32 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Int(#name as i32); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::I64 | ForeignType::U64 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Long(#name as i64); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::F32 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Float(#name); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::F64 => (
                     quote! { let #binding_name = manganis::jni::objects::JValue::Double(#name); },
-                    quote! { #binding_name.borrow() },
+                    quote! { #binding_name },
                 ),
                 ForeignType::String | ForeignType::StrRef => (
                     quote! {
