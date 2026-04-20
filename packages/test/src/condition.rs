@@ -817,8 +817,7 @@ where
 
 /// A datum on which one can invoke a [Matcher].
 ///
-/// This allows [MatchableCondition] to work with both [ElementCondition] and
-/// [AllElementsCondition].
+/// This allows [MatcherCondition] to work with both [ElementCondition] and [AllElementsCondition].
 pub trait Matchable<M> {
     fn matches(&self, matcher: &M) -> ControlFlow<()>;
 

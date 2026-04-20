@@ -136,7 +136,7 @@ impl DocumentTester {
         }
     }
 
-    /// Immediately returns the first element in the DOM satisfying the given [Query].
+    /// Immediately returns the first element in the DOM satisfying the given query.
     ///
     /// If no such element already exists on the DOM, then this returns an error.
     ///
@@ -145,7 +145,7 @@ impl DocumentTester {
         self.document.query_selector_raw(query)
     }
 
-    /// Immediately returns all already elements in the DOM satisfying the given [Query].
+    /// Immediately returns all already elements in the DOM satisfying the given query.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<usize> {
