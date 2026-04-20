@@ -40,7 +40,7 @@ trait Waitable: EventLoopDriver {
     }
 }
 
-/// A represenation of a single element on the DOM which may already exist or may exist in the
+/// A representation of a single element on the DOM which may already exist or may exist in the
 /// future.
 ///
 /// A test can make assertions on the element with [ElementCondition::expect]. The test decides
@@ -292,7 +292,7 @@ impl<'vdom> ElementCondition<'vdom> {
     /// > ```
     /// >
     /// > Because the assertion is true at the moment of the click, the test passes despite the
-    /// > implemenation being wrong!
+    /// > implementation being wrong!
     /// >
     /// > To fix this, first await an actual effect of the interaction which implies that the event
     /// > handler actually ran. _Then_ assert on the state.
@@ -436,7 +436,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
     }
 }
 
-/// A represenation of a set of elements on the DOM matching a query, currently or in the future.
+/// A representation of a set of elements on the DOM matching a query, currently or in the future.
 ///
 /// A test can make assertions on the elements with [AllElementsCondition::expect]. The test decides
 /// whether to make the assertion immediately or await it.
@@ -571,8 +571,8 @@ impl<'vdom> AllElementsCondition<'vdom> {
     /// # tokio::runtime::Builder::new_current_thread().enable_time().build().unwrap().block_on(my_component_renders_correctly());
     /// ```
     ///
-    /// > Warning! The same warning applies as with [ElementCondition] about awaiting an expecation:
-    /// > The test may spuriously pass despite the implementation being wrong.
+    /// > Warning! The same warning applies as with [ElementCondition] about awaiting an
+    /// > expectation: The test may spuriously pass despite the implementation being wrong.
     pub fn expect<M>(self, matcher: M) -> MatcherCondition<'vdom, M, AllElementsCondition<'vdom>>
     where
         M: for<'a> Matcher<Vec<ResolvedElement<'a>>>,
