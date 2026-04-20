@@ -183,7 +183,7 @@ impl DocumentTester {
     ///        }
     ///    }
     /// }
-    /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn run_test() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let mut tester = dioxus_test::render(AComponent).build();
     /// tester.query("#click-count").expect(inner_html(contains_string("Click count: 0"))).await?;
     /// tester.query("button").click().await?;

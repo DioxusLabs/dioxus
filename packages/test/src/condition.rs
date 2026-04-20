@@ -367,7 +367,7 @@ impl<'vdom> ElementCondition<'vdom> {
     ///        }
     ///    }
     /// }
-    /// # async fn run_test() -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn run_test() -> std::result::Result<(), Box<dyn std::error::Error>> {
     /// let mut tester = dioxus_test::render(AComponent).build();
     /// let query = tester.query("button");
     /// query.immediately()?.click();
