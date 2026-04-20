@@ -544,16 +544,12 @@ where
     type Storage = A::Storage;
 
     #[inline]
-    fn try_read(
-        &self,
-    ) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+    fn try_read(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
         self.access.try_read()
     }
 
     #[inline]
-    fn try_peek(
-        &self,
-    ) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
+    fn try_peek(&self) -> Option<<Self::Storage as AnyStorage>::Ref<'static, Self::Target>> {
         self.access.try_peek()
     }
 }
@@ -565,9 +561,7 @@ where
     type WriteMetadata = A::WriteMetadata;
 
     #[inline]
-    fn try_write(
-        &self,
-    ) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
+    fn try_write(&self) -> Option<WriteLock<'static, A::Target, A::Storage, A::WriteMetadata>> {
         self.access.try_write()
     }
 
@@ -624,9 +618,7 @@ where
 // carry a real subscription tree on its own — give it a fresh one so methods
 // bounded on `HasSubscriptionTree` (e.g. collection `.len()`, `.is_empty()`)
 // still compile on test-style `Optic::new(...)` chains.
-impl<T, S: 'static> HasSubscriptionTree
-    for generational_box::GenerationalBox<T, S>
-{
+impl<T, S: 'static> HasSubscriptionTree for generational_box::GenerationalBox<T, S> {
     fn subscription_tree(&self) -> SubscriptionTree {
         SubscriptionTree::new()
     }

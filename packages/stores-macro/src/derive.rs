@@ -646,7 +646,6 @@ fn mapped_type(
     }
 }
 
-
 /// Take the generics from the original type with only generic fields into the generics for the transposed type
 fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
     let (_, ty_generics, _) = generics.split_for_impl();

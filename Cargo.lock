@@ -4041,6 +4041,7 @@ dependencies = [
  "dioxus-signals",
  "dioxus-stores",
  "generational-box",
+ "parking_lot",
 ]
 
 [[package]]

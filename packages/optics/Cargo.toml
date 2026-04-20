@@ -13,6 +13,7 @@ rust-version = "1.79.0"
 [dependencies]
 dioxus-core = { workspace = true }
 generational-box = { workspace = true }
+parking_lot = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }

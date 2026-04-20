@@ -11,7 +11,8 @@ use std::{
 use dioxus_core::{ScopeId, VNode, VirtualDom};
 use dioxus_optics::{
     AsFuture, AwaitTransform, FlattenSomeOp, FutureAccess, FutureProject, OkPrism, OptPrismOp,
-    Optic, OpticExt, OpticIter, Prism, PrismOp, Resource, ResourceFuture, SomePrism, ValueAccess,
+    Optic, OpticExt, OpticIter, OpticRefExt, Prism, PrismOp, Resource, ResourceFuture, SomePrism,
+    ValueAccess,
 };
 use dioxus_signals::{CopyValue, Memo, ReadableExt, Signal, SyncSignal};
 use dioxus_stores::Store;
@@ -199,6 +200,30 @@ fn optional_path_can_be_materialized_as_option_of_required_optic() {
 }
 
 #[test]
+fn option_refs_support_direct_optics_projection() {
+    with_runtime(|| {
+        let present = Signal::new(App {
+            user: Some(User { active: true }),
+            todos: vec![],
+        });
+        let active = present
+            .read()
+            .map_ref(app_user)
+            .to_option()
+            .expect("user is present")
+            .map_ref(user_active);
+
+        assert!(*active);
+
+        let missing = Signal::new(App {
+            user: None,
+            todos: vec![],
+        });
+        assert!(missing.read().map_ref(app_user).to_option().is_none());
+    });
+}
+
+#[test]
 fn result_projection_supports_read_write_and_future() {
     with_runtime(|| {
         let ok = Optic::new(Ok::<User, String>(User { active: true }));
@@ -223,6 +248,23 @@ fn result_projection_supports_read_write_and_future() {
             >,
         > = future_carrier.map_ok().future();
         assert_eq!(block_on(fut).map(|user| user.active), Some(true));
+    });
+}
+
+#[test]
+fn result_refs_support_direct_optics_projection() {
+    with_runtime(|| {
+        let ok = Signal::new(Ok::<User, String>(User { active: true }));
+        let active = ok
+            .read()
+            .as_result()
+            .expect("value is ok")
+            .map_ref(user_active);
+        assert!(*active);
+
+        let err = SyncSignal::new_maybe_sync(Err::<User, String>("offline".to_string()));
+        let message = err.read().as_result().expect_err("value is err");
+        assert_eq!(&*message, "offline");
     });
 }
 

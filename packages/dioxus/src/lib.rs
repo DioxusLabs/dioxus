@@ -175,9 +175,9 @@ pub mod prelude {
         EachBTreeMap, EachHashMap, EachVec, ErrPrism, FlattenSome, FlattenSomeOp, FutureAccess,
         FutureProject, GetProjection, HasSubscriptionTree, HashMapKey, InlinePrism, IsEmpty,
         IterShape, Len, LensOp, OkPrism, OptPrismOp, Optic, OpticBTreeMapExt, OpticExt,
-        OpticHashMapExt, OpticIter, OpticMutExt, OpticVecExt, Optional, PathBuffer, PathSegment,
-        Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, SomePrism, Subscribed,
-        SubscriptionTree, ValueAccess, Values, VecIndex, PATH_LEN,
+        OpticHashMapExt, OpticIter, OpticMutExt, OpticRefExt, OpticVecExt, Optional, PathBuffer,
+        PathSegment, Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, SomePrism,
+        Subscribed, SubscriptionTree, ValueAccess, Values, VecIndex, PATH_LEN,
     };
 
     #[cfg(feature = "signals")]

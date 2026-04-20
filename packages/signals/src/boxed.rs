@@ -424,10 +424,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_write_silent()
+        self.value.try_peek_unchecked().unwrap().try_write_silent()
     }
 }
 

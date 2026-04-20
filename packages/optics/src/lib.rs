@@ -18,7 +18,9 @@ pub use combinator::{
     Access, AccessMut, Combinator, ErrPrism, FutureAccess, InlinePrism, LensOp, OkPrism,
     OptPrismOp, Prism, PrismOp, RefOp, Resolve, SomePrism, ValueAccess,
 };
-pub use ext::{OpticExt, OpticMutExt};
+#[doc(hidden)]
+pub use ext::BorrowProject;
+pub use ext::{OpticExt, OpticMutExt, OpticRefExt};
 pub use iter::{IterShape, OpticIter};
 pub use path::{PathBuffer, PathSegment, Pathed, PATH_LEN};
 pub use resource::{AsFuture, AwaitTransform, FutureProject, Resource, ResourceFuture};
@@ -32,8 +34,9 @@ pub mod prelude {
         EachBTreeMap, EachHashMap, EachVec, ErrPrism, FlattenSome, FlattenSomeOp, FutureAccess,
         FutureProject, GetProjection, HasSubscriptionTree, HashMapKey, InlinePrism, IsEmpty,
         IterShape, Len, LensOp, OkPrism, OptPrismOp, Optic, OpticBTreeMapExt, OpticExt,
-        OpticHashMapExt, OpticIter, OpticMutExt, OpticVecExt, Optional, PathBuffer, PathSegment,
-        Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, Resource, ResourceFuture,
-        SomePrism, Subscribed, SubscriptionTree, ValueAccess, Values, VecIndex, PATH_LEN,
+        OpticHashMapExt, OpticIter, OpticMutExt, OpticRefExt, OpticVecExt, Optional, PathBuffer,
+        PathSegment, Pathed, Position, Prism, PrismOp, RefOp, Required, Resolve, Resource,
+        ResourceFuture, SomePrism, Subscribed, SubscriptionTree, ValueAccess, Values, VecIndex,
+        PATH_LEN,
     };
 }

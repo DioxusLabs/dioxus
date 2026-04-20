@@ -400,19 +400,17 @@ mod macro_tests {
         let mut dom = VirtualDom::new(VNode::empty);
         dom.rebuild_in_place();
         dom.in_scope(ScopeId::ROOT, || {
-            let mut state =
-                Signal::new(HashMap::<u32, TodoItem>::from([(
-                    1,
-                    TodoItem { checked: false, contents: "x".into() },
-                )]));
+            let mut state = Signal::new(HashMap::<u32, TodoItem>::from([(
+                1,
+                TodoItem {
+                    checked: false,
+                    contents: "x".into(),
+                },
+            )]));
 
             // The Optic leaves Store-land the moment we take a HashMap key —
             // this is exactly the chain todomvc_store uses.
-            let entry = state
-                .iter()
-                .get(&1)
-                .to_option()
-                .expect("key 1 present");
+            let entry = state.iter().get(&1).to_option().expect("key 1 present");
 
             // `.checked()` / `.contents()` resolve via the macro-emitted
             // `TodoItemOpticExt` impl on `Optic<A, Required>` where A: Access.

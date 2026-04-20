@@ -7,13 +7,19 @@
 //! methods just forward to the equivalent inherent methods on
 //! [`Optic`](crate::Optic).
 //!
+//! [`OpticRefExt`] applies the same projection ideas directly to borrowed
+//! storage refs, so callers can write `signal.read().map_ref(...)`,
+//! `signal.read().to_option()`, or `signal.read().as_result()` without ending
+//! the borrow and rebuilding an optics chain.
+//!
 //! Bridges in `dioxus-signals` register `Signal`, `Memo`, `Store`,
 //! `CopyValue`, `ReadSignal`, `WriteSignal`, `GlobalSignal`, etc. as
 //! [`Access`] / [`AccessMut`], so they all pick this trait up automatically.
 
-use std::marker::PhantomData;
+use std::{cell::Ref, marker::PhantomData};
 
-use generational_box::{AnyStorage, WriteLock};
+use generational_box::{AnyStorage, GenerationalRef, WriteLock};
+use parking_lot::MappedRwLockReadGuard;
 
 use crate::collection::{FlattenSome, GetProjection};
 use crate::combinator::{
@@ -233,3 +239,206 @@ pub trait OpticMutExt: AccessMut + Sized {
 }
 
 impl<A: AccessMut> OpticMutExt for A {}
+
+#[doc(hidden)]
+pub trait BorrowProject: std::ops::Deref + Sized {
+    type Projection<U: ?Sized + 'static>: std::ops::Deref<Target = U>;
+
+    fn map<U: ?Sized + 'static>(self, f: impl FnOnce(&Self::Target) -> &U) -> Self::Projection<U>;
+
+    fn try_map<U: ?Sized + 'static>(
+        self,
+        f: impl FnOnce(&Self::Target) -> Option<&U>,
+    ) -> Option<Self::Projection<U>>;
+}
+
+impl<'a, T: ?Sized> BorrowProject for Ref<'a, T> {
+    type Projection<U: ?Sized + 'static> = Ref<'a, U>;
+
+    #[inline]
+    fn map<U: ?Sized + 'static>(self, f: impl FnOnce(&Self::Target) -> &U) -> Self::Projection<U> {
+        Ref::map(self, f)
+    }
+
+    #[inline]
+    fn try_map<U: ?Sized + 'static>(
+        self,
+        f: impl FnOnce(&Self::Target) -> Option<&U>,
+    ) -> Option<Self::Projection<U>> {
+        Ref::filter_map(self, f).ok()
+    }
+}
+
+impl<'a, T: ?Sized> BorrowProject for MappedRwLockReadGuard<'a, T> {
+    type Projection<U: ?Sized + 'static> = MappedRwLockReadGuard<'a, U>;
+
+    #[inline]
+    fn map<U: ?Sized + 'static>(self, f: impl FnOnce(&Self::Target) -> &U) -> Self::Projection<U> {
+        MappedRwLockReadGuard::map(self, f)
+    }
+
+    #[inline]
+    fn try_map<U: ?Sized + 'static>(
+        self,
+        f: impl FnOnce(&Self::Target) -> Option<&U>,
+    ) -> Option<Self::Projection<U>> {
+        MappedRwLockReadGuard::try_map(self, f).ok()
+    }
+}
+
+/// Ref-level optics helpers for borrowed values.
+///
+/// These mirror the read-only lens side of [`OpticExt`], but operate directly
+/// on a borrowed ref, consuming it to produce a narrower borrowed ref.
+pub trait OpticRefExt: Sized {
+    /// The current value behind the ref.
+    type Target: ?Sized + 'static;
+
+    /// The ref type produced after a projection.
+    type Ref<U: ?Sized + 'static>: std::ops::Deref<Target = U>;
+
+    /// Project through a read-only optics lens.
+    #[must_use]
+    fn map_ref<U: ?Sized + 'static, F>(self, read: F) -> Self::Ref<U>
+    where
+        F: FnOnce(&Self::Target) -> &U;
+
+    /// Project through a fallible read-only optics lens.
+    #[must_use]
+    fn try_map_ref<U: ?Sized + 'static, F>(self, read: F) -> Option<Self::Ref<U>>
+    where
+        F: FnOnce(&Self::Target) -> Option<&U>;
+
+    /// Project into a variant of any sum type through a user-defined [`Prism`].
+    #[must_use]
+    #[inline]
+    fn map_variant<P>(self) -> Option<Self::Ref<P::Variant>>
+    where
+        Self: OpticRefExt<Target = P::Source>,
+        P: Prism + Default,
+    {
+        self.map_variant_with_prism(P::default())
+    }
+
+    /// Project into a variant through a specific prism instance.
+    #[must_use]
+    #[inline]
+    fn map_variant_with_prism<P>(self, prism: P) -> Option<Self::Ref<P::Variant>>
+    where
+        Self: OpticRefExt<Target = P::Source>,
+        P: Prism,
+    {
+        self.try_map_ref(|source| prism.try_ref(source))
+    }
+
+    /// Lift `Option<T>` into an optional borrowed child path.
+    #[must_use]
+    #[inline]
+    fn map_some<T: 'static>(self) -> Option<Self::Ref<T>>
+    where
+        Self: OpticRefExt<Target = Option<T>>,
+    {
+        self.map_variant::<SomePrism<T>>()
+    }
+
+    #[inline]
+    fn to_option<T: 'static>(self) -> Option<Self::Ref<T>>
+    where
+        Self: OpticRefExt<Target = Option<T>>,
+    {
+        self.map_some::<T>()
+    }
+
+    /// Lift `Result<T, E>::Ok(T)` into an optional borrowed child path.
+    #[must_use]
+    #[inline]
+    fn map_ok<T: 'static, E: 'static>(self) -> Option<Self::Ref<T>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>>,
+    {
+        self.map_variant::<OkPrism<T, E>>()
+    }
+
+    /// Lift `Result<T, E>::Err(E)` into an optional borrowed child path.
+    #[must_use]
+    #[inline]
+    fn map_err<T: 'static, E: 'static>(self) -> Option<Self::Ref<E>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>>,
+    {
+        self.map_variant::<ErrPrism<T, E>>()
+    }
+
+    /// Project `Ref<Result<T, E>>` into `Option<Ref<T>>`.
+    #[must_use]
+    #[inline]
+    fn to_ok<T: 'static, E: 'static>(self) -> Option<Self::Ref<T>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>>,
+    {
+        self.map_ok::<T, E>()
+    }
+
+    /// Project `Ref<Result<T, E>>` into `Option<Ref<E>>`.
+    #[must_use]
+    #[inline]
+    fn to_err<T: 'static, E: 'static>(self) -> Option<Self::Ref<E>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>>,
+    {
+        self.map_err::<T, E>()
+    }
+
+    /// Project `Ref<Result<T, E>>` into `Result<Ref<T>, Ref<E>>`.
+    #[must_use]
+    #[inline]
+    fn as_result<T: 'static, E: 'static>(self) -> Result<Self::Ref<T>, Self::Ref<E>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>> + std::ops::Deref<Target = Result<T, E>>,
+    {
+        if matches!(&*self, Ok(_)) {
+            Ok(self
+                .map_ok::<T, E>()
+                .expect("result was Ok at peek time but absent on read"))
+        } else {
+            Err(self
+                .map_err::<T, E>()
+                .expect("result was Err at peek time but absent on read"))
+        }
+    }
+
+    /// Mirror [`Optic::try_ok`](crate::Optic::try_ok) for a borrowed result.
+    #[must_use]
+    #[inline]
+    fn try_ok<T: 'static, E: 'static>(self) -> Result<Self::Ref<T>, Self::Ref<E>>
+    where
+        Self: OpticRefExt<Target = Result<T, E>> + std::ops::Deref<Target = Result<T, E>>,
+    {
+        self.as_result()
+    }
+}
+
+impl<R> OpticRefExt for GenerationalRef<R>
+where
+    R: BorrowProject,
+    R::Target: 'static,
+{
+    type Target = R::Target;
+    type Ref<U: ?Sized + 'static> = GenerationalRef<R::Projection<U>>;
+
+    #[inline]
+    fn map_ref<U: ?Sized + 'static, F>(self, read: F) -> Self::Ref<U>
+    where
+        F: FnOnce(&Self::Target) -> &U,
+    {
+        self.map(|value| value.map(read))
+    }
+
+    #[inline]
+    fn try_map_ref<U: ?Sized + 'static, F>(self, read: F) -> Option<Self::Ref<U>>
+    where
+        F: FnOnce(&Self::Target) -> Option<&U>,
+    {
+        self.try_map(|value| value.try_map(read))
+    }
+}

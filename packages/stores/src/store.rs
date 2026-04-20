@@ -211,11 +211,7 @@ where
 #[doc(hidden)]
 pub struct SuperIntoStoreFromOpticMarker;
 
-impl<T, S, Lens, Source>
-    SuperInto<
-        Store<T, WriteSignal<T, S>>,
-        SuperIntoStoreFromOpticMarker,
-    >
+impl<T, S, Lens, Source> SuperInto<Store<T, WriteSignal<T, S>>, SuperIntoStoreFromOpticMarker>
     for dioxus_optics::Optic<
         dioxus_optics::Subscribed<
             dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
@@ -227,13 +223,14 @@ where
     Source: 'static,
     T: 'static,
     S: BoxedSignalStorage<T>
-        + CreateBoxedSignalStorage<
-            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
-        >,
+        + CreateBoxedSignalStorage<dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
 {
     fn super_into(self) -> Store<T, WriteSignal<T, S>> {
         // Chain: Optic<Subscribed<Combinator<...>>> → Store<T, Combinator<...>> → boxed WriteStore<T, S>.
-        let with_combinator: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>> = self.into();
+        let with_combinator: Store<
+            T,
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        > = self.into();
         with_combinator.into()
     }
 }
@@ -241,11 +238,7 @@ where
 #[doc(hidden)]
 pub struct SuperIntoReadStoreFromOpticMarker;
 
-impl<T, S, Lens, Source>
-    SuperInto<
-        Store<T, ReadSignal<T, S>>,
-        SuperIntoReadStoreFromOpticMarker,
-    >
+impl<T, S, Lens, Source> SuperInto<Store<T, ReadSignal<T, S>>, SuperIntoReadStoreFromOpticMarker>
     for dioxus_optics::Optic<
         dioxus_optics::Subscribed<
             dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
@@ -257,12 +250,13 @@ where
     Source: 'static,
     T: 'static,
     S: BoxedSignalStorage<T>
-        + CreateBoxedSignalStorage<
-            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
-        >,
+        + CreateBoxedSignalStorage<dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>>,
 {
     fn super_into(self) -> Store<T, ReadSignal<T, S>> {
-        let with_combinator: Store<T, dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>> = self.into();
+        let with_combinator: Store<
+            T,
+            dioxus_optics::Combinator<Lens, dioxus_optics::LensOp<Source, T>>,
+        > = self.into();
         with_combinator.into()
     }
 }

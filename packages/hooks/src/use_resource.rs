@@ -7,13 +7,13 @@ use dioxus_optics::{
     AsFuture, Combinator, ErrPrism, FutureAccess, OkPrism, Optic, PrismOp, Required, SomePrism,
     ValueAccess,
 };
-use std::marker::PhantomData;
 use dioxus_signals::{
     BorrowError, BorrowMutError, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
     Readable, ReadableExt, ReadableRef, Writable, WritableExt, WritableRef, WriteSignal,
 };
 use dioxus_stores::Store;
 use futures_util::{pin_mut, FutureExt, StreamExt};
+use std::marker::PhantomData;
 
 // ---------------------------------------------------------------------------
 // `use_resource` hook
