@@ -1,7 +1,10 @@
 pub(super) mod dom;
 pub(crate) mod vdom;
 
+use std::fmt::Write;
+
 use dioxus_autofmt::write_block_out;
+use dioxus_core::{Attribute, AttributeValue, TemplateAttribute};
 use dioxus_rsx::{
     Attribute as RsxAttribute, AttributeName as RsxAttributeName,
     AttributeValue as RsxAttributeValue, BodyNode, CallBody, Component as RsxComponent,
@@ -11,6 +14,97 @@ use dioxus_rsx::{
 use syn::parse_quote;
 
 pub(crate) use self::vdom::serialize_vnode_subtree;
+
+pub(super) const STYLE_NAMESPACE: &str = "style";
+pub(super) const DANGEROUS_INNER_HTML_ATTRIBUTE: &str = "dangerous_inner_html";
+
+pub(super) fn append_style_declaration(into: &mut String, name: &str, value: &str) {
+    let _ = write!(into, "{name}:{value};");
+}
+
+pub(super) fn append_dynamic_style_declaration(
+    into: &mut String,
+    name: &str,
+    value: &AttributeValue,
+) {
+    let _ = write!(into, "{name}:");
+    match value {
+        AttributeValue::Text(value) => into.push_str(value),
+        AttributeValue::Float(value) => {
+            let _ = write!(into, "{value}");
+        }
+        AttributeValue::Int(value) => {
+            let _ = write!(into, "{value}");
+        }
+        AttributeValue::Bool(value) => {
+            let _ = write!(into, "{value}");
+        }
+        AttributeValue::Any(_) | AttributeValue::Listener(_) | AttributeValue::None => {}
+    }
+    into.push(';');
+}
+
+/// A non-style attribute yielded by [`walk_template_attrs`].
+pub(super) enum TemplateAttrRef<'a> {
+    Static {
+        name: &'static str,
+        value: &'static str,
+        namespace: Option<&'static str>,
+    },
+    Dynamic(&'a Attribute),
+}
+
+/// Walk a template's static attrs plus resolved dynamic attribute groups,
+/// folding any `style`-namespaced entries into a single declaration string and
+/// invoking the visitor for everything else. Returns the combined style value
+/// if any style fragments were collected.
+///
+/// Both the hydration-validation attribute comparator and the RSX serializer
+/// need the exact same traversal + style-folding; this is the shared seam.
+pub(super) fn walk_template_attrs<'a>(
+    static_attrs: &'static [TemplateAttribute],
+    dynamic_groups: impl IntoIterator<Item = &'a [Attribute]>,
+    mut visit: impl FnMut(TemplateAttrRef<'a>),
+) -> Option<String> {
+    let mut static_styles = String::new();
+    let mut dynamic_styles = String::new();
+
+    for attr in static_attrs {
+        let TemplateAttribute::Static {
+            name,
+            value,
+            namespace,
+        } = attr
+        else {
+            continue;
+        };
+        if *namespace == Some(STYLE_NAMESPACE) {
+            append_style_declaration(&mut static_styles, name, value);
+        } else {
+            visit(TemplateAttrRef::Static {
+                name,
+                value,
+                namespace: *namespace,
+            });
+        }
+    }
+
+    for group in dynamic_groups {
+        for attr in group {
+            if attr.namespace == Some(STYLE_NAMESPACE) {
+                append_dynamic_style_declaration(&mut dynamic_styles, attr.name, &attr.value);
+            } else {
+                visit(TemplateAttrRef::Dynamic(attr));
+            }
+        }
+    }
+
+    if static_styles.is_empty() && dynamic_styles.is_empty() {
+        None
+    } else {
+        Some(format!("{static_styles}{dynamic_styles}"))
+    }
+}
 
 pub(super) fn missing_node() -> BodyNode {
     component_node("missing_node")

@@ -7,11 +7,9 @@ use syn::parse_quote;
 
 use super::{
     component_node, element_node, expr_attribute, format_rsx_nodes, is_internal_attribute_name,
-    placeholder_node, text_attribute,
+    placeholder_node, text_attribute, walk_template_attrs, TemplateAttrRef,
+    DANGEROUS_INNER_HTML_ATTRIBUTE, STYLE_NAMESPACE,
 };
-
-const DANGEROUS_INNER_HTML_ATTRIBUTE: &str = "dangerous_inner_html";
-const STYLE_NAMESPACE: &str = "style";
 
 pub(crate) fn serialize_template_subtree(
     dom: &VirtualDom,
@@ -82,54 +80,31 @@ fn serialize_template_attributes(
     vnode: &VNode,
 ) -> Vec<RsxAttribute> {
     let mut rendered = Vec::new();
-    let mut static_styles = String::new();
-    let mut dynamic_styles = String::new();
 
-    for attr in attrs {
-        match attr {
-            TemplateAttribute::Static {
-                name,
-                value,
-                namespace,
-            } => {
-                if *namespace == Some(STYLE_NAMESPACE) {
-                    append_style_declaration(&mut static_styles, name, value);
-                    continue;
-                }
+    let dynamic_groups = attrs.iter().filter_map(|attr| match attr {
+        TemplateAttribute::Dynamic { id } => Some(&*vnode.dynamic_attrs[*id]),
+        _ => None,
+    });
 
-                if let Some(rendered_attr) =
-                    render_static_template_attribute(name, value, *namespace)
-                {
-                    rendered.push(rendered_attr);
-                }
-            }
-            TemplateAttribute::Dynamic { id } => {
-                let mut dynamic_attrs: Vec<_> = vnode.dynamic_attrs[*id]
-                    .iter()
-                    .filter_map(|attr| {
-                        if attr.namespace == Some(STYLE_NAMESPACE) {
-                            append_dynamic_style_declaration(
-                                &mut dynamic_styles,
-                                attr.name,
-                                &attr.value,
-                            );
-                            return None;
-                        }
-
-                        render_dynamic_template_attribute(attr)
-                    })
-                    .collect();
-                dynamic_attrs.sort_by_key(|attr| attr.name.to_string());
-                rendered.extend(dynamic_attrs);
+    let style = walk_template_attrs(attrs, dynamic_groups, |item| match item {
+        TemplateAttrRef::Static {
+            name,
+            value,
+            namespace,
+        } => {
+            if let Some(attr) = render_static_template_attribute(name, value, namespace) {
+                rendered.push(attr);
             }
         }
-    }
+        TemplateAttrRef::Dynamic(attr) => {
+            if let Some(attr) = render_dynamic_template_attribute(attr) {
+                rendered.push(attr);
+            }
+        }
+    });
 
-    if !static_styles.is_empty() || !dynamic_styles.is_empty() {
-        rendered.push(text_attribute(
-            STYLE_NAMESPACE,
-            &format!("{static_styles}{dynamic_styles}"),
-        ));
+    if let Some(style) = style {
+        rendered.push(text_attribute(STYLE_NAMESPACE, &style));
     }
 
     rendered
@@ -253,22 +228,3 @@ fn parse_inner_html_nodes(inner_html: String) -> Vec<BodyNode> {
         .unwrap_or_else(|| vec![BodyNode::Text(TextNode::from_text(&inner_html))])
 }
 
-fn append_style_declaration(into: &mut String, name: &str, value: &str) {
-    into.push_str(name);
-    into.push(':');
-    into.push_str(value);
-    into.push(';');
-}
-
-fn append_dynamic_style_declaration(into: &mut String, name: &str, value: &AttributeValue) {
-    into.push_str(name);
-    into.push(':');
-    match value {
-        AttributeValue::Text(value) => into.push_str(value),
-        AttributeValue::Float(value) => into.push_str(&value.to_string()),
-        AttributeValue::Int(value) => into.push_str(&value.to_string()),
-        AttributeValue::Bool(value) => into.push_str(&value.to_string()),
-        AttributeValue::Any(_) | AttributeValue::Listener(_) | AttributeValue::None => {}
-    }
-    into.push(';');
-}

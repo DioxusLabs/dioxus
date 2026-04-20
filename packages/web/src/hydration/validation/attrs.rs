@@ -1,11 +1,11 @@
-use std::{collections::BTreeMap, fmt::Write};
+use std::collections::BTreeMap;
 
 use dioxus_core::{Attribute, AttributeValue, TemplateAttribute};
 
-use super::serialize::is_internal_attribute_name;
-
-const DANGEROUS_INNER_HTML_ATTRIBUTE: &str = "dangerous_inner_html";
-const STYLE_NAMESPACE: &str = "style";
+use super::serialize::{
+    is_internal_attribute_name, walk_template_attrs, TemplateAttrRef,
+    DANGEROUS_INNER_HTML_ATTRIBUTE, STYLE_NAMESPACE,
+};
 
 const BOOLEAN_HTML_ATTRIBUTES: &[&str] = &[
     "allowfullscreen",
@@ -148,56 +148,37 @@ fn expected_attributes(
     dynamic_attrs: &[&[Attribute]],
 ) -> BTreeMap<String, ExpectedAttributeValue> {
     let mut expected = BTreeMap::new();
-    let mut static_styles = String::new();
-    let mut dynamic_styles = String::new();
 
-    for attr in static_attrs {
-        let TemplateAttribute::Static {
-            name,
-            value,
-            namespace,
-        } = attr
-        else {
-            continue;
-        };
-
-        if should_skip_attribute(name, *namespace) {
-            continue;
-        }
-
-        if *namespace == Some(STYLE_NAMESPACE) {
-            append_style_declaration(&mut static_styles, name, value);
-            continue;
-        }
-
-        expected.insert(
-            (*name).to_string(),
-            expected_static_attribute_value(name, value),
-        );
-    }
-
-    for attrs in dynamic_attrs {
-        for attr in attrs.iter() {
-            if should_skip_attribute(attr.name, attr.namespace) {
-                continue;
+    let style = walk_template_attrs(
+        static_attrs,
+        dynamic_attrs.iter().copied(),
+        |item| match item {
+            TemplateAttrRef::Static {
+                name,
+                value,
+                namespace,
+            } => {
+                if should_skip_attribute(name, namespace) {
+                    return;
+                }
+                expected.insert(name.to_string(), expected_static_attribute_value(name, value));
             }
-
-            if attr.namespace == Some(STYLE_NAMESPACE) {
-                append_dynamic_style_declaration(&mut dynamic_styles, attr.name, &attr.value);
-                continue;
+            TemplateAttrRef::Dynamic(attr) => {
+                if should_skip_attribute(attr.name, attr.namespace) {
+                    return;
+                }
+                expected.insert(
+                    attr.name.to_string(),
+                    expected_dynamic_attribute_value(attr.name, &attr.value),
+                );
             }
+        },
+    );
 
-            expected.insert(
-                attr.name.to_string(),
-                expected_dynamic_attribute_value(attr.name, &attr.value),
-            );
-        }
-    }
-
-    if !static_styles.is_empty() || !dynamic_styles.is_empty() {
+    if let Some(style) = style {
         expected.insert(
             STYLE_NAMESPACE.to_string(),
-            ExpectedAttributeValue::Exact(format!("{static_styles}{dynamic_styles}")),
+            ExpectedAttributeValue::Exact(style),
         );
     }
 
@@ -272,28 +253,6 @@ fn should_skip_attribute(name: &str, namespace: Option<&str>) -> bool {
     is_internal_attribute_name(name)
         || name == DANGEROUS_INNER_HTML_ATTRIBUTE
         || matches!(namespace, Some(ns) if ns != STYLE_NAMESPACE)
-}
-
-fn append_style_declaration(into: &mut String, name: &str, value: &str) {
-    let _ = write!(into, "{name}:{value};");
-}
-
-fn append_dynamic_style_declaration(into: &mut String, name: &str, value: &AttributeValue) {
-    let _ = write!(into, "{name}:");
-    match value {
-        AttributeValue::Text(value) => into.push_str(value),
-        AttributeValue::Float(value) => {
-            let _ = write!(into, "{value}");
-        }
-        AttributeValue::Int(value) => {
-            let _ = write!(into, "{value}");
-        }
-        AttributeValue::Bool(value) => {
-            let _ = write!(into, "{value}");
-        }
-        AttributeValue::Any(_) | AttributeValue::Listener(_) | AttributeValue::None => {}
-    }
-    into.push(';');
 }
 
 fn str_truthy(value: &str) -> bool {
