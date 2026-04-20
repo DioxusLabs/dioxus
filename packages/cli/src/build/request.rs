@@ -1311,12 +1311,14 @@ impl BuildRequest {
                 }
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
                 //       since that is a really bad user experience.
-                Message::BuildFinished(finished) if !finished.success => {
+                Message::BuildFinished(finished) => {
+                    if !finished.success {
                     bail!(
                         "cargo build finished with errors for target: {} [{}]",
                         self.main_target,
                         self.triple
                     );
+                }
                 }
                 _ => {}
             }
@@ -6159,11 +6161,13 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                         );
                     }
                 }
-                AssetVariant::Image(image_options) if image_options.preloaded() => {
-                    _ = write!(
-                        head_resources,
-                        r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                    );
+                AssetVariant::Image(image_options) => {
+                    if image_options.preloaded() {
+                        _ = write!(
+                            head_resources,
+                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                        );
+                    }
                 }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
