@@ -184,3 +184,48 @@ fn anchors() {
         ]
     )
 }
+
+/// Regression test: `create_scope_dom` is used by hydration mismatch recovery to
+/// emit creation mutations for a scope whose vdom tree already exists (because
+/// `rebuild` was run with skip_mutations to populate state before hydrating).
+///
+/// The second pass must reuse the element ids that were claimed on the first
+/// pass instead of allocating fresh ids — otherwise the arena grows by one slot
+/// per element on every recovery and the mutations emitted reference ids that
+/// drift from the ones a fresh rebuild would have produced.
+#[test]
+fn create_scope_dom_reuses_element_ids() {
+    fn app() -> Element {
+        rsx! {
+            div {
+                id: "app",
+                "hello"
+                button { onclick: |_| {}, "click" }
+                div { "child" }
+            }
+        }
+    }
+
+    // Baseline: fresh rebuild's mutations.
+    let mut baseline = VirtualDom::new(app);
+    let baseline_edits = baseline.rebuild_to_vec();
+
+    // Recovery path: rebuild with NoOp (as the web hydration flow does with
+    // skip_mutations), then emit creation mutations via `create_scope_dom`.
+    let mut recovered = VirtualDom::new(app);
+    recovered.rebuild(&mut dioxus_core::NoOpMutations);
+    let mut recovered_edits = dioxus_core::Mutations::default();
+    let m = recovered
+        .create_scope_dom(&mut recovered_edits, ScopeId::ROOT)
+        .expect("scope has a rendered tree");
+    recovered_edits.edits.push(AppendChildren {
+        m,
+        id: ElementId(0),
+    });
+
+    assert_eq!(
+        recovered_edits.edits, baseline_edits.edits,
+        "create_scope_dom after a skip_mutations rebuild must emit the same \
+         mutations (including element ids) as a fresh rebuild"
+    );
+}

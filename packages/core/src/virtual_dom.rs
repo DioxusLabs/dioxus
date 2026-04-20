@@ -619,6 +619,12 @@ impl VirtualDom {
             .clone()
             .ok_or(CreateScopeDomError)?;
 
+        // The prior pass (e.g. a rebuild with skip_mutations run to populate
+        // state before hydrating) already claimed element ids. Reclaim them
+        // before re-creating so the second pass reuses slab slots instead of
+        // leaking one per element. Component state is preserved.
+        existing_nodes.remove_node_inner::<NoOpMutations>(self, None, false, None);
+
         Ok(self.create_scope(Some(to), scope_id, existing_nodes, None))
     }
 
