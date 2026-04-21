@@ -1,229 +1,177 @@
 <div align="center">
-    <img
-        src="https://github.com/user-attachments/assets/6c7e227e-44ff-4e53-824a-67949051149c"
-        alt="Build web, desktop, and mobile apps with a single codebase."
-        width="100%"
-        class="darkmode-image"
-    >
-    <div>
-        <a href=https://dioxuslabs.com/learn/0.7/getting_started>Getting Started</a> | <a href="https://dioxuslabs.com/learn/0.7/">Book (0.7)</a> | <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples">Examples</a>
-    </div>
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+</div>
+
+<div align="center">
+  <!-- Crates version -->
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
+    alt="Crates.io version" />
+  </a>
+  <!-- Downloads -->
+  <a href="https://crates.io/crates/dioxus">
+    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
+      alt="Download" />
+  </a>
+  <!-- docs -->
+  <a href="https://docs.rs/dioxus">
+    <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
+      alt="docs.rs docs" />
+  </a>
+  <!-- CI -->
+  <a href="https://github.com/dioxuslabs/dioxus/actions">
+    <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
+      alt="CI status" />
+  </a>
+  <!-- Awesome -->
+  <a href="https://dioxuslabs.com/awesome">
+    <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
+  </a>
+  <!-- Discord -->
+  <a href="https://discord.gg/XgGxMSkvUM">
+    <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
+  </a>
+</div>
+
+<div align="center">
+  <h3>
+    <a href="https://dioxuslabs.com"> Website </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/learn/0.7/getting_started"> Getting Started </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/learn/0.7/"> Book (0.7) </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/tree/main/examples"> Examples </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/learn/0.7/tutorial"> Tutorial </a>
+  </h3>
 </div>
 
 ---
 
-Dioxus is a framework for building cross-platform apps in Rust. With one codebase, you can build web, desktop, and mobile apps with fullstack server functions. Dioxus is designed to be easy to learn for developers familiar with web technologies like HTML, CSS, and JavaScript.
+Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hot-reloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
 
-<div align="center">
-    <img src="https://github.com/user-attachments/assets/dddae6a9-c13b-4a88-84e8-dc98c1286d2a" alt="App with dioxus" height="600px">
-</div>
-
-## At a glance
-
-Dioxus is crossplatform app framework that empowers developer to build beautiful, fast, type-safe apps with Rust. By default, Dioxus apps are declared with HTML and CSS. Dioxus includes a number of useful features:
-
-- Hotreloading of RSX markup and assets
-- Interactive CLI with logging, project templates, linting, and more
-- Integrated bundler for deploying to the web, macOS, Linux, and Windows
-- Support for modern web features like SSR, Hydration, and HTML streaming
-- Direct access to system APIs through JNI (Android), CoreFoundation (Apple), and web-sys (web)
-- Type-safe application routing and server functions
-
-## Quick start
-
-To get started with Dioxus, you'll want to grab the dioxus-cli tool: `dx`. We distribute `dx` with `cargo-binstall` - if you already have binstall skip this step.
-
-```shell
-# skip if you already have cargo-binstall
-cargo install cargo-binstall
-
-# install the precompiled `dx` tool
-cargo binstall dioxus-cli
-
-# create a new app, following the template
-dx new my-app && cd my-app
-
-# and then serve!
-dx serve --desktop
-```
-
-## Your first app
-
-All Dioxus apps are built by composing functions return an `Element`.
-
-To launch an app, we use the `launch` method. In the launch function, we pass the app's root `Component`.
-
-```rust, no_run
-use dioxus::prelude::*;
-
-fn main() {
-    dioxus::launch(App);
-}
-
-// The #[component] attribute streamlines component creation.
-// It's not required, but highly recommended. It will lint incorrect component definitions and help you create props structs.
-#[component]
-fn App() -> Element {
-    rsx! { "hello world!" }
-}
-```
-
-## Elements & your first component
-
-You can use the `rsx!` macro to create elements with a jsx-like syntax.
-Any element in `rsx!` can have attributes, listeners, and children. For
-consistency, we force all attributes and listeners to be listed _before_
-children.
-
-```rust, no_run
-# use dioxus::prelude::*;
-let value = "123";
-
-rsx! {
-    div {
-        class: "my-class {value}",                  // <--- attribute
-        onclick: move |_| println!("clicked!"),   // <--- listener
-        h1 { "hello world" }                       // <--- child
-    }
-};
-```
-
-The `rsx!` macro accepts attributes in "struct form". Any rust expression contained within curly braces that implements [`IntoDynNode`](dioxus_core::IntoDynNode) will be parsed as a child. We make two exceptions: both `for` loops and `if` statements are parsed where their body is parsed as a rsx nodes.
-
-```rust, no_run
-# use dioxus::prelude::*;
-rsx! {
-    div {
-        for _ in 0..10 {
-            span { "hello world" }
-        }
-    }
-};
-```
-
-Putting everything together, we can write a simple component that renders a list of
-elements:
-
-```rust, no_run
-# use dioxus::prelude::*;
-#[component]
-fn App() -> Element {
-    let name = "dave";
-    rsx! {
-        h1 { "Hello, {name}!" }
-        div { class: "my-class", id: "my-id",
-            for i in 0..5 {
-                div { "FizzBuzz: {i}" }
-            }
-        }
-    }
-}
-```
-
-## Components
-
-We can compose these function components to build a complex app. Each new component takes some Properties. For components with no explicit properties, we can omit the type altogether.
-
-In Dioxus, all properties are memoized by default with `Clone` and `PartialEq`. For props you can't clone, simply wrap the fields in a [`ReadSignal`](dioxus_signals::ReadSignal) and Dioxus will handle converting types for you.
-
-```rust, no_run
-# use dioxus::prelude::*;
-# #[component] fn Header(title: String, color: String) -> Element { todo!() }
-#[component]
-fn App() -> Element {
-    rsx! {
-        Header {
-            title: "My App",
-            color: "red",
-        }
-    }
-}
-```
-
-The `#[component]` macro will help us automatically create a props struct for our component:
-
-```rust, no_run
-# use dioxus::prelude::*;
-// The component macro turns the arguments for our function into named fields we can pass in to the component in rsx
-#[component]
-fn Header(title: String, color: String) -> Element {
-    rsx! {
-        div {
-            background_color: "{color}",
-            h1 { "{title}" }
-        }
-    }
-}
-```
-
-> You can read more about props in the [reference](https://dioxuslabs.com/learn/0.7/essentials/ui/components).
-
-## Hooks
-
-While components are reusable forms of UI elements, hooks are reusable forms of logic. Hooks provide a way of retrieving state from Dioxus' internal `Scope` and using
-it to render UI elements.
-
-By convention, all hooks are functions that should start with `use_`. We can use hooks to define the state and modify it from within listeners.
-
-```rust, no_run
-# use dioxus::prelude::*;
-#[component]
-fn App() -> Element {
-    // The use signal hook runs once when the component is created and then returns the current value every run after the first
-    let name = use_signal(|| "world");
-
-    rsx! { "hello {name}!" }
-}
-```
-
-Hooks are sensitive to how they are used. To use hooks, you must abide by the ["rules of hooks"](https://dioxuslabs.com/learn/0.7/essentials/basics/hooks#rules-of-hooks):
-
-- Hooks can only be called in the body of a component or another hook. Not inside of another expression like a loop, conditional or function call.
-- Hooks should start with "use\_"
-
-Hooks let us add a field of state to our component without declaring an explicit state struct. However, this means we need to "load" the struct in the right order. If that order is wrong, then the hook will pick the wrong state and panic.
-
-Dioxus includes many built-in hooks that you can use in your components. If those hooks don't fit your use case, you can also extend Dioxus with custom hooks.
-
-## Putting it all together
-
-Using components, rsx, and hooks, we can build a simple app.
-
-```rust, no_run
-use dioxus::prelude::*;
-
-fn main() {
-    dioxus::launch(App);
-}
-
-#[component]
-fn App() -> Element {
+```rust
+fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
-        div { "Count: {count}" }
-        button { onclick: move |_| count += 1, "Increment" }
-        button { onclick: move |_| count -= 1, "Decrement" }
+        h1 { "High-Five counter: {count}" }
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
     }
 }
 ```
 
-## Conclusion
+## ⭐️ Unique features
 
-This overview doesn't cover everything. Make sure to check out the [tutorial](https://dioxuslabs.com/learn/0.7/tutorial) and [guides](https://dioxuslabs.com/learn/0.7/tutorial) on the official
-website for more details.
+- Cross-platform apps in three lines of code (web, desktop, mobile, server, and more)
+- [Ergonomic state management](https://dioxuslabs.com/blog/release-050) combines the best of React, Solid, and Svelte
+- Built-in featureful, type-safe, fullstack web framework
+- Integrated bundler for deploying to the web, macOS, Linux, and Windows
+- Subsecond Rust hot-patching and asset hot-reloading
+- And more! [Take a tour of Dioxus](https://dioxuslabs.com/learn/0.7/).
 
-Beyond this overview, Dioxus supports:
+## Quick start
 
-- Server-side rendering
-- Concurrent rendering (with async support)
-- Web/Desktop/Mobile support
-- Pre-rendering and hydration
-- Fragments, and Suspense
-- Inline-styles
-- Custom event handlers
-- Custom elements
-- Basic fine-grained reactivity (IE SolidJS/Svelte)
-- and more!
+Grab the Dioxus CLI (`dx`) and spin up a new app in seconds:
 
-Build cool things ✌️
+```shell
+# install the dioxus-cli
+curl -fsSL https://dioxuslabs.com/install.sh | bash
+
+# create a new app, following the template instructions
+dx new my-app && cd my-app
+
+# and then serve on `--web, --desktop, --ios, or --android`
+dx serve --desktop
+```
+
+## Guides
+
+This overview doesn't cover everything. Make sure to check out:
+
+- [Long-form tutorial](https://dioxuslabs.com/learn/0.7/tutorial)
+- [Core concept guide](https://dioxuslabs.com/learn/0.7/essentials/)
+- [Platform-specific guides](https://dioxuslabs.com/learn/0.7/guides/)
+- [Code examples on GitHub](https://github.com/DioxusLabs/dioxus/tree/main/examples)
+
+
+## Instant hot-reloading
+
+With one command, `dx serve` and your app is running. Edit your markup, styles, and see changes in milliseconds. Use our experimental `dx serve --hotpatch` to update Rust code in real time.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/hotreload-video.webp">
+</div>
+
+## Build Beautiful Apps
+
+Dioxus apps are styled with HTML and CSS. Use the built-in TailwindCSS support or load your favorite CSS library. Easily call into native code (objective-c, JNI, Web-Sys) for a perfect native touch.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/ebou2.avif">
+</div>
+
+## Truly fullstack applications
+
+Dioxus deeply integrates with [axum](https://github.com/tokio-rs/axum) to provide powerful fullstack capabilities for both clients and servers. Pick from a wide array of built-in batteries like WebSockets, SSE, Streaming, File Upload/Download, Server-Side-Rendering, Forms, Middleware, and Hot-Reload, or go fully custom and integrate your existing axum backend.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/fullstack-websockets.avif" width="700">
+</div>
+
+## Experimental Native Renderer
+
+Render using web-sys, webview, server-side-rendering, liveview, or even with our experimental WGPU-based renderer. Embed Dioxus in Bevy, WGPU, or even run on embedded Linux!
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/native-blitz-wgpu.webp">
+</div>
+
+## First-party primitive components
+
+Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/primitive-components.avif" width="700">
+</div>
+
+## First-class Android and iOS support
+
+Dioxus is the fastest way to build native mobile apps with Rust. Simply run `dx serve --platform android` and your app is running in an emulator or on device in seconds. Call directly into JNI and Native APIs.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/android_and_ios2.avif" width="500">
+</div>
+
+## Bundle for web, desktop, and mobile
+
+Simply run `dx bundle` and your app will be built and bundled with maximization optimizations. On the web, take advantage of [`.avif` generation, `.wasm` compression, minification](https://dioxuslabs.com/learn/0.7/tutorial/assets), and more. Build WebApps weighing [less than 50kb](https://github.com/ealmloff/tiny-dioxus/) and desktop/mobile apps less than 5mb.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/bundle.gif">
+</div>
+
+## Fantastic documentation
+
+We've put a ton of effort into building clean, readable, and comprehensive documentation. All html elements and listeners are documented with MDN docs, and our Docs runs continuous integration with Dioxus itself to ensure that the docs are always up to date. Check out the [Dioxus website](https://dioxuslabs.com/learn/0.7/) for guides, references, recipes, and more.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/docs.avif">
+</div>
+
+## Community
+
+Dioxus is a community-driven project, with a very active [Discord](https://discord.gg/XgGxMSkvUM) and [GitHub](https://github.com/DioxusLabs/dioxus/issues) community. We're always looking for help, and we're happy to answer questions and help you get started. [Our SDK](https://github.com/DioxusLabs/dioxus-std) is community-run and we even have a [GitHub organization](https://github.com/dioxus-community/) for the best Dioxus crates that receive free upgrades and support.
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/dioxus-community.avif">
+</div>
+
+## License
+
+This project is licensed under either the [MIT license](https://github.com/DioxusLabs/dioxus/blob/main/LICENSE-MIT) or the [Apache-2 License](https://github.com/DioxusLabs/dioxus/blob/main/LICENSE-APACHE).
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in Dioxus by you, shall be licensed as MIT or Apache-2, without any additional terms or conditions.

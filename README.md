@@ -164,10 +164,6 @@ We've put a ton of effort into building clean, readable, and comprehensive docum
 </div>
 
 
-## Modular and Customizable
-
-Build your own renderer. Use our modular components like RSX, VirtualDom, Blitz, Taffy, and Subsecond.
-
 ## Community
 
 Dioxus is a community-driven project, with a very active [Discord](https://discord.gg/XgGxMSkvUM) and [GitHub](https://github.com/DioxusLabs/dioxus/issues) community. We're always looking for help, and we're happy to answer questions and help you get started. [Our SDK](https://github.com/DioxusLabs/dioxus-std) is community-run and we even have a [GitHub organization](https://github.com/dioxus-community/) for the best Dioxus crates that receive free upgrades and support.
@@ -252,10 +248,10 @@ cargo run --example <example>
 However, we encourage you to download the dioxus-cli to test out features like hot-reloading. To install the most recent binary CLI, you can use cargo binstall.
 
 ```sh
-cargo binstall dioxus-cli@0.7.0 --force
+curl -fsSL https://dioxuslabs.com/install.sh | bash
 ```
 
-If this CLI is out-of-date, you can install it directly from git
+If this CLI is out-of-date, you can install it directly from git or cargo-binstall
 
 ```sh
 cargo install --git https://github.com/DioxusLabs/dioxus dioxus-cli --locked
