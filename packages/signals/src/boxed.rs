@@ -1,6 +1,8 @@
 use std::{any::Any, ops::Deref};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers};
+use dioxus_core::{
+    current_scope_id, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers,
+};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -19,6 +21,8 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
     value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
+    subscribers: CopyValue<Subscribers, SyncStorage>,
+    forwarding_context: ReactiveContext,
 }
 
 impl<T: ?Sized + 'static> ReadSignal<T> {
@@ -35,23 +39,50 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
+        let subscribers = CopyValue::<Subscribers, SyncStorage>::new_maybe_sync(Subscribers::new());
+        let callback_subscribers = subscribers;
+        let forwarding_context = ReactiveContext::new_with_callback(
+            move || {
+                let mut current_subscribers = Vec::new();
+                callback_subscribers
+                    .try_peek_unchecked()
+                    .unwrap()
+                    .visit(|subscriber| current_subscribers.push(*subscriber));
+                for subscriber in current_subscribers {
+                    if !subscriber.mark_dirty() {
+                        callback_subscribers
+                            .try_peek_unchecked()
+                            .unwrap()
+                            .remove(&subscriber);
+                    }
+                }
+            },
+            current_scope_id(),
+            std::panic::Location::caller(),
+        );
         Self {
             value: CopyValue::new_maybe_sync(S::new_readable(value, sealed::SealedToken)),
+            subscribers,
+            forwarding_context,
         }
     }
 
     /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
     pub fn point_to(&self, other: Self) -> BorrowResult {
         let this_subscribers = self.subscribers();
+        let old_wrapped_subscribers = self.value.try_peek_unchecked().unwrap().subscribers();
+        let forwarding_context = self.forwarding_context;
         let mut this_subscribers_vec = Vec::new();
         // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
         this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
-        let other_subscribers = other.subscribers();
+        let other_subscribers = other.value.try_peek_unchecked().unwrap().subscribers();
         for subscriber in this_subscribers_vec {
+            old_wrapped_subscribers.remove(&subscriber);
             subscriber.subscribe(other_subscribers.clone());
         }
-        self.value.point_to(other.value)?;
-        Ok(())
+        forwarding_context.clear_subscribers();
+        forwarding_context.subscribe(other_subscribers);
+        self.value.point_to(other.value)
     }
 
     #[doc(hidden)]
@@ -132,10 +163,17 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        if let Some(reactive_context) = ReactiveContext::current() {
+            reactive_context.subscribe(self.subscribers());
+        }
+
+        let forwarding_context = self.forwarding_context;
+        forwarding_context.reset_and_run_in(|| {
+            self.value
+                .try_peek_unchecked()
+                .unwrap()
+                .try_read_unchecked()
+        })
     }
 
     #[track_caller]
@@ -153,7 +191,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value.try_peek_unchecked().unwrap().subscribers()
+        self.subscribers.try_peek_unchecked().unwrap().clone()
     }
 }
 
