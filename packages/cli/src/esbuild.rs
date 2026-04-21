@@ -151,6 +151,7 @@ impl Esbuild {
     /// - darwin-arm64, darwin-x64
     /// - linux-x64, linux-arm64
     /// - win32-x64, win32-arm64
+    /// - freebsd-x64, freebsd-arm64
     fn npm_platform_package() -> Option<&'static str> {
         if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
             Some("darwin-arm64")
@@ -164,6 +165,10 @@ impl Esbuild {
             Some("win32-x64")
         } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
             Some("win32-arm64")
+        } else if cfg!(all(target_os = "freebsd", target_arch = "x86_64")) {
+            Some("freebsd-x64")
+        } else if cfg!(all(target_os = "freebsd", target_arch = "aarch64")) {
+            Some("freebsd-arm64")
         } else {
             None
         }
