@@ -1,6 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/splash-header-darkmode.svg#gh-dark-mode-only" style="width: 80%; height: auto;">
-  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/splash-header.svg#gh-light-mode-only" style="width: 80%; height: auto;">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/dioxus/main/notes/splash-header.svg" style="width: 80%; height: auto;">
 </div>
 
 <div align="center">
