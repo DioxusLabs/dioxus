@@ -1,0 +1,2 @@
+[build]
+rustdocflags = ['--cfg', 'skip_out_tests']
