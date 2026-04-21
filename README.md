@@ -63,9 +63,9 @@
   </h3>
 </div>
 <br>
-<p align="center">
+<!-- <p align="center">
   <a href="https://github.com/DioxusLabs/dioxus/releases/tag/v0.7.0">✨ Dioxus 0.7 is out!!! ✨</a>
-</p>
+</p> -->
 <br>
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hot-reloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
