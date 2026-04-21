@@ -52,7 +52,13 @@
 
 Build for web, desktop, and mobile, and more with a single codebase. Zero-config setup, integrated hot-reloading, and signals-based state management. Add backend functionality with Server Functions and bundle with our CLI.
 
-```rust
+```rust, ignore
+use dioxus::prelude::*;
+
+fn main() {
+    dioxus::launch(app);
+}
+
 fn app() -> Element {
     let mut count = use_signal(|| 0);
 
