@@ -2,9 +2,7 @@
 
 use std::{cell::RefCell, collections::HashSet, rc::Rc};
 
-use dioxus_core::{
-    Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, Template, TemplateNode,
-};
+use dioxus_core::{Attribute, DynamicNode, Element, RenderError, Runtime, ScopeId, TemplateNode};
 use dioxus_core_macro::*;
 
 mod link;
@@ -77,29 +75,25 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
     // The title's children must be in one of two forms:
     // 1. rsx! { "static text" }
     // 2. rsx! { "title: {dynamic_text}" }
-    match vnode.template {
-        // rsx! { "static text" }
-        Template {
-            roots: &[TemplateNode::Text { text }],
-            node_paths: &[],
-            attr_paths: &[],
-            ..
-        } => Ok(text.to_string()),
-        // rsx! { "title: {dynamic_text}" }
-        Template {
-            roots: &[TemplateNode::Dynamic { id }],
-            node_paths: &[&[0]],
-            attr_paths: &[],
-            ..
-        } => {
-            let node = &vnode.dynamic_nodes[id];
-            match node {
-                DynamicNode::Text(text) => Ok(text.value.clone()),
-                _ => Err(ExtractSingleTextNodeError::NonTextNode),
-            }
-        }
-        _ => Err(ExtractSingleTextNodeError::NonTemplate),
+    let template = vnode.template;
+    let roots = template.roots();
+    let node_paths = template.node_paths();
+    let attr_paths = template.attr_paths();
+
+    // rsx! { "static text" }
+    if let ([TemplateNode::Text { text }], [], []) = (roots, node_paths, attr_paths) {
+        return Ok(text.to_string());
     }
+    // rsx! { "title: {dynamic_text}" }
+    if let ([TemplateNode::Dynamic { id }], [&[0]], []) = (roots, node_paths, attr_paths) {
+        let node = &vnode.dynamic_nodes[*id];
+        return match node {
+            DynamicNode::Text(text) => Ok(text.value.clone()),
+            _ => Err(ExtractSingleTextNodeError::NonTextNode),
+        };
+    }
+
+    Err(ExtractSingleTextNodeError::NonTemplate)
 }
 
 fn get_or_insert_root_context<T: Default + Clone + 'static>() -> T {

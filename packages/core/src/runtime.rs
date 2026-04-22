@@ -427,7 +427,7 @@ fn MyComponent() -> Element {{
                 mount_id = el_ref.mount.get().as_usize();
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+                for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
                     let attrs = &*el_ref.dynamic_attrs[idx];
 
                     for attr in attrs.iter() {
@@ -485,7 +485,7 @@ fn MyComponent() -> Element {{
         let node_template = el_ref.template;
         let target_path = node.path;
 
-        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+        for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
             let attrs = &*el_ref.dynamic_attrs[idx];
 
             for attr in attrs.iter() {

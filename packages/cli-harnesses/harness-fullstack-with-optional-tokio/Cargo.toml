@@ -16,4 +16,3 @@ default = []
 server = ["dioxus/server", "dep:tokio"]
 web = ["dioxus/web"]
 
-    
