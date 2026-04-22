@@ -21,6 +21,8 @@ dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
+anyhow = { workspace = true }
+image = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

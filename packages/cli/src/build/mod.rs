@@ -12,6 +12,7 @@
 mod android;
 mod apple;
 mod web;
+mod windows;
 
 mod assets;
 mod builder;

@@ -943,6 +943,15 @@ impl BuildRequest {
             AndroidTools::unpack_prebuilt_openssl()?;
         }
 
+        // Compile the Windows resource (.res) so it's ready to be linked in later
+        if matches!(self.triple.operating_system, OperatingSystem::Windows) {
+            if let Err(err) = self.write_winres() {
+                if self.using_dioxus_explicitly {
+                    tracing::warn!("Application may not have an icon: {err}");
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -1767,6 +1776,11 @@ impl BuildRequest {
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN/../lib".to_string());
                 cargo_args.push("-Clink-arg=-Wl,-rpath,$ORIGIN".to_string());
             }
+            OperatingSystem::Windows => {
+                if let Some((search_path, link_spec)) = self.winres_linker_args() {
+                    cargo_args.extend(["-L".to_string(), search_path, "-l".to_string(), link_spec]);
+                }
+            }
             _ => {}
         }
 
@@ -2505,7 +2519,7 @@ impl BuildRequest {
     /// target/dx/build/app/web/
     /// target/dx/build/app/web/public/
     /// target/dx/build/app/web/server.exe
-    fn platform_dir(&self) -> PathBuf {
+    pub(crate) fn platform_dir(&self) -> PathBuf {
         self.internal_out_dir()
             .join(&self.main_target)
             .join(if self.release { "release" } else { "debug" })
