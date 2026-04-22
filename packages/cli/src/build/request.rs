@@ -1778,12 +1778,7 @@ impl BuildRequest {
             }
             OperatingSystem::Windows => {
                 if let Some((search_path, link_spec)) = self.winres_linker_args() {
-                    cargo_args.extend([
-                        "-L".to_string(),
-                        search_path,
-                        "-l".to_string(),
-                        link_spec,
-                    ]);
+                    cargo_args.extend(["-L".to_string(), search_path, "-l".to_string(), link_spec]);
                 }
             }
             _ => {}
