@@ -426,7 +426,13 @@ impl<'a> Writer<'a> {
         {
             let comments = self.accumulate_full_line_comments(brace.span.span().end());
             if !comments.is_empty() {
+                // Undo the tab from tabbed_line(). It positioned for the closing
+                // brace, but trailing comments need child-level indentation
+                let tab_width = self.out.indent.indent_str().len() * self.out.indent_level;
+                self.out.buf.truncate(self.out.buf.len() - tab_width);
+                self.out.indent_level += 1;
                 self.apply_line_comments(comments)?;
+                self.out.indent_level -= 1;
                 self.out.tab()?;
             }
         }
