@@ -132,10 +132,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_unchecked()?.try_read_unchecked()
     }
 
     #[track_caller]
@@ -143,10 +140,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -367,10 +361,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_unchecked()?.try_read_unchecked()
     }
 
     #[track_caller]
@@ -378,10 +369,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers

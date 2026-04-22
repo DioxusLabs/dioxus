@@ -661,10 +661,13 @@ mod struct_info {
                 // If they are equal, we don't need to rerun the component we can just update the existing signals
                 #(
                     // Try to memo the signal
-                    let field_eq = {
-                        let old_value: &_ = &*#signal_fields.peek();
-                        let new_value: &_ = &*new.#signal_fields.peek();
-                        (&old_value).compare(&&new_value)
+                    let field_eq = match (#signal_fields.try_peek(), new.#signal_fields.try_peek()) {
+                        (Ok(old_ref), Ok(new_ref)) => {
+                            let old_value: &_ = &*old_ref;
+                            let new_value: &_ = &*new_ref;
+                            (&old_value).compare(&&new_value)
+                        }
+                        _ => false,
                     };
                     // Make the old fields point to the new fields
                     #signal_fields.point_to(new.#signal_fields).unwrap();
