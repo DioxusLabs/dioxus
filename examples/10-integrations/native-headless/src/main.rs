@@ -16,7 +16,7 @@ use pollster::FutureExt as _;
 use std::sync::Arc;
 use std::task::Context;
 use vello::{
-    peniko::color::AlphaColor, RenderParams, Renderer as VelloRenderer, RendererOptions, Scene,
+    RenderParams, Renderer as VelloRenderer, RendererOptions, Scene, peniko::color::AlphaColor,
 };
 use wgpu::TextureFormat;
 use wgpu_context::WGPUContext;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use crate::Color;
 use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 use wgpu::{
     CommandEncoderDescriptor, Device, Extent3d, FragmentState, LoadOp, MultisampleState,
@@ -173,10 +173,10 @@ impl ActiveDemoRenderer {
         start_time: &Instant,
     ) -> Option<TextureHandle> {
         // If "next texture" size doesn't match specified size then unregister and drop texture
-        if let Some(next) = &self.next_texture {
-            if next.texture.width() != width || next.texture.height() != height {
-                ctx.unregister_texture(self.next_texture.take().unwrap().handle);
-            }
+        if let Some(next) = &self.next_texture
+            && (next.texture.width() != width || next.texture.height() != height)
+        {
+            ctx.unregister_texture(self.next_texture.take().unwrap().handle);
         }
 
         // If there is no "next texture" then create one and register it.

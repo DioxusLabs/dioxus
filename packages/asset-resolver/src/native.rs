@@ -1,7 +1,7 @@
 //! Native specific utilities for resolving assets in a bundle. This module is intended for use in renderers that
 //! need to resolve asset bundles for resources like images, and fonts.
 
-use http::{status::StatusCode, Response};
+use http::{Response, status::StatusCode};
 use std::path::{Path, PathBuf};
 
 use crate::{AssetPathError, NativeAssetResolveError};

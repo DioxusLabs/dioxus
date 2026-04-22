@@ -1,8 +1,8 @@
 use crate::{
-    bundler::{AppCategory, BundleContext},
     PackageType,
+    bundler::{AppCategory, BundleContext},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use image::{GenericImageView, ImageFormat};
 use std::{

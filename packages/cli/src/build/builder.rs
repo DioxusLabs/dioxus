@@ -1,10 +1,10 @@
-use crate::{opt::process_file_to, BuildPhaseProfile};
 use crate::{
-    serve::WebServer, verbosity_or_default, BuildArtifacts, BuildRequest, BuildStage,
-    BuilderUpdate, BundleFormat, ProgressRx, ProgressTx, Result, StructuredOutput,
+    BuildArtifacts, BuildRequest, BuildStage, BuilderUpdate, BundleFormat, ProgressRx, ProgressTx,
+    Result, StructuredOutput, serve::WebServer, verbosity_or_default,
 };
-use anyhow::{bail, Context, Error};
-use futures_util::{future::OptionFuture, pin_mut, FutureExt};
+use crate::{BuildPhaseProfile, opt::process_file_to};
+use anyhow::{Context, Error, bail};
+use futures_util::{FutureExt, future::OptionFuture, pin_mut};
 use itertools::Itertools;
 use std::{
     collections::HashSet,
@@ -192,8 +192,8 @@ impl AppBuilder {
 
     /// Wait for any new updates to the builder - either it completed or gave us a message etc
     pub(crate) async fn wait(&mut self) -> BuilderUpdate {
-        use futures_util::StreamExt;
         use BuilderUpdate::*;
+        use futures_util::StreamExt;
 
         // Wait for the build to finish or for it to emit a status message
         let update = tokio::select! {
@@ -308,7 +308,7 @@ impl AppBuilder {
                     _ => {}
                 }
             }
-            BuilderUpdate::BuildReady { ref bundle } => {
+            BuilderUpdate::BuildReady { bundle } => {
                 // Log the build completion as a telemetry event + provide analytics on build phases
                 self.log_flamegraph_and_telemetry(bundle);
 
@@ -1167,7 +1167,7 @@ impl AppBuilder {
             // If the user provided a query, then we look through the device list looking for the right one.
             // This searches both UUIDs and names, making it possible to paste an ID or a name.
             false => {
-                use nucleo::{chars, Config, Matcher, Utf32Str};
+                use nucleo::{Config, Matcher, Utf32Str, chars};
                 let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
                 let mut matcher = Matcher::new(Config::DEFAULT);
                 let mut best_score = 0;
@@ -1713,7 +1713,9 @@ impl AppBuilder {
                     Some(base_path) => format!("/{}", base_path.trim_matches('/')),
                     None => "".to_owned(),
                 };
-                format!("{url_scheme}://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}")
+                format!(
+                    "{url_scheme}://DioxusLabs.dioxus/debugger?uri={protocol}://{address}{base_path}"
+                )
             }
 
             BundleFormat::Ios => {
@@ -1865,7 +1867,7 @@ impl AppBuilder {
                 let devices = String::from_utf8_lossy(&res.stdout);
                 let mut best_score = 0;
                 let mut device_identifier = "".to_string();
-                use nucleo::{chars, Config, Matcher, Utf32Str};
+                use nucleo::{Config, Matcher, Utf32Str, chars};
                 let mut matcher = Matcher::new(Config::DEFAULT);
                 let normalize = |c: char| chars::to_lower_case(chars::normalize(c));
                 let needle = device_name_query.chars().map(normalize).collect::<Vec<_>>();
@@ -2071,7 +2073,7 @@ impl AppBuilder {
         use anyhow::Context;
         use dioxus_cli_config::{server_ip, server_port};
         use dioxus_dx_wire_format::BuildStage;
-        use futures_util::{stream::FuturesUnordered, StreamExt};
+        use futures_util::{StreamExt, stream::FuturesUnordered};
         use std::{
             net::{IpAddr, Ipv4Addr, SocketAddr},
             time::Duration,

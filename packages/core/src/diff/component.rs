@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    Element, SuspenseContext,
     any_props::AnyProps,
     innerlude::{
         ElementRef, MountId, ScopeOrder, SuspenseBoundaryProps, SuspenseBoundaryPropsWithOwner,
@@ -12,7 +13,6 @@ use crate::{
     nodes::VNode,
     scopes::{LastRenderedNode, ScopeId},
     virtual_dom::VirtualDom,
-    Element, SuspenseContext,
 };
 
 impl VirtualDom {

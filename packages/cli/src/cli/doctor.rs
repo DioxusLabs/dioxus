@@ -1,6 +1,6 @@
 use super::*;
 use crate::{AndroidTools, Result, Workspace};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use itertools::Itertools;
 
 /// Perform a system analysis to verify the system install is working correctly.

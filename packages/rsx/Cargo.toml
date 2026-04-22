@@ -2,7 +2,7 @@
 name = "dioxus-rsx"
 version = { workspace = true }
 authors = ["Jonathan Kelley", "Evan Almloff"]
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 repository = "https://github.com/DioxusLabs/dioxus/"

@@ -2,10 +2,10 @@ use proc_macro::TokenStream;
 
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::Punctuated;
-use syn::{braced, parse_macro_input, Ident, Token};
+use syn::{Ident, Token, braced, parse_macro_input};
 
 #[proc_macro]
 pub fn impl_extension_attributes(input: TokenStream) -> TokenStream {

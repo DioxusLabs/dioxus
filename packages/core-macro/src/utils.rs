@@ -1,7 +1,7 @@
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
 use syn::spanned::Spanned;
-use syn::{parse_quote, Expr, Lit, Meta, Token, Type};
+use syn::{Expr, Lit, Meta, Token, Type, parse_quote};
 
 /// Attempts to convert the given literal to a string.
 /// Converts ints and floats to their base 10 counterparts.

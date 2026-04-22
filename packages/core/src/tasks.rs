@@ -1,9 +1,9 @@
+use crate::ScopeId;
 use crate::innerlude::Effect;
 use crate::innerlude::ScopeOrder;
-use crate::innerlude::{remove_future, spawn, Runtime};
+use crate::innerlude::{Runtime, remove_future, spawn};
 use crate::scope_context::ScopeStatus;
 use crate::scope_context::SuspenseLocation;
-use crate::ScopeId;
 use futures_util::task::ArcWake;
 use slotmap::DefaultKey;
 use std::marker::PhantomData;

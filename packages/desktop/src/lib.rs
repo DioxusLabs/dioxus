@@ -53,7 +53,7 @@ pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
 pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{
-    window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
+    DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext, window,
 };
 pub use event_handlers::WryEventHandler;
 pub use hooks::*;

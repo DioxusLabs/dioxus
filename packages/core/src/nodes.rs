@@ -1,10 +1,10 @@
 use crate::{
+    Element, Event, Properties, ScopeId, VirtualDom,
     any_props::BoxedAnyProps,
     arena::ElementId,
     events::ListenerCallback,
     innerlude::{ElementRef, MountId, ScopeState, VProps},
     properties::ComponentFunction,
-    Element, Event, Properties, ScopeId, VirtualDom,
 };
 use dioxus_core_types::DioxusFormattable;
 use std::ops::Deref;

@@ -216,7 +216,7 @@ impl Default for Geolocation {
 /// The path "src/ios/plugin" points to the SwiftPM package containing GeolocationPlugin.swift
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[manganis::ffi("src/ios/plugin")]
-extern "Swift" {
+unsafe extern "Swift" {
     /// The native GeolocationPlugin class
     pub type GeolocationPlugin;
 
@@ -249,7 +249,7 @@ extern "Swift" {
 /// The path "src/android" points to the Gradle project containing GeolocationPlugin.kt
 #[cfg(target_os = "android")]
 #[manganis::ffi("src/android")]
-extern "Kotlin" {
+unsafe extern "Kotlin" {
     /// The native GeolocationPlugin class
     pub type GeolocationPlugin;
 

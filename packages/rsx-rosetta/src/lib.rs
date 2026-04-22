@@ -11,7 +11,7 @@ use dioxus_rsx::{
 pub use html_parser::{Dom, Node};
 use htmlentity::entity::ICodedDataTrait;
 use proc_macro2::{Ident, Span};
-use syn::{punctuated::Punctuated, LitStr};
+use syn::{LitStr, punctuated::Punctuated};
 
 /// Convert an HTML DOM tree into an RSX CallBody
 pub fn rsx_from_html(dom: &Dom) -> CallBody {

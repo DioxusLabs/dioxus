@@ -60,7 +60,7 @@
 
 use crate::BuildRequest;
 use crate::{BuildContext, Result};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use itertools::Itertools;
 use manganis_core::AndroidArtifactMetadata;
 use serde::Serialize;

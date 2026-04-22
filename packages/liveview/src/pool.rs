@@ -1,15 +1,15 @@
 use crate::{
+    LiveViewError,
     document::init_document,
     element::LiveviewElement,
     events::SerializedHtmlEventConverter,
     query::{QueryEngine, QueryResult},
-    LiveViewError,
 };
 
-use dioxus_core::{provide_context, Element, Event, ScopeId, VirtualDom};
+use dioxus_core::{Element, Event, ScopeId, VirtualDom, provide_context};
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
-use futures_util::{pin_mut, SinkExt, StreamExt};
+use futures_util::{SinkExt, StreamExt, pin_mut};
 use serde::Serialize;
 use std::{any::Any, rc::Rc};
 use tokio_util::task::LocalPoolHandle;

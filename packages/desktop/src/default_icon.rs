@@ -1,7 +1,7 @@
 use anyhow::Result;
-use image::load_from_memory;
 use image::GenericImageView;
 use image::ImageReader;
+use image::load_from_memory;
 use std::path::Path;
 
 /// Pre-decoded RGBA bytes of the bundled fallback icon.

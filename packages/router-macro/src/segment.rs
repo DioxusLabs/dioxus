@@ -1,4 +1,4 @@
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{Ident, Type};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};

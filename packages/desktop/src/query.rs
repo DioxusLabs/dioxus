@@ -1,7 +1,7 @@
 use crate::{DesktopContext, WeakDesktopContext};
 use futures_util::{FutureExt, StreamExt};
 use generational_box::Owner;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use serde_json::Value;
 use slab::Slab;
 use std::{cell::RefCell, rc::Rc};

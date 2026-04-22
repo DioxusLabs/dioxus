@@ -164,16 +164,20 @@ impl Bundle {
             }
             std::fs::create_dir_all(krate.bundle_dir(build.bundle))
                 .context("Failed to create bundle directory")?;
-            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(|| {
-                "Failed to copy the output executable into the bundle directory"
-            })?;
+            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(
+                || "Failed to copy the output executable into the bundle directory",
+            )?;
 
             // Check if required fields are provided instead of failing silently.
             if build.config.bundle.identifier.is_none() {
-                bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
+                bail!(
+                    "\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n"
+                );
             }
             if build.config.bundle.publisher.is_none() {
-                bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
+                bail!(
+                    "\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n"
+                );
             }
         }
 
@@ -263,7 +267,7 @@ impl Bundle {
 mod tests {
     use super::Bundle;
     use crate::{
-        cli::CommandWithPlatformOverrides, BuildArgs, BundleFormat, PackageType, Platform,
+        BuildArgs, BundleFormat, PackageType, Platform, cli::CommandWithPlatformOverrides,
     };
 
     #[test]
@@ -276,11 +280,13 @@ mod tests {
 
     #[test]
     fn validates_ios_package_types() {
-        assert!(Bundle::validate_package_types_for_bundle(
-            BundleFormat::Ios,
-            Some(&[PackageType::IosApp, PackageType::Ipa]),
-        )
-        .is_ok());
+        assert!(
+            Bundle::validate_package_types_for_bundle(
+                BundleFormat::Ios,
+                Some(&[PackageType::IosApp, PackageType::Ipa]),
+            )
+            .is_ok()
+        );
 
         assert!(Bundle::validate_package_types_for_bundle(
             BundleFormat::Ios,

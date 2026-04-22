@@ -1,4 +1,4 @@
-use dioxus_core::{use_hook, Runtime};
+use dioxus_core::{Runtime, use_hook};
 
 /// Run a closure after the suspense boundary this is under is resolved. The
 /// closure will be run immediately if the suspense boundary is already resolved

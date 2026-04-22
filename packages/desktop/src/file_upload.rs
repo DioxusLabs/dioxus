@@ -6,14 +6,14 @@ use std::{any::Any, collections::HashMap};
 use tokio::{fs::File, io::AsyncReadExt};
 
 use dioxus_html::{
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
-    SerializedMouseData, SerializedPointInteraction,
 };
 
 use serde::{Deserialize, Serialize};

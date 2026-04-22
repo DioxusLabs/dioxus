@@ -6,7 +6,7 @@ use crate::{
     hash::HashFragment,
     nest::NestId,
     query::QuerySegment,
-    segment::{create_error_type, parse_route_segments, RouteSegment},
+    segment::{RouteSegment, create_error_type, parse_route_segments},
 };
 
 #[derive(Debug)]
@@ -70,14 +70,14 @@ impl Redirect {
                         return Err(syn::Error::new_spanned(
                             arg,
                             "Expected closure argument to be a typed pattern",
-                        ))
+                        ));
                     }
                 },
                 _ => {
                     return Err(syn::Error::new_spanned(
                         arg,
                         "Expected closure argument to be a typed pattern",
-                    ))
+                    ));
                 }
             }
         }

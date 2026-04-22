@@ -4,11 +4,11 @@ use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
 use crate::{
+    TemplateNode,
     arena::ElementId,
     innerlude::{ElementPath, ElementRef, VNodeMount, VText},
     nodes::DynamicNode,
     scopes::ScopeId,
-    TemplateNode,
 };
 
 impl VNode {
@@ -587,7 +587,9 @@ impl VNode {
 
         // Go through each root node and create the node, adding it to the stack.
         // Each node already exists in the template, so we can just clone it from the template
-        let nodes_created = template
+
+        // And return the number of nodes we created on the stack
+        template
             .roots()
             .iter()
             .enumerate()
@@ -634,10 +636,7 @@ impl VNode {
                     }
                 }
             })
-            .sum();
-
-        // And return the number of nodes we created on the stack
-        nodes_created
+            .sum()
     }
 }
 

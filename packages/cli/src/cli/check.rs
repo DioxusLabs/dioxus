@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::BuildRequest;
-use anyhow::{anyhow, Context};
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use anyhow::{Context, anyhow};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::path::Path;
 
 /// Check the Rust files in the project for issues.

@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, DeriveInput, LitInt, Path};
-use syn::{parse_quote, Generics, WhereClause, WherePredicate};
+use quote::{ToTokens, quote};
+use syn::{DeriveInput, LitInt, Path, parse_macro_input};
+use syn::{Generics, WhereClause, WherePredicate, parse_quote};
 
 fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics, krate: &Path) {
     let bounds = generics.params.iter().filter_map(|param| match param {
@@ -103,8 +103,8 @@ pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
                 let mut repr_c = false;
                 let mut discriminant_size = None;
                 for attr in &input.attrs {
-                    if attr.path().is_ident("repr") {
-                        if let Err(err) = attr.parse_nested_meta(|meta| {
+                    if attr.path().is_ident("repr")
+                        && let Err(err) = attr.parse_nested_meta(|meta| {
                             // #[repr(C)]
                             if meta.path.is_ident("C") {
                                 repr_c = true;
@@ -136,9 +136,9 @@ pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
                             }
 
                             Err(meta.error("unrecognized repr"))
-                        }) {
-                            return err.to_compile_error().into();
-                        }
+                        })
+                    {
+                        return err.to_compile_error().into();
                     }
                 }
 

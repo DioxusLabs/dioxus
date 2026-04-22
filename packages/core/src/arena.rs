@@ -1,5 +1,5 @@
 use crate::innerlude::ScopeOrder;
-use crate::{virtual_dom::VirtualDom, ScopeId};
+use crate::{ScopeId, virtual_dom::VirtualDom};
 
 /// An Element's unique identifier.
 ///
@@ -27,11 +27,7 @@ impl MountId {
     pub(crate) const PLACEHOLDER: Self = Self(usize::MAX);
 
     pub(crate) fn as_usize(self) -> Option<usize> {
-        if self.mounted() {
-            Some(self.0)
-        } else {
-            None
-        }
+        if self.mounted() { Some(self.0) } else { None }
     }
 
     #[allow(unused)]

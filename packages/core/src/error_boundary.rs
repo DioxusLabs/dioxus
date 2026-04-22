@@ -1,7 +1,8 @@
 use crate::{
-    innerlude::{provide_context, CapturedError},
-    try_consume_context, use_hook, Element, IntoDynNode, Properties, ReactiveContext, Subscribers,
-    Template, TemplateAttribute, TemplateNode, VNode,
+    Element, IntoDynNode, Properties, ReactiveContext, Subscribers, Template, TemplateAttribute,
+    TemplateNode, VNode,
+    innerlude::{CapturedError, provide_context},
+    try_consume_context, use_hook,
 };
 use std::{
     any::Any,
@@ -441,9 +442,9 @@ impl<__children> ErrorBoundaryPropsBuilder<(__children, (ErrorHandler,))> {
 }
 #[allow(dead_code, non_camel_case_types, missing_docs)]
 impl<
-        __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
-        __children: ErrorBoundaryPropsBuilder_Optional<Element>,
-    > ErrorBoundaryPropsBuilder<(__children, __handle_error)>
+    __handle_error: ErrorBoundaryPropsBuilder_Optional<ErrorHandler>,
+    __children: ErrorBoundaryPropsBuilder_Optional<Element>,
+> ErrorBoundaryPropsBuilder<(__children, __handle_error)>
 {
     pub fn build(self) -> ErrorBoundaryProps {
         let (children, handle_error) = self.fields;

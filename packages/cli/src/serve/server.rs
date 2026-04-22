@@ -1,32 +1,31 @@
 use crate::{
-    config::WebHttpsConfig, serve::ServeUpdate, BuildId, BuildStage, BuilderUpdate, BundleFormat,
-    Result, TraceSrc,
+    BuildId, BuildStage, BuilderUpdate, BundleFormat, Result, TraceSrc, config::WebHttpsConfig,
+    serve::ServeUpdate,
 };
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use axum::{
+    Extension, Router,
     body::Body,
     extract::{
-        ws::{Message, WebSocket},
         Query, Request, State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     http::{
-        header::{HeaderName, HeaderValue, CACHE_CONTROL, EXPIRES, PRAGMA},
         Method, Response, StatusCode,
+        header::{CACHE_CONTROL, EXPIRES, HeaderName, HeaderValue, PRAGMA},
     },
     middleware::{self, Next},
     response::IntoResponse,
     routing::{get, get_service},
-    Extension, Router,
 };
 use dioxus_devtools_types::{DevserverMsg, HotReloadMsg};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{
-    future,
+    StreamExt, future,
     stream::{self, FuturesUnordered},
-    StreamExt,
 };
 use hyper::HeaderMap;
-use rustls::crypto::{ring::default_provider, CryptoProvider};
+use rustls::crypto::{CryptoProvider, ring::default_provider};
 use serde::{Deserialize, Serialize};
 use std::{
     convert::Infallible,
@@ -39,9 +38,9 @@ use std::{
 use subsecond_types::JumpTable;
 use tokio::process::Command;
 use tower_http::{
+    ServiceBuilderExt,
     cors::Any,
     services::fs::{ServeDir, ServeFileSystemResponseBody},
-    ServiceBuilderExt,
 };
 
 use super::AppServer;

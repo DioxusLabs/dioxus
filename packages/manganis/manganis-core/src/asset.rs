@@ -1,6 +1,6 @@
 use crate::AssetOptions;
 use const_serialize_07 as const_serialize;
-use const_serialize_08::{deserialize_const, ConstStr, SerializeConst};
+use const_serialize_08::{ConstStr, SerializeConst, deserialize_const};
 use std::{fmt::Debug, hash::Hash, path::PathBuf};
 
 /// An asset that should be copied by the bundler with some options. This type will be
@@ -153,7 +153,9 @@ impl Asset {
             let ptr = bundled as *const [u8] as *const u8;
             let len = bundled.len();
             if ptr.is_null() {
-                panic!("Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker");
+                panic!(
+                    "Tried to use an asset that was not bundled. Make sure you are compiling dx as the linker"
+                );
             }
             let mut bytes = Vec::with_capacity(len);
             for byte in 0..len {
@@ -175,8 +177,8 @@ impl Asset {
             let bundled = (self.legacy)();
             let bytes = read_slice_volatile(bundled);
             let read = const_serialize_07::ConstReadBuffer::new(bytes.as_ref());
-            let asset = const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1;
-            asset
+
+            const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
         } else {
             asset
         }

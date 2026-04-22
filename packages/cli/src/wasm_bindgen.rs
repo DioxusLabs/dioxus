@@ -1,5 +1,5 @@
 use crate::{CliSettings, Result, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
@@ -217,7 +217,10 @@ impl WasmBindgen {
         // Attempt installation from binstall.
         if let Err(e) = self.install_binstall().await {
             tracing::error!("Failed to install wasm-bindgen-cli@{}: {e}", self.version);
-            tracing::info!("Failed to install prebuilt binary for wasm-bindgen-cli@{}. Compiling from source instead. This may take a while.", self.version);
+            tracing::info!(
+                "Failed to install prebuilt binary for wasm-bindgen-cli@{}. Compiling from source instead. This may take a while.",
+                self.version
+            );
         } else {
             tracing::info!(
                 "wasm-bindgen-cli@{} was successfully installed from cargo-binstall.",

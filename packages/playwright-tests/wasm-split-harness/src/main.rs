@@ -256,7 +256,7 @@ fn ChildSplit() -> Element {
         }
 
         #[wasm_bindgen(module = "/src/stars.js")]
-        extern "C" {
+        unsafe extern "C" {
             pub(crate) fn get_stars(name: String) -> Option<usize>;
             pub(crate) fn set_stars(name: String, stars: usize);
         }

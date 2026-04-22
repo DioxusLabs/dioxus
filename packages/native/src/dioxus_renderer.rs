@@ -5,8 +5,8 @@ use std::sync::Arc;
 use anyrender::WindowRenderer;
 
 pub use anyrender_vello::{
-    wgpu::{Features, Limits},
     CustomPaintSource, VelloRendererOptions,
+    wgpu::{Features, Limits},
 };
 
 #[cfg(not(all(target_os = "ios", target_abi = "sim")))]

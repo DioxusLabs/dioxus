@@ -1,6 +1,6 @@
 use std::{hash::Hasher, path::Path};
 
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use codemap::SpanLoc;
 use grass::OutputStyle;
 use lightningcss::{
@@ -8,7 +8,7 @@ use lightningcss::{
     stylesheet::{MinifyOptions, ParserOptions, StyleSheet},
     targets::{Browsers, Targets},
 };
-use manganis_core::{create_module_hash, transform_css, CssAssetOptions, CssModuleAssetOptions};
+use manganis_core::{CssAssetOptions, CssModuleAssetOptions, create_module_hash, transform_css};
 
 pub(crate) fn process_css(
     css_options: &CssAssetOptions,

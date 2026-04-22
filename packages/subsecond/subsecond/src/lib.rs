@@ -235,7 +235,7 @@ use std::{
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,
-    sync::{atomic::AtomicPtr, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicPtr},
 };
 
 /// Call a given function with hot-reloading enabled. If the function's code changes, `call` will use
@@ -394,10 +394,10 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
-        if let Some(jump_table) = unsafe { get_jump_table() } {
-            if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
-                return HotFnPtr(ptr);
-            }
+        if let Some(jump_table) = unsafe { get_jump_table() }
+            && let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned()
+        {
+            return HotFnPtr(ptr);
         }
 
         HotFnPtr(known_fn_ptr as u64)
@@ -501,11 +501,11 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     {
         // on android we try to circumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
-        let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
+        let lib = Box::leak(Box::new(unsafe { android_memmap_dlopen(&table.lib)? }));
 
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new({
-            match libloading::Library::new(&table.lib) {
+            match unsafe { libloading::Library::new(&table.lib) } {
                 Ok(lib) => lib,
                 Err(err) => return Err(PatchError::Dlopen(err.to_string())),
             }
@@ -543,7 +543,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             })
             .collect();
 
-        commit_patch(table);
+        unsafe { commit_patch(table) };
     };
 
     // On wasm, we need to download the module, compile it, and then run it.
@@ -553,9 +553,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             ArrayBuffer, Object, Reflect,
             WebAssembly::{self, Memory, Table},
         };
-        use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsValue;
         use wasm_bindgen::UnwrapThrowExt;
+        use wasm_bindgen::prelude::*;
         use wasm_bindgen_futures::JsFuture;
 
         let funcs: Table = wasm_bindgen::function_table().unchecked_into();
@@ -725,7 +725,7 @@ pub fn aslr_reference() -> usize {
 
             #[cfg(windows)]
             {
-                extern "system" {
+                unsafe extern "system" {
                     fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
                     fn GetProcAddress(
                         hModule: *mut std::ffi::c_void,
@@ -756,7 +756,7 @@ pub fn aslr_reference() -> usize {
 /// - https://developer.android.com/ndk/reference/structandroid/dlextinfo
 #[cfg(target_os = "android")]
 unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Library, PatchError> {
-    use std::ffi::{c_void, CStr, CString};
+    use std::ffi::{CStr, CString, c_void};
     use std::os::fd::{AsRawFd, BorrowedFd};
     use std::ptr;
 
@@ -771,7 +771,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
         library_namespace: *const c_void,
     }
 
-    extern "C" {
+    unsafe extern "C" {
         fn android_dlopen_ext(
             filename: *const libc::c_char,
             flags: libc::c_int,
@@ -793,7 +793,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
 
     let raw_fd = mfd.into_raw_fd();
 
-    let mut map = memmap2::MmapMut::map_mut(raw_fd)
+    let mut map = unsafe { memmap2::MmapMut::map_mut(raw_fd) }
         .map_err(|e| PatchError::AndroidMemfd(format!("Failed to map memfd: {}", e)))?;
     map.copy_from_slice(&contents);
     let map = map
@@ -816,7 +816,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
 
     let handle = libloading::os::unix::with_dlerror(
         || {
-            let ptr = android_dlopen_ext(filename.as_ptr() as _, flags, &info);
+            let ptr = unsafe { android_dlopen_ext(filename.as_ptr() as _, flags, &info) };
             if ptr.is_null() {
                 return None;
             } else {

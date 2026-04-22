@@ -4,6 +4,7 @@
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
 use crate::dom::WebsysDom;
+use RehydrationError::*;
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
     SuspenseContext, TemplateNode, VNode, VirtualDom,
@@ -11,7 +12,6 @@ use dioxus_core::{
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
-use RehydrationError::*;
 
 use super::SuspenseMessage;
 
@@ -251,11 +251,10 @@ impl WebsysDom {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
         if let Some(suspense) =
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
+            && suspense.has_suspended_tasks()
         {
-            if suspense.has_suspended_tasks() {
-                self.suspense_hydration_ids
-                    .add_suspense_boundary(scope.id());
-            }
+            self.suspense_hydration_ids
+                .add_suspense_boundary(scope.id());
         }
 
         self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
@@ -307,10 +306,10 @@ impl WebsysDom {
                         mounted_id = Some(id);
                         for attribute in attributes {
                             let value = &attribute.value;
-                            if let AttributeValue::Listener(_) = value {
-                                if attribute.name == "onmounted" {
-                                    to_mount.push(id);
-                                }
+                            if let AttributeValue::Listener(_) = value
+                                && attribute.name == "onmounted"
+                            {
+                                to_mount.push(id);
                             }
                         }
                     }

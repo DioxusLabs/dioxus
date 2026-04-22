@@ -1,6 +1,6 @@
 use crate::config::WasmOptLevel;
 use crate::{CliSettings, Result, WasmOptConfig, Workspace};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
@@ -182,7 +182,9 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "arm64-macos"
     } else {
-        bail!("Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH.");
+        bail!(
+            "Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH."
+        );
     };
 
     // Find the first asset with a name that contains the platform string

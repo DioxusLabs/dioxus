@@ -1,9 +1,9 @@
 use convert_case::{Case, Casing};
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote, ToTokens};
+use quote::{ToTokens, format_ident, quote};
 use syn::{
-    ext::IdentExt, parse_quote, spanned::Spanned, DataEnum, DataStruct, DeriveInput, Field, Fields,
-    Generics, Ident, Index, LitInt, Visibility,
+    DataEnum, DataStruct, DeriveInput, Field, Fields, Generics, Ident, Index, LitInt, Visibility,
+    ext::IdentExt, parse_quote, spanned::Spanned,
 };
 
 /// Turn a visibility modifier into a readable PascalCase suffix used in
@@ -153,7 +153,7 @@ fn transpose_generics(name: &Ident, generics: &syn::Generics) -> TokenStream2 {
     let args: Vec<_> = generics
         .params
         .iter()
-        .map(|gen| match gen {
+        .map(|gen_| match gen_ {
             syn::GenericParam::Type(p) => {
                 let ident = &p.ident;
                 mapped_type(name, &ty_generics, &parse_quote!(#ident))

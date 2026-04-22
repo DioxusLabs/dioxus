@@ -3,7 +3,7 @@ use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
-use http::{request::Parts, HeaderMap};
+use http::{HeaderMap, request::Parts};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -277,8 +277,8 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<FullstackContext, M>, M>(
-) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
+pub fn extract<T: FromRequest<FullstackContext, M>, M>()
+-> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T, M>()
 }
 
@@ -320,7 +320,7 @@ pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     if let Some(err) = error.downcast_ref::<ServerFnError>() {
         match err {
             ServerFnError::ServerError { code, .. } => {
-                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             }
             _ => return StatusCode::INTERNAL_SERVER_ERROR,
         }

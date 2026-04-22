@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
+use syn::{Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate, parse_quote};
 use syn::{ext::IdentExt, parse::Parse};
-use syn::{parse_quote, Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate};
 
 pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let store_type = &*input.self_ty;
@@ -157,29 +157,27 @@ struct StorePath {
 }
 
 fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
-    if let Type::Path(type_path) = store_type {
-        if let Some(segment) = type_path.path.segments.last() {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(store_generics) = args.args.first().and_then(argument_as_type) {
-                    let store_lens = args
-                        .args
-                        .iter()
-                        .nth(1)
-                        .and_then(argument_as_type)
-                        .unwrap_or_else(|| parse_quote!(__Lens));
-                    let store_lens = parse_quote!(#store_lens);
-                    let mut path_without_generics = type_path.path.clone();
-                    for segment in &mut path_without_generics.segments {
-                        segment.arguments = PathArguments::None;
-                    }
-                    return Ok(StorePath {
-                        store_path: path_without_generics,
-                        store_generic: store_generics,
-                        store_lens,
-                    });
-                }
-            }
+    if let Type::Path(type_path) = store_type
+        && let Some(segment) = type_path.path.segments.last()
+        && let PathArguments::AngleBracketed(args) = &segment.arguments
+        && let Some(store_generics) = args.args.first().and_then(argument_as_type)
+    {
+        let store_lens = args
+            .args
+            .iter()
+            .nth(1)
+            .and_then(argument_as_type)
+            .unwrap_or_else(|| parse_quote!(__Lens));
+        let store_lens = parse_quote!(#store_lens);
+        let mut path_without_generics = type_path.path.clone();
+        for segment in &mut path_without_generics.segments {
+            segment.arguments = PathArguments::None;
         }
+        return Ok(StorePath {
+            store_path: path_without_generics,
+            store_generic: store_generics,
+            store_lens,
+        });
     }
     Err(syn::Error::new_spanned(
         store_type,

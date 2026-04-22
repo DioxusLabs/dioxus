@@ -264,8 +264,8 @@ rustls = { version = "0.23.28", default-features = false, features = [
 ] }
 serde_json = "1.0.140"
 serde = "1.0.225"
-schemars = "1.0"
-syn = "2.0.104"
+schemars = "1.2.1"
+syn = "2.0.117"
 quote = "1.0.38"
 axum-core = "0.5.2"
 proc-macro2 = "1.0.101"

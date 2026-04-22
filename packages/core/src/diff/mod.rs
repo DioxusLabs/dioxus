@@ -10,11 +10,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{
+    ElementId, TemplateNode,
     arena::MountId,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
     virtual_dom::VirtualDom,
-    ElementId, TemplateNode,
 };
 
 mod component;

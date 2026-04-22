@@ -85,8 +85,8 @@ fn extract_single_text_node(children: &Element) -> Result<String, ExtractSingleT
         return Ok(text.to_string());
     }
     // rsx! { "title: {dynamic_text}" }
-    if let ([TemplateNode::Dynamic { id }], [&[0]], []) = (roots, node_paths, attr_paths) {
-        let node = &vnode.dynamic_nodes[*id];
+    if let (&[TemplateNode::Dynamic { id }], &[&[0]], &[]) = (roots, node_paths, attr_paths) {
+        let node = &vnode.dynamic_nodes[id];
         return match node {
             DynamicNode::Text(text) => Ok(text.value.clone()),
             _ => Err(ExtractSingleTextNodeError::NonTextNode),
@@ -136,7 +136,10 @@ pub(crate) fn extend_attributes(
             dioxus_core::AttributeValue::Int(v) => v.to_string(),
             dioxus_core::AttributeValue::Bool(v) => v.to_string(),
             dioxus_core::AttributeValue::Listener(_) | dioxus_core::AttributeValue::Any(_) => {
-                tracing::error!("document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}", additional_attribute.value);
+                tracing::error!(
+                    "document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}",
+                    additional_attribute.value
+                );
                 continue;
             }
             dioxus_core::AttributeValue::None => {

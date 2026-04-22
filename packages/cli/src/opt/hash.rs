@@ -8,7 +8,7 @@ use std::{
 
 use crate::opt::{
     css::hash_scss,
-    file::{resolve_asset_options, ResolvedAssetType},
+    file::{ResolvedAssetType, resolve_asset_options},
     js::hash_js,
 };
 use manganis::{AssetOptions, BundledAsset};

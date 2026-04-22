@@ -51,7 +51,7 @@ pub(crate) const unsafe fn serialize_const_struct(
         } = &layout.data[i];
         to = write_map_key(to, name);
         let field = ptr.wrapping_byte_add(*offset as _);
-        to = serialize_const_ptr(field, to, layout);
+        to = unsafe { serialize_const_ptr(field, to, layout) };
         i += 1;
     }
     to

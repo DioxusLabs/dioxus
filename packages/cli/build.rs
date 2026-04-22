@@ -19,11 +19,7 @@ fn main() {
         let hash = String::from_utf8(output.stdout).ok()?;
         let hash = hash.trim().to_string();
 
-        if hash.is_empty() {
-            None
-        } else {
-            Some(hash)
-        }
+        if hash.is_empty() { None } else { Some(hash) }
     });
 
     if let Some(full_hash) = full_hash {

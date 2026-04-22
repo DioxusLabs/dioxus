@@ -33,8 +33,8 @@
 //!         logo.png
 //! ```
 
-use crate::{opt::AppManifest, BuildMode, BuildRequest};
 use crate::{BuildContext, BundleFormat, Result, TraceSrc, WasmBindgen, WasmOptConfig};
+use crate::{BuildMode, BuildRequest, opt::AppManifest};
 use anyhow::Context;
 use dioxus_cli_config::format_base_path_meta_element;
 use manganis::AssetOptions;
@@ -170,10 +170,12 @@ impl BuildRequest {
                 let path = bindgen_outdir.join(format!("chunk_{}_{}.wasm", idx, chunk.module_name));
                 wasm_opt::write_wasm(&chunk.bytes, &path, &wasm_opt_options).await?;
                 writeln!(
-                    glue, "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
+                    glue,
+                    "export const __wasm_split_load_chunk_{idx} = makeLoad(\"/{base_path}/assets/{url}\", [], fusedImports);",
                     base_path = self.base_path_or_default(),
                     url = assets
-                        .register_asset(&path, AssetOptions::builder().into_asset_options())?.bundled_path(),
+                        .register_asset(&path, AssetOptions::builder().into_asset_options())?
+                        .bundled_path(),
                 )?;
             }
 
@@ -197,14 +199,11 @@ impl BuildRequest {
                     glue,
                     "export const __wasm_split_load_{module}_{hash_id}_{comp_name} = makeLoad(\"/{base_path}/assets/{url}\", [{deps}], fusedImports);",
                     module = module.module_name,
-
                     base_path = self.base_path_or_default(),
-
                     // Again, register this wasm with the asset system
                     url = assets
                         .register_asset(&path, AssetOptions::builder().into_asset_options())?
                         .bundled_path(),
-
                     // This time, make sure to write the dependencies of this chunk
                     // The names here are again, hardcoded in wasm-split - fix this eventually.
                     deps = module

@@ -4,7 +4,7 @@ use std::{
     ops::{Deref, Index},
 };
 
-use crate::{ext_methods, MappedSignal, ReadSignal};
+use crate::{MappedSignal, ReadSignal, ext_methods};
 use dioxus_core::Subscribers;
 use generational_box::{AnyStorage, UnsyncStorage};
 
