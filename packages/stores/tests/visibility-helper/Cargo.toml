@@ -1,0 +1,12 @@
+[package]
+name = "dioxus-stores-visibility-helper"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+dioxus-stores = { path = "../.." }
+dioxus-signals = { path = "../../../signals" }

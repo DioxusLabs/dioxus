@@ -1,22 +1,15 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::parse::Parse;
 use syn::spanned::Spanned;
-use syn::{
-    parse_quote, Ident, ImplItem, ImplItemConst, ImplItemType, ItemImpl, PathArguments, Type,
-    WherePredicate,
-};
+use syn::{ext::IdentExt, parse::Parse};
+use syn::{parse_quote, Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate};
 
 pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
-    // Extract the type name the store is generic over
     let store_type = &*input.self_ty;
     let store = parse_store_type(store_type)?;
     let store_path = &store.store_path;
     let item = store.store_generic;
     let lens_generic = store.store_lens;
-    let visibility = args
-        .visibility
-        .unwrap_or_else(|| syn::Visibility::Inherited);
     if let Some(input_trait) = input.trait_.as_ref() {
         return Err(syn::Error::new_spanned(
             input_trait.1.clone(),
@@ -24,50 +17,16 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
         ));
     }
 
+    let type_name = stringify_type(&item)?;
     let extension_name = match args.name {
         Some(attr) => attr,
-        None => {
-            // Otherwise, generate a name based on the type name
-            let type_name = stringify_type(&item)?;
-            Ident::new(&format!("{}StoreImplExt", type_name), item.span())
-        }
+        None => Ident::new(&format!("{}StoreImplExt", type_name), item.span()),
     };
+    // Prefix hidden items with the trait name so multiple `#[store]` impls on
+    // the same type don't collide.
+    let name_prefix = extension_name.unraw().to_string();
 
-    // Go through each method in the impl block and add extra bounds to lens as needed
-    let immutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #item> + ::std::marker::Copy + 'static);
-    let mutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #item> + ::std::marker::Copy + 'static);
-    for item in &mut input.items {
-        let ImplItem::Fn(func) = item else {
-            continue; // Only process function items
-        };
-        // Only add bounds if the function has a self argument
-        let Some(receiver) = func.sig.inputs.iter().find_map(|arg| {
-            if let syn::FnArg::Receiver(receiver) = arg {
-                Some(receiver)
-            } else {
-                None
-            }
-        }) else {
-            continue;
-        };
-        let extra_bounds = match (&receiver.reference, &receiver.mutability) {
-            // The function takes &self
-            (Some(_), None) => &immutable_bounds,
-            // The function takes &mut self
-            (Some(_), Some(_)) => &mutable_bounds,
-            _ => {
-                // If the function doesn't take &self or &mut self, we don't need to add any bounds
-                continue;
-            }
-        };
-        func.sig
-            .generics
-            .make_where_clause()
-            .predicates
-            .push(extra_bounds.clone());
-    }
-
-    // Push a __Lens generic to the impl if it doesn't already exist
+    // Push a __Lens generic to the impl if it doesn't already exist.
     let contains_lens_generic = input.generics.params.iter().any(|param| {
         if let syn::GenericParam::Type(ty) = param {
             ty.ident == lens_generic
@@ -82,25 +41,80 @@ pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result
             .push(parse_quote!(#lens_generic: ::std::marker::Copy + 'static));
     }
 
-    // quote as the trait definition
-    let trait_definition = impl_to_trait_body(&extension_name, &input, &visibility)?;
+    let store_ty = quote! { #store_path<#item, #lens_generic> };
 
-    // Reformat the type to be generic over the lens
-    input.self_ty = parse_quote!(#store_path<#item, #lens_generic>);
+    // Trait generics prepend `__V` to the impl's generics; the seal impls use
+    // the impl's generics unchanged.
+    let mut extension_generics = input.generics.clone();
+    extension_generics.params.insert(0, parse_quote!(__V));
+    let (seal_impl, _, seal_where) = input.generics.split_for_impl();
+    let (trait_decl, trait_use, trait_where) = extension_generics.split_for_impl();
 
-    // Change the standalone impl block to a trait impl block
-    let (_, trait_generics, _) = input.generics.split_for_impl();
-    input.trait_ = Some((
-        None,
-        parse_quote!(#extension_name #trait_generics),
-        parse_quote!(for),
-    ));
+    let mut seal =
+        crate::seal::SealBuilder::new(name_prefix, item.span(), store_ty.clone(), extension_name)
+            .seal_generics(quote! { #seal_impl }, quote! { #seal_where })
+            .trait_generics(
+                quote! { #trait_decl },
+                quote! { #trait_use },
+                quote! { #trait_where },
+            )
+            .trait_visibility(args.visibility.unwrap_or_else(|| parse_quote!(pub)));
 
-    Ok(quote! {
-        #trait_definition
+    let immutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Readable<Target = #item> + ::std::marker::Copy + 'static);
+    let mutable_bounds: WherePredicate = parse_quote!(#lens_generic: dioxus_stores::macro_helpers::dioxus_signals::Writable<Target = #item> + ::std::marker::Copy + 'static);
 
-        #input
-    })
+    for impl_item in input.items {
+        match impl_item {
+            ImplItem::Fn(mut func) => {
+                // Add `Readable` to `&self` fns and `Writable` to `&mut self`
+                // fns; every fn also gets a witness bound for its visibility.
+                let receiver = func.sig.inputs.iter().find_map(|arg| {
+                    if let syn::FnArg::Receiver(r) = arg {
+                        Some(r)
+                    } else {
+                        None
+                    }
+                });
+                let extra = receiver.and_then(|r| match (&r.reference, &r.mutability) {
+                    (Some(_), None) => Some(&immutable_bounds),
+                    (Some(_), Some(_)) => Some(&mutable_bounds),
+                    _ => None,
+                });
+                if let Some(extra) = extra {
+                    func.sig
+                        .generics
+                        .make_where_clause()
+                        .predicates
+                        .push(extra.clone());
+                }
+                let witness = seal.push_witness(&func.vis);
+                let bound: WherePredicate = parse_quote!(Self: #witness<__V>);
+                func.sig.generics.make_where_clause().predicates.push(bound);
+                let attrs = &func.attrs;
+                let sig = &func.sig;
+                let body = &func.block;
+                seal.push_assoc(
+                    quote! { #(#attrs)* #sig; },
+                    quote! { #(#attrs)* #sig #body },
+                );
+            }
+            ImplItem::Const(c) => {
+                return Err(syn::Error::new_spanned(
+                    c,
+                    "`#[store]` only supports methods; associated consts are not allowed",
+                ));
+            }
+            ImplItem::Type(t) => {
+                return Err(syn::Error::new_spanned(
+                    t,
+                    "`#[store]` only supports methods; associated types are not allowed",
+                ));
+            }
+            other => return Err(syn::Error::new_spanned(other, "Unsupported item type")),
+        }
+    }
+
+    Ok(seal.into_tokens())
 }
 
 fn stringify_type(ty: &Type) -> syn::Result<String> {
@@ -125,81 +139,6 @@ fn stringify_type(ty: &Type) -> syn::Result<String> {
             ty,
             "Unsupported type in store implementation",
         )),
-    }
-}
-
-fn impl_to_trait_body(
-    trait_name: &Ident,
-    item: &ItemImpl,
-    visibility: &syn::Visibility,
-) -> syn::Result<TokenStream> {
-    let ItemImpl {
-        attrs,
-        defaultness,
-        unsafety,
-        items,
-        ..
-    } = item;
-
-    let generics = &item.generics;
-
-    let items = items
-        .iter()
-        .map(item_to_trait_definition)
-        .collect::<syn::Result<Vec<_>>>()?;
-
-    Ok(quote! {
-        #(#attrs)*
-        #visibility #defaultness #unsafety trait #trait_name #generics {
-            #(#items)*
-        }
-    })
-}
-
-fn item_to_trait_definition(item: &syn::ImplItem) -> syn::Result<proc_macro2::TokenStream> {
-    match item {
-        syn::ImplItem::Fn(func) => {
-            let sig = &func.sig;
-
-            Ok(quote! {
-                #sig;
-            })
-        }
-        syn::ImplItem::Const(impl_item_const) => {
-            let ImplItemConst {
-                attrs,
-                const_token,
-                ident,
-                generics,
-                colon_token,
-                ty,
-                semi_token,
-                ..
-            } = impl_item_const;
-
-            Ok(quote! {
-                #(#attrs)*
-                #const_token #ident #generics #colon_token #ty #semi_token
-            })
-        }
-        syn::ImplItem::Type(impl_item_type) => {
-            let ImplItemType {
-                attrs,
-                type_token,
-                ident,
-                generics,
-                eq_token,
-                ty,
-                semi_token,
-                ..
-            } = impl_item_type;
-
-            Ok(quote! {
-                #(#attrs)*
-                #type_token #ident #generics #eq_token #ty #semi_token
-            })
-        }
-        _ => Err(syn::Error::new_spanned(item, "Unsupported item type")),
     }
 }
 
@@ -252,20 +191,21 @@ fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
 pub(crate) struct ExtendArgs {
     /// The name of the extension trait generated
     name: Option<Ident>,
-    /// The visibility of the extension trait
+    /// The visibility of the extension trait itself. Defaults to `pub`.
     visibility: Option<syn::Visibility>,
 }
 
 impl Parse for ExtendArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        // Try to parse visibility if it exists
+        // An optional leading visibility, e.g. `#[store(pub(crate))]` or
+        // `#[store(pub(crate), name = Foo)]`.
         let visibility = if input.peek(syn::Token![pub]) {
             let vis: syn::Visibility = input.parse()?;
+            let _: Option<syn::Token![,]> = input.parse()?;
             Some(vis)
         } else {
             None
         };
-        // Try to parse name = ident if it exists
         let name = if input.peek(Ident) && input.peek2(syn::Token![=]) {
             let ident: Ident = input.parse()?;
             if ident != "name" {

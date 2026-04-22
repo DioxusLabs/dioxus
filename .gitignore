@@ -1,4 +1,5 @@
 .dioxus
+.claude/settings.local.json
 /target
 /packages/playwright-tests/cli-optimization/monaco-editor-0.52.2
 /packages/playwright-tests/web/dist

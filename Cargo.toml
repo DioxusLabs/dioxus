@@ -111,6 +111,7 @@ members = [
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
 ]
+exclude = ["packages/stores/tests/visibility-helper"]
 
 
 [workspace.package]

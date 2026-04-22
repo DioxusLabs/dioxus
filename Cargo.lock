@@ -4284,7 +4284,9 @@ dependencies = [
  "dioxus-core",
  "dioxus-signals",
  "dioxus-stores-macro",
+ "dioxus-stores-visibility-helper",
  "generational-box",
+ "trybuild",
 ]
 
 [[package]]
@@ -4297,6 +4299,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "dioxus-stores-visibility-helper"
+version = "0.0.0"
+dependencies = [
+ "dioxus-signals",
+ "dioxus-stores",
 ]
 
 [[package]]

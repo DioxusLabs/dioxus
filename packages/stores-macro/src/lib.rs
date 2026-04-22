@@ -5,6 +5,7 @@ use crate::extend::ExtendArgs;
 
 mod derive;
 mod extend;
+mod seal;
 
 /// # `derive(Store)`
 ///
@@ -49,10 +50,22 @@ mod extend;
 /// let contents: String = contents();
 /// ```
 ///
+/// ### Field Visibility
+///
+/// Each generated accessor carries the visibility of its field, and the
+/// transposed struct preserves the original field visibility.
 ///
 /// ### Enums
 ///
 /// For enums, the store macro generates methods for each variant that checks if the store is that variant. It also generates a `transpose` method that returns an enum with all fields as stores.
+///
+/// Variant accessors carry the enum's visibility, since variant fields
+/// inherit it.
+///
+/// The single-field variant accessor returns `Option<Store<..>>` that yields
+/// `Some` when the store currently matches that variant. The returned store
+/// reads and writes the field through the enum, and panics if the variant
+/// has since changed.
 ///
 /// ```rust, no_run
 /// use dioxus::prelude::*;
@@ -114,8 +127,13 @@ pub fn derive_store(input: TokenStream) -> TokenStream {
 ///
 /// ## Arguments
 ///
-/// - `pub`: Makes the generated extension trait public. If not provided, the trait will be private.
+/// - An optional leading visibility for the generated extension trait, e.g.
+///   `#[store(pub(crate))]`. If omitted, the trait is generated as `pub`.
 /// - `name = YourExtensionName`: The name of the extension trait. If not provided, it will be generated based on the type name.
+///
+/// Each method carries the visibility declared on its `fn` in the `impl`
+/// block. `#[store]` supports methods only; associated consts and types are
+/// rejected.
 ///
 /// ## Bounds
 ///
