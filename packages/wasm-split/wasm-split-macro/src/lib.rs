@@ -75,21 +75,21 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
         #wrapper_sig {
             #(#attrs)*
             #[allow(improper_ctypes_definitions)]
-            #[no_mangle]
-            pub extern "C" #export_sig {
+            #[unsafe(no_mangle)]
+            pub unsafe extern "C" #export_sig {
                 Box::pin(async move { #(#stmts)* })
             }
 
             #[link(wasm_import_module = "./__wasm_split.js")]
-            extern "C" {
-                #[no_mangle]
+            unsafe extern "C" {
+                #[unsafe(no_mangle)]
                 fn #load_module_ident (
                     callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                     data: *const ::std::ffi::c_void
                 );
 
                 #[allow(improper_ctypes)]
-                #[no_mangle]
+                #[unsafe(no_mangle)]
                 #import_sig;
             }
 
@@ -156,23 +156,23 @@ pub fn lazy_loader(input: TokenStream) -> TokenStream {
             #[cfg(target_arch = "wasm32")]
             {
                 #[link(wasm_import_module = "./__wasm_split.js")]
-                extern "C" {
+                unsafe extern "C" {
                     // The function we'll use to initiate the download of the module
-                    #[no_mangle]
+                    #[unsafe(no_mangle)]
                     fn #load_module_ident(
                         callback: unsafe extern "C" fn(*const ::std::ffi::c_void, bool),
                         data: *const ::std::ffi::c_void,
                     );
 
                     #[allow(improper_ctypes)]
-                    #[no_mangle]
+                    #[unsafe(no_mangle)]
                     fn #impl_import_ident(arg: #arg_ty) #outputs;
                 }
 
 
                 #[allow(improper_ctypes_definitions)]
-                #[no_mangle]
-                pub extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
+                #[unsafe(no_mangle)]
+                pub unsafe extern "C" fn #impl_export_ident(arg: #arg_ty) #outputs {
                     #name(arg)
                 }
 

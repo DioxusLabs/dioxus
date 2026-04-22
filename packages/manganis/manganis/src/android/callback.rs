@@ -109,7 +109,7 @@ impl CallbackSystem {
 ///
 /// SAFETY: This function is called from Java and must maintain proper memory safety.
 /// The handler pointer is valid as long as the Manager exists (see Drop implementation).
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn rust_callback<'a>(
     mut env: JNIEnv<'a>,
     _class: JObject<'a>,
