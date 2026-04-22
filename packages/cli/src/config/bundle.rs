@@ -233,6 +233,38 @@ pub(crate) struct WindowsSettings {
     /// need to use another tool like `osslsigncode`.
     #[serde(default)]
     pub sign_command: Option<CustomSignCommandSettings>,
+
+    /// Free-form developer comments embedded in the executable's VERSIONINFO,
+    /// surfaced in Windows Explorer → Properties → Details → Comments.
+    #[serde(default)]
+    pub(crate) comments: Option<String>,
+
+    /// Internal name embedded in the executable's VERSIONINFO. Most apps leave
+    /// this equal to the product name; override only if the binary is known
+    /// internally by a different identifier (e.g. an original codename).
+    #[serde(default)]
+    pub(crate) internal_name: Option<String>,
+
+    /// VERSIONINFO LANGID for the resource block. Hex form like `0x0409`
+    /// (en-US) or `0x0407` (de-DE). Defaults to `0x0000` (neutral). See
+    /// <https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource#langID>
+    /// for the full table.
+    #[serde(default)]
+    pub(crate) language: Option<u16>,
+
+    /// Pass the host Windows SDK's `um/` and `shared/` headers to `rc.exe` via
+    /// `/I` flags. Only relevant when cross-compiling to MSVC from a
+    /// non-Windows host where the SDK headers aren't on the default include
+    /// path. Has no effect for the GNU (`windres`) toolchain.
+    #[serde(default)]
+    pub(crate) add_toolkit_include: Option<bool>,
+
+    /// Raw `.rc` snippet appended verbatim to the generated resource file.
+    /// Use this to add custom resources not covered by other settings —
+    /// application manifests, custom string tables, accelerators, etc.
+    /// Contents are not escaped.
+    #[serde(default)]
+    pub(crate) extra_rc: Option<String>,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, JsonSchema)]

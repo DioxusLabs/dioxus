@@ -1,4 +1,3 @@
-#![allow(unused)]
 //! Modified version of <https://github.com/BenjaminRi/winresource> or <https://github.com/tauri-apps/winres>
 //!
 //! Rust Windows resource helper
@@ -9,10 +8,9 @@
 //! Maybe it could be replaced by <https://crates.io/crates/windows-resource> in the future
 //! if it's going to be used to compile resources as the name suggests instead of external tools
 
-use dioxus_html::tr;
 use krates::semver::Version;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -26,11 +24,176 @@ use crate::BuildRequest;
 
 const DEFAULT_ICON: &[u8] = include_bytes!("../../assets/icon.ico");
 
-pub(crate) fn write_default_icon(output_dir: &Path) -> Result<PathBuf> {
-    let icon = output_dir.join("icon.ico");
-    let mut file = File::create(&icon)?;
-    file.write_all(DEFAULT_ICON)?;
-    Ok(icon)
+impl BuildRequest {
+    /// Per-build directory for the compiled Windows resource (`.rc` source,
+    /// the produced object/lib, and any default-icon copy). Lives under
+    /// [`Self::platform_dir`], which is already unique per
+    /// `(project, profile, bundle)` and is not cleared by `dx build`/`dx bundle`,
+    /// so multiple projects can't clobber each other.
+    pub(crate) fn winres_dir(&self) -> PathBuf {
+        self.platform_dir().join(".winres")
+    }
+
+    /// Returns `(search_path, link_spec)` for the Windows resource library
+    /// produced by [`Self::write_winres`], if it has been built. This is a
+    /// pure lookup that derives the deterministic output paths and only
+    /// returns `Some` when the compiled lib is actually present on disk, so
+    /// it is safe to call from `cargo_build_arguments`. The pair is suitable
+    /// for `cargo rustc -L <search_path> -l <link_spec>`.
+    pub(crate) fn winres_linker_args(&self) -> Option<(String, String)> {
+        if !matches!(self.triple.operating_system, OperatingSystem::Windows) {
+            return None;
+        }
+
+        let winres_dir = self.winres_dir();
+
+        let (link_spec, lib_filename) = if matches!(self.triple.environment, Environment::Msvc) {
+            ("dylib=resource", "resource.lib")
+        } else {
+            ("static=resource", "libresource.a")
+        };
+
+        if !winres_dir.join(lib_filename).is_file() {
+            return None;
+        }
+
+        Some((
+            winres_dir.to_string_lossy().to_string(),
+            link_spec.to_string(),
+        ))
+    }
+
+    // needs to only run when tomls are updated
+    pub(crate) fn write_winres(&self) -> Result<()> {
+        let bundle = &self.config.bundle;
+        let package = self.package();
+
+        let (version_str, version) = match bundle.version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (
+                &format!(
+                    "{}.{}.{}",
+                    package.version.major, package.version.minor, package.version.patch
+                ),
+                VersionInfo::version_from_krate(&package.version),
+            ),
+        };
+
+        let (file_version_str, file_version) = match bundle.file_version.as_ref() {
+            Some(v) => (v, VersionInfo::version_from_str(v)),
+            None => (version_str, version),
+        };
+
+        let productname = match self.config.application.name.as_ref() {
+            Some(n) => n,
+            None => &self.bundled_app_name(),
+        };
+
+        let binding = package.description.clone().unwrap_or_default();
+        let description = match bundle.short_description.as_ref() {
+            Some(val) => val,
+            None => bundle.long_description.as_ref().unwrap_or(&binding),
+        };
+
+        let winres_dir = self.winres_dir();
+        _ = std::fs::create_dir_all(&winres_dir);
+
+        let mut winres = WindowsResource::new(version, file_version);
+        winres
+            .set(Properties::ProductVersion, version_str)
+            .set(Properties::FileVersion, file_version_str)
+            .set(Properties::ProductName, productname)
+            .set(Properties::FileDescription, description);
+
+        if let Some(value) = &bundle.original_file_name {
+            winres.set(Properties::OriginalFilename, value);
+        }
+
+        if let Some(value) = &bundle.copyright {
+            winres.set(Properties::Copyright, value);
+        }
+        if let Some(value) = &bundle.trademark {
+            winres.set(Properties::Trademark, value);
+        }
+
+        if let Some(value) = &bundle.publisher {
+            winres.set(Properties::CompanyName, value);
+        }
+
+        if let Some(value) = &bundle.category {
+            winres.set(Properties::Other("Category"), value);
+        }
+
+        let windows = bundle.windows.as_ref();
+
+        if let Some(value) = windows.and_then(|w| w.comments.as_deref()) {
+            winres.set(Properties::Comments, value);
+        }
+        if let Some(value) = windows.and_then(|w| w.internal_name.as_deref()) {
+            winres.set(Properties::InternalName, value);
+        }
+        if let Some(language) = windows.and_then(|w| w.language) {
+            winres.set_language(language);
+        }
+        if windows.and_then(|w| w.add_toolkit_include).unwrap_or(false) {
+            winres.add_toolkit_include(true);
+        }
+        if let Some(value) = windows.and_then(|w| w.extra_rc.as_deref()) {
+            winres.append_rc_content(value);
+        }
+
+        let mut has_default = false;
+        if let Some(path) = windows.and_then(|w| w.icon_path.as_ref()) {
+            winres.set_icon(path.clone());
+            has_default = true;
+        }
+
+        if let Some(icons) = bundle.icon.as_ref() {
+            for (id, icon) in icons.iter().enumerate() {
+                if icon.ends_with(".ico") {
+                    let icon_path = self.canonicalize_icon_path(&PathBuf::from(icon))?;
+                    if !has_default {
+                        // first .ico file will be app icon
+                        winres.set_icon(icon_path);
+                        has_default = true;
+                    } else {
+                        // other .ico files can be accessed with their index as id
+                        winres.set_icon_with_id(icon_path, id.to_string());
+                    };
+                }
+            }
+        }
+
+        if !has_default {
+            let default_icon = winres_dir.join("icon.ico");
+            let mut file = File::create(&default_icon)?;
+            file.write_all(DEFAULT_ICON)?;
+            let icon = self.canonicalize_icon_path(&default_icon)?;
+            winres.set_icon(icon);
+        }
+
+        winres.compile(&self.triple, &winres_dir)?;
+        Ok(())
+    }
+
+    fn canonicalize_icon_path(&self, icon_path: &PathBuf) -> Result<PathBuf> {
+        if icon_path.is_absolute() && icon_path.is_file() {
+            return Ok(dunce::canonicalize(icon_path)?);
+        }
+        let crate_icon = self.crate_dir().join(icon_path);
+        if crate_icon.is_file() {
+            return Ok(dunce::canonicalize(crate_icon)?);
+        }
+        let workspace_icon = self.workspace_dir().join(icon_path);
+        if workspace_icon.is_file() {
+            return Ok(dunce::canonicalize(workspace_icon)?);
+        }
+
+        Err(anyhow::anyhow!(
+            "Could not find icon from path {:?}",
+            icon_path
+        ))
+    }
 }
 
 /// Values based on <https://learn.microsoft.com/en-us/windows/win32/menurc/about-icons>
@@ -126,7 +289,7 @@ impl std::fmt::Display for Properties {
 
 impl VersionInfo {
     /// Creates u64 version from string
-    pub fn version_from_str(version: &str) -> u64 {
+    fn version_from_str(version: &str) -> u64 {
         let parts: Vec<&str> = version.split('.').collect();
         if parts.len() > 4 {
             tracing::warn!("Version number had more than 4 parts. Ignoring the rest.");
@@ -152,7 +315,7 @@ impl VersionInfo {
             | (segments[3] as u64)
     }
 
-    pub fn version_from_krate(v: &Version) -> u64 {
+    fn version_from_krate(v: &Version) -> u64 {
         (v.major << 48) | (v.minor << 32) | (v.patch << 16)
     }
 }
@@ -163,36 +326,8 @@ struct Icon {
     name_id: String,
 }
 
-impl Icon {
-    fn from_pathbuf(path: &Path, id: &str) -> Self {
-        Icon {
-            path: path
-                .canonicalize()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or(path.to_string_lossy().to_string()),
-            name_id: id.into(),
-        }
-    }
-
-    fn from_str(path: &str, id: &str) -> Self {
-        Icon {
-            path: PathBuf::from(path)
-                .canonicalize()
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or(path.to_string()),
-            name_id: id.into(),
-        }
-    }
-}
-#[derive(Debug, Default)]
-pub struct WindowsResourceLinker {
-    pub lib: String,
-    pub path: String,
-    pub files: Vec<String>,
-}
-
 #[derive(Debug)]
-pub struct WindowsResource {
+struct WindowsResource {
     properties: HashMap<String, String>,
     version_info: HashMap<VersionInfo, u64>,
     icons: Vec<Icon>,
@@ -206,7 +341,7 @@ impl WindowsResource {
     ///
     /// We initialize the resource file with values provided in Dioxus.toml
     ///
-    pub fn new(version: u64, file_version: u64) -> Self {
+    fn new(version: u64, file_version: u64) -> Self {
         let props: HashMap<String, String> = HashMap::new();
         let mut ver: HashMap<VersionInfo, u64> = HashMap::new();
 
@@ -231,7 +366,7 @@ impl WindowsResource {
     /// Set string properties of the version info struct.
     ///
     /// See [`Properties`] for valid values
-    pub fn set(&mut self, name: Properties, value: &str) -> &mut Self {
+    fn set(&mut self, name: Properties, value: &str) -> &mut Self {
         self.properties.insert(name.to_string(), value.to_string());
         self
     }
@@ -265,7 +400,7 @@ impl WindowsResource {
     /// | Breton              | `0x007e` |
     /// | Scottish Gaelic     | `0x0091` |
     /// | Romansch            | `0x0017` |
-    pub fn set_language(&mut self, language: u16) -> &mut Self {
+    fn set_language(&mut self, language: u16) -> &mut Self {
         self.language = language;
         self
     }
@@ -276,7 +411,7 @@ impl WindowsResource {
     /// or relative to the projects root.
     ///
     /// Equivalent ```to set_icon_with_id(path, IDI::APPLICATION)```.
-    pub fn set_icon(&mut self, path: PathBuf) -> &mut Self {
+    fn set_icon(&mut self, path: PathBuf) -> &mut Self {
         self.set_icon_with_id(path, IDI::APPLICATION)
     }
 
@@ -322,7 +457,7 @@ impl WindowsResource {
     /// name IDs, and add the application icon first with the lowest id:
     ///
     /// see [`IDI`] for special icons ids
-    pub fn set_icon_with_id(&mut self, path: PathBuf, name_id: impl Into<String>) -> &mut Self {
+    fn set_icon_with_id(&mut self, path: PathBuf, name_id: impl Into<String>) -> &mut Self {
         self.icons.push(Icon {
             path: path.to_string_lossy().to_string(),
             name_id: name_id.into(),
@@ -330,15 +465,8 @@ impl WindowsResource {
         self
     }
 
-    /// Set a version info struct property
-    /// Currently we only support numeric values; you have to look them up.
-    pub fn set_version_info(&mut self, field: VersionInfo, value: u64) -> &mut Self {
-        self.version_info.insert(field, value);
-        self
-    }
-
     /// Set the path to the ar executable.
-    pub fn add_toolkit_include(&mut self, add: bool) -> &mut Self {
+    fn add_toolkit_include(&mut self, add: bool) -> &mut Self {
         self.add_toolkit_include = add;
         self
     }
@@ -373,8 +501,8 @@ impl WindowsResource {
                 writeln!(
                     f,
                     "VALUE \"{}\", \"{}\"",
-                    escape_string(k),
-                    escape_string(v)
+                    escape_string_windows(k),
+                    escape_string_windows(v)
                 )?;
             }
         }
@@ -387,8 +515,8 @@ impl WindowsResource {
             writeln!(
                 f,
                 "{} ICON \"{}\"",
-                escape_string(&icon.name_id),
-                escape_string(&icon.path)
+                escape_string_windows(&icon.name_id),
+                escape_string_windows(&icon.path)
             )?;
         }
 
@@ -397,7 +525,7 @@ impl WindowsResource {
     }
 
     /// Append an additional snippet to the generated rc file.
-    pub fn append_rc_content(&mut self, content: &str) -> &mut Self {
+    fn append_rc_content(&mut self, content: &str) -> &mut Self {
         if !(self.append_rc_content.ends_with('\n') || self.append_rc_content.is_empty()) {
             self.append_rc_content.push('\n');
         }
@@ -410,7 +538,7 @@ impl WindowsResource {
     /// This function generates a resource file from the settings or
     /// uses an existing resource file and passes it to the resource compiler
     /// of your toolkit.
-    pub fn compile(&mut self, target: &Triple, output_dir: &Path) -> Result<WindowsResourceLinker> {
+    fn compile(&mut self, target: &Triple, output_dir: &Path) -> Result<()> {
         if matches!(target.environment, Environment::Msvc) {
             tracing::debug!("Compiling Windows resource file with msvc toolkit");
             self.compile_with_toolkit_msvc(target, output_dir)
@@ -424,11 +552,7 @@ impl WindowsResource {
         }
     }
 
-    fn compile_with_toolkit_gnu(
-        &mut self,
-        target: &Triple,
-        output_dir: &Path,
-    ) -> Result<WindowsResourceLinker> {
+    fn compile_with_toolkit_gnu(&mut self, target: &Triple, output_dir: &Path) -> Result<()> {
         let toolkit_path =
             if env::var_os("HOST").is_some_and(|v| v.to_string_lossy().contains("windows")) {
                 PathBuf::from("\\")
@@ -513,21 +637,10 @@ impl WindowsResource {
             ));
         }
 
-        Ok(WindowsResourceLinker {
-            lib: "static=resource".to_string(),
-            path: output_dir.to_string_lossy().to_string(),
-            files: vec![
-                output.to_string_lossy().to_string(),
-                libname.to_string_lossy().to_string(),
-            ],
-        })
+        Ok(())
     }
 
-    fn compile_with_toolkit_msvc(
-        &mut self,
-        target: &Triple,
-        output_dir: &Path,
-    ) -> Result<WindowsResourceLinker> {
+    fn compile_with_toolkit_msvc(&mut self, target: &Triple, output_dir: &Path) -> Result<()> {
         // The path to this could also be provided via Dioxus.toml if someone has the exe in other places
         let toolkit = get_sdk(matches!(target.architecture, Architecture::X86_64))?;
 
@@ -555,11 +668,7 @@ impl WindowsResource {
             return Err(anyhow!("Compiling resource file {:?}", &status.stderr));
         }
 
-        Ok(WindowsResourceLinker {
-            lib: "dylib=resource".to_string(),
-            path: output_dir.to_string_lossy().to_string(),
-            files: vec![output.to_string_lossy().to_string()],
-        })
+        Ok(())
     }
 }
 
@@ -618,12 +727,25 @@ fn get_sdk(is_x64: bool) -> io::Result<PathBuf> {
     Err(io::Error::other("Can not find Windows SDK"))
 }
 
-pub(crate) fn escape_string(string: &str) -> String {
+/// Escapes `string` so it can be safely embedded between the double-quotes of
+/// a Windows resource script (`.rc`) string literal, as consumed by
+/// `windres` / `rc.exe`.
+///
+/// Used by [`WindowsResource::write_resource_file`] for every quoted value we
+/// emit — `VERSIONINFO` `VALUE` entries (`ProductName`, `FileDescription`,
+/// etc.) and the path / name-id of each `ICON` resource. Without this, an
+/// unescaped `"` or `\` in (for example) a user-supplied `productName` or
+/// icon path would produce a malformed `.rc` and a confusing compiler error.
+///
+/// The RC string-literal grammar is a hybrid:
+/// - `"` is doubled (`""`) — RC's own quoting convention, *not* `\"`.
+/// - Backslash escapes follow C conventions: `\\`, `\n`, `\t`, `\r`, `\'`.
+///
+/// See the RC reference:
+/// <https://learn.microsoft.com/en-us/windows/win32/menurc/about-resource-files>
+fn escape_string_windows(string: &str) -> String {
     let mut escaped = String::new();
     for chr in string.chars() {
-        // In quoted RC strings, double-quotes are escaped by using two
-        // consecutive double-quotes.  Other characters are escaped in the
-        // usual C way using backslashes.
         match chr {
             '"' => escaped.push_str("\"\""),
             '\'' => escaped.push_str("\\'"),
@@ -654,122 +776,4 @@ fn win_sdk_include_root(path: &Path) -> PathBuf {
     }
 
     tools_path
-}
-
-impl BuildRequest {
-    fn canonicalize_icon_path(&self, icon_path: &PathBuf) -> Result<PathBuf> {
-        if icon_path.is_absolute() && icon_path.is_file() {
-            return Ok(dunce::canonicalize(icon_path)?);
-        }
-        let crate_icon = self.crate_dir().join(icon_path);
-        if crate_icon.is_file() {
-            return Ok(dunce::canonicalize(crate_icon)?);
-        }
-        let workspace_icon = self.workspace_dir().join(icon_path);
-        if workspace_icon.is_file() {
-            return Ok(dunce::canonicalize(workspace_icon)?);
-        }
-
-        Err(anyhow::anyhow!(
-            "Could not find icon from path {:?}",
-            icon_path
-        ))
-    }
-
-    // needs to only run when tomls are updated
-    pub(crate) fn write_winres(&self) -> Result<WindowsResourceLinker> {
-        let bundle = &self.config.bundle;
-        let package = self.package();
-
-        let (version_str, version) = match bundle.version.as_ref() {
-            Some(v) => (v, VersionInfo::version_from_str(v)),
-            None => (
-                &format!(
-                    "{}.{}.{}",
-                    package.version.major, package.version.minor, package.version.patch
-                ),
-                VersionInfo::version_from_krate(&package.version),
-            ),
-        };
-
-        let (file_version_str, file_version) = match bundle.file_version.as_ref() {
-            Some(v) => (v, VersionInfo::version_from_str(v)),
-            None => (version_str, version),
-        };
-
-        let productname = match self.config.application.name.as_ref() {
-            Some(n) => n,
-            None => &self.bundled_app_name(),
-        };
-
-        let binding = package.description.clone().unwrap_or_default();
-        let description = match bundle.short_description.as_ref() {
-            Some(val) => val,
-            None => bundle.long_description.as_ref().unwrap_or(&binding),
-        };
-
-        // platform dir gets cleared on bundle
-        let mut output_dir = self.platform_dir();
-        output_dir.push("winres");
-
-        std::fs::create_dir_all(&output_dir)?;
-
-        let mut winres = WindowsResource::new(version, file_version);
-        winres
-            .set(Properties::ProductVersion, version_str)
-            .set(Properties::FileVersion, file_version_str)
-            .set(Properties::ProductName, productname)
-            .set(Properties::FileDescription, description);
-
-        if let Some(value) = &bundle.original_file_name {
-            winres.set(Properties::OriginalFilename, value);
-        }
-
-        if let Some(value) = &bundle.copyright {
-            winres.set(Properties::Copyright, value);
-        }
-        if let Some(value) = &bundle.trademark {
-            winres.set(Properties::Trademark, value);
-        }
-
-        if let Some(value) = &bundle.publisher {
-            winres.set(Properties::CompanyName, value);
-        }
-
-        if let Some(value) = &bundle.category {
-            winres.set(Properties::Other("Category"), value);
-        }
-
-        let mut has_default = false;
-        if let Some(windows) = bundle.windows.as_ref() {
-            if let Some(path) = windows.icon_path.as_ref() {
-                winres.set_icon(path.clone());
-                has_default = true;
-            }
-        };
-
-        if let Some(icons) = bundle.icon.as_ref() {
-            for (id, icon) in icons.iter().enumerate() {
-                if icon.ends_with(".ico") {
-                    let icon_path = self.canonicalize_icon_path(&PathBuf::from(icon))?;
-                    if !has_default {
-                        // first .ico file will be app icon
-                        winres.set_icon(icon_path);
-                        has_default = true;
-                    } else {
-                        // other .ico files can be accessed with their index as id
-                        winres.set_icon_with_id(icon_path, id.to_string());
-                    };
-                }
-            }
-        }
-
-        if !has_default {
-            let default_icon = write_default_icon(&output_dir)?;
-            let icon = self.canonicalize_icon_path(&default_icon)?;
-            winres.set_icon(icon);
-        }
-
-        winres.compile(&self.triple, &output_dir)
-    }
 }
