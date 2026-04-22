@@ -81,11 +81,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
             futures_util::select! {
                 msg = hotreload_rx.next() => {
-                    if let Some(msg) = msg {
-                        if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                    if let Some(msg) = msg
+                        && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             dioxus_devtools::apply_changes(&virtual_dom, &msg);
                         }
-                    }
                 }
                 _ = &mut timeout => {
                     break;

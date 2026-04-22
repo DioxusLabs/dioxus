@@ -56,13 +56,12 @@ impl InMemoryCache {
             // The cache entry is out of date, so we need to remove it.
             if let Some(invalidate_after) = self.invalidate_after {
                 // If we can't convert to a std duration, the duration is negative and hasn't elapsed yet.
-                if let Ok(std_elapsed) = elapsed.to_std() {
-                    if std_elapsed > invalidate_after {
+                if let Ok(std_elapsed) = elapsed.to_std()
+                    && std_elapsed > invalidate_after {
                         tracing::trace!("memory cache out of date");
                         memory_cache.pop(route);
                         return Ok(None);
                     }
-                }
             }
 
             // We need to reborrow because we may have invalidated the lifetime if the route was removed.

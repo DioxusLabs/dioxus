@@ -158,14 +158,13 @@ impl Renderer {
                             write_attribute(buf, attr)?;
                         }
 
-                        if self.pre_render {
-                            if let AttributeValue::Listener(_) = &attr.value {
+                        if self.pre_render
+                            && let AttributeValue::Listener(_) = &attr.value {
                                 // The onmounted event doesn't need a DOM listener
                                 if attr.name != "onmounted" {
                                     accumulated_listeners.push(attr.name);
                                 }
                             }
-                        }
                     }
                 }
                 Segment::Node { index, escape_text } => {

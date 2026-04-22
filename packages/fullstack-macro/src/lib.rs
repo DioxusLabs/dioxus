@@ -830,8 +830,8 @@ impl CompiledRoute {
             .enumerate()
             .filter_map(|(i, item)| {
                 if let FnArg::Typed(pat_type) = item {
-                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                        if self.path_params.iter().any(|(_slash, path_param)| {
+                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat
+                        && (self.path_params.iter().any(|(_slash, path_param)| {
                             if let Some((path_ident, _ty)) = path_param.capture() {
                                 path_ident == &pat_ident.ident
                             } else {
@@ -840,11 +840,10 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|query| query.binding == pat_ident.ident)
+                            .any(|query| query.binding == pat_ident.ident))
                         {
                             return None;
                         }
-                    }
 
                     Some((i, pat_type.clone()))
                 } else {

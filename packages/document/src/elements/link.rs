@@ -121,11 +121,10 @@ pub fn Link(props: LinkProps) -> Element {
     use_hook(|| {
         let document = document();
         let mut insert_link = document.create_head_component();
-        if let Some(href) = &props.href {
-            if !should_insert_link(href, props.rel.as_deref()) {
+        if let Some(href) = &props.href
+            && !should_insert_link(href, props.rel.as_deref()) {
                 insert_link = false;
             }
-        }
 
         if !insert_link {
             return;

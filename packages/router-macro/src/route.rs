@@ -133,11 +133,10 @@ impl Route {
                 .named
                 .iter()
                 .filter_map(|f| {
-                    if let RouteType::Child(child) = &ty {
-                        if f.ident == child.ident {
+                    if let RouteType::Child(child) = &ty
+                        && f.ident == child.ident {
                             return None;
                         }
-                    }
                     Some((f.ident.clone().unwrap(), f.ty.clone()))
                 })
                 .collect(),
@@ -389,16 +388,14 @@ impl Route {
                     from_route = true
                 }
             }
-            if let Some(query) = &self.query {
-                if query.contains_ident(name) {
+            if let Some(query) = &self.query
+                && query.contains_ident(name) {
                     from_route = true
                 }
-            }
-            if let Some(hash) = &self.hash {
-                if hash.contains_ident(name) {
+            if let Some(hash) = &self.hash
+                && hash.contains_ident(name) {
                     from_route = true
                 }
-            }
 
             if from_route {
                 quote! {#name}

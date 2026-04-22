@@ -558,13 +558,13 @@ impl Workspace {
     }
 
     pub async fn get_xcode_path() -> Option<PathBuf> {
-        let xcode = Command::new("xcode-select")
+        
+        Command::new("xcode-select")
             .arg("-p")
             .output()
             .await
             .ok()
-            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
-        xcode
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into())
     }
 
     pub async fn get_rustc_sysroot() -> Result<String, anyhow::Error> {

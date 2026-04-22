@@ -251,12 +251,10 @@ impl WebsysDom {
         // If this scope is a suspense boundary that is pending, add it to the list of pending suspense boundaries
         if let Some(suspense) =
             SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime(), scope.id())
-        {
-            if suspense.has_suspended_tasks() {
+            && suspense.has_suspended_tasks() {
                 self.suspense_hydration_ids
                     .add_suspense_boundary(scope.id());
             }
-        }
 
         self.rehydrate_vnode(dom, scope.root_node(), ids, to_mount)
     }
@@ -307,11 +305,10 @@ impl WebsysDom {
                         mounted_id = Some(id);
                         for attribute in attributes {
                             let value = &attribute.value;
-                            if let AttributeValue::Listener(_) = value {
-                                if attribute.name == "onmounted" {
+                            if let AttributeValue::Listener(_) = value
+                                && attribute.name == "onmounted" {
                                     to_mount.push(id);
                                 }
-                            }
                         }
                     }
                 }

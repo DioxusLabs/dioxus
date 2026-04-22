@@ -173,11 +173,10 @@ impl dioxus_history::History for WebHistory {
 
         let function = Closure::wrap(Box::new(move |_| {
             (*callback)();
-            if d {
-                if let Some([x, y]) = get_current(&h) {
+            if d
+                && let Some([x, y]) = get_current(&h) {
                     ScrollPosition { x, y }.scroll_to(w.clone())
                 }
-            }
         }) as Box<dyn FnMut(Event)>);
         self.window
             .add_event_listener_with_callback(
@@ -329,11 +328,10 @@ impl dioxus_history::History for HashHistory {
 
         let function = Closure::wrap(Box::new(move |_| {
             (*callback)();
-            if d {
-                if let Some([x, y]) = get_current(&h) {
+            if d
+                && let Some([x, y]) = get_current(&h) {
                     ScrollPosition { x, y }.scroll_to(w.clone())
                 }
-            }
         }) as Box<dyn FnMut(Event)>);
         self.window
             .add_event_listener_with_callback(

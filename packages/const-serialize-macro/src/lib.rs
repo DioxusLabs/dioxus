@@ -103,8 +103,8 @@ pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
                 let mut repr_c = false;
                 let mut discriminant_size = None;
                 for attr in &input.attrs {
-                    if attr.path().is_ident("repr") {
-                        if let Err(err) = attr.parse_nested_meta(|meta| {
+                    if attr.path().is_ident("repr")
+                        && let Err(err) = attr.parse_nested_meta(|meta| {
                             // #[repr(C)]
                             if meta.path.is_ident("C") {
                                 repr_c = true;
@@ -139,7 +139,6 @@ pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
                         }) {
                             return err.to_compile_error().into();
                         }
-                    }
                 }
 
                 let variants_have_fields = data

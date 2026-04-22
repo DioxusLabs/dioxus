@@ -77,12 +77,11 @@ impl HasDataTransferData for Synthetic<DragEvent> {
     fn data_transfer(&self) -> dioxus_html::DataTransfer {
         use wasm_bindgen::JsCast;
 
-        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>() {
-            if let Some(data) = target.data_transfer() {
+        if let Some(target) = self.event.dyn_ref::<web_sys::DragEvent>()
+            && let Some(data) = target.data_transfer() {
                 let web_data_transfer = WebDataTransfer::new(data);
                 return dioxus_html::DataTransfer::new(web_data_transfer);
             }
-        }
 
         // Return an empty DataTransfer if we couldn't get one from the event
         let web_data_transfer = WebDataTransfer::new(web_sys::DataTransfer::new().unwrap());
@@ -102,15 +101,13 @@ impl HasFileData for Synthetic<DragEvent> {
                     let items = data_transfer.items();
                     let mut files = vec![];
                     for i in 0..items.length() {
-                        if let Some(item) = items.get(i) {
-                            if item.kind() == "file" {
-                                if let Ok(Some(file)) = item.get_as_file() {
+                        if let Some(item) = items.get(i)
+                            && item.kind() == "file"
+                                && let Ok(Some(file)) = item.get_as_file() {
                                     let web_data =
                                         WebFileData::new(file, FileReader::new().unwrap());
                                     files.push(FileData::new(web_data));
                                 }
-                            }
-                        }
                     }
                     return files;
                 }

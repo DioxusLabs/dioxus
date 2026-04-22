@@ -278,8 +278,8 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
             .map(|line| {
                 let line_parsed = line.trim().to_string();
                 let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                line_parsed
+                
+                line_parsed.trim_start_matches('"').to_string()
             })
             .collect()
     } else {

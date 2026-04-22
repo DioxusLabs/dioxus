@@ -324,7 +324,8 @@ impl SuspenseBoundaryProps {
                 .clone();
 
             // If there are suspended futures, render the fallback
-            let nodes_created = if !suspense_context.suspended_futures().is_empty() {
+            
+            if !suspense_context.suspended_futures().is_empty() {
                 let (node, nodes_created) =
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {
                         let scope_state = &mut dom.scopes[scope_id.0];
@@ -360,8 +361,7 @@ impl SuspenseBoundaryProps {
                 mark_suspense_resolved(&suspense_context, dom, scope_id);
 
                 nodes_created
-            };
-            nodes_created
+            }
         })
     }
 

@@ -73,8 +73,8 @@ impl HasFormData for WebFormData {
             let form_data = web_sys::FormData::new_with_form(form).unwrap();
 
             for entry in form_data.entries().into_iter().flatten() {
-                if let Ok(array) = entry.dyn_into::<Array>() {
-                    if let Some(name) = array.get(0).as_string() {
+                if let Ok(array) = entry.dyn_into::<Array>()
+                    && let Some(name) = array.get(0).as_string() {
                         let value = array.get(1);
                         if let Some(file) = value.dyn_ref::<web_sys::File>() {
                             if file.name().is_empty() {
@@ -90,7 +90,6 @@ impl HasFormData for WebFormData {
                             values.push((name, FormValue::Text(s)));
                         }
                     }
-                }
             }
         } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
             // try to fill in select element values

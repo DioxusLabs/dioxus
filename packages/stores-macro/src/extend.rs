@@ -157,10 +157,10 @@ struct StorePath {
 }
 
 fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
-    if let Type::Path(type_path) = store_type {
-        if let Some(segment) = type_path.path.segments.last() {
-            if let PathArguments::AngleBracketed(args) = &segment.arguments {
-                if let Some(store_generics) = args.args.first().and_then(argument_as_type) {
+    if let Type::Path(type_path) = store_type
+        && let Some(segment) = type_path.path.segments.last()
+            && let PathArguments::AngleBracketed(args) = &segment.arguments
+                && let Some(store_generics) = args.args.first().and_then(argument_as_type) {
                     let store_lens = args
                         .args
                         .iter()
@@ -178,9 +178,6 @@ fn parse_store_type(store_type: &Type) -> syn::Result<StorePath> {
                         store_lens,
                     });
                 }
-            }
-        }
-    }
     Err(syn::Error::new_spanned(
         store_type,
         "The implementation must be in the form `impl Store<T> {...}`",

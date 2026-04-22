@@ -88,11 +88,10 @@ impl<H> FullstackHistory<H> {
         // rendered at a different url
         if let Some(entry) = try_consume_context::<RouteEntry>() {
             let entry = entry.entry.borrow();
-            if let Some(entry) = &*entry {
-                if let Ok(initial_route) = entry.get() {
+            if let Some(entry) = &*entry
+                && let Ok(initial_route) = entry.get() {
                     return initial_route;
                 }
-            }
         }
 
         self.history.current_route()

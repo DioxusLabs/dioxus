@@ -570,11 +570,9 @@ impl SsrRendererPool {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
             if let Some(suspense_boundary) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
-            {
-                if let Some(node) = suspense_boundary.suspended_nodes() {
+                && let Some(node) = suspense_boundary.suspended_nodes() {
                     Self::take_from_vnode(context, vdom, &node);
                 }
-            }
             if let Some(node) = scope.try_root_node() {
                 Self::take_from_vnode(context, vdom, node);
             }

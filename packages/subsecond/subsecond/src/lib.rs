@@ -394,11 +394,10 @@ impl<A, M, F: HotFunction<A, M>> HotFn<A, M, F> {
         }
 
         let known_fn_ptr = <F as HotFunction<A, M>>::call_it as *const () as usize;
-        if let Some(jump_table) = unsafe { get_jump_table() } {
-            if let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
+        if let Some(jump_table) = unsafe { get_jump_table() }
+            && let Some(ptr) = jump_table.map.get(&(known_fn_ptr as u64)).cloned() {
                 return HotFnPtr(ptr);
             }
-        }
 
         HotFnPtr(known_fn_ptr as u64)
     }

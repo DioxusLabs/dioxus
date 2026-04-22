@@ -177,8 +177,8 @@ impl Asset {
             let bundled = (self.legacy)();
             let bytes = read_slice_volatile(bundled);
             let read = const_serialize_07::ConstReadBuffer::new(bytes.as_ref());
-            let asset = const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1;
-            asset
+            
+            const_serialize_07::deserialize_const!(BundledAsset, read).expect("Failed to deserialize asset. Make sure you built with the matching version of the Dioxus CLI").1
         } else {
             asset
         }

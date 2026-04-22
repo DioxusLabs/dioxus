@@ -683,13 +683,11 @@ impl<'a> Writer<'a> {
         }
 
         // If there is more than 1 comment, make sure the first comment is not an empty line
-        if comments.len() > 1 {
-            if let Some(&first) = comments.back() {
-                if self.src[first].trim().is_empty() {
+        if comments.len() > 1
+            && let Some(&first) = comments.back()
+                && self.src[first].trim().is_empty() {
                     comments.pop_back();
                 }
-            }
-        }
 
         comments
     }
@@ -792,8 +790,8 @@ impl<'a> Writer<'a> {
         }
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.span().start()) {
-                if let Some(lines) = self.src.get(..attr.span().start().line - 1) {
+            if self.current_span_is_primary(attr.span().start())
+                && let Some(lines) = self.src.get(..attr.span().start().line - 1) {
                     'line: for line in lines.iter().rev() {
                         match (line.trim().starts_with("//"), line.is_empty()) {
                             (true, _) => return 100000,
@@ -802,7 +800,6 @@ impl<'a> Writer<'a> {
                         }
                     }
                 };
-            }
 
             total += match &attr.name {
                 AttributeName::BuiltIn(name) => {
@@ -1066,14 +1063,12 @@ impl<'a> Writer<'a> {
                 } else {
                     // Single line - output pretty line and capture inline comments
                     out.push_str(line);
-                    if let Some(src_line) = src_lines.next() {
-                        if let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line)) {
-                            if let Some(c) = cap.get(1) {
+                    if let Some(src_line) = src_lines.next()
+                        && let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
+                            && let Some(c) = cap.get(1) {
                                 out.push_str(" // ");
                                 out.push_str(c.as_str().replace("//", "").trim());
                             }
-                        }
-                    }
                 }
             }
         }
