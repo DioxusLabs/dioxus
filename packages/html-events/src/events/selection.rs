@@ -1,7 +1,3 @@
-use dioxus_core::Event;
-
-pub type SelectionEvent = Event<SelectionData>;
-
 pub struct SelectionData {
     inner: Box<dyn HasSelectionData>,
 }

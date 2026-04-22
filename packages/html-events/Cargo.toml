@@ -1,0 +1,42 @@
+[package]
+name = "html-events"
+version = { workspace = true }
+authors = ["Jonathan Kelley"]
+edition = "2021"
+description = "Types/Traits to represent HTML events"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
+
+[dependencies]
+keyboard-types = { workspace = true, default-features = false }
+futures-util = { workspace = true }
+euclid = "0.22.11"
+enumset = "1.1.6"
+bytes = { workspace = true }
+anyhow = { workspace = true }
+
+# Serialize
+serde = { workspace = true, features = ["derive"], optional = true }
+serde_repr = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[features]
+default = ["serialize"]
+serialize = [
+    "dep:serde",
+    "dep:serde_json",
+    "dep:serde_repr",
+    "euclid/serde",
+    "keyboard-types/serde",
+    "bytes/serde"
+]
+
+[package.metadata.docs.rs]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+feature = ["html-to-rsx", "hot-reload-context", "html-to-rsx"]

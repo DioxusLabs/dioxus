@@ -1,38 +1,34 @@
-use dioxus_core::Event;
-
-pub type ToggleEvent = Event<ToggleData>;
-
-pub struct ToggleData {
-    inner: Box<dyn HasToggleData>,
+pub struct FocusData {
+    inner: Box<dyn HasFocusData>,
 }
 
-impl<E: HasToggleData> From<E> for ToggleData {
+impl<E: HasFocusData> From<E> for FocusData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
 }
 
-impl std::fmt::Debug for ToggleData {
+impl std::fmt::Debug for FocusData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ToggleData").finish()
+        f.debug_struct("FocusData").finish()
     }
 }
 
-impl PartialEq for ToggleData {
+impl PartialEq for FocusData {
     fn eq(&self, _other: &Self) -> bool {
         true
     }
 }
 
-impl ToggleData {
-    /// Create a new ToggleData
-    pub fn new(inner: impl HasToggleData + 'static) -> Self {
+impl FocusData {
+    /// Create a new FocusData
+    pub fn new(inner: impl HasFocusData + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }
     }
 
-    /// Downcast this event to a concrete event type
+    /// Downcast this event data to a specific type
     #[inline(always)]
     pub fn downcast<T: 'static>(&self) -> Option<&T> {
         self.inner.as_any().downcast_ref::<T>()
@@ -40,42 +36,42 @@ impl ToggleData {
 }
 
 #[cfg(feature = "serialize")]
-/// A serialized version of ToggleData
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedToggleData {}
+/// A serialized version of FocusData
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone, Default)]
+pub struct SerializedFocusData {}
 
 #[cfg(feature = "serialize")]
-impl From<&ToggleData> for SerializedToggleData {
-    fn from(_: &ToggleData) -> Self {
+impl From<&FocusData> for SerializedFocusData {
+    fn from(_: &FocusData) -> Self {
         Self {}
     }
 }
 
 #[cfg(feature = "serialize")]
-impl HasToggleData for SerializedToggleData {
+impl HasFocusData for SerializedFocusData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
 #[cfg(feature = "serialize")]
-impl serde::Serialize for ToggleData {
+impl serde::Serialize for FocusData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedToggleData::from(self).serialize(serializer)
+        SerializedFocusData::from(self).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for ToggleData {
+impl<'de> serde::Deserialize<'de> for FocusData {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = SerializedToggleData::deserialize(deserializer)?;
+        let data = SerializedFocusData::deserialize(deserializer)?;
         Ok(Self {
             inner: Box::new(data),
         })
     }
 }
 
-pub trait HasToggleData: std::any::Any {
+pub trait HasFocusData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

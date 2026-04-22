@@ -13,6 +13,7 @@ members = [
     "packages/extension",
     "packages/router",
     "packages/html",
+    "packages/html-events",
     "packages/html-internal-macro",
     "packages/hooks",
     "packages/web",
@@ -128,6 +129,7 @@ dioxus-router-macro = { path = "packages/router-macro", version = "0.7.4" }
 dioxus-document = { path = "packages/document", version = "0.7.4", default-features = false }
 dioxus-history = { path = "packages/history", version = "0.7.4", default-features = false }
 dioxus-html = { path = "packages/html", version = "0.7.4", default-features = false }
+html-events = { path = "packages/html-events", version = "0.7.4", default-features = false }
 dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.4" }
 dioxus-hooks = { path = "packages/hooks", version = "0.7.4" }
 dioxus-web = { path = "packages/web", version = "0.7.4", default-features = false }

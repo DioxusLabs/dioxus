@@ -1,32 +1,28 @@
-use dioxus_core::Event;
-
-pub type CancelEvent = Event<CancelData>;
-
-pub struct CancelData {
-    inner: Box<dyn HasCancelData>,
+pub struct MediaData {
+    inner: Box<dyn HasMediaData>,
 }
 
-impl<E: HasCancelData> From<E> for CancelData {
+impl<E: HasMediaData> From<E> for MediaData {
     fn from(e: E) -> Self {
         Self { inner: Box::new(e) }
     }
 }
 
-impl std::fmt::Debug for CancelData {
+impl std::fmt::Debug for MediaData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CancelData").finish()
+        f.debug_struct("MediaData").finish()
     }
 }
 
-impl PartialEq for CancelData {
-    fn eq(&self, _other: &Self) -> bool {
+impl PartialEq for MediaData {
+    fn eq(&self, _: &Self) -> bool {
         true
     }
 }
 
-impl CancelData {
-    /// Create a new CancelData
-    pub fn new(inner: impl HasCancelData + 'static) -> Self {
+impl MediaData {
+    /// Create a new MediaData
+    pub fn new(inner: impl HasMediaData + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }
@@ -40,42 +36,42 @@ impl CancelData {
 }
 
 #[cfg(feature = "serialize")]
-/// A serialized version of CancelData
+/// A serialized version of MediaData
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Clone)]
-pub struct SerializedCancelData {}
+pub struct SerializedMediaData {}
 
 #[cfg(feature = "serialize")]
-impl From<&CancelData> for SerializedCancelData {
-    fn from(_: &CancelData) -> Self {
+impl From<&MediaData> for SerializedMediaData {
+    fn from(_: &MediaData) -> Self {
         Self {}
     }
 }
 
 #[cfg(feature = "serialize")]
-impl HasCancelData for SerializedCancelData {
+impl HasMediaData for SerializedMediaData {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
 
 #[cfg(feature = "serialize")]
-impl serde::Serialize for CancelData {
+impl serde::Serialize for MediaData {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        SerializedCancelData::from(self).serialize(serializer)
+        SerializedMediaData::from(self).serialize(serializer)
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for CancelData {
+impl<'de> serde::Deserialize<'de> for MediaData {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let data = SerializedCancelData::deserialize(deserializer)?;
+        let data = SerializedMediaData::deserialize(deserializer)?;
         Ok(Self {
             inner: Box::new(data),
         })
     }
 }
 
-pub trait HasCancelData: std::any::Any {
+pub trait HasMediaData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }

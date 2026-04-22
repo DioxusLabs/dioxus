@@ -1,10 +1,7 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{MouseButton, MouseButtonSet};
 use crate::*;
-use dioxus_core::Event;
 use keyboard_types::Modifiers;
-
-pub type MouseEvent = Event<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 /// Data associated with a mouse event

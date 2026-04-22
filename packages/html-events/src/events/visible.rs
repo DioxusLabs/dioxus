@@ -260,11 +260,7 @@ pub trait HasVisibleData: std::any::Any {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-use dioxus_core::Event;
-
 use crate::geometry::PixelsRect;
-
-pub type VisibleEvent = Event<VisibleData>;
 
 /// The VisibleResult type for the VisibleData
 pub type VisibleResult<T> = Result<T, VisibleError>;

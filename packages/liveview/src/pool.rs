@@ -6,7 +6,7 @@ use crate::{
     LiveViewError,
 };
 
-use dioxus_core::{provide_context, Element, Event, ScopeId, VirtualDom};
+use dioxus_core::{provide_context, Element, ElementId, Event, ScopeId, VirtualDom};
 use dioxus_html::{EventData, HtmlEvent, PlatformEventData};
 use dioxus_interpreter_js::MutationState;
 use futures_util::{pin_mut, SinkExt, StreamExt};
@@ -180,9 +180,11 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                         if let Ok(message) = serde_json::from_str::<IpcMessage>(&String::from_utf8_lossy(evt)) {
                             match message {
                                 IpcMessage::Event(evt) => {
+                                    let element = ElementId(evt.element);
+
                                     // Intercept the mounted event and insert a custom element type
                                     let event = if let EventData::Mounted = &evt.data {
-                                        let element = LiveviewElement::new(evt.element, query_engine.clone());
+                                        let element = LiveviewElement::new(element, query_engine.clone());
                                         Event::new(
                                             Rc::new(PlatformEventData::new(Box::new(element))) as Rc<dyn Any>,
                                             evt.bubbles,
@@ -196,7 +198,7 @@ pub async fn run(mut vdom: VirtualDom, ws: impl LiveViewSocket) -> Result<(), Li
                                     vdom.runtime().handle_event(
                                         &evt.name,
                                         event,
-                                        evt.element,
+                                        element,
                                     );
                                 }
                                 IpcMessage::Query(result) => {

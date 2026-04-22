@@ -3578,6 +3578,7 @@ version = "0.7.5"
 name = "dioxus-desktop"
 version = "0.7.5"
 dependencies = [
+ "anyhow",
  "async-trait",
  "base64 0.22.1",
  "bytes",
@@ -3896,6 +3897,7 @@ dependencies = [
  "futures-channel",
  "futures-util",
  "generational-box",
+ "html-events",
  "js-sys",
  "keyboard-types",
  "lazy-js-bundle",
@@ -4350,6 +4352,7 @@ dependencies = [
 name = "dioxus-web"
 version = "0.7.5"
 dependencies = [
+ "anyhow",
  "ciborium",
  "dioxus",
  "dioxus-cli-config",
@@ -6777,6 +6780,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d1ad449764d627e22bfd7cd5e8868264fc9236e07c752972b4080cd351cb476"
 dependencies = [
  "utf8-width",
+]
+
+[[package]]
+name = "html-events"
+version = "0.7.5"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "enumset",
+ "euclid",
+ "futures-util",
+ "keyboard-types",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "tracing",
 ]
 
 [[package]]

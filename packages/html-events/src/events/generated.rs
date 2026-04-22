@@ -355,7 +355,25 @@ macro_rules! expand_html_event_converter {
                 fn $converter(&self, event: &PlatformEventData) -> $data;
             )*
         }
+    };
+}
 
+macro_rules! expand_from_impls {
+    (
+        enum Event {
+            $(
+                #[convert = $converter:ident]
+                #[events = [
+                    $(
+                        $( #[$attr:meta] )*
+                        $name:ident => $raw:ident,
+                    )*
+                ]]
+                $(#[raw = [$($raw_only:ident),* $(,)?]])?
+                $group:ident($data:ident),
+            )*
+        }
+    ) => {
         $(
             impl From<&PlatformEventData> for $data {
                 fn from(val: &PlatformEventData) -> Self {
@@ -413,36 +431,7 @@ macro_rules! expand_html_event_deserialize {
     };
 }
 
-macro_rules! expand_html_event_listeners {
-    (
-        enum Event {
-            $(
-                #[convert = $converter:ident]
-                #[events = [
-                    $(
-                        $( #[$attr:meta] )*
-                        $name:ident => $raw:ident,
-                    )*
-                ]]
-                $(#[raw = [$($raw_only:ident),* $(,)?]])?
-                $group:ident($data:ident),
-            )*
-        }
-    ) => {
-        $(
-            impl_event! {
-                $data;
-                $(
-                    #[doc = concat!(stringify!($name))]
-                    $( #[$attr] )*
-                    $name: concat!("on", stringify!($raw));
-                )*
-            }
-        )*
-    };
-}
-
 with_html_event_groups!(expand_html_event_converter);
 #[cfg(feature = "serialize")]
 with_html_event_groups!(expand_html_event_deserialize);
-with_html_event_groups!(expand_html_event_listeners);
+with_html_event_groups!(expand_from_impls);

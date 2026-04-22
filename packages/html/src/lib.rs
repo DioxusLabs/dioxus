@@ -21,24 +21,13 @@ pub mod elements;
 pub use elements::HtmlCtx;
 #[cfg(feature = "html-to-rsx")]
 pub use elements::{map_html_attribute_to_rsx, map_html_element_to_rsx};
-pub mod events;
-pub(crate) mod file_data;
-pub use file_data::*;
 mod attribute_groups;
-mod data_transfer;
-pub mod geometry;
-pub mod input_data;
-pub mod point_interaction;
+pub mod events;
 mod render_template;
-pub use data_transfer::*;
 
 pub use bytes;
 
-#[cfg(feature = "serialize")]
-mod transit;
-
-#[cfg(feature = "serialize")]
-pub use transit::*;
+pub use html_events::*;
 
 pub use attribute_groups::*;
 pub use elements::*;
@@ -47,13 +36,7 @@ pub use render_template::*;
 
 pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};
 pub use crate::elements::extensions::*;
-pub use crate::point_interaction::*;
 pub use keyboard_types::{self, Code, Key, Location, Modifiers};
-
-pub mod traits {
-    pub use crate::events::*;
-    pub use crate::point_interaction::*;
-}
 
 pub mod extensions {
     pub use crate::attribute_groups::{GlobalAttributesExtension, SvgAttributesExtension};

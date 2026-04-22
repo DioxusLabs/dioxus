@@ -10,7 +10,7 @@ pub use dioxus_core::{
 pub use dioxus_core_macro::{component, rsx, Props};
 pub use dioxus_html as dioxus_elements;
 pub use dioxus_html::{
-    events::*, extensions::*, global_attributes, keyboard_types, svg_attributes, traits::*,
+    events::*, extensions::*, global_attributes, keyboard_types, svg_attributes,
     GlobalAttributesExtension, SvgAttributesExtension,
 };
 pub use dioxus_html::{Code, Key, Location, Modifiers};
