@@ -580,6 +580,56 @@ path = "examples/02-building-ui/svg.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "counter"
+path = "examples/02-building-ui/counter.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "conditional_rendering"
+path = "examples/02-building-ui/conditional_rendering.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lists"
+path = "examples/02-building-ui/lists.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "components"
+path = "examples/02-building-ui/components.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "children"
+path = "examples/02-building-ui/children.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inputs"
+path = "examples/02-building-ui/inputs.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "forms"
+path = "examples/02-building-ui/forms.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "checkbox_radio"
+path = "examples/02-building-ui/checkbox_radio.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_classes"
+path = "examples/02-building-ui/dynamic_classes.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "event_handler_prop"
+path = "examples/02-building-ui/event_handler_prop.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "css_modules"
 path = "examples/03-assets-styling/css_modules.rs"
 doc-scrape-examples = true
@@ -600,8 +650,38 @@ path = "examples/03-assets-styling/meta.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "meta_elements"
-path = "examples/03-assets-styling/meta_elements.rs"
+name = "stylesheet"
+path = "examples/03-assets-styling/stylesheet.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "document_title"
+path = "examples/03-assets-styling/document_title.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "favicon"
+path = "examples/03-assets-styling/favicon.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inline_styles"
+path = "examples/03-assets-styling/inline_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_styles"
+path = "examples/03-assets-styling/dynamic_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "fonts"
+path = "examples/03-assets-styling/fonts.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "script"
+path = "examples/03-assets-styling/script.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -632,6 +712,41 @@ doc-scrape-examples = true
 [[example]]
 name = "errors"
 path = "examples/04-managing-state/error_handling.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_effect"
+path = "examples/04-managing-state/use_effect.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_memo"
+path = "examples/04-managing-state/use_memo.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "struct_signal"
+path = "examples/04-managing-state/struct_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "vec_signal"
+path = "examples/04-managing-state/vec_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "read_signal"
+path = "examples/04-managing-state/read_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lifting_state"
+path = "examples/04-managing-state/lifting_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_hook"
+path = "examples/04-managing-state/custom_hook.rs"
 doc-scrape-examples = true
 
 [[example]]
