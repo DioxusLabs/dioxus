@@ -406,36 +406,44 @@ fn MyComponent() -> Element {{
         name = "VirtualDom::handle_bubbling_event"
     )]
     fn handle_bubbling_event(&self, parent: ElementRef, name: &str, uievent: Event<dyn Any>) {
-        let mounts = self.mounts.borrow();
-
         // If the event bubbles, we traverse through the tree until we find the target element.
         // Loop through each dynamic attribute (in a depth first order) in this template before moving up to the template's parent.
         let mut parent = Some(parent);
         while let Some(path) = parent {
             let mut listeners = vec![];
+            let mount_id;
 
-            let Some(mount) = mounts.get(path.mount.0) else {
-                // If the node is suspended and not mounted, we can just ignore the event
-                return;
-            };
-            let el_ref = &mount.node;
-            let node_template = el_ref.template;
-            let target_path = path.path;
+            // We do this in its own block to prevent mounts from staying open while we call user code
+            {
+                let mounts = self.mounts.borrow();
+                let Some(mount) = mounts.get(path.mount.0) else {
+                    // If the node is suspended and not mounted, we can just ignore the event
+                    return;
+                };
 
-            // Accumulate listeners into the listener list bottom to top
-            for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
-                let attrs = &*el_ref.dynamic_attrs[idx];
+                let el_ref = &mount.node;
+                let node_template = el_ref.template;
+                let target_path = path.path;
+                mount_id = el_ref.mount.get().as_usize();
 
-                for attr in attrs.iter() {
-                    // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-                    if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path) {
-                        listeners.push(&attr.value);
+                // Accumulate listeners into the listener list bottom to top
+                for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
+                    let attrs = &*el_ref.dynamic_attrs[idx];
 
-                        // Break if this is the exact target element.
-                        // This means we won't call two listeners with the same name on the same element. This should be
-                        // documented, or be rejected from the rsx! macro outright
-                        if target_path == this_path {
-                            break;
+                    for attr in attrs.iter() {
+                        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                        if attr.name.get(2..) == Some(name) && target_path.is_descendant(this_path)
+                        {
+                            if let AttributeValue::Listener(listener) = &attr.value {
+                                listeners.push(listener.clone());
+                            }
+
+                            // Break if this is the exact target element.
+                            // This means we won't call two listeners with the same name on the same element. This should be
+                            // documented, or be rejected from the rsx! macro outright
+                            if target_path == this_path {
+                                break;
+                            }
                         }
                     }
                 }
@@ -449,18 +457,15 @@ fn MyComponent() -> Element {{
                 listeners.len()
             );
             for listener in listeners.into_iter().rev() {
-                if let AttributeValue::Listener(listener) = listener {
-                    listener.call(uievent.clone());
-                    let metadata = uievent.metadata.borrow();
+                listener.call(uievent.clone());
+                let metadata = uievent.metadata.borrow();
 
-                    if !metadata.propagates {
-                        return;
-                    }
+                if !metadata.propagates {
+                    return;
                 }
             }
 
-            let mount = el_ref.mount.get().as_usize();
-            parent = mount.and_then(|id| mounts.get(id).and_then(|el| el.parent));
+            parent = mount_id.and_then(|id| self.mounts.borrow().get(id).and_then(|el| el.parent));
         }
     }
 

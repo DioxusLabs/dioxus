@@ -228,7 +228,7 @@ Dioxus 强调以下几个关键点，使其与其他框架有所不同：
 - **类 React**: 我们依赖组件、props 和 hooks 等概念来构建 UI，我们的状态管理更接近 Svelte 而非 SolidJS。
 - **HTML 和 CSS**: 我们完全拥抱 HTML 和 CSS，包括其所有特性和怪癖。
 - **渲染器无关**: 得益于[我们快速的虚拟 DOM](https://dioxuslabs.com/blog/templates-diffing)，你可以为任何你想要的平台替换渲染器。
-- **协作性**: 只要有可能，我们就会将像 [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), 和 [blitz](http://github.com/dioxusLabs/blitz) 这样的 crates 分离出来，以便生态系统能够共同成长。
+- **协作性**: 只要有可能，我们就会将像 [Taffy](https://github.com/DioxusLabs/taffy), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), 和 [blitz](http://github.com/dioxusLabs/blitz) 这样的 crates 分离出来，以便生态系统能够共同成长。
 
 ### Dioxus vs Tauri
 

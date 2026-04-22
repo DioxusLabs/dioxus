@@ -419,9 +419,19 @@ pub trait ReadableResultExt<T, E>: Readable<Target = Result<T, E>> {
         T: 'static,
         E: 'static,
     {
-        <Self::Storage as AnyStorage>::try_map(self.read(), |v| v.as_ref().ok()).ok_or(
-            <Self::Storage as AnyStorage>::map(self.read(), |v| v.as_ref().err().unwrap()),
-        )
+        let read = self.read();
+        match read.deref() {
+            Ok(_) => Ok(<Self::Storage as AnyStorage>::map(read, |v| {
+                v.as_ref()
+                    .ok()
+                    .expect("Result variant changed between read and map")
+            })),
+            Err(_) => Err(<Self::Storage as AnyStorage>::map(read, |v| {
+                v.as_ref()
+                    .err()
+                    .expect("Result variant changed between read and map")
+            })),
+        }
     }
 }
 

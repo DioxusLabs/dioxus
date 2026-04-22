@@ -3,11 +3,13 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![deny(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(unexpected_cfgs)]
 
 mod android_sync_lock;
 mod app;
 mod assets;
 mod config;
+mod default_icon;
 mod desktop_context;
 mod document;
 mod edits;
@@ -49,6 +51,7 @@ pub mod trayicon;
 // Public exports
 pub use assets::AssetRequest;
 pub use config::{Config, WindowCloseBehaviour};
+pub use default_icon::{default_icon, icon_from_memory, icon_from_path};
 pub use desktop_context::{
     window, DesktopContext, DesktopService, PendingDesktopContext, WeakDesktopContext,
 };

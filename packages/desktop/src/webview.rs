@@ -13,7 +13,7 @@ use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
+use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
 use futures_util::{pin_mut, FutureExt};
 use std::sync::{atomic::AtomicBool, Arc};
 use std::{cell::OnceCell, time::Duration};
@@ -78,6 +78,7 @@ impl WebviewEdits {
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 self.handle_html_event(event)
             }
@@ -152,19 +153,35 @@ impl WebviewEdits {
                         .collect(),
                 })))
             }
+            // Which also includes drops...
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                let file_event = hovered_file.current();
-                let file_paths = match file_event {
-                    Some(wry::DragDropEvent::Enter { paths, .. }) => paths,
-                    Some(wry::DragDropEvent::Drop { paths, .. }) => paths,
-                    _ => vec![],
+                let full_file_paths = hovered_file.current_paths();
+
+                let xfer_data = drag.data_transfer.clone();
+                let new_file_data = xfer_data
+                    .files
+                    .iter()
+                    .map(|f| {
+                        let new_path = full_file_paths
+                            .iter()
+                            .find(|p| p.ends_with(&f.path))
+                            .unwrap_or(&f.path);
+                        SerializedFileData {
+                            path: new_path.clone(),
+                            ..f.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let new_xfer_data = dioxus_html::SerializedDataTransfer {
+                    files: new_file_data,
+                    ..xfer_data
                 };
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
-                    data_transfer: drag.data_transfer.clone(),
-                    files: file_paths,
+                    data_transfer: new_xfer_data,
+                    files: full_file_paths,
                 })))
             }
             _ => data.into_any(),
@@ -217,14 +234,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
+            window = window.with_window_icon(crate::default_icon().ok());
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
@@ -243,12 +253,23 @@ impl WebviewInstance {
 
             unsafe {
                 let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
                 let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
             }
         }
 
-        let mut web_context = WebContext::new(cfg.data_dir.clone());
+        let mut web_context = WebContext::new(cfg.data_dir.clone().or_else(|| {
+            // On Windows, WebView2 defaults to storing its data next to the executable.
+            // This fails on certain drives (e.g. ReFS dev drives, Program Files) where the
+            // directory may not be writable. Fall back to %LOCALAPPDATA%/<exe_name> automatically.
+            if cfg!(windows) {
+                let exe = std::env::current_exe().ok()?;
+                let name = exe.file_stem()?.to_str()?;
+                let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
+                Some(std::path::PathBuf::from(local_app_data).join(name))
+            } else {
+                None
+            }
+        }));
         let edit_queue = shared.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
@@ -541,6 +562,7 @@ impl WebviewInstance {
 
             {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
@@ -552,6 +574,7 @@ impl WebviewInstance {
             }
 
             // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             self.edits

@@ -105,42 +105,6 @@ pub trait HasPointerData: PointerInteraction {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-impl_event![
-    PointerData;
-    /// pointerdown
-    onpointerdown
-
-    /// pointermove
-    onpointermove
-
-    /// pointerup
-    onpointerup
-
-    /// pointercancel
-    onpointercancel
-
-    /// gotpointercapture
-    ongotpointercapture
-
-    /// lostpointercapture
-    onlostpointercapture
-
-    /// pointerenter
-    onpointerenter
-
-    /// pointerleave
-    onpointerleave
-
-    /// pointerover
-    onpointerover
-
-    /// pointerout
-    onpointerout
-
-    /// auxclick
-    onauxclick
-];
-
 impl PointerData {
     /// Gets the unique identifier of the pointer causing the event.
     pub fn pointer_id(&self) -> i32 {

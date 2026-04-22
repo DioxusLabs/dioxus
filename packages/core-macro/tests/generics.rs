@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, marker::PhantomData};
 
 use dioxus::prelude::*;
 
@@ -99,6 +99,41 @@ fn generic_props_compile() {
     fn GenericFnWhereClause<T>(value: T) -> Element
     where
         T: Clone + PartialEq + Display + 'static,
+    {
+        rsx! {
+            p { "{value}" }
+        }
+    }
+
+    #[derive(Props)]
+    struct PropsWithOwnerOnlyRequiresStatic<T: 'static> {
+        value: PhantomData<T>,
+        trigger_owner: EventHandler<()>,
+    }
+
+    impl<T> PartialEq for PropsWithOwnerOnlyRequiresStatic<T> {
+        fn eq(&self, _: &Self) -> bool {
+            true
+        }
+    }
+
+    impl<T> Clone for PropsWithOwnerOnlyRequiresStatic<T> {
+        fn clone(&self) -> Self {
+            PropsWithOwnerOnlyRequiresStatic {
+                value: PhantomData,
+                trigger_owner: self.trigger_owner,
+            }
+        }
+    }
+
+    fn ReadSignalNoCloneWithOwner<T>(props: PropsWithOwnerOnlyRequiresStatic<T>) -> Element {
+        rsx! {}
+    }
+
+    #[component]
+    fn ReadSignalNoClone<T>(value: ReadSignal<T>) -> Element
+    where
+        T: PartialEq + Display + 'static,
     {
         rsx! {
             p { "{value}" }

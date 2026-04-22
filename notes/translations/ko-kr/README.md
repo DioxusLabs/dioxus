@@ -252,7 +252,7 @@ Dioxus는 다른 프레임워크와 차별화되는 몇 가지 핵심 사항에 
 - **React처럼**: 우리는 컴포넌트, props, 훅과 같은 개념을 사용하여 UI를 구축하며, 상태 관리는 SolidJS보다 Svelte에 더 가깝습니다.
 - **HTML과 CSS**: 우리는 HTML과 CSS를 완전히 활용하며, 특이점도 모두 수용합니다.
 - **독립적 렌더러**: [우리의 빠른 VirtualDOM](https://dioxuslabs.com/blog/templates-diffing) 덕분에 원하는 플랫폼의 렌더러로 교체할 수 있습니다.
-- **협업적**: 가능한 한 [Taffy](https://github.com/DioxusLabs/taffy), [magnanis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), [blitz](http://github.com/dioxusLabs/blitz)와 같은 크레이트를 분리하여 생태계가 함께 성장할 수 있도록 합니다.
+- **협업적**: 가능한 한 [Taffy](https://github.com/DioxusLabs/taffy), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), [blitz](http://github.com/dioxusLabs/blitz)와 같은 크레이트를 분리하여 생태계가 함께 성장할 수 있도록 합니다.
 
 ### Dioxus vs Tauri
 

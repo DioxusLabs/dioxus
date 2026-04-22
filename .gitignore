@@ -30,13 +30,14 @@ node_modules/
 /test-results/
 /packages/playwright-report/
 /packages/playwright/.cache/
-
+# Allow geolocation plugin sources to be tracked
+/packages/geolocation/android/build/
+/packages/geolocation/android/.gradle/
 # Zed
 .zed/
 
 # ignore the output of tmps
 tmp/
-bundle/
 
 # in debugging we frequently dump wasm to wat with `wasm-tools print`
 *.wat

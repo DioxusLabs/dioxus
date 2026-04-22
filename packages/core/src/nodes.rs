@@ -1223,6 +1223,12 @@ impl<T: IntoAttributeValue> IntoAttributeValue for Option<T> {
     }
 }
 
+impl<T: ToOwned<Owned = R>, R: IntoAttributeValue> IntoAttributeValue for &T {
+    fn into_value(self) -> AttributeValue {
+        self.to_owned().into_value()
+    }
+}
+
 pub struct AnyFmtMarker;
 impl<T> IntoAttributeValue<AnyFmtMarker> for T
 where

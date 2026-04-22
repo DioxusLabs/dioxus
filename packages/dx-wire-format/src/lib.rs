@@ -94,6 +94,7 @@ pub enum BuildStage {
         current: usize,
         total: usize,
         krate: String,
+        fresh: bool,
     },
     RunningBindgen,
     SplittingBundle,
@@ -108,6 +109,9 @@ pub enum BuildStage {
     },
     Bundling,
     RunningGradle,
+    CompilingNativePlugins {
+        detail: String,
+    },
     CodeSigning,
     Success,
     Failed,

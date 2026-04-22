@@ -5,9 +5,9 @@ edition = "2021"
 authors = ["Jonathan Kelley"]
 description = "Types crate for the Subsecond hotpatch engine."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
+repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/subsecond"
 keywords = ["hotpatch", "engine", "subsecond", "dioxus"]
-
+readme = "../README.md"
 
 [dependencies]
 serde = { workspace = true, features = ["derive"] }

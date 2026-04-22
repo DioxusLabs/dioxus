@@ -178,8 +178,6 @@ impl Print {
     ///
     /// This function comes from shell-escape
     fn escape_windows(s: Cow<str>) -> Cow<str> {
-        use std::iter::repeat;
-
         let mut needs_escape = s.is_empty();
         for ch in s.chars() {
             match ch {
@@ -202,15 +200,15 @@ impl Print {
 
             match chars.next() {
                 Some('"') => {
-                    es.extend(repeat('\\').take(nslashes * 2 + 1));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2 + 1));
                     es.push('"');
                 }
                 Some(c) => {
-                    es.extend(repeat('\\').take(nslashes));
+                    es.extend(std::iter::repeat_n('\\', nslashes));
                     es.push(c);
                 }
                 None => {
-                    es.extend(repeat('\\').take(nslashes * 2));
+                    es.extend(std::iter::repeat_n('\\', nslashes * 2));
                     break;
                 }
             }

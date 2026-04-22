@@ -14,6 +14,7 @@ pub(crate) mod platform_override;
 pub(crate) mod print;
 pub(crate) mod run;
 pub(crate) mod serve;
+pub(crate) mod shell_completions;
 pub(crate) mod target;
 pub(crate) mod translate;
 pub(crate) mod update;
@@ -83,6 +84,10 @@ pub(crate) enum Commands {
     /// Diagnose installed tools and system configuration.
     #[clap(name = "doctor")]
     Doctor(doctor::Doctor),
+
+    /// Print shell completions for the given shell.
+    #[clap(name = "completions")]
+    ShellCompletions(shell_completions::ShellCompletions),
 
     /// Print project information in a structured format, like cargo args, linker args, and other
     /// flags DX sets that might be useful in third-party tools.

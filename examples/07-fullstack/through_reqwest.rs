@@ -1,4 +1,4 @@
-//! This example demonstrates that dioxus server functions can be be called directly as a Rust
+//! This example demonstrates that dioxus server functions can be called directly as a Rust
 //! function or via an HTTP request using reqwest.
 //!
 //! Dioxus server functions generated a REST endpoint that can be called using any HTTP client.

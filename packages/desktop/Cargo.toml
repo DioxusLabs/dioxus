@@ -21,8 +21,10 @@ dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
-serde = "1.0.219"
-serde_json = "1.0.140"
+anyhow = { workspace = true }
+image = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
