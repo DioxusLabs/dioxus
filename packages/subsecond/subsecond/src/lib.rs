@@ -501,7 +501,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
     {
         // on android we try to circumvent permissions issues by copying the library to a memmap and then libloading that
         #[cfg(target_os = "android")]
-        let lib = Box::leak(Box::new(android_memmap_dlopen(&table.lib)?));
+        let lib = Box::leak(Box::new(unsafe { android_memmap_dlopen(&table.lib)? }));
 
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new({
@@ -793,7 +793,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
 
     let raw_fd = mfd.into_raw_fd();
 
-    let mut map = memmap2::MmapMut::map_mut(raw_fd)
+    let mut map = unsafe { memmap2::MmapMut::map_mut(raw_fd) }
         .map_err(|e| PatchError::AndroidMemfd(format!("Failed to map memfd: {}", e)))?;
     map.copy_from_slice(&contents);
     let map = map
@@ -816,7 +816,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
 
     let handle = libloading::os::unix::with_dlerror(
         || {
-            let ptr = android_dlopen_ext(filename.as_ptr() as _, flags, &info);
+            let ptr = unsafe { android_dlopen_ext(filename.as_ptr() as _, flags, &info) };
             if ptr.is_null() {
                 return None;
             } else {
