@@ -456,12 +456,12 @@ impl<T, E> Resource<Result<T, E>> {
         >,
     > {
         let value: MappedSignal<T, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Ok(ref res)) => res,
+            Some(Ok(res)) => res,
             _ => panic!("Resource is not ready"),
         });
 
         let error: MappedSignal<E, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Err(ref err)) => err,
+            Some(Err(err)) => err,
             _ => panic!("Resource is not ready"),
         });
 

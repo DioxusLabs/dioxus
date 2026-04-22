@@ -94,18 +94,18 @@ impl SsrRendererPool {
 
     /// Render a virtual dom into a stream. This method will return immediately and continue streaming the result in the background
     /// The streaming is canceled when the stream the function returns is dropped
-    pub(crate) async fn render_to(
+    pub(crate) async fn render_to<F: FnOnce() -> VirtualDom + Send + Sync + 'static>(
         self: Arc<Self>,
         parts: Parts,
         cfg: &ServeConfig,
         rt: &LocalPoolHandle,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
+        virtual_dom_factory: F,
     ) -> Result<
         (
             HttpError,
             HeaderMap,
             RenderFreshness,
-            impl Stream<Item = Result<String, IncrementalRendererError>>,
+            impl Stream<Item = Result<String, IncrementalRendererError>> + use<F>,
         ),
         SSRError,
     > {

@@ -254,7 +254,7 @@ fn route_impl_with_route(
     let body_json_names = body_json_args
         .iter()
         .map(|(i, pat_type)| match &*pat_type.pat {
-            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
             _ => format_ident!("___Arg{}", i),
         })
         .collect::<Vec<_>>();
@@ -421,7 +421,7 @@ fn route_impl_with_route(
         let input = &function.sig.inputs[query.arg_idx];
         let name = match input {
             FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+                Pat::Ident(pat_ident) => pat_ident.ident.clone(),
                 _ => format_ident!("___Arg{}", query.arg_idx),
             },
             FnArg::Receiver(_receiver) => panic!(),

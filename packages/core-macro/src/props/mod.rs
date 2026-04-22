@@ -1238,14 +1238,13 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn required_field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref name,
-                ref builder_name,
+                name,
+                builder_name,
                 ..
             } = self;
 
             let FieldInfo {
-                name: ref field_name,
-                ..
+                name: field_name, ..
             } = field;
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics

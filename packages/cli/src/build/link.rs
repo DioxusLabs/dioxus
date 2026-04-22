@@ -636,7 +636,7 @@ impl BuildRequest {
         // Kahn's algorithm. BTreeSet gives deterministic (lexicographic) tie-breaking.
         let mut ready: BTreeSet<&String> = indegree
             .iter()
-            .filter(|(_, &deg)| deg == 0)
+            .filter(|&(_, &deg)| deg == 0)
             .map(|(name, _)| *name)
             .collect();
         let mut ordered = Vec::with_capacity(crates.len());

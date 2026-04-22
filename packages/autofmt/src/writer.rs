@@ -1142,10 +1142,10 @@ impl<'a> Writer<'a> {
         }
 
         let res = match children {
-            [BodyNode::Text(ref text)] => Some(text.input.to_string_with_quotes().len()),
+            [BodyNode::Text(text)] => Some(text.input.to_string_with_quotes().len()),
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => {
+            [BodyNode::RawExpr(expr)] => {
                 let pretty = self.retrieve_formatted_expr(&expr.expr.as_expr()?);
                 if pretty.contains('\n') {
                     None
@@ -1155,7 +1155,7 @@ impl<'a> Writer<'a> {
             }
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::Component(ref comp)]
+            [BodyNode::Component(comp)]
             // basically if the component is completely empty, we can inline it
                 if comp.fields.is_empty()
                     && comp.children.is_empty()

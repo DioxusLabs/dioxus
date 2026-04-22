@@ -8,11 +8,11 @@ use pretty_assertions::assert_eq;
 #[test]
 fn list_creates_one_by_one() {
     let mut dom = VirtualDom::new(|| {
-        let gen = generation();
+        let g = generation();
 
         rsx! {
             div {
-                for i in 0..gen {
+                for i in 0..g {
                     div { "{i}" }
                 }
             }
@@ -82,11 +82,11 @@ fn list_creates_one_by_one() {
 #[test]
 fn removes_one_by_one() {
     let mut dom = VirtualDom::new(|| {
-        let gen = 3 - generation() % 4;
+        let g = 3 - generation() % 4;
 
         rsx! {
             div {
-                for i in 0..gen {
+                for i in 0..g {
                     div { "{i}" }
                 }
             }
@@ -231,11 +231,11 @@ fn list_shrink_multiroot() {
 #[test]
 fn removes_one_by_one_multiroot() {
     let mut dom = VirtualDom::new(|| {
-        let gen = 3 - generation() % 4;
+        let g = 3 - generation() % 4;
 
         rsx! {
             div {
-                {(0..gen).map(|i| rsx! {
+                {(0..g).map(|i| rsx! {
                     div { "{i}" }
                     div { "{i}" }
                 })}

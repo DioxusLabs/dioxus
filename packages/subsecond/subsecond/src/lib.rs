@@ -505,7 +505,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
 
         #[cfg(not(target_os = "android"))]
         let lib = Box::leak(Box::new({
-            match libloading::Library::new(&table.lib) {
+            match unsafe { libloading::Library::new(&table.lib) } {
                 Ok(lib) => lib,
                 Err(err) => return Err(PatchError::Dlopen(err.to_string())),
             }
@@ -543,7 +543,7 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             })
             .collect();
 
-        commit_patch(table);
+        unsafe { commit_patch(table) };
     };
 
     // On wasm, we need to download the module, compile it, and then run it.

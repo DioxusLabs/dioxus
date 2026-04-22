@@ -57,8 +57,8 @@ enum Node {
 fn returns_element(ty: &syn::ReturnType) -> bool {
     match ty {
         syn::ReturnType::Default => false,
-        syn::ReturnType::Type(_, ref ty) => {
-            if let syn::Type::Path(ref path) = **ty {
+        syn::ReturnType::Type(_, ty) => {
+            if let syn::Type::Path(path) = &**ty {
                 if let Some(segment) = path.path.segments.last() {
                     if segment.ident == "Element" {
                         return true;

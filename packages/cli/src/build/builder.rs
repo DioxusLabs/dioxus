@@ -308,7 +308,7 @@ impl AppBuilder {
                     _ => {}
                 }
             }
-            BuilderUpdate::BuildReady { ref bundle } => {
+            BuilderUpdate::BuildReady { bundle } => {
                 // Log the build completion as a telemetry event + provide analytics on build phases
                 self.log_flamegraph_and_telemetry(bundle);
 

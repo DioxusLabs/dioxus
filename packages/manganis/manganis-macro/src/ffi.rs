@@ -749,7 +749,7 @@ impl FfiBridgeParser {
                         static mut LOAD_RESULT: Result<(), &'static str> = Ok(());
 
                         #[link(name = "System")]
-                        extern "C" {
+                        unsafe extern "C" {
                             fn dlopen(filename: *const std::ffi::c_char, flags: std::ffi::c_int) -> *mut std::ffi::c_void;
                             fn dlerror() -> *const std::ffi::c_char;
                         }
