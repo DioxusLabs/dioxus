@@ -4,6 +4,11 @@ use image::GenericImageView;
 use image::ImageReader;
 use std::path::Path;
 
+/// Pre-decoded RGBA bytes of the bundled fallback icon.
+const FALLBACK_ICON_RGBA: &[u8] = include_bytes!("./assets/default_icon.bin");
+const FALLBACK_ICON_WIDTH: u32 = 460;
+const FALLBACK_ICON_HEIGHT: u32 = 460;
+
 /// Trait that creates icons for various types
 pub trait DioxusIconTrait {
     fn get_icon() -> Result<Self>
@@ -40,12 +45,16 @@ impl DioxusIconTrait for DioxusTrayIcon {
     where
         Self: Sized,
     {
-        #[cfg(not(target_os = "windows"))]
-        {
-            Err(anyhow::anyhow!("not implemented"))
-        }
         #[cfg(target_os = "windows")]
-        DioxusTrayIcon::from_resource(32512, None).map_err(Into::into)
+        if let Ok(icon) = DioxusTrayIcon::from_resource(32512, None) {
+            return Ok(icon);
+        }
+        DioxusTrayIcon::from_rgba(
+            FALLBACK_ICON_RGBA.to_vec(),
+            FALLBACK_ICON_WIDTH,
+            FALLBACK_ICON_HEIGHT,
+        )
+        .map_err(Into::into)
     }
 
     fn from_memory(value: &[u8]) -> Result<Self>
@@ -78,12 +87,16 @@ impl DioxusIconTrait for DioxusMenuIcon {
     where
         Self: Sized,
     {
-        #[cfg(not(target_os = "windows"))]
-        {
-            Err(anyhow::anyhow!("not implemented"))
-        }
         #[cfg(target_os = "windows")]
-        DioxusMenuIcon::from_resource(32512, None).map_err(Into::into)
+        if let Ok(icon) = DioxusMenuIcon::from_resource(32512, None) {
+            return Ok(icon);
+        }
+        DioxusMenuIcon::from_rgba(
+            FALLBACK_ICON_RGBA.to_vec(),
+            FALLBACK_ICON_WIDTH,
+            FALLBACK_ICON_HEIGHT,
+        )
+        .map_err(Into::into)
     }
 
     fn from_memory(value: &[u8]) -> Result<Self>
@@ -117,12 +130,16 @@ impl DioxusIconTrait for Icon {
     where
         Self: Sized,
     {
-        #[cfg(not(target_os = "windows"))]
-        {
-            Err(anyhow::anyhow!("not implemented"))
-        }
         #[cfg(target_os = "windows")]
-        Icon::from_resource(32512, None).map_err(Into::into)
+        if let Ok(icon) = Icon::from_resource(32512, None) {
+            return Ok(icon);
+        }
+        Icon::from_rgba(
+            FALLBACK_ICON_RGBA.to_vec(),
+            FALLBACK_ICON_WIDTH,
+            FALLBACK_ICON_HEIGHT,
+        )
+        .map_err(Into::into)
     }
 
     fn from_memory(value: &[u8]) -> Result<Self>
@@ -146,9 +163,12 @@ impl DioxusIconTrait for Icon {
     }
 }
 
-/// Provides the default icon of the app
+/// Provides the default icon of the app.
 ///
-/// Currently implemented for windows only.
+/// On Windows this prefers the icon embedded as resource id `IDI::APPLICATION`
+/// (32512) by `dx`'s bundler, falling back to a generic Dioxus icon when the
+/// resource is missing (e.g. when running with plain `cargo run`). On all
+/// other platforms the bundled fallback icon is returned directly.
 pub fn default_icon<T: DioxusIconTrait>() -> Result<T> {
     T::get_icon()
 }
