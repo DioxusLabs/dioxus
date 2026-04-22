@@ -725,7 +725,7 @@ pub fn aslr_reference() -> usize {
 
             #[cfg(windows)]
             {
-                extern "system" {
+                unsafe extern "system" {
                     fn GetModuleHandleA(lpModuleName: *const i8) -> *mut std::ffi::c_void;
                     fn GetProcAddress(
                         hModule: *mut std::ffi::c_void,
@@ -771,7 +771,7 @@ unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Li
         library_namespace: *const c_void,
     }
 
-    extern "C" {
+    unsafe extern "C" {
         fn android_dlopen_ext(
             filename: *const libc::c_char,
             flags: libc::c_int,

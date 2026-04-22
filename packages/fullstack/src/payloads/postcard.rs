@@ -97,10 +97,8 @@ fn postcard_content_type(headers: &HeaderMap) -> bool {
         return false;
     };
 
-    let is_postcard_content_type = mime.type_() == "application"
-        && (mime.subtype() == "postcard" || mime.suffix().is_some_and(|name| name == "postcard"));
-
-    is_postcard_content_type
+    mime.type_() == "application"
+        && (mime.subtype() == "postcard" || mime.suffix().is_some_and(|name| name == "postcard"))
 }
 
 impl<T> IntoResponse for Postcard<T>
