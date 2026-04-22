@@ -1,6 +1,6 @@
 [package]
 name = "manganis-core-07"
-edition = "2021"
+edition = "2024"
 version = "0.7.2"
 authors = ["Jonathan Kelley"]
 description = "Legacy manganis-core v0.7.2 for backwards compatibility during 0.7.3 release"

@@ -2,13 +2,13 @@
 name = "const-serialize"
 version = "0.8.0-alpha.0"
 authors = ["Evan Almloff"]
-edition = "2021"
+edition = "2024"
 description = "A serialization framework that works in const contexts"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/dioxuslabs/dioxus"
 homepage = "https://dioxuslabs.com/learn/0.5/getting_started"
 keywords = ["const", "serialize"]
-rust-version = "1.83.0"
+rust-version = "1.85.0"
 
 [dependencies]
 const-serialize-macro = { workspace = true }

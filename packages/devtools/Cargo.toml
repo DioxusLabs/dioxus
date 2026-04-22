@@ -2,7 +2,7 @@
 name = "dioxus-devtools"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.4/migration/hot_reload"

@@ -1,7 +1,7 @@
 [package]
 name = "harness-fullstack-desktop-with-features"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 
@@ -15,4 +15,3 @@ desktop=["dioxus/desktop", "has_anyhow"]
 has_anyhow=["dep:anyhow"]
 server=["dioxus/server"]
 
-    

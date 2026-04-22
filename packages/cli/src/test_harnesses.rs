@@ -366,7 +366,7 @@ impl TestHarnessBuilder {
             r#"[package]
 name = "{name}"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 publish = false
 

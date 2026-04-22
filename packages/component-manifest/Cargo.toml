@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-component-manifest"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 description = "Wire format for the dioxus CLI telemetry type"
 authors = ["Evan Almloff"]
