@@ -350,8 +350,6 @@ impl Template {
         use xxhash_rust::const_xxh64::xxh64;
 
         const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
-            use xxhash_rust::const_xxh64::xxh64;
-
             match node {
                 TemplateNode::Element {
                     tag,
@@ -363,6 +361,7 @@ impl Template {
                     if let Some(ns) = *namespace {
                         h = xxh64(ns.as_bytes(), h);
                     }
+
                     // Hash attributes (already in deterministic order from macro)
                     let mut i = 0;
                     while i < attrs.len() {
@@ -372,25 +371,27 @@ impl Template {
                                 value,
                                 namespace,
                             } => {
-                                let mut h = xxh64(name.as_bytes(), seed);
-                                h = xxh64(value.as_bytes(), h);
+                                let mut new_h = xxh64(name.as_bytes(), h);
+                                new_h = xxh64(value.as_bytes(), new_h);
                                 if let Some(ns) = *namespace {
-                                    h = xxh64(ns.as_bytes(), h);
+                                    new_h = xxh64(ns.as_bytes(), new_h);
                                 }
-                                h
+                                new_h
                             }
                             TemplateAttribute::Dynamic { id } => {
-                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
+                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFE], h))
                             }
                         };
                         i += 1;
                     }
+
                     // Hash children
                     let mut i = 0;
                     while i < children.len() {
                         h = hash_template_node(&children[i], h);
                         i += 1;
                     }
+
                     h
                 }
                 TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
@@ -409,7 +410,8 @@ impl Template {
             i += 1;
         }
 
-        // Hash node paths
+        // Hash node paths (mixed with a section marker so they can't collapse into attr_paths)
+        hash = xxh64(&[0xA1], hash);
         let mut i = 0;
         while i < node_paths.len() {
             hash = xxh64(node_paths[i], hash);
@@ -417,6 +419,7 @@ impl Template {
         }
 
         // Hash attr paths
+        hash = xxh64(&[0xA2], hash);
         let mut i = 0;
         while i < attr_paths.len() {
             hash = xxh64(attr_paths[i], hash);

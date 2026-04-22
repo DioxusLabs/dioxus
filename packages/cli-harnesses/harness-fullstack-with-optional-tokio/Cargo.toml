@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
-serde = { workspace = true }
+serde = "1.0.219"
 tokio = { workspace = true, features = ["full"], optional = true }
 
 
