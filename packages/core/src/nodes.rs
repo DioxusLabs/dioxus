@@ -349,6 +349,57 @@ impl Template {
     ) -> u64 {
         use xxhash_rust::const_xxh64::xxh64;
 
+        const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
+            use xxhash_rust::const_xxh64::xxh64;
+
+            match node {
+                TemplateNode::Element {
+                    tag,
+                    namespace,
+                    attrs,
+                    children,
+                } => {
+                    let mut h = xxh64(tag.as_bytes(), seed);
+                    if let Some(ns) = *namespace {
+                        h = xxh64(ns.as_bytes(), h);
+                    }
+                    // Hash attributes (already in deterministic order from macro)
+                    let mut i = 0;
+                    while i < attrs.len() {
+                        h = match &attrs[i] {
+                            TemplateAttribute::Static {
+                                name,
+                                value,
+                                namespace,
+                            } => {
+                                let mut h = xxh64(name.as_bytes(), seed);
+                                h = xxh64(value.as_bytes(), h);
+                                if let Some(ns) = *namespace {
+                                    h = xxh64(ns.as_bytes(), h);
+                                }
+                                h
+                            }
+                            TemplateAttribute::Dynamic { id } => {
+                                xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
+                            }
+                        };
+                        i += 1;
+                    }
+                    // Hash children
+                    let mut i = 0;
+                    while i < children.len() {
+                        h = hash_template_node(&children[i], h);
+                        i += 1;
+                    }
+                    h
+                }
+                TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
+                TemplateNode::Dynamic { id } => {
+                    xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
+                }
+            }
+        }
+
         let mut hash = 0u64;
 
         // Hash roots
@@ -373,61 +424,6 @@ impl Template {
         }
 
         hash
-    }
-}
-
-const fn hash_template_node(node: &TemplateNode, seed: u64) -> u64 {
-    use xxhash_rust::const_xxh64::xxh64;
-
-    match node {
-        TemplateNode::Element {
-            tag,
-            namespace,
-            attrs,
-            children,
-        } => {
-            let mut h = xxh64(tag.as_bytes(), seed);
-            if let Some(ns) = *namespace {
-                h = xxh64(ns.as_bytes(), h);
-            }
-            // Hash attributes (already in deterministic order from macro)
-            let mut i = 0;
-            while i < attrs.len() {
-                h = hash_template_attribute(&attrs[i], h);
-                i += 1;
-            }
-            // Hash children
-            let mut i = 0;
-            while i < children.len() {
-                h = hash_template_node(&children[i], h);
-                i += 1;
-            }
-            h
-        }
-        TemplateNode::Text { text } => xxh64(text.as_bytes(), seed),
-        TemplateNode::Dynamic { id } => xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed)),
-    }
-}
-
-const fn hash_template_attribute(attr: &TemplateAttribute, seed: u64) -> u64 {
-    use xxhash_rust::const_xxh64::xxh64;
-
-    match attr {
-        TemplateAttribute::Static {
-            name,
-            value,
-            namespace,
-        } => {
-            let mut h = xxh64(name.as_bytes(), seed);
-            h = xxh64(value.as_bytes(), h);
-            if let Some(ns) = *namespace {
-                h = xxh64(ns.as_bytes(), h);
-            }
-            h
-        }
-        TemplateAttribute::Dynamic { id } => {
-            xxh64(&(*id as u64).to_le_bytes(), xxh64(&[0xFF], seed))
-        }
     }
 }
 
