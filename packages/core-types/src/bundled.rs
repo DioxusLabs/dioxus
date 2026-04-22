@@ -10,9 +10,10 @@ pub fn is_bundled_app() -> bool {
         // If the cargo manifest dir is set, we're not bundled.
         // Generally this is only set with `cargo run`
         if let Ok(path) = std::env::var("CARGO_MANIFEST_DIR")
-            && !path.is_empty() {
-                return false;
-            }
+            && !path.is_empty()
+        {
+            return false;
+        }
 
         true
     });

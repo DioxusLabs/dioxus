@@ -221,10 +221,11 @@ impl ToTokens for IfmtInput {
 
         // Try to turn it into a single _.to_string() call
         if !cfg!(debug_assertions)
-            && let Some(single_dynamic) = self.try_to_string() {
-                tokens.extend(single_dynamic);
-                return;
-            }
+            && let Some(single_dynamic) = self.try_to_string()
+        {
+            tokens.extend(single_dynamic);
+            return;
+        }
 
         // If the segments are not complex exprs, we can just use format! directly to take advantage of RA rename/expansion
         if self.is_simple_expr() {
@@ -316,9 +317,10 @@ pub enum FormattedSegmentType {
 impl FormattedSegmentType {
     fn parse(input: &str) -> Result<Self> {
         if let Ok(ident) = parse_str::<Ident>(input)
-            && ident == input {
-                return Ok(Self::Ident(ident));
-            }
+            && ident == input
+        {
+            return Ok(Self::Ident(ident));
+        }
         if let Ok(expr) = parse_str(input) {
             Ok(Self::Expr(Box::new(expr)))
         } else {

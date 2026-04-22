@@ -35,19 +35,20 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
 
         // 2. Attempt to hotpatch
         if let Some(jump_table) = msg.jump_table.as_ref().cloned()
-            && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                let our_pid = if cfg!(target_family = "wasm") {
-                    None
-                } else {
-                    Some(std::process::id())
-                };
+            && msg.for_build_id == Some(dioxus_cli_config::build_id())
+        {
+            let our_pid = if cfg!(target_family = "wasm") {
+                None
+            } else {
+                Some(std::process::id())
+            };
 
-                if msg.for_pid == our_pid {
-                    unsafe { subsecond::apply_patch(jump_table) }?;
-                    dom.runtime().force_all_dirty();
-                    ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
-                }
+            if msg.for_pid == our_pid {
+                unsafe { subsecond::apply_patch(jump_table) }?;
+                dom.runtime().force_all_dirty();
+                ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
             }
+        }
 
         Ok(())
     })
@@ -76,9 +77,10 @@ pub fn connect_subsecond() {
     connect(|msg| {
         if let DevserverMsg::HotReload(hot_reload_msg) = msg
             && let Some(jumptable) = hot_reload_msg.jump_table
-                && hot_reload_msg.for_pid == Some(std::process::id()) {
-                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
-                }
+            && hot_reload_msg.for_pid == Some(std::process::id())
+        {
+            unsafe { subsecond::apply_patch(jumptable).unwrap() };
+        }
     });
 }
 
@@ -99,9 +101,10 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
 
         while let Ok(msg) = websocket.read() {
             if let tungstenite::Message::Text(text) = msg
-                && let Ok(msg) = serde_json::from_str(&text) {
-                    callback(msg);
-                }
+                && let Ok(msg) = serde_json::from_str(&text)
+            {
+                callback(msg);
+            }
         }
     });
 }
@@ -179,10 +182,11 @@ where
     connect(move |msg| {
         if let DevserverMsg::HotReload(hot_reload_msg) = msg
             && let Some(jumptable) = hot_reload_msg.jump_table
-                && hot_reload_msg.for_pid == Some(std::process::id()) {
-                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
-                    tx.unbounded_send(()).unwrap();
-                }
+            && hot_reload_msg.for_pid == Some(std::process::id())
+        {
+            unsafe { subsecond::apply_patch(jumptable).unwrap() };
+            tx.unbounded_send(()).unwrap();
+        }
     });
 
     let wrapped = move |args| -> std::pin::Pin<Box<dyn std::future::Future<Output = O>>> {

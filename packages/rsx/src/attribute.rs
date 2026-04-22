@@ -312,9 +312,10 @@ impl Attribute {
         if let (AttributeName::BuiltIn(name), AttributeValue::AttrExpr(expr)) =
             (&self.name, &self.value)
             && let Ok(Expr::Path(path)) = expr.as_expr()
-                && path.path.get_ident() == Some(name) {
-                    return true;
-                }
+            && path.path.get_ident() == Some(name)
+        {
+            return true;
+        }
 
         false
     }

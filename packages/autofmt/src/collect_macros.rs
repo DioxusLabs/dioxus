@@ -35,9 +35,10 @@ impl<'b> Visit<'b> for MacroCollector<'_, 'b> {
 
         let name = &i.path.segments.last().map(|i| i.ident.to_string());
         if let Some("rsx" | "render") = name.as_deref()
-            && self.skip_count == 0 {
-                self.macros.push(i)
-            }
+            && self.skip_count == 0
+        {
+            self.macros.push(i)
+        }
     }
 
     // attributes can occur on stmts and items - we need to make sure the stack is reset when we exit

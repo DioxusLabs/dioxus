@@ -177,12 +177,13 @@ pub fn Link(props: LinkProps) -> Element {
         class_.push_str(&c);
     }
     if let Some(c) = active_class
-        && href == current_url {
-            if !class_.is_empty() {
-                class_.push(' ');
-            }
-            class_.push_str(&c);
+        && href == current_url
+    {
+        if !class_.is_empty() {
+            class_.push(' ');
         }
+        class_.push_str(&c);
+    }
 
     let class = if class_.is_empty() {
         None

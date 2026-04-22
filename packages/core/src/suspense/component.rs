@@ -324,7 +324,7 @@ impl SuspenseBoundaryProps {
                 .clone();
 
             // If there are suspended futures, render the fallback
-            
+
             if !suspense_context.suspended_futures().is_empty() {
                 let (node, nodes_created) =
                     suspense_context.in_suspense_placeholder(&dom.runtime(), || {

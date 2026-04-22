@@ -73,10 +73,11 @@ impl ForeignType {
                         "String" => return Ok(ForeignType::String),
                         "Option" => {
                             if let syn::PathArguments::AngleBracketed(args) = &segment.arguments
-                                && let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                                    let inner_type = Self::from_type(inner)?;
-                                    return Ok(ForeignType::Option(Box::new(inner_type)));
-                                }
+                                && let Some(syn::GenericArgument::Type(inner)) = args.args.first()
+                            {
+                                let inner_type = Self::from_type(inner)?;
+                                return Ok(ForeignType::Option(Box::new(inner_type)));
+                            }
                             return Err(syn::Error::new(ty.span(), "Invalid Option type"));
                         }
                         "Result" => {
@@ -213,11 +214,13 @@ impl ForeignFunctionDecl {
                     let arg_ty = ForeignType::from_type(&pat_type.ty)?;
 
                     // Check if first arg is `this: &SomeType`
-                    if i == 0 && arg_name == "this"
-                        && let ForeignType::OpaqueRef(type_name) = &arg_ty {
-                            receiver = Some(type_name.clone());
-                            continue; // Don't add to args
-                        }
+                    if i == 0
+                        && arg_name == "this"
+                        && let ForeignType::OpaqueRef(type_name) = &arg_ty
+                    {
+                        receiver = Some(type_name.clone());
+                        continue; // Don't add to args
+                    }
 
                     args.push(ForeignArg {
                         name: arg_name,
@@ -356,11 +359,12 @@ impl FfiBridgeParser {
             if trimmed.starts_with("namespace") {
                 // Extract the quoted string
                 if let Some(start) = trimmed.find('"')
-                    && let Some(end) = trimmed[start + 1..].find('"') {
-                        let namespace = &trimmed[start + 1..start + 1 + end];
-                        // Convert dots to slashes for JNI format
-                        return Some(namespace.replace('.', "/"));
-                    }
+                    && let Some(end) = trimmed[start + 1..].find('"')
+                {
+                    let namespace = &trimmed[start + 1..start + 1 + end];
+                    // Convert dots to slashes for JNI format
+                    return Some(namespace.replace('.', "/"));
+                }
             }
         }
 

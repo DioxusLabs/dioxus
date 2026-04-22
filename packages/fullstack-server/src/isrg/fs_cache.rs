@@ -44,9 +44,10 @@ impl FileSystemCache {
         use std::io::Write;
         let file_path = self.route_as_path(&route, timestamp);
         if let Some(parent) = file_path.parent()
-            && !parent.exists() {
-                std::fs::create_dir_all(parent)?;
-            }
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
         let file = std::fs::File::create(file_path)?;
         let mut file = std::io::BufWriter::new(file);
         file.write_all(&data)?;
@@ -64,10 +65,11 @@ impl FileSystemCache {
                 for entry in walkdir::WalkDir::new(entry.path()).into_iter().flatten() {
                     if entry.file_type().is_file()
                         && let Some(fnmae) = entry.file_name().to_str()
-                            && fnmae.ends_with(".html")
-                                && let Err(err) = std::fs::remove_file(entry.path()) {
-                                    tracing::error!("Failed to remove file: {}", err);
-                                }
+                        && fnmae.ends_with(".html")
+                        && let Err(err) = std::fs::remove_file(entry.path())
+                    {
+                        tracing::error!("Failed to remove file: {}", err);
+                    }
                 }
             }
         }
@@ -86,13 +88,14 @@ impl FileSystemCache {
     ) -> Result<Option<(RenderFreshness, Vec<u8>)>, IncrementalRendererError> {
         if let Some(file_path) = self.find_file(route)
             && let Some(freshness) = file_path.freshness(self.invalidate_after)
-                && let Ok(file) = std::fs::File::open(file_path.full_path) {
-                    let mut file = std::io::BufReader::new(file);
-                    let mut cache_hit = Vec::new();
-                    std::io::copy(&mut file, &mut cache_hit)?;
-                    tracing::trace!("file cache hit {:?}", route);
-                    return Ok(Some((freshness, cache_hit)));
-                }
+            && let Ok(file) = std::fs::File::open(file_path.full_path)
+        {
+            let mut file = std::io::BufReader::new(file);
+            let mut cache_hit = Vec::new();
+            std::io::copy(&mut file, &mut cache_hit)?;
+            tracing::trace!("file cache hit {:?}", route);
+            return Ok(Some((freshness, cache_hit)));
+        }
 
         Ok(None)
     }
@@ -106,10 +109,11 @@ impl FileSystemCache {
                 for entry in dir.flatten() {
                     if let Some(cached_path) = ValidCachedPath::try_from_path(entry.path()) {
                         if let Ok(elapsed) = cached_path.timestamp.elapsed()
-                            && elapsed < deadline {
-                                // The timestamp is valid, return the file
-                                return Some(cached_path);
-                            }
+                            && elapsed < deadline
+                        {
+                            // The timestamp is valid, return the file
+                            return Some(cached_path);
+                        }
                         // if the timestamp is invalid or passed, delete the file
                         if let Err(err) = std::fs::remove_file(entry.path()) {
                             tracing::error!("Failed to remove file: {}", err);

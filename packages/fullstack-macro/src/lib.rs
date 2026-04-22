@@ -841,9 +841,9 @@ impl CompiledRoute {
                             .query_params
                             .iter()
                             .any(|query| query.binding == pat_ident.ident))
-                        {
-                            return None;
-                        }
+                    {
+                        return None;
+                    }
 
                     Some((i, pat_type.clone()))
                 } else {

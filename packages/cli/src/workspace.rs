@@ -558,7 +558,6 @@ impl Workspace {
     }
 
     pub async fn get_xcode_path() -> Option<PathBuf> {
-        
         Command::new("xcode-select")
             .arg("-p")
             .output()

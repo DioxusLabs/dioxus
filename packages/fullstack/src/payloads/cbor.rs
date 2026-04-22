@@ -42,8 +42,6 @@ fn is_valid_cbor_content_type(headers: &HeaderMap) -> bool {
         return false;
     };
 
-    
-
     mime.type_() == "application"
         && (mime.subtype() == "cbor" || mime.suffix().is_some_and(|name| name == "cbor"))
 }

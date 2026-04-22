@@ -351,18 +351,20 @@ impl ComponentBody {
 
     fn is_explicit_props_ident(&self) -> bool {
         if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first()
-            && let Pat::Ident(ident) = pat.as_ref() {
-                return ident.ident == "props";
-            }
+            && let Pat::Ident(ident) = pat.as_ref()
+        {
+            return ident.ident == "props";
+        }
 
         false
     }
 
     fn has_struct_parameter_pattern(&self) -> bool {
         if let Some(FnArg::Typed(PatType { pat, .. })) = self.item_fn.sig.inputs.first()
-            && matches!(pat.as_ref(), Pat::Struct(_)) {
-                return true;
-            }
+            && matches!(pat.as_ref(), Pat::Struct(_))
+        {
+            return true;
+        }
 
         false
     }

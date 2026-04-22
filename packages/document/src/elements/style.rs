@@ -81,9 +81,10 @@ pub fn Style(props: StyleProps) -> Element {
         let document = document();
         let mut insert_style = document.create_head_component();
         if let Some(href) = &props.href
-            && !should_insert_style(href) {
-                insert_style = false;
-            }
+            && !should_insert_style(href)
+        {
+            insert_style = false;
+        }
         if !insert_style {
             return;
         }

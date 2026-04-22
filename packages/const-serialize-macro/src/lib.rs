@@ -136,9 +136,10 @@ pub fn derive_parse(raw_input: TokenStream) -> TokenStream {
                             }
 
                             Err(meta.error("unrecognized repr"))
-                        }) {
-                            return err.to_compile_error().into();
-                        }
+                        })
+                    {
+                        return err.to_compile_error().into();
+                    }
                 }
 
                 let variants_have_fields = data

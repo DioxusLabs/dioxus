@@ -139,11 +139,12 @@ impl<'a> ParseRouteTree<'a> {
                                 for &seg_id in segments.iter() {
                                     let seg = self.get(seg_id).unwrap();
                                     if let RouteTreeSegmentData::Static { segment: s, .. } = seg
-                                        && *s == segment {
-                                            // If it does, just update the current route
-                                            current_route = Some(seg_id);
-                                            continue 'o;
-                                        }
+                                        && *s == segment
+                                    {
+                                        // If it does, just update the current route
+                                        current_route = Some(seg_id);
+                                        continue 'o;
+                                    }
                                 }
                             }
 

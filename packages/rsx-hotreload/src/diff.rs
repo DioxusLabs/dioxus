@@ -279,9 +279,11 @@ impl HotReloadResult {
             .enumerate()
             .filter_map(|(index, node)| {
                 if let BodyNode::ForLoop(for_loop) = &node.inner
-                    && for_loop.pat == forloop.pat && for_loop.expr == forloop.expr {
-                        return Some((index, for_loop));
-                    }
+                    && for_loop.pat == forloop.pat
+                    && for_loop.expr == forloop.expr
+                {
+                    return Some((index, for_loop));
+                }
                 None
             })
             .collect::<Vec<_>>();

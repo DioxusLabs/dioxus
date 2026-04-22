@@ -587,7 +587,6 @@ impl VNode {
 
         // Go through each root node and create the node, adding it to the stack.
         // Each node already exists in the template, so we can just clone it from the template
-        
 
         // And return the number of nodes we created on the stack
         template

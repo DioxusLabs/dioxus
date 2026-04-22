@@ -139,9 +139,10 @@ impl NativeFileData for WebFileData {
 
         if let Ok(value) = js_sys::Reflect::get(&self.file, &key)
             && let Some(path_str) = value.as_string()
-                && !path_str.is_empty() {
-                    return std::path::PathBuf::from(path_str);
-                }
+            && !path_str.is_empty()
+        {
+            return std::path::PathBuf::from(path_str);
+        }
 
         std::path::PathBuf::from(self.file.name())
     }

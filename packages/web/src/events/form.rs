@@ -74,22 +74,22 @@ impl HasFormData for WebFormData {
 
             for entry in form_data.entries().into_iter().flatten() {
                 if let Ok(array) = entry.dyn_into::<Array>()
-                    && let Some(name) = array.get(0).as_string() {
-                        let value = array.get(1);
-                        if let Some(file) = value.dyn_ref::<web_sys::File>() {
-                            if file.name().is_empty() {
-                                values.push((name, FormValue::File(None)));
-                            } else {
-                                let data =
-                                    WebFileData::new(file.clone(), FileReader::new().unwrap());
-                                let as_file = FileData::new(data);
+                    && let Some(name) = array.get(0).as_string()
+                {
+                    let value = array.get(1);
+                    if let Some(file) = value.dyn_ref::<web_sys::File>() {
+                        if file.name().is_empty() {
+                            values.push((name, FormValue::File(None)));
+                        } else {
+                            let data = WebFileData::new(file.clone(), FileReader::new().unwrap());
+                            let as_file = FileData::new(data);
 
-                                values.push((name, FormValue::File(Some(as_file))));
-                            }
-                        } else if let Some(s) = value.as_string() {
-                            values.push((name, FormValue::Text(s)));
+                            values.push((name, FormValue::File(Some(as_file))));
                         }
+                    } else if let Some(s) = value.as_string() {
+                        values.push((name, FormValue::Text(s)));
                     }
+                }
             }
         } else if let Some(select) = self.element.dyn_ref::<web_sys::HtmlSelectElement>() {
             // try to fill in select element values
