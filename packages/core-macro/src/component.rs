@@ -245,6 +245,7 @@ impl ComponentBody {
 
         let item_struct = parse_quote! {
             #[derive(Props)]
+            #[non_exhaustive]
             #[allow(non_camel_case_types)]
             #vis struct #struct_ident #generics #where_clause {
                 #(#struct_fields),*
