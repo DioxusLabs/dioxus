@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse_macro_input, DeriveInput, LitInt, Path};
-use syn::{parse_quote, Generics, WhereClause, WherePredicate};
+use quote::{ToTokens, quote};
+use syn::{DeriveInput, LitInt, Path, parse_macro_input};
+use syn::{Generics, WhereClause, WherePredicate, parse_quote};
 
 fn add_bounds(where_clause: &mut Option<WhereClause>, generics: &Generics, krate: &Path) {
     let bounds = generics.params.iter().filter_map(|param| match param {

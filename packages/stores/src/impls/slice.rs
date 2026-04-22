@@ -2,7 +2,7 @@
 
 use std::{iter::FusedIterator, panic::Location};
 
-use crate::{impls::index::IndexSelector, store::Store, ReadStore};
+use crate::{ReadStore, impls::index::IndexSelector, store::Store};
 use dioxus_signals::{
     AnyStorage, BorrowError, BorrowMutError, ReadSignal, Readable, ReadableExt, UnsyncStorage,
     Writable, WriteLock, WriteSignal,
@@ -56,9 +56,9 @@ where
     pub fn iter(
         &self,
     ) -> impl ExactSizeIterator<Item = Store<I, VecGetWrite<Lens>>>
-           + DoubleEndedIterator
-           + FusedIterator
-           + '_
+    + DoubleEndedIterator
+    + FusedIterator
+    + '_
     where
         Lens: Clone,
     {

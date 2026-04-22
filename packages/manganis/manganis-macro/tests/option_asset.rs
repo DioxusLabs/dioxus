@@ -1,4 +1,4 @@
-use manganis::{asset, option_asset, Asset};
+use manganis::{Asset, asset, option_asset};
 
 #[test]
 fn resolves_existing_asset() {

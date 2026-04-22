@@ -5,7 +5,7 @@
 //! downloaded from the npm registry and cached locally.
 
 use crate::{CliSettings, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::path::PathBuf;
 
 /// Pinned esbuild version.
@@ -178,7 +178,7 @@ impl Esbuild {
 #[cfg(test)]
 mod tests {
     use super::Esbuild;
-    use flate2::{write::GzEncoder, Compression};
+    use flate2::{Compression, write::GzEncoder};
 
     fn tgz_with_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());

@@ -18,7 +18,7 @@ use super::HotpatchModuleCache;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
-use anyhow::{bail, ensure, Context};
+use anyhow::{Context, bail, ensure};
 use itertools::Itertools;
 use serde::Serialize;
 use sha1::Digest;

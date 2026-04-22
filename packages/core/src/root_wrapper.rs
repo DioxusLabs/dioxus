@@ -1,6 +1,6 @@
 use crate::{
-    fc_to_builder, properties::RootProps, DynamicNode, Element, ErrorBoundary, Properties,
-    SuspenseBoundary, Template, TemplateNode, VComponent, VNode,
+    DynamicNode, Element, ErrorBoundary, Properties, SuspenseBoundary, Template, TemplateNode,
+    VComponent, VNode, fc_to_builder, properties::RootProps,
 };
 
 // We wrap the root scope in a component that renders it inside a default ErrorBoundary and SuspenseBoundary

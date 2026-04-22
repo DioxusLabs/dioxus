@@ -5,7 +5,7 @@ use std::{
 
 use generational_box::{AnyStorage, UnsyncStorage};
 
-use crate::{ext_methods, read::Readable, read::ReadableExt, MappedMutSignal, WriteSignal};
+use crate::{MappedMutSignal, WriteSignal, ext_methods, read::Readable, read::ReadableExt};
 
 /// A reference to a value that can be written to.
 #[allow(type_alias_bounds)]

@@ -10,7 +10,7 @@
 
 use krates::semver::Version;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -581,7 +581,9 @@ impl WindowsResource {
                 (_, Environment::GnuLlvm) => "llvm-",
                 // fail safe
                 _ => {
-                    tracing::warn!("Unknown Windows target used for cross-compilation - invoking unprefixed windres");
+                    tracing::warn!(
+                        "Unknown Windows target used for cross-compilation - invoking unprefixed windres"
+                    );
                     ""
                 }
             }

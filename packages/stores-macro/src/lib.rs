@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput, ItemImpl};
+use syn::{DeriveInput, ItemImpl, parse_macro_input};
 
 use crate::extend::ExtendArgs;
 

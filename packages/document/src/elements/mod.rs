@@ -136,7 +136,10 @@ pub(crate) fn extend_attributes(
             dioxus_core::AttributeValue::Int(v) => v.to_string(),
             dioxus_core::AttributeValue::Bool(v) => v.to_string(),
             dioxus_core::AttributeValue::Listener(_) | dioxus_core::AttributeValue::Any(_) => {
-                tracing::error!("document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}", additional_attribute.value);
+                tracing::error!(
+                    "document::* elements do not support event listeners or any value attributes. Expected displayable attribute, found {:?}",
+                    additional_attribute.value
+                );
                 continue;
             }
             dioxus_core::AttributeValue::None => {

@@ -1,6 +1,6 @@
 use std::ops::DerefMut;
 
-use crate::{store::Store, MappedStore};
+use crate::{MappedStore, store::Store};
 use dioxus_signals::Readable;
 
 impl<Lens, T> Store<T, Lens>

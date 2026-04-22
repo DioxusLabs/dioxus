@@ -1619,10 +1619,12 @@ mod tests {
 
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.android.min_sdk, Some(24));
-        assert!(config
-            .android
-            .permissions
-            .contains_key("android.permission.FOREGROUND_SERVICE"));
+        assert!(
+            config
+                .android
+                .permissions
+                .contains_key("android.permission.FOREGROUND_SERVICE")
+        );
     }
 
     #[test]

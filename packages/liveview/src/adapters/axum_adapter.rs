@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use crate::{interpreter_glue, LiveViewError, LiveViewSocket, LiveviewRouter};
+use crate::{LiveViewError, LiveViewSocket, LiveviewRouter, interpreter_glue};
 use axum::{
+    Router,
     extract::{
-        ws::{Message, WebSocket},
         WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     response::Html,
     routing::*,
-    Router,
 };
 use futures_util::{SinkExt, StreamExt};
 

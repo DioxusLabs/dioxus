@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{arg, Arg, ArgMatches, Args, FromArgMatches};
+use clap::{Arg, ArgMatches, Args, FromArgMatches, arg};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::str::FromStr;

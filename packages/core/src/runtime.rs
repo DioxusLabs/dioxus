@@ -1,18 +1,18 @@
 use crate::nodes::VNodeMount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{arena::ElementRef, CapturedError};
+use crate::{AttributeValue, ElementId, Event};
+use crate::{CapturedError, arena::ElementRef};
 use crate::{
-    innerlude::{DirtyTasks, Effect},
     SuspenseContext,
+    innerlude::{DirtyTasks, Effect},
 };
 use crate::{
+    Task,
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
     scopes::ScopeId,
-    Task,
 };
-use crate::{AttributeValue, ElementId, Event};
 use generational_box::{AnyStorage, Owner};
 use slab::Slab;
 use slotmap::DefaultKey;
@@ -571,9 +571,9 @@ fn MyComponent() -> Element {{
             cx.insert_error(error)
         } else {
             tracing::error!(
-                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-                    error
-                )
+                "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                error
+            )
         }
     }
 

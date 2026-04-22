@@ -1,14 +1,14 @@
 use proc_macro2::Span;
-use quote::quote;
 use quote::ToTokens;
+use quote::quote;
 use std::fmt::Display;
 use std::ops::Deref;
 use syn::{
-    parse::{Parse, ParseStream},
     Lit, LitBool, LitFloat, LitInt, LitStr,
+    parse::{Parse, ParseStream},
 };
 
-use crate::{location::DynIdx, IfmtInput, Segment};
+use crate::{IfmtInput, Segment, location::DynIdx};
 use proc_macro2::TokenStream as TokenStream2;
 
 /// A literal value in the rsx! macro
@@ -70,7 +70,7 @@ impl Parse for HotLiteral {
                 return Err(syn::Error::new(
                     raw.span(),
                     "Only string, int, float, and bool literals are supported",
-                ))
+                ));
             }
         };
 

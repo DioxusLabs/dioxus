@@ -28,8 +28,8 @@ use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU32;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU32;
 use std::{
     net::IpAddr,
     sync::{Arc, RwLock},

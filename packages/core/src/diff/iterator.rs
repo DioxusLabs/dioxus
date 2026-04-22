@@ -1,7 +1,7 @@
 use crate::{
+    DynamicNode, ScopeId, VirtualDom,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
-    DynamicNode, ScopeId, VirtualDom,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};

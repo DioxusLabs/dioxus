@@ -2,8 +2,8 @@
 
 #![allow(non_snake_case)]
 
-use chrono::offset::Utc;
 use chrono::DateTime;
+use chrono::offset::Utc;
 use rustc_hash::FxHasher;
 use std::{hash::BuildHasherDefault, num::NonZeroUsize};
 

@@ -3,7 +3,7 @@ use crate::WebFileData;
 use dioxus_html::{FileData, FormValue, HasFileData, HasFormData};
 use js_sys::Array;
 use std::any::Any;
-use wasm_bindgen::{prelude::wasm_bindgen, JsCast};
+use wasm_bindgen::{JsCast, prelude::wasm_bindgen};
 use web_sys::{Element, Event, FileReader};
 
 pub(crate) struct WebFormData {

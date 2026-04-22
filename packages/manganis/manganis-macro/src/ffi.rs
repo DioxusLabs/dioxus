@@ -7,9 +7,9 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote};
 use std::hash::{DefaultHasher, Hash, Hasher};
 use syn::{
+    ForeignItem, ForeignItemFn, Ident, ItemForeignMod, LitStr, Pat, ReturnType, Type,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    ForeignItem, ForeignItemFn, Ident, ItemForeignMod, LitStr, Pat, ReturnType, Type,
 };
 
 /// The foreign ABI being targeted
@@ -207,7 +207,7 @@ impl ForeignFunctionDecl {
                             return Err(syn::Error::new(
                                 pat_type.pat.span(),
                                 "Expected identifier pattern",
-                            ))
+                            ));
                         }
                     };
 
@@ -289,14 +289,14 @@ impl FfiBridgeParser {
                     return Err(syn::Error::new(
                         name.span(),
                         format!("Unsupported ABI: {}. Expected 'Swift' or 'Kotlin'", other),
-                    ))
+                    ));
                 }
             },
             None => {
                 return Err(syn::Error::new(
                     item.abi.extern_token.span,
                     "Expected ABI string (e.g., extern \"Swift\")",
-                ))
+                ));
             }
         };
 

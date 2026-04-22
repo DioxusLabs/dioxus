@@ -2,12 +2,12 @@ use crate::{asset::AssetParser, resolve_path};
 use macro_string::MacroString;
 use manganis_core::{create_module_hash, get_class_mappings};
 use proc_macro2::{Span, TokenStream};
-use quote::{format_ident, quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, format_ident, quote};
 use syn::{
+    Ident, ItemStruct,
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::Comma,
-    Ident, ItemStruct,
 };
 
 pub(crate) struct CssModuleAttribute {

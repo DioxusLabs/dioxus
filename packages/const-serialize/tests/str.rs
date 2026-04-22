@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, serialize_const, ConstStr, ConstVec};
+use const_serialize::{ConstStr, ConstVec, deserialize_const, serialize_const};
 
 #[test]
 fn test_serialize_const_layout_str() {

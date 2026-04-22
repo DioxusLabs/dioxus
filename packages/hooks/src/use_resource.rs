@@ -1,15 +1,16 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use crate::{UseWaker, use_callback, use_signal, use_waker};
 
 use dioxus_core::{
-    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
-    Subscribers, SuspendedFuture, Task,
+    Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError, Subscribers,
+    SuspendedFuture, Task, spawn, use_hook,
 };
 use dioxus_signals::*;
 use futures_util::{
+    FutureExt, StreamExt,
     future::{self},
-    pin_mut, FutureExt, StreamExt,
+    pin_mut,
 };
 use std::{cell::Cell, future::Future, rc::Rc};
 use std::{fmt::Debug, ops::Deref};

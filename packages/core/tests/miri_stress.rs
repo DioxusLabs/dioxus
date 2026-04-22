@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
-use dioxus_core::{generation, NoOpMutations};
+use dioxus_core::{NoOpMutations, generation};
 
 // The tests in this file are intended to be run with Miri, so not all of them contain assertions.
 // If the tests  complete under Miri, they have passed.

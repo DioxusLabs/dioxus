@@ -1,5 +1,5 @@
 use super::*;
-use crate::{settings::SupportedEditor, CliSettings, TraceSrc, Workspace};
+use crate::{CliSettings, TraceSrc, Workspace, settings::SupportedEditor};
 
 /// Dioxus config file controls
 #[derive(Clone, Debug, Deserialize, Subcommand)]

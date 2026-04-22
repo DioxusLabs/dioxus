@@ -1,4 +1,4 @@
-use crate::{buffer::Buffer, IndentOptions};
+use crate::{IndentOptions, buffer::Buffer};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, token::Brace, Expr};
+use syn::{Expr, spanned::Spanned, token::Brace};
 
 #[derive(Debug)]
 pub struct Writer<'a> {

@@ -10,7 +10,7 @@ use wry::http::{Request as HttpRequest, Response as HttpResponse};
 use wry::{RequestAsyncResponder, WebViewId};
 
 use crate::ipc::UserWindowEvent;
-use crate::menubar::{default_menu_bar, DioxusMenu};
+use crate::menubar::{DioxusMenu, default_menu_bar};
 
 type CustomEventHandler = Box<
     dyn 'static
@@ -210,7 +210,7 @@ impl Config {
     pub fn with_custom_event_handler(
         mut self,
         f: impl FnMut(&tao::event::Event<'_, UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)
-            + 'static,
+        + 'static,
     ) -> Self {
         self.custom_event_handler = Some(Box::new(f));
         self

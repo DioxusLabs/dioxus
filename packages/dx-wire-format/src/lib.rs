@@ -1,4 +1,4 @@
-use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
+use cargo_metadata::{CompilerMessage, diagnostic::Diagnostic};
 use manganis_core::BundledAsset;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashSet, path::PathBuf};

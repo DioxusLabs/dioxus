@@ -1,6 +1,6 @@
-use dioxus_core::queue_effect;
 use dioxus_core::ScopeId;
-use dioxus_core::{provide_context, Runtime};
+use dioxus_core::queue_effect;
+use dioxus_core::{Runtime, provide_context};
 use dioxus_document::{
     Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
 };

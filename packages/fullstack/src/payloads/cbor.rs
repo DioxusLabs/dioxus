@@ -1,10 +1,10 @@
 use axum::{
     body::Bytes,
-    extract::{rejection::BytesRejection, FromRequest, Request},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    extract::{FromRequest, Request, rejection::BytesRejection},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// CBOR Extractor / Response.
 ///

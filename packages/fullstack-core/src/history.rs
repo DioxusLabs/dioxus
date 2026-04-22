@@ -2,9 +2,9 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use crate::transport::{is_hydrating, SerializeContextEntry};
+use crate::transport::{SerializeContextEntry, is_hydrating};
 use dioxus_core::{provide_context, queue_effect, schedule_update, try_consume_context};
-use dioxus_history::{history, provide_history_context, History};
+use dioxus_history::{History, history, provide_history_context};
 
 // If we are currently in a scope and this is the first run then queue a rerender
 // for after hydration

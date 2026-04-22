@@ -1,8 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
-    Platform, TargetArgs, Workspace,
+    Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
+    Platform, TargetArgs, Workspace, cli::*,
 };
 
 /// Build the Rust Dioxus app and all of its assets.

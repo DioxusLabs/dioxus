@@ -1,11 +1,11 @@
-use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
-use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::{bail, Context};
+use crate::styles::GLOW_STYLE;
+use crate::{AndroidTools, config::DioxusConfig};
+use anyhow::{Context, bail};
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
+use krates::{KrateDetails, LockOptions, semver::Version};
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
@@ -68,7 +68,9 @@ impl Workspace {
                 eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
 
                 if x % 10 == 0 {
-                    eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                    eprintln!(
+                        "{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?"
+                    );
                 }
             }
         };
@@ -304,7 +306,9 @@ impl Workspace {
             });
 
             if found.is_none() {
-                tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                tracing::error!(
+                    "Could not find package {package} in the workspace. Did you forget to add it to the workspace?"
+                );
                 tracing::error!("Packages in the workspace:");
                 for package in self.krates.workspace_members() {
                     if let krates::Node::Krate { krate, .. } = package {

@@ -1,7 +1,7 @@
 use dioxus_core::use_hook;
 use dioxus_signals::{ReadableExt, Signal, WritableExt};
 use futures_channel::oneshot::{Canceled, Receiver, Sender};
-use futures_util::{future::Shared, FutureExt};
+use futures_util::{FutureExt, future::Shared};
 
 /// A hook that provides a waker for other hooks to provide async/await capabilities.
 ///

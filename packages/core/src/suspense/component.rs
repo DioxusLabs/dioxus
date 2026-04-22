@@ -252,9 +252,9 @@ mod SuspenseBoundary_completions {
         SuspenseBoundary {},
     }
 }
-use generational_box::Owner;
 #[allow(unused)]
 pub use SuspenseBoundary_completions::Component::SuspenseBoundary;
+use generational_box::Owner;
 
 /// Suspense has a custom diffing algorithm that diffs the suspended nodes in the background without rendering them
 impl SuspenseBoundaryProps {

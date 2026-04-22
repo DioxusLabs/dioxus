@@ -13,7 +13,7 @@ use futures::{Stream, StreamExt};
 use futures_channel::mpsc::UnboundedSender;
 use headers::{ContentType, Header};
 use send_wrapper::SendWrapper;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{future::Future, marker::PhantomData, pin::Pin};
 
 /// A stream of text data.

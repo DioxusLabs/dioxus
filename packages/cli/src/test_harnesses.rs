@@ -1,7 +1,7 @@
 use crate::{BuildTargets, BundleFormat, Cli, Commands, Workspace};
 use anyhow::Result;
 use clap::Parser;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::{
     collections::HashSet,
     fmt::Write,
@@ -10,7 +10,7 @@ use std::{
     prelude::rust_2024::Future,
 };
 use target_lexicon::Triple;
-use tracing_subscriber::{prelude::*, util::SubscriberInitExt, EnvFilter, Layer};
+use tracing_subscriber::{EnvFilter, Layer, prelude::*, util::SubscriberInitExt};
 
 #[tokio::test]
 async fn run_harness() {

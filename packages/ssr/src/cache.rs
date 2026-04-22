@@ -29,7 +29,7 @@
 //! };
 //!```
 
-use crate::renderer::{str_truthy, BOOL_ATTRS};
+use crate::renderer::{BOOL_ATTRS, str_truthy};
 use dioxus_core::{TemplateAttribute, TemplateNode, VNode};
 use std::{fmt::Write, ops::AddAssign};
 

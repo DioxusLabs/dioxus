@@ -1,6 +1,6 @@
 use crate::bundler::BundleContext;
 use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
@@ -1256,7 +1256,7 @@ SectionEnd
 
 #[cfg(test)]
 mod tests {
-    use super::{render_template, WIX_TEMPLATE};
+    use super::{WIX_TEMPLATE, render_template};
     use crate::bundler::Arch;
     use serde_json::json;
     use std::collections::BTreeMap;

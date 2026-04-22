@@ -1,6 +1,6 @@
-use crate::{provide_router_context, routable::Routable, router_cfg::RouterConfig, Outlet};
-use dioxus_core::{provide_context, use_hook, Callback, Element};
-use dioxus_core_macro::{rsx, Props};
+use crate::{Outlet, provide_router_context, routable::Routable, router_cfg::RouterConfig};
+use dioxus_core::{Callback, Element, provide_context, use_hook};
+use dioxus_core_macro::{Props, rsx};
 
 /// The props for [`Router`].
 #[derive(Props)]
@@ -34,7 +34,7 @@ impl<R: Clone> PartialEq for RouterProps<R> {
 
 /// A component that renders the current route.
 pub fn Router<R: Routable + Clone>(props: RouterProps<R>) -> Element {
-    use crate::{outlet::OutletContext, RouterContext};
+    use crate::{RouterContext, outlet::OutletContext};
 
     use_hook(|| {
         provide_router_context(RouterContext::new(props.config.call(())));

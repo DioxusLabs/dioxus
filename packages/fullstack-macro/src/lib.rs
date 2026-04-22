@@ -9,18 +9,18 @@ use quote::ToTokens;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 use syn::{
-    braced, bracketed,
+    Attribute, Expr, ExprClosure, Lit, Result,
+    token::{Brace, Star},
+};
+use syn::{
+    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath, braced,
+    bracketed,
     parse::ParseStream,
     punctuated::Punctuated,
     token::{Comma, Slash},
-    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath,
 };
-use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr, Path};
-use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
-use syn::{
-    token::{Brace, Star},
-    Attribute, Expr, ExprClosure, Lit, Result,
-};
+use syn::{Ident, ItemFn, LitStr, Path, parse::Parse, parse_quote};
+use syn::{LitBool, LitInt, Pat, PatType, spanned::Spanned};
 
 /// ## Usage
 ///
@@ -731,13 +731,13 @@ impl CompiledRoute {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method specified both in macro and in attribute",
-                ))
+                ));
             }
             (None, None) => {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method not specified in macro or in attribute",
-                ))
+                ));
             }
         };
 
@@ -1275,7 +1275,7 @@ impl Parse for OapiOptions {
                     return Err(syn::Error::new(
                         ident.span(),
                         "unexpected field, expected one of (summary, description, id, hidden, tags, security, responses, transform)",
-                    ))
+                    ));
                 }
             }
             let _ = input.parse::<Token![,]>().ok();
@@ -1801,7 +1801,7 @@ impl Parse for ServerFnArg {
                 return Err(syn::Error::new(
                     arg.span(),
                     "cannot use receiver types in server function macro",
-                ))
+                ));
             }
             FnArg::Typed(t) => t,
         };

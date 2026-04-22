@@ -1,7 +1,7 @@
 use crate::{
-    styles::{GLOW_STYLE, LINK_STYLE},
     AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
     TraceController,
+    styles::{GLOW_STYLE, LINK_STYLE},
 };
 
 mod ansi_buffer;

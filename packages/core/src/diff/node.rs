@@ -4,11 +4,11 @@ use crate::{VNode, VirtualDom, WriteMutations};
 use core::iter::Peekable;
 
 use crate::{
+    TemplateNode,
     arena::ElementId,
     innerlude::{ElementPath, ElementRef, VNodeMount, VText},
     nodes::DynamicNode,
     scopes::ScopeId,
-    TemplateNode,
 };
 
 impl VNode {

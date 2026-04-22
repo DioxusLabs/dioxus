@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 
 use digest::Digest;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, parse_quote, FnArg, Ident, ItemFn, ReturnType, Signature};
+use syn::{FnArg, Ident, ItemFn, ReturnType, Signature, parse_macro_input, parse_quote};
 
 #[proc_macro_attribute]
 pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -10,7 +10,9 @@ pub fn wasm_split(args: TokenStream, input: TokenStream) -> TokenStream {
     let item_fn = parse_macro_input!(input as ItemFn);
 
     if item_fn.sig.asyncness.is_none() {
-        panic!("wasm_split functions must be async. Use a LazyLoader with synchronous functions instead.");
+        panic!(
+            "wasm_split functions must be async. Use a LazyLoader with synchronous functions instead."
+        );
     }
 
     let LoaderNames {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 use crate::Color;
 use dioxus_native::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 use wgpu::{
     CommandEncoderDescriptor, Device, Extent3d, FragmentState, LoadOp, MultisampleState,

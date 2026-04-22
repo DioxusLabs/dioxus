@@ -1,7 +1,7 @@
 use jni::{
+    JNIEnv, NativeMethod,
     objects::{GlobalRef, JClass, JObject, JValue},
     sys::jlong,
-    JNIEnv, NativeMethod,
 };
 
 use crate::android::java::Result;

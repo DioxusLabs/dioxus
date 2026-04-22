@@ -8,7 +8,7 @@ pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::{ScopeId, VirtualDom};
 use dom::WebsysDom;
-use futures_util::{pin_mut, select, FutureExt, StreamExt};
+use futures_util::{FutureExt, StreamExt, pin_mut, select};
 
 mod cfg;
 mod dom;

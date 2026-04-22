@@ -4,11 +4,11 @@ use slab::Slab;
 use syn::Ident;
 
 use crate::{
+    RouteEndpoint,
     nest::{Nest, NestId},
     redirect::Redirect,
     route::{Route, RouteType},
-    segment::{static_segment_idx, RouteSegment},
-    RouteEndpoint,
+    segment::{RouteSegment, static_segment_idx},
 };
 
 #[derive(Debug, Clone, Default)]

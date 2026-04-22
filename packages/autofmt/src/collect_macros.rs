@@ -3,7 +3,7 @@
 //! Returns all macros that match a pattern. You can use this information to autoformat them later
 
 use proc_macro2::LineColumn;
-use syn::{visit::Visit, File, Macro, Meta};
+use syn::{File, Macro, Meta, visit::Visit};
 
 type CollectedMacro<'a> = &'a Macro;
 

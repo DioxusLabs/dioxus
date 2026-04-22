@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::{store::Store, MappedStore};
+use crate::{MappedStore, store::Store};
 use dioxus_signals::{Readable, ReadableExt, Writable};
 
 impl<Lens, T, E> Store<Result<T, E>, Lens>

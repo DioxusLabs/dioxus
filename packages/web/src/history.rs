@@ -1,5 +1,5 @@
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use web_sys::{window, Event, History, ScrollRestoration, Window};
+use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
+use web_sys::{Event, History, ScrollRestoration, Window, window};
 
 /// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///

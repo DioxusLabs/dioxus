@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::spanned::Spanned;
+use syn::{Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate, parse_quote};
 use syn::{ext::IdentExt, parse::Parse};
-use syn::{parse_quote, Ident, ImplItem, ItemImpl, PathArguments, Type, WherePredicate};
 
 pub(crate) fn extend_store(args: ExtendArgs, mut input: ItemImpl) -> syn::Result<TokenStream> {
     let store_type = &*input.self_ty;

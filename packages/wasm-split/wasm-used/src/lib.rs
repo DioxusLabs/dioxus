@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use id_arena::Id;
-use walrus::{ir::*, ExportId};
 use walrus::{ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use walrus::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
+use walrus::{ExportId, ir::*};
 use walrus::{FunctionId, FunctionKind, Global, GlobalId};
 use walrus::{GlobalKind, Memory, MemoryId, Table, TableId};
 

@@ -2,11 +2,11 @@ use crate::{WebDataTransfer, WebFileData, WebFileEngine};
 
 use super::{Synthetic, WebEventExt};
 use dioxus_html::{
-    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
-    input_data::{decode_mouse_button_set, MouseButton},
     FileData, HasDataTransferData, HasDragData, HasFileData, HasMouseData,
     InteractionElementOffset, InteractionLocation, Modifiers, ModifiersInteraction,
     PointerInteraction,
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{MouseButton, decode_mouse_button_set},
 };
 use web_sys::{DragEvent, FileReader};
 

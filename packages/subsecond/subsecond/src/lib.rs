@@ -235,7 +235,7 @@ use std::{
     backtrace,
     mem::transmute,
     panic::AssertUnwindSafe,
-    sync::{atomic::AtomicPtr, Arc, Mutex},
+    sync::{Arc, Mutex, atomic::AtomicPtr},
 };
 
 /// Call a given function with hot-reloading enabled. If the function's code changes, `call` will use
@@ -553,9 +553,9 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             ArrayBuffer, Object, Reflect,
             WebAssembly::{self, Memory, Table},
         };
-        use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsValue;
         use wasm_bindgen::UnwrapThrowExt;
+        use wasm_bindgen::prelude::*;
         use wasm_bindgen_futures::JsFuture;
 
         let funcs: Table = wasm_bindgen::function_table().unchecked_into();
@@ -756,7 +756,7 @@ pub fn aslr_reference() -> usize {
 /// - https://developer.android.com/ndk/reference/structandroid/dlextinfo
 #[cfg(target_os = "android")]
 unsafe fn android_memmap_dlopen(file: &std::path::Path) -> Result<libloading::Library, PatchError> {
-    use std::ffi::{c_void, CStr, CString};
+    use std::ffi::{CStr, CString, c_void};
     use std::os::fd::{AsRawFd, BorrowedFd};
     use std::ptr;
 
