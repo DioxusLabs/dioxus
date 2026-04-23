@@ -271,17 +271,18 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 // simply returning will cause a redraw
             }
 
-            ServeUpdate::ToggleShouldRebuild => {
-                use crate::styles::{ERROR, NOTE_STYLE};
-                builder.automatic_rebuilds = !builder.automatic_rebuilds;
+            ServeUpdate::CycleHotreloadMode => {
+                use crate::styles::{GLOW_STYLE, HINT_STYLE};
+                let style = |label: &str| match label {
+                    "disabled" => format!("{HINT_STYLE}disabled{HINT_STYLE:#}"),
+                    other => format!("{GLOW_STYLE}{other}{GLOW_STYLE:#}"),
+                };
+                let (prev, next) = builder.cycle_hotreload_mode();
                 tracing::info!(
-                    "Automatic rebuilds are currently: {}",
-                    if builder.automatic_rebuilds {
-                        format!("{NOTE_STYLE}enabled{NOTE_STYLE:#}")
-                    } else {
-                        format!("{ERROR}disabled{ERROR:#}")
-                    }
-                )
+                    "changing hotreload mode: {} -> {}",
+                    style(prev),
+                    style(next),
+                );
             }
 
             ServeUpdate::OpenDebugger { id } => {

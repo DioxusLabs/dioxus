@@ -865,6 +865,32 @@ impl AppServer {
         }
     }
 
+    /// Returns a static label for the current hotreload mode (used by both the TUI and logs).
+    pub(crate) fn hotreload_mode_label(&self) -> &'static str {
+        if !self.automatic_rebuilds {
+            "disabled"
+        } else if self.use_hotpatch_engine {
+            "hot-patching"
+        } else {
+            "rsx and assets"
+        }
+    }
+
+    /// Cycle the hotreload mode: hot-patching -> disabled -> rsx and assets -> hot-patching.
+    /// Returns `(previous_label, new_label)` for logging the transition.
+    pub(crate) fn cycle_hotreload_mode(&mut self) -> (&'static str, &'static str) {
+        let prev = self.hotreload_mode_label();
+        if self.automatic_rebuilds && self.use_hotpatch_engine {
+            self.automatic_rebuilds = false;
+        } else if !self.automatic_rebuilds {
+            self.automatic_rebuilds = true;
+            self.use_hotpatch_engine = false;
+        } else {
+            self.use_hotpatch_engine = true;
+        }
+        (prev, self.hotreload_mode_label())
+    }
+
     pub(crate) async fn client_connected(
         &mut self,
         build_id: BuildId,

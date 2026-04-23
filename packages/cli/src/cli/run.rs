@@ -170,7 +170,7 @@ impl RunArgs {
                 ServeUpdate::FilesChanged { .. } => {}
                 ServeUpdate::OpenApp => {}
                 ServeUpdate::RequestRebuild => {}
-                ServeUpdate::ToggleShouldRebuild => {}
+                ServeUpdate::CycleHotreloadMode => {}
                 ServeUpdate::OpenDebugger { .. } => {}
                 ServeUpdate::Redraw => {}
                 ServeUpdate::TracingLog { .. } => {}
