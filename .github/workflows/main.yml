@@ -191,7 +191,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev patchelf desktop-file-utils librsvg2-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.92.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -227,7 +227,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.92.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -265,7 +265,7 @@ jobs:
       - name: Copy Repo to Dev Drive
         run: Copy-Item -Path "${{ github.workspace }}" -Destination "$env:DIOXUS_WORKSPACE" -Recurse
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@1.92.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -325,7 +325,7 @@ jobs:
         with:
           node-version: 24
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@1.88.0
+        uses: dtolnay/rust-toolchain@1.92.0
         with:
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
@@ -367,7 +367,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "1.88.0" }
+          - { os: warp-ubuntu-latest-x64-8x, name: "Linux (stable)", toolchain: "1.92.0" }
           - { os: warp-ubuntu-latest-x64-8x, name: "Linux (beta)", toolchain: beta }
     steps:
       # Do our best to cache the toolchain and node install steps
@@ -431,7 +431,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.92.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -456,7 +456,7 @@ jobs:
         with:
           packages: libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libudev-dev libayatana-appindicator3-dev libxdo-dev libglib2.0-dev
           version: 1.0
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.92.0
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
@@ -481,7 +481,7 @@ jobs:
           - {
               target: aarch64-apple-darwin,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "1.88.0",
+              toolchain: "1.92.0",
               cross: false,
               command: "test",
               args: "--all --tests",
@@ -490,7 +490,7 @@ jobs:
           - {
               target: aarch64-apple-ios,
               os: warp-macos-latest-arm64-6x,
-              toolchain: "1.88.0",
+              toolchain: "1.92.0",
               cross: false,
               command: "build",
               args: "--package dioxus-desktop",
@@ -499,7 +499,7 @@ jobs:
           - {
               target: aarch64-unknown-linux-gnu,
               os: warp-ubuntu-latest-arm64-4x,
-              toolchain: "1.88.0",
+              toolchain: "1.92.0",
               cross: false,
               command: "build",
               args: "--all --tests",
@@ -508,7 +508,7 @@ jobs:
           - {
               target: aarch64-linux-android,
               os: warp-ubuntu-latest-x64-4x,
-              toolchain: "1.88.0",
+              toolchain: "1.92.0",
               cross: true,
               command: "build",
               args: "--package dioxus-desktop",
@@ -518,7 +518,7 @@ jobs:
           # - {
           #     target: x86_64-unknown-linux-gnu,
           #     os: ubuntu-24.04,
-          #     toolchain: "1.88.0",
+          #     toolchain: "1.92.0",
           #     cross: false,
           #     command: "build",
           #     args: "--all --tests",
@@ -597,7 +597,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: ${{ env.rust_nightly }}
-      - uses: dtolnay/rust-toolchain@1.88.0
+      - uses: dtolnay/rust-toolchain@1.92.0
       - uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: "true"
@@ -606,7 +606,7 @@ jobs:
       - name: Generate minimal-version lockfile
         run: cargo +${{ env.rust_nightly }} update -Zdirect-minimal-versions
       - name: Check workspace with minimum versions
-        run: cargo +1.88.0 check --workspace
+        run: cargo +1.92.0 check --workspace
 
   nix:
     needs: check-paths
