@@ -450,11 +450,8 @@ impl Output {
             return;
         };
 
-        // First, dequeue any logs that have built up from event handling.
-        // Sort by timestamp so that logs from the two producer channels
-        // (`tracer.wait()` and the builder's stdio) render in chronological
-        // order even when `tokio::select!` picks them up out of order.
-        for log in Self::drain_sorted(&mut self.pending_logs) {
+        // First, dequeue any logs that have built up from event handling
+        while let Some(log) = self.pending_logs.pop_back() {
             _ = self.render_log(term, log);
         }
 
@@ -1094,7 +1091,7 @@ impl Output {
     fn emit_logs_to_tracing(&mut self) {
         // In non-interactive mode (CI, piped output), drain pending logs to tracing
         // so they still appear in stdout/stderr instead of being silently dropped.
-        for log in Self::drain_sorted(&mut self.pending_logs) {
+        while let Some(log) = self.pending_logs.pop_back() {
             let msg = match &log.content {
                 TraceContent::Text(s) => s.as_str(),
                 TraceContent::Cargo(d) => d.message.as_str(),
@@ -1107,20 +1104,6 @@ impl Output {
                 Level::TRACE => tracing::trace!("{msg}"),
             }
         }
-    }
-
-    /// Drain `pending_logs` into a timestamp-sorted iterator (oldest first).
-    ///
-    /// The serve loop has two async producer channels (`tracer.wait()` carrying
-    /// `tracing::*!` events, and the builder's stdio stream) that both feed
-    /// `pending_logs`. `tokio::select!` doesn't guarantee FIFO between channels,
-    /// so messages from the same logical tick can land out of order. Sorting
-    /// by the capture-time timestamp restores chronological ordering at render
-    /// time without requiring deeper channel restructuring.
-    fn drain_sorted(pending: &mut VecDeque<TraceMsg>) -> std::vec::IntoIter<TraceMsg> {
-        let mut logs: Vec<TraceMsg> = pending.drain(..).collect();
-        logs.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
-        logs.into_iter()
     }
 }
 
@@ -1139,7 +1122,7 @@ impl std::ops::Drop for Output {
         };
 
         // First, dequeue any logs that have built up from event handling
-        for log in Self::drain_sorted(&mut self.pending_logs) {
+        while let Some(log) = self.pending_logs.pop_back() {
             _ = self.render_log(term, log);
         }
 

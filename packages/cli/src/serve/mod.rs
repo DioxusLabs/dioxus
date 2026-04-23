@@ -80,12 +80,14 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
         // Draw the state of the server to the screen
         screen.render(&builder, &devserver);
 
-        // And then wait for any updates before redrawing
+        // And then wait for any updates before redrawing.
+        // Use biased so the tracer wins in log emits vs all others
         let msg = tokio::select! {
+            biased;
+            msg = tracer.wait() => msg,
             msg = builder.wait() => msg,
             msg = devserver.wait() => msg,
             msg = screen.wait() => msg,
-            msg = tracer.wait() => msg,
         };
 
         match msg {
