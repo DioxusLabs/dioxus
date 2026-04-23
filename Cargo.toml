@@ -231,7 +231,7 @@ wasm-bindgen-futures = "0.4.50"
 js-sys = "0.3.77"
 web-sys = { version = "0.3.77", default-features = false }
 html_parser = "0.7.0"
-thiserror = "2.0.12"
+thiserror = "2.0.18"
 prettyplease = { version = "0.2.35", features = ["verbatim"] }
 const_format = "0.2.34"
 cargo_toml = { version = "0.22.3" }
@@ -327,7 +327,7 @@ hyper-util = "0.1.12"
 krates = { version = "0.17.5" }
 libloading = "0.8.8"
 libc = "0.2.174"
-memmap2 = "0.9.8"
+memmap2 = "0.9.10"
 memfd = "0.6.4"
 xxhash-rust = { version = "0.8.15", default-features = false }
 serde_qs = "0.15.0"
@@ -348,7 +348,7 @@ infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"
 muda = "0.17.0"
-objc2 = { version = "0.6.3", features = ["exception"] }
+objc2 = { version = "0.6.4", features = ["exception"] }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3.2", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false }
