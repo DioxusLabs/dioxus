@@ -53,7 +53,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 Serving your app: {binname}! 🚀
                 • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
                 • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
-                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
+                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to change hotreload mode
                 • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
                 • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
                ----------------------------------------------------------------"#,
