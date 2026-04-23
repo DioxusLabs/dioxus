@@ -1,61 +1,62 @@
-use blitz_shell::BlitzShellNetCallback;
+use blitz_shell::BlitzShellProxy;
 use std::sync::Arc;
 
-use blitz_dom::net::Resource;
-use blitz_shell::BlitzShellEvent;
-use blitz_traits::net::{NetCallback, NetProvider};
-use winit::event_loop::EventLoopProxy;
+use blitz_traits::net::{NetHandler, NetProvider, Request};
 
 pub struct DioxusNativeNetProvider {
-    callback: Arc<dyn NetCallback<Resource> + 'static>,
-    #[cfg(feature = "net")]
-    inner_net_provider: Arc<dyn NetProvider<Resource> + 'static>,
+    inner_net_provider: Option<Arc<dyn NetProvider + 'static>>,
 }
+
+#[allow(unused)]
 impl DioxusNativeNetProvider {
-    pub fn shared(proxy: EventLoopProxy<BlitzShellEvent>) -> Arc<dyn NetProvider<Resource>> {
-        Arc::new(Self::new(proxy)) as Arc<dyn NetProvider<Resource>>
+    pub fn shared(proxy: BlitzShellProxy) -> Arc<dyn NetProvider> {
+        Arc::new(Self::new(proxy)) as Arc<dyn NetProvider>
     }
 
-    pub fn new(proxy: EventLoopProxy<BlitzShellEvent>) -> Self {
-        let net_callback = BlitzShellNetCallback::shared(proxy);
+    pub fn new(proxy: BlitzShellProxy) -> Self {
+        #[cfg(any(feature = "data-uri", feature = "net"))]
+        let net_waker = Some(Arc::new(proxy) as _);
 
         #[cfg(feature = "net")]
-        let net_provider = blitz_net::Provider::shared(net_callback.clone());
+        let inner_net_provider = Some(blitz_net::Provider::shared(net_waker.clone()));
+        #[cfg(all(feature = "data-uri", not(feature = "net")))]
+        let inner_net_provider = Some(blitz_shell::DataUriNetProvider::shared(net_waker.clone()));
+        #[cfg(all(not(feature = "data-uri"), not(feature = "net")))]
+        let inner_net_provider = None;
 
+        Self { inner_net_provider }
+    }
+
+    pub fn with_inner(proxy: BlitzShellProxy, inner: Arc<dyn NetProvider>) -> Self {
         Self {
-            callback: net_callback,
-            #[cfg(feature = "net")]
-            inner_net_provider: net_provider,
+            inner_net_provider: Some(inner),
         }
+    }
+
+    pub fn inner(&self) -> Option<&Arc<dyn NetProvider>> {
+        self.inner_net_provider.as_ref()
     }
 }
 
-impl NetProvider<Resource> for DioxusNativeNetProvider {
-    fn fetch(
-        &self,
-        doc_id: usize,
-        request: blitz_traits::net::Request,
-        handler: blitz_traits::net::BoxedHandler<Resource>,
-    ) {
+impl NetProvider for DioxusNativeNetProvider {
+    fn fetch(&self, doc_id: usize, request: Request, handler: Box<dyn NetHandler>) {
         if request.url.scheme() == "dioxus" {
-            #[allow(clippy::single_match)]
-            // cfg'd code has multiple branches in some configurations
+            #[allow(clippy::single_match)] // cfg'd code
             match dioxus_asset_resolver::native::serve_asset(request.url.path()) {
                 Ok(res) => {
                     #[cfg(feature = "tracing")]
                     tracing::trace!("fetching asset from file system success {request:#?}");
-                    handler.bytes(doc_id, res.into_body().into(), self.callback.clone())
+                    handler.bytes(request.url.to_string(), res.into_body().into())
                 }
                 Err(_) => {
                     #[cfg(feature = "tracing")]
                     tracing::warn!("fetching asset from file system error {request:#?}");
                 }
             }
+        } else if let Some(inner) = &self.inner_net_provider {
+            inner.fetch(doc_id, request, handler);
         } else {
-            #[cfg(feature = "net")]
-            self.inner_net_provider.fetch(doc_id, request, handler);
-
-            #[cfg(all(not(feature = "net"), feature = "tracing"))]
+            #[cfg(feature = "tracing")]
             tracing::warn!("net feature not enabled, cannot fetch {request:#?}");
         }
     }

@@ -1,6 +1,6 @@
 //! Integration between Dioxus and Blitz
-use crate::{NodeId, qual_name, trace};
-use blitz_dom::{BaseDocument, DocumentMutator};
+use crate::{NodeId, SubDocumentAttr, qual_name, trace};
+use blitz_dom::{BaseDocument, Document as _, DocumentMutator};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -19,6 +19,8 @@ pub struct DioxusState {
     pub(crate) node_id_mapping: Vec<Option<NodeId>>,
     /// Count of each handler type
     pub(crate) event_handler_counts: [u32; 32],
+    /// Mounted events queued as elements are mounted
+    pub(crate) queued_mounted_events: Vec<ElementId>,
 }
 
 impl DioxusState {
@@ -29,6 +31,7 @@ impl DioxusState {
             stack: vec![root_id],
             node_id_mapping: vec![Some(root_id)],
             event_handler_counts: [0; 32],
+            queued_mounted_events: Vec::new(),
         }
     }
 
@@ -50,6 +53,10 @@ impl DioxusState {
 
     pub(crate) fn m_stack_nodes(&mut self, m: usize) -> Vec<usize> {
         self.stack.split_off(self.stack.len() - m)
+    }
+
+    pub(crate) fn queue_mount_event(&mut self, id: ElementId) {
+        self.queued_mounted_events.push(id);
     }
 }
 
@@ -194,6 +201,23 @@ impl WriteMutations for MutationWriter<'_> {
             }
         }
 
+        if local_name == "__webview_document" {
+            match value {
+                AttributeValue::Any(sub_doc_attr) => {
+                    if let Some(sub_doc_attr) =
+                        sub_doc_attr.as_any().downcast_ref::<SubDocumentAttr>()
+                        && let Some(mut sub_document) = sub_doc_attr.take_document()
+                    {
+                        sub_document
+                            .inner_mut()
+                            .set_shell_provider(self.docm.doc.shell_provider.clone());
+                        self.docm.set_sub_document(node_id, sub_document as _);
+                    }
+                }
+                _ => self.docm.remove_sub_document(node_id),
+            }
+        }
+
         let falsy = is_falsy(value);
         match value {
             AttributeValue::None => {
@@ -224,7 +248,7 @@ impl WriteMutations for MutationWriter<'_> {
         // TODO: proper template node support
         let template_entry = self.state.templates.entry(template).or_insert_with(|| {
             let template_root_ids: Vec<NodeId> = template
-                .roots()
+                .roots
                 .iter()
                 .map(|root| create_template_node(&mut self.docm, root))
                 .collect();
@@ -240,6 +264,12 @@ impl WriteMutations for MutationWriter<'_> {
     }
 
     fn create_event_listener(&mut self, name: &'static str, id: ElementId) {
+        // Mounted events are fired immediately after the element is mounted.
+        if name == "mounted" {
+            self.state.queue_mount_event(id);
+            return;
+        }
+
         // We're going to actually set the listener here as a placeholder - in JS this would also be a placeholder
         // we might actually just want to attach the attribute to the root element (delegation)
         let value = AttributeValue::Text("<rust func>".into());

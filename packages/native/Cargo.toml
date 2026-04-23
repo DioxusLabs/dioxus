@@ -10,11 +10,12 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello", "incremental"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
 
 # DOM features
 svg = ["blitz-dom/svg", "blitz-paint/svg"]
+floats = ["blitz-dom/floats"]
 incremental = ["blitz-dom/incremental"]
 autofocus = ["blitz-dom/autofocus"]
 system-fonts = ["blitz-dom/system_fonts"]
@@ -24,14 +25,35 @@ clipboard = ["blitz-shell/clipboard"]
 file_dialog = ["file-dialog"] # Backwards compat. Remove in next breaking version
 file-dialog = ["blitz-shell/file_dialog"]
 accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
+data-uri = ["blitz-shell/data-uri"]
+
+# Renderer features
+vello = ["alt-renderer", "dep:anyrender_vello"]
+vello-hybrid = ["alt-renderer", "dep:anyrender_vello_hybrid"]
+skia = ["alt-renderer", "dep:anyrender_skia"]
+vello-cpu = ["alt-renderer", "vello-cpu-pixels"]
+vello-cpu-pixels = ["alt-renderer", "vello-cpu-base", "anyrender_vello_cpu/pixels_window_renderer"]
+vello-cpu-softbuffer = ["alt-renderer", "vello-cpu-base", "anyrender_vello_cpu/softbuffer_window_renderer"]
+vello-cpu-base = ["alt-renderer", "dep:anyrender_vello_cpu"]
+alt-renderer = []
 
 # Other features
 net = ["dep:tokio", "dep:blitz-net"]
 html = ["dep:blitz-html"]
 
-# Dev / Debug
-hot-reload = ["dep:dioxus-cli-config", "dep:dioxus-devtools"]
-tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "blitz-dom/tracing"]
+# Dev
+hot-reload = ["dep:dioxus-devtools"]
+
+# Debug/Logging
+log-times = ["log-phase-times", "log-frame-times"]
+log-phase-times = ["blitz-dom/log_phase_times"]
+log-frame-times = [
+  "anyrender_vello_cpu?/log_frame_times",
+  "anyrender_vello?/log_frame_times",
+  "anyrender_vello_hybrid?/log_frame_times",
+  "anyrender_skia?/log_frame_times",
+]
+tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "blitz-dom/tracing", "blitz-html/tracing", "blitz-net/tracing"]
 
 [dependencies]
 # Blitz dependencies
@@ -44,7 +66,10 @@ blitz-shell = { workspace = true }
 
 # AnyRender dependencies
 anyrender = { workspace = true }
-anyrender_vello = { workspace = true }
+anyrender_vello = { workspace = true, optional = true}
+anyrender_vello_hybrid = { workspace = true, optional = true}
+anyrender_vello_cpu = { workspace = true, optional = true}
+anyrender_skia = { workspace = true, optional = true}
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
@@ -53,9 +78,9 @@ dioxus-native-dom = { workspace = true }
 dioxus-asset-resolver = { workspace = true, features = ["native"] }
 dioxus-history = { workspace = true }
 dioxus-document = { workspace = true }
+dioxus-cli-config = { workspace = true }
 
 # Dioxus hot reload
-dioxus-cli-config = { workspace = true, optional = true }
 dioxus-devtools = { workspace = true, optional = true }
 
 # Dioxus prelude
@@ -70,13 +95,19 @@ winit = { workspace = true }
 keyboard-types = { workspace = true }
 
 # IO & Networking
-tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+tokio = { workspace = true, features = ["rt"], optional = true }
 webbrowser = { workspace = true }
 
 # Other dependencies
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-activity = { version = "0.6", default-features = false }
 
 [target.'cfg(all(target_os = "ios", target_abi = "sim"))'.dependencies]
 anyrender_vello_cpu = { workspace = true, features = ["pixels_window_renderer"]}
