@@ -7,7 +7,10 @@ use anyrender_vello::VelloScenePainter;
 use blitz_dom::{Document as _, DocumentConfig};
 use blitz_paint::paint_scene;
 use blitz_traits::{
-    events::{BlitzMouseButtonEvent, MouseEventButton, MouseEventButtons, UiEvent},
+    events::{
+        BlitzPointerEvent, BlitzPointerId, MouseEventButton, MouseEventButtons, PointerCoords,
+        PointerDetails, UiEvent,
+    },
     shell::{ColorScheme, Viewport},
 };
 use dioxus::prelude::*;
@@ -112,10 +115,12 @@ fn main() {
     // (i.e. to render a custom renderer instead of Vello)
     paint_scene(
         &mut VelloScenePainter::new(&mut scene),
-        &dioxus_doc,
+        &dioxus_doc.inner(),
         SCALE_FACTOR as f64,
         WIDTH,
         HEIGHT,
+        0,
+        0,
     );
 
     // Render the `vello::Scene` to the Texture using the `VelloRenderer`
@@ -140,12 +145,21 @@ fn main() {
     // EVENT HANDLING
     // =============
 
-    let event = UiEvent::MouseDown(BlitzMouseButtonEvent {
-        x: 30.0,
-        y: 40.0,
+    let event = UiEvent::PointerDown(BlitzPointerEvent {
+        id: BlitzPointerId::Mouse,
+        is_primary: true,
+        coords: PointerCoords {
+            page_x: 30.0,
+            page_y: 40.0,
+            client_x: 30.0,
+            client_y: 40.0,
+            screen_x: 30.0,
+            screen_y: 40.0,
+        },
         button: MouseEventButton::Main,
         buttons: MouseEventButtons::Primary, // keep track of all pressed buttons
         mods: Modifiers::empty(),            // ctrl, alt, shift, etc
+        details: PointerDetails::default(),
     });
     dioxus_doc.handle_ui_event(event);
 

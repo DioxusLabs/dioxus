@@ -190,19 +190,22 @@ const-serialize-macro = { path = "packages/const-serialize-macro", version = "0.
 
 warnings = { version = "0.2.1" }
 
-# blitz
-blitz-dom = { version = "0.2.4", default-features = false }
-blitz-net = { version = "0.2" }
-blitz-html = { version = "0.2" }
-blitz-paint = { version = "0.2" }
-blitz-traits = { version = "0.2" }
-blitz-shell = { version = "0.2", default-features = false }
-anyrender = { version = "0.6.2", default-features = false }
-anyrender_vello = { version = "0.6", default-features = false }
-anyrender_vello_cpu = { version = "0.8", default-features = false }
-wgpu_context = { version = "0.1", default-features = false }
-wgpu = { version = "26.0.1" }
-vello = "0.6"
+# blitz / native
+blitz-dom = { version = "=0.3.0-alpha.2", default-features = false }
+blitz-net = { version = "=0.3.0-alpha.2" }
+blitz-html = { version = "=0.3.0-alpha.2" }
+blitz-paint = { version = "=0.3.0-alpha.2" }
+blitz-traits = { version = "=0.3.0-alpha.2" }
+blitz-shell = { version = "=0.3.0-alpha.2", default-features = false }
+anyrender = { version = "0.8", default-features = false }
+anyrender_vello = { version = "0.8", default-features = false }
+anyrender_vello_cpu = { version = "0.10", default-features = false }
+anyrender_vello_hybrid = { version = "0.3", default-features = false }
+anyrender_skia = { version = "0.5", default-features = false }
+wgpu_context = { version = "0.4" }
+wgpu = { version = "28" }
+vello = "0.8"
+winit = { version = "=0.31.0-beta.2" }
 
 
 # a fork of pretty please for tests - let's get off of this if we can!
@@ -366,7 +369,6 @@ shell-words = "1.1.0"
 
 # native
 keyboard-types = { version = "0.7", default-features = false }
-winit = { version = "0.30.11", features = ["rwh_06"] }
 
 # reduce debug symbols to line tables only - speeds up compiles and shrinks artifacts
 # backtraces still show file:line, but debugger can't inspect variables
