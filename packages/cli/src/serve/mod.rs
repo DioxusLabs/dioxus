@@ -67,6 +67,13 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
         }
     );
 
+    // Let people know hotpatching is enabled by default now.
+    if builder.use_hotpatch_engine {
+        tracing::warn!(
+            "Note: {GLOW_STYLE}Rust hot-patching{GLOW_STYLE:#} is now enabled by default! Unexpected behavior might occur. Press `p` to change modes."
+        );
+    }
+
     builder.initialize();
 
     loop {
