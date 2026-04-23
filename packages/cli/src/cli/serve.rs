@@ -57,7 +57,7 @@ pub(crate) struct ServeArgs {
     /// Enable Rust hot-patching instead of full rebuilds [default: false]
     ///
     /// This is quite experimental and may lead to unexpected segfaults or crashes in development.
-    #[arg(long, default_value_t = false, alias = "hotpatch")]
+    #[arg(long, default_value_t = true, alias = "hotpatch")]
     pub(crate) hot_patch: bool,
 
     /// Watch the filesystem for changes and trigger a rebuild [default: true]
