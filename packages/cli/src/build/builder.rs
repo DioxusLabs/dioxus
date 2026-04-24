@@ -1971,7 +1971,7 @@ impl AppBuilder {
                 "event": "build_and_bundle_complete",
                 "time_taken": time_taken,
                 "mode": match bundle.mode {
-                    BuildMode::Base { .. } => "base",
+                    BuildMode::Base => "base",
                     BuildMode::Fat => "fat",
                     BuildMode::Thin { .. } => "thin",
                 },
@@ -2006,7 +2006,7 @@ impl AppBuilder {
         let mut flamegraph = format!(
             "Flamegraph for {} - time taken: {}ms",
             match bundle.mode {
-                BuildMode::Base { .. } => "base",
+                BuildMode::Base => "base",
                 BuildMode::Fat => "fat",
                 BuildMode::Thin { .. } => "thin",
             },

@@ -961,7 +961,7 @@ impl BuildRequest {
             BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
 
             // In base/fat mode, we do the full chain with a root `cargo rustc`
-            BuildMode::Base { .. } | BuildMode::Fat => {
+            BuildMode::Base | BuildMode::Fat => {
                 let mut artifacts = self.cargo_build(&ctx).await?;
 
                 ctx.profile_phase("Post-processing executable");
@@ -1419,7 +1419,7 @@ impl BuildRequest {
         let mut manifest = extract_symbols_from_file(exe).await?;
 
         if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            && matches!(ctx.mode, BuildMode::Base | BuildMode::Fat)
         {
             if let Some(dir) = self.user_public_dir() {
                 for entry in walkdir::WalkDir::new(&dir)
