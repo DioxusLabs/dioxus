@@ -47,6 +47,7 @@ members = [
     "packages/asset-resolver",
     "packages/depinfo",
     "packages/component-manifest",
+    "packages/test",
 
     # CLI harnesses, all included
     "packages/cli-harnesses/*",
@@ -203,6 +204,8 @@ anyrender_vello_cpu = { version = "0.8", default-features = false }
 wgpu_context = { version = "0.1", default-features = false }
 wgpu = { version = "26.0.1" }
 vello = "0.6"
+bevy = "0.17"
+taffy = "0.9.2"
 
 
 # a fork of pretty please for tests - let's get off of this if we can!

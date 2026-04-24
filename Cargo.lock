@@ -4318,6 +4318,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-test"
+version = "0.7.6"
+dependencies = [
+ "blitz-dom",
+ "dioxus",
+ "dioxus-core",
+ "dioxus-html",
+ "dioxus-native-dom",
+ "taffy",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "dioxus-web"
 version = "0.7.6"
 dependencies = [
