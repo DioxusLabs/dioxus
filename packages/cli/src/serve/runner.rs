@@ -121,10 +121,6 @@ impl AppServer {
 
         // These come from the args but also might come from the workspace settings
         // We opt to use the manually specified args over the workspace settings
-        let hot_reload = args
-            .hot_reload
-            .unwrap_or_else(|| workspace.settings.always_hot_reload.unwrap_or(true));
-
         let open_browser = args
             .open
             .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(false))
@@ -173,9 +169,7 @@ impl AppServer {
             .flatten();
 
         let watch_fs = args.watch.unwrap_or(true);
-        let hotreload_mode = if !hot_reload {
-            HotReloadMode::Disabled
-        } else if args.hot_patch {
+        let hotreload_mode = if args.hot_patch.unwrap_or(true) {
             HotReloadMode::Hotpatch
         } else {
             HotReloadMode::RsxOnly
@@ -585,8 +579,15 @@ impl AppServer {
             self.add_hot_reload_message(&msg);
 
             let file = files[0].display().to_string();
-            let file =
-                file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
+            let crate_dir = self.client.build.crate_dir().display().to_string();
+            let workspace_dir = self.client.build.workspace_dir().display().to_string();
+            let file = if file.starts_with(&crate_dir) {
+                file.trim_start_matches(&crate_dir)
+            } else if file.starts_with(&workspace_dir) {
+                file.trim_start_matches(&workspace_dir)
+            } else {
+                &file
+            };
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //

@@ -687,7 +687,7 @@ impl BuildRequest {
 
         // The triple will be the triple passed or the host if using dioxus.
         let triple = if using_dioxus_explicitly {
-            triple.context("Could not automatically detect target triple")?
+            triple.context("Could not automatically detect target triple. Make sure to specify the platform (ie --web or --desktop) or the triple directly.")?
         } else {
             triple.unwrap_or(Triple::host())
         };

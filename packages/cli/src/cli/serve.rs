@@ -58,7 +58,7 @@ pub(crate) struct ServeArgs {
     ///
     /// This is quite experimental and may lead to unexpected segfaults or crashes in development.
     #[arg(long, default_missing_value = "true", num_args=0..=1, alias = "hotpatch")]
-    pub(crate) hot_patch: bool,
+    pub(crate) hot_patch: Option<bool>,
 
     /// Watch the filesystem for changes and trigger a rebuild [default: true]
     #[clap(long, default_missing_value = "true", num_args=0..=1)]

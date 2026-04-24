@@ -883,7 +883,6 @@ impl TraceController {
                 Config::Set(setting) => (
                     format!("config set {}", setting),
                     match setting {
-                        Setting::AlwaysHotReload { value } => json!({ "value": value }),
                         Setting::AlwaysOpenBrowser { value } => json!({ "value": value }),
                         Setting::AlwaysOnTop { value } => json!({ "value": value }),
                         Setting::WSLFilePollInterval { value } => json!({ "value": value }),
