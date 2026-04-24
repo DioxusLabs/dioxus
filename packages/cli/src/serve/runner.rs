@@ -529,7 +529,6 @@ impl AppServer {
             match self.hotreload_mode {
                 // In hotpatch, we can only issue patches if the original build completed
                 HotReloadMode::Hotpatch if !self.has_hotpatchable_builds() => {
-                    tracing::info!("needs fat buuld because no artifacts exist");
                     self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
                     if let Some(server) = self.server.as_mut() {
                         server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
@@ -1009,8 +1008,8 @@ impl AppServer {
             self.fill_filemap_from_krate(server.build.crate_dir());
         }
 
-        for krate in self.all_watched_crates() {
-            self.fill_filemap_from_krate(krate);
+        for krate_path in self.all_watched_crates() {
+            self.fill_filemap_from_krate(krate_path);
         }
     }
 
@@ -1026,7 +1025,9 @@ impl AppServer {
     ///
     /// todo: There are known bugs here when handling gitignores.
     fn fill_filemap_from_krate(&mut self, crate_dir: PathBuf) {
-        for entry in walkdir::WalkDir::new(crate_dir).into_iter().flatten() {
+        let src_dir = crate_dir.join("src");
+
+        for entry in walkdir::WalkDir::new(src_dir).into_iter().flatten() {
             if self
                 .workspace
                 .ignore
@@ -1037,16 +1038,19 @@ impl AppServer {
             }
 
             let path = entry.path();
+            let pathbuf = path.to_path_buf();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                if let Ok(contents) = std::fs::read_to_string(path) {
-                    self.file_map.insert(
-                        path.to_path_buf(),
-                        CachedFile {
-                            contents,
-                            most_recent: None,
-                            templates: Default::default(),
-                        },
-                    );
+                if !self.file_map.contains_key(&pathbuf) {
+                    if let Ok(contents) = std::fs::read_to_string(path) {
+                        self.file_map.insert(
+                            pathbuf,
+                            CachedFile {
+                                contents,
+                                most_recent: None,
+                                templates: Default::default(),
+                            },
+                        );
+                    }
                 }
             }
         }
@@ -1072,8 +1076,6 @@ impl AppServer {
             self.client.build.crate_dir(),
             self.client.build.crate_package,
         ) {
-            tracing::trace!("Watching path {path:?}");
-
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
             }
@@ -1092,7 +1094,6 @@ impl AppServer {
 
         // Also watch the crates themselves, but not recursively, such that we can pick up new folders
         for krate in self.all_watched_crates() {
-            tracing::trace!("Watching path {krate:?}");
             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
                 handle_notify_error(err);
             }
@@ -1151,49 +1152,58 @@ impl AppServer {
         watched_paths
     }
 
-    /// Get all the Manifest paths for dependencies that we should watch. Will not return anything
-    /// in the `.cargo` folder - only local dependencies will be watched.
-    ///
-    /// This returns a list of manifest paths
-    ///
-    /// Extend the watch path to include:
-    ///
-    /// - the assets directory - this is so we can hotreload CSS and other assets by default
-    /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
-    /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
+    /// Get the directories of every local (non-`.cargo`) crate reachable from `crate_package`
+    /// through the dependency graph. Walks transitively so workspace members pulled in via
+    /// intermediate workspace crates (e.g. `dioxus-examples` → `dioxus` → `dioxus-core`) are
+    /// included. Registry/git deps under `.cargo` are skipped and not descended into.
     fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
         let mut paths = vec![];
+        let mut visited: HashSet<NodeId> = HashSet::new();
+        let mut queue: VecDeque<NodeId> = VecDeque::new();
 
-        for (dependency, _edge) in self.workspace.krates.get_deps(crate_package) {
-            let krate = match dependency {
-                krates::Node::Krate { krate, .. } => krate,
-                krates::Node::Feature { krate_index, .. } => {
-                    &self.workspace.krates[krate_index.index()]
+        visited.insert(crate_package);
+        queue.push_back(crate_package);
+
+        while let Some(node) = queue.pop_front() {
+            for (dependency, _edge) in self.workspace.krates.get_deps(node) {
+                let (krate, dep_nid) = match dependency {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (krate, nid)
+                    }
+                    krates::Node::Feature { krate_index, .. } => {
+                        let k = &self.workspace.krates[krate_index.index()];
+                        (k, *krate_index)
+                    }
+                };
+
+                if !visited.insert(dep_nid) {
+                    continue;
                 }
-            };
 
-            if krate
-                .manifest_path
-                .components()
-                .any(|c| c.as_str() == ".cargo")
-            {
-                continue;
-            }
-
-            paths.push(
-                krate
+                if krate
                     .manifest_path
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .into_std_path_buf(),
-            );
+                    .components()
+                    .any(|c| c.as_str() == ".cargo")
+                {
+                    continue;
+                }
+
+                paths.push(
+                    krate
+                        .manifest_path
+                        .parent()
+                        .unwrap()
+                        .to_path_buf()
+                        .into_std_path_buf(),
+                );
+                queue.push_back(dep_nid);
+            }
         }
 
         paths
     }
 
-    // todo: we need to make sure we merge this for all the running packages
     fn all_watched_crates(&self) -> Vec<PathBuf> {
         let crate_package = self.client().build.crate_package;
         let crate_dir = self.client().build.crate_dir();
@@ -1201,11 +1211,6 @@ impl AppServer {
         let mut krates: Vec<PathBuf> = self
             .local_dependencies(crate_package)
             .into_iter()
-            .map(|p| {
-                p.parent()
-                    .expect("Local manifest to exist and have a parent")
-                    .to_path_buf()
-            })
             .chain(Some(crate_dir))
             .collect();
 
@@ -1213,19 +1218,14 @@ impl AppServer {
             let server_crate_package = server.build.crate_package;
             let server_crate_dir = server.build.crate_dir();
 
-            let server_krates: Vec<PathBuf> = self
-                .local_dependencies(server_crate_package)
-                .into_iter()
-                .map(|p| {
-                    p.parent()
-                        .expect("Server manifest to exist and have a parent")
-                        .to_path_buf()
-                })
-                .chain(Some(server_crate_dir))
-                .collect();
-            krates.extend(server_krates);
+            krates.extend(
+                self.local_dependencies(server_crate_package)
+                    .into_iter()
+                    .chain(Some(server_crate_dir)),
+            );
         }
 
+        krates.sort();
         krates.dedup();
 
         krates
