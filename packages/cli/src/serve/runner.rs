@@ -1041,16 +1041,13 @@ impl AppServer {
             let path = entry.path();
             let pathbuf = path.to_path_buf();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                if !self.file_map.contains_key(&pathbuf) {
+                if let std::collections::hash_map::Entry::Vacant(e) = self.file_map.entry(pathbuf) {
                     if let Ok(contents) = std::fs::read_to_string(path) {
-                        self.file_map.insert(
-                            pathbuf,
-                            CachedFile {
+                        e.insert(CachedFile {
                                 contents,
                                 most_recent: None,
                                 templates: Default::default(),
-                            },
-                        );
+                            });
                     }
                 }
             }
