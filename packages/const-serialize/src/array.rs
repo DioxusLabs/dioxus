@@ -32,7 +32,7 @@ pub(crate) const unsafe fn serialize_const_array(
     to = write_array(to, len);
     while i < len {
         let field = ptr.wrapping_byte_offset((i * layout.item_layout.size()) as _);
-        to = serialize_const_ptr(field, to, layout.item_layout);
+        to = unsafe { serialize_const_ptr(field, to, layout.item_layout) };
         i += 1;
     }
     to

@@ -1,6 +1,6 @@
-use crate::bundler::{copy_dir_recursive, AppCategory, Bundle, BundleContext};
+use crate::bundler::{AppCategory, Bundle, BundleContext, copy_dir_recursive};
 use crate::{MacOsSettings, PackageType};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use image::{DynamicImage, ImageReader};
 use std::fs::{self, File};
 use std::io::BufWriter;

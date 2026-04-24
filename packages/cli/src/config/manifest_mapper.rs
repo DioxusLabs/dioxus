@@ -649,20 +649,26 @@ mod tests {
         );
 
         // Should have both fine and coarse for Android
-        assert!(mapper
-            .android_permissions
-            .iter()
-            .any(|p| p.permission == "android.permission.ACCESS_FINE_LOCATION"));
-        assert!(mapper
-            .android_permissions
-            .iter()
-            .any(|p| p.permission == "android.permission.ACCESS_COARSE_LOCATION"));
+        assert!(
+            mapper
+                .android_permissions
+                .iter()
+                .any(|p| p.permission == "android.permission.ACCESS_FINE_LOCATION")
+        );
+        assert!(
+            mapper
+                .android_permissions
+                .iter()
+                .any(|p| p.permission == "android.permission.ACCESS_COARSE_LOCATION")
+        );
 
         // Should have iOS location plist entry
-        assert!(mapper
-            .ios_plist_entries
-            .iter()
-            .any(|e| e.key == "NSLocationWhenInUseUsageDescription"));
+        assert!(
+            mapper
+                .ios_plist_entries
+                .iter()
+                .any(|e| e.key == "NSLocationWhenInUseUsageDescription")
+        );
     }
 
     #[test]
@@ -683,14 +689,18 @@ mod tests {
             &MacosConfig::default(),
         );
 
-        assert!(mapper
-            .android_permissions
-            .iter()
-            .any(|p| p.permission == "android.permission.CAMERA"));
-        assert!(mapper
-            .ios_plist_entries
-            .iter()
-            .any(|e| e.key == "NSCameraUsageDescription"));
+        assert!(
+            mapper
+                .android_permissions
+                .iter()
+                .any(|p| p.permission == "android.permission.CAMERA")
+        );
+        assert!(
+            mapper
+                .ios_plist_entries
+                .iter()
+                .any(|e| e.key == "NSCameraUsageDescription")
+        );
     }
 
     #[test]
@@ -711,9 +721,11 @@ mod tests {
             &MacosConfig::default(),
         );
 
-        assert!(mapper
-            .android_permissions
-            .iter()
-            .any(|p| p.permission == "android.permission.CAMERA"));
+        assert!(
+            mapper
+                .android_permissions
+                .iter()
+                .any(|p| p.permission == "android.permission.CAMERA")
+        );
     }
 }

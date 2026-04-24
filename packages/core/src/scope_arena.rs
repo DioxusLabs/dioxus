@@ -1,10 +1,10 @@
 use crate::{
+    Element, ReactiveContext,
     any_props::{AnyProps, BoxedAnyProps},
     innerlude::{RenderError, ScopeOrder, ScopeState},
     scope_context::{Scope, SuspenseLocation},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
-    Element, ReactiveContext,
 };
 
 impl VirtualDom {

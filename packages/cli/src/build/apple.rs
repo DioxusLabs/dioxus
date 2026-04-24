@@ -33,7 +33,7 @@
 
 use crate::{BuildContext, BundleFormat, Result};
 use crate::{BuildRequest, ManifestMapper};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use manganis::SwiftPackageMetadata;
 use serde::{Deserialize, Serialize};
 use std::{

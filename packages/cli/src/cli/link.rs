@@ -1,5 +1,5 @@
 use crate::Result;
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ffi::OsString, path::PathBuf, process::ExitCode};
 use target_lexicon::Triple;
@@ -278,8 +278,8 @@ pub fn handle_linker_arg_response_file(arg: String) -> Vec<String> {
             .map(|line| {
                 let line_parsed = line.trim().to_string();
                 let line_parsed = line_parsed.trim_end_matches('"').to_string();
-                let line_parsed = line_parsed.trim_start_matches('"').to_string();
-                line_parsed
+
+                line_parsed.trim_start_matches('"').to_string()
             })
             .collect()
     } else {

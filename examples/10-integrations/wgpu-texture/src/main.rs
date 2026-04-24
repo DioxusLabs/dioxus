@@ -1,5 +1,5 @@
-use color::{palette::css::WHITE, parse_color};
 use color::{OpaqueColor, Srgb};
+use color::{palette::css::WHITE, parse_color};
 use demo_renderer::{DemoMessage, DemoPaintSource};
 use dioxus::prelude::*;
 use dioxus_native::use_wgpu;

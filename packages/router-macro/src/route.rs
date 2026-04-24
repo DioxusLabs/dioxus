@@ -1,10 +1,10 @@
 use quote::{format_ident, quote, quote_spanned};
-use syn::parse::Parse;
-use syn::parse::ParseStream;
-use syn::parse_quote;
 use syn::Field;
 use syn::Path;
 use syn::Type;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::parse_quote;
 use syn::{Ident, LitStr};
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -15,9 +15,9 @@ use crate::layout::LayoutId;
 use crate::nest::Nest;
 use crate::nest::NestId;
 use crate::query::QuerySegment;
+use crate::segment::RouteSegment;
 use crate::segment::create_error_type;
 use crate::segment::parse_route_segments;
-use crate::segment::RouteSegment;
 
 struct RouteArgs {
     route: LitStr,
@@ -97,12 +97,10 @@ impl Route {
                         syn::Fields::Named(fields) => {
                             // find either a field with #[child] or a field named "child"
                             let child_field = fields.named.iter().find(|f| {
-                                f.attrs
-                                    .iter()
-                                    .any(|attr| attr.path().is_ident("child"))
+                                f.attrs.iter().any(|attr| attr.path().is_ident("child"))
                                     || *f.ident.as_ref().unwrap() == "child"
                             });
-                            match child_field{
+                            match child_field {
                                 Some(child) => {
                                     ty = RouteType::Child(child.clone());
                                 }
@@ -118,14 +116,14 @@ impl Route {
                             return Err(syn::Error::new_spanned(
                                 variant.clone(),
                                 "Routable variants with a #[child(..)] attribute must have named fields",
-                            ))
+                            ));
                         }
                     }
                 } else {
                     return Err(syn::Error::new_spanned(
-                            variant.clone(),
-                            "Routable variants must either have a #[route(..)] attribute or a #[child(..)] attribute",
-                        ));
+                        variant.clone(),
+                        "Routable variants must either have a #[route(..)] attribute or a #[child(..)] attribute",
+                    ));
                 }
             }
         };
@@ -135,10 +133,10 @@ impl Route {
                 .named
                 .iter()
                 .filter_map(|f| {
-                    if let RouteType::Child(child) = &ty {
-                        if f.ident == child.ident {
-                            return None;
-                        }
+                    if let RouteType::Child(child) = &ty
+                        && f.ident == child.ident
+                    {
+                        return None;
                     }
                     Some((f.ident.clone().unwrap(), f.ty.clone()))
                 })
@@ -391,15 +389,15 @@ impl Route {
                     from_route = true
                 }
             }
-            if let Some(query) = &self.query {
-                if query.contains_ident(name) {
-                    from_route = true
-                }
+            if let Some(query) = &self.query
+                && query.contains_ident(name)
+            {
+                from_route = true
             }
-            if let Some(hash) = &self.hash {
-                if hash.contains_ident(name) {
-                    from_route = true
-                }
+            if let Some(hash) = &self.hash
+                && hash.contains_ident(name)
+            {
+                from_route = true
             }
 
             if from_route {

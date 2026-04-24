@@ -1,7 +1,7 @@
 use proc_macro2::{Delimiter, TokenStream as TokenStream2, TokenTree};
 use quote::ToTokens;
 use std::hash;
-use syn::{parse::Parse, spanned::Spanned, token::Brace, Expr};
+use syn::{Expr, parse::Parse, spanned::Spanned, token::Brace};
 
 /// A raw expression potentially wrapped in curly braces that is parsed from the input stream.
 ///

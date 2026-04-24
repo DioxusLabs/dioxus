@@ -541,11 +541,11 @@ fn old_middle_empty_right_pivot() {
 #[test]
 fn keyed_list_with_dynamic_placeholder_and_text() {
     let mut dom = VirtualDom::new(|| {
-        let gen = generation();
-        let text = if gen % 2 != 0 { Some("hello") } else { None };
+        let g = generation();
+        let text = if g % 2 != 0 { Some("hello") } else { None };
         println!("{:?}", text);
 
-        let order: &[_] = match gen % 2 {
+        let order: &[_] = match g % 2 {
             0 => &[0, 1],
             1 => &[1, 0],
             _ => unreachable!(),

@@ -1,15 +1,15 @@
-use crate::{linker::generate_link_section, resolve_path, AssetParseError};
+use crate::{AssetParseError, linker::generate_link_section, resolve_path};
 use macro_string::MacroString;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use std::{
     hash::{DefaultHasher, Hash, Hasher},
     path::{Path, PathBuf},
 };
 use syn::{
+    Token,
     parse::{Parse, ParseStream},
     spanned::Spanned as _,
-    Token,
 };
 
 pub struct AssetParser {

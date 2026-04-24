@@ -1,5 +1,5 @@
 use crate::{DynIdx, PartialExpr};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::parse::Parse;
 
 #[derive(PartialEq, Eq, Clone, Debug)]

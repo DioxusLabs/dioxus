@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-asset-resolver"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 authors = ["Jonathan Kelley", "Dioxus Labs"]
 description = "Cross-platform asset resolver for manganis and dioxus"
@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 keywords = ["web", "desktop", "mobile", "gui", "wasm"]
-rust-version = "1.79.0"
+rust-version = "1.85.0"
 
 [dependencies]
 thiserror = { workspace = true }

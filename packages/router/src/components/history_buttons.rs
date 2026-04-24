@@ -1,5 +1,5 @@
 use dioxus_core::{Element, VNode};
-use dioxus_core_macro::{rsx, Props};
+use dioxus_core_macro::{Props, rsx};
 use dioxus_html as dioxus_elements;
 
 use tracing::error;

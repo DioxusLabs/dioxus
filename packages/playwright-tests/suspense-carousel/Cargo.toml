@@ -1,6 +1,6 @@
 [package]
 name = "suspense-carousel"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 publish = false
 

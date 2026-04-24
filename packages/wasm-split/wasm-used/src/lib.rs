@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use id_arena::Id;
-use walrus::{ir::*, ExportId};
 use walrus::{ConstExpr, Data, DataId, DataKind, Element, ExportItem, Function};
 use walrus::{ElementId, ElementItems, ElementKind, Module, RefType, Type, TypeId};
+use walrus::{ExportId, ir::*};
 use walrus::{FunctionId, FunctionKind, Global, GlobalId};
 use walrus::{GlobalKind, Memory, MemoryId, Table, TableId};
 
@@ -295,10 +295,11 @@ impl Used {
         // Let's keep `wabt` passing though and just say that if there are data
         // segments kept, but no memories, then we try to add the first memory,
         // if any, to the used set.
-        if !stack.used.data.is_empty() && stack.used.memories.is_empty() {
-            if let Some(mem) = module.memories.iter().next() {
-                stack.used.memories.insert(mem.id());
-            }
+        if !stack.used.data.is_empty()
+            && stack.used.memories.is_empty()
+            && let Some(mem) = module.memories.iter().next()
+        {
+            stack.used.memories.insert(mem.id());
         }
 
         stack.used

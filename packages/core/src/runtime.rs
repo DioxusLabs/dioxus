@@ -1,18 +1,18 @@
 use crate::nodes::VNodeMount;
 use crate::scheduler::ScopeOrder;
 use crate::scope_context::SuspenseLocation;
-use crate::{arena::ElementRef, CapturedError};
+use crate::{AttributeValue, ElementId, Event};
+use crate::{CapturedError, arena::ElementRef};
 use crate::{
-    innerlude::{DirtyTasks, Effect},
     SuspenseContext,
+    innerlude::{DirtyTasks, Effect},
 };
 use crate::{
+    Task,
     innerlude::{LocalTask, SchedulerMsg},
     scope_context::Scope,
     scopes::ScopeId,
-    Task,
 };
-use crate::{AttributeValue, ElementId, Event};
 use generational_box::{AnyStorage, Owner};
 use slab::Slab;
 use slotmap::DefaultKey;
@@ -427,7 +427,7 @@ fn MyComponent() -> Element {{
                 mount_id = el_ref.mount.get().as_usize();
 
                 // Accumulate listeners into the listener list bottom to top
-                for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+                for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
                     let attrs = &*el_ref.dynamic_attrs[idx];
 
                     for attr in attrs.iter() {
@@ -485,7 +485,7 @@ fn MyComponent() -> Element {{
         let node_template = el_ref.template;
         let target_path = node.path;
 
-        for (idx, this_path) in node_template.attr_paths.iter().enumerate() {
+        for (idx, this_path) in node_template.attr_paths().iter().enumerate() {
             let attrs = &*el_ref.dynamic_attrs[idx];
 
             for attr in attrs.iter() {
@@ -571,9 +571,9 @@ fn MyComponent() -> Element {{
             cx.insert_error(error)
         } else {
             tracing::error!(
-                    "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
-                    error
-                )
+                "Tried to throw an error into an error boundary, but failed to locate a boundary: {:?}",
+                error
+            )
         }
     }
 

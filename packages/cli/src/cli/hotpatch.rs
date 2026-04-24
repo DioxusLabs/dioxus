@@ -1,6 +1,6 @@
 use crate::{
-    platform_override::CommandWithPlatformOverrides, AppBuilder, BuildArgs, BuildId, BuildMode,
-    HotpatchModuleCache, Result, StructuredOutput, WorkspaceRustcArgs,
+    AppBuilder, BuildArgs, BuildId, BuildMode, HotpatchModuleCache, Result, StructuredOutput,
+    WorkspaceRustcArgs, platform_override::CommandWithPlatformOverrides,
 };
 use anyhow::Context;
 use clap::Parser;

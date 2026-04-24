@@ -1,5 +1,5 @@
 //! Integration between Dioxus and Blitz
-use crate::{qual_name, trace, NodeId};
+use crate::{NodeId, qual_name, trace};
 use blitz_dom::{BaseDocument, DocumentMutator};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{
@@ -224,7 +224,7 @@ impl WriteMutations for MutationWriter<'_> {
         // TODO: proper template node support
         let template_entry = self.state.templates.entry(template).or_insert_with(|| {
             let template_root_ids: Vec<NodeId> = template
-                .roots
+                .roots()
                 .iter()
                 .map(|root| create_template_node(&mut self.docm, root))
                 .collect();

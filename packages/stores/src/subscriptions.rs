@@ -453,8 +453,8 @@ mod tests {
     use super::*;
     use dioxus_core::{ScopeId, VNode, VirtualDom};
     use std::sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     };
 
     fn empty_app() -> dioxus_core::Element {

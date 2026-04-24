@@ -2,7 +2,7 @@
 name = "dioxus-web"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "Web-sys renderer for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

@@ -2,12 +2,12 @@
 name = "dioxus-cli"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "CLI for building fullstack web, desktop, and mobile apps with a single codebase."
 repository = "https://github.com/DioxusLabs/dioxus/"
 license = "MIT OR Apache-2.0"
 keywords = ["mobile", "gui", "cli", "dioxus", "wasm"]
-rust-version = "1.82.0"
+rust-version = "1.85.0"
 
 [dependencies]
 dioxus-autofmt = { workspace = true }
@@ -109,7 +109,7 @@ tracing-subscriber = { workspace = true, features = [
     "fmt",
 ] }
 console-subscriber = { version = "0.4.1", optional = true }
-schemars = "0.8"
+schemars = { workspace = true }
 tracing = { workspace = true }
 ansi-to-tui = { workspace = true }
 ansi-to-html = { workspace = true }

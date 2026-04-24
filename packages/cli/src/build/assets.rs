@@ -35,10 +35,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::opt::AppManifest;
 use crate::Result;
-use anyhow::{bail, Context};
-use const_serialize::{deserialize_const, serialize_const, ConstVec};
+use crate::opt::AppManifest;
+use anyhow::{Context, bail};
+use const_serialize::{ConstVec, deserialize_const, serialize_const};
 use manganis::{AssetOptions, AssetVariant, BundledAsset, ImageFormat, ImageSize};
 use manganis_core::SymbolData;
 use object::{File, Object, ObjectSection, ObjectSymbol, ReadCache, ReadRef, Section, Symbol};
@@ -782,7 +782,9 @@ pub(crate) async fn extract_symbols_from_file(path: impl AsRef<Path>) -> Result<
                 }
             }
         } else {
-            tracing::warn!("Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions, or the symbol may be in an unsupported format.");
+            tracing::warn!(
+                "Found a symbol at offset {offset} that could not be deserialized. This may be caused by a mismatch between your dioxus and dioxus-cli versions, or the symbol may be in an unsupported format."
+            );
         }
     }
 

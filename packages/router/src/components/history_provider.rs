@@ -1,6 +1,6 @@
-use dioxus_core::{use_hook, Callback, Element};
-use dioxus_core_macro::{component, Props};
-use dioxus_history::{provide_history_context, History};
+use dioxus_core::{Callback, Element, use_hook};
+use dioxus_core_macro::{Props, component};
+use dioxus_history::{History, provide_history_context};
 
 use std::rc::Rc;
 

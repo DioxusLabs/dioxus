@@ -2,7 +2,7 @@ mod issues;
 mod metadata;
 
 use std::path::PathBuf;
-use syn::{spanned::Spanned, visit::Visit, Pat};
+use syn::{Pat, spanned::Spanned, visit::Visit};
 
 use {
     issues::{Issue, IssueReport},
@@ -57,8 +57,8 @@ enum Node {
 fn returns_element(ty: &syn::ReturnType) -> bool {
     match ty {
         syn::ReturnType::Default => false,
-        syn::ReturnType::Type(_, ref ty) => {
-            if let syn::Type::Path(ref path) = **ty {
+        syn::ReturnType::Type(_, ty) => {
+            if let syn::Type::Path(path) = &**ty {
                 if let Some(segment) = path.path.segments.last() {
                     if segment.ident == "Element" {
                         return true;
@@ -382,11 +382,17 @@ mod tests {
                 HookInfo::new(
                     Span::new_from_str(
                         r#"use_signal(|| "hands")"#,
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     Span::new_from_str(
                         r#"use_signal"#,
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     "use_signal".to_string()
                 ),
@@ -424,8 +430,20 @@ mod tests {
             report.issues,
             vec![Issue::HookInsideConditional(
                 HookInfo::new(
-                    Span::new_from_str(r#"use_signal(|| "hands")"#, LineColumn { line: 4, column: 28 }),
-                    Span::new_from_str(r#"use_signal"#, LineColumn { line: 4, column: 28 }),
+                    Span::new_from_str(
+                        r#"use_signal(|| "hands")"#,
+                        LineColumn {
+                            line: 4,
+                            column: 28
+                        }
+                    ),
+                    Span::new_from_str(
+                        r#"use_signal"#,
+                        LineColumn {
+                            line: 4,
+                            column: 28
+                        }
+                    ),
                     "use_signal".to_string()
                 ),
                 ConditionalInfo::Match(MatchInfo::new(
@@ -433,7 +451,10 @@ mod tests {
                         "match you_are_happy && you_know_it {\n        true => {\n            let something = use_signal(|| \"hands\");\n            println!(\"clap your {something}\")\n        }\n        false => {}\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
-                    Span::new_from_str("match you_are_happy && you_know_it", LineColumn { line: 2, column: 4 })
+                    Span::new_from_str(
+                        "match you_are_happy && you_know_it",
+                        LineColumn { line: 2, column: 4 }
+                    )
                 ))
             )]
         );
@@ -474,11 +495,17 @@ mod tests {
                 HookInfo::new(
                     Span::new_from_str(
                         "use_signal(|| false)",
-                        LineColumn { line: 3, column: 26 },
+                        LineColumn {
+                            line: 3,
+                            column: 26
+                        },
                     ),
                     Span::new_from_str(
                         "use_signal",
-                        LineColumn { line: 3, column: 26 },
+                        LineColumn {
+                            line: 3,
+                            column: 26
+                        },
                     ),
                     "use_signal".to_string()
                 ),
@@ -487,10 +514,7 @@ mod tests {
                         "for _name in &names {\n        let is_selected = use_signal(|| false);\n        println!(\"selected: {is_selected}\");\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
-                    Span::new_from_str(
-                        "for _name in &names",
-                        LineColumn { line: 2, column: 4 },
-                    )
+                    Span::new_from_str("for _name in &names", LineColumn { line: 2, column: 4 },)
                 ))
             )]
         );
@@ -515,11 +539,17 @@ mod tests {
                 HookInfo::new(
                     Span::new_from_str(
                         r#"use_signal(|| "hands")"#,
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     Span::new_from_str(
                         "use_signal",
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     "use_signal".to_string()
                 ),
@@ -528,10 +558,7 @@ mod tests {
                         "while true {\n        let something = use_signal(|| \"hands\");\n        println!(\"clap your {something}\")\n    }",
                         LineColumn { line: 2, column: 4 },
                     ),
-                    Span::new_from_str(
-                        "while true",
-                        LineColumn { line: 2, column: 4 },
-                    )
+                    Span::new_from_str("while true", LineColumn { line: 2, column: 4 },)
                 ))
             )],
         );
@@ -556,11 +583,17 @@ mod tests {
                 HookInfo::new(
                     Span::new_from_str(
                         r#"use_signal(|| "hands")"#,
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     Span::new_from_str(
                         "use_signal",
-                        LineColumn { line: 3, column: 24 },
+                        LineColumn {
+                            line: 3,
+                            column: 24
+                        },
                     ),
                     "use_signal".to_string()
                 ),

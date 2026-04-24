@@ -221,10 +221,14 @@ impl ConstStr {
                 // If they do, convert the bytes to strings and return the split strings
                 if in_char_eq {
                     let Ok(before_char_str) = std::str::from_utf8(before_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     let Ok(after_char_str) = std::str::from_utf8(after_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     return Some((Self::new(before_char_str), Self::new(after_char_str)));
                 }
@@ -271,10 +275,14 @@ impl ConstStr {
                 // If they do, convert the bytes to strings and return the split strings
                 if in_char_eq {
                     let Ok(before_char_str) = std::str::from_utf8(before_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     let Ok(after_char_str) = std::str::from_utf8(after_char) else {
-                        panic!("Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary")
+                        panic!(
+                            "Invalid utf8; utf8_char_boundary_to_char_len should only return Some when the byte is a character boundary"
+                        )
                     };
                     return Some((Self::new(before_char_str), Self::new(after_char_str)));
                 }

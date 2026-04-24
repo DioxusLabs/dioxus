@@ -34,7 +34,7 @@ pub use config::Config;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::window::WindowAttributes;
 
-use blitz_shell::{create_default_event_loop, BlitzShellEvent, WindowConfig};
+use blitz_shell::{BlitzShellEvent, WindowConfig, create_default_event_loop};
 use dioxus_core::{ComponentFunction, Element, VirtualDom};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;

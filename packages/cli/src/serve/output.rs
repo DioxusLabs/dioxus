@@ -1,23 +1,23 @@
 use crate::Result;
 use crate::{
-    serve::{ansi_buffer::ansi_string_to_line, ServeUpdate, WebServer},
     BuildId, BuildStage, BuilderUpdate, BundleFormat, TraceContent, TraceMsg, TraceSrc,
+    serve::{ServeUpdate, WebServer, ansi_buffer::ansi_string_to_line},
 };
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use cargo_metadata::diagnostic::Diagnostic;
 use crossterm::{
+    ExecutableCommand,
     cursor::{Hide, Show},
     event::{
         DisableBracketedPaste, DisableFocusChange, EnableBracketedPaste, EnableFocusChange, Event,
         EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     },
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, ClearType},
-    ExecutableCommand,
+    terminal::{Clear, ClearType, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    TerminalOptions, Viewport,
     prelude::*,
     widgets::{Block, BorderType, Borders, LineGauge, Paragraph},
-    TerminalOptions, Viewport,
 };
 use std::{
     cell::RefCell,
@@ -143,7 +143,7 @@ impl Output {
     fn enable_raw_mode() -> Result<()> {
         #[cfg(unix)]
         {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
 
             // Ignore SIGTSTP, SIGTTIN, and SIGTTOU
             _ = signal(SignalKind::from_raw(20))?; // SIGTSTP
@@ -182,8 +182,8 @@ impl Output {
     }
 
     pub(crate) async fn wait(&mut self) -> ServeUpdate {
-        use futures_util::future::OptionFuture;
         use futures_util::StreamExt;
+        use futures_util::future::OptionFuture;
 
         if !self.interactive {
             return std::future::pending().await;
@@ -207,7 +207,7 @@ impl Output {
                 Err(ee) => {
                     return ServeUpdate::Exit {
                         error: Some(anyhow::anyhow!(ee)),
-                    }
+                    };
                 }
                 Ok(None) => {}
             }
@@ -250,7 +250,7 @@ impl Output {
 
         match key.code {
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                return Ok(Some(ServeUpdate::Exit { error: None }))
+                return Ok(Some(ServeUpdate::Exit { error: None }));
             }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
@@ -690,8 +690,10 @@ impl Output {
         if let Some(time_taken) = time_taken {
             if !failed {
                 frame.render_widget(
-                    Line::from(vec![format!("{:.1}s", time_taken.as_secs_f32()).dark_gray()])
-                        .left_aligned(),
+                    Line::from(vec![
+                        format!("{:.1}s", time_taken.as_secs_f32()).dark_gray(),
+                    ])
+                    .left_aligned(),
                     time_frame,
                 );
             }

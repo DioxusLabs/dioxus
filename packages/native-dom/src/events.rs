@@ -1,16 +1,16 @@
 use blitz_dom::Node;
 use blitz_traits::events::{BlitzKeyEvent, BlitzMouseButtonEvent, MouseEventButton};
 use dioxus_html::{
-    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
-    input_data::{MouseButton, MouseButtonSet},
-    point_interaction::{
-        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
-    },
     AnimationData, CancelData, ClipboardData, CompositionData, DragData, FocusData, FormData,
     FormValue, HasFileData, HasFocusData, HasFormData, HasKeyboardData, HasMouseData,
     HtmlEventConverter, ImageData, KeyboardData, MediaData, MountedData, MouseData,
     PlatformEventData, PointerData, ResizeData, ScrollData, SelectionData, ToggleData, TouchData,
     TransitionData, VisibleData, WheelData,
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{MouseButton, MouseButtonSet},
+    point_interaction::{
+        InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
+    },
 };
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::any::Any;

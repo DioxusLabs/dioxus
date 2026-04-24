@@ -40,7 +40,9 @@ impl<T: Send + Sync + 'static> Lazy<T> {
         E: Into<CapturedError>,
     {
         if std::mem::size_of::<F>() != 0 {
-            panic!("The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables.");
+            panic!(
+                "The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables."
+            );
         }
 
         // Prevent the constructor from being optimized out
@@ -135,7 +137,11 @@ where
     G: Future<Output = Result<T, E>> + Send + 'static,
     E: Into<CapturedError>,
 {
-    assert_eq!(std::mem::size_of::<F>(), 0, "The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables.");
+    assert_eq!(
+        std::mem::size_of::<F>(),
+        0,
+        "The constructor function must be a zero-sized type (ZST). Consider using a function pointer or a closure without captured variables."
+    );
 
     #[cfg(feature = "server")]
     {

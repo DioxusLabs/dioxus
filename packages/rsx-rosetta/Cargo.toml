@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-rsx-rosetta"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 authors = ["Jonathan Kelley"]
 description = "Autofomatter for Dioxus RSX"
 license = "MIT OR Apache-2.0"

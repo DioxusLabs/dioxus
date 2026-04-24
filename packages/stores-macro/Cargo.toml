@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-stores-macro"
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/docs/0.5/guide/en/getting_started/fullstack.html"
 keywords = ["dom", "ui", "gui", "react", "liveview"]
@@ -12,7 +12,7 @@ description = "Server function macros for Dioxus"
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { workspace = true, features = ["full"] }
+syn = { workspace = true, features = ["full", "extra-traits"] }
 convert_case = { workspace = true }
 
 [dev-dependencies]

@@ -4,20 +4,20 @@ use crate::isrg::{
     RenderFreshness,
 };
 use crate::streaming::{Mount, StreamingRenderer};
-use crate::{document::ServerDocument, ServeConfig};
+use crate::{ServeConfig, document::ServerDocument};
 use dioxus_cli_config::base_path;
 use dioxus_core::{
-    consume_context, has_context, try_consume_context, DynamicNode, ErrorContext, Runtime, ScopeId,
-    SuspenseContext, TemplateNode, VNode, VirtualDom,
+    DynamicNode, ErrorContext, Runtime, ScopeId, SuspenseContext, TemplateNode, VNode, VirtualDom,
+    consume_context, has_context, try_consume_context,
 };
-use dioxus_fullstack_core::{history::provide_fullstack_history_context, HttpError, ServerFnError};
 use dioxus_fullstack_core::{FullstackContext, StreamingStatus};
+use dioxus_fullstack_core::{HttpError, ServerFnError, history::provide_fullstack_history_context};
 use dioxus_fullstack_core::{HydrationContext, SerializedHydrationData};
 use dioxus_router::ParseRouteError;
 use dioxus_ssr::Renderer;
 use futures_channel::mpsc::Sender;
 use futures_util::{Stream, StreamExt};
-use http::{request::Parts, HeaderMap, StatusCode};
+use http::{HeaderMap, StatusCode, request::Parts};
 use std::{
     collections::HashMap,
     fmt::Write,
@@ -94,18 +94,18 @@ impl SsrRendererPool {
 
     /// Render a virtual dom into a stream. This method will return immediately and continue streaming the result in the background
     /// The streaming is canceled when the stream the function returns is dropped
-    pub(crate) async fn render_to(
+    pub(crate) async fn render_to<F: FnOnce() -> VirtualDom + Send + Sync + 'static>(
         self: Arc<Self>,
         parts: Parts,
         cfg: &ServeConfig,
         rt: &LocalPoolHandle,
-        virtual_dom_factory: impl FnOnce() -> VirtualDom + Send + Sync + 'static,
+        virtual_dom_factory: F,
     ) -> Result<
         (
             HttpError,
             HeaderMap,
             RenderFreshness,
-            impl Stream<Item = Result<String, IncrementalRendererError>>,
+            impl Stream<Item = Result<String, IncrementalRendererError>> + use<F>,
         ),
         SSRError,
     > {
@@ -453,9 +453,9 @@ impl SsrRendererPool {
         stream: Arc<StreamingRenderer<IncrementalRendererError>>,
         scope_to_mount_mapping: Arc<RwLock<HashMap<ScopeId, PendingSuspenseBoundary>>>,
     ) -> impl Fn(&mut Renderer, &mut dyn Write, &VirtualDom, ScopeId) -> std::fmt::Result
-           + Send
-           + Sync
-           + 'static {
+    + Send
+    + Sync
+    + 'static {
         // We use a stack to keep track of what suspense boundaries we are nested in to add children to the correct boundary
         // The stack starts with the root scope because the root is a suspense boundary
         let pending_suspense_boundaries_stack = RwLock::new(vec![]);
@@ -570,10 +570,9 @@ impl SsrRendererPool {
             // If this is a suspense boundary, move into the children first (even if they are suspended) because that will be run first on the client
             if let Some(suspense_boundary) =
                 SuspenseContext::downcast_suspense_boundary_from_scope(&vdom.runtime(), scope.id())
+                && let Some(node) = suspense_boundary.suspended_nodes()
             {
-                if let Some(node) = suspense_boundary.suspended_nodes() {
-                    Self::take_from_vnode(context, vdom, &node);
-                }
+                Self::take_from_vnode(context, vdom, &node);
             }
             if let Some(node) = scope.try_root_node() {
                 Self::take_from_vnode(context, vdom, node);
@@ -583,8 +582,8 @@ impl SsrRendererPool {
 
     fn take_from_vnode(context: &HydrationContext, vdom: &VirtualDom, vnode: &VNode) {
         let template = &vnode.template;
-        let mut dynamic_nodes_iter = template.node_paths.iter().copied().enumerate().peekable();
-        for (root_idx, node) in template.roots.iter().enumerate() {
+        let mut dynamic_nodes_iter = template.node_paths().iter().copied().enumerate().peekable();
+        for (root_idx, node) in template.roots().iter().enumerate() {
             match node {
                 TemplateNode::Element { .. } => {
                     // dioxus core runs nodes in an odd order to not mess up template order. We need to match

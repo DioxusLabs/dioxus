@@ -25,14 +25,14 @@ pub(crate) use serve::*;
 pub(crate) use target::*;
 pub(crate) use verbosity::*;
 
-use crate::platform_override::CommandWithPlatformOverrides;
 use crate::Anonymized;
-use crate::{error::Result, Error, StructuredOutput};
+use crate::platform_override::CommandWithPlatformOverrides;
+use crate::{Error, StructuredOutput, error::Result};
 use clap::builder::styling::{AnsiColor, Effects, Style, Styles};
 use clap::{Parser, Subcommand};
 use html_parser::Dom;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::LazyLock;
 use std::{
     fmt::Display,

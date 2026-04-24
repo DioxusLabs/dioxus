@@ -1,5 +1,5 @@
 use blitz_shell::{BlitzApplication, View};
-use dioxus_core::{provide_context, ScopeId};
+use dioxus_core::{ScopeId, provide_context};
 use dioxus_history::{History, MemoryHistory};
 use std::rc::Rc;
 use winit::application::ApplicationHandler;
@@ -8,7 +8,7 @@ use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::window::WindowId;
 
 use crate::DioxusNativeWindowRenderer;
-use crate::{contexts::DioxusNativeDocument, BlitzShellEvent, DioxusDocument, WindowConfig};
+use crate::{BlitzShellEvent, DioxusDocument, WindowConfig, contexts::DioxusNativeDocument};
 
 /// Dioxus-native specific event type
 pub enum DioxusNativeEvent {

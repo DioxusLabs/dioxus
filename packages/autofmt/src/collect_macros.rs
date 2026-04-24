@@ -3,7 +3,7 @@
 //! Returns all macros that match a pattern. You can use this information to autoformat them later
 
 use proc_macro2::LineColumn;
-use syn::{visit::Visit, File, Macro, Meta};
+use syn::{File, Macro, Meta, visit::Visit};
 
 type CollectedMacro<'a> = &'a Macro;
 
@@ -34,10 +34,10 @@ impl<'b> Visit<'b> for MacroCollector<'_, 'b> {
         syn::visit::visit_macro(self, i);
 
         let name = &i.path.segments.last().map(|i| i.ident.to_string());
-        if let Some("rsx" | "render") = name.as_deref() {
-            if self.skip_count == 0 {
-                self.macros.push(i)
-            }
+        if let Some("rsx" | "render") = name.as_deref()
+            && self.skip_count == 0
+        {
+            self.macros.push(i)
         }
     }
 

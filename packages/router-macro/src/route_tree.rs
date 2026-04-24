@@ -4,11 +4,11 @@ use slab::Slab;
 use syn::Ident;
 
 use crate::{
+    RouteEndpoint,
     nest::{Nest, NestId},
     redirect::Redirect,
     route::{Route, RouteType},
-    segment::{static_segment_idx, RouteSegment},
-    RouteEndpoint,
+    segment::{RouteSegment, static_segment_idx},
 };
 
 #[derive(Debug, Clone, Default)]
@@ -138,12 +138,12 @@ impl<'a> ParseRouteTree<'a> {
 
                                 for &seg_id in segments.iter() {
                                     let seg = self.get(seg_id).unwrap();
-                                    if let RouteTreeSegmentData::Static { segment: s, .. } = seg {
-                                        if *s == segment {
-                                            // If it does, just update the current route
-                                            current_route = Some(seg_id);
-                                            continue 'o;
-                                        }
+                                    if let RouteTreeSegmentData::Static { segment: s, .. } = seg
+                                        && *s == segment
+                                    {
+                                        // If it does, just update the current route
+                                        current_route = Some(seg_id);
+                                        continue 'o;
                                     }
                                 }
                             }

@@ -112,74 +112,75 @@ members = [
     "examples/10-integrations/wgpu-texture",
     "examples/10-integrations/native-headless",
 ]
+exclude = ["packages/stores/tests/visibility-helper"]
 
 
 [workspace.package]
-version = "0.7.5"
+version = "0.7.6"
 
 # dependencies that are shared across packages
 [workspace.dependencies]
-dioxus = { path = "packages/dioxus", version = "0.7.4" }
-dioxus-core = { path = "packages/core", version = "0.7.4" }
-dioxus-core-types = { path = "packages/core-types", version = "0.7.4" }
-dioxus-core-macro = { path = "packages/core-macro", version = "0.7.4" }
-dioxus-config-macro = { path = "packages/config-macro", version = "0.7.4" }
-dioxus-router = { path = "packages/router", version = "0.7.4" }
-dioxus-router-macro = { path = "packages/router-macro", version = "0.7.4" }
-dioxus-document = { path = "packages/document", version = "0.7.4", default-features = false }
-dioxus-history = { path = "packages/history", version = "0.7.4", default-features = false }
-dioxus-html = { path = "packages/html", version = "0.7.4", default-features = false }
-dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.4" }
-dioxus-hooks = { path = "packages/hooks", version = "0.7.4" }
-dioxus-web = { path = "packages/web", version = "0.7.4", default-features = false }
-dioxus-ssr = { path = "packages/ssr", version = "0.7.4", default-features = false }
-dioxus-desktop = { path = "packages/desktop", version = "0.7.4", default-features = false }
-dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.4" }
-dioxus-liveview = { path = "packages/liveview", version = "0.7.4" }
-dioxus-autofmt = { path = "packages/autofmt", version = "0.7.4" }
-dioxus-rsx = { path = "packages/rsx", version = "0.7.4" }
-dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.4" }
-dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.4" }
-dioxus-signals = { path = "packages/signals", version = "0.7.4" }
-dioxus-stores = { path = "packages/stores", version = "0.7.4" }
-dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.4" }
-dioxus-devtools = { path = "packages/devtools", version = "0.7.4" }
-dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.4" }
-dioxus-fullstack = { path = "packages/fullstack", version = "0.7.4", default-features = false }
-dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.4", default-features = false }
-dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.4", default-features = false }
-dioxus-server = { path = "packages/fullstack-server", version = "0.7.4" }
-dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.4" }
-dioxus-logger = { path = "packages/logger", version = "0.7.4" }
-dioxus-native = { path = "packages/native", version = "0.7.4" }
-dioxus-native-dom = { path = "packages/native-dom", version = "0.7.4" }
-dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.4" }
-dioxus-config-macros = { path = "packages/config-macros", version = "0.7.4" }
-dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.4" }
-generational-box = { path = "packages/generational-box", version = "0.7.4" }
-lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.4" }
+dioxus = { path = "packages/dioxus", version = "0.7.6" }
+dioxus-core = { path = "packages/core", version = "0.7.6" }
+dioxus-core-types = { path = "packages/core-types", version = "0.7.6" }
+dioxus-core-macro = { path = "packages/core-macro", version = "0.7.6" }
+dioxus-config-macro = { path = "packages/config-macro", version = "0.7.6" }
+dioxus-router = { path = "packages/router", version = "0.7.6" }
+dioxus-router-macro = { path = "packages/router-macro", version = "0.7.6" }
+dioxus-document = { path = "packages/document", version = "0.7.6", default-features = false }
+dioxus-history = { path = "packages/history", version = "0.7.6", default-features = false }
+dioxus-html = { path = "packages/html", version = "0.7.6", default-features = false }
+dioxus-html-internal-macro = { path = "packages/html-internal-macro", version = "0.7.6" }
+dioxus-hooks = { path = "packages/hooks", version = "0.7.6" }
+dioxus-web = { path = "packages/web", version = "0.7.6", default-features = false }
+dioxus-ssr = { path = "packages/ssr", version = "0.7.6", default-features = false }
+dioxus-desktop = { path = "packages/desktop", version = "0.7.6", default-features = false }
+dioxus-interpreter-js = { path = "packages/interpreter", version = "0.7.6" }
+dioxus-liveview = { path = "packages/liveview", version = "0.7.6" }
+dioxus-autofmt = { path = "packages/autofmt", version = "0.7.6" }
+dioxus-rsx = { path = "packages/rsx", version = "0.7.6" }
+dioxus-rsx-hotreload = { path = "packages/rsx-hotreload", version = "0.7.6" }
+dioxus-rsx-rosetta = { path = "packages/rsx-rosetta", version = "0.7.6" }
+dioxus-signals = { path = "packages/signals", version = "0.7.6" }
+dioxus-stores = { path = "packages/stores", version = "0.7.6" }
+dioxus-stores-macro = { path = "packages/stores-macro", version = "0.7.6" }
+dioxus-devtools = { path = "packages/devtools", version = "0.7.6" }
+dioxus-devtools-types = { path = "packages/devtools-types", version = "0.7.6" }
+dioxus-fullstack = { path = "packages/fullstack", version = "0.7.6", default-features = false }
+dioxus-fullstack-core = { path = "packages/fullstack-core", version = "0.7.6", default-features = false }
+dioxus-fullstack-macro = { path = "packages/fullstack-macro", version = "0.7.6", default-features = false }
+dioxus-server = { path = "packages/fullstack-server", version = "0.7.6" }
+dioxus-dx-wire-format = { path = "packages/dx-wire-format", version = "0.7.6" }
+dioxus-logger = { path = "packages/logger", version = "0.7.6" }
+dioxus-native = { path = "packages/native", version = "0.7.6" }
+dioxus-native-dom = { path = "packages/native-dom", version = "0.7.6" }
+dioxus-asset-resolver = { path = "packages/asset-resolver", version = "0.7.6" }
+dioxus-config-macros = { path = "packages/config-macros", version = "0.7.6" }
+dioxus-component-manifest = { path = "packages/component-manifest", version = "0.7.6" }
+generational-box = { path = "packages/generational-box", version = "0.7.6" }
+lazy-js-bundle = { path = "packages/lazy-js-bundle", version = "0.7.6" }
 
 # cli
-dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.4" }
-dioxus-cli-config = { path = "packages/cli-config", version = "0.7.4" }
+dioxus-cli-telemetry = { path = "packages/cli-telemetry", version = "0.7.6" }
+dioxus-cli-config = { path = "packages/cli-config", version = "0.7.6" }
 
 # subsecond
-subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.4" }
-subsecond = { path = "packages/subsecond/subsecond", version = "0.7.4" }
+subsecond-types = { path = "packages/subsecond/subsecond-types", version = "0.7.6" }
+subsecond = { path = "packages/subsecond/subsecond", version = "0.7.6" }
 
 # wasm-split
-wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.4" }
-wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.4" }
-wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.4" }
-wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.4" }
+wasm-splitter = { path = "packages/wasm-split/wasm-split", version = "0.7.6" }
+wasm-split-macro = { path = "packages/wasm-split/wasm-split-macro", version = "0.7.6" }
+wasm-split-cli = { path = "packages/wasm-split/wasm-split-cli", version = "0.7.6" }
+wasm-used = { path = "packages/wasm-split/wasm-used", version = "0.7.6" }
 
 # our dep-info parsing crate
-depinfo = { path = "packages/depinfo", version = "0.7.4" }
+depinfo = { path = "packages/depinfo", version = "0.7.6" }
 
 # manganis
-manganis = { path = "packages/manganis/manganis", version = "0.7.4" }
-manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.4" }
-manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.4" }
+manganis = { path = "packages/manganis/manganis", version = "0.7.6" }
+manganis-core = { path = "packages/manganis/manganis-core", version = "0.7.6" }
+manganis-macro = { path = "packages/manganis/manganis-macro", version = "0.7.6" }
 manganis-core-07 = { path = "packages/manganis/manganis-07", version = "0.7.2" }
 
 # const-serialize.
@@ -266,8 +267,8 @@ rustls = { version = "0.23.28", default-features = false, features = [
 ] }
 serde_json = "1.0.140"
 serde = "1.0.225"
-schemars = "1.0"
-syn = "2.0.104"
+schemars = "1.2.1"
+syn = "2.0.117"
 quote = "1.0.38"
 axum-core = "0.5.2"
 proc-macro2 = "1.0.101"
@@ -347,6 +348,10 @@ infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"
 muda = "0.17.0"
+objc2 = { version = "0.6.3", features = ["exception"] }
+objc2-foundation = { version = "0.3.2", default-features = false }
+objc2-ui-kit = { version = "0.3.2", default-features = false }
+objc2-app-kit = { version = "0.3.2", default-features = false }
 tray-icon = "0.21.0"
 open = "5.3.2"
 webbrowser = "1.0"
@@ -583,6 +588,56 @@ path = "examples/02-building-ui/svg.rs"
 doc-scrape-examples = true
 
 [[example]]
+name = "counter"
+path = "examples/02-building-ui/counter.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "conditional_rendering"
+path = "examples/02-building-ui/conditional_rendering.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lists"
+path = "examples/02-building-ui/lists.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "components"
+path = "examples/02-building-ui/components.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "children"
+path = "examples/02-building-ui/children.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inputs"
+path = "examples/02-building-ui/inputs.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "forms"
+path = "examples/02-building-ui/forms.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "checkbox_radio"
+path = "examples/02-building-ui/checkbox_radio.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_classes"
+path = "examples/02-building-ui/dynamic_classes.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "event_handler_prop"
+path = "examples/02-building-ui/event_handler_prop.rs"
+doc-scrape-examples = true
+
+[[example]]
 name = "css_modules"
 path = "examples/03-assets-styling/css_modules.rs"
 doc-scrape-examples = true
@@ -603,8 +658,38 @@ path = "examples/03-assets-styling/meta.rs"
 doc-scrape-examples = true
 
 [[example]]
-name = "meta_elements"
-path = "examples/03-assets-styling/meta_elements.rs"
+name = "stylesheet"
+path = "examples/03-assets-styling/stylesheet.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "document_title"
+path = "examples/03-assets-styling/document_title.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "favicon"
+path = "examples/03-assets-styling/favicon.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "inline_styles"
+path = "examples/03-assets-styling/inline_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "dynamic_styles"
+path = "examples/03-assets-styling/dynamic_styles.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "fonts"
+path = "examples/03-assets-styling/fonts.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "script"
+path = "examples/03-assets-styling/script.rs"
 doc-scrape-examples = true
 
 [[example]]
@@ -635,6 +720,41 @@ doc-scrape-examples = true
 [[example]]
 name = "errors"
 path = "examples/04-managing-state/error_handling.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_effect"
+path = "examples/04-managing-state/use_effect.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "use_memo"
+path = "examples/04-managing-state/use_memo.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "struct_signal"
+path = "examples/04-managing-state/struct_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "vec_signal"
+path = "examples/04-managing-state/vec_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "read_signal"
+path = "examples/04-managing-state/read_signal.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "lifting_state"
+path = "examples/04-managing-state/lifting_state.rs"
+doc-scrape-examples = true
+
+[[example]]
+name = "custom_hook"
+path = "examples/04-managing-state/custom_hook.rs"
 doc-scrape-examples = true
 
 [[example]]

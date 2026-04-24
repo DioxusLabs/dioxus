@@ -30,9 +30,9 @@
 //!
 
 use crate::component::ComponentCommand;
-use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
-use anyhow::{bail, Context, Error, Result};
+use crate::{Cli, Commands, Verbosity, dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate};
+use anyhow::{Context, Error, Result, bail};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
@@ -52,15 +52,15 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{future::Future, panic::AssertUnwindSafe};
-use tracing::{field::Visit, Level, Subscriber};
+use tracing::{Level, Subscriber, field::Visit};
 use tracing_subscriber::{
+    EnvFilter, Layer,
     fmt::{
         format::{self, Writer},
         time::FormatTime,
     },
     prelude::*,
     registry::LookupSpan,
-    EnvFilter, Layer,
 };
 use uuid::Uuid;
 
@@ -144,11 +144,17 @@ impl TraceController {
         // Set up a basic env-based filter for the logs
         let env_filter = match env::var(LOG_ENV) {
             Ok(_) => EnvFilter::from_env(LOG_ENV),
-            _ if is_serve_cmd => EnvFilter::new("error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace"),
+            _ if is_serve_cmd => EnvFilter::new(
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
+            ),
             _ => EnvFilter::new(format!(
                 "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
-                our_level = if args.verbosity.verbose { "debug" } else { "info" }
-            ))
+                our_level = if args.verbosity.verbose {
+                    "debug"
+                } else {
+                    "info"
+                }
+            )),
         };
 
         // Listen to a few more tokio events if the tokio-console feature is enabled
@@ -792,7 +798,7 @@ impl TraceController {
     /// The second return is a JSON object with the anonymized arguments as a structured value.
     pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
         use crate::cli::config::{Config, Setting};
-        use crate::{print::Print, BuildTools};
+        use crate::{BuildTools, print::Print};
         use cargo_generate::Vcs;
 
         match arg {
