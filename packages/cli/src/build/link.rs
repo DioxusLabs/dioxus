@@ -19,10 +19,12 @@ use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
 use anyhow::{Context, bail, ensure};
+use cargo_metadata::diagnostic::Diagnostic;
 use itertools::Itertools;
 use serde::Serialize;
 use sha1::Digest;
 use sha2::Sha256;
+use std::process::Stdio;
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
     ffi::OsString,
@@ -33,7 +35,7 @@ use std::{
 };
 use subsecond_types::JumpTable;
 use target_lexicon::{Architecture, OperatingSystem};
-use tokio::process::Command;
+use tokio::{io::AsyncBufReadExt, process::Command};
 use uuid::Uuid;
 
 impl BuildRequest {
@@ -152,7 +154,7 @@ impl BuildRequest {
             let rustc_args = self
                 .workspace_hotpatch_replay_args(workspace_rustc_args, crate_name)
                 .with_context(|| format!("Missing rustc args for replay: '{crate_name}'"))?;
-            self.compile_dep_crate(crate_name, rustc_args)
+            self.compile_dep_crate(ctx, crate_name, rustc_args)
                 .await
                 .with_context(|| format!("Failed to replay workspace crate '{crate_name}'"))?;
         }
@@ -515,7 +517,12 @@ impl BuildRequest {
     ///
     /// This produces updated outputs at the same paths cargo originally wrote to.
     /// Used during thin builds to replay the modified workspace chain before the tip crate.
-    async fn compile_dep_crate(&self, crate_name: &str, rustc_args: &RustcArgs) -> Result<()> {
+    async fn compile_dep_crate(
+        &self,
+        ctx: &BuildContext,
+        crate_name: &str,
+        rustc_args: &RustcArgs,
+    ) -> Result<()> {
         let mut cmd = Command::new("rustc");
         cmd.current_dir(self.workspace_dir());
         cmd.env_clear();
@@ -574,10 +581,60 @@ impl BuildRequest {
             cmd.arg("-Crelocation-model=pic");
         }
 
-        let output = cmd.output().await?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("Failed to compile workspace dep crate '{crate_name}':\n{stderr}");
+        // Stream stdout/stderr and collect diagnostics/text lines. The captured rustc args
+        // include `--error-format=json-*`, so each diagnostic arrives as a single JSON line that
+        // parses into a `Diagnostic` with a pre-rendered string attached.
+        //
+        // We buffer rather than forward-as-we-go so that on failure the rendered diagnostics can
+        // be bundled into the `bail!` message — otherwise the "Build failed: ..." log lands
+        // *after* the streamed diagnostics in the TUI, making the error look detached from the
+        // output that explains it. On success we still forward everything, just after the child
+        // exits.
+        let mut child = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("Failed to spawn rustc replay")?;
+
+        let mut stdout = tokio::io::BufReader::new(child.stdout.take().unwrap()).lines();
+        let mut stderr = tokio::io::BufReader::new(child.stderr.take().unwrap()).lines();
+
+        let mut diagnostics: Vec<Diagnostic> = vec![];
+
+        loop {
+            let line = tokio::select! {
+                Ok(Some(line)) = stdout.next_line() => line,
+                Ok(Some(line)) = stderr.next_line() => line,
+                else => break,
+            };
+
+            // Only Diagnostic-shaped JSON is interesting. Other rustc output (artifact/emit
+            // JSON lines, linker chatter, etc.) gets dropped — we don't want it polluting the
+            // bail message, and on success the replayed build shouldn't be surfacing it either.
+            if let Ok(diag) = serde_json::from_str::<Diagnostic>(&line) {
+                diagnostics.push(diag);
+            }
+        }
+
+        let status = child
+            .wait()
+            .await
+            .context("Failed to wait for rustc replay")?;
+
+        if !status.success() {
+            let mut rendered = String::new();
+            for diag in &diagnostics {
+                if let Some(r) = diag.rendered.as_deref() {
+                    rendered.push('\n');
+                    rendered.push_str(r.trim_end());
+                }
+            }
+            bail!("Failed to compile workspace dep crate '{crate_name}':{rendered}");
+        }
+
+        // On success, forward any diagnostics (warnings, notes) through the normal channel.
+        for diag in diagnostics {
+            ctx.status_build_diagnostic(diag);
         }
 
         Ok(())

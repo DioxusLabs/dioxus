@@ -56,11 +56,9 @@ pub(crate) struct AppServer {
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
-    pub(crate) use_hotpatch_engine: bool,
-    pub(crate) automatic_rebuilds: bool,
+    pub(crate) hotreload_mode: HotReloadMode,
     pub(crate) interactive: bool,
     pub(crate) _force_sequential: bool,
-    pub(crate) hot_reload: bool,
     pub(crate) open_browser: bool,
     pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
@@ -90,6 +88,13 @@ pub(crate) struct CachedFile {
     contents: String,
     most_recent: Option<String>,
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
+}
+
+#[derive(PartialEq, Clone, Debug, Copy)]
+pub(crate) enum HotReloadMode {
+    Hotpatch,
+    RsxOnly,
+    Disabled,
 }
 
 impl AppServer {
@@ -168,7 +173,13 @@ impl AppServer {
             .flatten();
 
         let watch_fs = args.watch.unwrap_or(true);
-        let use_hotpatch_engine = args.hot_patch;
+        let hotreload_mode = if !hot_reload {
+            HotReloadMode::Disabled
+        } else if args.hot_patch {
+            HotReloadMode::Hotpatch
+        } else {
+            HotReloadMode::RsxOnly
+        };
 
         let client = AppBuilder::new(&client)?;
         let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
@@ -188,12 +199,10 @@ impl AppServer {
         let mut runner = Self {
             file_map: Default::default(),
             applied_client_hot_reload_message: Default::default(),
-            automatic_rebuilds: true,
             watch_fs,
-            use_hotpatch_engine,
+            hotreload_mode,
             client,
             server,
-            hot_reload,
             open_browser,
             _wsl_file_poll_interval: wsl_file_poll_interval,
             always_on_top,
@@ -233,14 +242,22 @@ impl AppServer {
     }
 
     pub(crate) fn initialize(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base,
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
             server.start(build_mode, BuildId::SECONDARY);
+        }
+    }
+
+    /// The `BuildMode` that fresh/full rebuilds should start with under the current hotreload mode.
+    ///
+    /// Only `Hotpatch` needs the `Fat` build to prime the hotpatch engine; every other mode uses a
+    /// plain `Base` build.
+    fn initial_build_mode(&self) -> BuildMode {
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => BuildMode::Fat,
+            HotReloadMode::RsxOnly | HotReloadMode::Disabled => BuildMode::Base,
         }
     }
 
@@ -374,7 +391,7 @@ impl AppServer {
 
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
-        let mut needs_full_rebuild = false;
+        let mut needs_rust_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -395,7 +412,7 @@ impl AppServer {
 
             // If it's in the public dir, we sync it and trigger a full rebuild
             if self.client.build.path_is_in_public_dir(path) {
-                needs_full_rebuild = true;
+                needs_rust_rebuild = true;
                 continue;
             }
 
@@ -431,7 +448,7 @@ impl AppServer {
 
                 // This assumes the two files are structured similarly. If they're not, we can't diff them
                 let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-                    needs_full_rebuild = true;
+                    needs_rust_rebuild = true;
                     break;
                 };
 
@@ -460,7 +477,7 @@ impl AppServer {
 
                     // If no result is returned, we can't hotreload this file and need to keep the old file
                     let Some(results) = results else {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     };
 
@@ -494,7 +511,7 @@ impl AppServer {
             if ext != "rs" {
                 if let Some(artifacts) = self.client.artifacts.as_ref() {
                     if artifacts.depinfo.files.contains(path) {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     }
                 }
@@ -503,32 +520,57 @@ impl AppServer {
 
         // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
         if self.client.stage == BuildStage::Failed && !templates.is_empty() {
-            needs_full_rebuild = true
+            needs_rust_rebuild = true
         }
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine && self.has_valid_complete_builds() {
-                let changed_crates = self.order_changed_crates(files);
-
-                self.client
-                    .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
-
-                if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
+        if needs_rust_rebuild {
+            match self.hotreload_mode {
+                // In hotpatch, we can only issue patches if the original build completed
+                HotReloadMode::Hotpatch if !self.has_valid_complete_builds() => {
+                    self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_reload_start().await;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_patch_start().await;
-            } else {
-                self.client.start_rebuild(BuildMode::Base, BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base, BuildId::SECONDARY);
+
+                // Otherwise hotpatches go through patching system
+                HotReloadMode::Hotpatch => {
+                    let changed_crates = self.order_changed_crates(files);
+
+                    self.client.patch_rebuild(
+                        files.to_vec(),
+                        changed_crates.clone(),
+                        BuildId::PRIMARY,
+                    );
+
+                    if let Some(server) = self.server.as_mut() {
+                        server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_patch_start().await;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_reload_start().await;
+
+                // Full rust rebuilds with rsx are full builds
+                HotReloadMode::RsxOnly => {
+                    self.client.start_rebuild(BuildMode::Base, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Base, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_reload_start().await;
+                }
+
+                // `Disabled` is filtered out before reaching `handle_file_change`, so the only way
+                // we land here is if the user cycled to `Disabled` mid-handler. Treat it as a
+                // no-op with a visible warning so the edit isn't silently dropped.
+                HotReloadMode::Disabled => {}
             }
         } else {
             let msg = HotReloadMsg {
@@ -545,14 +587,6 @@ impl AppServer {
             let file = files[0].display().to_string();
             let file =
                 file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
-
-            if needs_full_rebuild && !self.automatic_rebuilds {
-                use crate::styles::NOTE_STYLE;
-                tracing::warn!(
-                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
-                    file
-                );
-            }
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //
@@ -728,10 +762,7 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base,
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client
             .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
@@ -866,27 +897,22 @@ impl AppServer {
 
     /// Returns a static label for the current hotreload mode (used by both the TUI and logs).
     pub(crate) fn hotreload_mode_label(&self) -> &'static str {
-        if !self.automatic_rebuilds {
-            "disabled"
-        } else if self.use_hotpatch_engine {
-            "hot-patching"
-        } else {
-            "rsx and assets"
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => "hot-patching",
+            HotReloadMode::RsxOnly => "rsx and assets",
+            HotReloadMode::Disabled => "disabled",
         }
     }
 
-    /// Cycle the hotreload mode: hot-patching -> disabled -> rsx and assets -> hot-patching.
-    /// Returns `(previous_label, new_label)` for logging the transition.
+    /// Cycle the hotreload mode: Hotpatch -> RsxOnly -> Disabled -> Hotpatch, i.e. monotonically
+    /// decreasing reactivity. Returns `(previous_label, new_label)` for logging the transition.
     pub(crate) fn cycle_hotreload_mode(&mut self) -> (&'static str, &'static str) {
         let prev = self.hotreload_mode_label();
-        if self.automatic_rebuilds && self.use_hotpatch_engine {
-            self.automatic_rebuilds = false;
-        } else if !self.automatic_rebuilds {
-            self.automatic_rebuilds = true;
-            self.use_hotpatch_engine = false;
-        } else {
-            self.use_hotpatch_engine = true;
-        }
+        self.hotreload_mode = match self.hotreload_mode {
+            HotReloadMode::Hotpatch => HotReloadMode::RsxOnly,
+            HotReloadMode::RsxOnly => HotReloadMode::Disabled,
+            HotReloadMode::Disabled => HotReloadMode::Hotpatch,
+        };
         (prev, self.hotreload_mode_label())
     }
 
@@ -1365,7 +1391,7 @@ impl AppServer {
     }
 
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
-        if self.use_hotpatch_engine {
+        if self.hotreload_mode == HotReloadMode::Hotpatch {
             tracing::warn!(
                 "Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging."
             );

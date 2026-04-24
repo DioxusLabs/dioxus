@@ -68,7 +68,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
     );
 
     // Let people know hotpatching is enabled by default now.
-    if builder.use_hotpatch_engine {
+    if builder.hotreload_mode == HotReloadMode::Hotpatch {
         tracing::warn!(
             "Note: {GLOW_STYLE}Rust hot-patching{GLOW_STYLE:#} is now enabled by default! Unexpected behavior might occur. Press `p` to change modes."
         );
@@ -92,7 +92,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !builder.hot_reload {
+                if files.is_empty() || builder.hotreload_mode == HotReloadMode::Disabled {
                     continue;
                 }
 
@@ -175,7 +175,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     BuilderUpdate::BuildFailed { err } => {
                         tracing::error!(
                             "{ERROR_STYLE}Build failed{ERROR_STYLE:#}: {}",
-                            crate::error::log_stacktrace(&err, 15),
+                            crate::error::log_stacktrace(&err, 0),
                             ERROR_STYLE = crate::styles::ERROR_STYLE,
                         );
 
@@ -259,7 +259,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
             }
 
             ServeUpdate::OpenApp => {
-                if builder.use_hotpatch_engine
+                if builder.hotreload_mode == HotReloadMode::Hotpatch
                     && !matches!(builder.client.build.bundle, BundleFormat::Web)
                 {
                     tracing::warn!(
@@ -271,7 +271,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 } else if let Err(err) = builder.open_all(&devserver, true).await {
                     tracing::error!(
                         "Failed to open app: {}",
-                        crate::error::log_stacktrace(&err, 15)
+                        crate::error::log_stacktrace(&err, 0)
                     )
                 }
             }

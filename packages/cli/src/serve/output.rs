@@ -28,7 +28,7 @@ use std::{
 };
 use tracing::Level;
 
-use super::AppServer;
+use super::{AppServer, HotReloadMode};
 
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 92;
@@ -722,19 +722,13 @@ impl Output {
             current_platform,
         );
 
-        let (label, indicator) = if !state.runner.automatic_rebuilds {
-            ("disabled".dark_gray(), " ✗".dark_gray())
-        } else if state.runner.use_hotpatch_engine {
-            ("hot-patching".yellow(), " ✓".yellow())
-        } else {
-            ("rsx and assets".yellow(), " ~".yellow())
+        let (label, indicator) = match state.runner.hotreload_mode {
+            HotReloadMode::Hotpatch => ("hot-patching".yellow(), " ✓".yellow()),
+            HotReloadMode::RsxOnly => ("rsx and assets".yellow(), " ~".yellow()),
+            HotReloadMode::Disabled => ("disabled".dark_gray(), " ✗".dark_gray()),
         };
         frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Hotreload: ".gray(),
-                label,
-                indicator,
-            ])),
+            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), label, indicator])),
             hotreload_mode,
         );
 
