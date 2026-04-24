@@ -156,7 +156,7 @@ fn swapped_components_mixed_literal_types_have_correct_types_per_slot() {
     let new = quote! {
         div {
             C { z: 43 }
-            B { y: 6.28 }
+            B { y: 6.45 }
             A { x: false }
         }
     };
@@ -185,7 +185,7 @@ fn swapped_components_mixed_literal_types_have_correct_types_per_slot() {
     // And the values themselves should be the NEW values, because the swapped
     // positions in the new template get mapped back to the old slots.
     assert_eq!(template.component_values[0], HotReloadLiteral::Bool(false));
-    assert_eq!(template.component_values[1], HotReloadLiteral::Float(6.28));
+    assert_eq!(template.component_values[1], HotReloadLiteral::Float(6.45));
     assert_eq!(template.component_values[2], HotReloadLiteral::Int(43));
 }
 
@@ -295,10 +295,9 @@ fn rotated_three_components_have_correct_values() {
         let HotReloadDynamicNode::Dynamic(old_idx) = template.dynamic_nodes[n] else {
             panic!("slot {} not Dynamic", n);
         };
-        let HotReloadLiteral::Fmted(segs) =
-            &template.component_values[old_idx] else {
-                panic!("not Fmted");
-            };
+        let HotReloadLiteral::Fmted(segs) = &template.component_values[old_idx] else {
+            panic!("not Fmted");
+        };
         // Stringify via debug — we can't reach into private segments field, so
         // compare against the expected FmtedSegments directly instead.
         let expected = FmtedSegments::new(vec![
@@ -408,7 +407,10 @@ fn removed_middle_component_fills_middle_slot_with_compatible_value() {
     let template = templates.get(&0).unwrap();
 
     // pool[0] surviving → Fmted still
-    assert!(matches!(template.component_values[0], HotReloadLiteral::Fmted(_)));
+    assert!(matches!(
+        template.component_values[0],
+        HotReloadLiteral::Fmted(_)
+    ));
     // pool[1] MISSING → must be Float (type-compatible fallback) so the runtime's
     // coercion doesn't mismatch if somehow read.
     assert!(
@@ -448,4 +450,3 @@ fn reordered_props_within_single_component() {
     assert_eq!(template.component_values[1], HotReloadLiteral::Float(5.0));
     assert_eq!(template.component_values[2], HotReloadLiteral::Bool(false));
 }
-

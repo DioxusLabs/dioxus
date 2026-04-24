@@ -293,11 +293,7 @@ pub(crate) struct BuildRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuildMode {
     /// A normal build generated using `cargo rustc`
-    ///
-    /// "run" indicates whether this build is intended to be run immediately after building.
-    /// This means we try to capture the build environment, saving vars like `CARGO_MANIFEST_DIR`
-    /// for the running executable.
-    Base { run: bool },
+    Base,
 
     /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
     Fat,

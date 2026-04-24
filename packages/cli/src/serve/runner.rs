@@ -235,7 +235,7 @@ impl AppServer {
     pub(crate) fn initialize(&mut self) {
         let build_mode = match self.use_hotpatch_engine {
             true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
+            false => BuildMode::Base,
         };
 
         self.client.start(build_mode.clone(), BuildId::PRIMARY);
@@ -509,7 +509,7 @@ impl AppServer {
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine {
+            if self.use_hotpatch_engine && self.has_valid_complete_builds() {
                 let changed_crates = self.order_changed_crates(files);
 
                 self.client
@@ -522,10 +522,9 @@ impl AppServer {
                 self.clear_cached_rsx();
                 server.send_patch_start().await;
             } else {
-                self.client
-                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
+                self.client.start_rebuild(BuildMode::Base, BuildId::PRIMARY);
                 if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
+                    server.start_rebuild(BuildMode::Base, BuildId::SECONDARY);
                 }
                 self.clear_hot_reload_changes();
                 self.clear_cached_rsx();
@@ -731,7 +730,7 @@ impl AppServer {
     pub(crate) async fn full_rebuild(&mut self) {
         let build_mode = match self.use_hotpatch_engine {
             true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
+            false => BuildMode::Base,
         };
 
         self.client
@@ -1383,6 +1382,16 @@ impl AppServer {
             }
             _ => {}
         }
+    }
+
+    /// Returns true if both the server and client have produced complete builds
+    fn has_valid_complete_builds(&self) -> bool {
+        self.client.artifacts.is_some()
+            && self
+                .server
+                .as_ref()
+                .map(|f| f.artifacts.is_some())
+                .unwrap_or(true)
     }
 }
 

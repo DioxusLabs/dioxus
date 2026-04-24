@@ -1349,8 +1349,7 @@ impl BuildRequest {
     fn rustc_wrapper_capture_mode(&self, build_mode: &BuildMode) -> &'static str {
         match build_mode {
             BuildMode::Fat => "fat",
-            BuildMode::Base { run: true } => "base-run",
-            BuildMode::Base { run: false } => "base",
+            BuildMode::Base => "base",
             BuildMode::Thin { .. } => "thin",
         }
     }

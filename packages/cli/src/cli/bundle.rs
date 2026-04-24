@@ -40,16 +40,15 @@ impl Bundle {
         self.force_ios_bundle_device_target_if_needed()?;
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        let client_artifacts =
-            AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
-                .finish_build()
-                .await?;
+        let client_artifacts = AppBuilder::started(&client, BuildMode::Base, BuildId::PRIMARY)?
+            .finish_build()
+            .await?;
         let mut server_artifacts = None;
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
             server_artifacts = Some(
-                AppBuilder::started(server, BuildMode::Base { run: false }, BuildId::SECONDARY)?
+                AppBuilder::started(server, BuildMode::Base, BuildId::SECONDARY)?
                     .finish_build()
                     .await?,
             );

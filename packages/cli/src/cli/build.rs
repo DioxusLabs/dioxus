@@ -153,7 +153,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let ssg = self.shared.ssg;
         let mode = match self.shared.fat_binary {
             true => BuildMode::Fat,
-            false => BuildMode::Base { run: false },
+            false => BuildMode::Base,
         };
         let targets = self.into_targets().await?;
 
