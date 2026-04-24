@@ -528,7 +528,8 @@ impl AppServer {
         if needs_rust_rebuild {
             match self.hotreload_mode {
                 // In hotpatch, we can only issue patches if the original build completed
-                HotReloadMode::Hotpatch if !self.has_valid_complete_builds() => {
+                HotReloadMode::Hotpatch if !self.has_hotpatchable_builds() => {
+                    tracing::info!("needs fat buuld because no artifacts exist");
                     self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
                     if let Some(server) = self.server.as_mut() {
                         server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
@@ -1410,14 +1411,20 @@ impl AppServer {
         }
     }
 
-    /// Returns true if both the server and client have produced complete builds
-    fn has_valid_complete_builds(&self) -> bool {
-        self.client.artifacts.is_some()
-            && self
-                .server
+    /// Returns true if both the server and client are ready to accept thin/hotpatch rebuilds —
+    /// i.e. they have completed artifacts *and* a populated `patch_cache` from a prior fat build.
+    ///
+    /// The cache check matters when cycling `RsxOnly`/`Disabled` -> `Hotpatch`: the existing
+    /// artifacts are from a base build and there's no symbol map to diff against, so we have to
+    /// fall back to a full fat rebuild before thin rebuilds can work.
+    fn has_hotpatchable_builds(&self) -> bool {
+        let builder_ready = |b: &AppBuilder| {
+            b.artifacts
                 .as_ref()
-                .map(|f| f.artifacts.is_some())
-                .unwrap_or(true)
+                .is_some_and(|a| a.patch_cache.is_some())
+        };
+
+        builder_ready(&self.client) && self.server.as_ref().map(builder_ready).unwrap_or(true)
     }
 }
 
