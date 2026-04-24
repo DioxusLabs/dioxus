@@ -164,7 +164,6 @@ impl AppBuilder {
             spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
-            // patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
             profile_spans: Vec::new(),
