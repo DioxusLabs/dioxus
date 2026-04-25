@@ -1,6 +1,7 @@
 use crate::{
     AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
     TraceController,
+    build::PatchError,
     styles::{GLOW_STYLE, LINK_STYLE},
 };
 
@@ -191,9 +192,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                 {
                                     tracing::error!("Failed to hot-patch app: {err}");
 
-                                    if let Some(_patching) =
-                                        err.downcast_ref::<crate::build::PatchError>()
-                                    {
+                                    if let Some(_patching) = err.downcast_ref::<PatchError>() {
                                         tracing::info!("Starting full rebuild: {err}");
                                         builder.full_rebuild().await;
                                         devserver.send_reload_start().await;
