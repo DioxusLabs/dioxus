@@ -352,12 +352,9 @@ impl AppServer {
 
     /// Handle an update from the builder
     pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate, devserver: &WebServer) {
-        match update {
-            BuilderUpdate::BuildReady { .. } => {
-                // If the build is ready, we need to check if we need to pre-render with ssg
-                self.rebuild_ssg(devserver).await;
-            }
-            _ => {}
+        if let BuilderUpdate::BuildReady { .. } = update {
+            // If the build is ready, we need to check if we need to pre-render with ssg
+            self.rebuild_ssg(devserver).await;
         }
     }
 
