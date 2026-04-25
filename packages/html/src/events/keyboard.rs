@@ -226,19 +226,6 @@ impl<'de> serde::Deserialize<'de> for KeyboardData {
     }
 }
 
-impl_event! {
-    KeyboardData;
-
-    /// onkeydown
-    onkeydown
-
-    /// onkeypress
-    onkeypress
-
-    /// onkeyup
-    onkeyup
-}
-
 pub trait HasKeyboardData: ModifiersInteraction + std::any::Any {
     /// The value of the key pressed by the user, taking into consideration the state of modifier keys such as Shift as well as the keyboard locale and layout.
     fn key(&self) -> Key;

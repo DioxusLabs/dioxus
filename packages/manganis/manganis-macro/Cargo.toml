@@ -1,7 +1,7 @@
 [package]
 name = "manganis-macro"
 version.workspace = true
-edition = "2021"
+edition = "2024"
 authors = ["Evan Almloff"]
 description = "Ergonomic, automatic, cross crate asset collection and optimization"
 license = "MIT OR Apache-2.0"

@@ -1,7 +1,7 @@
 //! Native specific utilities for resolving assets in a bundle. This module is intended for use in renderers that
 //! need to resolve asset bundles for resources like images, and fonts.
 
-use http::{status::StatusCode, Response};
+use http::{Response, status::StatusCode};
 use std::path::{Path, PathBuf};
 
 use crate::{AssetPathError, NativeAssetResolveError};
@@ -169,13 +169,28 @@ fn get_asset_root() -> PathBuf {
     //   $product_name/
     //     assets/
     if cfg!(target_os = "linux") {
-        if let Some(product_name) = dioxus_cli_config::product_name() {
-            let path = cur_exe
-                .parent()
-                .and_then(|parent| parent.parent())
-                .map(|root| root.join("lib").join(product_name));
-            if let Some(asset_dir) = path.filter(|path| path.exists()) {
-                return asset_dir;
+        if let Some(lib_dir) = cur_exe
+            .parent()
+            .and_then(|parent| parent.parent())
+            .map(|root| root.join("lib"))
+        {
+            // Try the product name from the compile-time env var first
+            if let Some(product_name) = dioxus_cli_config::product_name() {
+                let path = lib_dir.join(&product_name);
+                if path.exists() {
+                    return path;
+                }
+            }
+
+            // Fall back to scanning lib/ for a directory containing an `assets/` subfolder.
+            // This handles debug builds where DIOXUS_PRODUCT_NAME isn't baked in.
+            if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() && path.join("assets").is_dir() {
+                        return path;
+                    }
+                }
             }
         }
     }

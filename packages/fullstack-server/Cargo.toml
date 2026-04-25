@@ -2,7 +2,7 @@
 name = "dioxus-server"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 description = "Fullstack utilities for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -64,7 +64,7 @@ rkyv = { optional = true,  default-features = true, version = "0.8" }
 futures = { workspace = true, default-features = true }
 pin-project = { workspace = true }
 thiserror = { workspace = true }
-bytes = {version = "1.10.1", features = ["serde"]}
+bytes = { workspace = true, features = ["serde"] }
 tower-http = { workspace = true, features = ["fs"] }
 tower = { workspace = true, features = ["util"] }
 tower-layer = { version = "0.3.3", optional = true }

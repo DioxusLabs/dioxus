@@ -10,10 +10,10 @@ use proc_macro2::TokenStream;
 
 use syn::punctuated::Punctuated;
 use syn::spanned::Spanned;
-use syn::{parse::Error, PathArguments};
+use syn::{PathArguments, parse::Error};
 
 use quote::quote;
-use syn::{parse_quote, GenericArgument, Ident, PathSegment, Type};
+use syn::{GenericArgument, Ident, PathSegment, Type, parse_quote};
 
 pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
     let data = match &ast.data {
@@ -53,20 +53,20 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
                 return Err(Error::new(
                     ast.span(),
                     "Props is not supported for tuple structs",
-                ))
+                ));
             }
             syn::Fields::Unit => {
                 return Err(Error::new(
                     ast.span(),
                     "Props is not supported for unit structs",
-                ))
+                ));
             }
         },
         syn::Data::Enum(_) => {
-            return Err(Error::new(ast.span(), "Props is not supported for enums"))
+            return Err(Error::new(ast.span(), "Props is not supported for enums"));
         }
         syn::Data::Union(_) => {
-            return Err(Error::new(ast.span(), "Props is not supported for unions"))
+            return Err(Error::new(ast.span(), "Props is not supported for unions"));
         }
     };
     Ok(data)
@@ -176,8 +176,8 @@ mod field_info {
     use proc_macro2::TokenStream;
     use quote::{format_ident, quote};
     use syn::spanned::Spanned;
+    use syn::{Expr, Path, parse_quote};
     use syn::{parse::Error, punctuated::Punctuated};
-    use syn::{parse_quote, Expr, Path};
 
     use super::util::{
         expr_to_single_string, ident_to_type, path_to_single_string, strip_raw_ident_prefix,
@@ -551,11 +551,11 @@ fn extract_inner_type_from_segment(segment: &PathSegment) -> Option<&Type> {
 mod struct_info {
     use convert_case::{Case, Casing};
     use proc_macro2::TokenStream;
-    use quote::{quote, ToTokens};
+    use quote::{ToTokens, quote};
     use syn::parse::Error;
     use syn::punctuated::Punctuated;
     use syn::spanned::Spanned;
-    use syn::{parse_quote, Expr, Ident};
+    use syn::{Expr, Ident, parse_quote};
 
     use crate::props::strip_option;
 
@@ -661,10 +661,13 @@ mod struct_info {
                 // If they are equal, we don't need to rerun the component we can just update the existing signals
                 #(
                     // Try to memo the signal
-                    let field_eq = {
-                        let old_value: &_ = &*#signal_fields.peek();
-                        let new_value: &_ = &*new.#signal_fields.peek();
-                        (&old_value).compare(&&new_value)
+                    let field_eq = match (#signal_fields.try_peek(), new.#signal_fields.try_peek()) {
+                        (Ok(old_ref), Ok(new_ref)) => {
+                            let old_value: &_ = &*old_ref;
+                            let new_value: &_ = &*new_ref;
+                            (&old_value).compare(&&new_value)
+                        }
+                        _ => false,
                     };
                     // Make the old fields point to the new fields
                     #signal_fields.point_to(new.#signal_fields).unwrap();
@@ -833,8 +836,8 @@ Finally, call `.build()` to create the instance of `{name}`.
                     Some(ref doc) => quote!(#[doc = #doc]),
                     None => {
                         let doc = format!(
-                        "Builder for [`{name}`] instances.\n\nSee [`{name}::builder()`] for more info.",
-                    );
+                            "Builder for [`{name}`] instances.\n\nSee [`{name}::builder()`] for more info.",
+                        );
                         quote!(#[doc = #doc])
                     }
                 }
@@ -1072,7 +1075,10 @@ Finally, call `.build()` to create the instance of `{name}`.
                 name: field_name, ..
             } = field;
             if *field_name == "key" {
-                return Err(Error::new_spanned(field_name, "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys"));
+                return Err(Error::new_spanned(
+                    field_name,
+                    "Naming a prop `key` is not allowed because the name can conflict with the built in key attribute. See https://dioxuslabs.com/learn/0.7/essentials/ui/iteration for more information about keys",
+                ));
             }
             let StructInfo {
                 ref builder_name, ..
@@ -1235,14 +1241,11 @@ Finally, call `.build()` to create the instance of `{name}`.
 
         pub fn required_field_impl(&self, field: &FieldInfo) -> Result<TokenStream, Error> {
             let StructInfo {
-                ref name,
-                ref builder_name,
-                ..
+                name, builder_name, ..
             } = self;
 
             let FieldInfo {
-                name: ref field_name,
-                ..
+                name: field_name, ..
             } = field;
             let mut builder_generics: Vec<syn::GenericArgument> = self
                 .generics
@@ -1481,7 +1484,6 @@ Finally, call `.build()` to create the instance of `{name}`.
                 quote! {
                     #[doc(hidden)]
                     #[allow(dead_code, non_camel_case_types, missing_docs)]
-                    #[derive(Clone)]
                     #vis struct #name #generics_with_bounds #where_clause {
                         inner: #original_name #ty_generics,
                         owner: dioxus_core::internal::generational_box::Owner,
@@ -1490,6 +1492,15 @@ Finally, call `.build()` to create the instance of `{name}`.
                     impl #original_impl_generics PartialEq for #name #ty_generics #where_clause {
                         fn eq(&self, other: &Self) -> bool {
                             self.inner.eq(&other.inner)
+                        }
+                    }
+
+                    impl #original_impl_generics Clone for #name #ty_generics #where_clause {
+                        fn clone(&self) -> Self {
+                            Self {
+                                inner: self.inner.clone(),
+                                owner: self.owner.clone(),
+                            }
                         }
                     }
 
@@ -1732,10 +1743,10 @@ fn strip_option(type_: &Type) -> Option<Type> {
         let option_segment = segments_iter.next()?;
         if option_segment.ident == "Option" && segments_iter.next().is_none() {
             // It should have a single generic argument
-            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments {
-                if let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first() {
-                    return Some(ty.clone());
-                }
+            if let PathArguments::AngleBracketed(generic_arg) = &option_segment.arguments
+                && let Some(syn::GenericArgument::Type(ty)) = generic_arg.args.first()
+            {
+                return Some(ty.clone());
             }
         }
     }

@@ -9,11 +9,11 @@ use std::{
 };
 
 use crate::{
+    AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
+    GenerationalPointer, Storage,
     entry::{MemoryLocationBorrowInfo, RcStorageEntry, StorageEntry},
     error::{self, ValueDroppedError},
     references::{GenerationalRef, GenerationalRefMut},
-    AnyStorage, BorrowError, BorrowMutError, BorrowMutResult, BorrowResult, GenerationalLocation,
-    GenerationalPointer, Storage,
 };
 
 type RwLockStorageEntryRef = RwLockReadGuard<'static, StorageEntry<RwLockStorageEntryData>>;

@@ -1,8 +1,8 @@
 use dioxus_html::{
-    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
-    input_data::{decode_mouse_button_set, MouseButton},
     HasMouseData, HasWheelData, InteractionElementOffset, InteractionLocation, Modifiers,
     ModifiersInteraction, PointerInteraction,
+    geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint},
+    input_data::{MouseButton, decode_mouse_button_set},
 };
 use web_sys::WheelEvent;
 

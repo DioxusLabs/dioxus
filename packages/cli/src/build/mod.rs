@@ -8,24 +8,23 @@
 //! hot-patching Rust code through binary analysis and a custom linker. The [`builder`] module contains
 //! the management of the ongoing build and methods to open the build as a running app.
 
+// Platform-specific build code
+mod android;
+mod apple;
+mod web;
+mod windows;
+
 mod assets;
 mod builder;
-mod cache;
 mod context;
-mod ios_swift;
-mod manifest;
-mod manifest_mapper;
+mod link;
 mod patch;
-mod pre_render;
+mod renderer;
 mod request;
-mod tools;
 
+pub(crate) use android::AndroidTools;
 pub(crate) use assets::*;
 pub(crate) use builder::*;
-pub(crate) use cache::*;
 pub(crate) use context::*;
-pub(crate) use manifest::*;
 pub(crate) use patch::*;
-pub(crate) use pre_render::*;
 pub(crate) use request::*;
-pub(crate) use tools::*;

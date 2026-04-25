@@ -183,7 +183,10 @@ fn gen_bindings(input_path: &Path, output_path: &Path, minify_level: MinifyLevel
                     input_path, error
                 );
             } else {
-                panic!("Make sure you have Bun installed. Failed to generate bindings for {:?}. Error:\n{:?}", input_path, error);
+                panic!(
+                    "Make sure you have Bun installed. Failed to generate bindings for {:?}. Error:\n{:?}",
+                    input_path, error
+                );
             }
         }
     };

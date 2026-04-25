@@ -1,15 +1,16 @@
 #![allow(missing_docs)]
 
-use crate::{use_callback, use_signal, use_waker, UseWaker};
+use crate::{UseWaker, use_callback, use_signal, use_waker};
 
 use dioxus_core::{
-    spawn, use_hook, Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError,
-    Subscribers, SuspendedFuture, Task,
+    Callback, IntoAttributeValue, IntoDynNode, ReactiveContext, RenderError, Subscribers,
+    SuspendedFuture, Task, spawn, use_hook,
 };
 use dioxus_signals::*;
 use futures_util::{
+    FutureExt, StreamExt,
     future::{self},
-    pin_mut, FutureExt, StreamExt,
+    pin_mut,
 };
 use std::{cell::Cell, future::Future, rc::Rc};
 use std::{fmt::Debug, ops::Deref};
@@ -456,12 +457,12 @@ impl<T, E> Resource<Result<T, E>> {
         >,
     > {
         let value: MappedSignal<T, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Ok(ref res)) => res,
+            Some(Ok(res)) => res,
             _ => panic!("Resource is not ready"),
         });
 
         let error: MappedSignal<E, Signal<Option<Result<T, E>>>> = self.value.map(|v| match v {
-            Some(Err(ref err)) => err,
+            Some(Err(err)) => err,
             _ => panic!("Resource is not ready"),
         });
 

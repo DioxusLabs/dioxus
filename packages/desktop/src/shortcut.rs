@@ -8,8 +8,8 @@
     target_os = "openbsd"
 ))]
 pub use global_hotkey::{
-    hotkey::{Code, HotKey},
     Error as HotkeyError, GlobalHotKeyEvent, GlobalHotKeyManager, HotKeyState,
+    hotkey::{Code, HotKey},
 };
 
 #[cfg(any(target_os = "ios", target_os = "android"))]
@@ -297,7 +297,9 @@ impl IntoKeyCode for dioxus_html::KeyCode {
             dioxus_html::KeyCode::BackSlash => Code::Backslash,
             dioxus_html::KeyCode::CloseBracket => Code::BracketRight,
             dioxus_html::KeyCode::SingleQuote => Code::Quote,
-            key => panic!("Failed to convert {key:?} to tao::keyboard::KeyCode, try using tao::keyboard::KeyCode directly"),
+            key => panic!(
+                "Failed to convert {key:?} to tao::keyboard::KeyCode, try using tao::keyboard::KeyCode directly"
+            ),
         }
     }
 }

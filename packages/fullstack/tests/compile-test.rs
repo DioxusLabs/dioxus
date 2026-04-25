@@ -4,10 +4,10 @@
 use anyhow::Result;
 use axum::extract::FromRequest;
 use axum::response::IntoResponse;
-use axum::{response::Html, Json};
+use axum::{Json, response::Html};
 use bytes::Bytes;
 use dioxus::prelude::*;
-use dioxus_fullstack::{get, FileStream, ServerFnError, Text, TextStream, Websocket};
+use dioxus_fullstack::{FileStream, ServerFnError, Text, TextStream, Websocket, get};
 use futures::StreamExt;
 use http::HeaderMap;
 use http::StatusCode;

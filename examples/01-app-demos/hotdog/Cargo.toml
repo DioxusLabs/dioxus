@@ -2,7 +2,7 @@
 name = "hotdog"
 version = "0.1.0"
 authors = ["Dioxus Labs"]
-edition = "2021"
+edition = "2024"
 publish = false
 
 [dependencies]
@@ -20,3 +20,4 @@ desktop = ["dioxus/desktop"]
 native = ["dioxus/native"]
 mobile = ["dioxus/mobile"]
 server = ["dioxus/server", "dep:rusqlite"]
+production = []

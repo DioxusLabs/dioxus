@@ -1,11 +1,11 @@
-use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
-use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::{bail, Context};
+use crate::styles::GLOW_STYLE;
+use crate::{AndroidTools, config::DioxusConfig};
+use anyhow::{Context, bail};
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
+use krates::{KrateDetails, LockOptions, semver::Version};
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
@@ -68,7 +68,9 @@ impl Workspace {
                 eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
 
                 if x % 10 == 0 {
-                    eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                    eprintln!(
+                        "{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?"
+                    );
                 }
             }
         };
@@ -101,7 +103,7 @@ impl Workspace {
         )
         .context("Failed to load Cargo.toml")?;
 
-        let android_tools = crate::build::get_android_tools();
+        let android_tools = AndroidTools::current();
 
         let workspace = Arc::new(Self {
             krates,
@@ -304,7 +306,9 @@ impl Workspace {
             });
 
             if found.is_none() {
-                tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                tracing::error!(
+                    "Could not find package {package} in the workspace. Did you forget to add it to the workspace?"
+                );
                 tracing::error!("Packages in the workspace:");
                 for package in self.krates.workspace_members() {
                     if let krates::Node::Krate { krate, .. } = package {
@@ -554,13 +558,12 @@ impl Workspace {
     }
 
     pub async fn get_xcode_path() -> Option<PathBuf> {
-        let xcode = Command::new("xcode-select")
+        Command::new("xcode-select")
             .arg("-p")
             .output()
             .await
             .ok()
-            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
-        xcode
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into())
     }
 
     pub async fn get_rustc_sysroot() -> Result<String, anyhow::Error> {
@@ -611,6 +614,13 @@ impl Workspace {
                 }
             })
             .to_path_buf()
+    }
+
+    /// The directory where managed tool binaries are installed.
+    ///
+    /// Layout: `~/.dx/tools/{tool-name}-{version}/`
+    pub(crate) fn tools_dir() -> PathBuf {
+        Self::dioxus_data_dir().join("tools")
     }
 
     pub(crate) fn global_settings_file() -> PathBuf {

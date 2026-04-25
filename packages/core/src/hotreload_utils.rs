@@ -373,11 +373,7 @@ impl HotReloadedTemplate {
         let node_paths = Self::node_paths(roots);
         let attr_paths = Self::attr_paths(roots);
 
-        let template = Template {
-            roots,
-            node_paths,
-            attr_paths,
-        };
+        let template = Template::new(roots, node_paths, attr_paths);
         Self {
             key,
             dynamic_nodes,

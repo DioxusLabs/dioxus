@@ -1,4 +1,4 @@
-use crate::{current_scope_id, properties::SuperFrom, runtime::RuntimeGuard, Runtime, ScopeId};
+use crate::{Runtime, ScopeId, current_scope_id, properties::SuperFrom, runtime::RuntimeGuard};
 use futures_util::FutureExt;
 use generational_box::GenerationalBox;
 use std::{any::Any, cell::RefCell, marker::PhantomData, panic::Location, rc::Rc};
@@ -388,12 +388,12 @@ pub struct MarkerWrapper<T>(PhantomData<T>);
 
 // Closure can be created from FnMut -> async { anything } or FnMut -> Ret
 impl<
-        Function: FnMut(Args) -> Spawn + 'static,
-        Args: 'static,
-        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
-        Ret: 'static,
-        Marker,
-    > SuperFrom<Function, MarkerWrapper<Marker>> for Callback<Args, Ret>
+    Function: FnMut(Args) -> Spawn + 'static,
+    Args: 'static,
+    Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+    Ret: 'static,
+    Marker,
+> SuperFrom<Function, MarkerWrapper<Marker>> for Callback<Args, Ret>
 {
     fn super_from(input: Function) -> Self {
         Callback::new(input)
@@ -401,11 +401,11 @@ impl<
 }
 
 impl<
-        Function: FnMut(Event<T>) -> Spawn + 'static,
-        T: 'static,
-        Spawn: SpawnIfAsync<Marker> + 'static,
-        Marker,
-    > SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
+    Function: FnMut(Event<T>) -> Spawn + 'static,
+    T: 'static,
+    Spawn: SpawnIfAsync<Marker> + 'static,
+    Marker,
+> SuperFrom<Function, MarkerWrapper<Marker>> for ListenerCallback<T>
 {
     fn super_from(input: Function) -> Self {
         ListenerCallback::new(input)
@@ -426,11 +426,11 @@ pub struct UnitClosure<Marker>(PhantomData<Marker>);
 
 // Closure can be created from FnMut -> async { () } or FnMut -> Ret
 impl<
-        Function: FnMut() -> Spawn + 'static,
-        Spawn: SpawnIfAsync<Marker, Ret> + 'static,
-        Ret: 'static,
-        Marker,
-    > SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
+    Function: FnMut() -> Spawn + 'static,
+    Spawn: SpawnIfAsync<Marker, Ret> + 'static,
+    Ret: 'static,
+    Marker,
+> SuperFrom<Function, UnitClosure<Marker>> for Callback<(), Ret>
 {
     fn super_from(mut input: Function) -> Self {
         Callback::new(move |()| input())
@@ -469,7 +469,7 @@ impl<Args, Ret> Clone for Callback<Args, Ret> {
     }
 }
 
-impl<Args: 'static, Ret: 'static> PartialEq for Callback<Args, Ret> {
+impl<Args, Ret> PartialEq for Callback<Args, Ret> {
     fn eq(&self, other: &Self) -> bool {
         self.callback.ptr_eq(&other.callback) && self.origin == other.origin
     }

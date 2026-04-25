@@ -1,6 +1,6 @@
-use super::{copy_dir_recursive, zip_dir_recursive, Arch, Bundle, BundleContext};
+use super::{Arch, Bundle, BundleContext, copy_dir_recursive, zip_dir_recursive};
 use crate::PackageType;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
@@ -52,7 +52,7 @@ impl BundleContext<'_> {
 
         verify_codesigned_app(app_path).await?;
 
-        let output_dir = self.project_out_directory().join("bundle").join("ipa");
+        let output_dir = self.project_out_directory().join("ipa");
         std::fs::create_dir_all(&output_dir)?;
 
         let ipa_name = format!(

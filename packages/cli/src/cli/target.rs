@@ -1,6 +1,6 @@
 use crate::BundleFormat;
 use crate::Platform;
-use crate::{cli::*, Renderer};
+use crate::{Renderer, cli::*};
 // use crate::RendererArg;
 // use crate::PlatformAlias;
 use target_lexicon::Triple;

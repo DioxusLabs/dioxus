@@ -3,7 +3,7 @@
 use std::fmt::Debug;
 
 use dioxus_core::{Attribute, Element, EventHandler, VNode};
-use dioxus_core_macro::{rsx, Props};
+use dioxus_core_macro::{Props, rsx};
 use dioxus_html::{
     self as dioxus_elements, ModifiersInteraction, MountedEvent, MouseEvent, PointerInteraction,
 };

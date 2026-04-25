@@ -1,5 +1,5 @@
 use crate::{CliSettings, Result, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::{
     path::{Path, PathBuf},
     process::Stdio,
@@ -167,12 +167,12 @@ impl TailwindCli {
         }
     }
 
-    fn installed_bin_name(&self) -> String {
-        let mut name = format!("tailwindcss-{}", self.version);
+    fn installed_bin_name(&self) -> &'static str {
         if cfg!(windows) {
-            name = format!("{name}.exe");
+            "tailwindcss.exe"
+        } else {
+            "tailwindcss"
         }
-        name
     }
 
     async fn install_github(&self) -> anyhow::Result<()> {
@@ -232,8 +232,7 @@ impl TailwindCli {
     }
 
     fn install_dir(&self) -> Result<PathBuf> {
-        let bindgen_dir = Workspace::dioxus_data_dir().join("tailwind/");
-        Ok(bindgen_dir)
+        Ok(Workspace::tools_dir().join(format!("tailwindcss-{}", self.version)))
     }
 
     fn git_install_url(&self) -> Option<String> {

@@ -2,7 +2,7 @@
 name = "dioxus-native-dom"
 version = { workspace = true }
 authors = ["Jonathan Kelley", "Nico Burns"]
-edition = "2021"
+edition = "2024"
 description = "Core headless native renderer for Dioxus based on blitz"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

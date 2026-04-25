@@ -1,7 +1,7 @@
 [package]
 name = "native-headless"
 version = "0.0.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 publish = false
 
@@ -13,13 +13,13 @@ dioxus = { workspace = true, features = ["html", "hooks", "signals"] }
 dioxus-native-dom = { workspace = true }
 anyrender_vello = { workspace = true }
 vello = { workspace = true }
-rustc-hash = "1"
+rustc-hash = { workspace = true }
 futures-util = { workspace = true }
 tracing-subscriber = { workspace = true, optional = true }
 wgpu = { workspace = true }
 wgpu_context = { workspace = true }
 pollster = "0.4"
-bytemuck = "1"
+bytemuck = "1.23.2"
 blitz-paint = { workspace = true, default-features = true }
 blitz-traits = { workspace = true, default-features = true }
 blitz-dom = { workspace = true, default-features = true }

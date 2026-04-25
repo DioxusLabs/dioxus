@@ -1,13 +1,13 @@
 [package]
 name = "suspense-carousel"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 publish = false
 
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 async-std = "1.13.1"
-serde = "1.0.219"
+serde = { workspace = true }
 
 [features]
 default = []

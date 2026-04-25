@@ -1,8 +1,8 @@
 use crate::{
-    bundler::{AppCategory, BundleContext},
     PackageType,
+    bundler::{AppCategory, BundleContext},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use image::{GenericImageView, ImageFormat};
 use std::{
@@ -43,7 +43,7 @@ impl BundleContext<'_> {
         let arch = self.binary_arch();
         let arch_str = arch.appimage_arch();
 
-        let output_dir = self.project_out_directory().join("bundle").join("appimage");
+        let output_dir = self.project_out_directory().join("appimage");
         fs::create_dir_all(&output_dir)?;
 
         let appimage_filename = format!("{name}_{version}_{arch_str}.AppImage");
@@ -150,7 +150,7 @@ impl BundleContext<'_> {
         let package_name = self.deb_package_name();
         let version = self.version_string();
 
-        let output_dir = self.project_out_directory().join("bundle").join("deb");
+        let output_dir = self.project_out_directory().join("deb");
         fs::create_dir_all(&output_dir)?;
 
         let deb_filename = format!("{package_name}_{version}_{arch}.deb");
@@ -234,7 +234,7 @@ impl BundleContext<'_> {
         let description = self.short_description();
         let resource_dir_name = self.linux_resource_dir_name();
 
-        let output_dir = self.project_out_directory().join("bundle").join("rpm");
+        let output_dir = self.project_out_directory().join("rpm");
         fs::create_dir_all(&output_dir)?;
 
         let rpm_filename = format!("{name}-{version}-1.{arch}.rpm");
@@ -248,7 +248,10 @@ impl BundleContext<'_> {
         let binary_path = self.main_binary_path();
         let dest_bin = format!("/usr/bin/{name}");
         builder = builder
-            .with_file(&binary_path, rpm::FileOptions::new(dest_bin).mode(0o755))
+            .with_file(
+                &binary_path,
+                rpm::FileOptions::new(dest_bin).permissions(0o755),
+            )
             .context("Failed to add binary to RPM")?;
 
         let deb_settings = self.deb();
@@ -264,7 +267,7 @@ impl BundleContext<'_> {
         builder = builder
             .with_file(
                 &temp_desktop,
-                rpm::FileOptions::new(desktop_dest).mode(0o644),
+                rpm::FileOptions::new(desktop_dest).permissions(0o644),
             )
             .context("Failed to add desktop file to RPM")?;
 
@@ -287,7 +290,10 @@ impl BundleContext<'_> {
                             let dest =
                                 format!("/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png");
                             builder = builder
-                                .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
+                                .with_file(
+                                    icon_path,
+                                    rpm::FileOptions::new(dest).permissions(0o644),
+                                )
                                 .context("Failed to add icon to RPM")?;
                         }
                     }
@@ -295,7 +301,7 @@ impl BundleContext<'_> {
                 "svg" => {
                     let dest = format!("/usr/share/icons/hicolor/scalable/apps/{name}.svg");
                     builder = builder
-                        .with_file(icon_path, rpm::FileOptions::new(dest).mode(0o644))
+                        .with_file(icon_path, rpm::FileOptions::new(dest).permissions(0o644))
                         .context("Failed to add SVG icon to RPM")?;
                 }
                 "ico" => {
@@ -317,7 +323,10 @@ impl BundleContext<'_> {
 
                     let dest = format!("/usr/share/icons/hicolor/{size}x{size}/apps/{name}.png");
                     builder = builder
-                        .with_file(&converted_icon, rpm::FileOptions::new(dest).mode(0o644))
+                        .with_file(
+                            &converted_icon,
+                            rpm::FileOptions::new(dest).permissions(0o644),
+                        )
                         .context("Failed to add converted ICO icon to RPM")?;
                 }
                 _ => {
@@ -341,7 +350,7 @@ impl BundleContext<'_> {
                 relative.to_string_lossy().replace('\\', "/")
             );
             builder = builder
-                .with_file(src, rpm::FileOptions::new(&dest).mode(0o644))
+                .with_file(src, rpm::FileOptions::new(&dest).permissions(0o644))
                 .with_context(|| format!("Failed to add resource {} to RPM", relative.display()))?;
         }
 
@@ -355,7 +364,7 @@ impl BundleContext<'_> {
                 .context("External binary is missing a file name")?;
             let dest = format!("/usr/bin/{dest_name}");
             builder = builder
-                .with_file(src, rpm::FileOptions::new(&dest).mode(0o755))
+                .with_file(src, rpm::FileOptions::new(&dest).permissions(0o755))
                 .with_context(|| format!("Failed to add external binary {dest_name} to RPM"))?;
         }
 
@@ -374,7 +383,7 @@ impl BundleContext<'_> {
                     format!("/{dest}")
                 };
                 builder = builder
-                    .with_file(&src, rpm::FileOptions::new(&dest).mode(0o644))
+                    .with_file(&src, rpm::FileOptions::new(&dest).permissions(0o644))
                     .context("Failed to add custom file to RPM")?;
             }
         }
@@ -864,16 +873,20 @@ Type=Application
         control.push_str(&format!("Installed-Size: {installed_size}\n"));
 
         let description = self.short_description();
-        if !description.is_empty() {
-            control.push_str(&format!("Description: {description}\n"));
+        // Description is a required field in Debian control files - use the product name as fallback
+        let description = if description.is_empty() {
+            self.product_name()
+        } else {
+            description
+        };
+        control.push_str(&format!("Description: {description}\n"));
 
-            if let Some(long_desc) = self.long_description() {
-                for line in long_desc.lines() {
-                    if line.is_empty() {
-                        control.push_str(" .\n");
-                    } else {
-                        control.push_str(&format!(" {line}\n"));
-                    }
+        if let Some(long_desc) = self.long_description() {
+            for line in long_desc.lines() {
+                if line.is_empty() {
+                    control.push_str(" .\n");
+                } else {
+                    control.push_str(&format!(" {line}\n"));
                 }
             }
         }

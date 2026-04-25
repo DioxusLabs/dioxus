@@ -30,9 +30,9 @@
 //!
 
 use crate::component::ComponentCommand;
-use crate::{dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate, Cli, Commands, Verbosity};
 use crate::{BundleFormat, CliSettings, Workspace};
-use anyhow::{bail, Context, Error, Result};
+use crate::{Cli, Commands, Verbosity, dx_build_info::GIT_COMMIT_HASH_SHORT, serve::ServeUpdate};
+use anyhow::{Context, Error, Result, bail};
 use cargo_metadata::diagnostic::{Diagnostic, DiagnosticLevel};
 use clap::Parser;
 use dioxus_cli_telemetry::TelemetryEventData;
@@ -52,15 +52,15 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{future::Future, panic::AssertUnwindSafe};
-use tracing::{field::Visit, Level, Subscriber};
+use tracing::{Level, Subscriber, field::Visit};
 use tracing_subscriber::{
+    EnvFilter, Layer,
     fmt::{
         format::{self, Writer},
         time::FormatTime,
     },
     prelude::*,
     registry::LookupSpan,
-    EnvFilter, Layer,
 };
 use uuid::Uuid;
 
@@ -71,21 +71,6 @@ pub static VERBOSITY: OnceLock<Verbosity> = OnceLock::new();
 
 pub fn verbosity_or_default() -> Verbosity {
     crate::VERBOSITY.get().cloned().unwrap_or_default()
-}
-
-fn reset_cursor() {
-    use std::io::IsTerminal;
-
-    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
-    // the cargo generate TUI, but we still want to reset the cursor.
-    if std::io::stdout().is_terminal() {
-        _ = console::Term::stdout().show_cursor();
-    }
-}
-
-/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
-pub(crate) trait Anonymized {
-    fn anonymized(&self) -> serde_json::Value;
 }
 
 /// A custom layer that wraps our special interception logic based on the mode of the CLI and its verbosity.
@@ -114,6 +99,7 @@ struct CapturedPanicError {
     thread_name: Option<String>,
     location: Option<SavedLocation>,
 }
+
 impl std::fmt::Display for CapturedPanicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -130,6 +116,11 @@ struct SavedLocation {
     file: String,
     line: u32,
     column: u32,
+}
+
+/// A trait that emits an anonymous JSON representation of the object, suitable for telemetry.
+pub(crate) trait Anonymized {
+    fn anonymized(&self) -> serde_json::Value;
 }
 
 impl TraceController {
@@ -153,11 +144,17 @@ impl TraceController {
         // Set up a basic env-based filter for the logs
         let env_filter = match env::var(LOG_ENV) {
             Ok(_) => EnvFilter::from_env(LOG_ENV),
-            _ if is_serve_cmd => EnvFilter::new("error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace"),
+            _ if is_serve_cmd => EnvFilter::new(
+                "error,dx=trace,dioxus_cli=trace,manganis_cli_support=trace,wasm_split_cli=trace,subsecond_cli_support=trace",
+            ),
             _ => EnvFilter::new(format!(
                 "error,dx={our_level},dioxus_cli={our_level},manganis_cli_support={our_level},wasm_split_cli={our_level},subsecond_cli_support={our_level}",
-                our_level = if args.verbosity.verbose { "debug" } else { "info" }
-            ))
+                our_level = if args.verbosity.verbose {
+                    "debug"
+                } else {
+                    "info"
+                }
+            )),
         };
 
         // Listen to a few more tokio events if the tokio-console feature is enabled
@@ -801,7 +798,7 @@ impl TraceController {
     /// The second return is a JSON object with the anonymized arguments as a structured value.
     pub(crate) fn command_anonymized(arg: &crate::Commands) -> (String, serde_json::Value) {
         use crate::cli::config::{Config, Setting};
-        use crate::{print::Print, BuildTools};
+        use crate::{BuildTools, print::Print};
         use cargo_generate::Vcs;
 
         match arg {
@@ -840,6 +837,12 @@ impl TraceController {
                 }),
             ),
             Commands::Doctor(_cmd) => ("doctor".to_string(), json!({})),
+            Commands::ShellCompletions(cmd) => (
+                "completions".to_string(),
+                json!({
+                    "shell": cmd.shell.to_string(),
+                }),
+            ),
             Commands::Translate(cmd) => (
                 "translate".to_string(),
                 json!({
@@ -885,6 +888,9 @@ impl TraceController {
                         Setting::AlwaysOnTop { value } => json!({ "value": value }),
                         Setting::WSLFilePollInterval { value } => json!({ "value": value }),
                         Setting::DisableTelemetry { value } => json!({ "value": value }),
+                        Setting::PreferredEditor { value } => {
+                            json!({ "value": format!("{:?}", value) })
+                        }
                     },
                 ),
             },
@@ -1435,5 +1441,15 @@ impl PosthogEvent {
         self.properties
             .insert(key.into(), serde_json::to_value(value)?);
         Ok(())
+    }
+}
+
+fn reset_cursor() {
+    use std::io::IsTerminal;
+
+    // if we are running in a terminal, reset the cursor. The tui_active flag is not set for
+    // the cargo generate TUI, but we still want to reset the cursor.
+    if std::io::stdout().is_terminal() {
+        _ = console::Term::stdout().show_cursor();
     }
 }

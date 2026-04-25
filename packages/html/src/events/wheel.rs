@@ -2,11 +2,11 @@ use dioxus_core::Event;
 use keyboard_types::Modifiers;
 use std::fmt::Formatter;
 
-use crate::{geometry::*, InteractionLocation, ModifiersInteraction, PointerInteraction};
 use crate::{
-    input_data::{MouseButton, MouseButtonSet},
     InteractionElementOffset,
+    input_data::{MouseButton, MouseButtonSet},
 };
+use crate::{InteractionLocation, ModifiersInteraction, PointerInteraction, geometry::*};
 
 use super::HasMouseData;
 
@@ -222,13 +222,6 @@ impl<'de> serde::Deserialize<'de> for WheelData {
         })
     }
 }
-
-impl_event![
-    WheelData;
-
-    /// Called when the mouse wheel is rotated over an element.
-    onwheel
-];
 
 pub trait HasWheelData: HasMouseData + std::any::Any {
     /// The amount of wheel movement

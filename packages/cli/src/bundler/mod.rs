@@ -46,7 +46,7 @@ impl<'a> BundleContext<'a> {
         // Build the resources map from assets + config resources
         let mut resources_map = HashMap::new();
 
-        let asset_dir = build.asset_dir();
+        let asset_dir = build.bundle_asset_dir();
         if asset_dir.exists() {
             for entry in walkdir::WalkDir::new(&asset_dir) {
                 let entry = entry?;
@@ -69,9 +69,7 @@ impl<'a> BundleContext<'a> {
             }
         }
 
-        let tools_dir = dirs::cache_dir()
-            .unwrap_or_else(|| PathBuf::from(".cache"))
-            .join("dioxus");
+        let tools_dir = crate::Workspace::tools_dir();
         let _ = std::fs::create_dir_all(&tools_dir);
 
         let arch = {

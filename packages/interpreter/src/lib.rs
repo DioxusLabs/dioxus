@@ -27,7 +27,7 @@ pub use unified_bindings::*;
 // Common bindings for minimal usage.
 #[cfg(all(feature = "minimal_bindings", feature = "webonly"))]
 pub mod minimal_bindings {
-    use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
+    use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 
     /// Some useful snippets that we use to share common functionality between the different platforms we support.
     ///

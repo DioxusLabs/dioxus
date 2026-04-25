@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    serve::{AppServer, ServeUpdate, WebServer},
     BuilderUpdate, BundleFormat, Result,
+    serve::{AppServer, ServeUpdate, WebServer},
 };
 use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
@@ -161,6 +161,7 @@ impl RunArgs {
                         BuilderUpdate::ProcessWaitFailed { err } => {
                             return Err(err.into());
                         }
+                        BuilderUpdate::ProfilePhase { .. } => {}
                     }
                 }
                 ServeUpdate::Exit { .. } => break,

@@ -1,4 +1,4 @@
-use dioxus_core::{use_hook, VNode};
+use dioxus_core::{VNode, use_hook};
 
 use crate::document;
 

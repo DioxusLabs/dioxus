@@ -8,7 +8,7 @@ pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::{ScopeId, VirtualDom};
 use dom::WebsysDom;
-use futures_util::{pin_mut, select, FutureExt, StreamExt};
+use futures_util::{FutureExt, StreamExt, pin_mut, select};
 
 mod cfg;
 mod dom;
@@ -81,11 +81,10 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
             let mut timeout = gloo_timers::future::TimeoutFuture::new(100).fuse();
             futures_util::select! {
                 msg = hotreload_rx.next() => {
-                    if let Some(msg) = msg {
-                        if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
+                    if let Some(msg) = msg
+                        && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
                             dioxus_devtools::apply_changes(&virtual_dom, &msg);
                         }
-                    }
                 }
                 _ = &mut timeout => {
                     break;

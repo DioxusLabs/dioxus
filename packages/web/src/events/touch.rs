@@ -1,6 +1,6 @@
 use dioxus_html::{
-    geometry::{ClientPoint, PagePoint, ScreenPoint},
     HasTouchPointData, InteractionLocation, Modifiers, ModifiersInteraction, TouchPoint,
+    geometry::{ClientPoint, PagePoint, ScreenPoint},
 };
 use web_sys::{Touch, TouchEvent};
 

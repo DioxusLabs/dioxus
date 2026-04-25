@@ -1,10 +1,10 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, BundleFormat, HotpatchModuleCache, Result, ServeArgs, TailwindCli,
-    TraceSrc, Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildTargets, BuilderUpdate, BundleFormat,
+    HotpatchModuleCache, Result, ServeArgs, TailwindCli, TraceSrc, Workspace,
+    platform_override::CommandWithPlatformOverrides,
 };
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -14,12 +14,12 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
+use futures_util::future::OptionFuture;
 use krates::NodeId;
 use notify::{
-    event::{MetadataKind, ModifyKind},
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
+    event::{MetadataKind, ModifyKind},
 };
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -259,12 +259,12 @@ impl AppServer {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) = crate::pre_render_static_routes(
-                Some(devserver.devserver_address()),
-                server,
-                Some(&server.tx.clone()),
-            )
-            .await
+            if let Err(err) = server
+                .pre_render_static_routes(
+                    Some(devserver.devserver_address()),
+                    Some(&server.tx.clone()),
+                )
+                .await
             {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }
@@ -362,7 +362,7 @@ impl AppServer {
             // This prevents losing changes from tools like stylance, tailwind, or sass that generate files
             // in response to source changes.
             tracing::debug!(
-                "Queueing file change: client is not ready to receive hotreloads. Files: {:#?}",
+                "Queueing file change - client is not ready to receive hotreloads. Files: {:?}",
                 files
             );
             self.pending_file_changes.extend(files.iter().cloned());
@@ -410,7 +410,6 @@ impl AppServer {
                 // Get the cached file if it exists - ignoring if it doesn't exist
                 let Some(cached_file) = self.file_map.get_mut(path) else {
                     tracing::debug!("No entry for file in filemap: {:?}", path);
-                    tracing::debug!("Filemap: {:#?}", self.file_map.keys());
                     continue;
                 };
 
@@ -601,10 +600,12 @@ impl AppServer {
         use crate::cli::styles::GLOW_STYLE;
 
         if should_open {
-            let time_taken = artifacts
-                .time_end
-                .duration_since(artifacts.time_start)
-                .unwrap();
+            let time_taken = self.client.total_build_time().unwrap_or_else(|| {
+                artifacts
+                    .time_end
+                    .duration_since(artifacts.time_start)
+                    .unwrap()
+            });
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
@@ -1340,7 +1341,9 @@ impl AppServer {
 
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
         if self.use_hotpatch_engine {
-            tracing::warn!("Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging.");
+            tracing::warn!(
+                "Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging."
+            );
         }
 
         match build {

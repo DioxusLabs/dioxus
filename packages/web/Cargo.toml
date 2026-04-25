@@ -2,7 +2,7 @@
 name = "dioxus-web"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "Web-sys renderer for Dioxus: Build fullstack web, desktop, and mobile apps with a single codebase."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -32,8 +32,8 @@ tracing = { workspace = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true, features = ["std", "async-await", "async-await-macro"] }
 futures-channel = { workspace = true }
-serde_json = { version = "1.0", optional = true }
-serde = { version = "1.0", optional = true }
+serde_json = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
 serde-wasm-bindgen = { version = "0.6.5", optional = true }
 
 ciborium = { workspace = true, optional = true }

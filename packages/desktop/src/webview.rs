@@ -1,21 +1,21 @@
+use crate::PendingDesktopContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
-use crate::PendingDesktopContext;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
+    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    waker::tao_waker,
 };
-use crate::{document::DesktopDocument, WeakDesktopContext};
+use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
+use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{pin_mut, FutureExt};
-use std::sync::{atomic::AtomicBool, Arc};
+use futures_util::{FutureExt, pin_mut};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -234,14 +234,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
+            window = window.with_window_icon(crate::default_icon().ok());
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
@@ -251,17 +244,13 @@ impl WebviewInstance {
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
-        #[allow(deprecated)]
         {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
+            use objc2::rc::Retained;
+            use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
             use tao::platform::macos::WindowExtMacOS;
-
-            unsafe {
-                let window: id = window.ns_window() as id;
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
+            let ns_window: Retained<NSWindow> =
+                unsafe { Retained::retain(window.ns_window().cast()) }.unwrap();
+            ns_window.setCollectionBehavior(NSWindowCollectionBehavior::Managed)
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone().or_else(|| {

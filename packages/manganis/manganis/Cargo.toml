@@ -3,7 +3,7 @@
 name = "manganis"
 version.workspace = true
 authors = ["Evan Almloff"]
-edition = "2021"
+edition = "2024"
 description = "Ergonomic, automatic, cross crate asset collection and optimization"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/manganis/manganis"
@@ -20,7 +20,7 @@ thiserror = { workspace = true }
 const-serialize-07 = { package = "const-serialize", version = "=0.7.2" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+jni = "0.21.1"
 ndk-context = "0.1.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]

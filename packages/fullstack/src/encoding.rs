@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// A trait for encoding and decoding data.
 ///

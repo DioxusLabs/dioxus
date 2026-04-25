@@ -1,4 +1,4 @@
-use crate::{buffer::Buffer, IndentOptions};
+use crate::{IndentOptions, buffer::Buffer};
 use dioxus_rsx::*;
 use proc_macro2::{LineColumn, Span};
 use quote::ToTokens;
@@ -8,7 +8,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, token::Brace, Expr};
+use syn::{Expr, spanned::Spanned, token::Brace};
 
 #[derive(Debug)]
 pub struct Writer<'a> {
@@ -153,11 +153,7 @@ impl<'a> Writer<'a> {
     }
 
     fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
-        write!(
-            self.out,
-            "for {} in ",
-            forloop.pat.clone().into_token_stream(),
-        )?;
+        write!(self.out, "for {} in ", self.unparse_pat(&forloop.pat),)?;
 
         self.write_inline_expr(&forloop.expr)?;
 
@@ -430,7 +426,13 @@ impl<'a> Writer<'a> {
         {
             let comments = self.accumulate_full_line_comments(brace.span.span().end());
             if !comments.is_empty() {
+                // Undo the tab from tabbed_line(). It positioned for the closing
+                // brace, but trailing comments need child-level indentation
+                let tab_width = self.out.indent.indent_str().len() * self.out.indent_level;
+                self.out.buf.truncate(self.out.buf.len() - tab_width);
+                self.out.indent_level += 1;
                 self.apply_line_comments(comments)?;
+                self.out.indent_level -= 1;
                 self.out.tab()?;
             }
         }
@@ -681,12 +683,11 @@ impl<'a> Writer<'a> {
         }
 
         // If there is more than 1 comment, make sure the first comment is not an empty line
-        if comments.len() > 1 {
-            if let Some(&first) = comments.back() {
-                if self.src[first].trim().is_empty() {
-                    comments.pop_back();
-                }
-            }
+        if comments.len() > 1
+            && let Some(&first) = comments.back()
+            && self.src[first].trim().is_empty()
+        {
+            comments.pop_back();
         }
 
         comments
@@ -716,6 +717,14 @@ impl<'a> Writer<'a> {
         Ok(())
     }
 
+    fn span_has_line_comments(&self, span: Span) -> bool {
+        span.source_text().is_some_and(|source| {
+            source
+                .lines()
+                .any(|line| line.trim_start().starts_with("//"))
+        })
+    }
+
     fn attr_value_len(&mut self, value: &AttributeValue) -> usize {
         match value {
             AttributeValue::IfExpr(if_chain) => {
@@ -738,11 +747,23 @@ impl<'a> Writer<'a> {
             }
             AttributeValue::AttrExpr(expr) => expr
                 .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
+                .map(|expr| {
+                    if self.span_has_line_comments(expr.span()) {
+                        100000
+                    } else {
+                        self.attr_expr_len(&expr)
+                    }
+                })
                 .unwrap_or(100000),
             AttributeValue::EventTokens(closure) => closure
                 .as_expr()
-                .map(|expr| self.attr_expr_len(&expr))
+                .map(|expr| {
+                    if self.span_has_line_comments(expr.span()) {
+                        100000
+                    } else {
+                        self.attr_expr_len(&expr)
+                    }
+                })
                 .unwrap_or(100000),
         }
     }
@@ -770,17 +791,17 @@ impl<'a> Writer<'a> {
         }
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.span().start()) {
-                if let Some(lines) = self.src.get(..attr.span().start().line - 1) {
-                    'line: for line in lines.iter().rev() {
-                        match (line.trim().starts_with("//"), line.is_empty()) {
-                            (true, _) => return 100000,
-                            (_, true) => continue 'line,
-                            _ => break 'line,
-                        }
+            if self.current_span_is_primary(attr.span().start())
+                && let Some(lines) = self.src.get(..attr.span().start().line - 1)
+            {
+                'line: for line in lines.iter().rev() {
+                    match (line.trim().starts_with("//"), line.is_empty()) {
+                        (true, _) => return 100000,
+                        (_, true) => continue 'line,
+                        _ => break 'line,
                     }
-                };
-            }
+                }
+            };
 
             total += match &attr.name {
                 AttributeName::BuiltIn(name) => {
@@ -850,6 +871,9 @@ impl<'a> Writer<'a> {
 
         let pretty = self.retrieve_formatted_expr(&expr).to_string();
         let source = src_span.source_text().unwrap_or_default();
+        let source_has_line_comments = source
+            .lines()
+            .any(|line| line.trim_start().starts_with("//"));
         let mut src_lines = source.lines().peekable();
 
         // Comments already in pretty output (from nested rsx!) - skip these from source
@@ -944,7 +968,9 @@ impl<'a> Writer<'a> {
                         let is_call = src_trimmed.ends_with('(')
                             || src_trimmed.ends_with(',')
                             || src_trimmed.ends_with('{');
-                        if !is_call {
+                        let is_commented_block =
+                            source_has_line_comments && src_trimmed.ends_with('{');
+                        if is_commented_block || !is_call {
                             multiline = Some(vec![*src]);
                             break;
                         }
@@ -1012,7 +1038,17 @@ impl<'a> Writer<'a> {
                     }
 
                     // Write multi-line with adjusted indentation
-                    let base_indent = ml[0].chars().take_while(|c| c.is_whitespace()).count();
+                    let base_indent = if source_has_line_comments && ml[0].trim_end().ends_with('{')
+                    {
+                        ml.iter()
+                            .skip(1)
+                            .filter(|line| !line.trim().is_empty())
+                            .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+                            .min()
+                            .unwrap_or(0)
+                    } else {
+                        ml[0].chars().take_while(|c| c.is_whitespace()).count()
+                    };
                     let target: String = line.chars().take_while(|c| c.is_whitespace()).collect();
 
                     for (i, src_line) in ml.iter().enumerate() {
@@ -1029,13 +1065,12 @@ impl<'a> Writer<'a> {
                 } else {
                     // Single line - output pretty line and capture inline comments
                     out.push_str(line);
-                    if let Some(src_line) = src_lines.next() {
-                        if let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line)) {
-                            if let Some(c) = cap.get(1) {
-                                out.push_str(" // ");
-                                out.push_str(c.as_str().replace("//", "").trim());
-                            }
-                        }
+                    if let Some(src_line) = src_lines.next()
+                        && let Some(cap) = COMMENT_REGEX.with(|r| r.captures(src_line))
+                        && let Some(c) = cap.get(1)
+                    {
+                        out.push_str(" // ");
+                        out.push_str(c.as_str().replace("//", "").trim());
                     }
                 }
             }
@@ -1105,10 +1140,10 @@ impl<'a> Writer<'a> {
         }
 
         let res = match children {
-            [BodyNode::Text(ref text)] => Some(text.input.to_string_with_quotes().len()),
+            [BodyNode::Text(text)] => Some(text.input.to_string_with_quotes().len()),
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::RawExpr(ref expr)] => {
+            [BodyNode::RawExpr(expr)] => {
                 let pretty = self.retrieve_formatted_expr(&expr.expr.as_expr()?);
                 if pretty.contains('\n') {
                     None
@@ -1118,7 +1153,7 @@ impl<'a> Writer<'a> {
             }
 
             // TODO: let rawexprs to be inlined
-            [BodyNode::Component(ref comp)]
+            [BodyNode::Component(comp)]
             // basically if the component is completely empty, we can inline it
                 if comp.fields.is_empty()
                     && comp.children.is_empty()

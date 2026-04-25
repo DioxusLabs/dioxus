@@ -1,6 +1,6 @@
 use super::*;
 use crate::document;
-use dioxus_core::{use_hook, VNode};
+use dioxus_core::{VNode, use_hook};
 use dioxus_html as dioxus_elements;
 
 #[non_exhaustive]
@@ -121,10 +121,10 @@ pub fn Link(props: LinkProps) -> Element {
     use_hook(|| {
         let document = document();
         let mut insert_link = document.create_head_component();
-        if let Some(href) = &props.href {
-            if !should_insert_link(href, props.rel.as_deref()) {
-                insert_link = false;
-            }
+        if let Some(href) = &props.href
+            && !should_insert_link(href, props.rel.as_deref())
+        {
+            insert_link = false;
         }
 
         if !insert_link {

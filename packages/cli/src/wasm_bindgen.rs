@@ -1,5 +1,5 @@
 use crate::{CliSettings, Result, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
@@ -91,9 +91,9 @@ impl WasmBindgen {
         }
     }
 
-    pub(crate) fn keep_lld_sections(self, keep_lld_sections: bool) -> Self {
+    pub(crate) fn keep_lld_exports(self, keep_lld_exports: bool) -> Self {
         Self {
-            keep_lld_exports: keep_lld_sections,
+            keep_lld_exports,
             ..self
         }
     }
@@ -217,7 +217,10 @@ impl WasmBindgen {
         // Attempt installation from binstall.
         if let Err(e) = self.install_binstall().await {
             tracing::error!("Failed to install wasm-bindgen-cli@{}: {e}", self.version);
-            tracing::info!("Failed to install prebuilt binary for wasm-bindgen-cli@{}. Compiling from source instead. This may take a while.", self.version);
+            tracing::info!(
+                "Failed to install prebuilt binary for wasm-bindgen-cli@{}. Compiling from source instead. This may take a while.",
+                self.version
+            );
         } else {
             tracing::info!(
                 "wasm-bindgen-cli@{} was successfully installed from cargo-binstall.",
@@ -400,17 +403,17 @@ impl WasmBindgen {
     }
 
     fn install_dir(&self) -> anyhow::Result<PathBuf> {
-        let bindgen_dir = Workspace::dioxus_data_dir().join("wasm-bindgen/");
-        std::fs::create_dir_all(&bindgen_dir)?;
-        Ok(bindgen_dir)
+        let dir = Workspace::tools_dir().join(format!("wasm-bindgen-{}", self.version));
+        std::fs::create_dir_all(&dir)?;
+        Ok(dir)
     }
 
-    fn installed_bin_name(&self) -> String {
-        let mut name = format!("wasm-bindgen-{}", self.version);
+    fn installed_bin_name(&self) -> &'static str {
         if cfg!(windows) {
-            name = format!("{name}.exe");
+            "wasm-bindgen.exe"
+        } else {
+            "wasm-bindgen"
         }
-        name
     }
 
     fn cargo_bin_name(&self) -> String {
@@ -427,6 +430,9 @@ impl WasmBindgen {
 
     fn git_install_url(&self) -> Option<String> {
         let platform = if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
+            "x86_64-pc-windows-msvc"
+        } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
+            // No native ARM64 binary available; the x86_64 binary runs fine under emulation.
             "x86_64-pc-windows-msvc"
         } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             "x86_64-unknown-linux-musl"
