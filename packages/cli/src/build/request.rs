@@ -1167,7 +1167,22 @@ impl BuildRequest {
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
+
+        // Rustc writes dep-info paths relative to its cwd. Modern cargo invokes rustc from the
+        // workspace root (not the crate manifest dir), so we can't just guess — use the cwd the
+        // rustcwrapper captured at interception time. For Thin mode we also explicitly spawn
+        // rustc with that same cwd, so this stays consistent. Fall back to workspace_dir if the
+        // tip's args weren't captured (shouldn't happen in practice, but be defensive).
+        let dep_info_cwd = workspace_rustc_args
+            .rustc_args
+            .get(&format!("{}.bin", self.tip_crate_name()))
+            .map(|args| args.cwd.clone())
+            .filter(|cwd| !cwd.as_os_str().is_empty())
+            .unwrap_or_else(|| self.workspace_dir());
+
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d"))
+            .unwrap_or_default()
+            .canonicalize(dep_info_cwd);
 
         // Stream the tip's source-file list so the runner can extend its filemap / watch set
         // before this build is even bundled.
@@ -1582,7 +1597,7 @@ impl BuildRequest {
                     .context("Missing rustc args for tip crate")?;
 
                 let mut cmd = Command::new("rustc");
-                cmd.current_dir(self.workspace_dir());
+                cmd.current_dir(&rustc_args.cwd);
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");

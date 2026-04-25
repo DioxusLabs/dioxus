@@ -357,9 +357,6 @@ impl AppServer {
                 // If the build is ready, we need to check if we need to pre-render with ssg
                 self.rebuild_ssg(devserver).await;
             }
-            BuilderUpdate::DepInfoDiscovered { files } => {
-                self.absorb_dep_info_files(files);
-            }
             _ => {}
         }
     }
@@ -371,9 +368,7 @@ impl AppServer {
     /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
     ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
     ///   targets etc.
-    fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
-        tracing::info!("absorbing depinfo: {files:#?}");
-
+    pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
         for path in files {
             let ext = path
                 .extension()
@@ -622,15 +617,10 @@ impl AppServer {
             self.add_hot_reload_message(&msg);
 
             let file = files[0].display().to_string();
-            let crate_dir = self.client.build.crate_dir().display().to_string();
             let workspace_dir = self.client.build.workspace_dir().display().to_string();
-            let file = if file.starts_with(&crate_dir) {
-                file.trim_start_matches(&crate_dir)
-            } else if file.starts_with(&workspace_dir) {
-                file.trim_start_matches(&workspace_dir)
-            } else {
-                &file
-            };
+            let file = file
+                .trim_start_matches(&workspace_dir)
+                .trim_start_matches('/');
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //

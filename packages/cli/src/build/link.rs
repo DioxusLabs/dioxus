@@ -18,9 +18,9 @@ use super::HotpatchModuleCache;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
-use depinfo::RustcDepInfo;
 use anyhow::{Context, bail, ensure};
 use cargo_metadata::diagnostic::Diagnostic;
+use depinfo::RustcDepInfo;
 use itertools::Itertools;
 use serde::Serialize;
 use sha1::Digest;
@@ -526,7 +526,7 @@ impl BuildRequest {
         rustc_args: &RustcArgs,
     ) -> Result<()> {
         let mut cmd = Command::new("rustc");
-        cmd.current_dir(self.workspace_dir());
+        cmd.current_dir(rustc_args.cwd.clone());
         cmd.env_clear();
 
         // Skip args[0] which is the rustc binary path captured by the wrapper.
@@ -644,9 +644,14 @@ impl BuildRequest {
         // etc.) into its filemap. Without this, edits to those files in workspace dep crates
         // wouldn't trigger a rebuild because they only show up via the dep crate's depinfo —
         // never via the tip exe's depinfo, which is the only one we historically loaded.
+        //
+        // Rustc emits dep-info paths relative to the cwd we just invoked it under, so canonicalize
+        // against that same path.
         if let Some(dep_info_path) = dep_info_path_for_rustc_args(&replay_args) {
             match RustcDepInfo::from_file(&dep_info_path) {
-                Ok(info) => ctx.status_dep_info_discovered(info.files),
+                Ok(info) => {
+                    ctx.status_dep_info_discovered(info.canonicalize(rustc_args.cwd.clone()).files);
+                }
                 Err(err) => tracing::debug!(
                     "Failed to read dep-info for replayed crate '{crate_name}' at {}: {err}",
                     dep_info_path.display()

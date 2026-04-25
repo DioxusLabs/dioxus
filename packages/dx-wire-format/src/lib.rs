@@ -75,6 +75,7 @@ pub struct StructuredBuildArtifacts {
     pub rustc_args: Vec<String>,
     pub rustc_envs: Vec<(String, String)>,
     pub link_args: Vec<String>,
+    pub cwd: PathBuf,
     pub assets: HashSet<BundledAsset>, // the serialized asset manifest
 }
 
