@@ -352,9 +352,52 @@ impl AppServer {
 
     /// Handle an update from the builder
     pub(crate) async fn new_build_update(&mut self, update: &BuilderUpdate, devserver: &WebServer) {
-        if let BuilderUpdate::BuildReady { .. } = update {
-            // If the build is ready, we need to check if we need to pre-render with ssg
-            self.rebuild_ssg(devserver).await;
+        match update {
+            BuilderUpdate::BuildReady { .. } => {
+                // If the build is ready, we need to check if we need to pre-render with ssg
+                self.rebuild_ssg(devserver).await;
+            }
+            BuilderUpdate::DepInfoDiscovered { files } => {
+                self.absorb_dep_info_files(files);
+            }
+            _ => {}
+        }
+    }
+
+    /// Fold a `.d` file's dep list into our tracking state:
+    /// - `.rs` files get parsed and inserted into `file_map` (skipping entries already there so
+    ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
+    ///   them on the next edit.
+    /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
+    ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
+    ///   targets etc.
+    fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
+        tracing::info!("absorbing depinfo: {files:#?}");
+
+        for path in files {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+
+            if ext == "rs" && !self.file_map.contains_key(path) {
+                if let Ok(contents) = std::fs::read_to_string(path) {
+                    self.file_map.insert(
+                        path.clone(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(artifacts) = self.client.artifacts.as_mut() {
+                if !artifacts.depinfo.files.contains(path) {
+                    artifacts.depinfo.files.push(path.clone());
+                }
+            }
         }
     }
 
@@ -1044,10 +1087,10 @@ impl AppServer {
                 if let std::collections::hash_map::Entry::Vacant(e) = self.file_map.entry(pathbuf) {
                     if let Ok(contents) = std::fs::read_to_string(path) {
                         e.insert(CachedFile {
-                                contents,
-                                most_recent: None,
-                                templates: Default::default(),
-                            });
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        });
                     }
                 }
             }
@@ -1236,7 +1279,7 @@ impl AppServer {
     ///
     /// Uses BFS from the tip crate through its workspace dependencies to find the path.
     /// If the changed crate IS the tip crate, returns just `[tip]`.
-    pub(crate) fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
+    fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
         let tip_name = self.client.build.main_target.replace('-', "_");
 
         // If the changed crate is the tip, no chain needed

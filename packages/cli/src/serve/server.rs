@@ -263,6 +263,7 @@ impl WebServer {
             BuilderUpdate::ProcessExited { .. } => {}
             BuilderUpdate::ProcessWaitFailed { .. } => {}
             BuilderUpdate::ProfilePhase { .. } => {}
+            BuilderUpdate::DepInfoDiscovered { .. } => {}
         }
     }
 

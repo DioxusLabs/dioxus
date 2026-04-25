@@ -162,6 +162,7 @@ impl RunArgs {
                             return Err(err.into());
                         }
                         BuilderUpdate::ProfilePhase { .. } => {}
+                        BuilderUpdate::DepInfoDiscovered { .. } => {}
                     }
                 }
                 ServeUpdate::Exit { .. } => break,

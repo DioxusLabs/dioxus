@@ -243,6 +243,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                             }
                         }
                     }
+                    BuilderUpdate::DepInfoDiscovered { .. } => {}
                     BuilderUpdate::ProcessWaitFailed { err } => {
                         tracing::warn!(
                             "Failed to wait for process - maybe it's hung or being debugged?: {err}"

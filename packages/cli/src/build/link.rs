@@ -18,6 +18,7 @@ use super::HotpatchModuleCache;
 use crate::{BuildArtifacts, BuildMode, WorkspaceRustcArgs};
 use crate::{BuildContext, Error, LinkerFlavor, Result, RustcArgs, Workspace};
 use crate::{BuildRequest, DX_RUSTC_WRAPPER_ENV_VAR};
+use depinfo::RustcDepInfo;
 use anyhow::{Context, bail, ensure};
 use cargo_metadata::diagnostic::Diagnostic;
 use itertools::Itertools;
@@ -636,6 +637,21 @@ impl BuildRequest {
         // On success, forward any diagnostics (warnings, notes) through the normal channel.
         for diag in diagnostics {
             ctx.status_build_diagnostic(diag);
+        }
+
+        // Surface the source-file list rustc just emitted into the `.d` file so the runner can
+        // fold this crate's inputs (incl. `include_str!` targets, generated files in `OUT_DIR`,
+        // etc.) into its filemap. Without this, edits to those files in workspace dep crates
+        // wouldn't trigger a rebuild because they only show up via the dep crate's depinfo —
+        // never via the tip exe's depinfo, which is the only one we historically loaded.
+        if let Some(dep_info_path) = dep_info_path_for_rustc_args(&replay_args) {
+            match RustcDepInfo::from_file(&dep_info_path) {
+                Ok(info) => ctx.status_dep_info_discovered(info.files),
+                Err(err) => tracing::debug!(
+                    "Failed to read dep-info for replayed crate '{crate_name}' at {}: {err}",
+                    dep_info_path.display()
+                ),
+            }
         }
 
         Ok(())
@@ -1461,4 +1477,54 @@ impl BuildRequest {
             &scope_hash[..16]
         ))
     }
+}
+
+/// Reconstruct the dep-info `.d` path that rustc will write for an invocation, by parsing the
+/// `--out-dir`, `--crate-name`, and `-C extra-filename=` from the captured args. This mirrors
+/// rustc's own naming convention: `<out_dir>/<crate_name><extra_filename>.d`.
+fn dep_info_path_for_rustc_args(args: &[String]) -> Option<PathBuf> {
+    let mut out_dir: Option<&str> = None;
+    let mut crate_name: Option<&str> = None;
+    let mut extra: String = String::new();
+
+    let mut i = 0;
+    while i < args.len() {
+        let arg = args[i].as_str();
+        match arg {
+            "--out-dir" => {
+                out_dir = args.get(i + 1).map(String::as_str);
+                i += 2;
+                continue;
+            }
+            "--crate-name" => {
+                crate_name = args.get(i + 1).map(String::as_str);
+                i += 2;
+                continue;
+            }
+            "-C" => {
+                if let Some(next) = args.get(i + 1) {
+                    if let Some(val) = next.strip_prefix("extra-filename=") {
+                        extra = val.to_string();
+                    }
+                }
+                i += 2;
+                continue;
+            }
+            _ => {}
+        }
+
+        if let Some(rest) = arg.strip_prefix("--out-dir=") {
+            out_dir = Some(rest);
+        } else if let Some(rest) = arg.strip_prefix("--crate-name=") {
+            crate_name = Some(rest);
+        } else if let Some(rest) = arg.strip_prefix("-Cextra-filename=") {
+            extra = rest.to_string();
+        }
+
+        i += 1;
+    }
+
+    let out_dir = out_dir?;
+    let crate_name = crate_name?;
+    Some(PathBuf::from(out_dir).join(format!("{crate_name}{extra}.d")))
 }

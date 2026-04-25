@@ -333,6 +333,7 @@ impl AppBuilder {
                 }
             }
             BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::DepInfoDiscovered { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
@@ -546,6 +547,7 @@ impl AppBuilder {
                     return Err(err);
                 }
                 BuilderUpdate::ProfilePhase { .. } => {}
+                BuilderUpdate::DepInfoDiscovered { .. } => {}
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}

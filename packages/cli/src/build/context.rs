@@ -54,6 +54,15 @@ pub enum BuilderUpdate {
         err: Error,
     },
 
+    /// A rustc invocation finished and its `.d` dep-info file has been parsed. The included
+    /// `files` are the source/include targets rustc reported as inputs for that crate. The runner
+    /// folds these into its filemap and watch set so edits to non-`.rs` includes (e.g. CSS pulled
+    /// in via `include_str!`) and to source files in workspace dep crates trigger rebuilds /
+    /// hot-reloads even when those files weren't already under a watched crate root.
+    DepInfoDiscovered {
+        files: Vec<PathBuf>,
+    },
+
     /// A running process has received a stdout.
     /// May or may not be a complete line - do not treat it as a line. It will include a line if it is a complete line.
     ///
@@ -243,5 +252,14 @@ impl BuildContext {
         _ = self.tx.unbounded_send(BuilderUpdate::Progress {
             stage: BuildStage::ExtractingAssets,
         });
+    }
+
+    pub(crate) fn status_dep_info_discovered(&self, files: Vec<PathBuf>) {
+        if files.is_empty() {
+            return;
+        }
+        _ = self
+            .tx
+            .unbounded_send(BuilderUpdate::DepInfoDiscovered { files });
     }
 }

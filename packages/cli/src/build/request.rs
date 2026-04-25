@@ -1169,6 +1169,10 @@ impl BuildRequest {
         let mode = ctx.mode.clone();
         let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
 
+        // Stream the tip's source-file list so the runner can extend its filemap / watch set
+        // before this build is even bundled.
+        ctx.status_dep_info_discovered(depinfo.files.clone());
+
         Ok(BuildArtifacts {
             time_end,
             exe,
