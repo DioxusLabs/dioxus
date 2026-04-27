@@ -56,11 +56,9 @@ pub(crate) struct AppServer {
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
-    pub(crate) use_hotpatch_engine: bool,
-    pub(crate) automatic_rebuilds: bool,
+    pub(crate) hotreload_mode: HotReloadMode,
     pub(crate) interactive: bool,
     pub(crate) _force_sequential: bool,
-    pub(crate) hot_reload: bool,
     pub(crate) open_browser: bool,
     pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
@@ -92,6 +90,13 @@ pub(crate) struct CachedFile {
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
 }
 
+#[derive(PartialEq, Clone, Debug, Copy)]
+pub(crate) enum HotReloadMode {
+    Hotpatch,
+    RsxOnly,
+    Disabled,
+}
+
 impl AppServer {
     /// Create the AppRunner and then initialize the filemap with the crate directory.
     pub(crate) async fn new(args: ServeArgs) -> Result<Self> {
@@ -116,10 +121,6 @@ impl AppServer {
 
         // These come from the args but also might come from the workspace settings
         // We opt to use the manually specified args over the workspace settings
-        let hot_reload = args
-            .hot_reload
-            .unwrap_or_else(|| workspace.settings.always_hot_reload.unwrap_or(true));
-
         let open_browser = args
             .open
             .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(false))
@@ -168,7 +169,11 @@ impl AppServer {
             .flatten();
 
         let watch_fs = args.watch.unwrap_or(true);
-        let use_hotpatch_engine = args.hot_patch;
+        let hotreload_mode = if args.hot_patch.unwrap_or(true) {
+            HotReloadMode::Hotpatch
+        } else {
+            HotReloadMode::RsxOnly
+        };
 
         let client = AppBuilder::new(&client)?;
         let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
@@ -188,12 +193,10 @@ impl AppServer {
         let mut runner = Self {
             file_map: Default::default(),
             applied_client_hot_reload_message: Default::default(),
-            automatic_rebuilds: true,
             watch_fs,
-            use_hotpatch_engine,
+            hotreload_mode,
             client,
             server,
-            hot_reload,
             open_browser,
             _wsl_file_poll_interval: wsl_file_poll_interval,
             always_on_top,
@@ -233,14 +236,22 @@ impl AppServer {
     }
 
     pub(crate) fn initialize(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
             server.start(build_mode, BuildId::SECONDARY);
+        }
+    }
+
+    /// The `BuildMode` that fresh/full rebuilds should start with under the current hotreload mode.
+    ///
+    /// Only `Hotpatch` needs the `Fat` build to prime the hotpatch engine; every other mode uses a
+    /// plain `Base` build.
+    fn initial_build_mode(&self) -> BuildMode {
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => BuildMode::Fat,
+            HotReloadMode::RsxOnly | HotReloadMode::Disabled => BuildMode::Base,
         }
     }
 
@@ -347,6 +358,41 @@ impl AppServer {
         }
     }
 
+    /// Fold a `.d` file's dep list into our tracking state:
+    /// - `.rs` files get parsed and inserted into `file_map` (skipping entries already there so
+    ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
+    ///   them on the next edit.
+    /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
+    ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
+    ///   targets etc.
+    pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
+        for path in files {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+
+            if ext == "rs" && !self.file_map.contains_key(path) {
+                if let Ok(contents) = std::fs::read_to_string(path) {
+                    self.file_map.insert(
+                        path.clone(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(artifacts) = self.client.artifacts.as_mut() {
+                if !artifacts.depinfo.files.contains(path) {
+                    artifacts.depinfo.files.push(path.clone());
+                }
+            }
+        }
+    }
+
     /// Handle the list of changed files from the file watcher, attempting to aggressively prevent
     /// full rebuilds by hot-reloading RSX and hot-patching Rust code.
     ///
@@ -374,7 +420,7 @@ impl AppServer {
 
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
-        let mut needs_full_rebuild = false;
+        let mut needs_rust_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -395,7 +441,7 @@ impl AppServer {
 
             // If it's in the public dir, we sync it and trigger a full rebuild
             if self.client.build.path_is_in_public_dir(path) {
-                needs_full_rebuild = true;
+                needs_rust_rebuild = true;
                 continue;
             }
 
@@ -431,7 +477,7 @@ impl AppServer {
 
                 // This assumes the two files are structured similarly. If they're not, we can't diff them
                 let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-                    needs_full_rebuild = true;
+                    needs_rust_rebuild = true;
                     break;
                 };
 
@@ -460,7 +506,7 @@ impl AppServer {
 
                     // If no result is returned, we can't hotreload this file and need to keep the old file
                     let Some(results) = results else {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     };
 
@@ -494,7 +540,7 @@ impl AppServer {
             if ext != "rs" {
                 if let Some(artifacts) = self.client.artifacts.as_ref() {
                     if artifacts.depinfo.files.contains(path) {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     }
                 }
@@ -503,33 +549,57 @@ impl AppServer {
 
         // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
         if self.client.stage == BuildStage::Failed && !templates.is_empty() {
-            needs_full_rebuild = true
+            needs_rust_rebuild = true
         }
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine {
-                let changed_crates = self.order_changed_crates(files);
-
-                self.client
-                    .patch_rebuild(files.to_vec(), changed_crates.clone(), BuildId::PRIMARY);
-
-                if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
+        if needs_rust_rebuild {
+            match self.hotreload_mode {
+                // In hotpatch, we can only issue patches if the original build completed
+                HotReloadMode::Hotpatch if !self.has_hotpatchable_builds() => {
+                    self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_reload_start().await;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_patch_start().await;
-            } else {
-                self.client
-                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
+
+                // Otherwise hotpatches go through patching system
+                HotReloadMode::Hotpatch => {
+                    let changed_crates = self.order_changed_crates(files);
+
+                    self.client.patch_rebuild(
+                        files.to_vec(),
+                        changed_crates.clone(),
+                        BuildId::PRIMARY,
+                    );
+
+                    if let Some(server) = self.server.as_mut() {
+                        server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_patch_start().await;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_reload_start().await;
+
+                // Full rust rebuilds with rsx are full builds
+                HotReloadMode::RsxOnly => {
+                    self.client.start_rebuild(BuildMode::Base, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Base, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_reload_start().await;
+                }
+
+                // `Disabled` is filtered out before reaching `handle_file_change`, so the only way
+                // we land here is if the user cycled to `Disabled` mid-handler. Treat it as a
+                // no-op with a visible warning so the edit isn't silently dropped.
+                HotReloadMode::Disabled => {}
             }
         } else {
             let msg = HotReloadMsg {
@@ -544,16 +614,10 @@ impl AppServer {
             self.add_hot_reload_message(&msg);
 
             let file = files[0].display().to_string();
-            let file =
-                file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
-
-            if needs_full_rebuild && !self.automatic_rebuilds {
-                use crate::styles::NOTE_STYLE;
-                tracing::warn!(
-                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
-                    file
-                );
-            }
+            let workspace_dir = self.client.build.workspace_dir().display().to_string();
+            let file = file
+                .trim_start_matches(&workspace_dir)
+                .trim_start_matches('/');
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //
@@ -729,10 +793,7 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client
             .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
@@ -865,6 +926,27 @@ impl AppServer {
         }
     }
 
+    /// Returns a static label for the current hotreload mode (used by both the TUI and logs).
+    pub(crate) fn hotreload_mode_label(&self) -> &'static str {
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => "hot-patching",
+            HotReloadMode::RsxOnly => "rsx and assets",
+            HotReloadMode::Disabled => "disabled",
+        }
+    }
+
+    /// Cycle the hotreload mode: Hotpatch -> RsxOnly -> Disabled -> Hotpatch, i.e. monotonically
+    /// decreasing reactivity. Returns `(previous_label, new_label)` for logging the transition.
+    pub(crate) fn cycle_hotreload_mode(&mut self) -> (&'static str, &'static str) {
+        let prev = self.hotreload_mode_label();
+        self.hotreload_mode = match self.hotreload_mode {
+            HotReloadMode::Hotpatch => HotReloadMode::RsxOnly,
+            HotReloadMode::RsxOnly => HotReloadMode::Disabled,
+            HotReloadMode::Disabled => HotReloadMode::Hotpatch,
+        };
+        (prev, self.hotreload_mode_label())
+    }
+
     pub(crate) async fn client_connected(
         &mut self,
         build_id: BuildId,
@@ -957,8 +1039,8 @@ impl AppServer {
             self.fill_filemap_from_krate(server.build.crate_dir());
         }
 
-        for krate in self.all_watched_crates() {
-            self.fill_filemap_from_krate(krate);
+        for krate_path in self.all_watched_crates() {
+            self.fill_filemap_from_krate(krate_path);
         }
     }
 
@@ -974,7 +1056,9 @@ impl AppServer {
     ///
     /// todo: There are known bugs here when handling gitignores.
     fn fill_filemap_from_krate(&mut self, crate_dir: PathBuf) {
-        for entry in walkdir::WalkDir::new(crate_dir).into_iter().flatten() {
+        let src_dir = crate_dir.join("src");
+
+        for entry in walkdir::WalkDir::new(src_dir).into_iter().flatten() {
             if self
                 .workspace
                 .ignore
@@ -985,16 +1069,16 @@ impl AppServer {
             }
 
             let path = entry.path();
+            let pathbuf = path.to_path_buf();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                if let Ok(contents) = std::fs::read_to_string(path) {
-                    self.file_map.insert(
-                        path.to_path_buf(),
-                        CachedFile {
+                if let std::collections::hash_map::Entry::Vacant(e) = self.file_map.entry(pathbuf) {
+                    if let Ok(contents) = std::fs::read_to_string(path) {
+                        e.insert(CachedFile {
                             contents,
                             most_recent: None,
                             templates: Default::default(),
-                        },
-                    );
+                        });
+                    }
                 }
             }
         }
@@ -1020,8 +1104,6 @@ impl AppServer {
             self.client.build.crate_dir(),
             self.client.build.crate_package,
         ) {
-            tracing::trace!("Watching path {path:?}");
-
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
             }
@@ -1040,7 +1122,6 @@ impl AppServer {
 
         // Also watch the crates themselves, but not recursively, such that we can pick up new folders
         for krate in self.all_watched_crates() {
-            tracing::trace!("Watching path {krate:?}");
             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
                 handle_notify_error(err);
             }
@@ -1099,49 +1180,58 @@ impl AppServer {
         watched_paths
     }
 
-    /// Get all the Manifest paths for dependencies that we should watch. Will not return anything
-    /// in the `.cargo` folder - only local dependencies will be watched.
-    ///
-    /// This returns a list of manifest paths
-    ///
-    /// Extend the watch path to include:
-    ///
-    /// - the assets directory - this is so we can hotreload CSS and other assets by default
-    /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
-    /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
+    /// Get the directories of every local (non-`.cargo`) crate reachable from `crate_package`
+    /// through the dependency graph. Walks transitively so workspace members pulled in via
+    /// intermediate workspace crates (e.g. `dioxus-examples` → `dioxus` → `dioxus-core`) are
+    /// included. Registry/git deps under `.cargo` are skipped and not descended into.
     fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
         let mut paths = vec![];
+        let mut visited: HashSet<NodeId> = HashSet::new();
+        let mut queue: VecDeque<NodeId> = VecDeque::new();
 
-        for (dependency, _edge) in self.workspace.krates.get_deps(crate_package) {
-            let krate = match dependency {
-                krates::Node::Krate { krate, .. } => krate,
-                krates::Node::Feature { krate_index, .. } => {
-                    &self.workspace.krates[krate_index.index()]
+        visited.insert(crate_package);
+        queue.push_back(crate_package);
+
+        while let Some(node) = queue.pop_front() {
+            for (dependency, _edge) in self.workspace.krates.get_deps(node) {
+                let (krate, dep_nid) = match dependency {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (krate, nid)
+                    }
+                    krates::Node::Feature { krate_index, .. } => {
+                        let k = &self.workspace.krates[krate_index.index()];
+                        (k, *krate_index)
+                    }
+                };
+
+                if !visited.insert(dep_nid) {
+                    continue;
                 }
-            };
 
-            if krate
-                .manifest_path
-                .components()
-                .any(|c| c.as_str() == ".cargo")
-            {
-                continue;
-            }
-
-            paths.push(
-                krate
+                if krate
                     .manifest_path
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .into_std_path_buf(),
-            );
+                    .components()
+                    .any(|c| c.as_str() == ".cargo")
+                {
+                    continue;
+                }
+
+                paths.push(
+                    krate
+                        .manifest_path
+                        .parent()
+                        .unwrap()
+                        .to_path_buf()
+                        .into_std_path_buf(),
+                );
+                queue.push_back(dep_nid);
+            }
         }
 
         paths
     }
 
-    // todo: we need to make sure we merge this for all the running packages
     fn all_watched_crates(&self) -> Vec<PathBuf> {
         let crate_package = self.client().build.crate_package;
         let crate_dir = self.client().build.crate_dir();
@@ -1149,11 +1239,6 @@ impl AppServer {
         let mut krates: Vec<PathBuf> = self
             .local_dependencies(crate_package)
             .into_iter()
-            .map(|p| {
-                p.parent()
-                    .expect("Local manifest to exist and have a parent")
-                    .to_path_buf()
-            })
             .chain(Some(crate_dir))
             .collect();
 
@@ -1161,19 +1246,14 @@ impl AppServer {
             let server_crate_package = server.build.crate_package;
             let server_crate_dir = server.build.crate_dir();
 
-            let server_krates: Vec<PathBuf> = self
-                .local_dependencies(server_crate_package)
-                .into_iter()
-                .map(|p| {
-                    p.parent()
-                        .expect("Server manifest to exist and have a parent")
-                        .to_path_buf()
-                })
-                .chain(Some(server_crate_dir))
-                .collect();
-            krates.extend(server_krates);
+            krates.extend(
+                self.local_dependencies(server_crate_package)
+                    .into_iter()
+                    .chain(Some(server_crate_dir)),
+            );
         }
 
+        krates.sort();
         krates.dedup();
 
         krates
@@ -1186,7 +1266,7 @@ impl AppServer {
     ///
     /// Uses BFS from the tip crate through its workspace dependencies to find the path.
     /// If the changed crate IS the tip crate, returns just `[tip]`.
-    pub(crate) fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
+    fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
         let tip_name = self.client.build.main_target.replace('-', "_");
 
         // If the changed crate is the tip, no chain needed
@@ -1340,7 +1420,7 @@ impl AppServer {
     }
 
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
-        if self.use_hotpatch_engine {
+        if self.hotreload_mode == HotReloadMode::Hotpatch {
             tracing::warn!(
                 "Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging."
             );
@@ -1357,6 +1437,22 @@ impl AppServer {
             }
             _ => {}
         }
+    }
+
+    /// Returns true if both the server and client are ready to accept thin/hotpatch rebuilds —
+    /// i.e. they have completed artifacts *and* a populated `patch_cache` from a prior fat build.
+    ///
+    /// The cache check matters when cycling `RsxOnly`/`Disabled` -> `Hotpatch`: the existing
+    /// artifacts are from a base build and there's no symbol map to diff against, so we have to
+    /// fall back to a full fat rebuild before thin rebuilds can work.
+    fn has_hotpatchable_builds(&self) -> bool {
+        let builder_ready = |b: &AppBuilder| {
+            b.artifacts
+                .as_ref()
+                .is_some_and(|a| a.patch_cache.is_some())
+        };
+
+        builder_ready(&self.client) && self.server.as_ref().map(builder_ready).unwrap_or(true)
     }
 }
 

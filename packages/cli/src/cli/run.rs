@@ -25,7 +25,7 @@ impl RunArgs {
         //
         // We want to turn off the fancy stuff like the TUI, watcher, and hot-reload, but leave logging
         // and other things like the devserver on.
-        self.args.hot_patch = false;
+        self.args.hot_patch = Some(false);
         self.args.interactive = Some(false);
         self.args.hot_reload = Some(false);
         self.args.watch = Some(false);
@@ -162,6 +162,7 @@ impl RunArgs {
                             return Err(err.into());
                         }
                         BuilderUpdate::ProfilePhase { .. } => {}
+                        BuilderUpdate::DepInfoDiscovered { .. } => {}
                     }
                 }
                 ServeUpdate::Exit { .. } => break,
@@ -170,7 +171,7 @@ impl RunArgs {
                 ServeUpdate::FilesChanged { .. } => {}
                 ServeUpdate::OpenApp => {}
                 ServeUpdate::RequestRebuild => {}
-                ServeUpdate::ToggleShouldRebuild => {}
+                ServeUpdate::CycleHotreloadMode => {}
                 ServeUpdate::OpenDebugger { .. } => {}
                 ServeUpdate::Redraw => {}
                 ServeUpdate::TracingLog { .. } => {}

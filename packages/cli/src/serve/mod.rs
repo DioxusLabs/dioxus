@@ -1,6 +1,7 @@
 use crate::{
     AppBuilder, BuildId, BuildMode, BuilderUpdate, BundleFormat, Result, ServeArgs,
     TraceController,
+    build::PatchError,
     styles::{GLOW_STYLE, LINK_STYLE},
 };
 
@@ -53,7 +54,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 Serving your app: {binname}! 🚀
                 • Press {GLOW_STYLE}`ctrl+c`{GLOW_STYLE:#} to exit the server
                 • Press {GLOW_STYLE}`r`{GLOW_STYLE:#} to rebuild the app
-                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to toggle automatic rebuilds
+                • Press {GLOW_STYLE}`p`{GLOW_STYLE:#} to change hotreload mode
                 • Press {GLOW_STYLE}`v`{GLOW_STYLE:#} to toggle verbose logging
                 • Press {GLOW_STYLE}`/`{GLOW_STYLE:#} for more commands and shortcuts{extra}
                ----------------------------------------------------------------"#,
@@ -67,23 +68,32 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
         }
     );
 
+    // Let people know hotpatching is enabled by default now.
+    if builder.hotreload_mode == HotReloadMode::Hotpatch {
+        tracing::warn!(
+            "Note: {GLOW_STYLE}Rust hot-patching{GLOW_STYLE:#} is now enabled by default! Unexpected behavior might occur. Press `p` to change modes."
+        );
+    }
+
     builder.initialize();
 
     loop {
         // Draw the state of the server to the screen
         screen.render(&builder, &devserver);
 
-        // And then wait for any updates before redrawing
+        // And then wait for any updates before redrawing.
+        // Use biased so the tracer wins in log emits vs all others
         let msg = tokio::select! {
+            biased;
+            msg = tracer.wait() => msg,
             msg = builder.wait() => msg,
             msg = devserver.wait() => msg,
             msg = screen.wait() => msg,
-            msg = tracer.wait() => msg,
         };
 
         match msg {
             ServeUpdate::FilesChanged { files } => {
-                if files.is_empty() || !builder.hot_reload {
+                if files.is_empty() || builder.hotreload_mode == HotReloadMode::Disabled {
                     continue;
                 }
 
@@ -166,7 +176,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                     BuilderUpdate::BuildFailed { err } => {
                         tracing::error!(
                             "{ERROR_STYLE}Build failed{ERROR_STYLE:#}: {}",
-                            crate::error::log_stacktrace(&err, 15),
+                            crate::error::log_stacktrace(&err, 0),
                             ERROR_STYLE = crate::styles::ERROR_STYLE,
                         );
 
@@ -182,9 +192,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                 {
                                     tracing::error!("Failed to hot-patch app: {err}");
 
-                                    if let Some(_patching) =
-                                        err.downcast_ref::<crate::build::PatchError>()
-                                    {
+                                    if let Some(_patching) = err.downcast_ref::<PatchError>() {
                                         tracing::info!("Starting full rebuild: {err}");
                                         builder.full_rebuild().await;
                                         devserver.send_reload_start().await;
@@ -192,7 +200,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                                     }
                                 }
                             }
-                            BuildMode::Base { .. } | BuildMode::Fat => {
+                            BuildMode::Base | BuildMode::Fat => {
                                 _ = builder
                                     .open(&bundle, &mut devserver)
                                     .await
@@ -234,6 +242,9 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                             }
                         }
                     }
+                    BuilderUpdate::DepInfoDiscovered { files } => {
+                        builder.absorb_dep_info_files(&files);
+                    }
                     BuilderUpdate::ProcessWaitFailed { err } => {
                         tracing::warn!(
                             "Failed to wait for process - maybe it's hung or being debugged?: {err}"
@@ -250,7 +261,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
             }
 
             ServeUpdate::OpenApp => {
-                if builder.use_hotpatch_engine
+                if builder.hotreload_mode == HotReloadMode::Hotpatch
                     && !matches!(builder.client.build.bundle, BundleFormat::Web)
                 {
                     tracing::warn!(
@@ -262,7 +273,7 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 } else if let Err(err) = builder.open_all(&devserver, true).await {
                     tracing::error!(
                         "Failed to open app: {}",
-                        crate::error::log_stacktrace(&err, 15)
+                        crate::error::log_stacktrace(&err, 0)
                     )
                 }
             }
@@ -271,17 +282,18 @@ pub(crate) async fn serve_all(args: ServeArgs, tracer: &TraceController) -> Resu
                 // simply returning will cause a redraw
             }
 
-            ServeUpdate::ToggleShouldRebuild => {
-                use crate::styles::{ERROR, NOTE_STYLE};
-                builder.automatic_rebuilds = !builder.automatic_rebuilds;
+            ServeUpdate::CycleHotreloadMode => {
+                use crate::styles::{GLOW_STYLE, HINT_STYLE};
+                let style = |label: &str| match label {
+                    "disabled" => format!("{HINT_STYLE}disabled{HINT_STYLE:#}"),
+                    other => format!("{GLOW_STYLE}{other}{GLOW_STYLE:#}"),
+                };
+                let (prev, next) = builder.cycle_hotreload_mode();
                 tracing::info!(
-                    "Automatic rebuilds are currently: {}",
-                    if builder.automatic_rebuilds {
-                        format!("{NOTE_STYLE}enabled{NOTE_STYLE:#}")
-                    } else {
-                        format!("{ERROR}disabled{ERROR:#}")
-                    }
-                )
+                    "changing hotreload mode: {} -> {}",
+                    style(prev),
+                    style(next),
+                );
             }
 
             ServeUpdate::OpenDebugger { id } => {

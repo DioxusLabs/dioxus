@@ -293,11 +293,7 @@ pub(crate) struct BuildRequest {
 #[derive(Clone, Debug, PartialEq)]
 pub enum BuildMode {
     /// A normal build generated using `cargo rustc`
-    ///
-    /// "run" indicates whether this build is intended to be run immediately after building.
-    /// This means we try to capture the build environment, saving vars like `CARGO_MANIFEST_DIR`
-    /// for the running executable.
-    Base { run: bool },
+    Base,
 
     /// A "Fat" build generated with cargo rustc and dx as a custom linker without -Wl,-dead-strip
     Fat,
@@ -691,7 +687,7 @@ impl BuildRequest {
 
         // The triple will be the triple passed or the host if using dioxus.
         let triple = if using_dioxus_explicitly {
-            triple.context("Could not automatically detect target triple")?
+            triple.context("Could not automatically detect target triple. Make sure to specify the platform (ie --web or --desktop) or the triple directly.")?
         } else {
             triple.unwrap_or(Triple::host())
         };
@@ -965,7 +961,7 @@ impl BuildRequest {
             BuildMode::Thin { .. } => self.compile_workspace_hotpatch(&ctx).await,
 
             // In base/fat mode, we do the full chain with a root `cargo rustc`
-            BuildMode::Base { .. } | BuildMode::Fat => {
+            BuildMode::Base | BuildMode::Fat => {
                 let mut artifacts = self.cargo_build(&ctx).await?;
 
                 ctx.profile_phase("Post-processing executable");
@@ -1171,7 +1167,26 @@ impl BuildRequest {
 
         let time_end = SystemTime::now();
         let mode = ctx.mode.clone();
-        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d")).unwrap_or_default();
+
+        // Rustc writes dep-info paths relative to its cwd. Modern cargo invokes rustc from the
+        // workspace root (not the crate manifest dir), so we can't just guess — use the cwd the
+        // rustcwrapper captured at interception time. For Thin mode we also explicitly spawn
+        // rustc with that same cwd, so this stays consistent. Fall back to workspace_dir if the
+        // tip's args weren't captured (shouldn't happen in practice, but be defensive).
+        let dep_info_cwd = workspace_rustc_args
+            .rustc_args
+            .get(&format!("{}.bin", self.tip_crate_name()))
+            .map(|args| args.cwd.clone())
+            .filter(|cwd| !cwd.as_os_str().is_empty())
+            .unwrap_or_else(|| self.workspace_dir());
+
+        let depinfo = RustcDepInfo::from_file(&exe.with_extension("d"))
+            .unwrap_or_default()
+            .canonicalize(dep_info_cwd);
+
+        // Stream the tip's source-file list so the runner can extend its filemap / watch set
+        // before this build is even bundled.
+        ctx.status_dep_info_discovered(depinfo.files.clone());
 
         Ok(BuildArtifacts {
             time_end,
@@ -1423,7 +1438,7 @@ impl BuildRequest {
         let mut manifest = extract_symbols_from_file(exe).await?;
 
         if matches!(self.bundle, BundleFormat::Web)
-            && matches!(ctx.mode, BuildMode::Base { .. } | BuildMode::Fat)
+            && matches!(ctx.mode, BuildMode::Base | BuildMode::Fat)
         {
             if let Some(dir) = self.user_public_dir() {
                 for entry in walkdir::WalkDir::new(&dir)
@@ -1582,7 +1597,7 @@ impl BuildRequest {
                     .context("Missing rustc args for tip crate")?;
 
                 let mut cmd = Command::new("rustc");
-                cmd.current_dir(self.workspace_dir());
+                cmd.current_dir(&rustc_args.cwd);
                 cmd.env_clear();
                 cmd.args(rustc_args.args[1..].iter());
                 cmd.env_remove("RUSTC_WORKSPACE_WRAPPER");

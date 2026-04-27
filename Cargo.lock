@@ -3083,6 +3083,7 @@ dependencies = [
 name = "depinfo"
 version = "0.7.6"
 dependencies = [
+ "dunce",
  "thiserror 2.0.18",
 ]
 

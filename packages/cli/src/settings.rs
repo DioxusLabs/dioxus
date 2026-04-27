@@ -14,8 +14,6 @@ use tracing::{error, trace, warn};
 /// This allows users to control the cli settings with ease.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub(crate) struct CliSettings {
-    /// Describes whether hot reload should always be on.
-    pub(crate) always_hot_reload: Option<bool>,
     /// Describes whether the CLI should always open the browser for Web targets.
     pub(crate) always_open_browser: Option<bool>,
     /// Describes whether desktop apps in development will be pinned always-on-top.
