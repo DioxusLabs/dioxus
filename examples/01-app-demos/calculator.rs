@@ -30,7 +30,7 @@ fn main() {
             Config::new().with_window_attributes(
                 WindowAttributes::default()
                     .with_title(TITLE)
-                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+                    .with_surface_size(LogicalSize::new(300.0, 525.0)),
             )
         }))
         .launch(app);

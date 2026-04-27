@@ -14,10 +14,10 @@ mod demo_renderer;
 static STYLES: Asset = asset!("/src/styles.css");
 
 // WGPU settings required by this example
-const FEATURES: Features = Features::PUSH_CONSTANTS;
+const FEATURES: Features = Features::IMMEDIATES;
 fn limits() -> Limits {
     Limits {
-        max_push_constant_size: 16,
+        max_immediate_size: 16,
         ..Limits::default()
     }
 }
@@ -26,7 +26,7 @@ fn window_attributes() -> WindowAttributes {
     // but this demonstrates the use of `WindowAttributes`
     WindowAttributes::default()
         .with_title("WGPU Example")
-        .with_inner_size(LogicalSize::new(800, 600))
+        .with_surface_size(LogicalSize::new(800, 600))
 }
 
 type Color = OpaqueColor<Srgb>;
