@@ -9,6 +9,10 @@ repository = "https://github.com/DioxusLabs/dioxus/tree/main/packages/subsecond"
 keywords = ["hotpatch", "engine", "subsecond", "dioxus", "hot-reload"]
 readme = "../README.md"
 
+[features]
+default = []
+enable_always = []
+
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 subsecond-types = { workspace = true }
