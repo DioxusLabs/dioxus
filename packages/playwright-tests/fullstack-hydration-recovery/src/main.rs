@@ -34,6 +34,10 @@ fn App() -> Element {
                 fallback: |_| rsx! { div { id: "streaming-fallback", "Loading streaming…" } },
                 StreamingMismatch {}
             }
+            div {
+                id: "after-streaming-boundary",
+                "After streaming boundary"
+            }
         }
     }
 }

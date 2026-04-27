@@ -30,6 +30,7 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
 
   const serverHtml = await serverResponse.text();
   expect(serverHtml).toContain('id="recovery-button"');
+  expect(serverHtml).toContain('id="after-streaming-boundary"');
   expect(serverHtml).toMatch(/<div\b[^>]*id="recovery-button"/);
   expect(serverHtml).not.toMatch(/<button\b[^>]*id="recovery-button"/);
   expect(serverHtml).toContain("Server text content");
@@ -227,6 +228,24 @@ test("hydration mismatch recovers nested structure, text, attributes, and placeh
   await expect(streamingMismatch).toHaveCount(1);
   await expect(streamingMismatch).toHaveJSProperty("tagName", "BUTTON");
   await expect(streamingMismatch).toContainText("Streaming client: streamed data");
+
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const appRoot = document.querySelector("#app-root");
+        const streamingShell = document.querySelector("#streaming-mismatch-shell");
+        const afterBoundary = document.querySelector("#after-streaming-boundary");
+        if (!appRoot || !streamingShell || !afterBoundary) {
+          return "missing";
+        }
+
+        const children = Array.from(appRoot.children);
+        return (
+          children.indexOf(streamingShell) < children.indexOf(afterBoundary)
+        );
+      }),
+    )
+    .toBe(true);
 
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

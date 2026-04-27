@@ -131,7 +131,6 @@ mod js {
         "{let node = this.templates[$tmpl_id$][$index$].cloneNode(true); this.nodes[$id$] = node; this.stack.push(node);}"
     }
 
-    #[cfg(feature = "binary-protocol")]
     fn append_children_to_top(many: u16) {
         "{
             let root = this.stack[this.stack.length-many-1];
