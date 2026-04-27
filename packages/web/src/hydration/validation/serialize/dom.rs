@@ -54,10 +54,7 @@ fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<BodyNode> {
             if is_placeholder_comment(&comment) {
                 vec![placeholder_node()]
             } else {
-                vec![BodyNode::Text(TextNode::from_text(&format!(
-                    "<!--{}-->",
-                    comment.trim()
-                )))]
+                Vec::new()
             }
         }
         _ => vec![BodyNode::Text(TextNode::from_text(&format!(
@@ -89,7 +86,7 @@ pub(crate) fn should_skip_validation_node(node: &web_sys::Node) -> bool {
     if node.node_type() == web_sys::Node::COMMENT_NODE {
         let marker = node.text_content().unwrap_or_default();
         let marker = marker.trim();
-        return marker.starts_with("node-id") || marker == "#";
+        return marker.starts_with("node-id") || marker == "#" || !is_placeholder_comment(marker);
     }
 
     let Some(element) = node.dyn_ref::<web_sys::Element>() else {
