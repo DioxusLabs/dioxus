@@ -1,16 +1,16 @@
-use blitz_shell::BlitzShellEvent;
+use blitz_shell::{BlitzShellEvent, BlitzShellProxy};
 use dioxus_document::{Document, NoOpDocument};
-use winit::{event_loop::EventLoopProxy, window::WindowId};
+use winit::window::WindowId;
 
 use crate::DioxusNativeEvent;
 
 pub struct DioxusNativeDocument {
-    pub(crate) proxy: EventLoopProxy<BlitzShellEvent>,
+    pub(crate) proxy: BlitzShellProxy,
     pub(crate) window: WindowId,
 }
 
 impl DioxusNativeDocument {
-    pub(crate) fn new(proxy: EventLoopProxy<BlitzShellEvent>, window: WindowId) -> Self {
+    pub(crate) fn new(proxy: BlitzShellProxy, window: WindowId) -> Self {
         Self { proxy, window }
     }
 }
@@ -27,7 +27,7 @@ impl Document for DioxusNativeDocument {
         contents: Option<String>,
     ) {
         let window = self.window;
-        _ = self.proxy.send_event(BlitzShellEvent::embedder_event(
+        self.proxy.send_event(BlitzShellEvent::embedder_event(
             DioxusNativeEvent::CreateHeadElement {
                 name: name.to_string(),
                 attributes: attributes

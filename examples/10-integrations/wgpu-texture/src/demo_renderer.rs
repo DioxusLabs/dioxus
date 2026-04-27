@@ -6,10 +6,10 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Instant;
 use wgpu::{
     CommandEncoderDescriptor, Device, Extent3d, FragmentState, LoadOp, MultisampleState,
-    Operations, PipelineLayoutDescriptor, PrimitiveState, PushConstantRange, Queue,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages, StoreOp, Texture, TextureDescriptor,
-    TextureDimension, TextureFormat, TextureUsages, TextureViewDescriptor, VertexState,
+    Operations, PipelineLayoutDescriptor, PrimitiveState, Queue, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipeline, RenderPipelineDescriptor, ShaderModuleDescriptor,
+    ShaderSource, StoreOp, Texture, TextureDescriptor, TextureDimension, TextureFormat,
+    TextureUsages, TextureViewDescriptor, VertexState,
 };
 
 pub struct DemoPaintSource {
@@ -127,10 +127,7 @@ impl ActiveDemoRenderer {
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[PushConstantRange {
-                stages: ShaderStages::FRAGMENT,
-                range: 0..16, // full size in bytes, aligned
-            }],
+            immediate_size: 16,
         });
 
         let pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
@@ -151,7 +148,7 @@ impl ActiveDemoRenderer {
             primitive: PrimitiveState::default(),
             depth_stencil: None,
             multisample: MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -195,7 +192,7 @@ impl ActiveDemoRenderer {
 
         let elapsed: f32 = start_time.elapsed().as_millis() as f32 / 500.;
         let [light_red, light_green, light_blue] = light;
-        let push_constants = PushConstants {
+        let immediates = Immediates {
             light_color_and_time: [light_red, light_green, light_blue, elapsed],
         };
 
@@ -217,12 +214,12 @@ impl ActiveDemoRenderer {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_push_constants(
-                ShaderStages::FRAGMENT, // Stage (your constants are for fragment shader)
-                0,                      // Offset in bytes (start at 0)
-                bytemuck::bytes_of(&push_constants),
+            rpass.set_immediates(
+                0, // Offset in bytes (start at 0)
+                bytemuck::bytes_of(&immediates),
             );
             rpass.draw(0..3, 0..1);
         }
@@ -236,7 +233,7 @@ impl ActiveDemoRenderer {
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
-struct PushConstants {
+struct Immediates {
     light_color_and_time: [f32; 4],
 }
 

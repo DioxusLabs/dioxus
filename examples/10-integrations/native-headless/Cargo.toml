@@ -19,7 +19,7 @@ tracing-subscriber = { workspace = true, optional = true }
 wgpu = { workspace = true }
 wgpu_context = { workspace = true }
 pollster = "0.4"
-bytemuck = "1.23.2"
+bytemuck = "1.25"
 blitz-paint = { workspace = true, default-features = true }
 blitz-traits = { workspace = true, default-features = true }
 blitz-dom = { workspace = true, default-features = true }
