@@ -1,8 +1,6 @@
-// Authored as an ES module. The CLI must emit `<script type="module">` for this
-// asset (because `with_module(true)` is set) so the `import.meta.url` reference
-// below parses correctly. Setting a global lets the playwright spec assert the
-// module actually executed.
-const value = "ok-module";
-if (typeof import.meta.url === "string") {
-    window.__esm_module_value = value;
-}
+// No top-level import/export — auto-detection alone would classify this as a
+// classic script. `with_module(true)` on the asset overrides that and forces
+// the CLI to emit `<script type="module">` and run esbuild with the ESM
+// pipeline. The playwright spec asserts both that the global is set and that
+// the script tag actually has `type="module"`.
+window.__esm_module_value = "ok-module";

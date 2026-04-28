@@ -43,11 +43,17 @@ pub(crate) fn process_js(
 
 /// Run esbuild to minify a JavaScript file in place.
 ///
-/// When `is_module` is true, `--format=esm` is passed so the minifier preserves
-/// module syntax (`import`/`export`); the consuming `<script>` tag is expected to
-/// be `type="module"`. Otherwise no `--format` flag is set, which causes esbuild
-/// to keep the input's format verbatim — a classic IIFE script stays a classic
-/// script.
+/// When `is_module` is true, the file is treated as ES module input:
+/// `--bundle --format=esm` inlines local relative imports (notably the
+/// `snippets/` folder that wasm-bindgen emits for `#[wasm_bindgen(inline_js)]`
+/// / `module = "…"`) into a single ESM file. `http://` and `https://` imports
+/// are marked external so URL-based module loading (e.g. CDN-hosted ESM,
+/// firebase) is left for the browser to resolve at runtime. The consuming
+/// `<script>` tag is expected to be `type="module"`.
+///
+/// When `is_module` is false, only `--minify` is passed and esbuild preserves
+/// the input's format verbatim — a classic IIFE/UMD script stays a classic
+/// script with no wrapper added.
 fn run_esbuild(
     esbuild: &Path,
     source: &Path,
@@ -60,7 +66,13 @@ fn run_esbuild(
     cmd.arg("--log-level=warning");
     cmd.arg("--minify");
     if is_module {
+        cmd.arg("--bundle");
         cmd.arg("--format=esm");
+        // Don't try to resolve URL-based imports at build time — let the
+        // browser fetch them at runtime. Without these externals, esbuild
+        // errors out on patterns like `import x from "https://cdn/lib.js"`.
+        cmd.arg("--external:https://*");
+        cmd.arg("--external:http://*");
     }
 
     tracing::debug!("Running esbuild: {:?}", cmd);
