@@ -1,16 +1,32 @@
 {
   "editor.formatOnSave": true,
+  "js/ts.tsc.autoDetect": "off",
   "[toml]": {
     "editor.formatOnSave": false
   },
   "[handlebars]": {
     "editor.formatOnSave": false
   },
+  "editor.rulers": [100],
+  "[json]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
   "[javascript]": {
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[html]": {
-    "editor.formatOnSave": false
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "dioxus.formatOnSave": "disabled",
   // "rust-analyzer.check.workspace": true,
@@ -21,7 +37,5 @@
   // "rust-analyzer.check.allTargets": true,
   "rust-analyzer.cargo.features": "all",
   "rust-analyzer.check.features": "all",
-  "rust-analyzer.cargo.extraArgs": [
-    "--tests"
-  ],
+  "rust-analyzer.cargo.extraArgs": ["--tests"]
 }

@@ -91,7 +91,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
     replacer.visit_expr_mut(&mut modified_expr);
 
     // now unparsed with the modified expression
-    let mut unparsed = unparse_inner(&modified_expr);
+    let mut unparsed = unparse_inner(&modified_expr, cfg);
 
     // now we can replace the macros with the formatted blocks
     for fmted in replacer.formatted_stack.drain(..) {
@@ -105,11 +105,11 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
             out_fmt.push(' ');
         }
 
-        let mut whitespace = 0;
+        let mut indent_level = 0;
 
         for line in unparsed.lines() {
             if line.contains(MARKER) {
-                whitespace = line.matches(cfg.indent_str()).count();
+                indent_level = line.matches(cfg.indent_str()).count();
                 break;
             }
         }
@@ -119,7 +119,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
         while let Some((_idx, fmt_line)) = lines.next() {
             // Push the indentation (but not for blank lines - avoid trailing whitespace)
             if is_multiline && !fmt_line.is_empty() {
-                out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
+                out_fmt.push_str(&cfg.indent_str().repeat(indent_level));
             }
 
             // Calculate delta between indentations - the block indentation is too much
@@ -133,7 +133,7 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 
         if is_multiline {
             out_fmt.push('\n');
-            out_fmt.push_str(&cfg.indent_str().repeat(whitespace));
+            out_fmt.push_str(&cfg.indent_str().repeat(indent_level));
         } else if !is_empty {
             out_fmt.push(' ');
         }
@@ -161,10 +161,10 @@ pub fn unparse_expr(expr: &Expr, src: &str, cfg: &IndentOptions) -> String {
 ///
 /// This creates a new temporary file, parses the expression into it, and then formats the file.
 /// This is a bit of a hack, but dtonlay doesn't want to support this very simple usecase, forcing us to clone the expr
-pub fn unparse_inner(expr: &Expr) -> String {
+pub fn unparse_inner(expr: &Expr, cfg: &IndentOptions) -> String {
     let file = wrapped(expr);
     let wrapped = prettyplease::unparse(&file);
-    unwrapped(wrapped)
+    unwrapped(wrapped, cfg)
 }
 
 /// Unparse a pattern into a properly formatted string using prettyplease.
@@ -194,14 +194,27 @@ pub fn unparse_pat(pat: &syn::Pat) -> String {
 }
 
 // Split off the fn main and then cut the tabs off the front
-fn unwrapped(raw: String) -> String {
+fn unwrapped(raw: String, cfg: &IndentOptions) -> String {
+    const INDENT: &str = "    ";
+
     let mut o = raw
         .strip_prefix("fn main() {\n")
         .unwrap()
         .strip_suffix("}\n")
         .unwrap()
         .lines()
-        .map(|line| line.strip_prefix("    ").unwrap_or_default()) // todo: set this to tab level
+        .map(|line| line.strip_prefix(INDENT).unwrap_or(line))
+        .map(|mut line| {
+            let indent_level = line.matches(INDENT).count();
+
+            for _ in 0..indent_level {
+                if let Some(remaining) = line.strip_prefix(INDENT) {
+                    line = remaining;
+                }
+            }
+
+            cfg.indent_str().repeat(indent_level) + line
+        })
         .collect::<Vec<_>>()
         .join("\n");
 
