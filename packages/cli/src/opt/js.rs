@@ -4,20 +4,18 @@ use anyhow::Context;
 use manganis_core::JsAssetOptions;
 
 use crate::opt::hash::hash_file_contents;
+use crate::opt::js_module_detect::js_is_module;
 
 pub(crate) fn process_js(
     js_options: &JsAssetOptions,
     source: &Path,
     output_path: &Path,
-    bundle: bool,
     esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    let minify = js_options.minified();
-    let needs_esbuild = minify || bundle;
-
-    if needs_esbuild {
+    if js_options.minified() {
         if let Some(esbuild) = esbuild_path {
-            match run_esbuild(esbuild, source, output_path, bundle, minify) {
+            let is_module = js_is_module(js_options, source);
+            match run_esbuild(esbuild, source, output_path, is_module) {
                 Ok(()) => return Ok(()),
                 Err(err) => {
                     tracing::error!(
@@ -30,7 +28,7 @@ pub(crate) fn process_js(
         }
     }
 
-    // Fallback: copy unprocessed
+    // Fallback / no minification: copy unprocessed
     let mut source_file = std::fs::File::open(source)?;
     let mut writer = std::io::BufWriter::new(std::fs::File::create(output_path)?);
     std::io::copy(&mut source_file, &mut writer).with_context(|| {
@@ -43,26 +41,26 @@ pub(crate) fn process_js(
     Ok(())
 }
 
-/// Run esbuild to bundle and/or minify a JavaScript file.
+/// Run esbuild to minify a JavaScript file in place.
+///
+/// When `is_module` is true, `--format=esm` is passed so the minifier preserves
+/// module syntax (`import`/`export`); the consuming `<script>` tag is expected to
+/// be `type="module"`. Otherwise no `--format` flag is set, which causes esbuild
+/// to keep the input's format verbatim — a classic IIFE script stays a classic
+/// script.
 fn run_esbuild(
     esbuild: &Path,
     source: &Path,
     output_path: &Path,
-    bundle: bool,
-    minify: bool,
+    is_module: bool,
 ) -> anyhow::Result<()> {
     let mut cmd = std::process::Command::new(esbuild);
     cmd.arg(source);
     cmd.arg(format!("--outfile={}", output_path.display()));
     cmd.arg("--log-level=warning");
-
-    if bundle {
-        cmd.arg("--bundle");
+    cmd.arg("--minify");
+    if is_module {
         cmd.arg("--format=esm");
-    }
-
-    if minify {
-        cmd.arg("--minify");
     }
 
     tracing::debug!("Running esbuild: {:?}", cmd);
@@ -81,7 +79,6 @@ pub(crate) fn hash_js(
     _js_options: &JsAssetOptions,
     source: &Path,
     hasher: &mut impl std::hash::Hasher,
-    _bundle: bool,
 ) -> anyhow::Result<()> {
     hash_file_contents(source, hasher)
 }

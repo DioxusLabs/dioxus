@@ -10,10 +10,12 @@ mod folder;
 mod hash;
 mod image;
 mod js;
+mod js_module_detect;
 mod json;
 
 pub(crate) use file::process_file_to;
 pub(crate) use hash::add_hash_to_asset;
+pub(crate) use js_module_detect::js_is_module;
 
 /// A manifest of all assets collected from dependencies. This is persisted to disk for users to be
 /// able to pick up the result of asset extraction.

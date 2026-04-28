@@ -38,6 +38,49 @@ const REQUIRED: Asset = asset!("/assets/style.css");
 const OPTIONAL: Option<Asset> = option_asset!("/assets/missing.css");
 ```
 
+## JavaScript assets
+
+JS files referenced via `asset!()` are delivered to the browser without build-time
+bundling. The CLI auto-detects whether each file is an ES module (top-level
+`import`/`export` or `import.meta`) or a classic script and processes it
+accordingly.
+
+- **`with_minify(true)` (default)**: the file is minified in place, but its module
+  format is preserved. A classic IIFE script stays a classic script; an ES module
+  stays an ES module.
+- **`with_minify(false)`**: the file is copied byte-for-byte. Use this when shipping
+  pre-built third-party libraries you do not want re-processed.
+- **`with_static_head(true)`**: appends a `<script>` tag to the document head
+  pointing at the asset. The CLI emits `<script type="module" ...>` when the file
+  is detected (or declared) as an ES module, and a classic `<script>` otherwise.
+- **`with_preload(true)`**: emits a `<link rel="preload" as="script">` for the asset.
+- **`with_module(true)`**: forces the file to be treated as an ES module even when
+  auto-detection would say otherwise. Useful when you author a side-effect-only
+  module without top-level `import`/`export` declarations. Files named `*.mjs` are
+  always treated as modules; files named `*.cjs` are always treated as classic.
+
+```rust
+use manganis::{asset, Asset, AssetOptions};
+
+// Vendored UMD library: copy verbatim, emitted as a classic <script>.
+const SWEETALERT: Asset = asset!(
+    "/assets/sweetalert2.all.min.js",
+    AssetOptions::js().with_minify(false).with_static_head(true)
+);
+
+// Authored ES module: auto-detected from its top-level `import`/`export`,
+// minified, emitted as <script type="module">, and the browser resolves
+// imports at runtime.
+const APP: Asset = asset!(
+    "/assets/app.js",
+    AssetOptions::js().with_static_head(true)
+);
+```
+
+If you need build-time bundling that resolves `import` statements into a single
+file, pre-bundle with your tool of choice and ship the result as a single asset.
+The Manganis pipeline does not bundle JS.
+
 ## Native FFI Bindings
 
 Manganis provides the `#[ffi]` attribute macro for generating direct FFI bindings between Rust and native platforms (Swift/Kotlin). See the `geolocation-native-plugin` example for usage.

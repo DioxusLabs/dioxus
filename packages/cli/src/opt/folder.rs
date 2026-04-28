@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::opt::file::process_file_to_with_options;
+use crate::opt::file::process_file_to;
 
 /// Process a folder, optimizing and copying all assets into the output folder
 pub fn process_folder(
@@ -40,11 +40,10 @@ fn process_file_minimal(
     output_path: &Path,
     esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    process_file_to_with_options(
+    process_file_to(
         &manganis_core::AssetOptions::builder().into_asset_options(),
         input_path,
         output_path,
-        true,
         esbuild_path,
     )?;
     Ok(())
