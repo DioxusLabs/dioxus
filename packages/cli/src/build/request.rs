@@ -207,12 +207,12 @@ use cargo_metadata::diagnostic::Diagnostic;
 use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
-use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV, SERVER_IP_ENV, SERVER_PORT_ENV};
 use krates::{NodeId, cm::TargetKind};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
-use std::{borrow::Cow, collections::VecDeque, ffi::OsString};
+use std::{borrow::Cow, collections::VecDeque, ffi::OsString, net::SocketAddr};
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -272,6 +272,7 @@ pub(crate) struct BuildRequest {
     pub(crate) session_cache_dir: PathBuf,
     pub(crate) raw_json_diagnostics: bool,
     pub(crate) windows_subsystem: Option<String>,
+    pub(crate) ssg_address: Option<SocketAddr>,
 }
 
 /// dx can produce different "modes" of a build. A "regular" build is a "base" build. The Fat and Thin
@@ -911,6 +912,7 @@ impl BuildRequest {
             apple_team_id: args.apple_team_id.clone(),
             raw_json_diagnostics: args.raw_json_diagnostics,
             windows_subsystem: args.windows_subsystem.clone(),
+            ssg_address: None,
         })
     }
 
@@ -1898,6 +1900,14 @@ impl BuildRequest {
                 APP_TITLE_ENV.into(),
                 self.config.web.app.title.clone().into(),
             ));
+        }
+
+        // Release builds read fullstack address configuration at compile time. When SSG runs the
+        // built server binary, make sure the address baked into the binary matches the address the
+        // prerenderer will query.
+        if let Some(addr) = self.ssg_address {
+            env_vars.push((SERVER_IP_ENV.into(), addr.ip().to_string().into()));
+            env_vars.push((SERVER_PORT_ENV.into(), addr.port().to_string().into()));
         }
 
         // Assemble the rustflags by peering into the `.cargo/config.toml` file
