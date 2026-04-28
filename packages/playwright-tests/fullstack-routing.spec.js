@@ -94,3 +94,34 @@ test("click home link from blog", async ({ page }) => {
   const text = await page.textContent("body");
   expect(text).toContain("Home");
 });
+
+test("Link applies active and inactive classes correctly", async ({ page }) => {
+  await page.goto("http://localhost:8888/class");
+
+  const linkHome = page.locator("#link-home");
+  const linkOther = page.locator("#link-other");
+
+  // Initial SSR state 
+  // Home link should be active
+  await expect(linkHome).toHaveClass(/base-class class-active/);
+  await expect(linkHome).not.toHaveClass(/class-inactive/);
+  
+  // Other link should be inactive
+  await expect(linkOther).toHaveClass(/base-class class-inactive/);
+  await expect(linkOther).not.toHaveClass(/class-active/);
+
+  // Perform SPA navigation 
+  await linkOther.click();
+
+  // Wait for route change
+  await expect(page).toHaveURL(/\/class\/other/);
+
+  // After navigation 
+  // Home link becomes inactive
+  await expect(linkHome).toHaveClass(/base-class class-inactive/);
+  await expect(linkHome).not.toHaveClass(/class-active/);
+  
+  // Other link becomes active
+  await expect(linkOther).toHaveClass(/base-class class-active/);
+  await expect(linkOther).not.toHaveClass(/class-inactive/);
+});

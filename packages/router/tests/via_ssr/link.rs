@@ -238,6 +238,140 @@ fn with_active_class_inactive() {
 }
 
 #[test]
+fn with_inactive_class_active() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+    }
+
+    #[component]
+    fn Root() -> Element {
+        rsx! {
+            Link {
+                to: Route::Root {},
+                inactive_class: "inactive_class",
+                class: "test_class",
+                "Link"
+            }
+        }
+    }
+
+    let expected = format!(
+        "<h1>App</h1><a {href} {class} {aria}>Link</a>",
+        href = r#"href="/""#,
+        class = r#"class="test_class""#,
+        aria = r#"aria-current="page""#,
+    );
+
+    assert_eq!(prepare::<Route>(), expected);
+}
+
+#[test]
+fn with_inactive_class_inactive() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[component]
+    fn Test() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Root() -> Element {
+        rsx! {
+            Link {
+                to: Route::Test {},
+                inactive_class: "inactive_class",
+                class: "test_class",
+                "Link"
+            }
+        }
+    }
+
+    let expected = format!(
+        "<h1>App</h1><a {href} {class}>Link</a>",
+        href = r#"href="/test""#,
+        class = r#"class="test_class inactive_class""#,
+    );
+
+    assert_eq!(prepare::<Route>(), expected);
+}
+
+#[test]
+fn with_active_and_inactive_class_active() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+    }
+
+    #[component]
+    fn Root() -> Element {
+        rsx! {
+            Link {
+                to: Route::Root {},
+                active_class: "active_class",
+                inactive_class: "inactive_class",
+                class: "test_class",
+                "Link"
+            }
+        }
+    }
+
+    let expected = format!(
+        "<h1>App</h1><a {href} {class} {aria}>Link</a>",
+        href = r#"href="/""#,
+        class = r#"class="test_class active_class""#,
+        aria = r#"aria-current="page""#,
+    );
+
+    assert_eq!(prepare::<Route>(), expected);
+}
+
+#[test]
+fn with_active_and_inactive_class_inactive() {
+    #[derive(Routable, Clone)]
+    enum Route {
+        #[route("/")]
+        Root {},
+        #[route("/test")]
+        Test {},
+    }
+
+    #[component]
+    fn Test() -> Element {
+        unimplemented!()
+    }
+
+    #[component]
+    fn Root() -> Element {
+        rsx! {
+            Link {
+                to: Route::Test {},
+                active_class: "active_class",
+                inactive_class: "inactive_class",
+                class: "test_class",
+                "Link"
+            }
+        }
+    }
+
+    let expected = format!(
+        "<h1>App</h1><a {href} {class}>Link</a>",
+        href = r#"href="/test""#,
+        class = r#"class="test_class inactive_class""#,
+    );
+
+    assert_eq!(prepare::<Route>(), expected);
+}
+
+#[test]
 fn with_id() {
     #[derive(Routable, Clone)]
     enum Route {

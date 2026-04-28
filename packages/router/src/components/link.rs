@@ -22,6 +22,9 @@ pub struct LinkProps {
     /// A class to apply to the generate HTML anchor tag if the `target` route is active.
     pub active_class: Option<String>,
 
+    /// A class to apply to the generated HTML anchor tag if the `target` route is not active.
+    pub inactive_class: Option<String>,
+
     /// The children to render within the generated HTML anchor tag.
     pub children: Element,
 
@@ -84,6 +87,14 @@ impl Debug for LinkProps {
 /// However, in the background a [`Link`] still generates an anchor, which you can use for styling
 /// as normal.
 ///
+/// # Classes
+/// - `class`, if provided, is applied to the generated `<a>` element.
+/// - `active_class`, if provided, is appended (space-separated) when the current route matches the `target`.
+/// - `inactive_class`, if provided, is appended (space-separated) when the current route does not match the `target`.
+///
+/// When multiple class values are applied, they are concatenated with a space in the order:
+/// `class` -> `active_class` / `inactive_class`.
+///
 /// # External targets
 /// When the [`Link`]s target is an [`NavigationTarget::External`] target, that is used as the `href` directly. This
 /// means that a [`Link`] can always navigate to an [`NavigationTarget::External`] target, even if the [`dioxus_history::History`] does not support it.
@@ -114,6 +125,7 @@ impl Debug for LinkProps {
 ///     rsx! {
 ///         Link {
 ///             active_class: "active",
+///             inactive_class: "inactive",
 ///             class: "link_class",
 ///             id: "link_id",
 ///             new_tab: true,
@@ -137,6 +149,7 @@ impl Debug for LinkProps {
 pub fn Link(props: LinkProps) -> Element {
     let LinkProps {
         active_class,
+        inactive_class,
         children,
         attributes,
         new_tab,
@@ -172,23 +185,16 @@ pub fn Link(props: LinkProps) -> Element {
         NavigationTarget::External(route) => route.clone(),
     };
 
-    let mut class_ = String::new();
-    if let Some(c) = class {
-        class_.push_str(&c);
-    }
-    if let Some(c) = active_class
-        && href == current_url
-    {
-        if !class_.is_empty() {
-            class_.push(' ');
-        }
-        class_.push_str(&c);
-    }
-
-    let class = if class_.is_empty() {
-        None
+    let extra_class = if href.trim_end_matches("/") == current_url.trim_end_matches("/") {
+        active_class
     } else {
-        Some(class_)
+        inactive_class
+    };
+    let class = match (class, extra_class) {
+        (None, None) => None,
+        (None, Some(s)) => Some(s),
+        (Some(s), None) => Some(s),
+        (Some(active), Some(inactive)) => Some(format!("{active} {inactive}")),
     };
 
     let aria_current = (href == current_url).then_some("page");
