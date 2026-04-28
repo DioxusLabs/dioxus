@@ -50,7 +50,7 @@ fn hash_file(options: &AssetOptions, source: &Path) -> anyhow::Result<AssetHash>
 
     // Hash the version of the CLI
     hash.write(crate::dx_build_info::PKG_VERSION.as_bytes());
-    hash_file_with_options(options, source, &mut hash, false)?;
+    hash_file_with_options(options, source, &mut hash)?;
 
     let hash = hash.finish();
     Ok(AssetHash::new(hash))
@@ -61,7 +61,6 @@ pub(crate) fn hash_file_with_options(
     options: &AssetOptions,
     source: &Path,
     hasher: &mut impl Hasher,
-    in_folder: bool,
 ) -> anyhow::Result<()> {
     let resolved_options = resolve_asset_options(source, options.variant());
 
@@ -73,7 +72,7 @@ pub(crate) fn hash_file_with_options(
         }
 
         ResolvedAssetType::Js(options) => {
-            hash_js(options, source, hasher, !in_folder)?;
+            hash_js(options, source, hasher)?;
         }
 
         // Otherwise, we can just hash the file contents
@@ -100,7 +99,6 @@ pub(crate) fn hash_file_with_options(
                         .into_asset_options(),
                     &path,
                     hasher,
-                    true,
                 )?;
             }
         }

@@ -63,4 +63,47 @@ for (let { port, name } of test_variants) {
     );
   });
 
+  // Regression coverage for https://github.com/DioxusLabs/dioxus/issues/5512.
+  // Both files are vanilla IIFE scripts injected via `with_static_head(true)`.
+  // The 0.7.4–0.7.6 esbuild path wrapped them in a wrapper IIFE / `--format=esm`,
+  // which dropped the global side-effect and produced `export` syntax under a
+  // classic `<script>` tag. The asserted globals only get set if the file is
+  // delivered as a classic script with its body intact.
+  test(`classic js asset with_minify(false) is copied byte-for-byte in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    const value = await page.evaluate(() => window.__iife_classic_value);
+    expect(value).toBe("ok-classic");
+  });
+
+  test(`classic js asset with_minify(true) stays a classic script in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    const value = await page.evaluate(() => window.__iife_minify_value);
+    expect(value).toBe("ok-minify");
+  });
+
+  // `with_module(true)` should emit `<script type="module">` and preserve
+  // module syntax during minification. The fixture uses `import.meta.url`,
+  // which only parses when the script tag has `type="module"`.
+  test(`js asset with_module(true) is loaded as an ES module in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    const value = await page.evaluate(() => window.__esm_module_value);
+    expect(value).toBe("ok-module");
+    const moduleScript = page.locator('script[type="module"][src*="esm_module"]');
+    await expect(moduleScript).toHaveCount(1);
+  });
+
+  // Auto-detection: the CLI's has_module_syntax scan should recognise top-level
+  // `export` and emit `<script type="module">` even without `with_module(true)`.
+  test(`js asset with top-level export is auto-detected as ES module in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    const value = await page.evaluate(() => window.__esm_auto_value);
+    expect(value).toBe("ok-auto");
+    // import.meta only parses inside a real module; if the script were emitted
+    // as classic the file would have errored at parse time.
+    const metaType = await page.evaluate(() => window.__esm_auto_meta);
+    expect(metaType).toBe("string");
+    const moduleScript = page.locator('script[type="module"][src*="esm_auto"]');
+    await expect(moduleScript).toHaveCount(1);
+  });
+
 }
