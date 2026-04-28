@@ -59,7 +59,10 @@ impl<'a> Writer<'a> {
         if let Some(span) = body.span {
             self.out.indent_level += 1;
             let comments = self.accumulate_full_line_comments(span.span().end());
-            if !comments.is_empty() {
+            let has_real_comment = comments
+                .iter()
+                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+            if has_real_comment {
                 self.out.new_line()?;
                 self.apply_line_comments(comments)?;
                 self.out.buf.pop(); // remove the trailing newline, forcing us to end at the end of the comment
@@ -252,11 +255,19 @@ impl<'a> Writer<'a> {
 
     pub fn write_body_nodes(&mut self, children: &[BodyNode]) -> Result {
         let mut iter = children.iter().peekable();
+        let mut is_first = true;
 
         while let Some(child) = iter.next() {
             if self.current_span_is_primary(child.span().start()) {
-                self.write_comments(child.span().start())?;
+                let comments = self.accumulate_full_line_comments(child.span().start());
+                let has_real_comment = comments
+                    .iter()
+                    .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+                if has_real_comment || !is_first {
+                    self.apply_line_comments(comments)?;
+                }
             };
+            is_first = false;
             self.out.tab()?;
             self.write_ident(child)?;
             if iter.peek().is_some() {
@@ -360,8 +371,10 @@ impl<'a> Writer<'a> {
             self.write_todo_body(brace)?;
         }
 
-        // multiline handlers bump everything down
-        if attr_len > 1000 || self.out.indent.split_line_attributes() {
+        // multiline handlers bump everything down, but not empty blocks
+        if !matches!(opt_level, ShortOptimization::Empty)
+            && (attr_len > 1000 || self.out.indent.split_line_attributes())
+        {
             opt_level = ShortOptimization::NoOpt;
         }
 
@@ -410,7 +423,9 @@ impl<'a> Writer<'a> {
                 self.write_attributes(attributes, spreads, false, brace, has_children)?;
 
                 if !children.is_empty() {
-                    self.out.new_line()?;
+                    if !attributes.is_empty() || !spreads.is_empty() {
+                        self.out.new_line()?;
+                    }
                     self.write_body_indented(children)?;
                 }
 
@@ -425,7 +440,10 @@ impl<'a> Writer<'a> {
         ) && self.leading_row_is_empty(brace.span.span().end())
         {
             let comments = self.accumulate_full_line_comments(brace.span.span().end());
-            if !comments.is_empty() {
+            let has_real_comment = comments
+                .iter()
+                .any(|&id| self.src.get(id).is_some_and(|l| l.trim().starts_with("//")));
+            if has_real_comment {
                 // Undo the tab from tabbed_line(). It positioned for the closing
                 // brace, but trailing comments need child-level indentation
                 let tab_width = self.out.indent.indent_str().len() * self.out.indent_level;
@@ -526,8 +544,20 @@ impl<'a> Writer<'a> {
     fn write_attribute(&mut self, attr: &Attribute) -> Result {
         self.write_attribute_name(&attr.name)?;
 
-        // if the attribute is a shorthand, we don't need to write the colon, just the name
         if !attr.can_be_shorthand() {
+            if let AttributeValue::IfExpr(if_chain) = &attr.value {
+                let inline_len = self.attr_value_len(&attr.value);
+                let line_budget = 80usize.saturating_sub(self.out.indent_level * 4);
+                if inline_len > line_budget {
+                    write!(self.out, ":")?;
+                    self.out.indent_level += 1;
+                    self.out.new_line()?;
+                    self.out.tab()?;
+                    self.write_attribute_if_chain_multiline(if_chain)?;
+                    self.out.indent_level -= 1;
+                    return Ok(());
+                }
+            }
             write!(self.out, ": ")?;
             self.write_attribute_value(&attr.value)?;
         }
@@ -570,6 +600,17 @@ impl<'a> Writer<'a> {
     }
 
     fn write_attribute_if_chain(&mut self, if_chain: &IfAttributeValue) -> Result {
+        let inline_len = self.attr_value_len(&AttributeValue::IfExpr(if_chain.clone()));
+        let line_budget = 80usize.saturating_sub(self.out.indent_level * 4);
+
+        if inline_len <= line_budget {
+            self.write_attribute_if_chain_inline(if_chain)
+        } else {
+            self.write_attribute_if_chain_multiline(if_chain)
+        }
+    }
+
+    fn write_attribute_if_chain_inline(&mut self, if_chain: &IfAttributeValue) -> Result {
         let cond = self.unparse_expr(&if_chain.if_expr.cond);
         write!(self.out, "if {cond} {{ ")?;
         self.write_attribute_value(&if_chain.then_value)?;
@@ -577,7 +618,7 @@ impl<'a> Writer<'a> {
         match if_chain.else_value.as_deref() {
             Some(AttributeValue::IfExpr(else_if_chain)) => {
                 write!(self.out, " else ")?;
-                self.write_attribute_if_chain(else_if_chain)?;
+                self.write_attribute_if_chain_inline(else_if_chain)?;
             }
             Some(other) => {
                 write!(self.out, " else {{ ")?;
@@ -586,7 +627,40 @@ impl<'a> Writer<'a> {
             }
             None => {}
         }
+        Ok(())
+    }
 
+    fn write_attribute_if_chain_multiline(&mut self, if_chain: &IfAttributeValue) -> Result {
+        let base = self.out.indent_level;
+        let cond = self.unparse_expr(&if_chain.if_expr.cond);
+        write!(self.out, "if {cond} {{")?;
+        self.out.indent_level = base + 1;
+        self.out.new_line()?;
+        self.out.tab()?;
+        self.write_attribute_value(&if_chain.then_value)?;
+        self.out.indent_level = base;
+        self.out.new_line()?;
+        self.out.tab()?;
+        write!(self.out, "}}")?;
+        match if_chain.else_value.as_deref() {
+            Some(AttributeValue::IfExpr(else_if_chain)) => {
+                write!(self.out, " else ")?;
+                self.write_attribute_if_chain_multiline(else_if_chain)?;
+            }
+            Some(other) => {
+                write!(self.out, " else {{")?;
+                self.out.indent_level = base + 1;
+                self.out.new_line()?;
+                self.out.tab()?;
+                self.write_attribute_value(other)?;
+                self.out.indent_level = base;
+                self.out.new_line()?;
+                self.out.tab()?;
+                write!(self.out, "}}")?;
+            }
+            None => {}
+        }
+        self.out.indent_level = base;
         Ok(())
     }
 
@@ -838,18 +912,24 @@ impl<'a> Writer<'a> {
             return Ok(());
         }
 
+        let comments: Vec<&str> = (start.line..end.line)
+            .filter_map(|idx| {
+                let line = self.src.get(idx)?;
+                line.trim().starts_with("//").then_some(line.trim())
+            })
+            .collect();
+
+        if comments.is_empty() {
+            return Ok(());
+        }
+
         writeln!(self.out)?;
 
-        for idx in start.line..end.line {
-            let Some(line) = self.src.get(idx) else {
-                continue;
-            };
-            if line.trim().starts_with("//") {
-                for _ in 0..self.out.indent_level + 1 {
-                    write!(self.out, "    ")?
-                }
-                writeln!(self.out, "{}", line.trim())?;
+        for comment in &comments {
+            for _ in 0..self.out.indent_level + 1 {
+                write!(self.out, "    ")?
             }
+            writeln!(self.out, "{comment}")?;
         }
 
         for _ in 0..self.out.indent_level {

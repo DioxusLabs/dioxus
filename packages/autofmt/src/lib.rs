@@ -113,7 +113,6 @@ pub fn try_fmt_file(
 
         let span = item.delimiter.span().join();
         let mut formatted = writer.out.buf.split_off(0);
-
         let start = collect_macros::byte_offset(contents, span.start()) + 1;
         let end = collect_macros::byte_offset(contents, span.end()) - 1;
 
