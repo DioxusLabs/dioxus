@@ -1,4 +1,5 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use crate::{
     Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
@@ -67,6 +68,13 @@ pub struct BuildTargets {
     pub server: Option<BuildRequest>,
 }
 
+fn ssg_address() -> SocketAddr {
+    let ip = dioxus_cli_config::server_ip()
+        .unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+    let port = dioxus_cli_config::server_port().unwrap_or(9999);
+    SocketAddr::new(ip, port)
+}
+
 impl CommandWithPlatformOverrides<BuildArgs> {
     /// We need to decompose the combined `BuildArgs` into the individual targets that we need to build.
     ///
@@ -124,9 +132,12 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                         .bundle
                         .or(Some(BundleFormat::Server));
 
-                    server = Some(
-                        BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?,
-                    );
+                    let mut request =
+                        BuildRequest::new(&server_args.build_arguments, workspace.clone()).await?;
+                    if self.shared.ssg {
+                        request.ssg_address = Some(ssg_address());
+                    }
+                    server = Some(request);
                 }
                 None if client_args.platform == Platform::Server => {
                     // If the user requests a server build with `--server`, then we don't need to build a separate server binary.
@@ -138,7 +149,11 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     args.renderer = Some(crate::Renderer::Server);
                     args.bundle = Some(crate::BundleFormat::Server);
                     args.target = Some(target_lexicon::Triple::host());
-                    server = Some(BuildRequest::new(&args, workspace.clone()).await?);
+                    let mut request = BuildRequest::new(&args, workspace.clone()).await?;
+                    if self.shared.ssg {
+                        request.ssg_address = Some(ssg_address());
+                    }
+                    server = Some(request);
                 }
             }
         }

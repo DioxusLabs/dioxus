@@ -2089,11 +2089,14 @@ impl AppBuilder {
         }
         let server_exe = self.build.main_exe();
 
-        // Use the address passed in through environment variables or default to localhost:9999. We need
-        // to default to a value that is different than the CLI default address to avoid conflicts
-        let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
-        let port = server_port().unwrap_or(9999);
-        let fullstack_address = SocketAddr::new(ip, port);
+        // Use the SSG address baked into release server builds. If this builder was created without
+        // an SSG address (for example from `dx serve`), fall back to the environment or localhost:9999.
+        // The default port intentionally differs from the devserver default to avoid conflicts.
+        let fullstack_address = self.build.ssg_address.unwrap_or_else(|| {
+            let ip = server_ip().unwrap_or_else(|| IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)));
+            let port = server_port().unwrap_or(9999);
+            SocketAddr::new(ip, port)
+        });
         let address = fullstack_address.ip().to_string();
         let port = fullstack_address.port().to_string();
 

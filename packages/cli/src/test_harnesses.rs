@@ -56,6 +56,11 @@ async fn test_harnesses() {
                 let server = t.server.unwrap();
                 assert_eq!(server.bundle, BundleFormat::Server);
                 assert_eq!(server.triple, Triple::host());
+            })
+            .asrt(r#"dx build --ssg"#, |targets| async move {
+                let t = targets.unwrap();
+                let server = t.server.unwrap();
+                assert!(server.ssg_address.is_some());
             }),
         TestHarnessBuilder::new("harness-simple-fullstack-with-default")
             .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
