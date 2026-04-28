@@ -126,9 +126,12 @@ fn empty_component_body_is_idempotent() {
 #[test]
 fn empty_braces_match_arm_is_idempotent() {
     let src = include_str!("./samples/empty_braces_match_arm.rsx");
-    let once = dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
-    let twice = dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
-    let thrice = dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
+    let once =
+        dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
+    let twice =
+        dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
+    let thrice =
+        dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
     pretty_assertions::assert_eq!(&once, &twice, "pass 1 vs pass 2");
     pretty_assertions::assert_eq!(&twice, &thrice, "pass 2 vs pass 3");
 }
@@ -136,9 +139,12 @@ fn empty_braces_match_arm_is_idempotent() {
 #[test]
 fn empty_braces_no_space_is_idempotent() {
     let src = "rsx! { Router::<Route>{}}";
-    let once = dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
-    let twice = dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
-    let thrice = dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
+    let once =
+        dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
+    let twice =
+        dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
+    let thrice =
+        dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
     eprintln!("=== ONCE ===\n{once}");
     eprintln!("=== TWICE ===\n{twice}");
     eprintln!("=== THRICE ===\n{thrice}");
@@ -149,9 +155,12 @@ fn empty_braces_no_space_is_idempotent() {
 #[test]
 fn empty_braces_oneliner_is_idempotent() {
     let src = r#"rsx! { Router::<Route>{}}"#;
-    let once = dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
-    let twice = dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
-    let thrice = dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
+    let once =
+        dioxus_autofmt::apply_formats(src, dioxus_autofmt::fmt_file(src, Default::default()));
+    let twice =
+        dioxus_autofmt::apply_formats(&once, dioxus_autofmt::fmt_file(&once, Default::default()));
+    let thrice =
+        dioxus_autofmt::apply_formats(&twice, dioxus_autofmt::fmt_file(&twice, Default::default()));
     pretty_assertions::assert_eq!(&once, &twice, "pass 1 vs pass 2");
     pretty_assertions::assert_eq!(&twice, &thrice, "pass 2 vs pass 3");
 }
