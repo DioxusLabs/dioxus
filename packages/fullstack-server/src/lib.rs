@@ -39,6 +39,7 @@ pub(crate) mod streaming;
 
 pub use launch::router;
 pub use launch::serve;
+pub use launch::serve_at;
 
 pub mod serverfn;
 pub use serverfn::*;

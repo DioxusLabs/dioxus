@@ -111,16 +111,44 @@ pub fn router(app: fn() -> Element) -> Router {
 /// The axum router will be bound to the address specified by the `IP` and `PORT` environment variables,
 /// defaulting to `127.0.0.1:8080` if not set.
 ///
+/// To bind to a specific address, use [`serve_at`] instead.
+///
 /// This function uses axum to block on serving the application, and will not return.
-pub fn serve<F>(mut serve_it: impl FnMut() -> F) -> !
+pub fn serve<F>(serve_it: impl FnMut() -> F) -> !
+where
+    F: Future<Output = Result<Router, anyhow::Error>> + 'static,
+{
+    serve_at(
+        dioxus_cli_config::fullstack_address_or_localhost(),
+        serve_it,
+    )
+}
+
+/// Serve a fullstack dioxus application with a custom axum router, bound to the given address.
+///
+/// This is the same as [`serve`], but allows you to specify the address to bind to programmatically
+/// instead of relying on the `IP` and `PORT` environment variables.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use std::net::SocketAddr;
+///
+/// let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
+/// dioxus::serve_at(addr, || async {
+///     Ok(dioxus::server::router(app)
+///         .route("/health", axum::routing::get(|| async { "ok" })))
+/// });
+/// ```
+///
+/// This function uses axum to block on serving the application, and will not return.
+pub fn serve_at<F>(addr: SocketAddr, mut serve_it: impl FnMut() -> F) -> !
 where
     F: Future<Output = Result<Router, anyhow::Error>> + 'static,
 {
     let cb = move || Box::pin(serve_it()) as _;
 
-    block_on(
-        async move { serve_router(cb, dioxus_cli_config::fullstack_address_or_localhost()).await },
-    );
+    block_on(async move { serve_router(cb, addr).await });
 
     unreachable!("Serving a fullstack app should never return")
 }
