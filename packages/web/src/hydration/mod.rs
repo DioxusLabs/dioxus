@@ -9,21 +9,37 @@ mod hydrate;
 pub(crate) mod validation;
 
 #[cfg(feature = "hydrate")]
-use dioxus_core::{TemplateNode, VNode, VirtualDom};
+use crate::dom::WebsysDom;
+#[cfg(feature = "hydrate")]
+use dioxus_core::{ScopeId, TemplateNode, VNode, VirtualDom};
+#[cfg(feature = "hydrate")]
+use hydrate::{finalize_hydrate, HydrationOutputs, RehydrationError};
 
 #[cfg(feature = "hydrate")]
 pub(crate) trait HydrationSession {
-    fn run_scope<E, F, P, R>(
+    type RecoveryAnchor;
+
+    fn root_recovery(&self) -> Self::RecoveryAnchor;
+
+    fn streaming_recovery(&self, anchor: &web_sys::Element) -> Self::RecoveryAnchor;
+
+    /// Run the full hydration pass for one scope: walk the vnode (via
+    /// `hydrate`), validate against the DOM, then either finalize the match
+    /// or fall back to a client rebuild. The session owns the whole flow so
+    /// the caller doesn't need to dispatch on outcome.
+    fn run_scope<E, F>(
         &mut self,
-        roots: Vec<web_sys::Node>,
-        suspense_path: P,
-        expected_rsx: R,
+        websys: &mut WebsysDom,
+        dom: &mut VirtualDom,
+        scope_id: ScopeId,
+        under: Vec<web_sys::Node>,
+        recovery: Self::RecoveryAnchor,
+        suspense_path: Option<Vec<u32>>,
         hydrate: F,
-    ) -> Result<bool, E>
+    ) -> Result<(), E>
     where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-        P: FnOnce() -> Option<Vec<u32>>,
-        R: FnOnce() -> Result<String, E>;
+        E: From<RehydrationError>,
+        F: FnOnce(&mut WebsysDom, &mut VirtualDom, &mut Self) -> Result<HydrationOutputs, E>;
 
     fn element<E, F>(
         &mut self,
@@ -55,20 +71,28 @@ pub(crate) struct NoopHydrationSession;
 
 #[cfg(feature = "hydrate")]
 impl HydrationSession for NoopHydrationSession {
-    fn run_scope<E, F, P, R>(
+    type RecoveryAnchor = ();
+
+    fn root_recovery(&self) {}
+    fn streaming_recovery(&self, _: &web_sys::Element) {}
+
+    fn run_scope<E, F>(
         &mut self,
-        _: Vec<web_sys::Node>,
-        _: P,
-        _: R,
+        websys: &mut WebsysDom,
+        dom: &mut VirtualDom,
+        _: ScopeId,
+        under: Vec<web_sys::Node>,
+        _: Self::RecoveryAnchor,
+        _: Option<Vec<u32>>,
         hydrate: F,
-    ) -> Result<bool, E>
+    ) -> Result<(), E>
     where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-        P: FnOnce() -> Option<Vec<u32>>,
-        R: FnOnce() -> Result<String, E>,
+        E: From<RehydrationError>,
+        F: FnOnce(&mut WebsysDom, &mut VirtualDom, &mut Self) -> Result<HydrationOutputs, E>,
     {
-        hydrate(self)?;
-        Ok(false)
+        let outputs = hydrate(websys, dom, self)?;
+        finalize_hydrate(websys, outputs, under);
+        Ok(())
     }
 
     fn element<E, F>(
@@ -116,21 +140,6 @@ pub(crate) fn session() -> impl HydrationSession {
     #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
     {
         NoopHydrationSession
-    }
-}
-
-#[cfg(feature = "hydrate")]
-pub(crate) fn serialize_vnode_subtree(dom: &VirtualDom, vnode: &VNode) -> String {
-    #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-    {
-        validation::serialize::serialize_vnode_subtree(dom, vnode)
-    }
-
-    #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-    {
-        let _ = dom;
-        let _ = vnode;
-        String::new()
     }
 }
 

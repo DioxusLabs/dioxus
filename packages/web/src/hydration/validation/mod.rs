@@ -8,7 +8,10 @@ mod attrs;
 mod diff;
 pub(super) mod serialize;
 
-use dioxus_core::{TemplateAttribute, TemplateNode, VNode, VirtualDom};
+use dioxus_core::{
+    CreateScopeDomError, ElementId, ScopeId, TemplateAttribute, TemplateNode, VNode, VirtualDom,
+    WriteMutations,
+};
 use wasm_bindgen::JsCast;
 
 use self::{
@@ -17,9 +20,12 @@ use self::{
     serialize::{
         dom::{serialize_dom_nodes, serialize_dom_subtree, should_skip_validation_node},
         format_rsx_nodes, missing_node, placeholder_node,
+        serialize_vnode_subtree,
         vdom::{serialize_dangerous_inner_html, serialize_template_subtree},
     },
 };
+use super::hydrate::{child_nodes, finalize_hydrate, HydrationOutputs, RehydrationError};
+use crate::dom::WebsysDom;
 
 /// Information about a hydration mismatch between the expected vdom and actual DOM
 #[derive(Debug)]
@@ -77,18 +83,10 @@ impl DomTraverser {
 
     /// Create a traverser for the children of the current node
     pub fn children(&self) -> Self {
-        let Some(current) = self.current() else {
-            return Self::new(Vec::new());
-        };
-
-        let mut children = Vec::new();
-        let mut child = current.first_child();
-        while let Some(node) = child {
-            children.push(node.clone());
-            child = node.next_sibling();
+        match self.current() {
+            Some(current) => Self::new(child_nodes(current)),
+            None => Self::new(Vec::new()),
         }
-
-        Self::new(children)
     }
 }
 
@@ -110,35 +108,73 @@ pub(crate) struct HydrationValidationSession {
     element_stack: Vec<ElementMismatchContext>,
 }
 
-impl super::HydrationSession for HydrationValidationSession {
-    fn run_scope<E, F, P, R>(
-        &mut self,
-        roots: Vec<web_sys::Node>,
-        suspense_path: P,
-        expected_rsx: R,
-        hydrate: F,
-    ) -> Result<bool, E>
-    where
-        F: FnOnce(&mut Self) -> Result<(), E>,
-        P: FnOnce() -> Option<Vec<u32>>,
-        R: FnOnce() -> Result<String, E>,
-    {
-        self.init_traversal(roots);
-        self.push_root_marker();
-        let result = (|| {
-            hydrate(self)?;
-            self.report_extra_scope_nodes(expected_rsx()?);
-            let has_mismatches = self.has_mismatches();
-            if has_mismatches {
-                let suspense_path = suspense_path();
-                self.report_mismatches(suspense_path.as_deref());
-                self.take_mismatches(suspense_path.as_deref());
-            }
+#[derive(Debug)]
+pub(crate) enum RecoveryAnchor {
+    /// Initial hydration: clear `under` and rebuild into `ElementId(0)`.
+    Root,
+    /// Streaming suspense: the wrapper element is being removed, so splice the
+    /// rebuilt fragment in between these siblings.
+    Streaming {
+        parent: web_sys::Node,
+        next_sibling: Option<web_sys::Node>,
+    },
+}
 
-            Ok(has_mismatches)
+impl From<CreateScopeDomError> for RehydrationError {
+    fn from(_: CreateScopeDomError) -> Self {
+        Self::VNodeNotInitialized
+    }
+}
+
+impl super::HydrationSession for HydrationValidationSession {
+    type RecoveryAnchor = RecoveryAnchor;
+
+    fn root_recovery(&self) -> Self::RecoveryAnchor {
+        RecoveryAnchor::Root
+    }
+
+    fn streaming_recovery(&self, anchor: &web_sys::Element) -> Self::RecoveryAnchor {
+        RecoveryAnchor::Streaming {
+            parent: anchor
+                .parent_node()
+                .expect("streaming recovery requires a parent anchor"),
+            next_sibling: anchor.next_sibling(),
+        }
+    }
+
+    fn run_scope<E, F>(
+        &mut self,
+        websys: &mut WebsysDom,
+        dom: &mut VirtualDom,
+        scope_id: ScopeId,
+        under: Vec<web_sys::Node>,
+        recovery: Self::RecoveryAnchor,
+        suspense_path: Option<Vec<u32>>,
+        hydrate: F,
+    ) -> Result<(), E>
+    where
+        E: From<RehydrationError>,
+        F: FnOnce(&mut WebsysDom, &mut VirtualDom, &mut Self) -> Result<HydrationOutputs, E>,
+    {
+        self.init_traversal(validation_roots(scope_id, dom, &under));
+        self.push_root_marker();
+        let outcome = (|| -> Result<(), E> {
+            let outputs = hydrate(websys, dom, self)?;
+            let scope = dom
+                .get_scope(scope_id)
+                .ok_or(RehydrationError::VNodeNotInitialized)?;
+            self.report_extra_scope_nodes(serialize_vnode_subtree(dom, scope.root_node()));
+            if !self.has_mismatches() {
+                finalize_hydrate(websys, outputs, under);
+                return Ok(());
+            }
+            self.report_mismatches(suspense_path.as_deref());
+            self.take_mismatches(suspense_path.as_deref());
+            self.recover(websys, dom, scope_id, &under, recovery)?;
+            Ok(())
         })();
         self.pop_root_marker();
-        result
+        outcome
     }
 
     fn element<E, F>(
@@ -250,6 +286,64 @@ impl super::HydrationSession for HydrationValidationSession {
 }
 
 impl HydrationValidationSession {
+    fn recover(
+        &mut self,
+        websys: &mut WebsysDom,
+        vdom: &mut VirtualDom,
+        scope_id: ScopeId,
+        under: &[web_sys::Node],
+        recovery: RecoveryAnchor,
+    ) -> Result<(), RehydrationError> {
+        tracing::warn!("Hydration mismatches detected in scope {scope_id:?}. Rebuilding subtree.");
+
+        match recovery {
+            RecoveryAnchor::Root => {
+                let m = vdom.create_scope_dom(websys, scope_id)?;
+
+                if let Some(root) = under.first() {
+                    while let Some(child) = root.first_child() {
+                        let _ = root.remove_child(&child);
+                    }
+                }
+
+                websys.append_children(ElementId(0), m);
+                websys.flush_edits();
+            }
+            RecoveryAnchor::Streaming {
+                parent,
+                next_sibling,
+            } => {
+                let fragment = websys.document.create_document_fragment();
+                websys.interpreter.base().push_root(fragment.clone().into());
+                let m = match vdom.create_scope_dom(websys, scope_id) {
+                    Ok(m) => m,
+                    Err(err) => {
+                        websys.interpreter.pop_root();
+                        return Err(err.into());
+                    }
+                };
+                websys.interpreter.append_children_to_top(m as u16);
+                websys.interpreter.pop_root();
+                websys.interpreter.flush();
+
+                for node in under {
+                    if let Some(parent) = node.parent_node() {
+                        let _ = parent.remove_child(node);
+                    }
+                }
+
+                while let Some(child) = fragment.first_child() {
+                    let _ = parent.insert_before(&child, next_sibling.as_ref());
+                }
+
+                #[cfg(feature = "mounted")]
+                websys.flush_queued_mounted_events();
+            }
+        }
+
+        Ok(())
+    }
+
     /// Initialize traversal with the root nodes
     pub fn init_traversal(&mut self, roots: Vec<web_sys::Node>) {
         self.traverser_stack.clear();
@@ -487,14 +581,7 @@ impl HydrationValidationSession {
             return;
         };
 
-        let mut children = Vec::new();
-        let mut child = element.first_child();
-        while let Some(node) = child {
-            children.push(node.clone());
-            child = node.next_sibling();
-        }
-
-        let actual_inner_html_rsx = serialize_dom_nodes(&children);
+        let actual_inner_html_rsx = serialize_dom_nodes(&child_nodes(element));
         if normalize_debug_rsx(expected_inner_html_rsx)
             != normalize_debug_rsx(&actual_inner_html_rsx)
         {
@@ -629,6 +716,21 @@ impl HydrationValidationSession {
             component_path: self.component_path(),
             suspense_path: None,
         });
+    }
+}
+
+/// The DOM siblings the validation session should walk in parallel with the
+/// scope's vnode roots. `under` is the document root for the base scope and
+/// the sibling list for every other scope.
+fn validation_roots(
+    scope_id: ScopeId,
+    dom: &VirtualDom,
+    under: &[web_sys::Node],
+) -> Vec<web_sys::Node> {
+    if scope_id == dom.base_scope().id() {
+        under.first().map(child_nodes).unwrap_or_default()
+    } else {
+        under.to_vec()
     }
 }
 

@@ -3,14 +3,12 @@
 //! 2. As we render the virtual dom initially, keep track of the server ids of the suspense boundaries
 //! 3. Register a callback for dx_hydrate(id, data) that takes some new data, reruns the suspense boundary with that new data and then rehydrates the node
 
-use super::{serialize_vnode_subtree, session, HydrationSession, SuspenseMessage};
+use super::{session, HydrationSession, SuspenseMessage};
 use crate::dom::WebsysDom;
 use dioxus_core::{
     AttributeValue, DynamicNode, ElementId, ScopeId, ScopeState, SuspenseBoundaryProps,
     SuspenseContext, TemplateNode, VNode, VirtualDom,
 };
-#[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-use dioxus_core::{CreateScopeDomError, WriteMutations};
 use dioxus_fullstack_core::HydrationContext;
 use futures_channel::mpsc::UnboundedReceiver;
 use std::fmt::Write;
@@ -27,30 +25,26 @@ pub(crate) enum RehydrationError {
     ElementNotFound,
 }
 
-#[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-impl From<CreateScopeDomError> for RehydrationError {
-    fn from(_: CreateScopeDomError) -> Self {
-        Self::VNodeNotInitialized
-    }
-}
-
-#[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-#[derive(Debug)]
-struct RecoveryAnchor {
-    parent: web_sys::Node,
-    next_sibling: Option<web_sys::Node>,
-}
-
-#[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-type HydrationRecoveryAnchor = Option<RecoveryAnchor>;
-
-#[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-type HydrationRecoveryAnchor = ();
-
 #[derive(Default)]
-struct HydrationOutputs {
-    ids: Vec<u32>,
-    to_mount: Vec<ElementId>,
+pub(crate) struct HydrationOutputs {
+    pub(super) ids: Vec<u32>,
+    #[cfg_attr(not(feature = "mounted"), allow(dead_code))]
+    pub(super) to_mount: Vec<ElementId>,
+}
+
+/// Apply the success-path finalize: hand the matched ids + DOM nodes off to
+/// the JS interpreter and dispatch any deferred onmounted events.
+pub(crate) fn finalize_hydrate(
+    websys: &mut WebsysDom,
+    outputs: HydrationOutputs,
+    under: Vec<web_sys::Node>,
+) {
+    websys.interpreter.base().hydrate(outputs.ids, under);
+
+    #[cfg(feature = "mounted")]
+    for id in outputs.to_mount {
+        websys.send_mount_event(id);
+    }
 }
 
 #[derive(Debug)]
@@ -146,10 +140,10 @@ impl WebsysDom {
         } = message;
         let mut validation = session();
 
-        let document = web_sys::window().unwrap().document().unwrap();
         // Before we start rehydrating the suspense boundary we need to check that the suspense boundary exists. It may have been removed on the client.
         let resolved_suspense_id = path_to_resolved_suspense_id(&suspense_path);
-        let resolved_suspense_element = document
+        let resolved_suspense_element = self
+            .document
             .get_element_by_id(&resolved_suspense_id)
             .ok_or(RehydrationError::ElementNotFound)?;
 
@@ -161,12 +155,9 @@ impl WebsysDom {
             .ok_or(RehydrationError::SuspenseHydrationIdNotFound)?;
 
         // Push the new nodes onto the stack
-        let mut current_child = resolved_suspense_element.first_child();
-        let mut children = Vec::new();
-        while let Some(node) = current_child {
-            children.push(node.clone());
-            current_child = node.next_sibling();
-            self.interpreter.base().push_root(node);
+        let children = child_nodes(&resolved_suspense_element);
+        for node in &children {
+            self.interpreter.base().push_root(node.clone());
         }
 
         #[cfg(not(debug_assertions))]
@@ -198,24 +189,17 @@ impl WebsysDom {
         self.flush_edits();
 
         // Streaming recovery removes this suspense container, so capture its insertion anchor now while it is still mounted.
-        #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-        let recovery = RecoveryAnchor {
-            parent: resolved_suspense_element
-                .parent_node()
-                .expect("streaming recovery requires a parent anchor"),
-            next_sibling: resolved_suspense_element.next_sibling(),
-        };
-        #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-        let recovery = Some(recovery);
-        #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-        let recovery = ();
+        let recovery = validation.streaming_recovery(&resolved_suspense_element);
 
         // Remove the streaming div
         resolved_suspense_element.remove();
 
         let Some(root_scope) = dom.get_scope(id) else {
-            // If the scope was removed on the client, we may not be able to rehydrate it, but this shouldn't cause an error
-            self.drain_recovery_roots(children.len());
+            // The scope was removed on the client. resolve_suspense bailed before
+            // consuming the pushed roots, so unwind the JS stack manually.
+            for _ in 0..children.len() {
+                self.interpreter.pop_root();
+            }
             return Ok(());
         };
         let root_scope_id = root_scope.id();
@@ -224,128 +208,40 @@ impl WebsysDom {
         self.suspense_hydration_ids
             .current_path
             .clone_from(&suspense_path);
-        let child_count = children.len();
-        let result =
-            self.start_hydration_at_scope(root_scope_id, dom, children, &mut validation, recovery);
-        if result.is_err() {
-            self.drain_recovery_roots(child_count);
-        }
-        result?;
+        // resolve_suspense already consumed the pushed roots via replace_node_with,
+        // so the JS stack is balanced when start_hydration_at_scope runs.
+        self.start_hydration_at_scope(root_scope_id, dom, children, &mut validation, recovery)?;
 
         Ok(())
     }
 
-    fn start_hydration_at_scope(
+    fn start_hydration_at_scope<S: HydrationSession>(
         &mut self,
         scope_id: ScopeId,
         dom: &mut VirtualDom,
         under: Vec<web_sys::Node>,
-        validation: &mut impl HydrationSession,
-        recovery: HydrationRecoveryAnchor,
+        validation: &mut S,
+        recovery: S::RecoveryAnchor,
     ) -> Result<(), RehydrationError> {
-        let mut outputs = HydrationOutputs::default();
         let suspense_path = if scope_id == dom.base_scope().id() {
             None
         } else {
             Some(self.suspense_hydration_ids.current_path.clone())
         };
-        let has_mismatches = validation.run_scope(
-            validation_roots(scope_id, dom, &under),
-            || suspense_path.clone(),
-            || {
+        validation.run_scope(
+            self,
+            dom,
+            scope_id,
+            under,
+            recovery,
+            suspense_path,
+            |websys, dom, validation| {
+                let mut outputs = HydrationOutputs::default();
                 let scope = dom.get_scope(scope_id).ok_or(VNodeNotInitialized)?;
-                Ok(serialize_vnode_subtree(dom, scope.root_node()))
+                websys.rehydrate_scope(scope, dom, &mut outputs, validation)?;
+                Ok(outputs)
             },
-            |validation| {
-                let scope = dom.get_scope(scope_id).ok_or(VNodeNotInitialized)?;
-                self.rehydrate_scope(scope, dom, &mut outputs, validation)
-            },
-        )?;
-        #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-        let _ = recovery;
-
-        if has_mismatches {
-            #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-            {
-                self.recover_hydration_mismatch(scope_id, dom, under, recovery)?;
-                return Ok(());
-            }
-
-            #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-            unreachable!("hydration mismatches require debug hydration validation");
-        }
-
-        self.interpreter.base().hydrate(outputs.ids, under);
-
-        #[cfg(feature = "mounted")]
-        for id in outputs.to_mount {
-            self.send_mount_event(id);
-        }
-
-        Ok(())
-    }
-
-    #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-    fn recover_hydration_mismatch(
-        &mut self,
-        scope_id: ScopeId,
-        dom: &mut VirtualDom,
-        under: Vec<web_sys::Node>,
-        recovery: Option<RecoveryAnchor>,
-    ) -> Result<(), RehydrationError> {
-        self.skip_mutations = false;
-
-        tracing::warn!("Hydration mismatches detected in scope {scope_id:?}. Rebuilding subtree.");
-
-        let is_root = scope_id == dom.base_scope().id();
-
-        if is_root {
-            let m = dom.create_scope_dom(self, scope_id)?;
-
-            // Root scope: `under` is [root_element]. Clear its children
-            // and rebuild directly into the root (ElementId(0)).
-            if let Some(root) = under.first() {
-                while let Some(child) = root.first_child() {
-                    let _ = root.remove_child(&child);
-                }
-            }
-
-            self.append_children(ElementId(0), m);
-            self.flush_edits();
-        } else {
-            let recovery = recovery.expect("streaming recovery requires a parent anchor");
-            self.drain_recovery_roots(under.len());
-
-            let fragment = self.document.create_document_fragment();
-            self.interpreter.base().push_root(fragment.clone().into());
-            let m = match dom.create_scope_dom(self, scope_id) {
-                Ok(m) => m,
-                Err(err) => {
-                    self.interpreter.pop_root();
-                    return Err(err.into());
-                }
-            };
-            self.interpreter.append_children_to_top(m as u16);
-            self.interpreter.pop_root();
-            self.interpreter.flush();
-
-            for node in &under {
-                if let Some(parent) = node.parent_node() {
-                    let _ = parent.remove_child(node);
-                }
-            }
-
-            while let Some(child) = fragment.first_child() {
-                let _ = recovery
-                    .parent
-                    .insert_before(&child, recovery.next_sibling.as_ref());
-            }
-
-            #[cfg(feature = "mounted")]
-            self.flush_queued_mounted_events();
-        }
-
-        Ok(())
+        )
     }
 
     pub fn rehydrate(
@@ -378,10 +274,7 @@ impl WebsysDom {
 
         // Rehydrate the root scope that was rendered on the server. We will likely run into suspense boundaries.
         // Any suspense boundaries we run into are stored for hydration later.
-        #[cfg(all(feature = "debug-hydration-validation", debug_assertions))]
-        let recovery = None;
-        #[cfg(not(all(feature = "debug-hydration-validation", debug_assertions)))]
-        let recovery = ();
+        let recovery = validation.root_recovery();
         self.start_hydration_at_scope(
             vdom.base_scope().id(),
             vdom,
@@ -391,12 +284,6 @@ impl WebsysDom {
         )?;
 
         Ok(rx)
-    }
-
-    fn drain_recovery_roots(&mut self, count: usize) {
-        for _ in 0..count {
-            self.interpreter.pop_root();
-        }
     }
 
     fn rehydrate_scope(
@@ -545,24 +432,16 @@ impl WebsysDom {
     }
 }
 
-fn validation_roots(
-    scope_id: ScopeId,
-    dom: &VirtualDom,
-    under: &[web_sys::Node],
-) -> Vec<web_sys::Node> {
-    if scope_id == dom.base_scope().id() {
-        let mut roots = Vec::new();
-        if let Some(root) = under.first() {
-            let mut child = root.first_child();
-            while let Some(node) = child {
-                roots.push(node.clone());
-                child = node.next_sibling();
-            }
-        }
-        roots
-    } else {
-        under.to_vec()
+/// Collect the direct children of a node into a Vec, snapshotting the sibling
+/// chain at call time so callers can mutate the DOM during iteration.
+pub(crate) fn child_nodes(node: &web_sys::Node) -> Vec<web_sys::Node> {
+    let mut children = Vec::new();
+    let mut child = node.first_child();
+    while let Some(node) = child {
+        children.push(node.clone());
+        child = node.next_sibling();
     }
+    children
 }
 
 fn write_comma_separated(id: &[u32], into: &mut String) {

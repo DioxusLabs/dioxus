@@ -5,6 +5,7 @@ use super::{
     element_node, format_rsx_nodes, is_internal_attribute_name, missing_node, placeholder_node,
     text_attribute,
 };
+use crate::hydration::hydrate::child_nodes;
 
 pub(crate) fn serialize_dom_subtree(node: &web_sys::Node) -> String {
     format_rsx_nodes(serialize_dom_node_items(node))
@@ -32,10 +33,8 @@ fn serialize_dom_node_items(node: &web_sys::Node) -> Vec<BodyNode> {
 
             let attrs = serialize_dom_attributes(element);
             let mut children = Vec::new();
-            let mut child = node.first_child();
-            while let Some(current) = child {
-                children.extend(serialize_dom_node_items(&current));
-                child = current.next_sibling();
+            for child in child_nodes(node) {
+                children.extend(serialize_dom_node_items(&child));
             }
 
             vec![element_node(
@@ -84,9 +83,9 @@ fn serialize_dom_attributes(element: &web_sys::Element) -> Vec<RsxAttribute> {
 
 pub(crate) fn should_skip_validation_node(node: &web_sys::Node) -> bool {
     if node.node_type() == web_sys::Node::COMMENT_NODE {
-        let marker = node.text_content().unwrap_or_default();
-        let marker = marker.trim();
-        return marker.starts_with("node-id") || marker == "#" || !is_placeholder_comment(marker);
+        // Skip every comment except a real placeholder comment — diffing
+        // shouldn't be sensitive to internal markers (`node-id*`, `#`, etc).
+        return !is_placeholder_comment(&node.text_content().unwrap_or_default());
     }
 
     let Some(element) = node.dyn_ref::<web_sys::Element>() else {
@@ -107,6 +106,12 @@ pub(crate) fn should_skip_validation_node(node: &web_sys::Node) -> bool {
         || script.starts_with("window.initial_dioxus_hydration_debug_locations=")
 }
 
+/// SSR emits placeholder comments as `placeholder<digits>` (see
+/// `ssr::renderer`); match that exactly so a stray user comment starting with
+/// "placeholder" isn't mistaken for one.
 fn is_placeholder_comment(comment: &str) -> bool {
-    comment.trim().starts_with("placeholder")
+    let Some(rest) = comment.trim().strip_prefix("placeholder") else {
+        return false;
+    };
+    !rest.is_empty() && rest.bytes().all(|b| b.is_ascii_digit())
 }
