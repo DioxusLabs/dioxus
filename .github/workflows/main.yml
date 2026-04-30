@@ -210,7 +210,7 @@ jobs:
           test -n "$(find target -name '*.deb' -print -quit)"
           test -n "$(find target -name '*.rpm' -print -quit)"
       - uses: actions/upload-artifact@v6
-        if: always()
+        if: failure()
         with:
           name: hotdog-linux-bundles
           path: |
@@ -218,6 +218,7 @@ jobs:
             target/**/*.deb
             target/**/*.rpm
           if-no-files-found: ignore
+          retention-days: 7
 
   bundle-macos-smoke:
     needs: check-paths
@@ -244,13 +245,14 @@ jobs:
           test -n "$(find target -type d -name '*.app' -print -quit)"
           test -n "$(find target -type f -name '*.dmg' -print -quit)"
       - uses: actions/upload-artifact@v6
-        if: always()
+        if: failure()
         with:
           name: hotdog-macos-bundles
           path: |
             target/**/*.app
             target/**/*.dmg
           if-no-files-found: ignore
+          retention-days: 7
 
   windows-bundle-smoke:
     needs: check-paths
@@ -301,13 +303,14 @@ jobs:
       #   run: |
       #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
       - uses: actions/upload-artifact@v6
-        if: always()
+        if: failure()
         with:
           name: hotdog-windows-bundles-smoke
           path: |
             ${{ env.DIOXUS_WORKSPACE }}/target/**/*.msi
             ${{ env.DIOXUS_WORKSPACE }}/target/**/*-setup.exe
           if-no-files-found: ignore
+          retention-days: 7
 
   windows:
     needs: check-paths
@@ -351,11 +354,11 @@ jobs:
       #   run: |
       #     Get-ChildItem -Path "$env:DIOXUS_WORKSPACE\target" -Recurse -Include "*.pdb","*.exe","*.dll" | Remove-Item -Force
       - uses: actions/upload-artifact@v6
-        if: always()
+        if: failure()
         with:
           name: playwright-report-windows
           path: ${{ env.DIOXUS_WORKSPACE }}/packages/playwright-tests/playwright-report/
-          retention-days: 30
+          retention-days: 7
 
 
   playwright:
@@ -410,11 +413,11 @@ jobs:
           npx playwright install
           npx playwright test
       - uses: actions/upload-artifact@v6
-        if: always()
+        if: failure()
         with:
           name: playwright-report-${{ matrix.toolchain }}-${{ runner.os }}
           path: ./packages/playwright-tests/playwright-report/
-          retention-days: 30
+          retention-days: 7
 
 
 
