@@ -81,6 +81,42 @@ for (let { port, name } of test_variants) {
     // @ts-ignore
     const value = await page.evaluate(() => window.__iife_minify_value);
     expect(value).toBe("ok-minify");
+    const classicScript = page.locator('script[src*="iife_minify"]');
+    await expect(classicScript).toHaveCount(1);
+    await expect(classicScript).not.toHaveAttribute("type", "module");
+  });
+
+  test(`umd js asset is minified without being converted to a module in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    // @ts-ignore
+    const value = await page.evaluate(() => window.__umd_minify_value);
+    expect(value).toBe("ok-umd");
+    const classicScript = page.locator('script[src*="umd_minify"]');
+    await expect(classicScript).toHaveCount(1);
+    await expect(classicScript).not.toHaveAttribute("type", "module");
+  });
+
+  test(`cjs js asset is treated as a classic script in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    // @ts-ignore
+    const value = await page.evaluate(() => window.__cjs_classic_value);
+    expect(value).toBe("ok-cjs");
+    const classicScript = page.locator('script[src*="cjs_classic"]');
+    await expect(classicScript).toHaveCount(1);
+    await expect(classicScript).not.toHaveAttribute("type", "module");
+  });
+
+  test(`sweetalert2 UMD bundle from issue 5512 is copied and exported globally in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    // @ts-ignore
+    const value = await page.evaluate(() => ({
+      hasGlobal: typeof window.Sweetalert2 === "function",
+      hasFire: typeof window.Sweetalert2?.fire === "function",
+    }));
+    expect(value).toEqual({ hasGlobal: true, hasFire: true });
+    const classicScript = page.locator('script[src*="sweetalert2.all.min"]');
+    await expect(classicScript).toHaveCount(1);
+    await expect(classicScript).not.toHaveAttribute("type", "module");
   });
 
   // `with_module(true)` should emit `<script type="module">` and preserve
@@ -108,6 +144,24 @@ for (let { port, name } of test_variants) {
     const metaType = await page.evaluate(() => window.__esm_auto_meta);
     expect(metaType).toBe("string");
     const moduleScript = page.locator('script[type="module"][src*="esm_auto"]');
+    await expect(moduleScript).toHaveCount(1);
+  });
+
+  test(`js asset with relative ESM import is bundled as an ES module in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    // @ts-ignore
+    const value = await page.evaluate(() => window.__esm_import_value);
+    expect(value).toBe("ok-esm-import");
+    const moduleScript = page.locator('script[type="module"][src*="esm_import_entry"]');
+    await expect(moduleScript).toHaveCount(1);
+  });
+
+  test(`mjs extension is loaded as an ES module in ${name}`, async ({ page }) => {
+    await page.goto(`http://localhost:${port}`);
+    // @ts-ignore
+    const value = await page.evaluate(() => window.__mjs_auto_value);
+    expect(value).toBe("ok-mjs");
+    const moduleScript = page.locator('script[type="module"][src*="mjs_auto"]');
     await expect(moduleScript).toHaveCount(1);
   });
 

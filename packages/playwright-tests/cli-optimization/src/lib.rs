@@ -31,6 +31,21 @@ static _IIFE_MINIFY_JS: Asset = asset!(
     "/assets/iife_minify.js",
     AssetOptions::js().with_minify(true).with_static_head(true)
 );
+#[used]
+static _UMD_MINIFY_JS: Asset = asset!(
+    "/assets/umd_minify.js",
+    AssetOptions::js().with_minify(true).with_static_head(true)
+);
+#[used]
+static _CJS_CLASSIC_JS: Asset = asset!(
+    "/assets/cjs_classic.cjs",
+    AssetOptions::js().with_minify(true).with_static_head(true)
+);
+#[used]
+static _SWEETALERT2_JS: Asset = asset!(
+    "/assets/sweetalert2.all.min.js",
+    AssetOptions::js().with_minify(false).with_static_head(true)
+);
 
 // Coverage for `with_module(true)`: the script tag must be emitted as
 // `<script type="module">` and minification must preserve module syntax so
@@ -38,9 +53,7 @@ static _IIFE_MINIFY_JS: Asset = asset!(
 #[used]
 static _ESM_MODULE_JS: Asset = asset!(
     "/assets/esm_module.js",
-    AssetOptions::js()
-        .with_module(true)
-        .with_static_head(true)
+    AssetOptions::js().with_module(true).with_static_head(true)
 );
 
 // Coverage for module auto-detection: this asset has no `with_module(true)`
@@ -50,6 +63,16 @@ static _ESM_MODULE_JS: Asset = asset!(
 #[used]
 static _ESM_AUTO_JS: Asset = asset!(
     "/assets/esm_auto.js",
+    AssetOptions::js().with_static_head(true)
+);
+#[used]
+static _ESM_IMPORT_ENTRY_JS: Asset = asset!(
+    "/assets/esm_import_entry.js",
+    AssetOptions::js().with_static_head(true)
+);
+#[used]
+static _MJS_AUTO_JS: Asset = asset!(
+    "/assets/mjs_auto.mjs",
     AssetOptions::js().with_static_head(true)
 );
 
