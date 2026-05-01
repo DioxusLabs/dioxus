@@ -505,10 +505,9 @@ impl AppBuilder {
                             krate,
                             fresh,
                             ..
+                        } if !fresh => {
+                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
                         }
-                            if !fresh => {
-                                tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
-                            }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
                             current,

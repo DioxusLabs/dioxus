@@ -470,13 +470,12 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                         );
                     }
                 }
-                AssetVariant::Image(image_options)
-                    if image_options.preloaded() => {
-                        _ = write!(
-                            head_resources,
-                            r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
-                        );
-                    }
+                AssetVariant::Image(image_options) if image_options.preloaded() => {
+                    _ = write!(
+                        head_resources,
+                        r#"<link rel="preload" as="image" href="/{{base_path}}/assets/{asset_path}" crossorigin>"#
+                    );
+                }
                 AssetVariant::Js(js_options) => {
                     if js_options.preloaded() {
                         _ = write!(

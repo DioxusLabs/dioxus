@@ -945,14 +945,12 @@ fn wix_version(version: &str) -> Result<String> {
             .parse()
             .with_context(|| format!("Invalid version component: '{part}'"))?;
         match i {
-            0 | 1
-                if num > 255 => {
-                    bail!("Version component {part} exceeds maximum value of 255");
-                }
-            2 | 3
-                if num > 65535 => {
-                    bail!("Version component {part} exceeds maximum value of 65535");
-                }
+            0 | 1 if num > 255 => {
+                bail!("Version component {part} exceeds maximum value of 255");
+            }
+            2 | 3 if num > 65535 => {
+                bail!("Version component {part} exceeds maximum value of 65535");
+            }
             _ => {}
         }
     }
