@@ -13,7 +13,7 @@ const STYLE: Asset = asset!("/assets/style.css");
 
 After cargo builds your app, the asset path is embedded directly in the data section. A tool like the Dioxus CLI can extract this metadata and post-process these assets.
 
-```rust
+```rust, ignore
 use manganis::{ImageFormat, Asset, asset, ImageSize, AssetOptions};
 // You can collect arbitrary files. Absolute paths are resolved relative to the package root
 const _: Asset = asset!("/assets/script.js");
@@ -62,7 +62,7 @@ accordingly.
   Files named `*.mjs` are always treated as modules; files named `*.cjs` are
   always treated as classic.
 
-```rust
+```rust, ignore
 use manganis::{asset, Asset, AssetOptions};
 
 // Vendored UMD library: copy verbatim, emitted as a classic <script>.

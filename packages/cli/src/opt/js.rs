@@ -448,9 +448,9 @@ mod lexer {
         let mut i = start + 1;
         while i < bytes.len() {
             let c = bytes[i];
-            if is_identifier_continue(c) || c == b'.' {
-                i += 1;
-            } else if (c == b'+' || c == b'-') && i > start && matches!(bytes[i - 1], b'e' | b'E') {
+            if (is_identifier_continue(c) || c == b'.')
+                || ((c == b'+' || c == b'-') && i > start && matches!(bytes[i - 1], b'e' | b'E'))
+            {
                 i += 1;
             } else {
                 break;
