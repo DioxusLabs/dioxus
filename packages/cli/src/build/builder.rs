@@ -1991,7 +1991,7 @@ impl AppBuilder {
         use std::fmt::Write as _;
 
         let total_ms = time_taken as usize;
-        let timeline_width = 96usize;
+        let timeline_width = 48usize;
         let max_label_width = self
             .profile_spans
             .iter()

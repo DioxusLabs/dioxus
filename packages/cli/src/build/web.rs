@@ -34,7 +34,10 @@
 //! ```
 
 use crate::{BuildContext, BundleFormat, Result, TraceSrc, WasmBindgen, WasmOptConfig};
-use crate::{BuildMode, BuildRequest, opt::AppManifest};
+use crate::{
+    BuildMode, BuildRequest,
+    opt::{AppManifest, js_is_module},
+};
 use anyhow::Context;
 use dioxus_cli_config::format_base_path_meta_element;
 use manganis::AssetOptions;
@@ -486,9 +489,15 @@ __wbg_init({{module_or_path: "/{}/{wasm_path}"}}).then((wasm) => {{
                         );
                     }
                     if js_options.static_head() {
+                        let source = std::path::Path::new(asset.absolute_source_path());
+                        let module_attr = if js_is_module(js_options, source) {
+                            r#" type="module""#
+                        } else {
+                            ""
+                        };
                         _ = write!(
                             head_resources,
-                            r#"<script src="/{{base_path}}/assets/{asset_path}"></script>"#
+                            r#"<script{module_attr} src="/{{base_path}}/assets/{asset_path}"></script>"#
                         );
                     }
                 }
