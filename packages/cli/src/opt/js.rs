@@ -57,8 +57,6 @@ fn run_esbuild(
     output_path: &Path,
     js_options: &JsAssetOptions,
 ) -> anyhow::Result<()> {
-    let is_es_module = lexer::js_is_module(js_options, source);
-
     let mut cmd = std::process::Command::new(esbuild);
     cmd.arg(source);
     cmd.arg(format!("--outfile={}", output_path.display()));
@@ -68,7 +66,7 @@ fn run_esbuild(
         cmd.arg("--minify");
     }
 
-    if is_es_module {
+    if lexer::js_is_module(js_options, source) {
         cmd.arg("--bundle");
         cmd.arg("--format=esm");
         // Don't try to resolve URL-based imports at build time — let the
