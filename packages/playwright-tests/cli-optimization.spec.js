@@ -110,7 +110,9 @@ for (let { port, name } of test_variants) {
     await page.goto(`http://localhost:${port}`);
     // @ts-ignore
     const value = await page.evaluate(() => ({
+      // @ts-ignore
       hasGlobal: typeof window.Sweetalert2 === "function",
+      // @ts-ignore
       hasFire: typeof window.Sweetalert2?.fire === "function",
     }));
     expect(value).toEqual({ hasGlobal: true, hasFire: true });
