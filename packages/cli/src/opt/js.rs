@@ -10,16 +10,9 @@ pub(crate) fn process_js(
     output_path: &Path,
     esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    if js_options.minified() {
+    if js_options.minified() || js_options.is_module() {
         if let Some(esbuild) = esbuild_path {
-            let is_module = lexer::js_is_module(js_options, source);
-            match run_esbuild(
-                esbuild,
-                source,
-                output_path,
-                is_module,
-                js_options.minified(),
-            ) {
+            match run_esbuild(esbuild, source, output_path, js_options) {
                 Ok(()) => return Ok(()),
                 Err(err) => {
                     tracing::error!(
@@ -62,17 +55,20 @@ fn run_esbuild(
     esbuild: &Path,
     source: &Path,
     output_path: &Path,
-    is_module: bool,
-    minify: bool,
+    js_options: &JsAssetOptions,
 ) -> anyhow::Result<()> {
+    let is_es_module = lexer::js_is_module(js_options, source);
+
     let mut cmd = std::process::Command::new(esbuild);
     cmd.arg(source);
     cmd.arg(format!("--outfile={}", output_path.display()));
     cmd.arg("--log-level=warning");
-    if minify {
+
+    if js_options.minified() {
         cmd.arg("--minify");
     }
-    if is_module {
+
+    if is_es_module {
         cmd.arg("--bundle");
         cmd.arg("--format=esm");
         // Don't try to resolve URL-based imports at build time — let the
