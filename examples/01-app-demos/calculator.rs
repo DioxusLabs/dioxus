@@ -49,11 +49,10 @@ fn app() -> Element {
     let mut input_operator = move |key: &str| val.push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
-        Key::Backspace => {
-            if !val().is_empty() {
+        Key::Backspace
+            if !val().is_empty() => {
                 val.pop();
             }
-        }
         Key::Character(character) => match character.as_str() {
             "+" | "-" | "/" | "*" => input_operator(&character),
             "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" => input_digit(character),
