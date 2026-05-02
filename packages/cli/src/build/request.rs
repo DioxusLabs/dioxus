@@ -208,6 +208,7 @@ use cargo_toml::{Profile, Profiles, StripSetting};
 use depinfo::RustcDepInfo;
 use dioxus_cli_config::PRODUCT_NAME_ENV;
 use dioxus_cli_config::{APP_TITLE_ENV, ASSET_ROOT_ENV};
+use krates::semver::Version;
 use krates::{NodeId, cm::TargetKind};
 use manganis::BundledAsset;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
@@ -2671,10 +2672,8 @@ impl BuildRequest {
     }
 
     /// Get the crate version from Cargo.toml (e.g., "0.1.0")
-    pub(crate) fn crate_version(&self) -> String {
-        self.workspace.krates[self.crate_package]
-            .version
-            .to_string()
+    pub(crate) fn crate_version(&self) -> Version {
+        self.workspace.krates[self.crate_package].version.clone()
     }
 
     pub(crate) fn bundle_identifier(&self) -> String {
