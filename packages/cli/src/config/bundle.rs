@@ -149,7 +149,7 @@ pub(crate) struct WixSettings {
     pub upgrade_code: Option<uuid::Uuid>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub(crate) struct MacOsSettings {
     #[serde(default)]
     pub(crate) bundle_version: Option<String>,
@@ -195,6 +195,26 @@ pub(crate) struct MacOsSettings {
 
 fn default_hardened_runtime() -> bool {
     true
+}
+
+// Custom default impl so that we can default hardened_runtime to true
+impl Default for MacOsSettings {
+    fn default() -> Self {
+        Self {
+            bundle_version: None,
+            frameworks: None,
+            minimum_system_version: None,
+            license: None,
+            exception_domain: None,
+            signing_identity: None,
+            provider_short_name: None,
+            entitlements: None,
+            info_plist_path: None,
+            bundle_name: None,
+            files: HashMap::new(),
+            hardened_runtime: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, JsonSchema)]
