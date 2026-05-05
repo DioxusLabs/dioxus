@@ -256,198 +256,6 @@ impl AppServer {
         Ok(runner)
     }
 
-    /// Walk the workspace and load the on-disk contents of every `Cargo.toml` and `Dioxus.toml`
-    /// into the snapshot maps. Parse failures are silently skipped — the next successful save
-    /// will populate the snapshot, and the diff against an empty table will trigger a rebuild
-    /// (which is the right behavior since something was previously broken).
-    fn seed_config_snapshots(&mut self) {
-        let workspace_cargo = self.workspace.workspace_root().join("Cargo.toml");
-        // Collect manifest paths first so we don't hold an immutable borrow on
-        // `self.workspace` while calling `&mut self` methods.
-        let member_manifests: Vec<PathBuf> = self
-            .workspace
-            .krates
-            .workspace_members()
-            .filter_map(|member| match member {
-                krates::Node::Krate { krate, .. } => {
-                    Some(krate.manifest_path.as_std_path().to_path_buf())
-                }
-                _ => None,
-            })
-            .collect();
-        self.seed_cargo_snapshot(&workspace_cargo);
-        for manifest in member_manifests {
-            if manifest != workspace_cargo {
-                self.seed_cargo_snapshot(&manifest);
-            }
-        }
-
-        // Walk up from the client crate's manifest dir for Dioxus.toml — same search the
-        // `Workspace::load_dioxus_config` method uses.
-        let crate_dir = self.client.build.crate_dir();
-        let workspace_root = self.workspace.workspace_root();
-        let mut current = crate_dir.canonicalize().unwrap_or(crate_dir);
-        let workspace_root = workspace_root
-            .canonicalize()
-            .unwrap_or_else(|_| workspace_root.clone());
-        while current.starts_with(&workspace_root) {
-            for name in ["Dioxus.toml", "dioxus.toml"] {
-                let p = current.join(name);
-                if p.is_file() {
-                    self.seed_dioxus_snapshot(&p);
-                }
-            }
-            if !current.pop() {
-                break;
-            }
-        }
-    }
-
-    /// Re-run `cargo metadata` and rebuild every `BuildRequest` from scratch so edits to
-    /// `Cargo.toml` / `Dioxus.toml` actually flow into the next compile. Without this, the
-    /// `BuildRequest` constructed at startup keeps a stale view of features, profile resolution,
-    /// dependency graph, target dirs, and `DioxusConfig` — the `cargo rustc` invocation would
-    /// re-read `Cargo.toml` itself but anything dx derives from the workspace metadata stays
-    /// frozen at the original snapshot.
-    ///
-    /// Called from the rebuild dispatch in `handle_file_change` whenever a config edit triggers
-    /// a full rebuild. Failures (broken `Cargo.toml` mid-edit, cargo metadata error) are logged
-    /// and treated as non-fatal — the existing `BuildRequest`s stay in place and the rebuild is
-    /// skipped so the user can fix the file without us crashing the serve session.
-    async fn recreate_build_requests(&mut self) -> Result<()> {
-        // Capture state from the existing `BuildRequest`s that must survive recreation.
-        // `session_cache_dir` holds files written by `prebuild` (link_err.txt, link_args.json,
-        // etc.) that subsequent build steps `dunce::canonicalize` and require to exist.
-        // `start_rebuild` skips `prebuild`, so a fresh empty tempdir on the new request would
-        // fail with ENOENT during `cargo_build_env_vars`. Carry the path over so the existing
-        // files stay reachable.
-        let preserved_client_session_cache = self.client.build.session_cache_dir.clone();
-        let preserved_server_session_cache = self
-            .server
-            .as_ref()
-            .map(|s| s.build.session_cache_dir.clone());
-
-        let new_workspace = Workspace::reload().await?;
-        let mut new_targets = self.target_args.clone().into_targets().await?;
-
-        new_targets.client.session_cache_dir = preserved_client_session_cache;
-        if let (Some(req), Some(dir)) =
-            (new_targets.server.as_mut(), preserved_server_session_cache)
-        {
-            req.session_cache_dir = dir;
-        }
-
-        // Swap the freshly-derived `BuildRequest`s onto the existing `AppBuilder`s. The
-        // builders keep their websockets, child processes, watcher state, and hot-reload
-        // bookkeeping; only the build configuration is replaced.
-        self.client.build = new_targets.client;
-        if let (Some(server_app), Some(server_req)) = (self.server.as_mut(), new_targets.server) {
-            server_app.build = server_req;
-        }
-        self.workspace = new_workspace;
-
-        // Caches keyed off the old `BuildRequest` would now be wrong. The patch cache is for
-        // the previous fat binary's symbol table, the file_map RSX templates assume the old
-        // crate layout, and the applied hot-reload set should be re-empty so the freshly
-        // opened app starts from a clean slate.
-        self.clear_patches();
-        self.clear_cached_rsx();
-        self.file_map.clear();
-        self.applied_client_hot_reload_message = Default::default();
-
-        // Tailwind input/output paths come from `application.tailwind_*` in `Dioxus.toml` —
-        // restart the watcher so it picks up any change.
-        self.tw_watcher.abort();
-        self.tw_watcher = TailwindCli::serve(
-            self.client.build.package_manifest_dir(),
-            self.client.build.config.application.tailwind_input.clone(),
-            self.client.build.config.application.tailwind_output.clone(),
-        );
-
-        // Re-seed the config snapshots so the now-canonical state is the baseline for
-        // subsequent diffs. Without this, formatter passes that touch the file (e.g.
-        // `cargo metadata` rewriting trailing whitespace) could trigger another rebuild.
-        self.cargo_toml_snapshots.clear();
-        self.dioxus_toml_snapshots.clear();
-        self.seed_config_snapshots();
-
-        Ok(())
-    }
-
-    /// Read `path` as TOML and store the parsed value as the baseline for future diffs.
-    /// Silently no-ops on read or parse failure.
-    fn seed_cargo_snapshot(&mut self, path: &Path) {
-        if let Ok(value) = read_toml_file(path) {
-            self.cargo_toml_snapshots.insert(path.to_path_buf(), value);
-        }
-    }
-
-    fn seed_dioxus_snapshot(&mut self, path: &Path) {
-        if let Ok(value) = read_toml_file(path) {
-            self.dioxus_toml_snapshots.insert(path.to_path_buf(), value);
-        }
-    }
-
-    /// Classify a change to a `Cargo.toml`. Returns the action the runner should take and
-    /// updates the cached snapshot to the new content (so repeated edits don't loop on the
-    /// same diff).
-    ///
-    /// Parse failures keep the snapshot intact and return `Ignore` — the user is mid-edit and
-    /// the next successful save will diff against the last known-good state.
-    pub(crate) fn analyze_cargo_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
-        let new_value = match read_toml_file(path) {
-            Ok(v) => v,
-            Err(_) => {
-                return ConfigChangeOutcome::Ignore {
-                    note: Some(format!(
-                        "Cargo.toml parse failed at {}, will retry on next save",
-                        path.display()
-                    )),
-                };
-            }
-        };
-        let old_value = self
-            .cargo_toml_snapshots
-            .get(path)
-            .cloned()
-            .unwrap_or_else(|| toml::Value::Table(Default::default()));
-        let ctx = AnalysisCtx {
-            active_profile: self.client.build.profile.clone(),
-            active_bundle: self.client.build.bundle,
-        };
-        let outcome = analyze_cargo_value(&old_value, &new_value, &ctx);
-        self.cargo_toml_snapshots
-            .insert(path.to_path_buf(), new_value);
-        outcome
-    }
-
-    pub(crate) fn analyze_dioxus_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
-        let new_value = match read_toml_file(path) {
-            Ok(v) => v,
-            Err(_) => {
-                return ConfigChangeOutcome::Ignore {
-                    note: Some(format!(
-                        "Dioxus.toml parse failed at {}, will retry on next save",
-                        path.display()
-                    )),
-                };
-            }
-        };
-        let old_value = self
-            .dioxus_toml_snapshots
-            .get(path)
-            .cloned()
-            .unwrap_or_else(|| toml::Value::Table(Default::default()));
-        let ctx = AnalysisCtx {
-            active_profile: self.client.build.profile.clone(),
-            active_bundle: self.client.build.bundle,
-        };
-        let outcome = analyze_dioxus_value(&old_value, &new_value, &ctx);
-        self.dioxus_toml_snapshots
-            .insert(path.to_path_buf(), new_value);
-        outcome
-    }
-
     pub(crate) fn initialize(&mut self) {
         let build_mode = self.initial_build_mode();
 
@@ -571,41 +379,6 @@ impl AppServer {
         }
     }
 
-    /// Fold a `.d` file's dep list into our tracking state:
-    /// - `.rs` files get parsed and inserted into `file_map` (skipping entries already there so
-    ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
-    ///   them on the next edit.
-    /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
-    ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
-    ///   targets etc.
-    pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
-        for path in files {
-            let ext = path
-                .extension()
-                .and_then(|s| s.to_str())
-                .unwrap_or_default();
-
-            if ext == "rs" && !self.file_map.contains_key(path) {
-                if let Ok(contents) = std::fs::read_to_string(path) {
-                    self.file_map.insert(
-                        path.clone(),
-                        CachedFile {
-                            contents,
-                            most_recent: None,
-                            templates: Default::default(),
-                        },
-                    );
-                }
-            }
-
-            if let Some(artifacts) = self.client.artifacts.as_mut() {
-                if !artifacts.depinfo.files.contains(path) {
-                    artifacts.depinfo.files.push(path.clone());
-                }
-            }
-        }
-    }
-
     /// Handle the list of changed files from the file watcher, attempting to aggressively prevent
     /// full rebuilds by hot-reloading RSX and hot-patching Rust code.
     ///
@@ -634,10 +407,11 @@ impl AppServer {
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
         let mut needs_rust_rebuild = false;
+
         // Cargo.toml / Dioxus.toml edits change the dependency graph or build inputs in ways
         // hotpatch can't reason about — force a from-scratch rebuild instead of `patch_rebuild`
         // when this is true.
-        let mut force_full_rebuild = false;
+        let mut needs_deep_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -660,7 +434,7 @@ impl AppServer {
                     let outcome = self.analyze_cargo_toml_change(path);
                     if self.apply_config_outcome(outcome, path) {
                         needs_rust_rebuild = true;
-                        force_full_rebuild = true;
+                        needs_deep_rebuild = true;
                     }
                     continue;
                 }
@@ -668,7 +442,7 @@ impl AppServer {
                     let outcome = self.analyze_dioxus_toml_change(path);
                     if self.apply_config_outcome(outcome, path) {
                         needs_rust_rebuild = true;
-                        force_full_rebuild = true;
+                        needs_deep_rebuild = true;
                     }
                     continue;
                 }
@@ -806,7 +580,7 @@ impl AppServer {
             // recreation fails (e.g. mid-edit broken Cargo.toml), keep the existing requests
             // and skip the rebuild — same "user is mid-edit, will fix" behavior we use for
             // parse failures in `analyze_*_change`.
-            if force_full_rebuild {
+            if needs_deep_rebuild {
                 if let Err(err) = self.recreate_build_requests().await {
                     tracing::warn!(
                         dx_src = ?TraceSrc::Dev,
@@ -822,7 +596,7 @@ impl AppServer {
                 // dependency graph or build inputs — patch_rebuild can't handle that, so we go
                 // through the fat-rebuild path even when patches are otherwise available.
                 HotReloadMode::Hotpatch
-                    if force_full_rebuild || !self.has_hotpatchable_builds() =>
+                    if needs_deep_rebuild || !self.has_hotpatchable_builds() =>
                 {
                     self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
                     if let Some(server) = self.server.as_mut() {
@@ -830,7 +604,7 @@ impl AppServer {
                     }
                     self.clear_hot_reload_changes();
                     self.clear_cached_rsx();
-                    if force_full_rebuild {
+                    if needs_deep_rebuild {
                         self.clear_patches();
                     }
                     server.send_reload_start().await;
@@ -906,57 +680,6 @@ impl AppServer {
                 server.send_hotreload(msg).await;
             } else {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
-            }
-        }
-    }
-
-    /// Map a [`ConfigChangeOutcome`] to user-facing log output, returning `true` iff the
-    /// runner should kick off a rebuild for this edit.
-    ///
-    /// Styling: the `subject` (e.g. `Cargo.toml [dependencies]`) is green
-    /// ([`NOTE_STYLE`]), the verb and any trailing prose stay in the default color, and the
-    /// file path in parens is gray ([`HINT_STYLE`]).
-    ///
-    /// `WarnRestart` paths log a warning but explicitly return `false`, because the field
-    /// that changed is only consumed at devserver/webserver boot.
-    fn apply_config_outcome(&self, outcome: ConfigChangeOutcome, path: &Path) -> bool {
-        use crate::styles::HINT_STYLE;
-        let workspace_dir = self.client.build.workspace_dir().display().to_string();
-        let display_file = path
-            .display()
-            .to_string()
-            .trim_start_matches(&workspace_dir)
-            .trim_start_matches('/')
-            .to_string();
-        use crate::styles::NOTE_STYLE;
-        match outcome {
-            ConfigChangeOutcome::FullRebuild { subject, detail } => {
-                tracing::info!(
-                    dx_src = ?TraceSrc::Dev,
-                    "Full rebuild: {NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
-                );
-                true
-            }
-            ConfigChangeOutcome::WarnRestart { subject, detail } => {
-                tracing::warn!(
-                    dx_src = ?TraceSrc::Dev,
-                    "{NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
-                );
-                false
-            }
-            ConfigChangeOutcome::Ignore { note } => {
-                if let Some(note) = note {
-                    tracing::debug!(
-                        dx_src = ?TraceSrc::Dev,
-                        "{HINT_STYLE}{note} ({display_file}){HINT_STYLE:#}"
-                    );
-                } else {
-                    tracing::debug!(
-                        dx_src = ?TraceSrc::Dev,
-                        "{HINT_STYLE}Ignoring config edit: {display_file}{HINT_STYLE:#}"
-                    );
-                }
-                false
             }
         }
     }
@@ -1265,6 +988,41 @@ impl AppServer {
             HotReloadMode::Disabled => HotReloadMode::Hotpatch,
         };
         (prev, self.hotreload_mode_label())
+    }
+
+    /// Fold a `.d` file's dep list into our tracking state:
+    /// - `.rs` files get parsed and inserted into `file_map` (skipping entries already there so
+    ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
+    ///   them on the next edit.
+    /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
+    ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
+    ///   targets etc.
+    pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
+        for path in files {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+
+            if ext == "rs" && !self.file_map.contains_key(path) {
+                if let Ok(contents) = std::fs::read_to_string(path) {
+                    self.file_map.insert(
+                        path.clone(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(artifacts) = self.client.artifacts.as_mut() {
+                if !artifacts.depinfo.files.contains(path) {
+                    artifacts.depinfo.files.push(path.clone());
+                }
+            }
+        }
     }
 
     pub(crate) async fn client_connected(
@@ -1772,6 +1530,249 @@ impl AppServer {
         };
 
         builder_ready(&self.client) && self.server.as_ref().map(builder_ready).unwrap_or(true)
+    }
+
+    /// Map a [`ConfigChangeOutcome`] to user-facing log output, returning `true` iff the
+    /// runner should kick off a rebuild for this edit.
+    ///
+    /// Styling: the `subject` (e.g. `Cargo.toml [dependencies]`) is green
+    /// ([`NOTE_STYLE`]), the verb and any trailing prose stay in the default color, and the
+    /// file path in parens is gray ([`HINT_STYLE`]).
+    ///
+    /// `WarnRestart` paths log a warning but explicitly return `false`, because the field
+    /// that changed is only consumed at devserver/webserver boot.
+    fn apply_config_outcome(&self, outcome: ConfigChangeOutcome, path: &Path) -> bool {
+        use crate::styles::HINT_STYLE;
+        let workspace_dir = self.client.build.workspace_dir().display().to_string();
+        let display_file = path
+            .display()
+            .to_string()
+            .trim_start_matches(&workspace_dir)
+            .trim_start_matches('/')
+            .to_string();
+        use crate::styles::NOTE_STYLE;
+        match outcome {
+            ConfigChangeOutcome::FullRebuild { subject, detail } => {
+                tracing::info!(
+                    dx_src = ?TraceSrc::Dev,
+                    "Full rebuild: {NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
+                true
+            }
+            ConfigChangeOutcome::WarnRestart { subject, detail } => {
+                tracing::warn!(
+                    dx_src = ?TraceSrc::Dev,
+                    "{NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
+                false
+            }
+            ConfigChangeOutcome::Ignore { note } => {
+                if let Some(note) = note {
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}{note} ({display_file}){HINT_STYLE:#}"
+                    );
+                } else {
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}Ignoring config edit: {display_file}{HINT_STYLE:#}"
+                    );
+                }
+                false
+            }
+        }
+    }
+
+    /// Walk the workspace and load the on-disk contents of every `Cargo.toml` and `Dioxus.toml`
+    /// into the snapshot maps. Parse failures are silently skipped — the next successful save
+    /// will populate the snapshot, and the diff against an empty table will trigger a rebuild
+    /// (which is the right behavior since something was previously broken).
+    fn seed_config_snapshots(&mut self) {
+        let workspace_cargo = self.workspace.workspace_root().join("Cargo.toml");
+        // Collect manifest paths first so we don't hold an immutable borrow on
+        // `self.workspace` while calling `&mut self` methods.
+        let member_manifests: Vec<PathBuf> = self
+            .workspace
+            .krates
+            .workspace_members()
+            .filter_map(|member| match member {
+                krates::Node::Krate { krate, .. } => {
+                    Some(krate.manifest_path.as_std_path().to_path_buf())
+                }
+                _ => None,
+            })
+            .collect();
+        self.seed_cargo_snapshot(&workspace_cargo);
+        for manifest in member_manifests {
+            if manifest != workspace_cargo {
+                self.seed_cargo_snapshot(&manifest);
+            }
+        }
+
+        // Walk up from the client crate's manifest dir for Dioxus.toml — same search the
+        // `Workspace::load_dioxus_config` method uses.
+        let crate_dir = self.client.build.crate_dir();
+        let workspace_root = self.workspace.workspace_root();
+        let mut current = crate_dir.canonicalize().unwrap_or(crate_dir);
+        let workspace_root = workspace_root
+            .canonicalize()
+            .unwrap_or_else(|_| workspace_root.clone());
+        while current.starts_with(&workspace_root) {
+            for name in ["Dioxus.toml", "dioxus.toml"] {
+                let p = current.join(name);
+                if p.is_file() {
+                    self.seed_dioxus_snapshot(&p);
+                }
+            }
+            if !current.pop() {
+                break;
+            }
+        }
+    }
+
+    /// Re-run `cargo metadata` and rebuild every `BuildRequest` from scratch so edits to
+    /// `Cargo.toml` / `Dioxus.toml` actually flow into the next compile. Without this, the
+    /// `BuildRequest` constructed at startup keeps a stale view of features, profile resolution,
+    /// dependency graph, target dirs, and `DioxusConfig` — the `cargo rustc` invocation would
+    /// re-read `Cargo.toml` itself but anything dx derives from the workspace metadata stays
+    /// frozen at the original snapshot.
+    ///
+    /// Called from the rebuild dispatch in `handle_file_change` whenever a config edit triggers
+    /// a full rebuild. Failures (broken `Cargo.toml` mid-edit, cargo metadata error) are logged
+    /// and treated as non-fatal — the existing `BuildRequest`s stay in place and the rebuild is
+    /// skipped so the user can fix the file without us crashing the serve session.
+    async fn recreate_build_requests(&mut self) -> Result<()> {
+        // Capture state from the existing `BuildRequest`s that must survive recreation.
+        // `session_cache_dir` holds files written by `prebuild` (link_err.txt, link_args.json,
+        // etc.) that subsequent build steps `dunce::canonicalize` and require to exist.
+        // `start_rebuild` skips `prebuild`, so a fresh empty tempdir on the new request would
+        // fail with ENOENT during `cargo_build_env_vars`. Carry the path over so the existing
+        // files stay reachable.
+        let preserved_client_session_cache = self.client.build.session_cache_dir.clone();
+        let preserved_server_session_cache = self
+            .server
+            .as_ref()
+            .map(|s| s.build.session_cache_dir.clone());
+
+        let new_workspace = Workspace::reload().await?;
+        let mut new_targets = self.target_args.clone().into_targets().await?;
+
+        new_targets.client.session_cache_dir = preserved_client_session_cache;
+        if let (Some(req), Some(dir)) =
+            (new_targets.server.as_mut(), preserved_server_session_cache)
+        {
+            req.session_cache_dir = dir;
+        }
+
+        // Swap the freshly-derived `BuildRequest`s onto the existing `AppBuilder`s. The
+        // builders keep their websockets, child processes, watcher state, and hot-reload
+        // bookkeeping; only the build configuration is replaced.
+        self.client.build = new_targets.client;
+        if let (Some(server_app), Some(server_req)) = (self.server.as_mut(), new_targets.server) {
+            server_app.build = server_req;
+        }
+        self.workspace = new_workspace;
+
+        // Caches keyed off the old `BuildRequest` would now be wrong. The patch cache is for
+        // the previous fat binary's symbol table, the file_map RSX templates assume the old
+        // crate layout, and the applied hot-reload set should be re-empty so the freshly
+        // opened app starts from a clean slate.
+        self.clear_patches();
+        self.clear_cached_rsx();
+        self.file_map.clear();
+        self.applied_client_hot_reload_message = Default::default();
+
+        // Tailwind input/output paths come from `application.tailwind_*` in `Dioxus.toml` —
+        // restart the watcher so it picks up any change.
+        self.tw_watcher.abort();
+        self.tw_watcher = TailwindCli::serve(
+            self.client.build.package_manifest_dir(),
+            self.client.build.config.application.tailwind_input.clone(),
+            self.client.build.config.application.tailwind_output.clone(),
+        );
+
+        // Re-seed the config snapshots so the now-canonical state is the baseline for
+        // subsequent diffs. Without this, formatter passes that touch the file (e.g.
+        // `cargo metadata` rewriting trailing whitespace) could trigger another rebuild.
+        self.cargo_toml_snapshots.clear();
+        self.dioxus_toml_snapshots.clear();
+        self.seed_config_snapshots();
+
+        Ok(())
+    }
+
+    /// Read `path` as TOML and store the parsed value as the baseline for future diffs.
+    /// Silently no-ops on read or parse failure.
+    fn seed_cargo_snapshot(&mut self, path: &Path) {
+        if let Ok(value) = read_toml_file(path) {
+            self.cargo_toml_snapshots.insert(path.to_path_buf(), value);
+        }
+    }
+
+    fn seed_dioxus_snapshot(&mut self, path: &Path) {
+        if let Ok(value) = read_toml_file(path) {
+            self.dioxus_toml_snapshots.insert(path.to_path_buf(), value);
+        }
+    }
+
+    /// Classify a change to a `Cargo.toml`. Returns the action the runner should take and
+    /// updates the cached snapshot to the new content (so repeated edits don't loop on the
+    /// same diff).
+    ///
+    /// Parse failures keep the snapshot intact and return `Ignore` — the user is mid-edit and
+    /// the next successful save will diff against the last known-good state.
+    fn analyze_cargo_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
+        let new_value = match read_toml_file(path) {
+            Ok(v) => v,
+            Err(_) => {
+                return ConfigChangeOutcome::Ignore {
+                    note: Some(format!(
+                        "Cargo.toml parse failed at {}, will retry on next save",
+                        path.display()
+                    )),
+                };
+            }
+        };
+        let old_value = self
+            .cargo_toml_snapshots
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(Default::default()));
+        let ctx = AnalysisCtx {
+            active_profile: self.client.build.profile.clone(),
+            active_bundle: self.client.build.bundle,
+        };
+        let outcome = analyze_cargo_value(&old_value, &new_value, &ctx);
+        self.cargo_toml_snapshots
+            .insert(path.to_path_buf(), new_value);
+        outcome
+    }
+
+    fn analyze_dioxus_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
+        let new_value = match read_toml_file(path) {
+            Ok(v) => v,
+            Err(_) => {
+                return ConfigChangeOutcome::Ignore {
+                    note: Some(format!(
+                        "Dioxus.toml parse failed at {}, will retry on next save",
+                        path.display()
+                    )),
+                };
+            }
+        };
+        let old_value = self
+            .dioxus_toml_snapshots
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(Default::default()));
+        let ctx = AnalysisCtx {
+            active_profile: self.client.build.profile.clone(),
+            active_bundle: self.client.build.bundle,
+        };
+        let outcome = analyze_dioxus_value(&old_value, &new_value, &ctx);
+        self.dioxus_toml_snapshots
+            .insert(path.to_path_buf(), new_value);
+        outcome
     }
 }
 
