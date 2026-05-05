@@ -205,6 +205,7 @@ anyrender_vello_hybrid = { version = "0.3", default-features = false }
 anyrender_skia = { version = "0.5", default-features = false }
 wgpu_context = { version = "0.4" }
 wgpu = { version = "28" }
+taffy = "0.10.1"
 vello = "0.8"
 winit = { version = "=0.31.0-beta.2" }
 
