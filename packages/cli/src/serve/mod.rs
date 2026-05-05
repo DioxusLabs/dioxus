@@ -6,7 +6,6 @@ use crate::{
 };
 
 mod ansi_buffer;
-mod config_watcher;
 mod output;
 mod proxy;
 mod proxy_ws;
@@ -16,7 +15,6 @@ mod update;
 
 use anyhow::bail;
 use dioxus_dx_wire_format::BuildStage;
-pub(crate) use config_watcher::*;
 pub(crate) use output::*;
 pub(crate) use runner::*;
 pub(crate) use server::*;
