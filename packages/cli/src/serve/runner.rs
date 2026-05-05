@@ -331,10 +331,9 @@ impl AppServer {
         let mut new_targets = self.target_args.clone().into_targets().await?;
 
         new_targets.client.session_cache_dir = preserved_client_session_cache;
-        if let (Some(req), Some(dir)) = (
-            new_targets.server.as_mut(),
-            preserved_server_session_cache,
-        ) {
+        if let (Some(req), Some(dir)) =
+            (new_targets.server.as_mut(), preserved_server_session_cache)
+        {
             req.session_cache_dir = dir;
         }
 
@@ -342,9 +341,7 @@ impl AppServer {
         // builders keep their websockets, child processes, watcher state, and hot-reload
         // bookkeeping; only the build configuration is replaced.
         self.client.build = new_targets.client;
-        if let (Some(server_app), Some(server_req)) =
-            (self.server.as_mut(), new_targets.server)
-        {
+        if let (Some(server_app), Some(server_req)) = (self.server.as_mut(), new_targets.server) {
             server_app.build = server_req;
         }
         self.workspace = new_workspace;
@@ -2582,7 +2579,7 @@ serde = "2"
 
     #[test]
     fn cargo_change_patch_rebuilds() {
-        let baseline = format!("{CARGO_BASELINE}");
+        let baseline = CARGO_BASELINE;
         let modified = format!(
             "{CARGO_BASELINE}\n[patch.crates-io]\nserde = {{ git = \"https://github.com/serde-rs/serde\" }}\n"
         );
