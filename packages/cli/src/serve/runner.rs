@@ -995,7 +995,7 @@ impl AppServer {
     ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
     ///   them on the next edit.
     /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
-    ///   trigger at [`handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
+    ///   trigger at [`Self::handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
     ///   targets etc.
     pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
         for path in files {
@@ -1536,8 +1536,8 @@ impl AppServer {
     /// runner should kick off a rebuild for this edit.
     ///
     /// Styling: the `subject` (e.g. `Cargo.toml [dependencies]`) is green
-    /// ([`NOTE_STYLE`]), the verb and any trailing prose stay in the default color, and the
-    /// file path in parens is gray ([`HINT_STYLE`]).
+    /// ([`crate::styles::NOTE_STYLE`]), the verb and any trailing prose stay in the default
+    /// color, and the file path in parens is gray ([`crate::styles::HINT_STYLE`]).
     ///
     /// `WarnRestart` paths log a warning but explicitly return `false`, because the field
     /// that changed is only consumed at devserver/webserver boot.
