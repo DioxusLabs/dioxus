@@ -88,6 +88,10 @@ pub(crate) struct AppServer {
     // [`AppServer::analyze_cargo_toml_change`] / [`AppServer::analyze_dioxus_toml_change`].
     pub(crate) cargo_toml_snapshots: HashMap<PathBuf, toml::Value>,
     pub(crate) dioxus_toml_snapshots: HashMap<PathBuf, toml::Value>,
+
+    // The original target args used to construct the initial `BuildRequest`s, kept so we can
+    // re-derive fresh requests when a config edit invalidates the cached state.
+    pub(crate) target_args: CommandWithPlatformOverrides<crate::BuildArgs>,
 }
 
 pub(crate) struct CachedFile {
@@ -160,6 +164,10 @@ impl AppServer {
             server: args.platform_args.server.map(|s| s.targets),
             client: args.platform_args.client.map(|c| c.targets),
         };
+        // Hold on to the original target args so we can re-derive `BuildRequest`s when a
+        // Cargo.toml / Dioxus.toml edit invalidates feature resolution, profile flags, or any
+        // other field cooked into a `BuildRequest` at startup. See `recreate_build_requests`.
+        let stored_target_args = target_args.clone();
         let BuildTargets { client, server } = target_args.into_targets().await?;
 
         // All servers will end up behind us (the devserver) but on a different port
@@ -224,6 +232,7 @@ impl AppServer {
             pending_file_changes: Vec::new(),
             cargo_toml_snapshots: HashMap::new(),
             dioxus_toml_snapshots: HashMap::new(),
+            target_args: stored_target_args,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -292,6 +301,80 @@ impl AppServer {
                 break;
             }
         }
+    }
+
+    /// Re-run `cargo metadata` and rebuild every `BuildRequest` from scratch so edits to
+    /// `Cargo.toml` / `Dioxus.toml` actually flow into the next compile. Without this, the
+    /// `BuildRequest` constructed at startup keeps a stale view of features, profile resolution,
+    /// dependency graph, target dirs, and `DioxusConfig` — the `cargo rustc` invocation would
+    /// re-read `Cargo.toml` itself but anything dx derives from the workspace metadata stays
+    /// frozen at the original snapshot.
+    ///
+    /// Called from the rebuild dispatch in `handle_file_change` whenever a config edit triggers
+    /// a full rebuild. Failures (broken `Cargo.toml` mid-edit, cargo metadata error) are logged
+    /// and treated as non-fatal — the existing `BuildRequest`s stay in place and the rebuild is
+    /// skipped so the user can fix the file without us crashing the serve session.
+    async fn recreate_build_requests(&mut self) -> Result<()> {
+        // Capture state from the existing `BuildRequest`s that must survive recreation.
+        // `session_cache_dir` holds files written by `prebuild` (link_err.txt, link_args.json,
+        // etc.) that subsequent build steps `dunce::canonicalize` and require to exist.
+        // `start_rebuild` skips `prebuild`, so a fresh empty tempdir on the new request would
+        // fail with ENOENT during `cargo_build_env_vars`. Carry the path over so the existing
+        // files stay reachable.
+        let preserved_client_session_cache = self.client.build.session_cache_dir.clone();
+        let preserved_server_session_cache = self
+            .server
+            .as_ref()
+            .map(|s| s.build.session_cache_dir.clone());
+
+        let new_workspace = Workspace::reload().await?;
+        let mut new_targets = self.target_args.clone().into_targets().await?;
+
+        new_targets.client.session_cache_dir = preserved_client_session_cache;
+        if let (Some(req), Some(dir)) = (
+            new_targets.server.as_mut(),
+            preserved_server_session_cache,
+        ) {
+            req.session_cache_dir = dir;
+        }
+
+        // Swap the freshly-derived `BuildRequest`s onto the existing `AppBuilder`s. The
+        // builders keep their websockets, child processes, watcher state, and hot-reload
+        // bookkeeping; only the build configuration is replaced.
+        self.client.build = new_targets.client;
+        if let (Some(server_app), Some(server_req)) =
+            (self.server.as_mut(), new_targets.server)
+        {
+            server_app.build = server_req;
+        }
+        self.workspace = new_workspace;
+
+        // Caches keyed off the old `BuildRequest` would now be wrong. The patch cache is for
+        // the previous fat binary's symbol table, the file_map RSX templates assume the old
+        // crate layout, and the applied hot-reload set should be re-empty so the freshly
+        // opened app starts from a clean slate.
+        self.clear_patches();
+        self.clear_cached_rsx();
+        self.file_map.clear();
+        self.applied_client_hot_reload_message = Default::default();
+
+        // Tailwind input/output paths come from `application.tailwind_*` in `Dioxus.toml` —
+        // restart the watcher so it picks up any change.
+        self.tw_watcher.abort();
+        self.tw_watcher = TailwindCli::serve(
+            self.client.build.package_manifest_dir(),
+            self.client.build.config.application.tailwind_input.clone(),
+            self.client.build.config.application.tailwind_output.clone(),
+        );
+
+        // Re-seed the config snapshots so the now-canonical state is the baseline for
+        // subsequent diffs. Without this, formatter passes that touch the file (e.g.
+        // `cargo metadata` rewriting trailing whitespace) could trigger another rebuild.
+        self.cargo_toml_snapshots.clear();
+        self.dioxus_toml_snapshots.clear();
+        self.seed_config_snapshots();
+
+        Ok(())
     }
 
     /// Read `path` as TOML and store the parsed value as the baseline for future diffs.
@@ -719,6 +802,23 @@ impl AppServer {
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_rust_rebuild {
+            // Cargo.toml / Dioxus.toml edits invalidate the cached `BuildRequest`. Refresh
+            // `cargo metadata` and re-derive the build requests before kicking off the
+            // rebuild, otherwise cargo would re-read Cargo.toml but dx-side state (features,
+            // profile, target dirs, DioxusConfig) would stay frozen at startup. If
+            // recreation fails (e.g. mid-edit broken Cargo.toml), keep the existing requests
+            // and skip the rebuild — same "user is mid-edit, will fix" behavior we use for
+            // parse failures in `analyze_*_change`.
+            if force_full_rebuild {
+                if let Err(err) = self.recreate_build_requests().await {
+                    tracing::warn!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Skipping rebuild: failed to refresh cargo metadata: {err}"
+                    );
+                    return;
+                }
+            }
+
             match self.hotreload_mode {
                 // In hotpatch, we can only issue patches if the original build completed.
                 // `force_full_rebuild` is set when a Cargo.toml / Dioxus.toml change rewires the
@@ -816,9 +916,14 @@ impl AppServer {
     /// Map a [`ConfigChangeOutcome`] to user-facing log output, returning `true` iff the
     /// runner should kick off a rebuild for this edit.
     ///
+    /// Styling: the `subject` (e.g. `Cargo.toml [dependencies]`) is green
+    /// ([`NOTE_STYLE`]), the verb and any trailing prose stay in the default color, and the
+    /// file path in parens is gray ([`HINT_STYLE`]).
+    ///
     /// `WarnRestart` paths log a warning but explicitly return `false`, because the field
     /// that changed is only consumed at devserver/webserver boot.
     fn apply_config_outcome(&self, outcome: ConfigChangeOutcome, path: &Path) -> bool {
+        use crate::styles::HINT_STYLE;
         let workspace_dir = self.client.build.workspace_dir().display().to_string();
         let display_file = path
             .display()
@@ -826,20 +931,33 @@ impl AppServer {
             .trim_start_matches(&workspace_dir)
             .trim_start_matches('/')
             .to_string();
+        use crate::styles::NOTE_STYLE;
         match outcome {
-            ConfigChangeOutcome::FullRebuild { reason } => {
-                tracing::info!("Full rebuild: {} ({display_file})", reason);
+            ConfigChangeOutcome::FullRebuild { subject, detail } => {
+                tracing::info!(
+                    dx_src = ?TraceSrc::Dev,
+                    "Full rebuild: {NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
                 true
             }
-            ConfigChangeOutcome::WarnRestart { reason } => {
-                tracing::warn!("{reason} ({display_file})");
+            ConfigChangeOutcome::WarnRestart { subject, detail } => {
+                tracing::warn!(
+                    dx_src = ?TraceSrc::Dev,
+                    "{NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
                 false
             }
             ConfigChangeOutcome::Ignore { note } => {
                 if let Some(note) = note {
-                    tracing::debug!("{note}");
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}{note} ({display_file}){HINT_STYLE:#}"
+                    );
                 } else {
-                    tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring config edit: {display_file}");
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}Ignoring config edit: {display_file}{HINT_STYLE:#}"
+                    );
                 }
                 false
             }
@@ -1806,6 +1924,11 @@ fn format_duration_ms(d: Duration) -> String {
 // ---------------------------------------------------------------------------------------------
 
 /// What the runner should do in response to a config-file edit.
+///
+/// `FullRebuild` and `WarnRestart` carry the human-readable cause split into a `subject`
+/// (e.g. `Cargo.toml [dependencies]`) and a `detail` (e.g. `changed` plus any trailing hint).
+/// The split lets the log formatter style only the subject, leaving the verb and any
+/// follow-on prose in the default color.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ConfigChangeOutcome {
     /// Nothing rebuild-relevant changed (whitespace, comment-only edit, irrelevant field, edit
@@ -1813,14 +1936,13 @@ pub(crate) enum ConfigChangeOutcome {
     /// completely invisible.
     Ignore { note: Option<String> },
 
-    /// A field that affects compilation changed. The runner should kick off a full rebuild and
-    /// surface `reason` to the user as the "Full rebuild:" log line.
-    FullRebuild { reason: String },
+    /// A field that affects compilation changed. The runner should kick off a full rebuild.
+    FullRebuild { subject: String, detail: String },
 
     /// A field that's only consumed at devserver-startup changed (proxy, https, watch paths).
     /// The runner should warn the user that a `dx serve` restart is required to pick up the
     /// change. No build action is taken.
-    WarnRestart { reason: String },
+    WarnRestart { subject: String, detail: String },
 }
 
 impl ConfigChangeOutcome {
@@ -1893,7 +2015,8 @@ fn analyze_cargo_value(
     for section in rebuild_sections {
         if toml_get(old, &[section]) != toml_get(new, &[section]) {
             outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                reason: format!("Cargo.toml [{section}] changed"),
+                subject: format!("Cargo.toml [{section}]"),
+                detail: "changed".to_string(),
             });
         }
     }
@@ -1901,7 +2024,8 @@ fn analyze_cargo_value(
     // -------- target.<cfg>.dependencies / dev-dependencies / build-dependencies --------
     if toml_get(old, &["target"]) != toml_get(new, &["target"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-            reason: "Cargo.toml [target.*] dependencies changed".to_string(),
+            subject: "Cargo.toml [target.*]".to_string(),
+            detail: "dependencies changed".to_string(),
         });
     }
 
@@ -1923,7 +2047,8 @@ fn analyze_cargo_value(
     for key in pkg_compile_keys {
         if toml_get(old, &["package", key]) != toml_get(new, &["package", key]) {
             outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                reason: format!("Cargo.toml [package].{key} changed"),
+                subject: format!("Cargo.toml [package].{key}"),
+                detail: "changed".to_string(),
             });
         }
     }
@@ -1945,7 +2070,8 @@ fn analyze_cargo_value(
             // honored, falling back to the old table for profiles that were just deleted.
             if profile_in_active_chain(name, &ctx.active_profile, new_profiles, old_profiles) {
                 outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                    reason: format!("Cargo.toml [profile.{name}] changed"),
+                    subject: format!("Cargo.toml [profile.{name}]"),
+                    detail: "changed".to_string(),
                 });
             } else {
                 outcome = outcome.escalate(ConfigChangeOutcome::Ignore {
@@ -1959,7 +2085,8 @@ fn analyze_cargo_value(
     } else if toml_get(old, &["profile"]) != toml_get(new, &["profile"]) {
         // One side missing the [profile] table entirely — treat as full rebuild for safety.
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-            reason: "Cargo.toml [profile] section added or removed".to_string(),
+            subject: "Cargo.toml [profile]".to_string(),
+            detail: "section added or removed".to_string(),
         });
     }
 
@@ -1981,7 +2108,8 @@ fn analyze_cargo_value(
                 ""
             };
             outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                reason: format!("Cargo.toml [workspace].{key} changed{extra}"),
+                subject: format!("Cargo.toml [workspace].{key}"),
+                detail: format!("changed{extra}"),
             });
         }
     }
@@ -1989,7 +2117,8 @@ fn analyze_cargo_value(
     // -------- workspace-level patch / replace --------
     if toml_get(old, &["workspace", "patch"]) != toml_get(new, &["workspace", "patch"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-            reason: "Cargo.toml [workspace.patch] changed".to_string(),
+            subject: "Cargo.toml [workspace.patch]".to_string(),
+            detail: "changed".to_string(),
         });
     }
 
@@ -2078,7 +2207,8 @@ fn analyze_dioxus_value(
     for key in app_rebuild_keys {
         if toml_get(old, &["application", key]) != toml_get(new, &["application", key]) {
             outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                reason: format!("Dioxus.toml [application].{key} changed"),
+                subject: format!("Dioxus.toml [application].{key}"),
+                detail: "changed".to_string(),
             });
         }
     }
@@ -2086,35 +2216,40 @@ fn analyze_dioxus_value(
     // ---- [web.app] — title and base_path get baked into HTML / WASM URLs ----
     if toml_get(old, &["web", "app"]) != toml_get(new, &["web", "app"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-            reason: "Dioxus.toml [web.app] changed".to_string(),
+            subject: "Dioxus.toml [web.app]".to_string(),
+            detail: "changed".to_string(),
         });
     }
 
     // ---- [web.proxy] — only consumed when devserver boots ----
     if toml_get(old, &["web", "proxy"]) != toml_get(new, &["web", "proxy"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
-            reason: "Dioxus.toml [web.proxy] changed — restart `dx serve` to apply.".to_string(),
+            subject: "Dioxus.toml [web.proxy]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
         });
     }
 
     // ---- [web.https] — TLS config initialized at boot ----
     if toml_get(old, &["web", "https"]) != toml_get(new, &["web", "https"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
-            reason: "Dioxus.toml [web.https] changed — restart `dx serve` to apply.".to_string(),
+            subject: "Dioxus.toml [web.https]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
         });
     }
 
     // ---- [web.watcher] — watcher mounted at startup; can't be re-mounted live (yet) ----
     if toml_get(old, &["web", "watcher"]) != toml_get(new, &["web", "watcher"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
-            reason: "Dioxus.toml [web.watcher] changed — restart `dx serve` to apply.".to_string(),
+            subject: "Dioxus.toml [web.watcher]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
         });
     }
 
     // ---- [web.resource] — injected into HTML at build time ----
     if toml_get(old, &["web", "resource"]) != toml_get(new, &["web", "resource"]) {
         outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-            reason: "Dioxus.toml [web.resource] changed".to_string(),
+            subject: "Dioxus.toml [web.resource]".to_string(),
+            detail: "changed".to_string(),
         });
     }
 
@@ -2122,7 +2257,8 @@ fn analyze_dioxus_value(
     for section in &["permissions", "deep_links", "background"] {
         if toml_get(old, &[section]) != toml_get(new, &[section]) {
             outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                reason: format!("Dioxus.toml [{section}] changed"),
+                subject: format!("Dioxus.toml [{section}]"),
+                detail: "changed".to_string(),
             });
         }
     }
@@ -2139,7 +2275,8 @@ fn analyze_dioxus_value(
         if toml_get(old, &[section]) != toml_get(new, &[section]) {
             if ctx.active_bundle == fmt {
                 outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
-                    reason: format!("Dioxus.toml [{section}] changed"),
+                    subject: format!("Dioxus.toml [{section}]"),
+                    detail: "changed".to_string(),
                 });
             } else {
                 outcome = outcome.escalate(ConfigChangeOutcome::Ignore {
@@ -2416,8 +2553,9 @@ members = ["a", "b"]
 "#;
         let outcome = analyze_cargo_value(&parse(baseline), &parse(modified), &ctx_dev_web());
         assert_rebuild(&outcome);
-        if let ConfigChangeOutcome::FullRebuild { reason } = outcome {
-            assert!(reason.contains("workspace") && reason.contains("hot-reloaded"));
+        if let ConfigChangeOutcome::FullRebuild { subject, detail } = outcome {
+            assert!(subject.contains("workspace"));
+            assert!(detail.contains("hot-reloaded"));
         }
     }
 
@@ -2833,17 +2971,31 @@ name = "demo"
     // Outcome escalation
     // ============================================================================
 
+    fn rebuild(s: &str, d: &str) -> ConfigChangeOutcome {
+        ConfigChangeOutcome::FullRebuild {
+            subject: s.into(),
+            detail: d.into(),
+        }
+    }
+
+    fn warn(s: &str, d: &str) -> ConfigChangeOutcome {
+        ConfigChangeOutcome::WarnRestart {
+            subject: s.into(),
+            detail: d.into(),
+        }
+    }
+
     #[test]
     fn escalate_full_rebuild_dominates_warn_restart() {
-        let a = ConfigChangeOutcome::FullRebuild { reason: "a".into() };
-        let b = ConfigChangeOutcome::WarnRestart { reason: "b".into() };
+        let a = rebuild("a", "changed");
+        let b = warn("b", "changed");
         assert_rebuild(&a.clone().escalate(b.clone()));
         assert_rebuild(&b.escalate(a));
     }
 
     #[test]
     fn escalate_warn_restart_dominates_ignore() {
-        let a = ConfigChangeOutcome::WarnRestart { reason: "a".into() };
+        let a = warn("a", "changed");
         let b = ConfigChangeOutcome::Ignore { note: None };
         assert_warn(&a.clone().escalate(b.clone()));
         assert_warn(&b.escalate(a));
