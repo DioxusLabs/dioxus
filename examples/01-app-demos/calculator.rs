@@ -30,7 +30,7 @@ fn main() {
             Config::new().with_window_attributes(
                 WindowAttributes::default()
                     .with_title(TITLE)
-                    .with_inner_size(LogicalSize::new(300.0, 525.0)),
+                    .with_surface_size(LogicalSize::new(300.0, 525.0)),
             )
         }))
         .launch(app);
@@ -49,10 +49,8 @@ fn app() -> Element {
     let mut input_operator = move |key: &str| val.push_str(key);
 
     let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
-        Key::Backspace => {
-            if !val().is_empty() {
-                val.pop();
-            }
+        Key::Backspace if !val().is_empty() => {
+            val.pop();
         }
         Key::Character(character) => match character.as_str() {
             "+" | "-" | "/" | "*" => input_operator(&character),

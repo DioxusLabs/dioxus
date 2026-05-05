@@ -59,7 +59,7 @@ impl Bundle {
 
         // Fill platform-specific defaults for package types when omitted.
         if self.package_types.is_none() {
-            self.package_types = Self::default_package_types(client.bundle);
+            self.package_types = Some(Self::default_package_types(client.bundle));
         }
 
         Self::validate_package_types_for_bundle(client.bundle, self.package_types.as_deref())?;
@@ -125,11 +125,9 @@ impl Bundle {
             }
         }
 
+        println!("Bundled {} bundles:", bundles.len());
         for bundle_path in bundles.iter() {
-            tracing::info!(
-                "Bundled app at: {}",
-                bundle_path.absolutize().unwrap().display()
-            );
+            println!("{}", bundle_path.absolutize().unwrap().display());
         }
 
         let client = client_artifacts.into_structured_output();
@@ -195,11 +193,14 @@ impl Bundle {
         Ok(bundles)
     }
 
-    fn default_package_types(bundle: BundleFormat) -> Option<Vec<PackageType>> {
+    fn default_package_types(bundle: BundleFormat) -> Vec<PackageType> {
         match bundle {
-            BundleFormat::Ios => Some(vec![crate::PackageType::Ipa]),
-            BundleFormat::Android => Some(vec![crate::PackageType::Aab]),
-            _ => None,
+            BundleFormat::Web | BundleFormat::Server => Vec::new(),
+            BundleFormat::MacOS => vec![PackageType::MacOsBundle, PackageType::Dmg],
+            BundleFormat::Windows => vec![PackageType::Nsis],
+            BundleFormat::Linux => vec![PackageType::AppImage],
+            BundleFormat::Ios => vec![PackageType::Ipa],
+            BundleFormat::Android => vec![PackageType::Aab],
         }
     }
 
@@ -271,11 +272,55 @@ mod tests {
     };
 
     #[test]
-    fn ios_bundle_defaults_to_ipa() {
+    fn bundle_formats_have_default_package_types() {
         assert_eq!(
             Bundle::default_package_types(BundleFormat::Ios),
-            Some(vec![PackageType::Ipa])
+            vec![PackageType::Ipa]
         );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Android),
+            vec![PackageType::Aab]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::MacOS),
+            vec![PackageType::MacOsBundle, PackageType::Dmg]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Windows),
+            vec![PackageType::Nsis]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Linux),
+            vec![PackageType::AppImage]
+        );
+        assert_eq!(Bundle::default_package_types(BundleFormat::Web), vec![]);
+        assert_eq!(Bundle::default_package_types(BundleFormat::Server), vec![]);
+    }
+
+    #[test]
+    fn default_package_types_are_valid_for_their_bundle_format() {
+        for bundle_format in [
+            BundleFormat::Web,
+            BundleFormat::MacOS,
+            BundleFormat::Windows,
+            BundleFormat::Linux,
+            BundleFormat::Server,
+            BundleFormat::Ios,
+            BundleFormat::Android,
+        ] {
+            let package_types = Bundle::default_package_types(bundle_format);
+            Bundle::validate_package_types_for_bundle(bundle_format, Some(&package_types)).unwrap();
+        }
+    }
+
+    #[test]
+    fn omitted_package_types_are_filled_with_defaults() {
+        let mut package_types = None;
+        if package_types.is_none() {
+            package_types = Some(Bundle::default_package_types(BundleFormat::Linux));
+        }
+
+        assert_eq!(package_types, Some(vec![PackageType::AppImage]));
     }
 
     #[test]

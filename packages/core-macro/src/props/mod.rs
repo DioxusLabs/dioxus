@@ -946,7 +946,7 @@ Finally, call `.build()` to create the instance of `{name}`.
 
             let field_name = field.extends_vec_ident().unwrap();
 
-            let descructuring = self.included_fields().map(|f| {
+            let destructuring = self.included_fields().map(|f| {
                 let name = f.name;
                 quote!(#name)
             });
@@ -1048,7 +1048,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                         ____attr: impl dioxus_core::IntoAttributeValue<L>,
                         ____volatile: bool
                     ) -> Self {
-                        let ( #(#descructuring,)* ) = self.fields;
+                        let ( #(#destructuring,)* ) = self.fields;
                         self.#field_name.push(
                             dioxus_core::Attribute::new(
                                 ____name,
@@ -1084,7 +1084,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 ref builder_name, ..
             } = *self;
 
-            let descructuring = self.included_fields().map(|f| {
+            let destructuring = self.included_fields().map(|f| {
                 if f.ordinal == field.ordinal {
                     quote!(_)
                 } else {
@@ -1214,7 +1214,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     #[allow(clippy::type_complexity)]
                     pub fn #field_name < #marker > (self, #field_name: #arg_type) -> #builder_name < #( #target_generics ),* > {
                         let #field_name = (#arg_expr,);
-                        let ( #(#descructuring,)* ) = self.fields;
+                        let ( #(#destructuring,)* ) = self.fields;
                         #builder_name {
                             #(#forward_fields,)*
                             fields: ( #(#reconstructing,)* ),
@@ -1410,7 +1410,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                 );
             });
 
-            let descructuring = self.included_fields().map(|f| f.name);
+            let destructuring = self.included_fields().map(|f| f.name);
 
             let helper_trait_name = &self.conversion_helper_trait_name;
             // The default of a field can refer to earlier-defined fields, which we handle by
@@ -1530,7 +1530,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     impl #impl_generics #builder_name #modified_ty_generics #where_clause {
                         #doc
                         pub fn build(self) -> #name #ty_generics {
-                            let ( #(#descructuring,)* ) = self.fields;
+                            let ( #(#destructuring,)* ) = self.fields;
                             #( #assignments )*
                             #name {
                                 inner: #original_name {
@@ -1547,7 +1547,7 @@ Finally, call `.build()` to create the instance of `{name}`.
                     impl #impl_generics #builder_name #modified_ty_generics #where_clause {
                         #doc
                         pub fn build(self) -> #name #ty_generics {
-                            let ( #(#descructuring,)* ) = self.fields;
+                            let ( #(#destructuring,)* ) = self.fields;
                             #( #assignments )*
                             #name {
                                 #( #field_names ),*

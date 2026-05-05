@@ -16,6 +16,6 @@ dioxus-native = { workspace = true }
 dioxus = { workspace = true }
 wgpu = { workspace = true }
 winit = { workspace = true }
-bytemuck = "1.23.2"
+bytemuck = "1.25"
 color = "0.3.2"
 tracing-subscriber = { workspace = true, optional = true }

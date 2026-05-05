@@ -1136,14 +1136,12 @@ impl BuildRequest {
 
                 // todo: this can occasionally swallow errors, so we should figure out what exactly is going wrong
                 //       since that is a really bad user experience.
-                Message::BuildFinished(finished) => {
-                    if !finished.success {
-                        bail!(
-                            "cargo build finished with errors for target: {} [{}]",
-                            self.main_target,
-                            self.triple
-                        );
-                    }
+                Message::BuildFinished(finished) if !finished.success => {
+                    bail!(
+                        "cargo build finished with errors for target: {} [{}]",
+                        self.main_target,
+                        self.triple
+                    );
                 }
                 _ => {}
             }

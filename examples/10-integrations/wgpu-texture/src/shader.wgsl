@@ -28,7 +28,7 @@ struct PushConstants {
     light_color_and_time: vec4<f32>,
 };
 
-var<push_constant> pc: PushConstants;
+var<immediate> pc: PushConstants;
 
 fn sdRoundBox(p: vec3<f32>, b: vec3<f32>, r: f32) -> f32 {
     let q = abs(p) - b;

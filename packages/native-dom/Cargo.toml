@@ -11,11 +11,15 @@ keywords = ["dom", "ui", "gui", "react"]
 
 [features]
 default = ["accessibility", "svg", "system-fonts"]
+
+# DOM features
 svg = ["blitz-dom/svg"]
+floats = ["blitz-dom/floats"]
+incremental = ["blitz-dom/incremental"]
 accessibility = ["blitz-dom/accessibility"]
 tracing = ["dep:tracing", "blitz-dom/tracing"]
 system-fonts = ["blitz-dom/system_fonts"]
-autofocus = []
+autofocus = ["blitz-dom/autofocus"]
 
 [dependencies]
 # Blitz dependencies

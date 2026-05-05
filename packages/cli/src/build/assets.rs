@@ -276,6 +276,8 @@ fn legacy_asset_to_modern_asset(
             .with_minify(js.minified())
             .with_preload(js.preloaded())
             .with_static_head(js.static_head())
+            // Legacy 0.7 manganis has no module concept; default to classic script.
+            .with_module(false)
             .into_asset_options(),
         _ => AssetOptions::builder()
             .with_hash_suffix(add_hash)

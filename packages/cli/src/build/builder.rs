@@ -505,10 +505,8 @@ impl AppBuilder {
                             krate,
                             fresh,
                             ..
-                        } => {
-                            if !fresh {
-                                tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
-                            }
+                        } if !fresh => {
+                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -1991,7 +1989,7 @@ impl AppBuilder {
         use std::fmt::Write as _;
 
         let total_ms = time_taken as usize;
-        let timeline_width = 96usize;
+        let timeline_width = 48usize;
         let max_label_width = self
             .profile_spans
             .iter()

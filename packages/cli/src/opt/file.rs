@@ -17,17 +17,6 @@ pub(crate) fn process_file_to(
     output_path: &Path,
     esbuild_path: Option<&Path>,
 ) -> anyhow::Result<()> {
-    process_file_to_with_options(options, source, output_path, false, esbuild_path)
-}
-
-/// Process a specific file asset with additional options
-pub(crate) fn process_file_to_with_options(
-    options: &AssetOptions,
-    source: &Path,
-    output_path: &Path,
-    in_folder: bool,
-    esbuild_path: Option<&Path>,
-) -> anyhow::Result<()> {
     // If the file already exists and this is a hashed asset, then we must have a file
     // with the same hash already. The hash has the file contents and options, so if we
     // find a file with the same hash, we probably already created this file in the past
@@ -63,7 +52,7 @@ pub(crate) fn process_file_to_with_options(
             process_scss(options, source, &temp_path)?;
         }
         ResolvedAssetType::Js(options) => {
-            process_js(options, source, &temp_path, !in_folder, esbuild_path)?;
+            process_js(options, source, &temp_path, esbuild_path)?;
         }
         ResolvedAssetType::Image(options) => {
             process_image(options, source, &temp_path)?;

@@ -28,7 +28,7 @@ futures-util = { workspace = true }
 serde_json = { workspace = true, optional = true }
 tracing = { workspace = true }
 rustversion = { workspace = true }
-euclid = "0.22.11"
+euclid = "0.22.14"
 enumset = "1.1.6"
 bytes = { workspace = true }
 

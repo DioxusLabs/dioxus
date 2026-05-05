@@ -119,7 +119,7 @@ ratatui = { workspace = true, features = ["crossterm", "unstable"] }
 shell-words = { workspace = true }
 
 # disable `log` entirely since `walrus` uses it and is *much* slower with it enableda
-log = { version = "0.4.27", features = ["max_level_off", "release_max_level_off"] }
+log = { version = "0.4.29", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
 tempfile = "3.19.1"
