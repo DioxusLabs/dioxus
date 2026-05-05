@@ -1722,16 +1722,13 @@ impl AppServer {
     /// Parse failures keep the snapshot intact and return `Ignore` — the user is mid-edit and
     /// the next successful save will diff against the last known-good state.
     fn analyze_cargo_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
-        let new_value = match read_toml_file(path) {
-            Ok(v) => v,
-            Err(_) => {
-                return ConfigChangeOutcome::Ignore {
-                    note: Some(format!(
-                        "Cargo.toml parse failed at {}, will retry on next save",
-                        path.display()
-                    )),
-                };
-            }
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Cargo.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
         };
         let old_value = self
             .cargo_toml_snapshots
@@ -1749,16 +1746,13 @@ impl AppServer {
     }
 
     fn analyze_dioxus_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
-        let new_value = match read_toml_file(path) {
-            Ok(v) => v,
-            Err(_) => {
-                return ConfigChangeOutcome::Ignore {
-                    note: Some(format!(
-                        "Dioxus.toml parse failed at {}, will retry on next save",
-                        path.display()
-                    )),
-                };
-            }
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Dioxus.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
         };
         let old_value = self
             .dioxus_toml_snapshots
@@ -3087,16 +3081,13 @@ name = "demo"
         path: &Path,
         ctx: &AnalysisCtx,
     ) -> ConfigChangeOutcome {
-        let new_value = match read_toml_file(path) {
-            Ok(v) => v,
-            Err(_) => {
-                return ConfigChangeOutcome::Ignore {
-                    note: Some(format!(
-                        "Cargo.toml parse failed at {}, will retry on next save",
-                        path.display()
-                    )),
-                };
-            }
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Cargo.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
         };
         let old_value = snapshots
             .get(path)
