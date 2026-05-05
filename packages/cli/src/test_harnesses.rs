@@ -258,7 +258,7 @@ async fn test_harnesses() {
             ),
         TestHarnessBuilder::new("harness-fullstack-with-optional-tokio")
             .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
-            .deps(r#"serde = "1.0.219""#)
+            .deps(r#"serde = { workspace = true }"#)
             .deps(r#"tokio = { workspace = true, features = ["full"], optional = true }"#)
             .fetr(r#"default = []"#)
             .fetr(r#"server = ["dioxus/server", "dep:tokio"]"#)
@@ -362,6 +362,10 @@ impl TestHarnessBuilder {
         std::fs::create_dir_all(&test_dir).unwrap();
         std::fs::create_dir_all(test_dir.join("src")).unwrap();
 
+        // `dependencies` and `features` already end with `\n` (writeln! appends one), so closing
+        // the raw string immediately after `{features}` keeps the generated file at a single
+        // trailing newline. The previous form put 4 spaces and `"#` on their own line, which
+        // landed inside the string and produced "    " (no newline) at EOF — pure diff noise.
         let cargo_toml = format!(
             r#"[package]
 name = "{name}"
@@ -372,10 +376,8 @@ publish = false
 
 [dependencies]
 {dependencies}
-
 [features]
-{features}
-    "#,
+{features}"#,
             name = name,
             dependencies = dependencies,
             features = features

@@ -8,11 +8,8 @@ publish = false
 [dependencies]
 dioxus = { workspace = true, features = ["fullstack"] }
 
-
 [features]
 default=["desktop", "server"]
 desktop=["dioxus/desktop"]
 native=["dioxus/native"]
 server=["dioxus/server"]
-
-    

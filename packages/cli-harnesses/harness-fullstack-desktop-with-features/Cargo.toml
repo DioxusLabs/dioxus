@@ -9,10 +9,7 @@ publish = false
 dioxus = { workspace = true, features = ["fullstack"] }
 anyhow = { workspace = true, optional = true }
 
-
 [features]
 desktop=["dioxus/desktop", "has_anyhow"]
 has_anyhow=["dep:anyhow"]
 server=["dioxus/server"]
-
-    

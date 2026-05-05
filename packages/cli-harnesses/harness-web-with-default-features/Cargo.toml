@@ -8,9 +8,6 @@ publish = false
 [dependencies]
 dioxus = { workspace = true }
 
-
 [features]
 default=["other"]
 other=[]
-
-    
