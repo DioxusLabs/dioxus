@@ -22,6 +22,7 @@ pub struct JsAssetOptions {
     minify: bool,
     preload: bool,
     static_head: bool,
+    module: bool,
 }
 
 impl Default for JsAssetOptions {
@@ -42,6 +43,7 @@ impl JsAssetOptions {
             preload: false,
             minify: true,
             static_head: false,
+            module: false,
         }
     }
 
@@ -58,6 +60,11 @@ impl JsAssetOptions {
     /// Check if the asset is minified
     pub const fn minified(&self) -> bool {
         self.minify
+    }
+
+    /// Check whether the asset is declared as an ES module
+    pub const fn is_module(&self) -> bool {
+        self.module
     }
 }
 
@@ -113,6 +120,27 @@ impl AssetOptionsBuilder<JsAssetOptions> {
     #[allow(unused)]
     pub const fn with_preload(mut self, preload: bool) -> Self {
         self.variant.preload = preload;
+        self
+    }
+
+    /// Mark the asset as an ES module (default: false)
+    ///
+    /// When true, the script tag emitted via `with_static_head(true)` is rendered as
+    /// `<script type="module" ...>`, and the file is delivered with its module syntax
+    /// (`import`/`export`) preserved so the browser can resolve imports natively at
+    /// runtime. The default treats the file as a classic script: `<script>` is emitted
+    /// without `type="module"`, and minification preserves classic-script semantics.
+    ///
+    /// Note: this does not perform build-time bundling. If you need imports resolved
+    /// into a single file, pre-bundle with your tool of choice and ship the result.
+    ///
+    /// ```rust
+    /// # use manganis::{asset, Asset, AssetOptions};
+    /// const _: Asset = asset!("/assets/script.js", AssetOptions::js().with_module(true));
+    /// ```
+    #[allow(unused)]
+    pub const fn with_module(mut self, module: bool) -> Self {
+        self.variant.module = module;
         self
     }
 
