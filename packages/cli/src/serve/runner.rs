@@ -2374,7 +2374,10 @@ opt-level = 3
     #[test]
     fn cargo_add_dependency_rebuilds() {
         let new = parse(&format!(
-            "{CARGO_BASELINE}\n[dependencies.tokio]\nversion = \"1\""
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
         ));
         let outcome = analyze_cargo_value(&parse(CARGO_BASELINE), &new, &ctx_dev_web());
         assert_rebuild(&outcome);
@@ -2403,7 +2406,10 @@ opt-level = 3
     #[test]
     fn cargo_add_dev_dependency_rebuilds() {
         let new = parse(&format!(
-            "{CARGO_BASELINE}\n[dev-dependencies.criterion]\nversion = \"0.5\""
+            r#"{CARGO_BASELINE}
+[dev-dependencies.criterion]
+version = "0.5"
+"#
         ));
         assert_rebuild(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
@@ -2415,7 +2421,10 @@ opt-level = 3
     #[test]
     fn cargo_add_build_dependency_rebuilds() {
         let new = parse(&format!(
-            "{CARGO_BASELINE}\n[build-dependencies]\ncc = \"1\""
+            r#"{CARGO_BASELINE}
+[build-dependencies]
+cc = "1"
+"#
         ));
         assert_rebuild(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
@@ -2427,7 +2436,10 @@ opt-level = 3
     #[test]
     fn cargo_add_target_specific_dep_rebuilds() {
         let new = parse(&format!(
-            "{CARGO_BASELINE}\n[target.'cfg(unix)'.dependencies]\nlibc = \"0.2\""
+            r#"{CARGO_BASELINE}
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+"#
         ));
         assert_rebuild(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
@@ -2515,8 +2527,13 @@ opt-level = 3
     fn cargo_change_inherited_profile_rebuilds() {
         // Active profile "android-dev" inherits from "dev". A change to [profile.dev] must
         // rebuild because it propagates through the inherits chain.
-        let baseline =
-            format!("{CARGO_BASELINE}\n[profile.android-dev]\ninherits = \"dev\"\nopt-level = 1\n");
+        let baseline = format!(
+            r#"{CARGO_BASELINE}
+[profile.android-dev]
+inherits = "dev"
+opt-level = 1
+"#
+        );
         let modified = baseline.replacen("opt-level = 0", "opt-level = 1", 1);
         let ctx = AnalysisCtx {
             active_profile: "android-dev".to_string(),
@@ -2579,12 +2596,14 @@ serde = "2"
 
     #[test]
     fn cargo_change_patch_rebuilds() {
-        let baseline = CARGO_BASELINE;
         let modified = format!(
-            "{CARGO_BASELINE}\n[patch.crates-io]\nserde = {{ git = \"https://github.com/serde-rs/serde\" }}\n"
+            r#"{CARGO_BASELINE}
+[patch.crates-io]
+serde = {{ git = "https://github.com/serde-rs/serde" }}
+"#
         );
         assert_rebuild(&analyze_cargo_value(
-            &parse(&baseline),
+            &parse(CARGO_BASELINE),
             &parse(&modified),
             &ctx_dev_web(),
         ));
@@ -2592,7 +2611,12 @@ serde = "2"
 
     #[test]
     fn cargo_add_lib_section_rebuilds() {
-        let modified = format!("{CARGO_BASELINE}\n[lib]\nname = \"demo_lib\"\n");
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[lib]
+name = "demo_lib"
+"#
+        );
         assert_rebuild(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
             &parse(&modified),
@@ -2602,10 +2626,20 @@ serde = "2"
 
     #[test]
     fn cargo_change_bin_path_rebuilds() {
-        let baseline =
-            format!("{CARGO_BASELINE}\n[[bin]]\nname = \"demo\"\npath = \"src/main.rs\"\n");
-        let modified =
-            format!("{CARGO_BASELINE}\n[[bin]]\nname = \"demo\"\npath = \"src/bin.rs\"\n");
+        let baseline = format!(
+            r#"{CARGO_BASELINE}
+[[bin]]
+name = "demo"
+path = "src/main.rs"
+"#
+        );
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[[bin]]
+name = "demo"
+path = "src/bin.rs"
+"#
+        );
         assert_rebuild(&analyze_cargo_value(
             &parse(&baseline),
             &parse(&modified),
@@ -2615,7 +2649,12 @@ serde = "2"
 
     #[test]
     fn cargo_add_lints_section_ignored() {
-        let modified = format!("{CARGO_BASELINE}\n[lints.rust]\nunsafe_code = \"forbid\"\n");
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[lints.rust]
+unsafe_code = "forbid"
+"#
+        );
         assert_ignore(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
             &parse(&modified),
@@ -2650,7 +2689,8 @@ serde = "2"
     fn cargo_add_authors_ignored() {
         let modified = CARGO_BASELINE.replace(
             r#"license = "MIT""#,
-            "license = \"MIT\"\nauthors = [\"jon\"]",
+            r#"license = "MIT"
+authors = ["jon"]"#,
         );
         assert_ignore(&analyze_cargo_value(
             &parse(CARGO_BASELINE),
@@ -2784,7 +2824,8 @@ identifier = "com.example.demo.android"
     fn dioxus_change_tailwind_input_rebuilds() {
         let modified = DIOXUS_BASELINE.replace(
             r#"public_dir = "public""#,
-            "public_dir = \"public\"\ntailwind_input = \"src/input.css\"",
+            r#"public_dir = "public"
+tailwind_input = "src/input.css""#,
         );
         assert_rebuild(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
@@ -2795,8 +2836,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_add_proxy_warns_restart() {
-        let modified =
-            format!("{DIOXUS_BASELINE}\n[[web.proxy]]\nbackend = \"http://localhost:9999/api\"\n");
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[[web.proxy]]
+backend = "http://localhost:9999/api"
+"#
+        );
         assert_warn(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
@@ -2806,8 +2851,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_change_proxy_backend_warns_restart() {
-        let baseline =
-            format!("{DIOXUS_BASELINE}\n[[web.proxy]]\nbackend = \"http://localhost:9999/api\"\n");
+        let baseline = format!(
+            r#"{DIOXUS_BASELINE}
+[[web.proxy]]
+backend = "http://localhost:9999/api"
+"#
+        );
         let modified = baseline.replace("9999", "8888");
         assert_warn(&analyze_dioxus_value(
             &parse(&baseline),
@@ -2818,7 +2867,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_enable_https_warns_restart() {
-        let modified = format!("{DIOXUS_BASELINE}\n[web.https]\nenabled = true\n");
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web.https]
+enabled = true
+"#
+        );
         assert_warn(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
@@ -2840,7 +2894,10 @@ identifier = "com.example.demo.android"
     #[test]
     fn dioxus_add_dev_resource_script_rebuilds() {
         let modified = format!(
-            "{DIOXUS_BASELINE}\n[web.resource.dev]\nscript = [\"http://example.com/x.js\"]\n"
+            r#"{DIOXUS_BASELINE}
+[web.resource.dev]
+script = ["http://example.com/x.js"]
+"#
         );
         assert_rebuild(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
@@ -2864,7 +2921,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_change_components_section_ignored() {
-        let modified = format!("{DIOXUS_BASELINE}\n[components]\ngit = \"https://example.com\"\n");
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[components]
+git = "https://example.com"
+"#
+        );
         assert_ignore(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
@@ -2874,7 +2936,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_change_wasm_opt_level_ignored() {
-        let modified = format!("{DIOXUS_BASELINE}\n[web.wasm_opt]\nlevel = \"3\"\n");
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web.wasm_opt]
+level = "3"
+"#
+        );
         assert_ignore(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
@@ -2884,7 +2951,12 @@ identifier = "com.example.demo.android"
 
     #[test]
     fn dioxus_change_pre_compress_ignored() {
-        let modified = format!("{DIOXUS_BASELINE}\n[web]\npre_compress = true\n");
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web]
+pre_compress = true
+"#
+        );
         assert_ignore(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
             &parse(&modified),
@@ -2924,7 +2996,10 @@ identifier = "com.example.demo.android"
     #[test]
     fn dioxus_add_permission_rebuilds() {
         let modified = format!(
-            "{DIOXUS_BASELINE}\n[permissions]\ncamera = {{ description = \"need camera\" }}\n"
+            r#"{DIOXUS_BASELINE}
+[permissions]
+camera = {{ description = "need camera" }}
+"#
         );
         assert_rebuild(&analyze_dioxus_value(
             &parse(DIOXUS_BASELINE),
@@ -3057,7 +3132,12 @@ name = "demo"
         let mut snaps = HashMap::new();
         seed_cargo_into(&mut snaps, &path);
 
-        let modified = format!("{CARGO_BASELINE}\n[dependencies.tokio]\nversion = \"1\"\n");
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
         std::fs::write(&path, &modified).unwrap();
         assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
     }
@@ -3082,7 +3162,12 @@ name = "demo"
         }
 
         // Subsequent valid save still diffs against the *seeded* baseline.
-        let modified = format!("{CARGO_BASELINE}\n[dependencies.tokio]\nversion = \"1\"\n");
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
         std::fs::write(&path, &modified).unwrap();
         assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
     }
@@ -3096,7 +3181,12 @@ name = "demo"
         let mut snaps = HashMap::new();
         seed_cargo_into(&mut snaps, &path);
 
-        let modified = format!("{CARGO_BASELINE}\n[dependencies.tokio]\nversion = \"1\"\n");
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
         std::fs::write(&path, &modified).unwrap();
         assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
 
