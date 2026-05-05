@@ -13,3 +13,4 @@ dioxus = { workspace = true, features = ["fullstack"] }
 web=["dioxus/web"]
 server=["dioxus/server"]
 
+    

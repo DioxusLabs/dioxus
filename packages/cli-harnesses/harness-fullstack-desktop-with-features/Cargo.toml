@@ -15,3 +15,4 @@ desktop=["dioxus/desktop", "has_anyhow"]
 has_anyhow=["dep:anyhow"]
 server=["dioxus/server"]
 
+    

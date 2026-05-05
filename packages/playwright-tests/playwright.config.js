@@ -41,6 +41,7 @@ const ALL_SERVERS = [
   { specs: ["default-features-disabled.spec.js"], port: 8002, cwd: "default-features-disabled", command: `${dx} run --force-sequential --addr 127.0.0.1 --port 8002` },
   { specs: ["web-patch.spec.js"], port: 9980, cwd: "web-hot-patch-temp", setup: () => copyToTemp("web-hot-patch", "web-hot-patch-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9980 --hot-patch --exit-on-error` },
   { specs: ["web-patch-fullstack.spec.js"], port: 9981, cwd: "web-hot-patch-fullstack-temp", setup: () => copyToTemp("web-hot-patch-fullstack", "web-hot-patch-fullstack-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9981 --hot-patch --exit-on-error` },
+  { specs: ["web-config-watcher.spec.js"], port: 9982, cwd: "web-config-watcher-temp", setup: () => copyToTemp("web-config-watcher", "web-config-watcher-temp"), command: `${dx} serve --verbose --force-sequential --web --addr 127.0.0.1 --port 9982 --hot-patch --exit-on-error` },
 ];
 
 if (process.platform === "win32") {

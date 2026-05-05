@@ -82,6 +82,9 @@ pub(crate) struct AppServer {
 
     // File changes that arrived while a build was in progress, to be processed after build completes
     pub(crate) pending_file_changes: Vec<PathBuf>,
+
+    // Snapshots of Cargo.toml / Dioxus.toml files for field-aware diffing on change.
+    pub(crate) config_watcher: super::ConfigWatcher,
 }
 
 pub(crate) struct CachedFile {
@@ -189,6 +192,43 @@ impl AppServer {
         // Encourage the user to update to a new dx version
         crate::update::log_if_cli_could_update();
 
+        // Seed the config-file watcher with current snapshots of every Cargo.toml + Dioxus.toml
+        // we know about. Field-aware diffing on subsequent edits decides whether to rebuild,
+        // warn, or ignore. See `ConfigWatcher` for the classification rules.
+        let mut config_watcher =
+            super::ConfigWatcher::new(client.build.profile.clone(), client.build.bundle);
+        let workspace_cargo = workspace.workspace_root().join("Cargo.toml");
+        config_watcher.seed_cargo(&workspace_cargo);
+        for member in workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                let mp = krate.manifest_path.as_std_path();
+                if mp != workspace_cargo {
+                    config_watcher.seed_cargo(mp);
+                }
+            }
+        }
+        // Walk up from the client crate's manifest dir for Dioxus.toml — same search the
+        // Workspace::load_dioxus_config method uses.
+        {
+            let crate_dir = client.build.crate_dir();
+            let workspace_root = workspace.workspace_root();
+            let mut current = crate_dir.canonicalize().unwrap_or(crate_dir);
+            let workspace_root = workspace_root
+                .canonicalize()
+                .unwrap_or(workspace_root.clone());
+            while current.starts_with(&workspace_root) {
+                for name in ["Dioxus.toml", "dioxus.toml"] {
+                    let p = current.join(name);
+                    if p.is_file() {
+                        config_watcher.seed_dioxus(&p);
+                    }
+                }
+                if !current.pop() {
+                    break;
+                }
+            }
+        }
+
         // Create the runner
         let mut runner = Self {
             file_map: Default::default(),
@@ -216,6 +256,7 @@ impl AppServer {
             server_args,
             client_args,
             pending_file_changes: Vec::new(),
+            config_watcher,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -421,6 +462,10 @@ impl AppServer {
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
         let mut needs_rust_rebuild = false;
+        // Cargo.toml / Dioxus.toml edits change the dependency graph or build inputs in ways
+        // hotpatch can't reason about — force a from-scratch rebuild instead of `patch_rebuild`
+        // when this is true.
+        let mut force_full_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -430,6 +475,29 @@ impl AppServer {
                 .extension()
                 .and_then(|v| v.to_str())
                 .unwrap_or_default();
+
+            // Cargo.toml / Dioxus.toml — field-aware classification decides between full rebuild,
+            // "restart required" warning, and ignore-as-cosmetic. See [`ConfigWatcher`].
+            let filename = path.file_name().and_then(|v| v.to_str()).unwrap_or_default();
+            match filename {
+                "Cargo.toml" => {
+                    let outcome = self.config_watcher.analyze_cargo_toml(path);
+                    if self.apply_config_outcome(outcome, path) {
+                        needs_rust_rebuild = true;
+                        force_full_rebuild = true;
+                    }
+                    continue;
+                }
+                "Dioxus.toml" | "dioxus.toml" => {
+                    let outcome = self.config_watcher.analyze_dioxus_toml(path);
+                    if self.apply_config_outcome(outcome, path) {
+                        needs_rust_rebuild = true;
+                        force_full_rebuild = true;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
@@ -556,14 +624,22 @@ impl AppServer {
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
         if needs_rust_rebuild {
             match self.hotreload_mode {
-                // In hotpatch, we can only issue patches if the original build completed
-                HotReloadMode::Hotpatch if !self.has_hotpatchable_builds() => {
+                // In hotpatch, we can only issue patches if the original build completed.
+                // `force_full_rebuild` is set when a Cargo.toml / Dioxus.toml change rewires the
+                // dependency graph or build inputs — patch_rebuild can't handle that, so we go
+                // through the fat-rebuild path even when patches are otherwise available.
+                HotReloadMode::Hotpatch
+                    if force_full_rebuild || !self.has_hotpatchable_builds() =>
+                {
                     self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
                     if let Some(server) = self.server.as_mut() {
                         server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
                     }
                     self.clear_hot_reload_changes();
                     self.clear_cached_rsx();
+                    if force_full_rebuild {
+                        self.clear_patches();
+                    }
                     server.send_reload_start().await;
                 }
 
@@ -637,6 +713,45 @@ impl AppServer {
                 server.send_hotreload(msg).await;
             } else {
                 tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring file change: {}", file);
+            }
+        }
+    }
+
+    /// Map a [`ConfigChangeOutcome`] from `ConfigWatcher` to user-facing log output and a
+    /// boolean indicating whether the runner should treat the file as triggering a rebuild.
+    ///
+    /// `WarnRestart` paths log a warning but explicitly do *not* set `needs_rust_rebuild`,
+    /// because the field that changed is only consumed at devserver/webserver boot.
+    fn apply_config_outcome(
+        &self,
+        outcome: super::ConfigChangeOutcome,
+        path: &Path,
+    ) -> bool {
+        let workspace_dir = self.client.build.workspace_dir().display().to_string();
+        let display_file = path
+            .display()
+            .to_string()
+            .trim_start_matches(&workspace_dir)
+            .trim_start_matches('/')
+            .to_string();
+        match outcome {
+            super::ConfigChangeOutcome::FullRebuild { reason } => {
+                tracing::info!("Full rebuild: {} ({display_file})", reason);
+                true
+            }
+            super::ConfigChangeOutcome::WarnRestart { reason } => {
+                tracing::warn!(
+                    "{reason} ({display_file})"
+                );
+                false
+            }
+            super::ConfigChangeOutcome::Ignore { note } => {
+                if let Some(note) = note {
+                    tracing::debug!("{note}");
+                } else {
+                    tracing::debug!(dx_src = ?TraceSrc::Dev, "Ignoring config edit: {display_file}");
+                }
+                false
             }
         }
     }
