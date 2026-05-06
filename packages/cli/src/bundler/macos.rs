@@ -197,8 +197,8 @@ impl BundleContext<'_> {
 
             sign_paths(identity, sign_targets, &macos_settings).await?;
 
-            let should_notarize =
-                std::env::var("APPLE_ID").is_ok() || std::env::var("APPLE_API_KEY").is_ok();
+            let should_notarize = std::env::var("APPLE_ID").is_ok_and(|var| !var.is_empty())
+                || std::env::var("APPLE_API_KEY").is_ok_and(|var| !var.is_empty());
 
             if should_notarize {
                 let zip_path = output_dir.join(format!("{bundle_name}.zip"));
@@ -352,8 +352,8 @@ impl BundleContext<'_> {
             )
             .await?;
 
-            let should_notarize =
-                std::env::var("APPLE_ID").is_ok() || std::env::var("APPLE_API_KEY").is_ok();
+            let should_notarize = std::env::var("APPLE_ID").is_ok_and(|var| !var.is_empty())
+                || std::env::var("APPLE_API_KEY").is_ok_and(|var| !var.is_empty());
 
             if should_notarize {
                 notarize(&dmg_path, &dmg_path).await?;
@@ -637,7 +637,9 @@ fn copy_framework(src: &Path, frameworks_dir: &Path) -> Result<()> {
 
 /// Set up the signing identity.
 async fn setup_keychain(identity: Option<&str>) -> Result<Option<SigningIdentity>> {
-    let certificate_encoded = std::env::var("APPLE_CERTIFICATE").ok();
+    let certificate_encoded = std::env::var("APPLE_CERTIFICATE")
+        .ok()
+        .filter(|var| !var.is_empty());
     let certificate_password = std::env::var("APPLE_CERTIFICATE_PASSWORD")
         .ok()
         .unwrap_or_default();
@@ -854,12 +856,22 @@ async fn sign_path(
 
 /// Notarize a .app or .dmg with Apple's notary service.
 async fn notarize(notarize_path: &Path, staple_path: &Path) -> Result<()> {
-    let apple_id = std::env::var("APPLE_ID").ok();
-    let apple_password = std::env::var("APPLE_PASSWORD").ok();
-    let apple_team_id = std::env::var("APPLE_TEAM_ID").ok();
-    let api_key = std::env::var("APPLE_API_KEY").ok();
-    let api_issuer = std::env::var("APPLE_API_ISSUER").ok();
-    let api_key_path = std::env::var("APPLE_API_KEY_PATH").ok();
+    let apple_id = std::env::var("APPLE_ID").ok().filter(|var| !var.is_empty());
+    let apple_password = std::env::var("APPLE_PASSWORD")
+        .ok()
+        .filter(|var| !var.is_empty());
+    let apple_team_id = std::env::var("APPLE_TEAM_ID")
+        .ok()
+        .filter(|var| !var.is_empty());
+    let api_key = std::env::var("APPLE_API_KEY")
+        .ok()
+        .filter(|var| !var.is_empty());
+    let api_issuer = std::env::var("APPLE_API_ISSUER")
+        .ok()
+        .filter(|var| !var.is_empty());
+    let api_key_path = std::env::var("APPLE_API_KEY_PATH")
+        .ok()
+        .filter(|var| !var.is_empty());
 
     let mut cmd = Command::new("xcrun");
     cmd.args(["notarytool", "submit"]);
