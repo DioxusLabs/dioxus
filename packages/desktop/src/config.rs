@@ -20,6 +20,8 @@ type CustomEventHandler = Box<
         ),
 >;
 
+/// A function taking a URL and returning whether the webview should navigate to it or open it in
+/// the browser. If missing in the config, all URLs will be allowed.
 type NavigationHandler = Box<dyn Fn(&str) -> bool + 'static>;
 
 /// The closing behaviour of specific application window.

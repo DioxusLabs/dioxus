@@ -364,18 +364,25 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(move |var| {
-                // By default, no navigation is allowed other than serving the index and assets.
-                // However, allow navigation if the user provides a custom navigation handler. All
-                // other requests will be opened in a browser.
+                // Serve the index and assets.
                 if var.starts_with("dioxus://")
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")
                 {
                     // After the page has loaded once, don't allow any more navigation
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    !page_loaded
-                } else if let Some(handler) = navigation_handler.as_ref() {
-                    handler(&var)
+                    return !page_loaded;
+                }
+
+                // By default, navigation is allowed. Users can have more granular control by
+                // providing a navigation handler. If not allowed, valid URLs will be opened in the
+                // browser.
+                let allow_nav = match navigation_handler.as_ref() {
+                    Some(handler) => handler(&var),
+                    None => true,
+                };
+                if allow_nav {
+                    true
                 } else {
                     if var.starts_with("http://")
                         || var.starts_with("https://")
