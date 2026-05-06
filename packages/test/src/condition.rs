@@ -378,7 +378,7 @@ impl<'vdom> ElementCondition<'vdom> {
     pub fn immediately(&'vdom self) -> Result<ResolvedElement<'vdom>, TesterError> {
         match self.check() {
             ControlFlow::Continue(_) => Err(self.error.clone()),
-            ControlFlow::Break(b) => Ok(self.data.node_id_to_element(b)),
+            ControlFlow::Break(b) => Ok(self.data.build_resolved_element(b)),
         }
     }
 }
@@ -412,14 +412,14 @@ where
     fn matches(&self, matcher: &M) -> ControlFlow<()> {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => ControlFlow::Continue(()),
-            ControlFlow::Break(n) => matcher.matches(self.data.node_id_to_element(n)),
+            ControlFlow::Break(n) => matcher.matches(self.data.build_resolved_element(n)),
         }
     }
 
     fn explain_match_failure(&self, matcher: &M) -> String {
         match Waitable::check(self) {
             ControlFlow::Continue(_) => self.error.to_string(),
-            ControlFlow::Break(n) => matcher.explain_failure(self.data.node_id_to_element(n)),
+            ControlFlow::Break(n) => matcher.explain_failure(self.data.build_resolved_element(n)),
         }
     }
 }
@@ -431,7 +431,7 @@ impl<'vdom> IntoFuture for ElementCondition<'vdom> {
     fn into_future(mut self) -> Self::IntoFuture {
         Box::pin(async move {
             let node_id = self.to_waitable_future().await?;
-            Ok(self.data.node_id_to_element(node_id))
+            Ok(self.data.build_resolved_element(node_id))
         })
     }
 }
@@ -588,7 +588,7 @@ impl<'vdom> AllElementsCondition<'vdom> {
         let node_ids = self.data.get_elements(&self.query);
         node_ids
             .into_iter()
-            .map(|node_id| self.data.node_id_to_element(node_id))
+            .map(|node_id| self.data.build_resolved_element(node_id))
             .collect()
     }
 }

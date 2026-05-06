@@ -1,20 +1,20 @@
-use blitz_dom::Node;
-use dioxus_core::{ElementId, Event};
+use blitz_dom::{DocGuard, Node};
+use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{
     Modifiers, PlatformEventData,
     geometry::{Coordinates, euclid::Point2D},
 };
-use dioxus_native_dom::{DioxusDocument, synthetic_click_event};
+use dioxus_native_dom::synthetic_click_event;
 use std::rc::Rc;
 
 /// A reference to DOM node managed by a [crate::DocumentTester].
 ///
 /// This provides facilities for interacting with the node, querying its layout properties, and
 /// obtaining its content.
-#[derive(Clone, Copy)]
 pub struct ResolvedElement<'doc> {
-    pub(crate) document: &'doc DioxusDocument,
-    pub(crate) node: &'doc Node,
+    pub(crate) vdom: &'doc VirtualDom,
+    pub(crate) document: DocGuard<'doc>,
+    pub(crate) node_id: NodeId,
 }
 
 impl<'doc> ResolvedElement<'doc> {
@@ -29,7 +29,7 @@ impl<'doc> ResolvedElement<'doc> {
             "click",
             Event::new(
                 Rc::new(PlatformEventData::new(synthetic_click_event(
-                    self.node,
+                    self.node_id.resolve(&self.document),
                     Modifiers::empty(),
                 ))),
                 true,
@@ -54,7 +54,7 @@ impl<'doc> ResolvedElement<'doc> {
     /// specific event type. This method panics if the event payload has the wrong type.
     pub fn send_event(&self, name: &str, event: Event<PlatformEventData>) {
         let propagates = event.propagates();
-        self.document.vdom.runtime().handle_event(
+        self.vdom.runtime().handle_event(
             name,
             Event::new(event.data, propagates),
             self.get_element_id()
@@ -64,14 +64,15 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns a `String` consisting of the HTML of this element and all of its children.
     pub fn outer_html(&self) -> String {
-        self.node.outer_html()
+        self.node_id.resolve(&self.document).outer_html()
     }
 
     /// Returns a `String` consisting of the HTML of this element's children, not including this
     /// element itself.
     pub fn inner_html(&self) -> String {
         let inner_html_parts: Vec<_> = self
-            .node
+            .node_id
+            .resolve(&self.document)
             .children
             .iter()
             .filter_map(|child_id| {
@@ -97,7 +98,7 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the upper-left corner of this element.
     pub fn upper_left(&self) -> Coordinates {
-        let upper_left = self.node.final_layout.location;
+        let upper_left = self.node_id.resolve(&self.document).final_layout.location;
         Coordinates::new(
             Self::to_point2d(upper_left),
             Self::to_point2d(upper_left),
@@ -108,8 +109,9 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the upper-right corner of this element.
     pub fn upper_right(&self) -> Coordinates {
-        let mut upper_right = self.node.final_layout.location;
-        upper_right.x += self.node.final_layout.content_box_width();
+        let node = self.node_id.resolve(&self.document);
+        let mut upper_right = node.final_layout.location;
+        upper_right.x += node.final_layout.content_box_width();
         Coordinates::new(
             Self::to_point2d(upper_right),
             Self::to_point2d(upper_right),
@@ -120,8 +122,9 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the lower-left corner of this element.
     pub fn lower_left(&self) -> Coordinates {
-        let mut lower_left = self.node.final_layout.location;
-        lower_left.y += self.node.final_layout.content_box_height();
+        let node = self.node_id.resolve(&self.document);
+        let mut lower_left = node.final_layout.location;
+        lower_left.y += node.final_layout.content_box_height();
         Coordinates::new(
             Self::to_point2d(lower_left),
             Self::to_point2d(lower_left),
@@ -132,9 +135,10 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the lower-right corner of this element.
     pub fn lower_right(&self) -> Coordinates {
-        let mut lower_right = self.node.final_layout.location;
-        lower_right.x += self.node.final_layout.content_box_width();
-        lower_right.y += self.node.final_layout.content_box_height();
+        let node = self.node_id.resolve(&self.document);
+        let mut lower_right = node.final_layout.location;
+        lower_right.x += node.final_layout.content_box_width();
+        lower_right.y += node.final_layout.content_box_height();
         Coordinates::new(
             Self::to_point2d(lower_right),
             Self::to_point2d(lower_right),
@@ -149,13 +153,15 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated size of this element as a tuple (width, height) in screen pixels.
     pub fn size(&self) -> (f32, f32) {
-        let height = self.node.final_layout.content_box_height();
-        let width = self.node.final_layout.content_box_width();
+        let node = self.node_id.resolve(&self.document);
+        let height = node.final_layout.content_box_height();
+        let width = node.final_layout.content_box_width();
         (width, height)
     }
 
     fn get_element_id(&self) -> Option<ElementId> {
-        self.node
+        self.node_id
+            .resolve(&self.document)
             .element_data()?
             .attrs
             .iter()
@@ -168,7 +174,24 @@ impl<'doc> ResolvedElement<'doc> {
 impl<'doc> std::fmt::Debug for ResolvedElement<'doc> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ResolvedElement")
-            .field("node", &self.node)
+            .field("node_id", &self.node_id)
             .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum NodeId {
+    Root,
+    Node(usize),
+}
+
+impl NodeId {
+    fn resolve<'doc>(self, document: &'doc DocGuard<'doc>) -> &'doc Node {
+        match self {
+            NodeId::Root => document.root_element(),
+            NodeId::Node(node_id) => document
+                .get_node(node_id)
+                .expect("Element must be attached"),
+        }
     }
 }

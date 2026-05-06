@@ -1,6 +1,6 @@
 use crate::{
     condition::{AllElementsCondition, ElementCondition},
-    element::ResolvedElement,
+    element::{NodeId, ResolvedElement},
     result::TesterError,
 };
 use blitz_dom::{Document as _, SelectorList};
@@ -69,9 +69,10 @@ impl DocumentTester {
     ///
     /// This method must be invoked before querying any elements.
     pub fn build(mut self) -> Self {
-        self.document.inner.viewport_mut().window_size = self.window_size.unwrap_or((500, 800));
+        self.document.inner_mut().viewport_mut().window_size =
+            self.window_size.unwrap_or((500, 800));
         self.document.initial_build();
-        self.document.resolve(self.now);
+        self.document.inner_mut().resolve(self.now);
         self
     }
 
@@ -121,7 +122,7 @@ impl DocumentTester {
     /// This advances any CSS animations which may be in progress and recalculates the layout.
     pub async fn advance_time(&mut self, duration: Duration) {
         self.now += duration.as_secs_f64();
-        self.document.resolve(self.now);
+        self.document.inner_mut().resolve(self.now);
     }
 
     /// Returns an element referencing the root DOM node managed by this tester.
@@ -130,9 +131,11 @@ impl DocumentTester {
     /// for awaiting expectations. If the test must await an expectation on the root element use
     /// [Self::query] with the CSS selector `:root`.
     pub fn root<'vdom>(&'vdom self) -> ResolvedElement<'vdom> {
+        let document = self.document.inner();
         ResolvedElement {
-            document: &self.document,
-            node: self.document.root_element(),
+            vdom: &self.document.vdom,
+            document,
+            node_id: NodeId::Root,
         }
     }
 
@@ -142,14 +145,14 @@ impl DocumentTester {
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub(crate) fn get_element(&self, query: &SelectorList) -> Option<usize> {
-        self.document.query_selector_raw(query)
+        self.document.inner().query_selector_raw(query)
     }
 
     /// Immediately returns all already elements in the DOM satisfying the given query.
     ///
     /// Returns an error if the Query contains a syntactically invalid CSS selector.
     pub(crate) fn get_elements(&self, query: &SelectorList) -> Vec<usize> {
-        self.document.query_selector_all_raw(query).to_vec()
+        self.document.inner().query_selector_all_raw(query).to_vec()
     }
 
     /// Returns a representation of first element in the DOM satisfying the given query.
@@ -220,14 +223,11 @@ impl DocumentTester {
         AllElementsCondition::new(self, selector)
     }
 
-    pub(crate) fn node_id_to_element<'vdom>(&'vdom self, node_id: usize) -> ResolvedElement<'vdom> {
-        let node = self
-            .document
-            .get_node(node_id)
-            .expect("Element must be attached");
+    pub(crate) fn build_resolved_element(&self, id: usize) -> ResolvedElement<'_> {
         ResolvedElement {
-            document: &self.document,
-            node,
+            vdom: &self.document.vdom,
+            document: self.document.inner(),
+            node_id: NodeId::Node(id),
         }
     }
 }
@@ -247,6 +247,7 @@ pub trait TryIntoSelector {
 impl<T: AsRef<str>> TryIntoSelector for T {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
         document
+            .inner()
             .try_parse_selector_list(self.as_ref())
             .map_err(|_| {
                 TesterError::InvalidCssSelector(format!("Invalid CSS selector '{}'", self.as_ref()))
@@ -263,6 +264,7 @@ struct QueryByTestId(String);
 impl TryIntoSelector for QueryByTestId {
     fn try_into_selector(self, document: &DioxusDocument) -> Result<SelectorList, TesterError> {
         Ok(document
+            .inner()
             .try_parse_selector_list(&format!(r#"[data-testid="{}"]"#, self.0))
             .expect("Selector with testid should always parse"))
     }
