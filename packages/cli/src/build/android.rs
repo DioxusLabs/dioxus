@@ -382,7 +382,7 @@ impl BuildRequest {
         ctx.status_running_gradle();
 
         // When the build mode is set to release and there is an Android signature configuration, use assembleRelease
-        let build_type = if self.release && self.config.bundle.android.is_some() {
+        let build_type = if self.release {
             "assembleRelease"
         } else {
             "assembleDebug"
@@ -626,20 +626,24 @@ impl BuildRequest {
             .join("app-debug.apk")
     }
 
-    pub(crate) fn release_apk_path(&self) -> PathBuf {
+    pub(crate) fn release_apk_path(&self, signed: bool) -> PathBuf {
         self.root_dir()
             .join("app")
             .join("build")
             .join("outputs")
             .join("apk")
             .join("release")
-            .join("app-release.apk")
+            .join(if signed {
+                "app-release.apk"
+            } else {
+                "app-release-unsigned.apk"
+            })
     }
 
     pub(crate) fn android_apk_path(&self) -> PathBuf {
-        let assembled_release = self.release && self.config.bundle.android.is_some();
-        if assembled_release {
-            self.release_apk_path()
+        if self.release {
+            let is_signed = self.config.bundle.android.is_some();
+            self.release_apk_path(is_signed)
         } else {
             self.debug_apk_path()
         }
