@@ -19,4 +19,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 dioxus = { workspace = true }
-tokio = { version = "1.48", features = ["rt", "macros"] }
+tokio = { workspace = true, features = ["rt", "macros"] }
