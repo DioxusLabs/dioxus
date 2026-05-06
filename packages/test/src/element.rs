@@ -1,4 +1,4 @@
-use blitz_dom::{DocGuard, Node};
+use blitz_dom::{DocGuard, Node, Point};
 use dioxus_core::{ElementId, Event, VirtualDom};
 use dioxus_html::{
     Modifiers, PlatformEventData,
@@ -98,7 +98,11 @@ impl<'doc> ResolvedElement<'doc> {
 
     /// Returns the calculated [Coordinates] of the upper-left corner of this element.
     pub fn upper_left(&self) -> Coordinates {
-        let upper_left = self.node_id.resolve(&self.document).final_layout.location;
+        let node = self.node_id.resolve(&self.document);
+        let upper_left = Point {
+            x: node.final_layout.location.x,
+            y: node.final_layout.location.y,
+        };
         Coordinates::new(
             Self::to_point2d(upper_left),
             Self::to_point2d(upper_left),
@@ -110,7 +114,10 @@ impl<'doc> ResolvedElement<'doc> {
     /// Returns the calculated [Coordinates] of the upper-right corner of this element.
     pub fn upper_right(&self) -> Coordinates {
         let node = self.node_id.resolve(&self.document);
-        let mut upper_right = node.final_layout.location;
+        let mut upper_right = Point {
+            x: node.final_layout.location.x,
+            y: node.final_layout.location.y,
+        };
         upper_right.x += node.final_layout.content_box_width();
         Coordinates::new(
             Self::to_point2d(upper_right),
@@ -123,7 +130,10 @@ impl<'doc> ResolvedElement<'doc> {
     /// Returns the calculated [Coordinates] of the lower-left corner of this element.
     pub fn lower_left(&self) -> Coordinates {
         let node = self.node_id.resolve(&self.document);
-        let mut lower_left = node.final_layout.location;
+        let mut lower_left = Point {
+            x: node.final_layout.location.x,
+            y: node.final_layout.location.y,
+        };
         lower_left.y += node.final_layout.content_box_height();
         Coordinates::new(
             Self::to_point2d(lower_left),
@@ -136,7 +146,10 @@ impl<'doc> ResolvedElement<'doc> {
     /// Returns the calculated [Coordinates] of the lower-right corner of this element.
     pub fn lower_right(&self) -> Coordinates {
         let node = self.node_id.resolve(&self.document);
-        let mut lower_right = node.final_layout.location;
+        let mut lower_right = Point {
+            x: node.final_layout.location.x,
+            y: node.final_layout.location.y,
+        };
         lower_right.x += node.final_layout.content_box_width();
         lower_right.y += node.final_layout.content_box_height();
         Coordinates::new(
@@ -147,7 +160,7 @@ impl<'doc> ResolvedElement<'doc> {
         )
     }
 
-    fn to_point2d<Space>(point: taffy::geometry::Point<f32>) -> Point2D<f64, Space> {
+    fn to_point2d<Space>(point: Point<f32>) -> Point2D<f64, Space> {
         Point2D::new(point.x as f64, point.y as f64)
     }
 
