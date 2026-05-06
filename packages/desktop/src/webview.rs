@@ -375,7 +375,7 @@ impl WebviewInstance {
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
                     !page_loaded
                 } else if let Some(handler) = navigation_handler.as_ref() {
-                    return handler(&var);
+                    handler(&var)
                 } else {
                     if var.starts_with("http://")
                         || var.starts_with("https://")
