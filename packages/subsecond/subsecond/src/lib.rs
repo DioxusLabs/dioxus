@@ -594,24 +594,31 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
             .unwrap()
             .unchecked_into();
 
-        // ── SYNC SECTION — no `.await` past this point ────────────────
+        // ── HOST-STATE-MUTATING SECTION ───────────────────────────────
         //
-        // Everything below mutates shared JS state (linear memory, the
-        // indirect function table, the patch's data segment) and the
-        // jump-table pointer. We must not yield, because:
+        // Below we grow shared linear memory and the indirect function
+        // table, then async-instantiate the patch into them and commit
+        // the new jump table. There IS one `.await` for the instantiate
+        // (we can't avoid it: Chrome disallows synchronous
+        // `new WebAssembly.Instance` on the main thread for modules
+        // larger than 8MB, and patches routinely cross that), but it's
+        // safe — the original race we fixed wasn't about yielding here:
         //
-        //  * `memory.grow` detaches the previous `ArrayBuffer`. The old
-        //    code captured `memory.buffer()` BEFORE the awaits and then
-        //    read its `byteLength` to compute `__memory_base`; if any
-        //    other task ran a `memory.grow` during the awaits (e.g. an
-        //    allocator call from a concurrent render), the snapshot was
-        //    detached, `byteLength` returned 0, and the patch's data
-        //    segment ended up loaded over the host's stack/rodata.
-        //  * Two concurrent `apply_patch` tasks must not interleave
-        //    between memory/table grow and `commit_patch`. Doing all
-        //    side-effecting work in one synchronous turn guarantees that.
-        //  * If the future is cancelled before this point, host state
-        //    is untouched.
+        //  * `memory.grow` and `funcs.grow` each return their PRIOR
+        //    length atomically. Concurrent `apply_patch` tasks therefore
+        //    each get a unique, non-overlapping `memory_base` /
+        //    `table_base`, so two patches can't land on the same region.
+        //  * Host code can't observe the half-instantiated patch: the
+        //    new memory pages are zero, the new table slots are null,
+        //    and the jump table isn't committed until the very end of
+        //    this block, so nothing redirects through the new slots.
+        //  * The original bug — using `memory.buffer().byteLength()`
+        //    captured before the awaits, which returned 0 if the buffer
+        //    had been detached by a concurrent grow — is gone because
+        //    we derive `memory_base` from `memory.grow()`'s return
+        //    value instead.
+        //  * Cancellation between grow and `commit_patch` leaks memory
+        //    pages and table slots, but doesn't corrupt anything.
         const PAGE_SIZE: u32 = 64 * 1024;
         let patch_pages = (dl_bytes.byte_length() as f64 / PAGE_SIZE as f64).ceil() as u32 + 1;
 
@@ -646,9 +653,16 @@ pub unsafe fn apply_patch(mut table: JumpTable) -> Result<(), PatchError> {
         let imports = Object::new();
         Reflect::set(&imports, &"env".into(), &env).unwrap();
 
-        // Synchronous instantiation of the precompiled module — writes
-        // the patch's data segment into memory at `memory_base`.
-        let instance = Instance::new(&module, &imports).unwrap();
+        // Async instantiation of the precompiled module. We use the
+        // (Module, imports) form of `WebAssembly.instantiate`, which
+        // resolves directly to an `Instance` (not `{module, instance}`).
+        // This is the no-size-limit path; the synchronous
+        // `new WebAssembly.Instance` constructor is capped at 8MB on
+        // Chrome's main thread.
+        let instance: Instance = JsFuture::from(WebAssembly::instantiate_module(&module, &imports))
+            .await
+            .unwrap()
+            .unchecked_into();
         let inst_exports: Object = instance.exports();
 
         // Run the patch's relocation thunks and constructors. Order
