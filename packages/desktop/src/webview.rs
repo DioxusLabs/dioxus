@@ -374,18 +374,19 @@ impl WebviewInstance {
                     return !page_loaded;
                 }
 
-                // External links always open somewhere else. Prevents the webview from navigating
-                if var.starts_with("http://")
-                    || var.starts_with("https://")
-                    || var.starts_with("mailto:")
-                {
-                    _ = webbrowser::open(&var);
-                    return false;
-                }
+                // // External links always open somewhere else. Prevents the webview from navigating
+                // if var.starts_with("http://")
+                //     || var.starts_with("https://")
+                //     || var.starts_with("mailto:")
+                // {
+                //     _ = webbrowser::open(&var);
+                //     return false;
+                // }
 
                 // By default, external links are allowed. This keeps things like iframes working.
                 // However, users can customize this to allow/disallow domains/routes/patterns.
-                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                // navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                true
             })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
