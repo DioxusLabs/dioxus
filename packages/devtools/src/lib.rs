@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use dioxus_core::internal::HotReloadedTemplate;
 use dioxus_core::{ScopeId, VirtualDom};
 use dioxus_signals::{GlobalKey, Signal, WritableExt};
@@ -11,6 +13,56 @@ use subsecond::PatchError;
 /// Assets need to be handled by the renderer.
 pub fn apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) {
     try_apply_changes(dom, msg).unwrap()
+}
+
+pub async fn wait_apply_change(dom: &VirtualDom, msg: &HotReloadMsg) {
+    let (tx, mut rx) = futures_channel::mpsc::unbounded::<()>();
+    let mut needed_hotpach = false;
+    subsecond::register_handler(Arc::new(move || {
+        _ = tx.unbounded_send(());
+    }));
+
+    _ = dom.runtime().in_scope(ScopeId::ROOT, || {
+        // 1. Update signals...
+        let ctx = dioxus_signals::get_global_context();
+        for template in &msg.templates {
+            let value = template.template.clone();
+            let key = GlobalKey::File {
+                file: template.key.file.as_str(),
+                line: template.key.line as _,
+                column: template.key.column as _,
+                index: template.key.index as _,
+            };
+            if let Some(mut signal) = ctx.get_signal_with_key(key.clone()) {
+                signal.set(Some(value));
+            }
+        }
+
+        // 2. Attempt to hotpatch
+        if let Some(jump_table) = msg.jump_table.as_ref().cloned()
+            && msg.for_build_id == Some(dioxus_cli_config::build_id())
+        {
+            let our_pid = if cfg!(target_family = "wasm") {
+                None
+            } else {
+                Some(std::process::id())
+            };
+
+            if msg.for_pid == our_pid {
+                needed_hotpach = true;
+
+                unsafe { subsecond::apply_patch(jump_table) }?;
+                dom.runtime().force_all_dirty();
+                ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
+            }
+        }
+
+        dioxus_core::Ok(())
+    });
+
+    // if needed_hotpach {
+    //     rx.recv().await.expect("rx recv to work");
+    // }
 }
 
 /// Applies template and literal changes to the VirtualDom, but doesn't panic if patching fails.
