@@ -2694,9 +2694,16 @@ impl BuildRequest {
         self.crate_target.kind[0].clone()
     }
 
+    /// The application name. PascalCase version of the crate name by default.
+    /// May be overridden using [`ApplicationConfig::name`][crate::ApplicationConfig::name].
     pub(crate) fn bundled_app_name(&self) -> String {
         use convert_case::{Case, Casing};
-        self.executable_name().to_case(Case::Pascal)
+
+        self.config
+            .application
+            .name
+            .clone()
+            .unwrap_or_else(|| self.executable_name().to_case(Case::Pascal))
     }
 
     /// Get the crate version from Cargo.toml (e.g., "0.1.0")
