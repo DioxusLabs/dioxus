@@ -374,25 +374,19 @@ impl WebviewInstance {
                     return !page_loaded;
                 }
 
-                // By default, navigation is allowed. Users can have more granular control by
-                // providing a navigation handler. If not allowed, valid URLs will be opened in the
-                // browser.
-                let allow_nav = match navigation_handler.as_ref() {
-                    Some(handler) => handler(&var),
-                    None => true,
-                };
-                if allow_nav {
-                    true
-                } else {
-                    if var.starts_with("http://")
-                        || var.starts_with("https://")
-                        || var.starts_with("mailto:")
-                    {
-                        _ = webbrowser::open(&var);
-                    }
-                    false
+                // External links always open somewhere else. Prevents the webview from navigating
+                if var.starts_with("http://")
+                    || var.starts_with("https://")
+                    || var.starts_with("mailto:")
+                {
+                    _ = webbrowser::open(&var);
+                    return false;
                 }
-            }) // prevent all navigations
+
+                // By default, external links are allowed. This keeps things like iframes working.
+                // However, users can customize this to allow/disallow domains/routes/patterns.
+                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+            })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
         // Enable https scheme on android, needed for secure context API, like the geolocation API
