@@ -98,12 +98,19 @@
             );
         in
         {
-          packages.dioxus-cli = (
-            rustPackage "dioxus-cli" {
+          packages.dioxus-cli =
+            (rustPackage "dioxus-cli" {
               binary = "dx";
               features = [ "no-downloads" ];
-            }
-          );
+            }).overrideAttrs
+              (_: {
+                # The nix sandbox has no .git and no .cargo_vcs_info.json, so
+                # build.rs has nothing to derive the commit from. Pass the
+                # flake's own input rev through the env-var override path.
+                # `self.rev` is set on a clean tree; `dirtyRev` on a dirty one
+                # (and includes a `-dirty` suffix, which build.rs accepts).
+                DIOXUS_CLI_GIT_SHA = inputs.self.rev or inputs.self.dirtyRev or "";
+              });
           packages.default = self'.packages.dioxus-cli;
           checks.dioxus-cli = self'.packages.dioxus-cli;
 
