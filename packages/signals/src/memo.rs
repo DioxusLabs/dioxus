@@ -258,7 +258,7 @@ where
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        crate::readable_deref_impl(self)
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 

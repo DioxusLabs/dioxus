@@ -281,7 +281,7 @@ where
     type Target = dyn Fn() -> T;
 
     fn deref(&self) -> &Self::Target {
-        dioxus_signals::readable_deref_impl(self)
+        unsafe { ReadableExt::deref_impl(self) }
     }
 }
 
