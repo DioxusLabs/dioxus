@@ -1,5 +1,0 @@
-[application]
-name = "config-watcher-fixture"
-
-[web.app]
-title = "initial-title"
