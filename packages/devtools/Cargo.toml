@@ -36,5 +36,5 @@ serde_json = { workspace = true }
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 
 [features]
-default = ["dep:futures-util", "dep:futures-channel"]
+default = []
 serve = ["dep:futures-util", "dep:futures-channel"]
