@@ -9,18 +9,18 @@ use quote::ToTokens;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 use syn::{
-    braced, bracketed,
+    Attribute, Expr, ExprClosure, Lit, Result,
+    token::{Brace, Star},
+};
+use syn::{
+    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath, braced,
+    bracketed,
     parse::ParseStream,
     punctuated::Punctuated,
     token::{Comma, Slash},
-    Error, ExprTuple, FnArg, Meta, PathArguments, PathSegment, Token, Type, TypePath,
 };
-use syn::{parse::Parse, parse_quote, Ident, ItemFn, LitStr, Path};
-use syn::{spanned::Spanned, LitBool, LitInt, Pat, PatType};
-use syn::{
-    token::{Brace, Star},
-    Attribute, Expr, ExprClosure, Lit, Result,
-};
+use syn::{Ident, ItemFn, LitStr, Path, parse::Parse, parse_quote};
+use syn::{LitBool, LitInt, Pat, PatType, spanned::Spanned};
 
 /// ## Usage
 ///
@@ -99,17 +99,18 @@ pub fn server(attr: proc_macro::TokenStream, mut item: TokenStream) -> TokenStre
     };
 
     let method = Method::Post(Ident::new("POST", proc_macro2::Span::call_site()));
+    let prefix = args
+        .prefix
+        .unwrap_or_else(|| LitStr::new("/api", Span::call_site()));
+
     let route: Route = Route {
         method: None,
         path_params: vec![],
         query_params: vec![],
         route_lit: args.fn_path,
         oapi_options: None,
-        server_args: Default::default(),
-        prefix: Some(
-            args.prefix
-                .unwrap_or_else(|| LitStr::new("/api", Span::call_site())),
-        ),
+        server_args: args.server_args,
+        prefix: Some(prefix),
         _input_encoding: args.input,
         _output_encoding: args.output,
     };
@@ -253,7 +254,7 @@ fn route_impl_with_route(
     let body_json_names = body_json_args
         .iter()
         .map(|(i, pat_type)| match &*pat_type.pat {
-            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+            Pat::Ident(pat_ident) => pat_ident.ident.clone(),
             _ => format_ident!("___Arg{}", i),
         })
         .collect::<Vec<_>>();
@@ -369,23 +370,24 @@ fn route_impl_with_route(
             .cloned()
             .unwrap_or_else(|| LitStr::new("", Span::call_site()));
 
-        let route_lit = if !as_axum_path.is_empty() {
-            quote! { #as_axum_path }
+        let route_lit = if let Some(lit) = as_axum_path {
+            quote! { #lit }
         } else {
+            let name =
+                route.route_lit.as_ref().cloned().unwrap_or_else(|| {
+                    LitStr::new(&fn_on_server_name.to_string(), Span::call_site())
+                });
             quote! {
                 concat!(
                     "/",
-                    stringify!(#fn_on_server_name)
+                    #name
                 )
             }
         };
 
-        let hash = match route.route_lit.as_ref() {
-            // Explicit route lit, no need to hash
-            Some(_) => quote! { "" },
-
+        let hash = match route.prefix.as_ref() {
             // Implicit route lit, we need to hash the function signature to avoid collisions
-            None => {
+            Some(_) if route.route_lit.is_none() => {
                 // let enable_hash = option_env!("DISABLE_SERVER_FN_HASH").is_none();
                 let key_env_var = match option_env!("SERVER_FN_OVERRIDE_KEY") {
                     Some(_) => "SERVER_FN_OVERRIDE_KEY",
@@ -398,6 +400,9 @@ fn route_impl_with_route(
                     )
                 }
             }
+
+            // Explicit route lit, no need to hash
+            _ => quote! { "" },
         };
 
         quote! {
@@ -416,7 +421,7 @@ fn route_impl_with_route(
         let input = &function.sig.inputs[query.arg_idx];
         let name = match input {
             FnArg::Typed(pat_type) => match pat_type.pat.as_ref() {
-                Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
+                Pat::Ident(pat_ident) => pat_ident.ident.clone(),
                 _ => format_ident!("___Arg{}", query.arg_idx),
             },
             FnArg::Receiver(_receiver) => panic!(),
@@ -554,7 +559,7 @@ fn route_impl_with_route(
                     )
                 }
 
-                // Extract the server arguments from the context
+                // Extract the server arguments from the context if needed.
                 let (#(#server_names,)*) = dioxus_fullstack::FullstackContext::extract::<(#(#server_types,)*), _>().await?;
 
                 // Call the function directly
@@ -593,7 +598,11 @@ struct QueryParam {
 }
 
 impl CompiledRoute {
-    fn to_axum_path_string(&self) -> String {
+    fn to_axum_path_string(&self) -> Option<String> {
+        if self.prefix.is_some() {
+            return None;
+        }
+
         let mut path = String::new();
 
         for (_slash, param) in &self.path_params {
@@ -614,7 +623,7 @@ impl CompiledRoute {
             }
         }
 
-        path
+        Some(path)
     }
 
     /// Removes the arguments in `route` from `args`, and merges them in the output.
@@ -722,13 +731,13 @@ impl CompiledRoute {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method specified both in macro and in attribute",
-                ))
+                ));
             }
             (None, None) => {
                 return Err(syn::Error::new(
                     Span::call_site(),
                     "HTTP method not specified in macro or in attribute",
-                ))
+                ));
             }
         };
 
@@ -763,7 +772,7 @@ impl CompiledRoute {
         });
 
         out.push(parse_quote!(
-            dioxus_server::axum::extract::Query(#query_tokens)
+            dioxus_fullstack::payloads::Query(#query_tokens)
         ));
 
         out
@@ -821,8 +830,8 @@ impl CompiledRoute {
             .enumerate()
             .filter_map(|(i, item)| {
                 if let FnArg::Typed(pat_type) = item {
-                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat {
-                        if self.path_params.iter().any(|(_slash, path_param)| {
+                    if let syn::Pat::Ident(pat_ident) = &*pat_type.pat
+                        && (self.path_params.iter().any(|(_slash, path_param)| {
                             if let Some((path_ident, _ty)) = path_param.capture() {
                                 path_ident == &pat_ident.ident
                             } else {
@@ -831,10 +840,9 @@ impl CompiledRoute {
                         }) || self
                             .query_params
                             .iter()
-                            .any(|query| query.binding == pat_ident.ident)
-                        {
-                            return None;
-                        }
+                            .any(|query| query.binding == pat_ident.ident))
+                    {
+                        return None;
                     }
 
                     Some((i, pat_type.clone()))
@@ -909,6 +917,11 @@ impl CompiledRoute {
     }
 
     fn url_without_queries_for_format(&self) -> Option<String> {
+        // If there's a prefix, then it's an old-style route, and we can't generate a format string.
+        if self.prefix.is_some() {
+            return None;
+        }
+
         // If there's no explicit route, we can't generate a format string this way.
         let _lit = self.route_lit.as_ref()?;
 
@@ -1261,7 +1274,7 @@ impl Parse for OapiOptions {
                     return Err(syn::Error::new(
                         ident.span(),
                         "unexpected field, expected one of (summary, description, id, hidden, tags, security, responses, transform)",
-                    ))
+                    ));
                 }
             }
             let _ = input.parse::<Token![,]>().ok();
@@ -1382,6 +1395,7 @@ enum Method {
     Connect(Ident),
     Options(Ident),
     Trace(Ident),
+    Patch(Ident),
 }
 
 impl ToTokens for Method {
@@ -1394,7 +1408,8 @@ impl ToTokens for Method {
             | Self::Head(ident)
             | Self::Connect(ident)
             | Self::Options(ident)
-            | Self::Trace(ident) => {
+            | Self::Trace(ident)
+            | Self::Patch(ident) => {
                 ident.to_tokens(tokens);
             }
         }
@@ -1430,6 +1445,7 @@ impl Method {
             Self::Connect(span) => Ident::new("connect", span.span()),
             Self::Options(span) => Ident::new("options", span.span()),
             Self::Trace(span) => Ident::new("trace", span.span()),
+            Self::Patch(span) => Ident::new("patch", span.span()),
         }
     }
 
@@ -1443,6 +1459,7 @@ impl Method {
             "CONNECT" => Self::Connect(Ident::new("CONNECT", Span::call_site())),
             "OPTIONS" => Self::Options(Ident::new("OPTIONS", Span::call_site())),
             "TRACE" => Self::Trace(Ident::new("TRACE", Span::call_site())),
+            "PATCH" => Self::Patch(Ident::new("PATCH", Span::call_site())),
             _ => panic!("expected one of (GET, POST, PUT, DELETE, HEAD, CONNECT, OPTIONS, TRACE)"),
         }
     }
@@ -1487,6 +1504,9 @@ struct ServerFnArgs {
     /// The protocol to use for the server function implementation.
     protocol: Option<Type>,
     builtin_encoding: bool,
+    /// Server-only extractors (e.g., headers: HeaderMap, cookies: Cookies).
+    /// These are arguments that exist purely on the server side.
+    server_args: Punctuated<FnArg, Comma>,
 }
 
 impl Parse for ServerFnArgs {
@@ -1511,7 +1531,18 @@ impl Parse for ServerFnArgs {
         let mut use_key_and_value = false;
         let mut arg_pos = 0;
 
+        // Server-only extractors (key: Type pattern)
+        // These come after config options (key = value pattern)
+        // Example: #[server(endpoint = "/api/chat", headers: HeaderMap, cookies: Cookies)]
+        let mut server_args: Punctuated<FnArg, Comma> = Punctuated::new();
+
         while !stream.is_empty() {
+            // Check if this looks like an extractor (Ident : Type)
+            // If so, break out to parse extractors - they must come last
+            if stream.peek(Ident) && stream.peek2(Token![:]) {
+                break;
+            }
+
             arg_pos += 1;
             let lookahead = stream.lookahead1();
             if lookahead.peek(Ident) {
@@ -1680,6 +1711,20 @@ impl Parse for ServerFnArgs {
             }
         }
 
+        // Now parse any remaining extractors (key: Type pattern)
+        while !stream.is_empty() {
+            if stream.peek(Ident) && stream.peek2(Token![:]) {
+                server_args.push_value(stream.parse::<FnArg>()?);
+                if stream.peek(Comma) {
+                    server_args.push_punct(stream.parse::<Comma>()?);
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
         // parse legacy encoding into input/output
         let mut builtin_encoding = false;
         if let Some(encoding) = encoding {
@@ -1722,6 +1767,7 @@ impl Parse for ServerFnArgs {
             impl_from,
             impl_deref,
             protocol,
+            server_args,
         })
     }
 }
@@ -1754,7 +1800,7 @@ impl Parse for ServerFnArg {
                 return Err(syn::Error::new(
                     arg.span(),
                     "cannot use receiver types in server function macro",
-                ))
+                ));
             }
             FnArg::Typed(t) => t,
         };

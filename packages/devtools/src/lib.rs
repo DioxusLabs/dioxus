@@ -34,19 +34,19 @@ pub fn try_apply_changes(dom: &VirtualDom, msg: &HotReloadMsg) -> Result<(), Pat
         }
 
         // 2. Attempt to hotpatch
-        if let Some(jump_table) = msg.jump_table.as_ref().cloned() {
-            if msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                let our_pid = if cfg!(target_family = "wasm") {
-                    None
-                } else {
-                    Some(std::process::id())
-                };
+        if let Some(jump_table) = msg.jump_table.as_ref().cloned()
+            && msg.for_build_id == Some(dioxus_cli_config::build_id())
+        {
+            let our_pid = if cfg!(target_family = "wasm") {
+                None
+            } else {
+                Some(std::process::id())
+            };
 
-                if msg.for_pid == our_pid {
-                    unsafe { subsecond::apply_patch(jump_table) }?;
-                    dom.runtime().force_all_dirty();
-                    ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
-                }
+            if msg.for_pid == our_pid {
+                unsafe { subsecond::apply_patch(jump_table) }?;
+                dom.runtime().force_all_dirty();
+                ctx.clear::<Signal<Option<HotReloadedTemplate>>>();
             }
         }
 
@@ -75,12 +75,11 @@ pub fn connect(callback: impl FnMut(DevserverMsg) + Send + 'static) {
 #[cfg(not(target_family = "wasm"))]
 pub fn connect_subsecond() {
     connect(|msg| {
-        if let DevserverMsg::HotReload(hot_reload_msg) = msg {
-            if let Some(jumptable) = hot_reload_msg.jump_table {
-                if hot_reload_msg.for_pid == Some(std::process::id()) {
-                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
-                }
-            }
+        if let DevserverMsg::HotReload(hot_reload_msg) = msg
+            && let Some(jumptable) = hot_reload_msg.jump_table
+            && hot_reload_msg.for_pid == Some(std::process::id())
+        {
+            unsafe { subsecond::apply_patch(jumptable).unwrap() };
         }
     });
 }
@@ -101,10 +100,10 @@ pub fn connect_at(endpoint: String, mut callback: impl FnMut(DevserverMsg) + Sen
         };
 
         while let Ok(msg) = websocket.read() {
-            if let tungstenite::Message::Text(text) = msg {
-                if let Ok(msg) = serde_json::from_str(&text) {
-                    callback(msg);
-                }
+            if let tungstenite::Message::Text(text) = msg
+                && let Ok(msg) = serde_json::from_str(&text)
+            {
+                callback(msg);
             }
         }
     });
@@ -181,13 +180,12 @@ where
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
     connect(move |msg| {
-        if let DevserverMsg::HotReload(hot_reload_msg) = msg {
-            if let Some(jumptable) = hot_reload_msg.jump_table {
-                if hot_reload_msg.for_pid == Some(std::process::id()) {
-                    unsafe { subsecond::apply_patch(jumptable).unwrap() };
-                    tx.unbounded_send(()).unwrap();
-                }
-            }
+        if let DevserverMsg::HotReload(hot_reload_msg) = msg
+            && let Some(jumptable) = hot_reload_msg.jump_table
+            && hot_reload_msg.for_pid == Some(std::process::id())
+        {
+            unsafe { subsecond::apply_patch(jumptable).unwrap() };
+            tx.unbounded_send(()).unwrap();
         }
     });
 
@@ -204,7 +202,15 @@ where
 
         match res {
             futures_util::future::Either::Left(_completed) => _ = rx.next().await,
-            futures_util::future::Either::Right(_reload) => {}
+            futures_util::future::Either::Right((None, callback)) => {
+                // Receiving `None` here means that the sender is not connected, which
+                // typically means the dioxus devtools protocol has never connected.
+                // We want to run the future to completion and return instead of
+                // re-running the future constantly in the loop.
+                callback.await;
+                return;
+            }
+            futures_util::future::Either::Right((Some(_), _)) => {}
         }
 
         cur_future = hotfn.call((args.clone(),));

@@ -28,8 +28,8 @@ use std::future::Future;
 use std::net::{TcpListener, TcpStream};
 use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::atomic::AtomicU32;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicU32;
 use std::{
     net::IpAddr,
     sync::{Arc, RwLock},
@@ -231,6 +231,7 @@ impl EditWebsocket {
         let hex_encoded_server_key = encode_key_string(&current_server_location.server_key);
         let mut location = None;
 
+        #[allow(clippy::result_large_err)]
         let on_request = |req: &Request, res| {
             // Try to parse the webview id and key from the path
             let path = req.uri().path();

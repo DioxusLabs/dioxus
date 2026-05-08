@@ -10,26 +10,75 @@
 //!  - `tracing`: Enables tracing support.
 
 mod assets;
+mod config;
 mod contexts;
 mod dioxus_application;
 mod dioxus_renderer;
 mod link_handler;
 
+#[cfg(feature = "prelude")]
+pub mod prelude;
+
+#[cfg(feature = "net")]
+use blitz_traits::net::NetProvider;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
 
-pub use anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle};
 use assets::DioxusNativeNetProvider;
 pub use dioxus_application::{DioxusNativeApplication, DioxusNativeEvent};
-pub use dioxus_renderer::{use_wgpu, DioxusNativeWindowRenderer, Features, Limits};
+pub use dioxus_renderer::DioxusNativeWindowRenderer;
 
-use blitz_shell::{create_default_event_loop, BlitzShellEvent, Config, WindowConfig};
-use dioxus_core::{ComponentFunction, Element, VirtualDom};
+#[cfg(target_os = "android")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
+/// Set the current [`AndroidApp`](android_activity::AndroidApp).
+pub fn set_android_app(app: android_activity::AndroidApp) {
+    blitz_shell::set_android_app(app);
+}
+
+#[cfg(target_os = "android")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
+/// Get the current [`AndroidApp`](android_activity::AndroidApp).
+/// This will panic if the android activity has not been setup with [`set_android_app`].
+pub fn current_android_app() -> android_activity::AndroidApp {
+    blitz_shell::current_android_app()
+}
+
+#[cfg(target_os = "android")]
+#[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
+pub use android_activity::AndroidApp;
+
+#[cfg(feature = "vello")]
+pub use {
+    anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle},
+    dioxus_renderer::{Features, Limits, use_wgpu},
+};
+
+pub use config::Config;
+pub use winit::dpi::{LogicalSize, PhysicalSize};
+pub use winit::window::WindowAttributes;
+
+use blitz_shell::{BlitzShellEvent, BlitzShellProxy, WindowConfig, create_default_event_loop};
+use dioxus_core::{ComponentFunction, Element, VirtualDom, consume_context, use_hook};
 use link_handler::DioxusNativeNavigationProvider;
 use std::any::Any;
-#[cfg(feature = "html")]
 use std::sync::Arc;
-use winit::window::WindowAttributes;
+use winit::{
+    raw_window_handle::{HasWindowHandle as _, RawWindowHandle},
+    window::Window,
+};
+
+pub fn use_window() -> Arc<dyn Window> {
+    use_hook(consume_context::<Arc<dyn Window>>)
+}
+
+pub fn use_raw_window_handle() -> RawWindowHandle {
+    use_hook(|| {
+        consume_context::<Arc<dyn Window>>()
+            .window_handle()
+            .unwrap()
+            .as_raw()
+    })
+}
 
 /// Launch an interactive HTML/CSS renderer driven by the Dioxus virtualdom
 pub fn launch(app: fn() -> Element) {
@@ -69,41 +118,48 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     }
 
     // Read config values
-    let mut features = None;
-    let mut limits = None;
+    #[cfg(feature = "vello")]
+    let (mut features, mut limits) = (None, None);
     let mut window_attributes = None;
-    let mut _config = None;
+    let mut config = None;
     for mut cfg in configs {
-        cfg = try_read_config!(cfg, features, Features);
-        cfg = try_read_config!(cfg, limits, Limits);
+        #[cfg(feature = "vello")]
+        {
+            cfg = try_read_config!(cfg, features, Features);
+            cfg = try_read_config!(cfg, limits, Limits);
+        }
         cfg = try_read_config!(cfg, window_attributes, WindowAttributes);
-        cfg = try_read_config!(cfg, _config, Config);
+        cfg = try_read_config!(cfg, config, Config);
         let _ = cfg;
     }
 
-    let event_loop = create_default_event_loop::<BlitzShellEvent>();
+    let mut config = config.unwrap_or_default();
+    if let Some(window_attributes) = window_attributes {
+        config.window_attributes = window_attributes;
+    }
+    let event_loop = create_default_event_loop();
+    let winit_proxy = event_loop.create_proxy();
+    let (proxy, event_queue) = BlitzShellProxy::new(winit_proxy);
 
     // Turn on the runtime and enter it
     #[cfg(feature = "net")]
+    #[cfg(not(target_arch = "wasm32"))]
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
     #[cfg(feature = "net")]
+    #[cfg(not(target_arch = "wasm32"))]
     let _guard = rt.enter();
 
     // Setup hot-reloading if enabled.
-    #[cfg(all(
-        feature = "hot-reload",
-        debug_assertions,
-        not(target_os = "android"),
-        not(target_os = "ios")
-    ))]
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    #[cfg(not(target_arch = "wasm32"))]
     {
-        let proxy = event_loop.create_proxy();
+        let proxy = proxy.clone();
         dioxus_devtools::connect(move |event| {
             let dxn_event = DioxusNativeEvent::DevserverEvent(event);
-            let _ = proxy.send_event(BlitzShellEvent::embedder_event(dxn_event));
+            proxy.send_event(BlitzShellEvent::embedder_event(dxn_event));
         })
     }
 
@@ -119,15 +175,27 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
 
     #[cfg(feature = "net")]
     let net_provider = {
-        let proxy = event_loop.create_proxy();
-        let net_provider = DioxusNativeNetProvider::shared(proxy);
-        Some(net_provider)
+        let net_waker = Some(Arc::new(proxy.clone()) as _);
+        let inner_net_provider = Arc::new(blitz_net::Provider::new(net_waker));
+        vdom.provide_root_context(Arc::clone(&inner_net_provider));
+
+        Arc::new(DioxusNativeNetProvider::with_inner(
+            proxy.clone(),
+            inner_net_provider as _,
+        )) as Arc<dyn NetProvider>
     };
+
     #[cfg(not(feature = "net"))]
-    let net_provider = None;
+    let net_provider = DioxusNativeNetProvider::shared(proxy.clone());
+
+    vdom.provide_root_context(Arc::clone(&net_provider));
 
     #[cfg(feature = "html")]
-    let html_parser_provider = Some(Arc::new(blitz_html::HtmlProvider) as _);
+    let html_parser_provider = {
+        let html_parser = Arc::new(blitz_html::HtmlProvider) as _;
+        vdom.provide_root_context(Arc::clone(&html_parser));
+        Some(html_parser)
+    };
     #[cfg(not(feature = "html"))]
     let html_parser_provider = None;
 
@@ -137,22 +205,25 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     let doc = DioxusDocument::new(
         vdom,
         DocumentConfig {
-            net_provider,
+            net_provider: Some(net_provider),
             html_parser_provider,
             navigation_provider,
             ..Default::default()
         },
     );
+    #[cfg(feature = "vello")]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
+    #[cfg(not(feature = "vello"))]
+    let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,
         renderer.clone(),
-        window_attributes.unwrap_or_default(),
+        config.window_attributes,
     );
 
     // Create application
-    let mut application = DioxusNativeApplication::new(event_loop.create_proxy(), config);
+    let application = DioxusNativeApplication::new(proxy, event_queue, config);
 
     // Run event loop
-    event_loop.run_app(&mut application).unwrap();
+    event_loop.run_app(application).unwrap();
 }

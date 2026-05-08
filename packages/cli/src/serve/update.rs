@@ -31,7 +31,7 @@ pub(crate) enum ServeUpdate {
 
     RequestRebuild,
 
-    ToggleShouldRebuild,
+    CycleHotreloadMode,
 
     OpenDebugger {
         id: BuildId,

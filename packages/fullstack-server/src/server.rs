@@ -1,6 +1,6 @@
 use crate::{
-    ssr::{SSRError, SsrRendererPool},
     ServeConfig, ServerFunction,
+    ssr::{SSRError, SsrRendererPool},
 };
 use axum::{
     body::Body,
@@ -14,8 +14,8 @@ use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio_util::task::LocalPoolHandle;
-use tower::util::MapResponse;
 use tower::ServiceExt;
+use tower::util::MapResponse;
 use tower_http::services::fs::ServeFileSystemResponseBody;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
@@ -133,11 +133,7 @@ impl DioxusRouterExt for Router<FullstackState> {
 
         for func in ServerFunction::collect() {
             if seen.insert(format!("{} {}", func.method(), func.path())) {
-                tracing::info!(
-                    "Registering server function: {} {}",
-                    func.method(),
-                    func.path()
-                );
+                tracing::info!("Registering: {} {}", func.method(), func.path());
 
                 self = self.route(func.path(), func.method_router())
             }
@@ -407,7 +403,7 @@ fn serve_dir_cached<S>(mut router: Router<S>, public_path: &Path, directory: &Pa
 where
     S: Send + Sync + Clone + 'static,
 {
-    use tower_http::services::ServeFile;
+    use tower_http::services::{ServeDir, ServeFile};
 
     let dir = std::fs::read_dir(directory)
         .unwrap_or_else(|e| panic!("Couldn't read public directory at {:?}: {}", &directory, e));
@@ -430,7 +426,19 @@ where
         );
 
         if path.is_dir() {
-            router = serve_dir_cached(router, public_path, &path);
+            // In debug builds, serve directories dynamically so new files (like
+            // wasm patch modules) are immediately visible without rebuilding
+            // the router. In release, keep the previous cached traversal
+            // behaviour.
+            #[cfg(debug_assertions)]
+            {
+                router = router.nest_service(&route, ServeDir::new(&path));
+            }
+
+            #[cfg(not(debug_assertions))]
+            {
+                router = serve_dir_cached(router, public_path, &path);
+            }
         } else {
             let serve_file = ServeFile::new(&path).precompressed_br();
             // All cached assets are served at the root of the asset directory. If we know an asset

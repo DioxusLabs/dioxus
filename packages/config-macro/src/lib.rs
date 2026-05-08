@@ -31,6 +31,7 @@ define_config_macro!(server_only if any(feature = "ssr", feature = "liveview"));
 define_config_macro!(client if any(feature = "desktop", feature = "web", feature = "mobile"));
 define_config_macro!(web if feature = "web");
 define_config_macro!(desktop if feature = "desktop");
+define_config_macro!(native if feature = "native");
 define_config_macro!(mobile if feature = "mobile");
 define_config_macro!(fullstack if feature = "fullstack");
 define_config_macro!(ssr if feature = "ssr");

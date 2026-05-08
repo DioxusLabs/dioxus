@@ -2,7 +2,7 @@
 name = "dioxus-devtools"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.4/migration/hot_reload"
@@ -24,7 +24,6 @@ futures-channel = { workspace = true, optional = true }
 
 # hot reloading serve
 tracing = { workspace = true }
-warnings = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tungstenite = { workspace = true }

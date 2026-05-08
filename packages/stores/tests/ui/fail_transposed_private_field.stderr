@@ -1,0 +1,5 @@
+error[E0616]: field `private_field` of struct `ItemStoreTransposed` is private
+ --> tests/ui/fail_transposed_private_field.rs:8:31
+  |
+8 |     let _ = store.transpose().private_field;
+  |                               ^^^^^^^^^^^^^ private field

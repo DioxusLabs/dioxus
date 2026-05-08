@@ -4,11 +4,36 @@ use std::sync::Arc;
 
 use anyrender::WindowRenderer;
 
-pub use anyrender_vello::{
-    wgpu::{Features, Limits},
-    CustomPaintSource, VelloRendererOptions, VelloWindowRenderer as InnerRenderer,
-};
+// Renderers
 
+#[cfg(feature = "vello")]
+pub use anyrender_vello::{VelloRendererOptions, VelloWindowRenderer as InnerRenderer};
+#[cfg(all(feature = "vello-hybrid", not(feature = "vello")))]
+use anyrender_vello_hybrid::VelloHybridWindowRenderer as InnerRenderer;
+
+#[cfg(all(
+    feature = "skia",
+    not(feature = "vello"),
+    not(feature = "vello-hybrid"),
+    not(feature = "vello-cpu-base")
+))]
+use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
+#[cfg(all(
+    feature = "vello-cpu-base",
+    not(feature = "vello"),
+    not(feature = "vello-hybrid")
+))]
+use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
+
+// WGPU renderer extension features
+// TODO: enable for vello_hybrid
+
+#[cfg(feature = "vello")]
+pub use anyrender_vello::{
+    CustomPaintSource,
+    wgpu::{Features, Limits},
+};
+#[cfg(feature = "vello")]
 pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
     use dioxus_core::{consume_context, use_hook_with_cleanup};
 
@@ -44,6 +69,7 @@ impl DioxusNativeWindowRenderer {
         Self::with_inner_renderer(vello_renderer)
     }
 
+    #[cfg(feature = "vello")]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
         let vello_renderer = InnerRenderer::with_options(VelloRendererOptions {
             features,
@@ -60,6 +86,7 @@ impl DioxusNativeWindowRenderer {
     }
 }
 
+#[cfg(feature = "vello")]
 impl DioxusNativeWindowRenderer {
     pub fn register_custom_paint_source(&self, source: Box<dyn CustomPaintSource>) -> u64 {
         self.inner.borrow_mut().register_custom_paint_source(source)

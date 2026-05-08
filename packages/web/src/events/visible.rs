@@ -1,11 +1,11 @@
 use std::time::SystemTime;
 
 use dioxus_html::{
-    geometry::{
-        euclid::{Point2D, Size2D},
-        PixelsRect,
-    },
     HasVisibleData, VisibleData, VisibleError, VisibleResult,
+    geometry::{
+        PixelsRect,
+        euclid::{Point2D, Size2D},
+    },
 };
 use wasm_bindgen::JsCast;
 use web_sys::{CustomEvent, DomRectReadOnly, Event, IntersectionObserverEntry};

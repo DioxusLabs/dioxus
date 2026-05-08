@@ -79,16 +79,3 @@ pub trait HasClipboardData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event![
-    ClipboardData;
-
-    /// oncopy
-    oncopy
-
-    /// oncut
-    oncut
-
-    /// onpaste
-    onpaste
-];

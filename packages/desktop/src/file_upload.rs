@@ -6,14 +6,14 @@ use std::{any::Any, collections::HashMap};
 use tokio::{fs::File, io::AsyncReadExt};
 
 use dioxus_html::{
+    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
+    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
+    SerializedMouseData, SerializedPointInteraction,
     geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint},
     input_data::{MouseButton, MouseButtonSet},
     point_interaction::{
         InteractionElementOffset, InteractionLocation, ModifiersInteraction, PointerInteraction,
     },
-    FileData, FormValue, HasDataTransferData, HasDragData, HasFileData, HasFormData, HasMouseData,
-    NativeFileData, SerializedDataTransfer, SerializedFormData, SerializedFormObject,
-    SerializedMouseData, SerializedPointInteraction,
 };
 
 use serde::{Deserialize, Serialize};
@@ -54,6 +54,19 @@ impl FileDialogRequest {
         vec![]
     }
 
+    #[cfg(not(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    )))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        vec![]
+    }
+
     #[cfg(any(
         target_os = "windows",
         target_os = "macos",
@@ -63,13 +76,84 @@ impl FileDialogRequest {
         target_os = "netbsd",
         target_os = "openbsd"
     ))]
-    pub(crate) fn get_file_event(&self) -> Vec<PathBuf> {
+    pub(crate) fn get_file_event_sync(&self) -> Vec<PathBuf> {
         let dialog = rfd::FileDialog::new();
-
         if self.directory {
             self.get_file_event_for_folder(dialog)
         } else {
             self.get_file_event_for_file(dialog)
+        }
+    }
+
+    #[cfg(any(
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd"
+    ))]
+    pub(crate) async fn get_file_event_async(&self) -> Vec<PathBuf> {
+        let mut dialog = rfd::AsyncFileDialog::new();
+
+        if self.directory {
+            if self.multiple {
+                dialog
+                    .pick_folders()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            } else {
+                dialog
+                    .pick_folder()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            }
+        } else {
+            let filters: Vec<_> = self
+                .accept
+                .as_deref()
+                .unwrap_or(".*")
+                .split(',')
+                .filter_map(|s| Filters::from_str(s.trim()).ok())
+                .collect();
+
+            let file_extensions: Vec<_> = filters
+                .iter()
+                .flat_map(|f| f.as_extensions().into_iter())
+                .collect();
+
+            let filter_name = file_extensions
+                .iter()
+                .map(|extension| format!("*.{extension}"))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            dialog = dialog.add_filter(filter_name, file_extensions.as_slice());
+
+            let files: Vec<_> = if self.multiple {
+                dialog
+                    .pick_files()
+                    .await
+                    .into_iter()
+                    .flatten()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            } else {
+                dialog
+                    .pick_file()
+                    .await
+                    .into_iter()
+                    .map(|f| f.path().to_path_buf())
+                    .collect()
+            };
+
+            files
         }
     }
 
@@ -221,14 +305,24 @@ impl HasFormData for DesktopFormData {
 #[derive(Default, Clone)]
 pub struct NativeFileHover {
     event: Rc<RefCell<Option<DragDropEvent>>>,
+    paths: Rc<RefCell<Vec<PathBuf>>>,
 }
 impl NativeFileHover {
     pub fn set(&self, event: DragDropEvent) {
+        match event {
+            DragDropEvent::Enter { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            DragDropEvent::Drop { ref paths, .. } => self.paths.borrow_mut().clone_from(paths),
+            _ => {}
+        }
         self.event.borrow_mut().replace(event);
     }
 
     pub fn current(&self) -> Option<DragDropEvent> {
         self.event.borrow_mut().clone()
+    }
+
+    pub fn current_paths(&self) -> Vec<PathBuf> {
+        self.paths.borrow_mut().clone()
     }
 }
 

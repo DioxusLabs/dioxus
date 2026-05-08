@@ -1,22 +1,21 @@
+use crate::PendingDesktopContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
-use crate::PendingDesktopContext;
-use crate::WindowCloseBehaviour;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
+    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    waker::tao_waker,
 };
-use crate::{document::DesktopDocument, WeakDesktopContext};
+use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
+use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
-use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData};
-use futures_util::{pin_mut, FutureExt};
-use std::sync::atomic::AtomicBool;
+use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
+use futures_util::{FutureExt, pin_mut};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -79,6 +78,7 @@ impl WebviewEdits {
         let response = match serde_json::from_slice(&data_from_header) {
             Ok(event) => {
                 // we need to wait for the mutex lock to let us munge the main thread..
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 self.handle_html_event(event)
             }
@@ -153,19 +153,35 @@ impl WebviewEdits {
                         .collect(),
                 })))
             }
+            // Which also includes drops...
             dioxus_html::EventData::Drag(ref drag) => {
                 // we want to override this with a native file engine, provided by the most recent drag event
-                let file_event = hovered_file.current();
-                let file_paths = match file_event {
-                    Some(wry::DragDropEvent::Enter { paths, .. }) => paths,
-                    Some(wry::DragDropEvent::Drop { paths, .. }) => paths,
-                    _ => vec![],
+                let full_file_paths = hovered_file.current_paths();
+
+                let xfer_data = drag.data_transfer.clone();
+                let new_file_data = xfer_data
+                    .files
+                    .iter()
+                    .map(|f| {
+                        let new_path = full_file_paths
+                            .iter()
+                            .find(|p| p.ends_with(&f.path))
+                            .unwrap_or(&f.path);
+                        SerializedFileData {
+                            path: new_path.clone(),
+                            ..f.clone()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                let new_xfer_data = dioxus_html::SerializedDataTransfer {
+                    files: new_file_data,
+                    ..xfer_data
                 };
 
                 Rc::new(PlatformEventData::new(Box::new(DesktopFileDragEvent {
                     mouse: drag.mouse.clone(),
-                    data_transfer: drag.data_transfer.clone(),
-                    files: file_paths,
+                    data_transfer: new_xfer_data,
+                    files: full_file_paths,
                 })))
             }
             _ => data.into_any(),
@@ -200,7 +216,7 @@ pub(crate) struct WebviewInstance {
 impl WebviewInstance {
     pub(crate) fn new(
         mut cfg: Config,
-        dom: VirtualDom,
+        mut dom: VirtualDom,
         shared: Rc<SharedContext>,
     ) -> WebviewInstance {
         let mut window = cfg.window.clone();
@@ -218,35 +234,38 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
+            window = window.with_window_icon(crate::default_icon().ok());
         }
 
-        let window = window.build(&shared.target).unwrap();
+        let window = Arc::new(window.build(&shared.target).unwrap());
+        if let Some(on_build) = cfg.on_window.as_mut() {
+            on_build(window.clone(), &mut dom);
+        }
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
-        #[allow(deprecated)]
         {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
+            use objc2::rc::Retained;
+            use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
             use tao::platform::macos::WindowExtMacOS;
-
-            unsafe {
-                let window: id = window.ns_window() as id;
-                #[allow(unexpected_cfgs)]
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
+            let ns_window: Retained<NSWindow> =
+                unsafe { Retained::retain(window.ns_window().cast()) }.unwrap();
+            ns_window.setCollectionBehavior(NSWindowCollectionBehavior::Managed)
         }
 
-        let mut web_context = WebContext::new(cfg.data_dir.clone());
+        let mut web_context = WebContext::new(cfg.data_dir.clone().or_else(|| {
+            // On Windows, WebView2 defaults to storing its data next to the executable.
+            // This fails on certain drives (e.g. ReFS dev drives, Program Files) where the
+            // directory may not be writable. Fall back to %LOCALAPPDATA%/<exe_name> automatically.
+            if cfg!(windows) {
+                let exe = std::env::current_exe().ok()?;
+                let name = exe.file_stem()?.to_str()?;
+                let local_app_data = std::env::var("LOCALAPPDATA").ok()?;
+                Some(std::path::PathBuf::from(local_app_data).join(name))
+            } else {
+                None
+            }
+        }));
         let edit_queue = shared.websocket.create_queue();
         let asset_handlers = AssetHandlerRegistry::new();
         let edits = WebviewEdits::new(dom.runtime(), edit_queue.clone());
@@ -330,6 +349,7 @@ impl WebviewInstance {
             }
         };
 
+        let navigation_handler = cfg.navigation_handler.take();
         let page_loaded = AtomicBool::new(false);
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
@@ -344,25 +364,29 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(move |var| {
-                // We don't want to allow any navigation
-                // We only want to serve the index file and assets
+                // Serve the index and assets.
                 if var.starts_with("dioxus://")
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")
                 {
                     // After the page has loaded once, don't allow any more navigation
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    !page_loaded
-                } else {
-                    if var.starts_with("http://")
-                        || var.starts_with("https://")
-                        || var.starts_with("mailto:")
-                    {
-                        _ = webbrowser::open(&var);
-                    }
-                    false
+                    return !page_loaded;
                 }
-            }) // prevent all navigations
+
+                // External links always open somewhere else. Prevents the webview from navigating
+                if var.starts_with("http://")
+                    || var.starts_with("https://")
+                    || var.starts_with("mailto:")
+                {
+                    _ = webbrowser::open(&var);
+                    return false;
+                }
+
+                // By default, external links are allowed. This keeps things like iframes working.
+                // However, users can customize this to allow/disallow domains/routes/patterns.
+                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+            })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
         // Enable https scheme on android, needed for secure context API, like the geolocation API
@@ -440,6 +464,14 @@ impl WebviewInstance {
             None
         };
 
+        #[cfg(target_os = "windows")]
+        {
+            use wry::WebViewBuilderExtWindows;
+            if let Some(additional_windows_args) = &cfg.additional_windows_args {
+                webview = webview.with_additional_browser_args(additional_windows_args);
+            }
+        }
+
         #[cfg(any(
             target_os = "windows",
             target_os = "macos",
@@ -472,7 +504,7 @@ impl WebviewInstance {
             shared.clone(),
             asset_handlers,
             file_hover,
-            WindowCloseBehaviour::WindowCloses,
+            cfg.window_close_behavior,
         ));
 
         // Provide the desktop context to the virtual dom and edit handler
@@ -484,6 +516,9 @@ impl WebviewInstance {
             provide_context(provider);
             provide_context(history_provider);
         });
+
+        // Request an initial redraw
+        desktop_context.window.request_redraw();
 
         WebviewInstance {
             dom,
@@ -528,6 +563,7 @@ impl WebviewInstance {
 
             {
                 // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers and async tasks
+                #[cfg(target_os = "android")]
                 let _lock = crate::android_sync_lock::android_runtime_lock();
                 let fut = self.dom.wait_for_work();
                 pin_mut!(fut);
@@ -539,6 +575,7 @@ impl WebviewInstance {
             }
 
             // lock the hack-ed in lock sync wry has some thread-safety issues with event handlers
+            #[cfg(target_os = "android")]
             let _lock = crate::android_sync_lock::android_runtime_lock();
 
             self.edits

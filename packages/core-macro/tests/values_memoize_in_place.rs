@@ -215,3 +215,28 @@ fn cloning_read_signal_components_work() {
     }
     dom.render_immediate(&mut dioxus_core::NoOpMutations);
 }
+
+// Regression test for https://github.com/DioxusLabs/dioxus/issues/5222
+#[tokio::test]
+async fn optional_event_handler_diff() {
+    use dioxus_core::Properties;
+
+    #[derive(Props, Clone, PartialEq)]
+    struct CompProps {
+        callback: Option<Callback>,
+    }
+
+    let dom = VirtualDom::new(|| rsx! {});
+
+    dom.in_scope(ScopeId::APP, || {
+        // Diffing from None to Some should be different and copy the callback
+        let mut props = CompProps::builder().callback(None).build();
+        assert!(!props.memoize(&CompProps::builder().callback(|_| {}).build()));
+        assert!(props.inner.callback.is_some());
+
+        // Diffing from Some to None should be different and remove the callback
+        let mut props = CompProps::builder().callback(|_| {}).build();
+        assert!(!props.memoize(&CompProps::builder().callback(None).build()));
+        assert!(props.inner.callback.is_none());
+    });
+}

@@ -1,10 +1,10 @@
 use bytes::Bytes;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// A trait for encoding and decoding data.
 ///
 /// This takes an owned self to make it easier for zero-copy encodings.
-pub trait Encoding {
+pub trait Encoding: 'static {
     fn content_type() -> &'static str;
     fn stream_content_type() -> &'static str;
     fn to_bytes(data: impl Serialize) -> Option<Bytes> {

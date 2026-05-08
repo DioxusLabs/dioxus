@@ -109,6 +109,8 @@ impl ToTokens for TemplateBody {
             None => quote! { None },
         };
 
+        let key_warnings = self.check_for_duplicate_keys();
+
         let roots = node.quote_roots();
 
         // Print paths is easy - just print the paths
@@ -137,6 +139,8 @@ impl ToTokens for TemplateBody {
         tokens.append_all(quote! {
             dioxus_core::Element::Ok({
                 #diagnostics
+
+                #key_warnings
 
                 // Components pull in the dynamic literal pool and template in debug mode, so they need to be defined before dynamic nodes
                 #[cfg(debug_assertions)]
@@ -203,11 +207,11 @@ impl ToTokens for TemplateBody {
                 #[cfg(not(debug_assertions))]
                 {
                     #[doc(hidden)] // vscode please stop showing these in symbol search
-                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template {
-                        roots: __TEMPLATE_ROOTS,
-                        node_paths: &[ #( #node_paths ),* ],
-                        attr_paths: &[ #( #attr_paths ),* ],
-                    };
+                    static ___TEMPLATE: dioxus_core::Template = dioxus_core::Template::new(
+                        __TEMPLATE_ROOTS,
+                        &[ #( #node_paths ),* ],
+                        &[ #( #attr_paths ),* ],
+                    );
 
                     // NOTE: Allocating a temporary is important to make reads within rsx drop before the value is returned
                     #[allow(clippy::let_and_return)]
@@ -273,11 +277,7 @@ impl TemplateBody {
     }
 
     pub fn implicit_key(&self) -> Option<&AttributeValue> {
-        match self.roots.first() {
-            Some(BodyNode::Element(el)) => el.key(),
-            Some(BodyNode::Component(comp)) => comp.get_key(),
-            _ => None,
-        }
+        self.roots.first().and_then(BodyNode::key)
     }
 
     /// Ensure only one key and that the key is not a static str
@@ -302,6 +302,22 @@ impl TemplateBody {
 
             self.diagnostics.push(diagnostic);
         }
+    }
+
+    fn check_for_duplicate_keys(&self) -> TokenStream2 {
+        let mut warnings = TokenStream2::new();
+
+        // Make sure there are not multiple keys or keys on nodes other than the first in the block
+        for root in self.roots.iter().skip(1) {
+            if let Some(key) = root.key() {
+                warnings.extend(new_diagnostics::warning_diagnostic(
+                    key.span(),
+                    "Keys are only allowed on the first node in the block.",
+                ));
+            }
+        }
+
+        warnings
     }
 
     pub fn get_dyn_node(&self, path: &[u8]) -> &BodyNode {

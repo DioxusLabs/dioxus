@@ -1,12 +1,12 @@
-use dioxus_core::{use_hook, IntoAttributeValue, IntoDynNode, Subscribers};
 use dioxus_core::{CapturedError, RenderError, Result, SuspendedFuture};
-use dioxus_hooks::{use_resource, use_signal, Resource};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, Subscribers, use_hook};
+use dioxus_hooks::{Resource, use_resource, use_signal};
 use dioxus_signals::{
-    read_impls, ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable,
-    WritableExt, WriteLock,
+    ReadSignal, Readable, ReadableBoxExt, ReadableExt, ReadableRef, Signal, Writable, WritableExt,
+    WriteLock, read_impls,
 };
 use generational_box::{BorrowResult, UnsyncStorage};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::ops::Deref;
 use std::{cmp::PartialEq, future::Future};
 
@@ -238,7 +238,7 @@ impl<T> Readable for Loader<T> {
     where
         T: 'static,
     {
-        Ok(self.peek_unchecked())
+        Ok(self.read_value.peek_unchecked())
     }
 
     fn subscribers(&self) -> Subscribers
@@ -263,7 +263,8 @@ where
     T: Clone + IntoDynNode + PartialEq + 'static,
 {
     fn into_dyn_node(self) -> dioxus_core::DynamicNode {
-        self().into_dyn_node()
+        let t: T = self();
+        t.into_dyn_node()
     }
 }
 

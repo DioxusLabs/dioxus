@@ -13,7 +13,7 @@ Dim='' # White
 Bold_White=''
 Bold_Green=''
 
-if [[ -t 1 ]]; then
+if [ -t 1 ]; then
     # Reset
     Color_Off='\033[0m' # Text Reset
 
@@ -28,26 +28,26 @@ if [[ -t 1 ]]; then
 fi
 
 error() {
-    echo -e "${Red}error${Color_Off}:" "$@" >&2
+    printf "${Red}error${Color_Off}: %s\n" "$*" >&2
     exit 1
 }
 
 info() {
-    echo -e "${Dim}$@ ${Color_Off}"
+    printf "${Dim}%s ${Color_Off}\n" "$*"
 }
 
 info_bold() {
-    echo -e "${Bold_White}$@ ${Color_Off}"
+    printf "${Bold_White}%s ${Color_Off}\n" "$*"
 }
 
 success() {
-    echo -e "${Green}$@ ${Color_Off}"
+    printf "${Green}%s ${Color_Off}\n" "$*"
 }
 
 command -v unzip >/dev/null ||
     error 'unzip is required to install dx'
 
-if [[ $# -gt 2 ]]; then
+if [ $# -gt 2 ]; then
     error 'Too many arguments, only 2 are allowed. The first can be a specific tag of dx to install. (e.g. "dx-v0.7.1") or `nightly` or `pr <PR_NUMBER>` to install the latest nightly or PR build.'
 fi
 
@@ -78,7 +78,7 @@ GITHUB=${GITHUB-"https://github.com"}
 github_repo="$GITHUB/dioxuslabs/dioxus"
 exe_name=dx
 
-if [[ $# = 0 ]]; then
+if [ $# = 0 ]; then
     dx_uri=$github_repo/releases/latest/download/dx-$target.zip
 else
     dx_uri=$github_repo/releases/download/$1/dx-$target.zip
@@ -93,7 +93,7 @@ else
 fi
 bin_dir="$dx_install/bin"
 exe="$bin_dir/dx"
-cargo_bin_dir="$HOME/.cargo/bin"
+cargo_bin_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
 cargo_bin_exe="$cargo_bin_dir/dx"
 
 if [ ! -d "$bin_dir" ]; then

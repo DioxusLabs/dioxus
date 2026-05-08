@@ -1,14 +1,14 @@
 #![allow(unreachable_code)]
 
-use crate::{reqwest_error_to_request_error, StreamingError};
+use crate::{StreamingError, reqwest_error_to_request_error};
 use bytes::Bytes;
 use dioxus_fullstack_core::RequestError;
 use futures::Stream;
 use futures::{TryFutureExt, TryStreamExt};
 use headers::{ContentType, Header};
-use http::{response::Parts, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode};
+use http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, response::Parts};
 use send_wrapper::SendWrapper;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{LazyLock, Mutex, OnceLock};
 use std::{fmt::Display, pin::Pin, prelude::rust_2024::Future};
 use url::Url;
@@ -508,17 +508,17 @@ pub fn get_server_url() -> &'static str {
 
 static ROOT_URL: OnceLock<&'static str> = OnceLock::new();
 
-/// Delete the extra request headers for all servers functions.
+/// Delete the extra request headers for all server functions.
 pub fn clear_request_headers() {
     REQUEST_HEADERS.lock().unwrap().clear();
 }
 
-/// Set the extra request headers for all servers functions.
+/// Set the extra request headers for all server functions.
 pub fn set_request_headers(headers: HeaderMap) {
     *REQUEST_HEADERS.lock().unwrap() = headers;
 }
 
-/// Returns the extra request headers for all servers functions.
+/// Returns the extra request headers for all server functions.
 pub fn get_request_headers() -> HeaderMap {
     REQUEST_HEADERS.lock().unwrap().clone()
 }
@@ -644,7 +644,11 @@ mod browser {
             self: Box<Self>,
         ) -> Pin<Box<dyn Future<Output = Result<Bytes, RequestError>> + Send>> {
             Box::pin(SendWrapper::new(async move {
-                let bytes = self.inner.binary().await.unwrap();
+                let bytes = self
+                    .inner
+                    .binary()
+                    .await
+                    .map_err(|e| RequestError::Request(e.to_string()))?;
                 Ok(bytes.into())
             }))
         }
@@ -653,16 +657,24 @@ mod browser {
             self: Box<Self>,
         ) -> Pin<Box<dyn Stream<Item = Result<Bytes, StreamingError>> + 'static + Unpin + Send>>
         {
+            let body = match self.inner.body() {
+                Some(body) => body,
+                None => {
+                    return Box::pin(SendWrapper::new(futures::stream::iter([Err(
+                        StreamingError::Failed,
+                    )])));
+                }
+            };
+
             Box::pin(SendWrapper::new(
-                wasm_streams::ReadableStream::from_raw(self.inner.body().unwrap())
+                wasm_streams::ReadableStream::from_raw(body)
                     .into_stream()
                     .map(|chunk| {
-                        Ok(chunk
-                            .unwrap()
+                        let array = chunk
+                            .map_err(|_| StreamingError::Failed)?
                             .dyn_into::<Uint8Array>()
-                            .unwrap()
-                            .to_vec()
-                            .into())
+                            .map_err(|_| StreamingError::Failed)?;
+                        Ok(array.to_vec().into())
                     }),
             ))
         }

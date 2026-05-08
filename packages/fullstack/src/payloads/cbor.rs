@@ -1,10 +1,10 @@
 use axum::{
     body::Bytes,
-    extract::{rejection::BytesRejection, FromRequest, Request},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    extract::{FromRequest, Request, rejection::BytesRejection},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// CBOR Extractor / Response.
 ///
@@ -42,10 +42,8 @@ fn is_valid_cbor_content_type(headers: &HeaderMap) -> bool {
         return false;
     };
 
-    let is_cbor_content_type = mime.type_() == "application"
-        && (mime.subtype() == "cbor" || mime.suffix().is_some_and(|name| name == "cbor"));
-
-    is_cbor_content_type
+    mime.type_() == "application"
+        && (mime.subtype() == "cbor" || mime.suffix().is_some_and(|name| name == "cbor"))
 }
 
 impl<S, T> FromRequest<S> for Cbor<T>

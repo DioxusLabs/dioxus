@@ -70,6 +70,8 @@ impl ServerFunction {
                 .try_into()
                 .expect("MethodFilter only supports standard HTTP methods"),
             move |state: State<FullstackState>, request: Request| async move {
+                use tracing::Instrument;
+                let current_span = tracing::Span::current();
                 // Allow !Send futures by running in the render handlers pinned local pool
                 let result = state.rt.spawn_pinned(move || async move {
                     use dioxus_fullstack_core::FullstackContext;
@@ -97,7 +99,9 @@ impl ServerFunction {
                         .clone()
                         .scope(async move {
                             // Run the next middleware / handler inside the server context
-                            let mut response = handler(State(server_context), request).await;
+                            let mut response = handler(State(server_context), request)
+                                .instrument(current_span)
+                                .await;
 
                             let server_context = FullstackContext::current().expect(
                                 "Server context should be available inside the server context scope",
@@ -109,17 +113,18 @@ impl ServerFunction {
                                 response.headers_mut().extend(headers);
                             }
 
-                            // it it accepts text/html (i.e., is a plain form post) and doesn't already have a
-                            // Location set, then redirect to Referer
-                            if accepts_html {
-                                if let Some(referrer) = referrer {
+                            // If the response is successful and accepts text/html (i.e., is a
+                            // plain form post) and doesn't already have a Location set, then
+                            // redirect to Referer. Only redirect on success so that error
+                            // responses (4xx, 5xx) propagate correctly to the client.
+                            if accepts_html && response.status().is_success()
+                                && let Some(referrer) = referrer {
                                     let has_location = response.headers().get(LOCATION).is_some();
                                     if !has_location {
                                         *response.status_mut() = StatusCode::FOUND;
                                         response.headers_mut().insert(LOCATION, referrer);
                                     }
                                 }
-                            }
 
                             response
                         })

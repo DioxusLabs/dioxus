@@ -5,8 +5,8 @@
 
 use super::*;
 use crate::BuildRequest;
-use anyhow::{anyhow, Context};
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use anyhow::{Context, anyhow};
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use std::path::Path;
 
 /// Check the Rust files in the project for issues.
@@ -84,7 +84,7 @@ async fn check_files_and_report(files_to_check: Vec<PathBuf>) -> Result<()> {
             let res = tokio::spawn(async move {
                 tokio::fs::read_to_string(&_path)
                     .await
-                    .map(|contents| dioxus_check::check_file(_path, &contents))
+                    .map(|contents| crate::check::check_file(_path, &contents))
             })
             .await;
 

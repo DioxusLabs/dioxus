@@ -1,13 +1,13 @@
 use crate::{ClientResponse, FromResponse, RequestError, ServerFnError};
 #[cfg(feature = "server")]
 use axum::{
-    response::sse::{Event, KeepAlive},
     BoxError,
+    response::sse::{Event, KeepAlive},
 };
-use futures::io::AsyncBufReadExt;
 use futures::Stream;
+use futures::io::AsyncBufReadExt;
 use futures::{StreamExt, TryStreamExt};
-use http::{header::CONTENT_TYPE, HeaderValue, StatusCode};
+use http::{HeaderValue, StatusCode, header::CONTENT_TYPE};
 use serde::de::DeserializeOwned;
 use std::pin::Pin;
 use std::task::{Context, Poll};

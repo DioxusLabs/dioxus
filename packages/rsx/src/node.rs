@@ -2,11 +2,11 @@ use crate::innerlude::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::ToTokens;
 use syn::{
+    Ident, LitStr, Result, Token,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     spanned::Spanned,
     token::{self},
-    Ident, LitStr, Result, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -174,6 +174,14 @@ impl BodyNode {
         match self {
             BodyNode::Element(el) => &el.name,
             _ => panic!("Element name not available for this node"),
+        }
+    }
+
+    pub(crate) fn key(&self) -> Option<&AttributeValue> {
+        match self {
+            Self::Element(el) => el.key(),
+            Self::Component(comp) => comp.get_key(),
+            _ => None,
         }
     }
 }

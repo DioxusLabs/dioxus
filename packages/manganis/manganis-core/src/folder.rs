@@ -1,4 +1,5 @@
-use const_serialize::SerializeConst;
+use const_serialize_07 as const_serialize;
+use const_serialize_08::SerializeConst;
 
 use crate::{AssetOptions, AssetOptionsBuilder};
 
@@ -12,9 +13,11 @@ use crate::{AssetOptions, AssetOptionsBuilder};
     Copy,
     Hash,
     SerializeConst,
+    const_serialize::SerializeConst,
     serde::Serialize,
     serde::Deserialize,
 )]
+#[const_serialize(crate = const_serialize_08)]
 pub struct FolderAssetOptions {}
 
 impl Default for FolderAssetOptions {

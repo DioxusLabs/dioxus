@@ -1,6 +1,6 @@
 use crate::{
-    innerlude::{SchedulerMsg, SuspenseContext},
     Runtime, ScopeId, Task,
+    innerlude::{SchedulerMsg, SuspenseContext},
 };
 use generational_box::{AnyStorage, Owner};
 use rustc_hash::FxHashSet;

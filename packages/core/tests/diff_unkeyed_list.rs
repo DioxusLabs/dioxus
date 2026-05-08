@@ -2,17 +2,17 @@ use std::collections::HashSet;
 
 use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::{generation, Mutation};
+use dioxus_core::{Mutation, generation};
 use pretty_assertions::assert_eq;
 
 #[test]
 fn list_creates_one_by_one() {
     let mut dom = VirtualDom::new(|| {
-        let gen = generation();
+        let g = generation();
 
         rsx! {
             div {
-                for i in 0..gen {
+                for i in 0..g {
                     div { "{i}" }
                 }
             }
@@ -82,11 +82,11 @@ fn list_creates_one_by_one() {
 #[test]
 fn removes_one_by_one() {
     let mut dom = VirtualDom::new(|| {
-        let gen = 3 - generation() % 4;
+        let g = 3 - generation() % 4;
 
         rsx! {
             div {
-                for i in 0..gen {
+                for i in 0..g {
                     div { "{i}" }
                 }
             }
@@ -231,11 +231,11 @@ fn list_shrink_multiroot() {
 #[test]
 fn removes_one_by_one_multiroot() {
     let mut dom = VirtualDom::new(|| {
-        let gen = 3 - generation() % 4;
+        let g = 3 - generation() % 4;
 
         rsx! {
             div {
-                {(0..gen).map(|i| rsx! {
+                {(0..g).map(|i| rsx! {
                     div { "{i}" }
                     div { "{i}" }
                 })}
@@ -464,7 +464,7 @@ fn replace_and_add_items() {
         );
     }
 
-    // Rerendering adds an a static template
+    // Rerendering adds a static template
     {
         dom.mark_dirty(ScopeId::APP);
         let edits = dom.render_immediate_to_vec();
@@ -505,6 +505,86 @@ fn replace_and_add_items() {
                 ReplaceWith { id: ElementId(4,), m: 1 },
                 LoadTemplate { index: 0, id: ElementId(4,) },
                 ReplaceWith { id: ElementId(2,), m: 1 },
+            ]
+        );
+    }
+}
+
+// Simplified regression test for https://github.com/DioxusLabs/dioxus/issues/4924
+#[test]
+fn nested_unkeyed_lists() {
+    let mut dom = VirtualDom::new(|| {
+        let content = if generation() % 2 == 0 {
+            vec!["5\n6"]
+        } else {
+            vec!["1\n2", "3\n4"]
+        };
+
+        rsx! {
+            for one in &content {
+                for line in one.lines() {
+                    p { "{line}" }
+                }
+            }
+        }
+    });
+
+    // The list starts with one placeholder
+    {
+        let edits = dom.rebuild_to_vec();
+        assert_eq!(
+            edits.edits,
+            [
+                // load the p tag template
+                LoadTemplate { index: 0, id: ElementId(1) },
+                // Create the first text node
+                CreateTextNode { value: "5".into(), id: ElementId(2) },
+                // Replace the placeholder inside the p tag with the text node
+                ReplacePlaceholder { path: &[0], m: 1 },
+                // load the p tag template
+                LoadTemplate { index: 0, id: ElementId(3) },
+                // Create the second text node
+                CreateTextNode { value: "6".into(), id: ElementId(4) },
+                // Replace the placeholder inside the p tag with the text node
+                ReplacePlaceholder { path: &[0], m: 1 },
+                // Add the text nodes to the root node
+                AppendChildren { id: ElementId(0), m: 2 }
+            ]
+        );
+    }
+
+    // DOM state:
+    // <pre> # Id 1 for if statement
+    // <p> # Id 2
+    //    "5" # Id 3
+    // <p> # Id 4
+    //    "6" # Id 5
+    //
+    // The diffing engine should add two new elements to the end and modify the first two elements in place
+    {
+        dom.mark_dirty(ScopeId::APP);
+        let edits = dom.render_immediate_to_vec();
+        assert_eq!(
+            edits.edits,
+            [
+                // load the p tag template
+                LoadTemplate { index: 0, id: ElementId(5) },
+                // Create the third text node
+                CreateTextNode { value: "3".into(), id: ElementId(6) },
+                // Replace the placeholder inside the p tag with the text node
+                ReplacePlaceholder { path: &[0], m: 1 },
+                // load the p tag template
+                LoadTemplate { index: 0, id: ElementId(7) },
+                // Create the fourth text node
+                CreateTextNode { value: "4".into(), id: ElementId(8) },
+                // Replace the placeholder inside the p tag with the text node
+                ReplacePlaceholder { path: &[0], m: 1 },
+                // Insert the text nodes after the second p tag
+                InsertAfter { id: ElementId(3), m: 2 },
+                // Set the first text node to "1"
+                SetText { value: "1".into(), id: ElementId(2) },
+                // Set the second text node to "2"
+                SetText { value: "2".into(), id: ElementId(4) }
             ]
         );
     }

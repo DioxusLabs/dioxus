@@ -38,6 +38,7 @@ fn app() -> Element {
             test_mouse_down_div {}
             test_mouse_up_div {}
             test_mouse_scroll_div {}
+            test_scroll_does_not_bubble {}
             test_key_down_div {}
             test_key_up_div {}
             test_key_press_div {}
@@ -294,6 +295,33 @@ fn test_mouse_scroll_div() -> Element {
                 };
                 assert_eq!(delta, Vector3D::new(1.0, 2.0, 3.0));
                 RECEIVED_EVENTS.with_mut(|x| *x += 1);
+            }
+        }
+    }
+}
+
+fn test_scroll_does_not_bubble() -> Element {
+    utils::mock_event("scroll_child", r#"new Event("scroll", { bubbles: false })"#);
+
+    rsx! {
+        div {
+            id: "scroll_parent",
+            onscroll: move |_| -> () {
+                panic!("non-bubbling scroll event reached ancestor");
+            },
+            div {
+                id: "scroll_child",
+                width: "100px",
+                height: "20px",
+                overflow_y: "auto",
+                onscroll: move |event| {
+                    println!("{:?}", event.data);
+                    RECEIVED_EVENTS.with_mut(|x| *x += 1);
+                },
+                div {
+                    height: "100px",
+                    "Scrollable content"
+                }
             }
         }
     }

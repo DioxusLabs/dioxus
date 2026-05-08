@@ -1,12 +1,14 @@
 [package]
 name = "dioxus-playwright-web-patch-test"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 description = "Playwright test for Dioxus Web"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
 dioxus = { path = "../../dioxus", features = ["web"] }
+wasm-bindgen = { version = "0.2.114" }
+web-sys = { version = "*", features = ["MouseEvent"] }
 
 [workspace]

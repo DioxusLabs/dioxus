@@ -3,7 +3,7 @@ use axum_core::extract::FromRequest;
 use axum_core::response::IntoResponse;
 use dioxus_core::{CapturedError, ReactiveContext};
 use http::StatusCode;
-use http::{request::Parts, HeaderMap};
+use http::{HeaderMap, request::Parts};
 use parking_lot::RwLock;
 use std::collections::HashSet;
 use std::fmt::Debug;
@@ -126,8 +126,19 @@ impl FullstackContext {
     /// The body of the request is always empty when using this method, as the body can only be consumed once in the server
     /// function extractors.
     pub async fn extract<T: FromRequest<Self, M>, M>() -> Result<T, ServerFnError> {
-        let this = Self::current()
-            .ok_or_else(|| ServerFnError::new("No FullstackContext found".to_string()))?;
+        let this = Self::current().unwrap_or_else(|| {
+            // Create a dummy context if one doesn't exist, making the function usable outside of a request context
+            FullstackContext::new(
+                axum_core::extract::Request::builder()
+                    .method("GET")
+                    .uri("/")
+                    .header("X-Dummy-Header", "true")
+                    .body(())
+                    .unwrap()
+                    .into_parts()
+                    .0,
+            )
+        });
 
         let parts = this.request_headers.read().clone();
         let request = axum_core::extract::Request::from_parts(parts, Default::default());
@@ -266,8 +277,8 @@ pub fn commit_initial_chunk() {
 
 /// Extract an axum extractor from the current request.
 #[deprecated(note = "Use FullstackContext::extract instead", since = "0.7.0")]
-pub fn extract<T: FromRequest<FullstackContext, M>, M>(
-) -> impl std::future::Future<Output = Result<T, ServerFnError>> {
+pub fn extract<T: FromRequest<FullstackContext, M>, M>()
+-> impl std::future::Future<Output = Result<T, ServerFnError>> {
     FullstackContext::extract::<T, M>()
 }
 
@@ -309,7 +320,7 @@ pub fn status_code_from_error(error: &CapturedError) -> StatusCode {
     if let Some(err) = error.downcast_ref::<ServerFnError>() {
         match err {
             ServerFnError::ServerError { code, .. } => {
-                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+                return StatusCode::from_u16(*code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
             }
             _ => return StatusCode::INTERNAL_SERVER_ERROR,
         }

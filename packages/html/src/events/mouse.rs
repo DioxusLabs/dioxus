@@ -44,66 +44,6 @@ pub trait HasMouseData: PointerInteraction {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-impl_event! {
-    MouseData;
-
-    /// Execute a callback when a button is clicked.
-    ///
-    /// ## Description
-    ///
-    /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
-    /// is both pressed and released while the pointer is located inside the element.
-    ///
-    /// - Bubbles: Yes
-    /// - Cancelable: Yes
-    /// - Interface(InteData): [`MouseEvent`]
-    ///
-    /// If the button is pressed on one element and the pointer is moved outside the element before the button
-    /// is released, the event is fired on the most specific ancestor element that contained both elements.
-    /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
-    ///
-    /// ## Example
-    /// ```rust, ignore
-    /// rsx!( button { onclick: move |_| tracing::info!("Clicked!"), "click me" } )
-    /// ```
-    ///
-    /// ## Reference
-    /// - <https://www.w3schools.com/tags/ev_onclick.asp>
-    /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
-    onclick
-
-    /// oncontextmenu
-    oncontextmenu
-
-    #[deprecated(since = "0.5.0", note = "use ondoubleclick instead")]
-    ondblclick
-
-    ondoubleclick: "ondblclick"
-
-    /// onmousedown
-    onmousedown
-
-    /// onmouseenter
-    onmouseenter
-
-    /// onmouseleave
-    onmouseleave
-
-    /// onmousemove
-    onmousemove
-
-    /// onmouseout
-    onmouseout
-
-    /// onmouseover
-    ///
-    /// Triggered when the users's mouse hovers over an element.
-    onmouseover
-
-    /// onmouseup
-    onmouseup
-}
-
 impl MouseData {
     /// Create a new instance of MouseData
     pub fn new(inner: impl HasMouseData + 'static) -> Self {

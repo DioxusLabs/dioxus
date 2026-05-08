@@ -1,8 +1,8 @@
-use crate::{query::Query, DesktopContext, WeakDesktopContext};
+use crate::{DesktopContext, WeakDesktopContext, query::Query};
 use dioxus_core::queue_effect;
 use dioxus_document::{
-    create_element_in_head, Document, Eval, EvalError, Evaluator, LinkProps, MetaProps,
-    ScriptProps, StyleProps,
+    Document, Eval, EvalError, Evaluator, LinkProps, MetaProps, ScriptProps, StyleProps,
+    create_element_in_head,
 };
 
 use generational_box::{AnyStorage, GenerationalBox, UnsyncStorage};

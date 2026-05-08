@@ -301,6 +301,9 @@ mod_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/inputmode>
     inputmode;
 
+    /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/inert>
+    inert;
+
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/is>
     is;
 

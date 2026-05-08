@@ -4,10 +4,10 @@
 use anyhow::Result;
 use axum::extract::FromRequest;
 use axum::response::IntoResponse;
-use axum::{response::Html, Json};
+use axum::{Json, response::Html};
 use bytes::Bytes;
 use dioxus::prelude::*;
-use dioxus_fullstack::{get, FileStream, ServerFnError, Text, TextStream, Websocket};
+use dioxus_fullstack::{FileStream, ServerFnError, Text, TextStream, Websocket, get};
 use futures::StreamExt;
 use http::HeaderMap;
 use http::StatusCode;
@@ -340,5 +340,34 @@ mod input_types {
     #[post("/")]
     async fn five(age: u32, name: String) -> Result<()> {
         Ok(())
+    }
+}
+
+mod handlers {
+    use super::*;
+
+    #[get("/handlers/get")]
+    async fn handle_get() -> Result<String> {
+        Ok("handled get".to_string())
+    }
+
+    #[post("/handlers/post")]
+    async fn handle_post() -> Result<String> {
+        Ok("handled post".to_string())
+    }
+
+    #[put("/handlers/put")]
+    async fn handle_put() -> Result<String> {
+        Ok("handled put".to_string())
+    }
+
+    #[patch("/handlers/patch")]
+    async fn handle_patch() -> Result<String> {
+        Ok("handled patch".to_string())
+    }
+
+    #[delete("/handlers/delete")]
+    async fn handle_delete() -> Result<String> {
+        Ok("handled delete".to_string())
     }
 }

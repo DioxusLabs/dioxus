@@ -1,4 +1,4 @@
-use crate::{innerlude::CapturedPanic, ComponentFunction, Element};
+use crate::{ComponentFunction, Element, innerlude::CapturedPanic};
 use std::{any::Any, panic::AssertUnwindSafe};
 
 pub(crate) type BoxedAnyProps = Box<dyn AnyProps>;

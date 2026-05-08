@@ -1,10 +1,10 @@
 use dioxus_core::AnyhowContext;
-use dioxus_html::{bytes::Bytes, FileData, NativeFileData};
+use dioxus_html::{FileData, NativeFileData, bytes::Bytes};
 use futures_channel::oneshot;
 use js_sys::Uint8Array;
 use send_wrapper::SendWrapper;
 use std::{pin::Pin, prelude::rust_2024::Future};
-use wasm_bindgen::{prelude::Closure, JsCast};
+use wasm_bindgen::{JsCast, prelude::Closure};
 use web_sys::{File, FileList, FileReader};
 
 /// A file representation for the web platform
@@ -135,16 +135,21 @@ impl NativeFileData for WebFileData {
     }
 
     fn path(&self) -> std::path::PathBuf {
+        let key = wasm_bindgen::JsValue::from_str("webkitRelativePath");
+
+        if let Ok(value) = js_sys::Reflect::get(&self.file, &key)
+            && let Some(path_str) = value.as_string()
+            && !path_str.is_empty()
+        {
+            return std::path::PathBuf::from(path_str);
+        }
+
         std::path::PathBuf::from(self.file.name())
     }
 
     fn content_type(&self) -> Option<String> {
         let type_ = self.file.type_();
-        if type_.is_empty() {
-            None
-        } else {
-            Some(type_)
-        }
+        if type_.is_empty() { None } else { Some(type_) }
     }
 }
 

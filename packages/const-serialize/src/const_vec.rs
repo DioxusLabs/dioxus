@@ -6,7 +6,7 @@ use crate::ConstReadBuffer;
 const DEFAULT_MAX_SIZE: usize = 2usize.pow(10);
 
 /// [`ConstVec`] is a version of [`Vec`] that is usable in const contexts. It has
-/// a fixed maximum size, but it can can grow and shrink within that size limit
+/// a fixed maximum size, but it can grow and shrink within that size limit
 /// as needed.
 ///
 /// # Example

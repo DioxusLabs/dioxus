@@ -5,7 +5,7 @@
 // - Hydration
 
 #![allow(non_snake_case)]
-use dioxus::fullstack::{commit_initial_chunk, Websocket};
+use dioxus::fullstack::{Websocket, commit_initial_chunk};
 use dioxus::{fullstack::WebSocketOptions, prelude::*};
 
 fn main() {

@@ -1,0 +1,21 @@
+body {
+    font-family: system-ui, sans-serif;
+    background: #fafafa;
+    color: #222;
+    max-width: 640px;
+    margin: 40px auto;
+    padding: 0 16px;
+}
+
+h1 { color: #1e3a8a; }
+
+button {
+    padding: 6px 14px;
+    border: 1px solid #1e3a8a;
+    border-radius: 4px;
+    background: white;
+    color: #1e3a8a;
+    cursor: pointer;
+}
+
+button:hover { background: #1e3a8a; color: white; }

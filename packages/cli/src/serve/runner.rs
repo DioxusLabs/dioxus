@@ -1,10 +1,10 @@
 use super::{AppBuilder, ServeUpdate, WebServer};
 use crate::{
-    platform_override::CommandWithPlatformOverrides, BuildArtifacts, BuildId, BuildMode,
-    BuildTargets, BuilderUpdate, BundleFormat, HotpatchModuleCache, Result, ServeArgs, TailwindCli,
-    TraceSrc, Workspace,
+    BuildArtifacts, BuildId, BuildMode, BuildTargets, BuilderUpdate, BundleFormat,
+    HotpatchModuleCache, Result, ServeArgs, TailwindCli, TraceSrc, Workspace,
+    platform_override::CommandWithPlatformOverrides,
 };
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use dioxus_core::internal::{
     HotReloadTemplateWithLocation, HotReloadedTemplate, TemplateGlobalKey,
 };
@@ -14,17 +14,17 @@ use dioxus_html::HtmlCtx;
 use dioxus_rsx::CallBody;
 use dioxus_rsx_hotreload::{ChangedRsx, HotReloadResult};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::future::OptionFuture;
 use futures_util::StreamExt;
+use futures_util::future::OptionFuture;
 use krates::NodeId;
 use notify::{
-    event::{MetadataKind, ModifyKind},
     Config, EventKind, RecursiveMode, Watcher as NotifyWatcher,
+    event::{MetadataKind, ModifyKind},
 };
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     net::{IpAddr, TcpListener},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
@@ -46,7 +46,7 @@ pub(crate) struct AppServer {
     pub(crate) client: AppBuilder,
     pub(crate) server: Option<AppBuilder>,
 
-    // Related to to the filesystem watcher
+    // Related to the filesystem watcher
     pub(crate) watcher: Box<dyn notify::Watcher>,
     pub(crate) _watcher_tx: UnboundedSender<notify::Event>,
     pub(crate) watcher_rx: UnboundedReceiver<notify::Event>,
@@ -56,11 +56,9 @@ pub(crate) struct AppServer {
     pub(crate) file_map: HashMap<PathBuf, CachedFile>,
 
     // Resolved args related to how we go about processing the rebuilds and logging
-    pub(crate) use_hotpatch_engine: bool,
-    pub(crate) automatic_rebuilds: bool,
+    pub(crate) hotreload_mode: HotReloadMode,
     pub(crate) interactive: bool,
     pub(crate) _force_sequential: bool,
-    pub(crate) hot_reload: bool,
     pub(crate) open_browser: bool,
     pub(crate) _wsl_file_poll_interval: u16,
     pub(crate) always_on_top: bool,
@@ -81,12 +79,32 @@ pub(crate) struct AppServer {
 
     // Additional plugin-type tools
     pub(crate) tw_watcher: tokio::task::JoinHandle<Result<()>>,
+
+    // File changes that arrived while a build was in progress, to be processed after build completes
+    pub(crate) pending_file_changes: Vec<PathBuf>,
+
+    // Field-aware snapshots of Cargo.toml / Dioxus.toml so we can diff edits against the last
+    // known-good content rather than re-parsing from scratch each time. See
+    // [`AppServer::analyze_cargo_toml_change`] / [`AppServer::analyze_dioxus_toml_change`].
+    pub(crate) cargo_toml_snapshots: HashMap<PathBuf, toml::Value>,
+    pub(crate) dioxus_toml_snapshots: HashMap<PathBuf, toml::Value>,
+
+    // The original target args used to construct the initial `BuildRequest`s, kept so we can
+    // re-derive fresh requests when a config edit invalidates the cached state.
+    pub(crate) target_args: CommandWithPlatformOverrides<crate::BuildArgs>,
 }
 
 pub(crate) struct CachedFile {
     contents: String,
     most_recent: Option<String>,
     templates: HashMap<TemplateGlobalKey, HotReloadedTemplate>,
+}
+
+#[derive(PartialEq, Clone, Debug, Copy)]
+pub(crate) enum HotReloadMode {
+    Hotpatch,
+    RsxOnly,
+    Disabled,
 }
 
 impl AppServer {
@@ -113,10 +131,6 @@ impl AppServer {
 
         // These come from the args but also might come from the workspace settings
         // We opt to use the manually specified args over the workspace settings
-        let hot_reload = args
-            .hot_reload
-            .unwrap_or_else(|| workspace.settings.always_hot_reload.unwrap_or(true));
-
         let open_browser = args
             .open
             .unwrap_or_else(|| workspace.settings.always_open_browser.unwrap_or(false))
@@ -150,6 +164,10 @@ impl AppServer {
             server: args.platform_args.server.map(|s| s.targets),
             client: args.platform_args.client.map(|c| c.targets),
         };
+        // Hold on to the original target args so we can re-derive `BuildRequest`s when a
+        // Cargo.toml / Dioxus.toml edit invalidates feature resolution, profile flags, or any
+        // other field cooked into a `BuildRequest` at startup. See `recreate_build_requests`.
+        let stored_target_args = target_args.clone();
         let BuildTargets { client, server } = target_args.into_targets().await?;
 
         // All servers will end up behind us (the devserver) but on a different port
@@ -165,7 +183,11 @@ impl AppServer {
             .flatten();
 
         let watch_fs = args.watch.unwrap_or(true);
-        let use_hotpatch_engine = args.hot_patch;
+        let hotreload_mode = if args.hot_patch.unwrap_or(true) {
+            HotReloadMode::Hotpatch
+        } else {
+            HotReloadMode::RsxOnly
+        };
 
         let client = AppBuilder::new(&client)?;
         let server = server.map(|server| AppBuilder::new(&server)).transpose()?;
@@ -185,12 +207,10 @@ impl AppServer {
         let mut runner = Self {
             file_map: Default::default(),
             applied_client_hot_reload_message: Default::default(),
-            automatic_rebuilds: true,
             watch_fs,
-            use_hotpatch_engine,
+            hotreload_mode,
             client,
             server,
-            hot_reload,
             open_browser,
             _wsl_file_poll_interval: wsl_file_poll_interval,
             always_on_top,
@@ -209,6 +229,10 @@ impl AppServer {
             tw_watcher,
             server_args,
             client_args,
+            pending_file_changes: Vec::new(),
+            cargo_toml_snapshots: HashMap::new(),
+            dioxus_toml_snapshots: HashMap::new(),
+            target_args: stored_target_args,
         };
 
         // Only register the hot-reload stuff if we're watching the filesystem
@@ -225,19 +249,37 @@ impl AppServer {
             runner.load_rsx_filemap();
         }
 
+        // Seed snapshots of every Cargo.toml + Dioxus.toml in the workspace so subsequent
+        // edits diff against the on-disk state at startup, not against an empty table.
+        runner.seed_config_snapshots();
+
         Ok(runner)
     }
 
     pub(crate) fn initialize(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client.start(build_mode.clone(), BuildId::PRIMARY);
         if let Some(server) = self.server.as_mut() {
             server.start(build_mode, BuildId::SECONDARY);
         }
+    }
+
+    /// The `BuildMode` that fresh/full rebuilds should start with under the current hotreload mode.
+    ///
+    /// Only `Hotpatch` needs the `Fat` build to prime the hotpatch engine; every other mode uses a
+    /// plain `Base` build.
+    fn initial_build_mode(&self) -> BuildMode {
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => BuildMode::Fat,
+            HotReloadMode::RsxOnly | HotReloadMode::Disabled => BuildMode::Base,
+        }
+    }
+
+    /// Take any pending file changes that were queued while a build was in progress.
+    /// Returns the files and clears the pending list.
+    pub(crate) fn take_pending_file_changes(&mut self) -> Vec<PathBuf> {
+        std::mem::take(&mut self.pending_file_changes)
     }
 
     pub(crate) async fn rebuild_ssg(&mut self, devserver: &WebServer) {
@@ -249,12 +291,12 @@ impl AppServer {
             if !self.ssg || server.stage != BuildStage::Success {
                 return;
             }
-            if let Err(err) = crate::pre_render_static_routes(
-                Some(devserver.devserver_address()),
-                server,
-                Some(&server.tx.clone()),
-            )
-            .await
+            if let Err(err) = server
+                .pre_render_static_routes(
+                    Some(devserver.devserver_address()),
+                    Some(&server.tx.clone()),
+                )
+                .await
             {
                 tracing::error!("Failed to pre-render static routes: {err}");
             }
@@ -290,7 +332,7 @@ impl AppServer {
                 let mut changes: Vec<_> = event.into_iter().collect();
 
                 // Dequeue in bulk if we can, we might've received a lot of events in one go
-                while let Some(event) = self.watcher_rx.try_next().ok().flatten() {
+                while let Ok(event) = self.watcher_rx.try_recv() {
                     changes.push(event);
                 }
 
@@ -348,10 +390,14 @@ impl AppServer {
             self.client.stage,
             BuildStage::Failed | BuildStage::Aborted | BuildStage::Success
         ) {
+            // Queue file changes that arrive during a build, so we can process them after the build completes.
+            // This prevents losing changes from tools like stylance, tailwind, or sass that generate files
+            // in response to source changes.
             tracing::debug!(
-                "Ignoring file change: client is not ready to receive hotreloads. Files: {:#?}",
+                "Queueing file change - client is not ready to receive hotreloads. Files: {:?}",
                 files
             );
+            self.pending_file_changes.extend(files.iter().cloned());
             return;
         }
 
@@ -360,7 +406,12 @@ impl AppServer {
 
         // Prepare the hotreload message we need to send
         let mut assets = Vec::new();
-        let mut needs_full_rebuild = false;
+        let mut needs_rust_rebuild = false;
+
+        // Cargo.toml / Dioxus.toml edits change the dependency graph or build inputs in ways
+        // hotpatch can't reason about — force a from-scratch rebuild instead of `patch_rebuild`
+        // when this is true.
+        let mut needs_deep_rebuild = false;
 
         // We attempt to hotreload rsx blocks without a full rebuild
         for path in files {
@@ -370,6 +421,33 @@ impl AppServer {
                 .extension()
                 .and_then(|v| v.to_str())
                 .unwrap_or_default();
+
+            // Cargo.toml / Dioxus.toml — field-aware classification decides between full
+            // rebuild, "restart required" warning, and ignore-as-cosmetic. See
+            // [`AppServer::analyze_cargo_toml_change`] / [`AppServer::analyze_dioxus_toml_change`].
+            let filename = path
+                .file_name()
+                .and_then(|v| v.to_str())
+                .unwrap_or_default();
+            match filename {
+                "Cargo.toml" => {
+                    let outcome = self.analyze_cargo_toml_change(path);
+                    if self.apply_config_outcome(outcome, path) {
+                        needs_rust_rebuild = true;
+                        needs_deep_rebuild = true;
+                    }
+                    continue;
+                }
+                "Dioxus.toml" | "dioxus.toml" => {
+                    let outcome = self.analyze_dioxus_toml_change(path);
+                    if self.apply_config_outcome(outcome, path) {
+                        needs_rust_rebuild = true;
+                        needs_deep_rebuild = true;
+                    }
+                    continue;
+                }
+                _ => {}
+            }
 
             // If it's an asset, we want to hotreload it
             // todo(jon): don't hardcode this here
@@ -381,7 +459,7 @@ impl AppServer {
 
             // If it's in the public dir, we sync it and trigger a full rebuild
             if self.client.build.path_is_in_public_dir(path) {
-                needs_full_rebuild = true;
+                needs_rust_rebuild = true;
                 continue;
             }
 
@@ -396,7 +474,6 @@ impl AppServer {
                 // Get the cached file if it exists - ignoring if it doesn't exist
                 let Some(cached_file) = self.file_map.get_mut(path) else {
                     tracing::debug!("No entry for file in filemap: {:?}", path);
-                    tracing::debug!("Filemap: {:#?}", self.file_map.keys());
                     continue;
                 };
 
@@ -418,7 +495,7 @@ impl AppServer {
 
                 // This assumes the two files are structured similarly. If they're not, we can't diff them
                 let Some(changed_rsx) = dioxus_rsx_hotreload::diff_rsx(&new_file, &old_file) else {
-                    needs_full_rebuild = true;
+                    needs_rust_rebuild = true;
                     break;
                 };
 
@@ -447,7 +524,7 @@ impl AppServer {
 
                     // If no result is returned, we can't hotreload this file and need to keep the old file
                     let Some(results) = results else {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     };
 
@@ -481,7 +558,7 @@ impl AppServer {
             if ext != "rs" {
                 if let Some(artifacts) = self.client.artifacts.as_ref() {
                     if artifacts.depinfo.files.contains(path) {
-                        needs_full_rebuild = true;
+                        needs_rust_rebuild = true;
                         break;
                     }
                 }
@@ -490,29 +567,82 @@ impl AppServer {
 
         // If the client is in a failed state, any changes to rsx should trigger a rebuild/hotpatch
         if self.client.stage == BuildStage::Failed && !templates.is_empty() {
-            needs_full_rebuild = true
+            needs_rust_rebuild = true
         }
 
         // todo - we need to distinguish between hotpatchable rebuilds and true full rebuilds.
         //        A full rebuild is required when the user modifies static initializers which we haven't wired up yet.
-        if needs_full_rebuild && self.automatic_rebuilds {
-            if self.use_hotpatch_engine {
-                self.client.patch_rebuild(files.to_vec(), BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.patch_rebuild(files.to_vec(), BuildId::SECONDARY);
+        if needs_rust_rebuild {
+            // Cargo.toml / Dioxus.toml edits invalidate the cached `BuildRequest`. Refresh
+            // `cargo metadata` and re-derive the build requests before kicking off the
+            // rebuild, otherwise cargo would re-read Cargo.toml but dx-side state (features,
+            // profile, target dirs, DioxusConfig) would stay frozen at startup. If
+            // recreation fails (e.g. mid-edit broken Cargo.toml), keep the existing requests
+            // and skip the rebuild — same "user is mid-edit, will fix" behavior we use for
+            // parse failures in `analyze_*_change`.
+            if needs_deep_rebuild {
+                if let Err(err) = self.recreate_build_requests().await {
+                    tracing::warn!(
+                        dx_src = ?TraceSrc::Dev,
+                        "Skipping rebuild: failed to refresh cargo metadata: {err}"
+                    );
+                    return;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_patch_start().await;
-            } else {
-                self.client
-                    .start_rebuild(BuildMode::Base { run: true }, BuildId::PRIMARY);
-                if let Some(server) = self.server.as_mut() {
-                    server.start_rebuild(BuildMode::Base { run: true }, BuildId::SECONDARY);
+            }
+
+            match self.hotreload_mode {
+                // In hotpatch, we can only issue patches if the original build completed.
+                // `force_full_rebuild` is set when a Cargo.toml / Dioxus.toml change rewires the
+                // dependency graph or build inputs — patch_rebuild can't handle that, so we go
+                // through the fat-rebuild path even when patches are otherwise available.
+                HotReloadMode::Hotpatch
+                    if needs_deep_rebuild || !self.has_hotpatchable_builds() =>
+                {
+                    self.client.start_rebuild(BuildMode::Fat, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Fat, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    if needs_deep_rebuild {
+                        self.clear_patches();
+                    }
+                    server.send_reload_start().await;
                 }
-                self.clear_hot_reload_changes();
-                self.clear_cached_rsx();
-                server.send_reload_start().await;
+
+                // Otherwise hotpatches go through patching system
+                HotReloadMode::Hotpatch => {
+                    let changed_crates = self.order_changed_crates(files);
+
+                    self.client.patch_rebuild(
+                        files.to_vec(),
+                        changed_crates.clone(),
+                        BuildId::PRIMARY,
+                    );
+
+                    if let Some(server) = self.server.as_mut() {
+                        server.patch_rebuild(files.to_vec(), changed_crates, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_patch_start().await;
+                }
+
+                // Full rust rebuilds with rsx are full builds
+                HotReloadMode::RsxOnly => {
+                    self.client.start_rebuild(BuildMode::Base, BuildId::PRIMARY);
+                    if let Some(server) = self.server.as_mut() {
+                        server.start_rebuild(BuildMode::Base, BuildId::SECONDARY);
+                    }
+                    self.clear_hot_reload_changes();
+                    self.clear_cached_rsx();
+                    server.send_reload_start().await;
+                }
+
+                // `Disabled` is filtered out before reaching `handle_file_change`, so the only way
+                // we land here is if the user cycled to `Disabled` mid-handler. Treat it as a
+                // no-op with a visible warning so the edit isn't silently dropped.
+                HotReloadMode::Disabled => {}
             }
         } else {
             let msg = HotReloadMsg {
@@ -527,16 +657,10 @@ impl AppServer {
             self.add_hot_reload_message(&msg);
 
             let file = files[0].display().to_string();
-            let file =
-                file.trim_start_matches(&self.client.build.crate_dir().display().to_string());
-
-            if needs_full_rebuild && !self.automatic_rebuilds {
-                use crate::styles::NOTE_STYLE;
-                tracing::warn!(
-                    "Ignoring full rebuild for: {NOTE_STYLE}{}{NOTE_STYLE:#}",
-                    file
-                );
-            }
+            let workspace_dir = self.client.build.workspace_dir().display().to_string();
+            let file = file
+                .trim_start_matches(&workspace_dir)
+                .trim_start_matches('/');
 
             // Only send a hotreload message for templates and assets - otherwise we'll just get a full rebuild
             //
@@ -583,20 +707,22 @@ impl AppServer {
         use crate::cli::styles::GLOW_STYLE;
 
         if should_open {
-            let time_taken = artifacts
-                .time_end
-                .duration_since(artifacts.time_start)
-                .unwrap();
+            let time_taken = self.client.total_build_time().unwrap_or_else(|| {
+                artifacts
+                    .time_end
+                    .duration_since(artifacts.time_start)
+                    .unwrap()
+            });
 
             if self.client.builds_opened == 0 {
                 tracing::info!(
-                    "Build completed successfully in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}, launching app! 💫",
-                    time_taken.as_millis()
+                    "Build completed successfully in {GLOW_STYLE}{}{GLOW_STYLE:#}, launching app! 💫",
+                    format_duration_ms(time_taken)
                 );
             } else {
                 tracing::info!(
-                    "Build completed in {GLOW_STYLE}{:?}ms{GLOW_STYLE:#}",
-                    time_taken.as_millis()
+                    "Build completed in {GLOW_STYLE}{}{GLOW_STYLE:#}",
+                    format_duration_ms(time_taken)
                 );
             }
 
@@ -631,21 +757,32 @@ impl AppServer {
         let displayed_address = devserver.displayed_address();
 
         // Always open the server first after the client has been built
-        // Only open the server if it isn't prerendered
+        // Only open the server if it isn't prerendered and finished building
         if let Some(server) = self.server.as_mut().filter(|_| !self.ssg) {
-            tracing::debug!("Opening server build");
-            server.soft_kill().await;
-            server
-                .open(
-                    devserver_ip,
-                    displayed_address,
-                    fullstack_address,
-                    false,
-                    false,
-                    BuildId::SECONDARY,
-                    &self.server_args,
-                )
-                .await?;
+            if server.stage < BuildStage::Success {
+                tracing::trace!("Skipping server open: will open once build completes");
+            } else {
+                tracing::debug!("Opening server build");
+                server.soft_kill().await;
+                server
+                    .open(
+                        devserver_ip,
+                        displayed_address,
+                        fullstack_address,
+                        false,
+                        false,
+                        BuildId::SECONDARY,
+                        &self.server_args,
+                    )
+                    .await?;
+            }
+        }
+
+        // Skip opening native client if still building (web can open anytime)
+        if self.client.build.bundle != BundleFormat::Web && self.client.stage < BuildStage::Success
+        {
+            tracing::trace!("Skipping client open: will open once build completes");
+            return Ok(());
         }
 
         // Start the new app before we kill the old one to give it a little bit of time
@@ -699,10 +836,7 @@ impl AppServer {
     /// Perform a full rebuild of the app, equivalent to `cargo rustc` from scratch with no incremental
     /// hot-patch engine integration.
     pub(crate) async fn full_rebuild(&mut self) {
-        let build_mode = match self.use_hotpatch_engine {
-            true => BuildMode::Fat,
-            false => BuildMode::Base { run: true },
-        };
+        let build_mode = self.initial_build_mode();
 
         self.client
             .start_rebuild(build_mode.clone(), BuildId::PRIMARY);
@@ -835,6 +969,62 @@ impl AppServer {
         }
     }
 
+    /// Returns a static label for the current hotreload mode (used by both the TUI and logs).
+    pub(crate) fn hotreload_mode_label(&self) -> &'static str {
+        match self.hotreload_mode {
+            HotReloadMode::Hotpatch => "hot-patching",
+            HotReloadMode::RsxOnly => "rsx and assets",
+            HotReloadMode::Disabled => "disabled",
+        }
+    }
+
+    /// Cycle the hotreload mode: Hotpatch -> RsxOnly -> Disabled -> Hotpatch, i.e. monotonically
+    /// decreasing reactivity. Returns `(previous_label, new_label)` for logging the transition.
+    pub(crate) fn cycle_hotreload_mode(&mut self) -> (&'static str, &'static str) {
+        let prev = self.hotreload_mode_label();
+        self.hotreload_mode = match self.hotreload_mode {
+            HotReloadMode::Hotpatch => HotReloadMode::RsxOnly,
+            HotReloadMode::RsxOnly => HotReloadMode::Disabled,
+            HotReloadMode::Disabled => HotReloadMode::Hotpatch,
+        };
+        (prev, self.hotreload_mode_label())
+    }
+
+    /// Fold a `.d` file's dep list into our tracking state:
+    /// - `.rs` files get parsed and inserted into `file_map` (skipping entries already there so
+    ///   we don't clobber a `most_recent` buffer mid-edit) so RSX hot-reload diffing can find
+    ///   them on the next edit.
+    /// - any new path is appended to `client.artifacts.depinfo.files` so the non-`.rs` rebuild
+    ///   trigger at [`Self::handle_file_change`] picks up edits to `include_str!`/`include_bytes!`
+    ///   targets etc.
+    pub(crate) fn absorb_dep_info_files(&mut self, files: &[PathBuf]) {
+        for path in files {
+            let ext = path
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+
+            if ext == "rs" && !self.file_map.contains_key(path) {
+                if let Ok(contents) = std::fs::read_to_string(path) {
+                    self.file_map.insert(
+                        path.clone(),
+                        CachedFile {
+                            contents,
+                            most_recent: None,
+                            templates: Default::default(),
+                        },
+                    );
+                }
+            }
+
+            if let Some(artifacts) = self.client.artifacts.as_mut() {
+                if !artifacts.depinfo.files.contains(path) {
+                    artifacts.depinfo.files.push(path.clone());
+                }
+            }
+        }
+    }
+
     pub(crate) async fn client_connected(
         &mut self,
         build_id: BuildId,
@@ -842,10 +1032,10 @@ impl AppServer {
         pid: Option<u32>,
     ) {
         match build_id {
-            BuildId::PRIMARY => {
+            BuildId::PRIMARY
                 // multiple tabs on web can cause this to be called incorrectly, and it doesn't
                 // make any sense anyways
-                if self.client.build.bundle != BundleFormat::Web {
+                if self.client.build.bundle != BundleFormat::Web => {
                     if let Some(aslr_reference) = aslr_reference {
                         self.client.aslr_reference = Some(aslr_reference);
                     }
@@ -853,7 +1043,6 @@ impl AppServer {
                         self.client.pid = Some(pid);
                     }
                 }
-            }
             BuildId::SECONDARY => {
                 if let Some(server) = self.server.as_mut() {
                     server.aslr_reference = aslr_reference;
@@ -927,8 +1116,8 @@ impl AppServer {
             self.fill_filemap_from_krate(server.build.crate_dir());
         }
 
-        for krate in self.all_watched_crates() {
-            self.fill_filemap_from_krate(krate);
+        for krate_path in self.all_watched_crates() {
+            self.fill_filemap_from_krate(krate_path);
         }
     }
 
@@ -944,7 +1133,9 @@ impl AppServer {
     ///
     /// todo: There are known bugs here when handling gitignores.
     fn fill_filemap_from_krate(&mut self, crate_dir: PathBuf) {
-        for entry in walkdir::WalkDir::new(crate_dir).into_iter().flatten() {
+        let src_dir = crate_dir.join("src");
+
+        for entry in walkdir::WalkDir::new(src_dir).into_iter().flatten() {
             if self
                 .workspace
                 .ignore
@@ -955,16 +1146,16 @@ impl AppServer {
             }
 
             let path = entry.path();
+            let pathbuf = path.to_path_buf();
             if path.extension().and_then(|s| s.to_str()) == Some("rs") {
-                if let Ok(contents) = std::fs::read_to_string(path) {
-                    self.file_map.insert(
-                        path.to_path_buf(),
-                        CachedFile {
+                if let std::collections::hash_map::Entry::Vacant(e) = self.file_map.entry(pathbuf) {
+                    if let Ok(contents) = std::fs::read_to_string(path) {
+                        e.insert(CachedFile {
                             contents,
                             most_recent: None,
                             templates: Default::default(),
-                        },
-                    );
+                        });
+                    }
                 }
             }
         }
@@ -990,8 +1181,6 @@ impl AppServer {
             self.client.build.crate_dir(),
             self.client.build.crate_package,
         ) {
-            tracing::trace!("Watching path {path:?}");
-
             if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {
                 handle_notify_error(err);
             }
@@ -1010,7 +1199,6 @@ impl AppServer {
 
         // Also watch the crates themselves, but not recursively, such that we can pick up new folders
         for krate in self.all_watched_crates() {
-            tracing::trace!("Watching path {krate:?}");
             if let Err(err) = self.watcher.watch(&krate, RecursiveMode::NonRecursive) {
                 handle_notify_error(err);
             }
@@ -1069,49 +1257,58 @@ impl AppServer {
         watched_paths
     }
 
-    /// Get all the Manifest paths for dependencies that we should watch. Will not return anything
-    /// in the `.cargo` folder - only local dependencies will be watched.
-    ///
-    /// This returns a list of manifest paths
-    ///
-    /// Extend the watch path to include:
-    ///
-    /// - the assets directory - this is so we can hotreload CSS and other assets by default
-    /// - the Cargo.toml file - this is so we can hotreload the project if the user changes dependencies
-    /// - the Dioxus.toml file - this is so we can hotreload the project if the user changes the Dioxus config
+    /// Get the directories of every local (non-`.cargo`) crate reachable from `crate_package`
+    /// through the dependency graph. Walks transitively so workspace members pulled in via
+    /// intermediate workspace crates (e.g. `dioxus-examples` → `dioxus` → `dioxus-core`) are
+    /// included. Registry/git deps under `.cargo` are skipped and not descended into.
     fn local_dependencies(&self, crate_package: NodeId) -> Vec<PathBuf> {
         let mut paths = vec![];
+        let mut visited: HashSet<NodeId> = HashSet::new();
+        let mut queue: VecDeque<NodeId> = VecDeque::new();
 
-        for (dependency, _edge) in self.workspace.krates.get_deps(crate_package) {
-            let krate = match dependency {
-                krates::Node::Krate { krate, .. } => krate,
-                krates::Node::Feature { krate_index, .. } => {
-                    &self.workspace.krates[krate_index.index()]
+        visited.insert(crate_package);
+        queue.push_back(crate_package);
+
+        while let Some(node) = queue.pop_front() {
+            for (dependency, _edge) in self.workspace.krates.get_deps(node) {
+                let (krate, dep_nid) = match dependency {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (krate, nid)
+                    }
+                    krates::Node::Feature { krate_index, .. } => {
+                        let k = &self.workspace.krates[krate_index.index()];
+                        (k, *krate_index)
+                    }
+                };
+
+                if !visited.insert(dep_nid) {
+                    continue;
                 }
-            };
 
-            if krate
-                .manifest_path
-                .components()
-                .any(|c| c.as_str() == ".cargo")
-            {
-                continue;
-            }
-
-            paths.push(
-                krate
+                if krate
                     .manifest_path
-                    .parent()
-                    .unwrap()
-                    .to_path_buf()
-                    .into_std_path_buf(),
-            );
+                    .components()
+                    .any(|c| c.as_str() == ".cargo")
+                {
+                    continue;
+                }
+
+                paths.push(
+                    krate
+                        .manifest_path
+                        .parent()
+                        .unwrap()
+                        .to_path_buf()
+                        .into_std_path_buf(),
+                );
+                queue.push_back(dep_nid);
+            }
         }
 
         paths
     }
 
-    // todo: we need to make sure we merge this for all the running packages
     fn all_watched_crates(&self) -> Vec<PathBuf> {
         let crate_package = self.client().build.crate_package;
         let crate_dir = self.client().build.crate_dir();
@@ -1119,11 +1316,6 @@ impl AppServer {
         let mut krates: Vec<PathBuf> = self
             .local_dependencies(crate_package)
             .into_iter()
-            .map(|p| {
-                p.parent()
-                    .expect("Local manifest to exist and have a parent")
-                    .to_path_buf()
-            })
             .chain(Some(crate_dir))
             .collect();
 
@@ -1131,22 +1323,163 @@ impl AppServer {
             let server_crate_package = server.build.crate_package;
             let server_crate_dir = server.build.crate_dir();
 
-            let server_krates: Vec<PathBuf> = self
-                .local_dependencies(server_crate_package)
-                .into_iter()
-                .map(|p| {
-                    p.parent()
-                        .expect("Server manifest to exist and have a parent")
-                        .to_path_buf()
-                })
-                .chain(Some(server_crate_dir))
-                .collect();
-            krates.extend(server_krates);
+            krates.extend(
+                self.local_dependencies(server_crate_package)
+                    .into_iter()
+                    .chain(Some(server_crate_dir)),
+            );
         }
 
+        krates.sort();
         krates.dedup();
 
         krates
+    }
+
+    /// Compute the ordered compilation chain from a changed workspace crate to the tip crate.
+    ///
+    /// Returns crate names (underscore-normalized) in compilation order: the changed crate first,
+    /// then each intermediate workspace crate that depends on it, ending with the tip crate.
+    ///
+    /// Uses BFS from the tip crate through its workspace dependencies to find the path.
+    /// If the changed crate IS the tip crate, returns just `[tip]`.
+    fn workspace_dep_chain(&self, changed_crate: &str) -> Vec<String> {
+        let tip_name = self.client.build.main_target.replace('-', "_");
+
+        // If the changed crate is the tip, no chain needed
+        if changed_crate == tip_name {
+            return vec![tip_name];
+        }
+
+        // Build a map of workspace crate names to their krates NodeIds
+        let mut name_to_node: HashMap<String, NodeId> = HashMap::new();
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { id, krate, .. } = member {
+                let normalized = krate.name.replace('-', "_");
+                name_to_node.insert(normalized, self.workspace.krates.nid_for_kid(id).unwrap());
+            }
+        }
+
+        // BFS/DFS from tip through workspace deps to find path to changed crate.
+        // We walk the dependency edges (tip → its deps → their deps → ...) looking for changed_crate.
+        let Some(&tip_node) = name_to_node.get(&tip_name) else {
+            return vec![changed_crate.to_string()];
+        };
+
+        // parent[node] = the workspace crate that depends on it (closer to tip)
+        let mut parent: HashMap<NodeId, Option<NodeId>> = HashMap::new();
+        parent.insert(tip_node, None);
+        let mut queue = VecDeque::new();
+        queue.push_back(tip_node);
+
+        let mut target_node = None;
+
+        while let Some(current) = queue.pop_front() {
+            for (dep, _edge) in self.workspace.krates.get_deps(current) {
+                let (dep_name, dep_nid) = match dep {
+                    krates::Node::Krate { id, krate, .. } => {
+                        let normalized = krate.name.replace('-', "_");
+                        let nid = self.workspace.krates.nid_for_kid(id).unwrap();
+                        (normalized, nid)
+                    }
+                    _ => continue,
+                };
+
+                // Only traverse workspace members
+                if !name_to_node.contains_key(&dep_name) {
+                    continue;
+                }
+
+                if parent.contains_key(&dep_nid) {
+                    continue; // already visited
+                }
+
+                parent.insert(dep_nid, Some(current));
+
+                if dep_name == changed_crate {
+                    target_node = Some(dep_nid);
+                    break;
+                }
+
+                queue.push_back(dep_nid);
+            }
+
+            if target_node.is_some() {
+                break;
+            }
+        }
+
+        // Reconstruct the path from changed_crate → ... → tip
+        let Some(target) = target_node else {
+            // Changed crate not found in workspace dep graph — just compile it alone
+            return vec![changed_crate.to_string()];
+        };
+
+        let mut chain = vec![];
+        let mut node = target;
+        loop {
+            // Find the crate name for this node
+            let krate = &self.workspace.krates[node];
+            chain.push(krate.name.replace('-', "_"));
+
+            match parent.get(&node) {
+                Some(Some(parent_node)) => node = *parent_node,
+                _ => break,
+            }
+        }
+
+        chain
+    }
+
+    /// Order a set of changed workspace crates so that deeper dependencies compile first.
+    ///
+    /// Uses `workspace_dep_chain` to determine the depth of each crate in the dependency graph,
+    /// then sorts so that leaves (deepest deps) compile before crates closer to the tip.
+    fn order_changed_crates(&self, files: &[PathBuf]) -> Vec<String> {
+        // Determine which workspace crates changed based on the file paths.
+        // Order them so deeper deps compile first (leaves before dependents).
+        let changed_set: HashSet<String> = files
+            .iter()
+            .filter_map(|f| self.file_to_workspace_crate(f))
+            .collect();
+
+        let mut crates_with_depth: Vec<_> = changed_set
+            .iter()
+            .map(|c| (c.clone(), self.workspace_dep_chain(c).len()))
+            .collect();
+
+        // Longer chain = deeper in dep tree = should compile first
+        crates_with_depth.sort_by_key(|b| std::cmp::Reverse(b.1));
+        crates_with_depth.into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// Map a changed file path to the workspace crate it belongs to.
+    ///
+    /// Returns the crate name in rustc convention (hyphens → underscores), matching the
+    /// `--crate-name` arg used by rustc and the keys in `workspace_rustc_args`.
+    ///
+    /// Finds the workspace member whose crate directory is the longest prefix of the file path.
+    fn file_to_workspace_crate(&self, file: &Path) -> Option<String> {
+        let mut best_match: Option<(String, usize)> = None;
+
+        for member in self.workspace.krates.workspace_members() {
+            if let krates::Node::Krate { krate, .. } = member {
+                let Some(crate_dir) = krate.manifest_path.parent() else {
+                    continue;
+                };
+                if let Ok(relative) = file.strip_prefix(crate_dir.as_std_path()) {
+                    let depth = relative.components().count();
+                    let is_better = best_match
+                        .as_ref()
+                        .is_none_or(|(_, best_depth)| depth < *best_depth);
+                    if is_better {
+                        best_match = Some((krate.name.replace('-', "_"), depth));
+                    }
+                }
+            }
+        }
+
+        best_match.map(|(name, _)| name)
     }
 
     /// Check if this is a fullstack build. This means that there is an additional build with the `server` platform.
@@ -1164,8 +1497,10 @@ impl AppServer {
     }
 
     pub(crate) async fn open_debugger(&mut self, dev: &WebServer, build: BuildId) {
-        if self.use_hotpatch_engine {
-            tracing::warn!("Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging.");
+        if self.hotreload_mode == HotReloadMode::Hotpatch {
+            tracing::warn!(
+                "Debugging symbols might not work properly with hotpatching enabled. Consider disabling hotpatching for debugging."
+            );
         }
 
         match build {
@@ -1179,6 +1514,259 @@ impl AppServer {
             }
             _ => {}
         }
+    }
+
+    /// Returns true if both the server and client are ready to accept thin/hotpatch rebuilds —
+    /// i.e. they have completed artifacts *and* a populated `patch_cache` from a prior fat build.
+    ///
+    /// The cache check matters when cycling `RsxOnly`/`Disabled` -> `Hotpatch`: the existing
+    /// artifacts are from a base build and there's no symbol map to diff against, so we have to
+    /// fall back to a full fat rebuild before thin rebuilds can work.
+    fn has_hotpatchable_builds(&self) -> bool {
+        let builder_ready = |b: &AppBuilder| {
+            b.artifacts
+                .as_ref()
+                .is_some_and(|a| a.patch_cache.is_some())
+        };
+
+        builder_ready(&self.client) && self.server.as_ref().map(builder_ready).unwrap_or(true)
+    }
+
+    /// Map a [`ConfigChangeOutcome`] to user-facing log output, returning `true` iff the
+    /// runner should kick off a rebuild for this edit.
+    ///
+    /// Styling: the `subject` (e.g. `Cargo.toml [dependencies]`) is green
+    /// ([`crate::styles::NOTE_STYLE`]), the verb and any trailing prose stay in the default
+    /// color, and the file path in parens is gray ([`crate::styles::HINT_STYLE`]).
+    ///
+    /// `WarnRestart` paths log a warning but explicitly return `false`, because the field
+    /// that changed is only consumed at devserver/webserver boot.
+    fn apply_config_outcome(&self, outcome: ConfigChangeOutcome, path: &Path) -> bool {
+        use crate::styles::HINT_STYLE;
+        let workspace_dir = self.client.build.workspace_dir().display().to_string();
+        let display_file = path
+            .display()
+            .to_string()
+            .trim_start_matches(&workspace_dir)
+            .trim_start_matches('/')
+            .to_string();
+        use crate::styles::NOTE_STYLE;
+        match outcome {
+            ConfigChangeOutcome::FullRebuild { subject, detail } => {
+                tracing::info!(
+                    dx_src = ?TraceSrc::Dev,
+                    "Full rebuild: {NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
+                true
+            }
+            ConfigChangeOutcome::WarnRestart { subject, detail } => {
+                tracing::warn!(
+                    dx_src = ?TraceSrc::Dev,
+                    "{NOTE_STYLE}{subject}{NOTE_STYLE:#} {detail} {HINT_STYLE}({display_file}){HINT_STYLE:#}"
+                );
+                false
+            }
+            ConfigChangeOutcome::Ignore { note } => {
+                if let Some(note) = note {
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}{note} ({display_file}){HINT_STYLE:#}"
+                    );
+                } else {
+                    tracing::debug!(
+                        dx_src = ?TraceSrc::Dev,
+                        "{HINT_STYLE}Ignoring config edit: {display_file}{HINT_STYLE:#}"
+                    );
+                }
+                false
+            }
+        }
+    }
+
+    /// Walk the workspace and load the on-disk contents of every `Cargo.toml` and `Dioxus.toml`
+    /// into the snapshot maps. Parse failures are silently skipped — the next successful save
+    /// will populate the snapshot, and the diff against an empty table will trigger a rebuild
+    /// (which is the right behavior since something was previously broken).
+    fn seed_config_snapshots(&mut self) {
+        let workspace_cargo = self.workspace.workspace_root().join("Cargo.toml");
+        // Collect manifest paths first so we don't hold an immutable borrow on
+        // `self.workspace` while calling `&mut self` methods.
+        let member_manifests: Vec<PathBuf> = self
+            .workspace
+            .krates
+            .workspace_members()
+            .filter_map(|member| match member {
+                krates::Node::Krate { krate, .. } => {
+                    Some(krate.manifest_path.as_std_path().to_path_buf())
+                }
+                _ => None,
+            })
+            .collect();
+        self.seed_cargo_snapshot(&workspace_cargo);
+        for manifest in member_manifests {
+            if manifest != workspace_cargo {
+                self.seed_cargo_snapshot(&manifest);
+            }
+        }
+
+        // Walk up from the client crate's manifest dir for Dioxus.toml — same search the
+        // `Workspace::load_dioxus_config` method uses.
+        let crate_dir = self.client.build.crate_dir();
+        let workspace_root = self.workspace.workspace_root();
+        let mut current = crate_dir.canonicalize().unwrap_or(crate_dir);
+        let workspace_root = workspace_root
+            .canonicalize()
+            .unwrap_or_else(|_| workspace_root.clone());
+        while current.starts_with(&workspace_root) {
+            for name in ["Dioxus.toml", "dioxus.toml"] {
+                let p = current.join(name);
+                if p.is_file() {
+                    self.seed_dioxus_snapshot(&p);
+                }
+            }
+            if !current.pop() {
+                break;
+            }
+        }
+    }
+
+    /// Re-run `cargo metadata` and rebuild every `BuildRequest` from scratch so edits to
+    /// `Cargo.toml` / `Dioxus.toml` actually flow into the next compile. Without this, the
+    /// `BuildRequest` constructed at startup keeps a stale view of features, profile resolution,
+    /// dependency graph, target dirs, and `DioxusConfig` — the `cargo rustc` invocation would
+    /// re-read `Cargo.toml` itself but anything dx derives from the workspace metadata stays
+    /// frozen at the original snapshot.
+    ///
+    /// Called from the rebuild dispatch in `handle_file_change` whenever a config edit triggers
+    /// a full rebuild. Failures (broken `Cargo.toml` mid-edit, cargo metadata error) are logged
+    /// and treated as non-fatal — the existing `BuildRequest`s stay in place and the rebuild is
+    /// skipped so the user can fix the file without us crashing the serve session.
+    async fn recreate_build_requests(&mut self) -> Result<()> {
+        // Capture state from the existing `BuildRequest`s that must survive recreation.
+        // `session_cache_dir` holds files written by `prebuild` (link_err.txt, link_args.json,
+        // etc.) that subsequent build steps `dunce::canonicalize` and require to exist.
+        // `start_rebuild` skips `prebuild`, so a fresh empty tempdir on the new request would
+        // fail with ENOENT during `cargo_build_env_vars`. Carry the path over so the existing
+        // files stay reachable.
+        let preserved_client_session_cache = self.client.build.session_cache_dir.clone();
+        let preserved_server_session_cache = self
+            .server
+            .as_ref()
+            .map(|s| s.build.session_cache_dir.clone());
+
+        let new_workspace = Workspace::reload().await?;
+        let mut new_targets = self.target_args.clone().into_targets().await?;
+
+        new_targets.client.session_cache_dir = preserved_client_session_cache;
+        if let (Some(req), Some(dir)) =
+            (new_targets.server.as_mut(), preserved_server_session_cache)
+        {
+            req.session_cache_dir = dir;
+        }
+
+        // Swap the freshly-derived `BuildRequest`s onto the existing `AppBuilder`s. The
+        // builders keep their websockets, child processes, watcher state, and hot-reload
+        // bookkeeping; only the build configuration is replaced.
+        self.client.build = new_targets.client;
+        if let (Some(server_app), Some(server_req)) = (self.server.as_mut(), new_targets.server) {
+            server_app.build = server_req;
+        }
+        self.workspace = new_workspace;
+
+        // Caches keyed off the old `BuildRequest` would now be wrong. The patch cache is for
+        // the previous fat binary's symbol table, the file_map RSX templates assume the old
+        // crate layout, and the applied hot-reload set should be re-empty so the freshly
+        // opened app starts from a clean slate.
+        self.clear_patches();
+        self.clear_cached_rsx();
+        self.file_map.clear();
+        self.applied_client_hot_reload_message = Default::default();
+
+        // Tailwind input/output paths come from `application.tailwind_*` in `Dioxus.toml` —
+        // restart the watcher so it picks up any change.
+        self.tw_watcher.abort();
+        self.tw_watcher = TailwindCli::serve(
+            self.client.build.package_manifest_dir(),
+            self.client.build.config.application.tailwind_input.clone(),
+            self.client.build.config.application.tailwind_output.clone(),
+        );
+
+        // Re-seed the config snapshots so the now-canonical state is the baseline for
+        // subsequent diffs. Without this, formatter passes that touch the file (e.g.
+        // `cargo metadata` rewriting trailing whitespace) could trigger another rebuild.
+        self.cargo_toml_snapshots.clear();
+        self.dioxus_toml_snapshots.clear();
+        self.seed_config_snapshots();
+
+        Ok(())
+    }
+
+    /// Read `path` as TOML and store the parsed value as the baseline for future diffs.
+    /// Silently no-ops on read or parse failure.
+    fn seed_cargo_snapshot(&mut self, path: &Path) {
+        if let Ok(value) = read_toml_file(path) {
+            self.cargo_toml_snapshots.insert(path.to_path_buf(), value);
+        }
+    }
+
+    fn seed_dioxus_snapshot(&mut self, path: &Path) {
+        if let Ok(value) = read_toml_file(path) {
+            self.dioxus_toml_snapshots.insert(path.to_path_buf(), value);
+        }
+    }
+
+    /// Classify a change to a `Cargo.toml`. Returns the action the runner should take and
+    /// updates the cached snapshot to the new content (so repeated edits don't loop on the
+    /// same diff).
+    ///
+    /// Parse failures keep the snapshot intact and return `Ignore` — the user is mid-edit and
+    /// the next successful save will diff against the last known-good state.
+    fn analyze_cargo_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Cargo.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
+        };
+        let old_value = self
+            .cargo_toml_snapshots
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(Default::default()));
+        let ctx = AnalysisCtx {
+            active_profile: self.client.build.profile.clone(),
+            active_bundle: self.client.build.bundle,
+        };
+        let outcome = analyze_cargo_value(&old_value, &new_value, &ctx);
+        self.cargo_toml_snapshots
+            .insert(path.to_path_buf(), new_value);
+        outcome
+    }
+
+    fn analyze_dioxus_toml_change(&mut self, path: &Path) -> ConfigChangeOutcome {
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Dioxus.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
+        };
+        let old_value = self
+            .dioxus_toml_snapshots
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(Default::default()));
+        let ctx = AnalysisCtx {
+            active_profile: self.client.build.profile.clone(),
+            active_bundle: self.client.build.bundle,
+        };
+        let outcome = analyze_dioxus_value(&old_value, &new_value, &ctx);
+        self.dioxus_toml_snapshots
+            .insert(path.to_path_buf(), new_value);
+        outcome
     }
 }
 
@@ -1293,4 +1881,1309 @@ fn is_wsl() -> bool {
     }
 
     false
+}
+
+/// Format a Duration for human-readable output.
+fn format_duration_ms(d: Duration) -> String {
+    let total_ms = d.as_millis() as u64;
+
+    if total_ms < 1000 {
+        format!("{total_ms}ms")
+    } else {
+        let secs = total_ms as f64 / 1000.0;
+        format!("{secs:.2}s")
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Cargo.toml / Dioxus.toml live-edit classification
+//
+// Decides whether an in-flight `dx serve` should respond to an edit of `Cargo.toml` or
+// `Dioxus.toml` with a full rebuild, a "restart required" warning, or by silently ignoring it.
+//
+// The classification is field-aware: we parse the file as `toml::Value` and compare a curated
+// set of subtrees. Whitespace, comments, key reordering, and edits to fields outside the curated
+// set show up as `Ignore`, so a stray edit to e.g. `package.description` doesn't kick off a
+// 30-second rebuild.
+//
+// Profile and platform sections are filtered against the *active* profile and bundle. Editing
+// `[profile.release]` while serving in `dev` produces an `Ignore` with a debug note rather
+// than a rebuild — likewise for `[ios]` settings while serving for the web.
+//
+// Parse failures intentionally return `Ignore` and leave the snapshot untouched, so a save
+// that's mid-edit (broken syntax) doesn't get diffed and doesn't pollute the baseline. The
+// next successful save is what drives a decision.
+// ---------------------------------------------------------------------------------------------
+
+/// What the runner should do in response to a config-file edit.
+///
+/// `FullRebuild` and `WarnRestart` carry the human-readable cause split into a `subject`
+/// (e.g. `Cargo.toml [dependencies]`) and a `detail` (e.g. `changed` plus any trailing hint).
+/// The split lets the log formatter style only the subject, leaving the verb and any
+/// follow-on prose in the default color.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ConfigChangeOutcome {
+    /// Nothing rebuild-relevant changed (whitespace, comment-only edit, irrelevant field, edit
+    /// to an inactive profile/platform). `note` is logged at debug level so silent edits aren't
+    /// completely invisible.
+    Ignore { note: Option<String> },
+
+    /// A field that affects compilation changed. The runner should kick off a full rebuild.
+    FullRebuild { subject: String, detail: String },
+
+    /// A field that's only consumed at devserver-startup changed (proxy, https, watch paths).
+    /// The runner should warn the user that a `dx serve` restart is required to pick up the
+    /// change. No build action is taken.
+    WarnRestart { subject: String, detail: String },
+}
+
+impl ConfigChangeOutcome {
+    /// Combine two outcomes by keeping the strongest action.
+    /// `FullRebuild` > `WarnRestart` > `Ignore`.
+    fn escalate(self, other: ConfigChangeOutcome) -> ConfigChangeOutcome {
+        use ConfigChangeOutcome::*;
+        match (&self, &other) {
+            (FullRebuild { .. }, _) => self,
+            (_, FullRebuild { .. }) => other,
+            (WarnRestart { .. }, _) => self,
+            (_, WarnRestart { .. }) => other,
+            (Ignore { note: Some(_) }, Ignore { note: None }) => self,
+            (Ignore { note: None }, Ignore { note: Some(_) }) => other,
+            _ => self,
+        }
+    }
+}
+
+/// Active build context passed to the pure analysis functions. Lets `[profile.<name>]` and
+/// `[<platform>]` edits be classified relative to whatever the running serve session targets.
+#[derive(Debug, Clone)]
+struct AnalysisCtx {
+    active_profile: String,
+    active_bundle: BundleFormat,
+}
+
+fn read_toml_file(path: &Path) -> Result<toml::Value, anyhow::Error> {
+    let s = std::fs::read_to_string(path)?;
+    let v = toml::from_str::<toml::Value>(&s)?;
+    Ok(v)
+}
+
+/// Look up `path` (a list of table keys) inside a TOML value. Returns `None` at the first
+/// missing key or non-table along the way.
+fn toml_get<'a>(value: &'a toml::Value, path: &[&str]) -> Option<&'a toml::Value> {
+    let mut current = value;
+    for key in path {
+        let table = current.as_table()?;
+        current = table.get(*key)?;
+    }
+    Some(current)
+}
+
+fn analyze_cargo_value(
+    old: &toml::Value,
+    new: &toml::Value,
+    ctx: &AnalysisCtx,
+) -> ConfigChangeOutcome {
+    if old == new {
+        return ConfigChangeOutcome::Ignore { note: None };
+    }
+
+    let mut outcome = ConfigChangeOutcome::Ignore { note: None };
+
+    // -------- Sections that always force a full rebuild when their contents differ --------
+    let rebuild_sections: &[&str] = &[
+        "dependencies",
+        "dev-dependencies",
+        "build-dependencies",
+        "features",
+        "lib",
+        "bin",
+        "example",
+        "test",
+        "bench",
+        "patch",
+        "replace",
+    ];
+    for section in rebuild_sections {
+        if toml_get(old, &[section]) != toml_get(new, &[section]) {
+            outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                subject: format!("Cargo.toml [{section}]"),
+                detail: "changed".to_string(),
+            });
+        }
+    }
+
+    // -------- target.<cfg>.dependencies / dev-dependencies / build-dependencies --------
+    if toml_get(old, &["target"]) != toml_get(new, &["target"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+            subject: "Cargo.toml [target.*]".to_string(),
+            detail: "dependencies changed".to_string(),
+        });
+    }
+
+    // -------- [package] subset that affects compilation --------
+    let pkg_compile_keys: &[&str] = &[
+        "name",
+        "version",
+        "edition",
+        "rust-version",
+        "build",
+        "default-run",
+        "links",
+        "autobins",
+        "autoexamples",
+        "autotests",
+        "autobenches",
+        "resolver",
+    ];
+    for key in pkg_compile_keys {
+        if toml_get(old, &["package", key]) != toml_get(new, &["package", key]) {
+            outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                subject: format!("Cargo.toml [package].{key}"),
+                detail: "changed".to_string(),
+            });
+        }
+    }
+
+    // -------- [profile.<name>] — only relevant if <name> is in the active profile's chain --------
+    if let (Some(old_profiles), Some(new_profiles)) = (
+        toml_get(old, &["profile"]).and_then(|v| v.as_table()),
+        toml_get(new, &["profile"]).and_then(|v| v.as_table()),
+    ) {
+        let mut all_names: std::collections::BTreeSet<&str> = Default::default();
+        all_names.extend(old_profiles.keys().map(String::as_str));
+        all_names.extend(new_profiles.keys().map(String::as_str));
+
+        for name in all_names {
+            if old_profiles.get(name) == new_profiles.get(name) {
+                continue;
+            }
+            // Use the *new* profile table for inheritance so a freshly-added `inherits` is
+            // honored, falling back to the old table for profiles that were just deleted.
+            if profile_in_active_chain(name, &ctx.active_profile, new_profiles, old_profiles) {
+                outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                    subject: format!("Cargo.toml [profile.{name}]"),
+                    detail: "changed".to_string(),
+                });
+            } else {
+                outcome = outcome.escalate(ConfigChangeOutcome::Ignore {
+                    note: Some(format!(
+                        "Saw change to [profile.{name}] but active profile is `{}` — ignoring.",
+                        ctx.active_profile
+                    )),
+                });
+            }
+        }
+    } else if toml_get(old, &["profile"]) != toml_get(new, &["profile"]) {
+        // One side missing the [profile] table entirely — treat as full rebuild for safety.
+        outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+            subject: "Cargo.toml [profile]".to_string(),
+            detail: "section added or removed".to_string(),
+        });
+    }
+
+    // -------- [workspace] subset that affects build composition --------
+    let workspace_compile_keys: &[&str] = &[
+        "members",
+        "default-members",
+        "exclude",
+        "resolver",
+        "dependencies",
+        "package",
+        "metadata",
+    ];
+    for key in workspace_compile_keys {
+        if toml_get(old, &["workspace", key]) != toml_get(new, &["workspace", key]) {
+            let extra = if *key == "members" || *key == "default-members" {
+                " (note: source files in newly-added workspace members won't be hot-reloaded until you restart `dx serve`)"
+            } else {
+                ""
+            };
+            outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                subject: format!("Cargo.toml [workspace].{key}"),
+                detail: format!("changed{extra}"),
+            });
+        }
+    }
+
+    // -------- workspace-level patch / replace --------
+    if toml_get(old, &["workspace", "patch"]) != toml_get(new, &["workspace", "patch"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+            subject: "Cargo.toml [workspace.patch]".to_string(),
+            detail: "changed".to_string(),
+        });
+    }
+
+    outcome
+}
+
+/// Walk a profile's `inherits` chain in `profiles` (using `fallback` for profiles missing on
+/// the new side) and return true if `target` is `start` or any ancestor of `start`.
+///
+/// Cargo's built-in fallback chain (`test`→`dev`, `bench`→`release`) is encoded explicitly.
+fn profile_in_active_chain(
+    target: &str,
+    start: &str,
+    primary: &toml::value::Table,
+    fallback: &toml::value::Table,
+) -> bool {
+    if target == start {
+        return true;
+    }
+
+    // Built-in defaults — these inherit even if not declared.
+    let implicit_inherits = match start {
+        "test" => Some("dev"),
+        "bench" => Some("release"),
+        _ => None,
+    };
+
+    let mut current = start.to_string();
+    let mut visited: HashSet<String> = Default::default();
+    visited.insert(current.clone());
+
+    loop {
+        let table = primary
+            .get(&current)
+            .and_then(|v| v.as_table())
+            .or_else(|| fallback.get(&current).and_then(|v| v.as_table()));
+
+        let next = match table
+            .and_then(|t| t.get("inherits"))
+            .and_then(|v| v.as_str())
+        {
+            Some(s) => s.to_string(),
+            None => match implicit_inherits {
+                Some(s) if current == start => s.to_string(),
+                _ => return false,
+            },
+        };
+
+        if next == target {
+            return true;
+        }
+        if !visited.insert(next.clone()) {
+            return false; // cycle
+        }
+        current = next;
+    }
+}
+
+fn analyze_dioxus_value(
+    old: &toml::Value,
+    new: &toml::Value,
+    ctx: &AnalysisCtx,
+) -> ConfigChangeOutcome {
+    if old == new {
+        return ConfigChangeOutcome::Ignore { note: None };
+    }
+
+    let mut outcome = ConfigChangeOutcome::Ignore { note: None };
+
+    // ---- [application] — paths and identifiers compiled into the build ----
+    let app_rebuild_keys: &[&str] = &[
+        "name",
+        "out_dir",
+        "asset_dir",
+        "public_dir",
+        "tailwind_input",
+        "tailwind_output",
+        "ios_info_plist",
+        "macos_info_plist",
+        "ios_entitlements",
+        "macos_entitlements",
+        "android_manifest",
+        "android_main_activity",
+        "android_min_sdk_version",
+    ];
+    for key in app_rebuild_keys {
+        if toml_get(old, &["application", key]) != toml_get(new, &["application", key]) {
+            outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                subject: format!("Dioxus.toml [application].{key}"),
+                detail: "changed".to_string(),
+            });
+        }
+    }
+
+    // ---- [web.app] — title and base_path get baked into HTML / WASM URLs ----
+    if toml_get(old, &["web", "app"]) != toml_get(new, &["web", "app"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+            subject: "Dioxus.toml [web.app]".to_string(),
+            detail: "changed".to_string(),
+        });
+    }
+
+    // ---- [web.proxy] — only consumed when devserver boots ----
+    if toml_get(old, &["web", "proxy"]) != toml_get(new, &["web", "proxy"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
+            subject: "Dioxus.toml [web.proxy]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
+        });
+    }
+
+    // ---- [web.https] — TLS config initialized at boot ----
+    if toml_get(old, &["web", "https"]) != toml_get(new, &["web", "https"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
+            subject: "Dioxus.toml [web.https]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
+        });
+    }
+
+    // ---- [web.watcher] — watcher mounted at startup; can't be re-mounted live (yet) ----
+    if toml_get(old, &["web", "watcher"]) != toml_get(new, &["web", "watcher"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::WarnRestart {
+            subject: "Dioxus.toml [web.watcher]".to_string(),
+            detail: "changed — restart `dx serve` to apply.".to_string(),
+        });
+    }
+
+    // ---- [web.resource] — injected into HTML at build time ----
+    if toml_get(old, &["web", "resource"]) != toml_get(new, &["web", "resource"]) {
+        outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+            subject: "Dioxus.toml [web.resource]".to_string(),
+            detail: "changed".to_string(),
+        });
+    }
+
+    // ---- [permissions] / [deep_links] / [background] ----
+    for section in &["permissions", "deep_links", "background"] {
+        if toml_get(old, &[section]) != toml_get(new, &[section]) {
+            outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                subject: format!("Dioxus.toml [{section}]"),
+                detail: "changed".to_string(),
+            });
+        }
+    }
+
+    // ---- Per-platform sections — only rebuild if they're the active platform ----
+    let platform_sections = [
+        ("ios", BundleFormat::Ios),
+        ("android", BundleFormat::Android),
+        ("macos", BundleFormat::MacOS),
+        ("windows", BundleFormat::Windows),
+        ("linux", BundleFormat::Linux),
+    ];
+    for (section, fmt) in platform_sections {
+        if toml_get(old, &[section]) != toml_get(new, &[section]) {
+            if ctx.active_bundle == fmt {
+                outcome = outcome.escalate(ConfigChangeOutcome::FullRebuild {
+                    subject: format!("Dioxus.toml [{section}]"),
+                    detail: "changed".to_string(),
+                });
+            } else {
+                outcome = outcome.escalate(ConfigChangeOutcome::Ignore {
+                    note: Some(format!(
+                        "Saw change to [{section}] but active bundle is `{}` — ignoring.",
+                        ctx.active_bundle
+                    )),
+                });
+            }
+        }
+    }
+
+    // [bundle], [components], [web.pre_compress], [web.wasm_opt] are intentionally NOT in
+    // either rebuild or warn lists — they only matter for `dx bundle` / `dx components` /
+    // release post-processing, none of which run during `dx serve`.
+
+    outcome
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(s: &str) -> toml::Value {
+        toml::from_str(s).expect("valid toml")
+    }
+
+    fn ctx_dev_web() -> AnalysisCtx {
+        AnalysisCtx {
+            active_profile: "dev".to_string(),
+            active_bundle: BundleFormat::Web,
+        }
+    }
+
+    fn ctx_release_ios() -> AnalysisCtx {
+        AnalysisCtx {
+            active_profile: "release".to_string(),
+            active_bundle: BundleFormat::Ios,
+        }
+    }
+
+    fn assert_rebuild(outcome: &ConfigChangeOutcome) {
+        assert!(
+            matches!(outcome, ConfigChangeOutcome::FullRebuild { .. }),
+            "expected FullRebuild, got {outcome:?}"
+        );
+    }
+
+    fn assert_warn(outcome: &ConfigChangeOutcome) {
+        assert!(
+            matches!(outcome, ConfigChangeOutcome::WarnRestart { .. }),
+            "expected WarnRestart, got {outcome:?}"
+        );
+    }
+
+    fn assert_ignore(outcome: &ConfigChangeOutcome) {
+        assert!(
+            matches!(outcome, ConfigChangeOutcome::Ignore { .. }),
+            "expected Ignore, got {outcome:?}"
+        );
+    }
+
+    // ============================================================================
+    // Cargo.toml — baseline + variants
+    // ============================================================================
+
+    const CARGO_BASELINE: &str = r#"
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2021"
+description = "a demo crate"
+license = "MIT"
+
+[dependencies]
+serde = "1"
+
+[dev-dependencies]
+proptest = "1"
+
+[features]
+default = ["foo"]
+foo = []
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+"#;
+
+    #[test]
+    fn cargo_identical_is_ignore() {
+        let v = parse(CARGO_BASELINE);
+        assert_ignore(&analyze_cargo_value(&v, &v, &ctx_dev_web()));
+    }
+
+    #[test]
+    fn cargo_add_dependency_rebuilds() {
+        let new = parse(&format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        ));
+        let outcome = analyze_cargo_value(&parse(CARGO_BASELINE), &new, &ctx_dev_web());
+        assert_rebuild(&outcome);
+    }
+
+    #[test]
+    fn cargo_bump_dep_version_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace(r#"serde = "1""#, r#"serde = "2""#));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_remove_dependency_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace(r#"serde = "1""#, ""));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_dev_dependency_rebuilds() {
+        let new = parse(&format!(
+            r#"{CARGO_BASELINE}
+[dev-dependencies.criterion]
+version = "0.5"
+"#
+        ));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_build_dependency_rebuilds() {
+        let new = parse(&format!(
+            r#"{CARGO_BASELINE}
+[build-dependencies]
+cc = "1"
+"#
+        ));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_target_specific_dep_rebuilds() {
+        let new = parse(&format!(
+            r#"{CARGO_BASELINE}
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+"#
+        ));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_feature_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace("foo = []", "foo = []\nbar = []"));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_default_feature_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace(r#"default = ["foo"]"#, "default = []"));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_edition_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace(r#"edition = "2021""#, r#"edition = "2024""#));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_rust_version_rebuilds() {
+        let spliced = CARGO_BASELINE.replace(
+            r#"license = "MIT""#,
+            "license = \"MIT\"\nrust-version = \"1.80\"",
+        );
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&spliced),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_active_profile_rebuilds() {
+        let new = parse(&CARGO_BASELINE.replace("opt-level = 0", "opt-level = 1"));
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &new,
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_inactive_profile_ignored_in_dev() {
+        // Editing [profile.release] while serving in dev should NOT rebuild.
+        let new = parse(&CARGO_BASELINE.replace("opt-level = 3", "opt-level = 2"));
+        let outcome = analyze_cargo_value(&parse(CARGO_BASELINE), &new, &ctx_dev_web());
+        assert_ignore(&outcome);
+        if let ConfigChangeOutcome::Ignore { note: Some(n) } = &outcome {
+            assert!(n.contains("[profile.release]"));
+            assert!(n.contains("`dev`"));
+        } else {
+            panic!("expected Ignore-with-note, got {outcome:?}");
+        }
+    }
+
+    #[test]
+    fn cargo_change_inactive_profile_ignored_in_release() {
+        // Editing [profile.dev] while serving in release should NOT rebuild.
+        let new = parse(&CARGO_BASELINE.replace("opt-level = 0", "opt-level = 1"));
+        let outcome = analyze_cargo_value(&parse(CARGO_BASELINE), &new, &ctx_release_ios());
+        assert_ignore(&outcome);
+    }
+
+    #[test]
+    fn cargo_change_inherited_profile_rebuilds() {
+        // Active profile "android-dev" inherits from "dev". A change to [profile.dev] must
+        // rebuild because it propagates through the inherits chain.
+        let baseline = format!(
+            r#"{CARGO_BASELINE}
+[profile.android-dev]
+inherits = "dev"
+opt-level = 1
+"#
+        );
+        let modified = baseline.replacen("opt-level = 0", "opt-level = 1", 1);
+        let ctx = AnalysisCtx {
+            active_profile: "android-dev".to_string(),
+            active_bundle: BundleFormat::Android,
+        };
+        let outcome = analyze_cargo_value(&parse(&baseline), &parse(&modified), &ctx);
+        assert_rebuild(&outcome);
+    }
+
+    #[test]
+    fn cargo_change_test_profile_with_implicit_dev_inheritance() {
+        // `test` implicitly inherits from `dev`. Active = `test` → editing [profile.dev]
+        // must rebuild even without an explicit `inherits` key.
+        let new = parse(&CARGO_BASELINE.replace("opt-level = 0", "opt-level = 1"));
+        let ctx = AnalysisCtx {
+            active_profile: "test".to_string(),
+            active_bundle: BundleFormat::Web,
+        };
+        assert_rebuild(&analyze_cargo_value(&parse(CARGO_BASELINE), &new, &ctx));
+    }
+
+    #[test]
+    fn cargo_change_workspace_members_rebuilds_with_warn_note() {
+        let baseline = r#"
+[workspace]
+members = ["a"]
+"#;
+        let modified = r#"
+[workspace]
+members = ["a", "b"]
+"#;
+        let outcome = analyze_cargo_value(&parse(baseline), &parse(modified), &ctx_dev_web());
+        assert_rebuild(&outcome);
+        if let ConfigChangeOutcome::FullRebuild { subject, detail } = outcome {
+            assert!(subject.contains("workspace"));
+            assert!(detail.contains("hot-reloaded"));
+        }
+    }
+
+    #[test]
+    fn cargo_change_workspace_dependencies_rebuilds() {
+        let baseline = r#"
+[workspace]
+members = ["a"]
+[workspace.dependencies]
+serde = "1"
+"#;
+        let modified = r#"
+[workspace]
+members = ["a"]
+[workspace.dependencies]
+serde = "2"
+"#;
+        assert_rebuild(&analyze_cargo_value(
+            &parse(baseline),
+            &parse(modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_patch_rebuilds() {
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[patch.crates-io]
+serde = {{ git = "https://github.com/serde-rs/serde" }}
+"#
+        );
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_lib_section_rebuilds() {
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[lib]
+name = "demo_lib"
+"#
+        );
+        assert_rebuild(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_bin_path_rebuilds() {
+        let baseline = format!(
+            r#"{CARGO_BASELINE}
+[[bin]]
+name = "demo"
+path = "src/main.rs"
+"#
+        );
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[[bin]]
+name = "demo"
+path = "src/bin.rs"
+"#
+        );
+        assert_rebuild(&analyze_cargo_value(
+            &parse(&baseline),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_lints_section_ignored() {
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[lints.rust]
+unsafe_code = "forbid"
+"#
+        );
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_description_ignored() {
+        let modified = CARGO_BASELINE.replace(
+            r#"description = "a demo crate""#,
+            r#"description = "an updated demo""#,
+        );
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_change_license_ignored() {
+        let modified = CARGO_BASELINE.replace(r#"license = "MIT""#, r#"license = "Apache-2.0""#);
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_add_authors_ignored() {
+        let modified = CARGO_BASELINE.replace(
+            r#"license = "MIT""#,
+            r#"license = "MIT"
+authors = ["jon"]"#,
+        );
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_reorder_keys_ignored() {
+        let reordered = r#"
+[package]
+edition = "2021"
+license = "MIT"
+description = "a demo crate"
+version = "0.1.0"
+name = "demo"
+
+[dev-dependencies]
+proptest = "1"
+
+[dependencies]
+serde = "1"
+
+[features]
+foo = []
+default = ["foo"]
+
+[profile.release]
+opt-level = 3
+
+[profile.dev]
+opt-level = 0
+"#;
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(reordered),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_comment_only_change_ignored() {
+        // Inserting a comment doesn't change the parsed Value at all.
+        let modified = format!("# new comment\n{CARGO_BASELINE}");
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn cargo_whitespace_change_ignored() {
+        let modified = CARGO_BASELINE.replace("\n\n", "\n\n\n\n");
+        assert_ignore(&analyze_cargo_value(
+            &parse(CARGO_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    // ============================================================================
+    // Dioxus.toml — baseline + variants
+    // ============================================================================
+
+    const DIOXUS_BASELINE: &str = r#"
+[application]
+name = "demo"
+public_dir = "public"
+
+[web.app]
+title = "demo"
+
+[web.watcher]
+watch_path = ["src"]
+reload_html = false
+index_on_404 = true
+
+[bundle]
+identifier = "com.example.demo"
+
+[ios]
+identifier = "com.example.demo.ios"
+
+[android]
+identifier = "com.example.demo.android"
+"#;
+
+    #[test]
+    fn dioxus_identical_is_ignore() {
+        let v = parse(DIOXUS_BASELINE);
+        assert_ignore(&analyze_dioxus_value(&v, &v, &ctx_dev_web()));
+    }
+
+    #[test]
+    fn dioxus_change_app_title_rebuilds() {
+        let modified = DIOXUS_BASELINE.replace(r#"title = "demo""#, r#"title = "renamed""#);
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_base_path_rebuilds() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"title = "demo""#,
+            "title = \"demo\"\nbase_path = \"/app\"",
+        );
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_public_dir_rebuilds() {
+        let modified =
+            DIOXUS_BASELINE.replace(r#"public_dir = "public""#, r#"public_dir = "static""#);
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_tailwind_input_rebuilds() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"public_dir = "public""#,
+            r#"public_dir = "public"
+tailwind_input = "src/input.css""#,
+        );
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_add_proxy_warns_restart() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[[web.proxy]]
+backend = "http://localhost:9999/api"
+"#
+        );
+        assert_warn(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_proxy_backend_warns_restart() {
+        let baseline = format!(
+            r#"{DIOXUS_BASELINE}
+[[web.proxy]]
+backend = "http://localhost:9999/api"
+"#
+        );
+        let modified = baseline.replace("9999", "8888");
+        assert_warn(&analyze_dioxus_value(
+            &parse(&baseline),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_enable_https_warns_restart() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web.https]
+enabled = true
+"#
+        );
+        assert_warn(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_watcher_paths_warns_restart() {
+        let modified =
+            DIOXUS_BASELINE.replace(r#"watch_path = ["src"]"#, r#"watch_path = ["src", "lib"]"#);
+        assert_warn(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_add_dev_resource_script_rebuilds() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web.resource.dev]
+script = ["http://example.com/x.js"]
+"#
+        );
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_bundle_identifier_ignored() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"identifier = "com.example.demo""#,
+            r#"identifier = "com.example.renamed""#,
+        );
+        assert_ignore(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_components_section_ignored() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[components]
+git = "https://example.com"
+"#
+        );
+        assert_ignore(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_wasm_opt_level_ignored() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web.wasm_opt]
+level = "3"
+"#
+        );
+        assert_ignore(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_pre_compress_ignored() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[web]
+pre_compress = true
+"#
+        );
+        assert_ignore(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_ios_identifier_when_active_rebuilds() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"identifier = "com.example.demo.ios""#,
+            r#"identifier = "com.example.renamed.ios""#,
+        );
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_release_ios(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_change_ios_identifier_when_web_active_ignored() {
+        let modified = DIOXUS_BASELINE.replace(
+            r#"identifier = "com.example.demo.ios""#,
+            r#"identifier = "com.example.renamed.ios""#,
+        );
+        let outcome =
+            analyze_dioxus_value(&parse(DIOXUS_BASELINE), &parse(&modified), &ctx_dev_web());
+        assert_ignore(&outcome);
+        if let ConfigChangeOutcome::Ignore { note: Some(n) } = &outcome {
+            assert!(n.contains("[ios]"));
+        } else {
+            panic!("expected Ignore-with-note, got {outcome:?}");
+        }
+    }
+
+    #[test]
+    fn dioxus_add_permission_rebuilds() {
+        let modified = format!(
+            r#"{DIOXUS_BASELINE}
+[permissions]
+camera = {{ description = "need camera" }}
+"#
+        );
+        assert_rebuild(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(&modified),
+            &ctx_dev_web(),
+        ));
+    }
+
+    #[test]
+    fn dioxus_reorder_keys_ignored() {
+        let reordered = r#"
+[android]
+identifier = "com.example.demo.android"
+
+[ios]
+identifier = "com.example.demo.ios"
+
+[bundle]
+identifier = "com.example.demo"
+
+[web.watcher]
+index_on_404 = true
+reload_html = false
+watch_path = ["src"]
+
+[web.app]
+title = "demo"
+
+[application]
+public_dir = "public"
+name = "demo"
+"#;
+        assert_ignore(&analyze_dioxus_value(
+            &parse(DIOXUS_BASELINE),
+            &parse(reordered),
+            &ctx_dev_web(),
+        ));
+    }
+
+    // ============================================================================
+    // Outcome escalation
+    // ============================================================================
+
+    fn rebuild(s: &str, d: &str) -> ConfigChangeOutcome {
+        ConfigChangeOutcome::FullRebuild {
+            subject: s.into(),
+            detail: d.into(),
+        }
+    }
+
+    fn warn(s: &str, d: &str) -> ConfigChangeOutcome {
+        ConfigChangeOutcome::WarnRestart {
+            subject: s.into(),
+            detail: d.into(),
+        }
+    }
+
+    #[test]
+    fn escalate_full_rebuild_dominates_warn_restart() {
+        let a = rebuild("a", "changed");
+        let b = warn("b", "changed");
+        assert_rebuild(&a.clone().escalate(b.clone()));
+        assert_rebuild(&b.escalate(a));
+    }
+
+    #[test]
+    fn escalate_warn_restart_dominates_ignore() {
+        let a = warn("a", "changed");
+        let b = ConfigChangeOutcome::Ignore { note: None };
+        assert_warn(&a.clone().escalate(b.clone()));
+        assert_warn(&b.escalate(a));
+    }
+
+    // ============================================================================
+    // File-level round-trip (parse-error & no-repeat-rebuild behaviors)
+    // ============================================================================
+    //
+    // These exercise the helpers that load and diff against the on-disk content. They use a
+    // standalone `Snapshot` map rather than spinning up an `AppServer`, which keeps tests
+    // fast and isolated from the rest of the runner.
+
+    fn diff_cargo_file(
+        snapshots: &mut HashMap<PathBuf, toml::Value>,
+        path: &Path,
+        ctx: &AnalysisCtx,
+    ) -> ConfigChangeOutcome {
+        let Ok(new_value) = read_toml_file(path) else {
+            return ConfigChangeOutcome::Ignore {
+                note: Some(format!(
+                    "Cargo.toml parse failed at {}, will retry on next save",
+                    path.display()
+                )),
+            };
+        };
+        let old_value = snapshots
+            .get(path)
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(Default::default()));
+        let outcome = analyze_cargo_value(&old_value, &new_value, ctx);
+        snapshots.insert(path.to_path_buf(), new_value);
+        outcome
+    }
+
+    fn seed_cargo_into(snapshots: &mut HashMap<PathBuf, toml::Value>, path: &Path) {
+        if let Ok(v) = read_toml_file(path) {
+            snapshots.insert(path.to_path_buf(), v);
+        }
+    }
+
+    #[test]
+    fn diff_returns_ignore_for_unchanged_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Cargo.toml");
+        std::fs::write(&path, CARGO_BASELINE).unwrap();
+
+        let mut snaps = HashMap::new();
+        seed_cargo_into(&mut snaps, &path);
+        assert_ignore(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
+    }
+
+    #[test]
+    fn diff_detects_added_dependency() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Cargo.toml");
+        std::fs::write(&path, CARGO_BASELINE).unwrap();
+
+        let mut snaps = HashMap::new();
+        seed_cargo_into(&mut snaps, &path);
+
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
+        std::fs::write(&path, &modified).unwrap();
+        assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
+    }
+
+    #[test]
+    fn diff_returns_ignore_with_note_on_parse_error_and_keeps_snapshot() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Cargo.toml");
+        std::fs::write(&path, CARGO_BASELINE).unwrap();
+
+        let mut snaps = HashMap::new();
+        seed_cargo_into(&mut snaps, &path);
+
+        // Mid-edit garbage: snapshot must NOT be clobbered.
+        std::fs::write(&path, "[package\nthis is not valid").unwrap();
+        let outcome = diff_cargo_file(&mut snaps, &path, &ctx_dev_web());
+        assert_ignore(&outcome);
+        if let ConfigChangeOutcome::Ignore { note: Some(n) } = &outcome {
+            assert!(n.contains("parse failed"));
+        } else {
+            panic!("expected Ignore-with-note, got {outcome:?}");
+        }
+
+        // Subsequent valid save still diffs against the *seeded* baseline.
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
+        std::fs::write(&path, &modified).unwrap();
+        assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
+    }
+
+    #[test]
+    fn diff_no_repeat_rebuild_for_same_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Cargo.toml");
+        std::fs::write(&path, CARGO_BASELINE).unwrap();
+
+        let mut snaps = HashMap::new();
+        seed_cargo_into(&mut snaps, &path);
+
+        let modified = format!(
+            r#"{CARGO_BASELINE}
+[dependencies.tokio]
+version = "1"
+"#
+        );
+        std::fs::write(&path, &modified).unwrap();
+        assert_rebuild(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
+
+        // Second analyze call against the *same* file content should be Ignore — the
+        // snapshot was updated by the first call, so we don't loop on the same edit.
+        assert_ignore(&diff_cargo_file(&mut snaps, &path, &ctx_dev_web()));
+    }
 }

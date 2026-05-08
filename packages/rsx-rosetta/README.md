@@ -16,7 +16,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/learn/0.7/) |
-[API Docs](https://docs.rs/rsx-rosetta/latest/rsx-rosetta) |
+[API Docs](https://docs.rs/rsx-rosetta/latest/rsx_rosetta) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview
