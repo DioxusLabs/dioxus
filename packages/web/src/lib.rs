@@ -4,8 +4,6 @@
 
 //! # Dioxus Web
 
-use std::sync::Arc;
-
 pub use crate::cfg::Config;
 use crate::hydration::SuspenseMessage;
 use dioxus_core::{ScopeId, VirtualDom};
@@ -74,11 +72,6 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
     let mut hydration_receiver: Option<futures_channel::mpsc::UnboundedReceiver<SuspenseMessage>> =
         None;
 
-    let (patchtx, patchrx) = futures_channel::mpsc::channel::<()>(1);
-
-    //
-    dioxus_devtools::subsecond::register_handler(Arc::new(move || {}));
-
     if should_hydrate {
         // If we are hydrating, then the hotreload message might actually have a patch for us to apply.
         // Let's wait for a moment to see if we get a hotreload message before we start hydrating.
@@ -90,7 +83,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
                 msg = hotreload_rx.next() => {
                     if let Some(msg) = msg
                         && msg.for_build_id == Some(dioxus_cli_config::build_id()) {
-                            dioxus_devtools::wait_apply_change(&virtual_dom, &msg).await;
+                            dioxus_devtools::apply_changes(&virtual_dom, &msg);
                         }
                 }
                 _ = &mut timeout => {
@@ -228,7 +221,7 @@ pub async fn run(mut virtual_dom: VirtualDom, web_config: Config) -> ! {
         #[cfg(all(feature = "devtools", debug_assertions))]
         if let Some(hr_msg) = template {
             // Replace all templates
-            dioxus_devtools::wait_apply_change(&virtual_dom, &hr_msg).await;
+            dioxus_devtools::apply_changes(&virtual_dom, &hr_msg);
 
             if !hr_msg.assets.is_empty() {
                 crate::devtools::invalidate_browser_asset_cache();

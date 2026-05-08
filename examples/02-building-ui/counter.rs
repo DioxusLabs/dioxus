@@ -14,21 +14,9 @@ fn app() -> Element {
     let mut count = use_signal(|| 0);
 
     rsx! {
-        ul { display: "flex", flex_direction: "column",
-            a { href: "https://google.com", "goo1" }
-            a { href: "google.com", "goo2" }
-            a { href: "/foo", "foo1" }
-            a { href: "foo", "foo2" }
-            iframe {
-                width: "560",
-                height: "315",
-                src: "https://www.youtube.com/embed/mPHNIsDsJio?si=4VjFaOnWIflusRjA",
-                title: "YouTube video player",
-                "frameborder": "0",
-                allow: "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share",
-                // referrerpolicy: "strict-origin-when-cross-origin",
-                allowfullscreen: true,
-            }
-        }
+        h1 { "Count: {count}" }
+        button { onclick: move |_| count += 1, "Increment" }
+        button { onclick: move |_| count -= 1, "Decrement" }
+        button { onclick: move |_| count.set(0), "Reset" }
     }
 }
