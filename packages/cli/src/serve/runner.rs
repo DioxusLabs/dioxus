@@ -566,11 +566,11 @@ impl AppServer {
                     // (for directories added via cargo:rerun-if-changed=dir)
                     for dep_path in &artifacts.depinfo.files {
                         if dep_path.is_dir() && path.starts_with(dep_path) {
-                            needs_full_rebuild = true;
+                            needs_rust_rebuild = true;
                             break;
                         }
                     }
-                    if needs_full_rebuild {
+                    if needs_rust_rebuild {
                         break;
                     }
                 }
