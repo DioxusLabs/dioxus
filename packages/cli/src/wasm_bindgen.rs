@@ -201,8 +201,6 @@ impl WasmBindgen {
     /// 2. `cargo binstall` if installed.
     /// 3. Compile from source with `cargo install`.
     async fn install(&self) -> anyhow::Result<()> {
-        tracing::info!("Installing wasm-bindgen-cli@{}...", self.version);
-
         // Attempt installation from GitHub
         if let Err(e) = self.install_github().await {
             tracing::error!("Failed to install wasm-bindgen-cli@{}: {e}", self.version);

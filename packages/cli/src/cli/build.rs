@@ -153,7 +153,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let ssg = self.shared.ssg;
         let mode = match self.shared.fat_binary {
             true => BuildMode::Fat,
-            false => BuildMode::Base { run: false },
+            false => BuildMode::Base,
         };
         let targets = self.into_targets().await?;
 
@@ -213,12 +213,12 @@ impl BuildArtifacts {
         // The tip crate is identified by replacing hyphens with underscores in the target name,
         // but since we don't have the BuildRequest here, we look for the entry with link_args
         // (only the tip crate has link_args attached) or fall back to any entry.
-        let (rustc_args, rustc_envs) = self
+        let (rustc_args, rustc_envs, rustc_cwd) = self
             .workspace_rustc
             .rustc_args
             .iter()
             .find(|(k, _v)| k.ends_with(".bin"))
-            .map(|f| (f.1.args.clone(), f.1.envs.clone()))
+            .map(|f| (f.1.args.clone(), f.1.envs.clone(), f.1.cwd.clone()))
             .unwrap_or_default();
 
         StructuredBuildArtifacts {
@@ -226,6 +226,7 @@ impl BuildArtifacts {
             exe: self.exe,
             rustc_args,
             rustc_envs,
+            cwd: rustc_cwd,
             link_args: self.workspace_rustc.link_args,
             assets: self.assets.unique_assets().cloned().collect(),
         }
