@@ -20,10 +20,6 @@ type CustomEventHandler = Box<
         ),
 >;
 
-/// A function taking a URL and returning whether the webview should navigate to it or open it in
-/// the browser. If missing in the config, all URLs will be allowed.
-type NavigationHandler = Box<dyn Fn(&str) -> bool + 'static>;
-
 /// The closing behaviour of specific application window.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 #[non_exhaustive]
@@ -83,7 +79,7 @@ pub struct WindowConfig {
     pub(crate) window_close_behavior: WindowCloseBehaviour,
     pub(crate) disable_file_drop_handler: bool,
     pub(crate) additional_windows_args: Option<String>,
-    pub(crate) navigation_handler: Option<NavigationHandler>,
+    pub(crate) tray_icon_show_window_on_click: bool,
 
     #[allow(clippy::type_complexity)]
     pub(crate) on_window: Option<Box<dyn FnMut(Arc<Window>, &mut VirtualDom) + 'static>>,
@@ -120,8 +116,8 @@ impl WindowConfig {
             window_close_behavior: WindowCloseBehaviour::WindowCloses,
             disable_file_drop_handler: false,
             on_window: None,
+            tray_icon_show_window_on_click: true,
             additional_windows_args: None,
-            navigation_handler: None,
         }
     }
 
@@ -304,12 +300,6 @@ impl WindowConfig {
         self
     }
 
-    /// Set a custom navigation handler for non-dioxus URLs.
-    /// Return true to allow navigation inside the webview, false to block.
-    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
-        self.navigation_handler = Some(Box::new(f));
-        self
-    }
 }
 
 impl Default for WindowConfig {
@@ -414,7 +404,6 @@ impl Config {
         self.tray_icon_show_window_on_click = show;
         self
     }
-
     /// set the directory from which assets will be searched in release mode
     pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.window = self.window.with_resource_directory(path);
@@ -537,11 +526,6 @@ impl Config {
         self
     }
 
-    /// Set a custom navigation handler for non-dioxus URLs.
-    pub fn with_navigation_handler(mut self, f: impl Fn(&str) -> bool + 'static) -> Self {
-        self.window = self.window.with_navigation_handler(f);
-        self
-    }
 }
 
 impl Default for Config {
