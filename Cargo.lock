@@ -4003,6 +4003,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-playwright-fullstack-headers-test"
+version = "0.1.0"
+dependencies = [
+ "dioxus",
+ "http",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "dioxus-playwright-fullstack-hydration-order-test"
 version = "0.1.0"
 dependencies = [
