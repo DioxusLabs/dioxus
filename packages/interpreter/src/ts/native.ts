@@ -355,6 +355,12 @@ export class NativeInterpreter extends JSChannel_ {
     const element = getTargetId(target)!;
     const contents = serializeEvent(event, target);
 
+    // Unconditionally intercept clicks on external links because not doing so will break the
+    // application.
+    if (target instanceof Element && event.type === "click") {
+      this.handleClickNavigate(event, target);
+    }
+
     // Handle the event on the virtualdom and then preventDefault if it also preventsDefault
     // Some listeners
     let body = {
@@ -381,11 +387,6 @@ export class NativeInterpreter extends JSChannel_ {
     if (response) {
       if (response.preventDefault) {
         event.preventDefault();
-      } else {
-        // Attempt to intercept if the event is a click and the default action was not prevented
-        if (target instanceof Element && event.type === "click") {
-          this.handleClickNavigate(event, target);
-        }
       }
 
       if (response.stopPropagation) {
@@ -408,19 +409,28 @@ export class NativeInterpreter extends JSChannel_ {
     }
   }
 
+  // Handle click navigation events to prevent navigation away from the app. The navigation handler
+  // in the Rust code is not capable of distinguishing between navigation in the main frame and
+  // navigation in iframes, so intercepting them here is necessary to allow iframes and <a> tags to
+  // work correctly.
   handleClickNavigate(event: Event, target: Element) {
     // todo call prevent default if it's the right type of event
     if (!this.intercept_link_redirects) {
       return;
     }
 
-    // If the target is an anchor tag, we want to intercept the click too, to prevent the browser from navigating
+    // Check if the click was on an <a> tag linking to an external site, making sure to never
+    // intercept internal Dioxus links.
     let a_element = target.closest("a");
     if (a_element) {
-      event.preventDefault();
-
       const href = a_element.getAttribute("href");
-      if (href !== "" && href !== null && href !== undefined) {
+      if (href === "" || href === null || href === undefined) {
+        return
+      }
+
+      if (!href.startsWith(this.baseUri) &&
+        (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("mailto:"))) {
+        event.preventDefault();
         this.sendIpcMessage("browser_open", { href })
       }
     }

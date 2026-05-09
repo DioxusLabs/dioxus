@@ -349,9 +349,7 @@ impl WebviewInstance {
             }
         };
 
-        let navigation_handler = cfg.navigation_handler.take();
         let page_loaded = AtomicBool::new(false);
-
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
             .with_bounds(wry::Rect {
                 position: wry::dpi::Position::Logical(wry::dpi::LogicalPosition::new(0.0, 0.0)),
@@ -374,18 +372,12 @@ impl WebviewInstance {
                     return !page_loaded;
                 }
 
-                // External links always open somewhere else. Prevents the webview from navigating
-                if var.starts_with("http://")
-                    || var.starts_with("https://")
-                    || var.starts_with("mailto:")
-                {
-                    _ = webbrowser::open(&var);
-                    return false;
-                }
-
-                // By default, external links are allowed. This keeps things like iframes working.
-                // However, users can customize this to allow/disallow domains/routes/patterns.
-                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+                // Allow navigation for all other URLs to make iframes work. This will navigate the
+                // webview when the user clicks on a <a> tag. To prevent such behavior, those clicks
+                // are intercepted in native.ts. This navigation handler does not distinguish
+                // between the main frame and iframes, so any logic in here alone is insufficient to
+                // make both cases work.
+                true
             })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
