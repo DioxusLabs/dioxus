@@ -74,6 +74,7 @@ twoway![
     commented_rsx_block_only,
     commented_rsx_block_between,
     commented_rsx_block_deep,
+    cfg_let_event_block,
 ];
 
 fn assert_idempotent(src: &str) {
@@ -108,4 +109,9 @@ fn comments_attr_expr_blocks_is_idempotent() {
 #[test]
 fn comments_expr_with_strings_is_idempotent() {
     assert_idempotent(include_str!("./samples/comments_expr_with_strings.rsx"));
+}
+
+#[test]
+fn cfg_let_event_block_is_idempotent() {
+    assert_idempotent(include_str!("./samples/cfg_let_event_block.rsx"));
 }

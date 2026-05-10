@@ -888,7 +888,8 @@ impl<'a> Writer<'a> {
         if src_lines.peek().is_none() {
             out = pretty;
         } else {
-            for line in pretty.lines() {
+            let mut pretty_iter = pretty.lines().peekable();
+            while let Some(line) = pretty_iter.next() {
                 let trimmed = line.trim();
                 let compacted = line.replace(" ", "").replace(",", "");
 
@@ -1060,6 +1061,29 @@ impl<'a> Writer<'a> {
                         out.push_str(src_line.trim());
                         if i < ml.len() - 1 {
                             out.push('\n');
+                        }
+                    }
+
+                    // Skip pretty continuation lines whose content was already
+                    // emitted as part of the verbatim multi-line source.
+                    if acc.len() > compacted.len() {
+                        let mut consumed_compact = compacted.clone();
+                        while consumed_compact.len() < acc.len() {
+                            let Some(next_pretty) = pretty_iter.peek() else {
+                                break;
+                            };
+                            let next_trimmed = next_pretty.trim();
+                            if next_trimmed.is_empty() || next_trimmed.starts_with("//") {
+                                break;
+                            }
+                            let next_compact = next_pretty.replace(" ", "").replace(",", "");
+                            let candidate = format!("{consumed_compact}{next_compact}");
+                            if acc.starts_with(&candidate) {
+                                consumed_compact = candidate;
+                                pretty_iter.next();
+                                continue;
+                            }
+                            break;
                         }
                     }
                 } else {
