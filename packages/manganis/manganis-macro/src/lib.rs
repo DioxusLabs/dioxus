@@ -5,10 +5,11 @@ use std::path::PathBuf;
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::{
+    ItemStruct,
     parse::{Parse, ParseStream},
-    parse_macro_input, ItemStruct,
+    parse_macro_input,
 };
 
 pub(crate) mod asset;
@@ -16,7 +17,7 @@ pub(crate) mod css_module;
 pub(crate) mod ffi;
 pub(crate) mod linker;
 
-use crate::css_module::{expand_css_module_struct, CssModuleAttribute};
+use crate::css_module::{CssModuleAttribute, expand_css_module_struct};
 
 /// The asset macro collects assets that will be included in the final binary
 ///
@@ -384,7 +385,10 @@ impl std::fmt::Display for AssetParseError {
                     path.display()
                 )
             }
-            AssetParseError::RelativeAssetPath => write!(f, "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."),
+            AssetParseError::RelativeAssetPath => write!(
+                f,
+                "Failed to resolve relative asset path. Relative assets are only supported in rust 1.88+."
+            ),
         }
     }
 }

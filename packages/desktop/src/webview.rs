@@ -1,21 +1,21 @@
+use crate::PendingDesktopContext;
 use crate::file_upload::{DesktopFileData, DesktopFileDragEvent};
 use crate::menubar::DioxusMenu;
-use crate::PendingDesktopContext;
 use crate::{
-    app::SharedContext, assets::AssetHandlerRegistry, edits::WryQueue,
-    file_upload::NativeFileHover, ipc::UserWindowEvent, protocol, waker::tao_waker, Config,
-    DesktopContext, DesktopService,
+    Config, DesktopContext, DesktopService, app::SharedContext, assets::AssetHandlerRegistry,
+    edits::WryQueue, file_upload::NativeFileHover, ipc::UserWindowEvent, protocol,
+    waker::tao_waker,
 };
-use crate::{document::DesktopDocument, WeakDesktopContext};
+use crate::{WeakDesktopContext, document::DesktopDocument};
 use crate::{element::DesktopElement, file_upload::DesktopFormData};
 use base64::prelude::BASE64_STANDARD;
-use dioxus_core::{consume_context, provide_context, Runtime, ScopeId, VirtualDom};
+use dioxus_core::{Runtime, ScopeId, VirtualDom, consume_context, provide_context};
 use dioxus_document::Document;
 use dioxus_history::{History, MemoryHistory};
 use dioxus_hooks::to_owned;
 use dioxus_html::{FileData, FormValue, HtmlEvent, PlatformEventData, SerializedFileData};
-use futures_util::{pin_mut, FutureExt};
-use std::sync::{atomic::AtomicBool, Arc};
+use futures_util::{FutureExt, pin_mut};
+use std::sync::{Arc, atomic::AtomicBool};
 use std::{cell::OnceCell, time::Duration};
 use std::{rc::Rc, task::Waker};
 use wry::{DragDropEvent, RequestAsyncResponder, WebContext, WebViewBuilder, WebViewId};
@@ -234,14 +234,7 @@ impl WebviewInstance {
 
         // We assume that if the icon is None in cfg, then the user just didnt set it
         if cfg.window.window.window_icon.is_none() {
-            window = window.with_window_icon(Some(
-                tao::window::Icon::from_rgba(
-                    include_bytes!("./assets/default_icon.bin").to_vec(),
-                    460,
-                    460,
-                )
-                .expect("image parse failed"),
-            ));
+            window = window.with_window_icon(crate::default_icon().ok());
         }
 
         let window = Arc::new(window.build(&shared.target).unwrap());
@@ -251,17 +244,13 @@ impl WebviewInstance {
 
         // https://developer.apple.com/documentation/appkit/nswindowcollectionbehavior/nswindowcollectionbehaviormanaged
         #[cfg(target_os = "macos")]
-        #[allow(deprecated)]
         {
-            use cocoa::appkit::NSWindowCollectionBehavior;
-            use cocoa::base::id;
-            use objc::{msg_send, sel, sel_impl};
+            use objc2::rc::Retained;
+            use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
             use tao::platform::macos::WindowExtMacOS;
-
-            unsafe {
-                let window: id = window.ns_window() as id;
-                let _: () = msg_send![window, setCollectionBehavior: NSWindowCollectionBehavior::NSWindowCollectionBehaviorManaged];
-            }
+            let ns_window: Retained<NSWindow> =
+                unsafe { Retained::retain(window.ns_window().cast()) }.unwrap();
+            ns_window.setCollectionBehavior(NSWindowCollectionBehavior::Managed)
         }
 
         let mut web_context = WebContext::new(cfg.data_dir.clone().or_else(|| {
@@ -360,6 +349,7 @@ impl WebviewInstance {
             }
         };
 
+        let navigation_handler = cfg.navigation_handler.take();
         let page_loaded = AtomicBool::new(false);
 
         let mut webview = WebViewBuilder::new_with_web_context(&mut web_context)
@@ -374,25 +364,29 @@ impl WebviewInstance {
             .with_url("dioxus://index.html/")
             .with_ipc_handler(ipc_handler)
             .with_navigation_handler(move |var| {
-                // We don't want to allow any navigation
-                // We only want to serve the index file and assets
+                // Serve the index and assets.
                 if var.starts_with("dioxus://")
                     || var.starts_with("http://dioxus.")
                     || var.starts_with("https://dioxus.")
                 {
                     // After the page has loaded once, don't allow any more navigation
                     let page_loaded = page_loaded.swap(true, std::sync::atomic::Ordering::SeqCst);
-                    !page_loaded
-                } else {
-                    if var.starts_with("http://")
-                        || var.starts_with("https://")
-                        || var.starts_with("mailto:")
-                    {
-                        _ = webbrowser::open(&var);
-                    }
-                    false
+                    return !page_loaded;
                 }
-            }) // prevent all navigations
+
+                // External links always open somewhere else. Prevents the webview from navigating
+                if var.starts_with("http://")
+                    || var.starts_with("https://")
+                    || var.starts_with("mailto:")
+                {
+                    _ = webbrowser::open(&var);
+                    return false;
+                }
+
+                // By default, external links are allowed. This keeps things like iframes working.
+                // However, users can customize this to allow/disallow domains/routes/patterns.
+                navigation_handler.as_ref().map(|f| f(&var)).unwrap_or(true)
+            })
             .with_asynchronous_custom_protocol(String::from("dioxus"), request_handler);
 
         // Enable https scheme on android, needed for secure context API, like the geolocation API

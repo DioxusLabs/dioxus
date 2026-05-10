@@ -1,6 +1,6 @@
 use crate::bundler::BundleContext;
 use crate::{NSISInstallerMode, WebviewInstallMode, WindowsSettings};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use handlebars::Handlebars;
 use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
@@ -248,6 +248,11 @@ impl BundleContext<'_> {
             .arg("-o")
             .arg(&wixobj_path)
             .arg(&wxs_path);
+
+        if wix_settings.fips_compliant {
+            candle_cmd.arg("-fips");
+        }
+
         candle_cmd.arg("-ext").arg("WixUIExtension");
 
         tracing::debug!("candle command: {:?}", candle_cmd);
@@ -940,15 +945,11 @@ fn wix_version(version: &str) -> Result<String> {
             .parse()
             .with_context(|| format!("Invalid version component: '{part}'"))?;
         match i {
-            0 | 1 => {
-                if num > 255 {
-                    bail!("Version component {part} exceeds maximum value of 255");
-                }
+            0 | 1 if num > 255 => {
+                bail!("Version component {part} exceeds maximum value of 255");
             }
-            2 | 3 => {
-                if num > 65535 {
-                    bail!("Version component {part} exceeds maximum value of 65535");
-                }
+            2 | 3 if num > 65535 => {
+                bail!("Version component {part} exceeds maximum value of 65535");
             }
             _ => {}
         }
@@ -1251,7 +1252,7 @@ SectionEnd
 
 #[cfg(test)]
 mod tests {
-    use super::{render_template, WIX_TEMPLATE};
+    use super::{WIX_TEMPLATE, render_template};
     use crate::bundler::Arch;
     use serde_json::json;
     use std::collections::BTreeMap;

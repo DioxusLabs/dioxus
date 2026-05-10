@@ -1,6 +1,6 @@
 use owo_colors::{
-    colors::{css::LightBlue, BrightRed},
     OwoColorize, Stream,
+    colors::{BrightRed, css::LightBlue},
 };
 use std::{
     fmt::Display,

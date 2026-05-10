@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use dioxus_html::{
-    input_data::decode_key_location, Code, HasKeyboardData, Key, Location, Modifiers,
-    ModifiersInteraction,
+    Code, HasKeyboardData, Key, Location, Modifiers, ModifiersInteraction,
+    input_data::decode_key_location,
 };
 use web_sys::KeyboardEvent;
 

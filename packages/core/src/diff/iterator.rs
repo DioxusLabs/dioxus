@@ -1,7 +1,7 @@
 use crate::{
+    DynamicNode, ScopeId, VirtualDom,
     innerlude::{ElementRef, WriteMutations},
     nodes::VNode,
-    DynamicNode, ScopeId, VirtualDom,
 };
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -483,7 +483,7 @@ impl VNode {
         let mount = mounts.get(self.mount.get().0).unwrap();
 
         template
-            .roots
+            .roots()
             .iter()
             .enumerate()
             .map(

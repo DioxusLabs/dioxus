@@ -5,7 +5,7 @@
 //! downloaded from the npm registry and cached locally.
 
 use crate::{CliSettings, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::path::PathBuf;
 
 /// Pinned esbuild version.
@@ -151,6 +151,7 @@ impl Esbuild {
     /// - darwin-arm64, darwin-x64
     /// - linux-x64, linux-arm64
     /// - win32-x64, win32-arm64
+    /// - freebsd-x64, freebsd-arm64
     fn npm_platform_package() -> Option<&'static str> {
         if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
             Some("darwin-arm64")
@@ -164,6 +165,10 @@ impl Esbuild {
             Some("win32-x64")
         } else if cfg!(all(target_os = "windows", target_arch = "aarch64")) {
             Some("win32-arm64")
+        } else if cfg!(all(target_os = "freebsd", target_arch = "x86_64")) {
+            Some("freebsd-x64")
+        } else if cfg!(all(target_os = "freebsd", target_arch = "aarch64")) {
+            Some("freebsd-arm64")
         } else {
             None
         }
@@ -173,7 +178,7 @@ impl Esbuild {
 #[cfg(test)]
 mod tests {
     use super::Esbuild;
-    use flate2::{write::GzEncoder, Compression};
+    use flate2::{Compression, write::GzEncoder};
 
     fn tgz_with_entries(entries: &[(&str, &[u8])]) -> Vec<u8> {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());

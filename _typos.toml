@@ -14,4 +14,4 @@ unparented = "unparented"
 flate2="flate2"
 
 [files]
-extend-exclude = ["notes/translations/*", "CHANGELOG.md", "*.js"]
+extend-exclude = ["notes/translations/*", "CHANGELOG.md", "*.js", "packages/cli/src/build/windows.rs"]

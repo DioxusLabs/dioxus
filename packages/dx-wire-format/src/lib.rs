@@ -1,4 +1,4 @@
-use cargo_metadata::{diagnostic::Diagnostic, CompilerMessage};
+use cargo_metadata::{CompilerMessage, diagnostic::Diagnostic};
 use manganis_core::BundledAsset;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::HashSet, path::PathBuf};
@@ -75,6 +75,7 @@ pub struct StructuredBuildArtifacts {
     pub rustc_args: Vec<String>,
     pub rustc_envs: Vec<(String, String)>,
     pub link_args: Vec<String>,
+    pub cwd: PathBuf,
     pub assets: HashSet<BundledAsset>, // the serialized asset manifest
 }
 

@@ -1,4 +1,4 @@
-use jni::{objects::JObject, JNIEnv, JavaVM};
+use jni::{JNIEnv, JavaVM, objects::JObject};
 use std::sync::OnceLock;
 
 /// Cached reference to the Android activity.

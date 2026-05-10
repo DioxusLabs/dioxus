@@ -1,11 +1,11 @@
-use crate::styles::GLOW_STYLE;
 use crate::CliSettings;
 use crate::Result;
-use crate::{config::DioxusConfig, AndroidTools};
-use anyhow::{bail, Context};
+use crate::styles::GLOW_STYLE;
+use crate::{AndroidTools, config::DioxusConfig};
+use anyhow::{Context, bail};
 use ignore::gitignore::Gitignore;
-use krates::{semver::Version, KrateDetails, LockOptions};
 use krates::{Cmd, Krates, NodeId};
+use krates::{KrateDetails, LockOptions, semver::Version};
 use std::sync::Arc;
 use std::{collections::HashSet, path::Path};
 use std::{path::PathBuf, time::Duration};
@@ -23,14 +23,18 @@ pub struct Workspace {
     pub(crate) android_tools: Option<Arc<AndroidTools>>,
 }
 
+/// Process-wide cache of the loaded workspace. `Workspace::current()` populates this on first
+/// call; `Workspace::reload()` clears and repopulates it after `cargo metadata` could have gone
+/// stale (e.g. user-edited `Cargo.toml` triggers a full rebuild).
+static WORKSPACE_CACHE: tokio::sync::Mutex<Option<Arc<Workspace>>> =
+    tokio::sync::Mutex::const_new(None);
+
 impl Workspace {
     /// Load the workspace from the current directory. This is cached and will only be loaded once.
     pub async fn current() -> Result<Arc<Workspace>> {
-        static WS: tokio::sync::Mutex<Option<Arc<Workspace>>> = tokio::sync::Mutex::const_new(None);
-
         // Lock the workspace to prevent multiple threads from loading it at the same time
         // If loading the workspace failed the first time, it won't be set and therefore permeate an error.
-        let mut lock = WS.lock().await;
+        let mut lock = WORKSPACE_CACHE.lock().await;
         if let Some(ws) = lock.as_ref() {
             return Ok(ws.clone());
         }
@@ -68,7 +72,9 @@ impl Workspace {
                 eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...");
 
                 if x % 10 == 0 {
-                    eprintln!("{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?");
+                    eprintln!(
+                        "{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?"
+                    );
                 }
             }
         };
@@ -101,7 +107,7 @@ impl Workspace {
         )
         .context("Failed to load Cargo.toml")?;
 
-        let android_tools = crate::build::get_android_tools();
+        let android_tools = AndroidTools::current();
 
         let workspace = Arc::new(Self {
             krates,
@@ -134,6 +140,21 @@ impl Workspace {
         lock.replace(workspace.clone());
 
         Ok(workspace)
+    }
+
+    /// Force a re-read of `cargo metadata` and refresh every cached field on `Workspace`.
+    ///
+    /// Use this after edits to a `Cargo.toml` that change the dependency graph, profiles,
+    /// features, or workspace membership — anything `current()`'s cached view would now
+    /// disagree with on disk. Existing `Arc<Workspace>` holders keep their old snapshot;
+    /// subsequent `current()` calls (and the returned value here) see the refreshed one.
+    ///
+    /// Errors propagate normally — a broken `Cargo.toml` mid-edit will fail here, and the
+    /// caller is expected to leave the existing `Arc<Workspace>` in place until the user
+    /// fixes the file.
+    pub async fn reload() -> Result<Arc<Workspace>> {
+        WORKSPACE_CACHE.lock().await.take();
+        Self::current().await
     }
 
     pub fn android_tools(&self) -> Result<Arc<AndroidTools>> {
@@ -304,7 +325,9 @@ impl Workspace {
             });
 
             if found.is_none() {
-                tracing::error!("Could not find package {package} in the workspace. Did you forget to add it to the workspace?");
+                tracing::error!(
+                    "Could not find package {package} in the workspace. Did you forget to add it to the workspace?"
+                );
                 tracing::error!("Packages in the workspace:");
                 for package in self.krates.workspace_members() {
                     if let krates::Node::Krate { krate, .. } = package {
@@ -554,13 +577,12 @@ impl Workspace {
     }
 
     pub async fn get_xcode_path() -> Option<PathBuf> {
-        let xcode = Command::new("xcode-select")
+        Command::new("xcode-select")
             .arg("-p")
             .output()
             .await
             .ok()
-            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into());
-        xcode
+            .map(|s| String::from_utf8_lossy(&s.stdout).trim().to_string().into())
     }
 
     pub async fn get_rustc_sysroot() -> Result<String, anyhow::Error> {

@@ -79,16 +79,3 @@ pub trait HasSelectionData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! [
-    SelectionData;
-
-    /// select
-    onselect
-
-    /// selectstart
-    onselectstart
-
-    /// selectionchange
-    onselectionchange
-];

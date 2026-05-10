@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-playwright-web-hash-routing-test"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 description = "Playwright test for Dioxus Web Routing"
 license = "MIT OR Apache-2.0"
 publish = false

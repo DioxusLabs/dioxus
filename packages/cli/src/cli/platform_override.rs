@@ -1,8 +1,8 @@
 #![allow(dead_code)]
-use crate::Anonymized;
+use crate::{Anonymized, shell_completions::GENERATING_COMPLETIONS};
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Wraps a component with the subcommands `@server` and `@client` which will let you override the
 /// base arguments for the client and server instances.
@@ -159,9 +159,14 @@ where
     U: Subcommand,
 {
     fn augment_args(cmd: clap::Command) -> clap::Command {
-        // We use the special `defer` method which lets us recursively call `augment_args` on the inner command
-        // and thus `from_arg_matches`
-        T::augment_args(cmd).defer(|cmd| U::augment_subcommands(cmd.disable_help_subcommand(true)))
+        let cmd = T::augment_args(cmd).disable_help_subcommand(true);
+        if GENERATING_COMPLETIONS.load(std::sync::atomic::Ordering::Relaxed) {
+            cmd
+        } else {
+            // We use the special `defer` method which lets us recursively call `augment_args` on the inner command
+            // and thus `from_arg_matches`
+            cmd.defer(|cmd| U::augment_subcommands(cmd))
+        }
     }
 
     fn augment_args_for_update(_cmd: clap::Command) -> clap::Command {

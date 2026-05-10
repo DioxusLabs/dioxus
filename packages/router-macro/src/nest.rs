@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Ident, LitStr};
 
-use crate::segment::{create_error_type, parse_route_segments, RouteSegment};
+use crate::segment::{RouteSegment, create_error_type, parse_route_segments};
 
 #[derive(Debug, Clone, Copy)]
 pub struct NestId(pub usize);

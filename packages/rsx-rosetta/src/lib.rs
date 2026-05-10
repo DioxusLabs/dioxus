@@ -11,7 +11,7 @@ use dioxus_rsx::{
 pub use html_parser::{Dom, Node};
 use htmlentity::entity::ICodedDataTrait;
 use proc_macro2::{Ident, Span};
-use syn::{punctuated::Punctuated, LitStr};
+use syn::{LitStr, punctuated::Punctuated};
 
 /// Convert an HTML DOM tree into an RSX CallBody
 pub fn rsx_from_html(dom: &Dom) -> CallBody {
@@ -96,7 +96,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
             // the html-parser crate we use uses a HashMap for attributes. This leads to a
             // non-deterministic order of attributes.
             // Sort them here
-            attributes.sort_by(|a, b| a.name.to_string().cmp(&b.name.to_string()));
+            attributes.sort_by_key(|a| a.name.to_string());
 
             let children = el.children.iter().filter_map(rsx_node_from_html).collect();
 

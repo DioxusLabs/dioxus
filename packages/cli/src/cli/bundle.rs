@@ -4,7 +4,7 @@ use crate::{
 use anyhow::Context;
 use path_absolutize::Absolutize;
 use std::path::PathBuf;
-use target_lexicon::Triple;
+use target_lexicon::{OperatingSystem, Triple};
 
 use super::*;
 
@@ -40,16 +40,15 @@ impl Bundle {
         self.force_ios_bundle_device_target_if_needed()?;
         let BuildTargets { client, server } = self.args.into_targets().await?;
 
-        let client_artifacts =
-            AppBuilder::started(&client, BuildMode::Base { run: false }, BuildId::PRIMARY)?
-                .finish_build()
-                .await?;
+        let client_artifacts = AppBuilder::started(&client, BuildMode::Base, BuildId::PRIMARY)?
+            .finish_build()
+            .await?;
         let mut server_artifacts = None;
 
         if let Some(server) = server.as_ref() {
             // If the server is present, we need to build it as well
             server_artifacts = Some(
-                AppBuilder::started(server, BuildMode::Base { run: false }, BuildId::SECONDARY)?
+                AppBuilder::started(server, BuildMode::Base, BuildId::SECONDARY)?
                     .finish_build()
                     .await?,
             );
@@ -59,7 +58,7 @@ impl Bundle {
 
         // Fill platform-specific defaults for package types when omitted.
         if self.package_types.is_none() {
-            self.package_types = Self::default_package_types(client.bundle);
+            self.package_types = Some(Self::default_package_types(client.bundle));
         }
 
         Self::validate_package_types_for_bundle(client.bundle, self.package_types.as_deref())?;
@@ -125,11 +124,9 @@ impl Bundle {
             }
         }
 
+        println!("Bundled {} bundles:", bundles.len());
         for bundle_path in bundles.iter() {
-            tracing::info!(
-                "Bundled app at: {}",
-                bundle_path.absolutize().unwrap().display()
-            );
+            println!("{}", bundle_path.absolutize().unwrap().display());
         }
 
         let client = client_artifacts.into_structured_output();
@@ -158,21 +155,26 @@ impl Bundle {
             _ = std::fs::remove_dir_all(krate.bundle_dir(build.bundle));
 
             let mut name: PathBuf = krate.executable_name().into();
-            if cfg!(windows) {
+
+            if build.triple.operating_system == OperatingSystem::Windows {
                 name.set_extension("exe");
             }
             std::fs::create_dir_all(krate.bundle_dir(build.bundle))
                 .context("Failed to create bundle directory")?;
-            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(|| {
-                "Failed to copy the output executable into the bundle directory"
-            })?;
+            std::fs::copy(&exe, krate.bundle_dir(build.bundle).join(&name)).with_context(
+                || "Failed to copy the output executable into the bundle directory",
+            )?;
 
             // Check if required fields are provided instead of failing silently.
             if build.config.bundle.identifier.is_none() {
-                bail!("\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n");
+                bail!(
+                    "\n\nBundle identifier was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\nidentifier = \"com.mycompany\"\n\n"
+                );
             }
             if build.config.bundle.publisher.is_none() {
-                bail!("\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n");
+                bail!(
+                    "\n\nBundle publisher was not provided in `Dioxus.toml`. Add it as:\n\n[bundle]\npublisher = \"MyCompany\"\n\n"
+                );
             }
         }
 
@@ -190,11 +192,14 @@ impl Bundle {
         Ok(bundles)
     }
 
-    fn default_package_types(bundle: BundleFormat) -> Option<Vec<PackageType>> {
+    fn default_package_types(bundle: BundleFormat) -> Vec<PackageType> {
         match bundle {
-            BundleFormat::Ios => Some(vec![crate::PackageType::Ipa]),
-            BundleFormat::Android => Some(vec![crate::PackageType::Aab]),
-            _ => None,
+            BundleFormat::Web | BundleFormat::Server => Vec::new(),
+            BundleFormat::MacOS => vec![PackageType::MacOsBundle, PackageType::Dmg],
+            BundleFormat::Windows => vec![PackageType::Nsis],
+            BundleFormat::Linux => vec![PackageType::AppImage],
+            BundleFormat::Ios => vec![PackageType::Ipa],
+            BundleFormat::Android => vec![PackageType::Aab],
         }
     }
 
@@ -262,24 +267,70 @@ impl Bundle {
 mod tests {
     use super::Bundle;
     use crate::{
-        cli::CommandWithPlatformOverrides, BuildArgs, BundleFormat, PackageType, Platform,
+        BuildArgs, BundleFormat, PackageType, Platform, cli::CommandWithPlatformOverrides,
     };
 
     #[test]
-    fn ios_bundle_defaults_to_ipa() {
+    fn bundle_formats_have_default_package_types() {
         assert_eq!(
             Bundle::default_package_types(BundleFormat::Ios),
-            Some(vec![PackageType::Ipa])
+            vec![PackageType::Ipa]
         );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Android),
+            vec![PackageType::Aab]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::MacOS),
+            vec![PackageType::MacOsBundle, PackageType::Dmg]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Windows),
+            vec![PackageType::Nsis]
+        );
+        assert_eq!(
+            Bundle::default_package_types(BundleFormat::Linux),
+            vec![PackageType::AppImage]
+        );
+        assert_eq!(Bundle::default_package_types(BundleFormat::Web), vec![]);
+        assert_eq!(Bundle::default_package_types(BundleFormat::Server), vec![]);
+    }
+
+    #[test]
+    fn default_package_types_are_valid_for_their_bundle_format() {
+        for bundle_format in [
+            BundleFormat::Web,
+            BundleFormat::MacOS,
+            BundleFormat::Windows,
+            BundleFormat::Linux,
+            BundleFormat::Server,
+            BundleFormat::Ios,
+            BundleFormat::Android,
+        ] {
+            let package_types = Bundle::default_package_types(bundle_format);
+            Bundle::validate_package_types_for_bundle(bundle_format, Some(&package_types)).unwrap();
+        }
+    }
+
+    #[test]
+    fn omitted_package_types_are_filled_with_defaults() {
+        let mut package_types = None;
+        if package_types.is_none() {
+            package_types = Some(Bundle::default_package_types(BundleFormat::Linux));
+        }
+
+        assert_eq!(package_types, Some(vec![PackageType::AppImage]));
     }
 
     #[test]
     fn validates_ios_package_types() {
-        assert!(Bundle::validate_package_types_for_bundle(
-            BundleFormat::Ios,
-            Some(&[PackageType::IosApp, PackageType::Ipa]),
-        )
-        .is_ok());
+        assert!(
+            Bundle::validate_package_types_for_bundle(
+                BundleFormat::Ios,
+                Some(&[PackageType::IosApp, PackageType::Ipa]),
+            )
+            .is_ok()
+        );
 
         assert!(Bundle::validate_package_types_for_bundle(
             BundleFormat::Ios,

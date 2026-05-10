@@ -1,8 +1,8 @@
 use dioxus_dx_wire_format::StructuredBuildArtifacts;
 
 use crate::{
-    cli::*, Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
-    Platform, TargetArgs, Workspace,
+    Anonymized, AppBuilder, BuildArtifacts, BuildId, BuildMode, BuildRequest, BundleFormat,
+    Platform, TargetArgs, Workspace, cli::*,
 };
 
 /// Build the Rust Dioxus app and all of its assets.
@@ -153,7 +153,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
         let ssg = self.shared.ssg;
         let mode = match self.shared.fat_binary {
             true => BuildMode::Fat,
-            false => BuildMode::Base { run: false },
+            false => BuildMode::Base,
         };
         let targets = self.into_targets().await?;
 
@@ -198,7 +198,7 @@ impl CommandWithPlatformOverrides<BuildArgs> {
 
         // Run SSG and cache static routes
         if ssg {
-            crate::pre_render_static_routes(None, &mut server_build, None).await?;
+            server_build.pre_render_static_routes(None, None).await?;
         }
 
         tracing::info!(path = ?server.root_dir(), "Server build completed successfully! 🚀");
@@ -213,20 +213,21 @@ impl BuildArtifacts {
         // The tip crate is identified by replacing hyphens with underscores in the target name,
         // but since we don't have the BuildRequest here, we look for the entry with link_args
         // (only the tip crate has link_args attached) or fall back to any entry.
-        let tip_args = self
-            .workspace_rustc_args
-            .values()
-            .find(|a| !a.link_args.is_empty())
-            .or_else(|| self.workspace_rustc_args.values().next())
-            .cloned()
+        let (rustc_args, rustc_envs, rustc_cwd) = self
+            .workspace_rustc
+            .rustc_args
+            .iter()
+            .find(|(k, _v)| k.ends_with(".bin"))
+            .map(|f| (f.1.args.clone(), f.1.envs.clone(), f.1.cwd.clone()))
             .unwrap_or_default();
 
         StructuredBuildArtifacts {
             path: self.root_dir,
             exe: self.exe,
-            rustc_args: tip_args.args,
-            rustc_envs: tip_args.envs,
-            link_args: tip_args.link_args,
+            rustc_args,
+            rustc_envs,
+            cwd: rustc_cwd,
+            link_args: self.workspace_rustc.link_args,
             assets: self.assets.unique_assets().cloned().collect(),
         }
     }

@@ -46,7 +46,7 @@ use dioxus_fullstack_core::RequestError;
 use http::StatusCode;
 use send_wrapper::SendWrapper;
 use serde::Serialize;
-use serde::{de::DeserializeOwned, Deserialize};
+use serde::{Deserialize, de::DeserializeOwned};
 use std::fmt::Display;
 use std::{marker::PhantomData, prelude::rust_2024::Future};
 

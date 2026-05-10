@@ -42,13 +42,13 @@ pub(crate) const unsafe fn serialize_const_list(
 ) -> ConstVec<u8> {
     // Read the length of the list
     let len_ptr = ptr.wrapping_byte_offset(layout.len_offset as _);
-    let len = layout.len_layout.read(len_ptr as *const u8) as usize;
+    let len = unsafe { layout.len_layout.read(len_ptr as *const u8) } as usize;
 
     let data_ptr = ptr.wrapping_byte_offset(layout.data_offset as _);
     let item_layout = layout.data_layout.item_layout;
     // If the item size is 1, deserialize as bytes directly
     if item_layout.size() == 1 {
-        let slice = std::slice::from_raw_parts(data_ptr as *const u8, len);
+        let slice = unsafe { std::slice::from_raw_parts(data_ptr as *const u8, len) };
         to = write_bytes(to, slice);
     }
     // Otherwise, deserialize as a list of items
@@ -57,7 +57,7 @@ pub(crate) const unsafe fn serialize_const_list(
         to = write_array(to, len);
         while i < len {
             let item = data_ptr.wrapping_byte_offset((i * item_layout.size()) as _);
-            to = serialize_const_ptr(item, to, item_layout);
+            to = unsafe { serialize_const_ptr(item, to, item_layout) };
             i += 1;
         }
     }

@@ -18,15 +18,15 @@ use super::literal::HotLiteral;
 use crate::{innerlude::*, partial_closure::PartialClosure};
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, quote_spanned, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote, quote_spanned};
 use std::fmt::Display;
 use syn::{
+    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
+    Stmt, Token,
     ext::IdentExt,
     parse::{Parse, ParseStream},
     parse_quote,
     spanned::Spanned,
-    Block, Expr, ExprBlock, ExprClosure, ExprIf, Ident, Lit, LitBool, LitFloat, LitInt, LitStr,
-    Stmt, Token,
 };
 
 /// A property value in the from of a `name: value` pair with an optional comma.
@@ -311,12 +311,10 @@ impl Attribute {
         // Or if it is a builtin attribute with a single ident value
         if let (AttributeName::BuiltIn(name), AttributeValue::AttrExpr(expr)) =
             (&self.name, &self.value)
+            && let Ok(Expr::Path(path)) = expr.as_expr()
+            && path.path.get_ident() == Some(name)
         {
-            if let Ok(Expr::Path(path)) = expr.as_expr() {
-                if path.path.get_ident() == Some(name) {
-                    return true;
-                }
-            }
+            return true;
         }
 
         false
@@ -880,31 +878,35 @@ mod tests {
     fn call_with_explicit_closure() {
         let mut a: Attribute = parse2(quote! { onclick: |e| {} }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let a = 1; |e| {} } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let b = 2; { |e| { b } } } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
 
         let mut a: Attribute = parse2(quote! { onclick: { let r = |e| { b }; r } }).unwrap();
         a.el_name = Some(parse_quote!(button));
-        assert!(!a
-            .rendered_as_dynamic_attr()
-            .to_string()
-            .contains("call_with_explicit_closure"));
+        assert!(
+            !a.rendered_as_dynamic_attr()
+                .to_string()
+                .contains("call_with_explicit_closure")
+        );
     }
 
     /// Make sure reserved keywords are parsed as attributes

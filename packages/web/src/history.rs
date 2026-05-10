@@ -1,5 +1,5 @@
-use wasm_bindgen::{prelude::Closure, JsCast, JsValue};
-use web_sys::{window, Event, History, ScrollRestoration, Window};
+use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
+use web_sys::{Event, History, ScrollRestoration, Window, window};
 
 /// A [`dioxus_history::History`] provider that integrates with a browser via the [History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API).
 ///
@@ -173,10 +173,8 @@ impl dioxus_history::History for WebHistory {
 
         let function = Closure::wrap(Box::new(move |_| {
             (*callback)();
-            if d {
-                if let Some([x, y]) = get_current(&h) {
-                    ScrollPosition { x, y }.scroll_to(w.clone())
-                }
+            if d && let Some([x, y]) = get_current(&h) {
+                ScrollPosition { x, y }.scroll_to(w.clone())
             }
         }) as Box<dyn FnMut(Event)>);
         self.window
@@ -329,10 +327,8 @@ impl dioxus_history::History for HashHistory {
 
         let function = Closure::wrap(Box::new(move |_| {
             (*callback)();
-            if d {
-                if let Some([x, y]) = get_current(&h) {
-                    ScrollPosition { x, y }.scroll_to(w.clone())
-                }
+            if d && let Some([x, y]) = get_current(&h) {
+                ScrollPosition { x, y }.scroll_to(w.clone())
             }
         }) as Box<dyn FnMut(Event)>);
         self.window

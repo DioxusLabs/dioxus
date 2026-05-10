@@ -2,13 +2,13 @@
 name = "dioxus-desktop"
 version = { workspace = true }
 authors = ["Jonathan Kelley"]
-edition = "2021"
+edition = "2024"
 description = "WebView renderer for Dioxus"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
-rust-version = "1.76.0"
+rust-version = "1.85.0"
 
 [dependencies]
 dioxus-core = { workspace = true, features = ["serialize"] }
@@ -21,8 +21,10 @@ dioxus-asset-resolver = { workspace = true, features = ["native"] }
 generational-box = { workspace = true }
 dioxus-devtools = { workspace = true, optional = true }
 
-serde = "1.0.219"
-serde_json = "1.0.140"
+anyhow = { workspace = true }
+image = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 wry = { workspace = true, default-features = false, features = ["os-webview", "protocol", "drag-drop"] }
@@ -68,8 +70,9 @@ muda = { workspace = true }
 tray-icon = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc = "0.2.7"
-objc_id = "0.1.1"
+objc2 = { workspace = true }
+objc2-foundation = { workspace = true, features = ["NSThread"] }
+objc2-ui-kit = { workspace = true, features = ["UIView", "UIViewController"] }
 
 # use rustls on android
 [target.'cfg(target_os = "android")'.dependencies]
@@ -84,9 +87,8 @@ ndk-context = { version = "0.1.1" }
 tungstenite = { workspace = true, features = ["native-tls"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.26.1"
-core-foundation = "0.10.1"
-objc = "0.2.7"
+objc2 = { workspace = true }
+objc2-app-kit = { workspace = true, features = ["NSView"] }
 
 [build-dependencies]
 lazy-js-bundle = { workspace = true }

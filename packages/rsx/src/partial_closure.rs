@@ -3,9 +3,9 @@ use proc_macro2::TokenStream;
 use quote::ToTokens;
 use std::hash::{Hash, Hasher};
 use syn::{
+    Attribute, Expr, Pat, PatType, Result, ReturnType, Token, Type,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Attribute, Expr, Pat, PatType, Result, ReturnType, Token, Type,
 };
 use syn::{BoundLifetimes, ExprClosure};
 

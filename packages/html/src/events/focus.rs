@@ -79,19 +79,3 @@ pub trait HasFocusData: std::any::Any {
     /// return self as Any
     fn as_any(&self) -> &dyn std::any::Any;
 }
-
-impl_event! [
-    FocusData;
-
-    /// onfocus
-    onfocus
-
-    // onfocusout
-    onfocusout
-
-    // onfocusin
-    onfocusin
-
-    /// onblur
-    onblur
-];

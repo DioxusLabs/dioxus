@@ -1,6 +1,6 @@
 [package]
 name = "wasm-used"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 authors = ["Jonathan Kelley"]
 license = "MIT OR Apache-2.0"

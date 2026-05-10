@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream as TokenStream2;
-use quote::quote;
 use quote::ToTokens;
+use quote::quote;
 
 /// Generate a linker section for embedding arbitrary data in the binary
 ///
