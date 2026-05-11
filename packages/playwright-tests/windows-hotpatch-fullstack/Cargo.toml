@@ -1,6 +1,6 @@
 [package]
 name = "windows-hotpatch-fullstack"
-edition = "2021"
+edition = "2024"
 version = "0.0.1"
 publish = false
 

@@ -41,11 +41,11 @@ pub mod components {
 mod contexts {
     pub(crate) mod navigator;
     pub(crate) mod outlet;
-    pub use outlet::{use_outlet_context, OutletContext};
+    pub use outlet::{OutletContext, use_outlet_context};
     pub(crate) mod router;
     pub use navigator::*;
     pub(crate) use router::*;
-    pub use router::{root_router, GenericRouterContext, ParseRouteError, RouterContext};
+    pub use router::{GenericRouterContext, ParseRouteError, RouterContext, root_router};
 }
 
 mod router_cfg;

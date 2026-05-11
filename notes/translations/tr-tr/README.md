@@ -234,7 +234,7 @@ Dioxus'u diğer frameworklerden ayıran birkaç vurguladığı nokta var:
 - **React-benzeri**: Components, props(fonksiyon argümanlarına benzer olan yapılar) ve hooks(fonksiyon componentlerinin diğer framework özelliklerine erişmesini sağlayan yapılar) gibi konseptler üzerine bina ettik. Bu durum bizi SolidJS'ten ziyade Svelte'ye yaklaştırdı.
 - **HTML ve CSS**: Quirks(geriye uyumluluk) ve diğer özellikler için, HTML ve CSS'i temel alıyoruz.
 - **Renderer-agnostic(İşleyen Bağımsız)**: [Ürettiğimiz Hızlı VirtualDOM](https://dioxuslabs.com/blog/templates-diffing) sayesinde istediğiniz platform için renderer değiştebilirsiniz.
-- **Collaborative(Birlikte çalışmayı destekleyen)**: Mümkün olduğu sürece bu örneklerdeki gibi crates(basitçe Rust üzerindeki kütüphaneler gibi düşünün) üretiyoruz: [Taffy](https://github.com/DioxusLabs/taffy), [manganis](https://github.com/DioxusLabs/manganis), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), ve [blitz](http://github.com/dioxusLabs/blitz). Böylece ekosistemi birlikte büyütebiliriz.
+- **Collaborative(Birlikte çalışmayı destekleyen)**: Mümkün olduğu sürece bu örneklerdeki gibi crates(basitçe Rust üzerindeki kütüphaneler gibi düşünün) üretiyoruz: [Taffy](https://github.com/DioxusLabs/taffy), [include_mdbook](https://github.com/DioxusLabs/include_mdbook), ve [blitz](http://github.com/dioxusLabs/blitz). Böylece ekosistemi birlikte büyütebiliriz.
 
 ### Dioxus ile Tauri'yi Kıyaslayalım
 

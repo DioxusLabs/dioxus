@@ -1,8 +1,8 @@
 #![allow(dead_code)]
-use crate::{shell_completions::GENERATING_COMPLETIONS, Anonymized};
+use crate::{Anonymized, shell_completions::GENERATING_COMPLETIONS};
 use clap::parser::ValueSource;
 use clap::{ArgMatches, Args, CommandFactory, FromArgMatches, Parser, Subcommand};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Wraps a component with the subcommands `@server` and `@client` which will let you override the
 /// base arguments for the client and server instances.

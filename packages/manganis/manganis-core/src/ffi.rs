@@ -1,6 +1,7 @@
 use crate::BundledAsset;
 use const_serialize::{ConstStr, SerializeConst};
 use const_serialize_08 as const_serialize;
+use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 
 /// Unified symbol data that can represent both assets and permissions
@@ -79,7 +80,7 @@ pub struct PlatformIdentifiers {
 }
 
 /// Metadata describing an Android plugin artifact (.aar) that must be copied into the host Gradle project.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst, Serialize, Deserialize)]
 pub struct AndroidArtifactMetadata {
     pub plugin_name: ConstStr,
     pub artifact_path: ConstStr,
@@ -101,7 +102,7 @@ impl AndroidArtifactMetadata {
 }
 
 /// Metadata for a Swift package that needs to be linked into the app (iOS/macOS).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SerializeConst, Serialize, Deserialize)]
 pub struct SwiftPackageMetadata {
     pub plugin_name: ConstStr,
     pub package_path: ConstStr,

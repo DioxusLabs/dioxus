@@ -3,18 +3,18 @@
 use std::collections::HashMap;
 
 use dioxus_core::{
+    Template, TemplateAttribute, TemplateNode, VNode,
     internal::{
         FmtSegment, FmtedSegments, HotReloadAttributeValue, HotReloadDynamicAttribute,
         HotReloadDynamicNode, HotReloadLiteral, HotReloadedTemplate, NamedAttribute,
     },
-    Template, TemplateAttribute, TemplateNode, VNode,
 };
 use dioxus_core_types::HotReloadingContext;
 use dioxus_rsx::CallBody;
-use dioxus_rsx_hotreload::{self, diff_rsx, ChangedRsx, HotReloadResult};
+use dioxus_rsx_hotreload::{self, ChangedRsx, HotReloadResult, diff_rsx};
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens};
-use syn::{parse::Parse, spanned::Spanned, token::Token, File};
+use quote::{ToTokens, quote};
+use syn::{File, parse::Parse, spanned::Spanned, token::Token};
 
 #[derive(Debug)]
 struct Mock;

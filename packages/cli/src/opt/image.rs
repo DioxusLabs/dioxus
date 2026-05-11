@@ -29,12 +29,19 @@ pub(crate) fn process_image(
         }
         (Ok(image), ImageFormat::Avif) => {
             if let Err(error) = image.save(output_path) {
-                tracing::error!("Failed to save avif image: {} with path {}. You must have the avif feature enabled to use avif assets", error, output_path.display());
+                tracing::error!(
+                    "Failed to save avif image: {} with path {}. You must have the avif feature enabled to use avif assets",
+                    error,
+                    output_path.display()
+                );
             }
         }
         (Ok(image), ImageFormat::Webp) => {
             if let Err(err) = image.save(output_path) {
-                tracing::error!("Failed to save webp image: {}. You must have the avif feature enabled to use webp assets", err);
+                tracing::error!(
+                    "Failed to save webp image: {}. You must have the avif feature enabled to use webp assets",
+                    err
+                );
             }
         }
         (Ok(image), _) => {

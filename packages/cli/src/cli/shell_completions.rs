@@ -1,7 +1,7 @@
 use super::*;
-use crate::{cli, Result};
+use crate::{Result, cli};
 use clap::CommandFactory;
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use std::sync::atomic::AtomicBool;
 
 /// Generate shell completions for the specified shell.

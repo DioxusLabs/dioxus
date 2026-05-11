@@ -152,7 +152,7 @@ fn fs_main() -> @location(0) vec4<f32> {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -176,7 +176,7 @@ fn fs_main() -> @location(0) vec4<f32> {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -236,6 +236,7 @@ fn fs_main() -> @location(0) vec4<f32> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(pipeline);
             rpass.draw(0..3, 0..1);

@@ -4,14 +4,14 @@
 //! We also set up a little recursive timer that will attempt to reconnect if the connection is lost.
 
 use dioxus_devtools::{DevserverMsg, HotReloadMsg};
-use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
+use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender, unbounded};
 use js_sys::JsString;
 use std::fmt::Display;
 use std::time::Duration;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use wasm_bindgen::{closure::Closure, JsValue};
-use web_sys::{window, CloseEvent, MessageEvent, WebSocket};
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::{JsValue, closure::Closure};
+use web_sys::{CloseEvent, MessageEvent, WebSocket, window};
 
 const POLL_INTERVAL_MIN: i32 = 250;
 const POLL_INTERVAL_MAX: i32 = 4000;

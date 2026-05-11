@@ -28,28 +28,28 @@ use axum::{
 };
 use axum_core::response::{IntoResponse, Response};
 use bytes::Bytes;
-use dioxus_core::{use_hook, CapturedError, Result};
+use dioxus_core::{CapturedError, Result, use_hook};
 use dioxus_fullstack_core::{HttpError, RequestError};
-use dioxus_hooks::{use_resource, Resource, UseWaker};
+use dioxus_hooks::{Resource, UseWaker, use_resource};
 use dioxus_hooks::{use_signal, use_waker};
 use dioxus_signals::{ReadSignal, ReadableExt, ReadableOptionExt, Signal, WritableExt};
 use futures::{
-    stream::{SplitSink, SplitStream},
     Sink, SinkExt, Stream, StreamExt, TryFutureExt,
+    stream::{SplitSink, SplitStream},
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use std::{
     marker::PhantomData,
     pin::Pin,
     prelude::rust_2024::Future,
     rc::Rc,
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 
 #[cfg(feature = "web")]
 use {
     futures_util::lock::Mutex,
-    gloo_net::websocket::{futures::WebSocket as WsWebsocket, Message as WsMessage},
+    gloo_net::websocket::{Message as WsMessage, futures::WebSocket as WsWebsocket},
 };
 
 /// A hook that provides a reactive interface to a WebSocket connection.
@@ -1194,8 +1194,8 @@ mod native {
     use super::{CloseCode, Message, WebsocketError};
     use dioxus_fullstack_core::RequestError;
     use reqwest::{
-        header::{HeaderName, HeaderValue},
         Response, StatusCode, Version,
+        header::{HeaderName, HeaderValue},
     };
     use tungstenite::protocol::WebSocketConfig;
 

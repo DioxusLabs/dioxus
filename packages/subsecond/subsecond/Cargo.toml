@@ -1,6 +1,6 @@
 [package]
 name = "subsecond"
-edition = "2021"
+edition = "2024"
 version.workspace = true
 authors = ["Jonathan Kelley"]
 description = "A runtime hotpatching engine for Rust hot-reloading."

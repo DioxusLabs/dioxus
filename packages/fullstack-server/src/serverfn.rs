@@ -117,15 +117,14 @@ impl ServerFunction {
                             // plain form post) and doesn't already have a Location set, then
                             // redirect to Referer. Only redirect on success so that error
                             // responses (4xx, 5xx) propagate correctly to the client.
-                            if accepts_html && response.status().is_success() {
-                                if let Some(referrer) = referrer {
+                            if accepts_html && response.status().is_success()
+                                && let Some(referrer) = referrer {
                                     let has_location = response.headers().get(LOCATION).is_some();
                                     if !has_location {
                                         *response.status_mut() = StatusCode::FOUND;
                                         response.headers_mut().insert(LOCATION, referrer);
                                     }
                                 }
-                            }
 
                             response
                         })

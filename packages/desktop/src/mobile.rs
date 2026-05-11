@@ -8,7 +8,7 @@
 /// The CLI is expecting to find `dev.dioxus.main` in the final library. If you find a need to
 /// change this, you'll need to change the CLI as well.
 #[cfg(target_os = "android")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[inline(never)]
 pub extern "C" fn start_app() {
     use crate::Config;

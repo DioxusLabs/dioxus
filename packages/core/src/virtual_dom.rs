@@ -5,14 +5,14 @@
 use crate::properties::RootProps;
 use crate::root_wrapper::RootScopeWrapper;
 use crate::{
+    ComponentFunction, Element, Mutations,
     arena::ElementId,
     innerlude::{NoOpMutations, SchedulerMsg, ScopeOrder, ScopeState, VProps, WriteMutations},
     runtime::{Runtime, RuntimeGuard},
     scopes::ScopeId,
-    ComponentFunction, Element, Mutations,
 };
-use crate::{innerlude::Work, scopes::LastRenderedNode};
 use crate::{Task, VComponent};
+use crate::{innerlude::Work, scopes::LastRenderedNode};
 use futures_util::StreamExt;
 use slab::Slab;
 use std::collections::BTreeSet;

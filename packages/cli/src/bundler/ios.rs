@@ -1,6 +1,6 @@
-use super::{copy_dir_recursive, zip_dir_recursive, Arch, Bundle, BundleContext};
+use super::{Arch, Bundle, BundleContext, copy_dir_recursive, zip_dir_recursive};
 use crate::PackageType;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
 

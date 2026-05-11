@@ -1,13 +1,13 @@
 use crate::config::WasmOptLevel;
 use crate::{CliSettings, Result, WasmOptConfig, Workspace};
-use anyhow::{anyhow, bail, Context};
+use anyhow::{Context, anyhow, bail};
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::NamedTempFile;
 
 /// Pinned binaryen version (contains wasm-opt).
-const BINARYEN_VERSION: &str = "127";
+const BINARYEN_VERSION: &str = "129";
 
 /// Write these wasm bytes with a particular set of optimizations
 pub async fn write_wasm(bytes: &[u8], output_path: &Path, cfg: &WasmOptConfig) -> Result<()> {
@@ -182,7 +182,9 @@ async fn find_latest_wasm_opt_download_url() -> anyhow::Result<String> {
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "arm64-macos"
     } else {
-        bail!("Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH.");
+        bail!(
+            "Unknown platform for wasm-opt installation. Please install wasm-opt manually from https://github.com/WebAssembly/binaryen/releases and add it to your PATH."
+        );
     };
 
     // Find the first asset with a name that contains the platform string

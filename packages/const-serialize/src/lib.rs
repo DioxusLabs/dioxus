@@ -74,11 +74,11 @@ const unsafe fn serialize_const_ptr(
     layout: &Layout,
 ) -> ConstVec<u8> {
     match layout {
-        Layout::Enum(layout) => serialize_const_enum(ptr, to, layout),
-        Layout::Struct(layout) => serialize_const_struct(ptr, to, layout),
-        Layout::Array(layout) => serialize_const_array(ptr, to, layout),
-        Layout::List(layout) => serialize_const_list(ptr, to, layout),
-        Layout::Primitive(layout) => serialize_const_primitive(ptr, to, layout),
+        Layout::Enum(layout) => unsafe { serialize_const_enum(ptr, to, layout) },
+        Layout::Struct(layout) => unsafe { serialize_const_struct(ptr, to, layout) },
+        Layout::Array(layout) => unsafe { serialize_const_array(ptr, to, layout) },
+        Layout::List(layout) => unsafe { serialize_const_list(ptr, to, layout) },
+        Layout::Primitive(layout) => unsafe { serialize_const_primitive(ptr, to, layout) },
     }
 }
 

@@ -1448,16 +1448,22 @@ pub struct LinuxDebSettings {
 ///
 /// Note: Default values are stripped and allOf wrappers simplified to prevent
 /// stack overflow in some TOML LSP implementations (e.g., Taplo's WASM build).
-pub fn generate_manifest_schema() -> schemars::schema::RootSchema {
+pub fn generate_manifest_schema() -> schemars::Schema {
     let mut schema = schemars::schema_for!(super::DioxusConfig);
 
     // Simplify schema to prevent Taplo WASM LSP stack overflow.
     // 1. Strip default values (large nested objects cause issues)
     // 2. Simplify allOf wrappers around single $refs
-    simplify_schema(&mut schema.schema);
-    for def in schema.definitions.values_mut() {
-        if let schemars::schema::Schema::Object(obj) = def {
-            simplify_schema(obj);
+    if let Some(obj) = schema.as_object_mut() {
+        simplify_schema(obj);
+
+        // Definitions live under `$defs` (JSON Schema 2020-12) in schemars 1.x.
+        if let Some(serde_json::Value::Object(defs)) = obj.get_mut("$defs") {
+            for def in defs.values_mut() {
+                if let serde_json::Value::Object(def_obj) = def {
+                    simplify_schema(def_obj);
+                }
+            }
         }
     }
 
@@ -1467,89 +1473,70 @@ pub fn generate_manifest_schema() -> schemars::schema::RootSchema {
 /// Recursively simplify a schema object for LSP compatibility.
 /// - Removes default values (large nested objects cause stack overflow)
 /// - Simplifies `allOf: [$ref]` to just `$ref` (reduces recursion depth)
-fn simplify_schema(schema: &mut schemars::schema::SchemaObject) {
+fn simplify_schema(schema: &mut serde_json::Map<String, serde_json::Value>) {
+    use serde_json::Value;
+
     // Remove the default value from this schema
-    schema.metadata().default = None;
+    schema.remove("default");
 
     // Simplify allOf with single $ref: { allOf: [{ $ref: "..." }] } -> { $ref: "..." }
-    let mut ref_to_promote = None;
-    if let Some(subschemas) = &schema.subschemas {
-        if let Some(all_of) = &subschemas.all_of {
-            if all_of.len() == 1 {
-                if let schemars::schema::Schema::Object(inner) = &all_of[0] {
-                    if inner.reference.is_some()
-                        && inner.instance_type.is_none()
-                        && inner.object.is_none()
-                        && inner.array.is_none()
-                        && inner.subschemas.is_none()
-                    {
-                        ref_to_promote = inner.reference.clone();
-                    }
-                }
-            }
-        }
-    }
+    let ref_to_promote = schema
+        .get("allOf")
+        .and_then(Value::as_array)
+        .filter(|arr| arr.len() == 1)
+        .and_then(|arr| arr[0].as_object())
+        .filter(|inner| {
+            inner.contains_key("$ref")
+                && !inner.contains_key("type")
+                && !inner.contains_key("properties")
+                && !inner.contains_key("additionalProperties")
+                && !inner.contains_key("items")
+                && !inner.contains_key("allOf")
+                && !inner.contains_key("anyOf")
+                && !inner.contains_key("oneOf")
+        })
+        .and_then(|inner| inner.get("$ref"))
+        .cloned();
     if let Some(r) = ref_to_promote {
-        schema.subschemas = None;
-        schema.reference = Some(r);
+        schema.remove("allOf");
+        schema.insert("$ref".to_string(), r);
     }
 
-    // Process remaining subschemas
-    if let Some(subschemas) = &mut schema.subschemas {
-        if let Some(all_of) = &mut subschemas.all_of {
-            for s in all_of {
-                if let schemars::schema::Schema::Object(obj) = s {
-                    simplify_schema(obj);
-                }
-            }
-        }
-        if let Some(any_of) = &mut subschemas.any_of {
-            for s in any_of {
-                if let schemars::schema::Schema::Object(obj) = s {
-                    simplify_schema(obj);
-                }
-            }
-        }
-        if let Some(one_of) = &mut subschemas.one_of {
-            for s in one_of {
-                if let schemars::schema::Schema::Object(obj) = s {
-                    simplify_schema(obj);
+    // Process remaining allOf/anyOf/oneOf subschemas
+    for key in ["allOf", "anyOf", "oneOf"] {
+        if let Some(Value::Array(arr)) = schema.get_mut(key) {
+            for item in arr {
+                if let Value::Object(sub) = item {
+                    simplify_schema(sub);
                 }
             }
         }
     }
 
     // Process object properties
-    if let Some(object) = &mut schema.object {
-        for prop in object.properties.values_mut() {
-            if let schemars::schema::Schema::Object(obj) = prop {
-                simplify_schema(obj);
-            }
-        }
-        if let Some(additional) = &mut object.additional_properties {
-            if let schemars::schema::Schema::Object(obj) = additional.as_mut() {
-                simplify_schema(obj);
+    if let Some(Value::Object(props)) = schema.get_mut("properties") {
+        for prop in props.values_mut() {
+            if let Value::Object(sub) = prop {
+                simplify_schema(sub);
             }
         }
     }
+    if let Some(Value::Object(additional)) = schema.get_mut("additionalProperties") {
+        simplify_schema(additional);
+    }
 
-    // Process array items
-    if let Some(array) = &mut schema.array {
-        if let Some(items) = &mut array.items {
-            match items {
-                schemars::schema::SingleOrVec::Single(s) => {
-                    if let schemars::schema::Schema::Object(obj) = s.as_mut() {
-                        simplify_schema(obj);
-                    }
-                }
-                schemars::schema::SingleOrVec::Vec(v) => {
-                    for s in v {
-                        if let schemars::schema::Schema::Object(obj) = s {
-                            simplify_schema(obj);
-                        }
+    // Process array items (can be a single schema or an array of schemas)
+    if let Some(items) = schema.get_mut("items") {
+        match items {
+            Value::Object(sub) => simplify_schema(sub),
+            Value::Array(arr) => {
+                for item in arr {
+                    if let Value::Object(sub) = item {
+                        simplify_schema(sub);
                     }
                 }
             }
+            _ => {}
         }
     }
 }
@@ -1619,10 +1606,12 @@ mod tests {
 
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.android.min_sdk, Some(24));
-        assert!(config
-            .android
-            .permissions
-            .contains_key("android.permission.FOREGROUND_SERVICE"));
+        assert!(
+            config
+                .android
+                .permissions
+                .contains_key("android.permission.FOREGROUND_SERVICE")
+        );
     }
 
     #[test]

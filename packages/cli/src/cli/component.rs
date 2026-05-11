@@ -4,11 +4,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{verbosity_or_default, DioxusConfig, Result, StructuredOutput, Workspace};
-use anyhow::{bail, Context};
+use crate::{DioxusConfig, Result, StructuredOutput, Workspace, verbosity_or_default};
+use anyhow::{Context, bail};
 use clap::Parser;
 use dioxus_component_manifest::{
-    component_manifest_schema, CargoDependency, Component, ComponentDependency,
+    CargoDependency, Component, ComponentDependency, component_manifest_schema,
 };
 use git2::Repository;
 use schemars::JsonSchema;
@@ -204,9 +204,13 @@ impl ComponentCommand {
                         components_root.display()
                     );
                     println!("To finish setting up components, you will need to:");
-                    println!("- manually reference the module by adding `mod components;` to your `main.rs` file");
+                    println!(
+                        "- manually reference the module by adding `mod components;` to your `main.rs` file"
+                    );
                     if registry.is_default() {
-                        println!("- add a reference to `asset!(\"/assets/dx-components-theme.css\")` as a stylesheet in your app");
+                        println!(
+                            "- add a reference to `asset!(\"/assets/dx-components-theme.css\")` as a stylesheet in your app"
+                        );
                     }
                 }
             }

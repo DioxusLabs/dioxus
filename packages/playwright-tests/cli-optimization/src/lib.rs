@@ -17,6 +17,65 @@ static _ASSET: Asset = asset!(
     AssetOptions::builder().with_hash_suffix(false)
 );
 
+// Regression coverage for https://github.com/DioxusLabs/dioxus/issues/5512:
+// `with_minify(false)` must copy the file byte-for-byte (no IIFE rewrap, no
+// ESM transform), and `with_minify(true)` must keep the script as a classic
+// script (not ESM) so the `<script>` tag without `type="module"` still runs.
+#[used]
+static _IIFE_CLASSIC_JS: Asset = asset!(
+    "/assets/iife_classic.js",
+    AssetOptions::js().with_minify(false).with_static_head(true)
+);
+#[used]
+static _IIFE_MINIFY_JS: Asset = asset!(
+    "/assets/iife_minify.js",
+    AssetOptions::js().with_minify(true).with_static_head(true)
+);
+#[used]
+static _UMD_MINIFY_JS: Asset = asset!(
+    "/assets/umd_minify.js",
+    AssetOptions::js().with_minify(true).with_static_head(true)
+);
+#[used]
+static _CJS_CLASSIC_JS: Asset = asset!(
+    "/assets/cjs_classic.cjs",
+    AssetOptions::js().with_minify(true).with_static_head(true)
+);
+#[used]
+static _SWEETALERT2_JS: Asset = asset!(
+    "/assets/sweetalert2.all.min.js",
+    AssetOptions::js().with_minify(false).with_static_head(true)
+);
+
+// Coverage for `with_module(true)`: the script tag must be emitted as
+// `<script type="module">` and minification must preserve module syntax so
+// the browser can parse the file as ESM.
+#[used]
+static _ESM_MODULE_JS: Asset = asset!(
+    "/assets/esm_module.js",
+    AssetOptions::js().with_module(true).with_static_head(true)
+);
+
+// Coverage for module auto-detection: this asset has no `with_module(true)`
+// override, but its source contains a top-level `export`, so the CLI's
+// has_module_syntax scan must classify it as ESM and emit the script tag with
+// `type="module"`. Confirms detection works without explicit user opt-in.
+#[used]
+static _ESM_AUTO_JS: Asset = asset!(
+    "/assets/esm_auto.js",
+    AssetOptions::js().with_static_head(true)
+);
+#[used]
+static _ESM_IMPORT_ENTRY_JS: Asset = asset!(
+    "/assets/esm_import_entry.js",
+    AssetOptions::js().with_static_head(true)
+);
+#[used]
+static _MJS_AUTO_JS: Asset = asset!(
+    "/assets/mjs_auto.mjs",
+    AssetOptions::js().with_static_head(true)
+);
+
 pub fn main() {
     dioxus::launch(App);
 }

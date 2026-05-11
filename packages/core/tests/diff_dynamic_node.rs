@@ -6,8 +6,8 @@ use pretty_assertions::assert_eq;
 #[test]
 fn toggle_option_text() {
     let mut dom = VirtualDom::new(|| {
-        let gen = generation();
-        let text = if gen % 2 != 0 { Some("hello") } else { None };
+        let g = generation();
+        let text = if g % 2 != 0 { Some("hello") } else { None };
         println!("{:?}", text);
 
         rsx! {

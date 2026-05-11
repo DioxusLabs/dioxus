@@ -1,5 +1,5 @@
 use crate::{CliSettings, Result, Workspace};
-use anyhow::{anyhow, Context};
+use anyhow::{Context, anyhow};
 use std::{
     path::{Path, PathBuf},
     process::Stdio,

@@ -2,11 +2,11 @@ use dioxus_core::Event;
 use keyboard_types::Modifiers;
 use std::fmt::Formatter;
 
-use crate::{geometry::*, InteractionLocation, ModifiersInteraction, PointerInteraction};
 use crate::{
-    input_data::{MouseButton, MouseButtonSet},
     InteractionElementOffset,
+    input_data::{MouseButton, MouseButtonSet},
 };
+use crate::{InteractionLocation, ModifiersInteraction, PointerInteraction, geometry::*};
 
 use super::HasMouseData;
 

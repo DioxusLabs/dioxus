@@ -1,7 +1,7 @@
 // The homepage is statically rendered, so we don't need to a persistent websocket connection.
 
 use crate::{
-    api::{fetch_products, Sort},
+    api::{Sort, fetch_products},
     components::nav::Nav,
     components::product_item::ProductItem,
 };

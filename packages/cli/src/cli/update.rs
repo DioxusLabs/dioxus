@@ -1,6 +1,6 @@
 use super::*;
 use crate::{Result, Workspace};
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use itertools::Itertools;
 use self_update::cargo_crate_version;
 
@@ -238,7 +238,9 @@ pub fn log_if_cli_could_update() {
                         let ignored = f.ignore_version_update.as_deref().unwrap_or_default();
                         if release.version != ignored {
                             use crate::styles::GLOW_STYLE;
-                            tracing::warn!("A new dx version is available: {new}! Run {GLOW_STYLE}dx self-update{GLOW_STYLE:#} to update.");
+                            tracing::warn!(
+                                "A new dx version is available: {new}! Run {GLOW_STYLE}dx self-update{GLOW_STYLE:#} to update."
+                            );
                             f.ignore_version_update = Some(new.to_string());
                         }
                     });

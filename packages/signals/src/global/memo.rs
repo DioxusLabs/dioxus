@@ -1,7 +1,7 @@
 use super::{Global, InitializeFromFunction};
+use crate::Memo;
 use crate::read::ReadableExt;
 use crate::read_impls;
-use crate::Memo;
 
 impl<T: PartialEq + 'static> InitializeFromFunction<T> for Memo<T> {
     fn initialize_from_function(f: fn() -> T) -> Self {

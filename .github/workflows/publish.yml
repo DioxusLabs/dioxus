@@ -70,6 +70,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # Build from the tag we're releasing, not the branch the workflow
+          # was dispatched from. Without this the binary's Cargo.toml version
+          # and embedded SHA reflect whatever was on the dispatch branch.
+          ref: refs/tags/${{ github.event.inputs.post }}
+
+      - name: Resolve release commit SHA
+        shell: bash
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "DIOXUS_CLI_GIT_SHA=$sha" >> "$GITHUB_ENV"
+          echo "DIOXUS_CLI_GIT_SHA_SHORT=${sha:0:7}" >> "$GITHUB_ENV"
 
       - name: Install openssl on macos
         if: matrix.platform.os == 'macos-latest'
@@ -102,7 +114,7 @@ jobs:
       - name: Install stable
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.88.0"
+          toolchain: "1.92.0"
           targets: ${{ matrix.platform.target }}
 
       - uses: Swatinem/rust-cache@v2

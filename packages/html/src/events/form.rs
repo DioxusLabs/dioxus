@@ -1,5 +1,5 @@
-use crate::file_data::HasFileData;
 use crate::FileData;
+use crate::file_data::HasFileData;
 use std::fmt::Debug;
 
 use dioxus_core::Event;

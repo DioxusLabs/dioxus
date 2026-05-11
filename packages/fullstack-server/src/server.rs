@@ -1,6 +1,6 @@
 use crate::{
-    ssr::{SSRError, SsrRendererPool},
     ServeConfig, ServerFunction,
+    ssr::{SSRError, SsrRendererPool},
 };
 use axum::{
     body::Body,
@@ -14,8 +14,8 @@ use http::header::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio_util::task::LocalPoolHandle;
-use tower::util::MapResponse;
 use tower::ServiceExt;
+use tower::util::MapResponse;
 use tower_http::services::fs::ServeFileSystemResponseBody;
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.

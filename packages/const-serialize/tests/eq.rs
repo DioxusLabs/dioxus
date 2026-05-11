@@ -1,4 +1,4 @@
-use const_serialize::{serialize_eq, SerializeConst};
+use const_serialize::{SerializeConst, serialize_eq};
 
 #[derive(Clone, Copy, Debug, PartialEq, SerializeConst)]
 struct Struct {

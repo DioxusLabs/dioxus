@@ -1,4 +1,4 @@
-use const_serialize::{deserialize_const, serialize_const, ConstVec, SerializeConst};
+use const_serialize::{ConstVec, SerializeConst, deserialize_const, serialize_const};
 use std::mem::MaybeUninit;
 
 #[test]

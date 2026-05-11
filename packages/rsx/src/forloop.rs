@@ -1,7 +1,7 @@
 use super::*;
 use location::DynIdx;
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{braced, token::Brace, Expr, Pat};
+use syn::{Expr, Pat, braced, token::Brace};
 
 #[non_exhaustive]
 #[derive(PartialEq, Eq, Clone, Debug)]

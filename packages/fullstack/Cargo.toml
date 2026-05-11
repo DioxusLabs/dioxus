@@ -2,7 +2,7 @@
 name = "dioxus-fullstack"
 authors = ["Jonathan Kelley", "Evan Almloff"]
 version = { workspace = true }
-edition = "2021"
+edition = "2024"
 description = "Library for fetching resources from servers in Dioxus apps."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"

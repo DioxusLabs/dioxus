@@ -1,16 +1,16 @@
-use crate::config::WebProxyConfig;
 use crate::TraceSrc;
+use crate::config::WebProxyConfig;
 use crate::{Error, Result};
 
 use anyhow::bail;
 use axum::body::Body;
 use axum::http::request::Parts;
-use axum::{body::Body as MyBody, response::IntoResponse};
 use axum::{
-    http::StatusCode,
-    routing::{any, MethodRouter},
     Router,
+    http::StatusCode,
+    routing::{MethodRouter, any},
 };
+use axum::{body::Body as MyBody, response::IntoResponse};
 use hyper::client::conn::http1;
 use hyper::header::*;
 use hyper::{Request, Response, Uri};

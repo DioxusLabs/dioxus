@@ -7,7 +7,7 @@ pub(crate) const unsafe fn serialize_const_enum(
     layout: &EnumLayout,
 ) -> ConstVec<u8> {
     let byte_ptr = ptr as *const u8;
-    let discriminant = layout.discriminant.read(byte_ptr);
+    let discriminant = unsafe { layout.discriminant.read(byte_ptr) };
 
     let mut i = 0;
     while i < layout.variants.len() {
@@ -19,7 +19,7 @@ pub(crate) const unsafe fn serialize_const_enum(
             to = write_map(to, 1);
             to = write_map_key(to, name);
             let data_ptr = ptr.wrapping_byte_offset(layout.variants_offset as _);
-            to = serialize_const_struct(data_ptr, to, data);
+            to = unsafe { serialize_const_struct(data_ptr, to, data) };
             break;
         }
         i += 1;

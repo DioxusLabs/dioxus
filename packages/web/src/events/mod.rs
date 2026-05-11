@@ -96,13 +96,17 @@ macro_rules! with_web_event_converters {
             };
             convert_mouse_data(MouseData) => web_sys::MouseEvent;
             convert_pointer_data(PointerData) => web_sys::PointerEvent;
-            convert_resize_data(ResizeData) => web_sys::ResizeObserverEntry;
+            convert_resize_data(ResizeData) => web_sys::CustomEvent => |event| {
+                Synthetic::<web_sys::ResizeObserverEntry>::from(downcast_event(event).raw.clone()).into()
+            };
             convert_scroll_data(ScrollData) => web_sys::Event;
             convert_selection_data(SelectionData) => web_sys::Event;
             convert_toggle_data(ToggleData) => web_sys::Event;
             convert_touch_data(TouchData) => web_sys::TouchEvent;
             convert_transition_data(TransitionData) => web_sys::TransitionEvent;
-            convert_visible_data(VisibleData) => web_sys::IntersectionObserverEntry;
+            convert_visible_data(VisibleData) => web_sys::CustomEvent => |event| {
+                Synthetic::<web_sys::IntersectionObserverEntry>::from(downcast_event(event).raw.clone()).into()
+            };
             convert_wheel_data(WheelData) => web_sys::WheelEvent;
         }
     };

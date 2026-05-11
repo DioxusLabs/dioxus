@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-License-Identifier: MIT
 
-use serde::{ser::Serializer, Serialize};
+use serde::{Serialize, ser::Serializer};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
