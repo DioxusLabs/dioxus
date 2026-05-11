@@ -221,7 +221,7 @@ impl BundleContext<'_> {
                     bail!("ditto failed to create zip for notarization");
                 }
 
-                match notarize(&zip_path).await {
+                match notarize(&zip_path, &app_dir).await {
                     Ok(()) => {
                         let _ = fs::remove_file(&zip_path);
                     }
@@ -356,7 +356,7 @@ impl BundleContext<'_> {
                 std::env::var("APPLE_ID").is_ok() || std::env::var("APPLE_API_KEY").is_ok();
 
             if should_notarize {
-                notarize(&dmg_path).await?;
+                notarize(&dmg_path, &dmg_path).await?;
             }
         }
 
@@ -853,7 +853,7 @@ async fn sign_path(
 }
 
 /// Notarize a .app or .dmg with Apple's notary service.
-async fn notarize(app_path: &Path) -> Result<()> {
+async fn notarize(notarize_path: &Path, staple_path: &Path) -> Result<()> {
     let apple_id = std::env::var("APPLE_ID").ok();
     let apple_password = std::env::var("APPLE_PASSWORD").ok();
     let apple_team_id = std::env::var("APPLE_TEAM_ID").ok();
@@ -863,7 +863,7 @@ async fn notarize(app_path: &Path) -> Result<()> {
 
     let mut cmd = Command::new("xcrun");
     cmd.args(["notarytool", "submit"]);
-    cmd.arg(app_path);
+    cmd.arg(notarize_path);
 
     if let (Some(key), Some(issuer), Some(key_path)) = (&api_key, &api_issuer, &api_key_path) {
         cmd.args(["--key", key_path]);
@@ -883,15 +883,15 @@ async fn notarize(app_path: &Path) -> Result<()> {
 
     cmd.arg("--wait");
 
-    tracing::info!("Submitting {} for notarization...", app_path.display());
+    tracing::info!("Submitting {} for notarization...", notarize_path.display());
     run_command(&mut cmd, "xcrun notarytool submit").await?;
 
     tracing::info!("Stapling notarization ticket...");
     let mut staple_cmd = Command::new("xcrun");
-    staple_cmd.args(["stapler", "staple"]).arg(app_path);
+    staple_cmd.args(["stapler", "staple"]).arg(staple_path);
     run_command(&mut staple_cmd, "xcrun stapler staple").await?;
 
-    tracing::info!("Notarization complete for {}", app_path.display());
+    tracing::info!("Notarization complete for {}", staple_path.display());
     Ok(())
 }
 

@@ -27,6 +27,7 @@ impl WorkspaceRustcArgs {
 pub struct RustcArgs {
     pub args: Vec<String>,
     pub envs: Vec<(String, String)>,
+    pub cwd: PathBuf,
 }
 
 /// The environment variable indicating where the args directory is located.
@@ -62,6 +63,7 @@ pub fn run_rustc() -> ExitCode {
     let rustc_args = RustcArgs {
         args: captured_args.clone(),
         envs: vars().collect::<_>(),
+        cwd: std::env::current_dir().expect("Failed to get current dir"),
     };
 
     // Always persist the captured rustc invocation, even for link steps.
@@ -84,9 +86,9 @@ pub fn run_rustc() -> ExitCode {
     // when passing arguments to the `rustc` command we are spawning.
     cmd.args(captured_args.iter().skip(1));
     cmd.envs(rustc_args.envs);
+    cmd.current_dir(rustc_args.cwd);
     cmd.stdout(std::process::Stdio::inherit());
     cmd.stderr(std::process::Stdio::inherit());
-    cmd.current_dir(std::env::current_dir().expect("Failed to get current dir"));
 
     // Spawn the process and propagate its exit code.
     let status = cmd.status().expect("Failed to execute rustc command");

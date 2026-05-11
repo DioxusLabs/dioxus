@@ -201,8 +201,6 @@ impl WasmBindgen {
     /// 2. `cargo binstall` if installed.
     /// 3. Compile from source with `cargo install`.
     async fn install(&self) -> anyhow::Result<()> {
-        tracing::info!("Installing wasm-bindgen-cli@{}...", self.version);
-
         // Attempt installation from GitHub
         if let Err(e) = self.install_github().await {
             tracing::error!("Failed to install wasm-bindgen-cli@{}: {e}", self.version);
@@ -437,7 +435,7 @@ impl WasmBindgen {
         } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
             "x86_64-unknown-linux-musl"
         } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
-            "aarch64-unknown-linux-gnu"
+            "aarch64-unknown-linux-musl"
         } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
             "x86_64-apple-darwin"
         } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {

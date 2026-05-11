@@ -24,10 +24,10 @@ jni = "0.21.1"
 ndk-context = "0.1.1"
 
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2 = "0.6.3"
+objc2 = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6.3"
+objc2 = { workspace = true }
 
 [features]
 default = []

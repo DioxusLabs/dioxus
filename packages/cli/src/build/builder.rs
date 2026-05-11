@@ -66,7 +66,6 @@ pub(crate) struct AppBuilder {
 
     /// The list of patches applied to the app, used to know which ones to reapply and/or iterate from.
     pub patches: Vec<JumpTable>,
-    pub patch_cache: Option<HotpatchModuleCache>,
 
     /// The virtual directory that assets will be served from
     /// Used mostly for apk/ipa builds since they live in simulator
@@ -165,7 +164,6 @@ impl AppBuilder {
             spawn_handle: None,
             entropy_app_exe: None,
             artifacts: None,
-            patch_cache: None,
             pid: None,
             modified_crates: HashSet::new(),
             profile_spans: Vec::new(),
@@ -335,6 +333,7 @@ impl AppBuilder {
                 }
             }
             BuilderUpdate::CompilerMessage { .. } => {}
+            BuilderUpdate::DepInfoDiscovered { .. } => {}
             StdoutReceived { .. } => {}
             StderrReceived { .. } => {}
             ProcessExited { .. } => {}
@@ -459,7 +458,6 @@ impl AppBuilder {
         // And then start a new build, resetting our progress/stage to the beginning and replacing the old tokio task
         self.abort_all(BuildStage::Restarting);
         self.artifacts.take();
-        self.patch_cache.take();
 
         // A full rebuild resets all accumulated hotpatch state — the fat binary is a clean baseline.
         self.modified_crates.clear();
@@ -505,10 +503,8 @@ impl AppBuilder {
                             krate,
                             fresh,
                             ..
-                        } => {
-                            if !fresh {
-                                tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
-                            }
+                        } if !fresh => {
+                            tracing::info!("Compiled [{current:>3}/{total}]: {krate}");
                         }
                         BuildStage::RunningBindgen => tracing::info!("Running wasm-bindgen..."),
                         BuildStage::CopyingAssets {
@@ -549,6 +545,7 @@ impl AppBuilder {
                     return Err(err);
                 }
                 BuilderUpdate::ProfilePhase { .. } => {}
+                BuilderUpdate::DepInfoDiscovered { .. } => {}
                 BuilderUpdate::StdoutReceived { .. } => {}
                 BuilderUpdate::StderrReceived { .. } => {}
                 BuilderUpdate::ProcessExited { .. } => {}
@@ -1973,7 +1970,7 @@ impl AppBuilder {
                 "event": "build_and_bundle_complete",
                 "time_taken": time_taken,
                 "mode": match bundle.mode {
-                    BuildMode::Base { .. } => "base",
+                    BuildMode::Base => "base",
                     BuildMode::Fat => "fat",
                     BuildMode::Thin { .. } => "thin",
                 },
@@ -1991,7 +1988,7 @@ impl AppBuilder {
         use std::fmt::Write as _;
 
         let total_ms = time_taken as usize;
-        let timeline_width = 96usize;
+        let timeline_width = 48usize;
         let max_label_width = self
             .profile_spans
             .iter()
@@ -2008,7 +2005,7 @@ impl AppBuilder {
         let mut flamegraph = format!(
             "Flamegraph for {} - time taken: {}ms",
             match bundle.mode {
-                BuildMode::Base { .. } => "base",
+                BuildMode::Base => "base",
                 BuildMode::Fat => "fat",
                 BuildMode::Thin { .. } => "thin",
             },

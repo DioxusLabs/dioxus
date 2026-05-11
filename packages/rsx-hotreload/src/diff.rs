@@ -111,8 +111,15 @@ pub struct HotReloadResult {
     /// The dynamic attributes for the current node
     dynamic_attributes: Vec<HotReloadDynamicAttribute>,
 
-    /// The literal component properties for the current node
-    literal_component_properties: Vec<HotReloadLiteral>,
+    /// The literal component properties for the current node, indexed by the OLD template's
+    /// global literal pool position. The runtime looks up `component_values[old_global_idx]`
+    /// using indices baked into the original compiled code, so this vec MUST preserve the
+    /// OLD layout, not the NEW walk order.
+    ///
+    /// `None` means the slot's old component was not matched (e.g. the component was
+    /// removed); we fill those with the old literal value since removed components never
+    /// have their compiled code invoked.
+    literal_component_properties: Vec<Option<HotReloadLiteral>>,
 }
 
 impl HotReloadResult {
@@ -126,12 +133,14 @@ impl HotReloadResult {
         let full_rebuild_state = full_rebuild_state.normalized();
         let new = new.normalized();
         let full_rebuild_state = LastBuildState::new(&full_rebuild_state, name);
+        let literal_component_properties =
+            vec![None; full_rebuild_state.component_properties.len()];
         let mut s = Self {
             full_rebuild_state,
             templates: Default::default(),
             dynamic_nodes: Default::default(),
             dynamic_attributes: Default::default(),
-            literal_component_properties: Default::default(),
+            literal_component_properties,
         };
 
         s.hotreload_body::<Ctx>(&new)?;
@@ -191,7 +200,33 @@ impl HotReloadResult {
         // Move over old IDs onto the new template
         self.hotreload_dynamic_nodes::<Ctx>(new)?;
         let new_dynamic_nodes = std::mem::take(&mut self.dynamic_nodes);
-        let literal_component_properties = std::mem::take(&mut self.literal_component_properties);
+
+        // Collapse the OLD-pool-indexed literal vector into the dense runtime vec the core
+        // renderer expects. Slots that were never matched by a surviving new component keep
+        // a best-effort copy of the old literal value so the vec's size and types line up
+        // with the layout baked into the original compiled code.
+        let literal_component_properties = std::mem::take(&mut self.literal_component_properties)
+            .into_iter()
+            .enumerate()
+            .map(|(idx, slot)| {
+                slot.unwrap_or_else(
+                    // Produce a type-matching runtime literal for an old literal slot that no surviving new
+                    // component claimed. The value itself never reaches the screen (the removed component's
+                    // compiled code is never invoked), but the *type* must match the slot's original type so
+                    // any accidental read does not hit the runtime's type-mismatch fallback path. We cannot
+                    // use `LastBuildState::hotreload_hot_literal` here because it would mutate the dynamic
+                    // text pool's `used` flags and skew scoring.
+                    || match &self.full_rebuild_state.component_properties[idx] {
+                        HotLiteral::Fmted(_) => HotReloadLiteral::Fmted(FmtedSegments::new(vec![])),
+                        HotLiteral::Bool(b) => HotReloadLiteral::Bool(b.value()),
+                        HotLiteral::Float(f) => {
+                            HotReloadLiteral::Float(f.base10_parse().unwrap_or(0.0))
+                        }
+                        HotLiteral::Int(i) => HotReloadLiteral::Int(i.base10_parse().unwrap_or(0)),
+                    },
+                )
+            })
+            .collect();
 
         let key = self.hot_reload_key(new)?;
 
@@ -389,8 +424,18 @@ impl HotReloadResult {
             .used
             .set(true);
 
-        self.literal_component_properties
-            .extend(literal_component_properties.iter().cloned());
+        // Place each matched literal at its correct OLD global literal-pool index. The k-th
+        // literal returned by `hotreload_component_fields` corresponds to the k-th non-key
+        // AttrLiteral in the OLD component's declaration order, which is exactly what
+        // `old_component.component_literal_dyn_idx[k]` maps to a global pool index.
+        let old_component = match &self.full_rebuild_state.dynamic_nodes.inner[index].inner {
+            BodyNode::Component(c) => c,
+            _ => unreachable!("candidate was filtered to Component variants"),
+        };
+        for (k, lit) in literal_component_properties.iter().enumerate() {
+            let global_idx = old_component.component_literal_dyn_idx[k].get();
+            self.literal_component_properties[global_idx] = Some(lit.clone());
+        }
 
         self.extend(new_body);
 

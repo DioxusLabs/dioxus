@@ -63,6 +63,7 @@ impl HotpatchTip {
             rustc_args,
             rustc_envs,
             link_args,
+            cwd,
             ..
         } = structured_build_artifacts;
 
@@ -77,6 +78,7 @@ impl HotpatchTip {
             crate::RustcArgs {
                 args: rustc_args,
                 envs: rustc_envs,
+                cwd,
             },
         );
 

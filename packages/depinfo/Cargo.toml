@@ -11,4 +11,8 @@ keywords = ["rustc", "cargo", "dep-info" ]
 
 [dependencies]
 thiserror = { workspace = true }
+dunce = { workspace = true, optional = true }
 
+[features]
+default = ["canonicalize"]
+canonicalize = ["dep:dunce"]

@@ -28,7 +28,7 @@ use std::{
 };
 use tracing::Level;
 
-use super::AppServer;
+use super::{AppServer, HotReloadMode};
 
 const TICK_RATE_MS: u64 = 100;
 const VIEWPORT_MAX_WIDTH: u16 = 92;
@@ -254,7 +254,7 @@ impl Output {
             }
             KeyCode::Char('r') => return Ok(Some(ServeUpdate::RequestRebuild)),
             KeyCode::Char('o') => return Ok(Some(ServeUpdate::OpenApp)),
-            KeyCode::Char('p') => return Ok(Some(ServeUpdate::ToggleShouldRebuild)),
+            KeyCode::Char('p') => return Ok(Some(ServeUpdate::CycleHotreloadMode)),
             KeyCode::Char('v') => {
                 self.verbose = !self.verbose;
                 tracing::info!(
@@ -701,7 +701,7 @@ impl Output {
     }
 
     fn render_stats(&self, frame: &mut Frame<'_>, area: Rect, state: RenderState) {
-        let [current_platform, app_features, serve_address]: [_; 3] = Layout::vertical([
+        let [current_platform, hotreload_mode, serve_address]: [_; 3] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Length(1),
@@ -722,7 +722,15 @@ impl Output {
             current_platform,
         );
 
-        self.render_feature_list(frame, app_features, state);
+        let (label, indicator) = match state.runner.hotreload_mode {
+            HotReloadMode::Hotpatch => ("hot-patching".yellow(), " ✓".yellow()),
+            HotReloadMode::RsxOnly => ("rsx and assets".yellow(), " ~".yellow()),
+            HotReloadMode::Disabled => ("disabled".dark_gray(), " ✗".dark_gray()),
+        };
+        frame.render_widget(
+            Paragraph::new(Line::from(vec!["Hotreload: ".gray(), label, indicator])),
+            hotreload_mode,
+        );
 
         // todo(jon) should we write https ?
         let address = match state.server.displayed_address() {
@@ -804,19 +812,7 @@ impl Output {
             ])),
             meta_list[2],
         );
-        frame.render_widget(
-            Paragraph::new(Line::from(vec![
-                "Hotreload: ".gray(),
-                if !state.runner.automatic_rebuilds {
-                    "disabled".dark_gray()
-                } else if state.runner.use_hotpatch_engine {
-                    "hot-patching".yellow()
-                } else {
-                    "rsx and assets".yellow()
-                },
-            ])),
-            meta_list[3],
-        );
+        self.render_feature_list(frame, meta_list[3], state);
 
         // space
         frame.render_widget(Paragraph::new(Line::from(vec![" ".gray()])), meta_list[4]);
@@ -846,7 +842,7 @@ impl Output {
             "",
             "r: rebuild the app",
             "o: open the app",
-            "p: pause rebuilds",
+            "p: cycle hotreload mode",
             "v: toggle verbose logs",
             "t: toggle tracing logs",
             "c: clear the screen",
