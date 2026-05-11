@@ -1,9 +1,9 @@
-use std::{any::Any, ops::Deref};
+use std::{any::Any, ops::Deref, sync::OnceLock};
 
 use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, current_scope_id,
 };
-use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{AnyStorage, BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
     CopyValue, Global, InitializeFromFunction, MappedMutSignal, MappedSignal, Memo, Readable,
@@ -27,12 +27,13 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
     /// The wrapped readable. `Option` so `point_to` can move ownership without needing a dummy.
     pub(crate) value: Option<Box<S::DynReadable<sealed::SealedToken>>>,
-    /// Subscribers attached to this wrapper handle, independent of the wrapped readable. Lazy so
-    /// wrappers that are never read pay nothing.
-    pub(crate) subscribers: Option<Subscribers>,
+    /// Subscribers attached to this wrapper handle, independent of the wrapped readable.
+    /// `OnceLock` so lazy init is internally atomic and only needs a read borrow on the
+    /// surrounding [CopyValue]
+    pub(crate) subscribers: OnceLock<Subscribers>,
     /// Bridges writes on the inner readable to our own subscribers so they follow the wrapper's
-    /// identity across `point_to` swaps. Lazy for the same reason as `subscribers`.
-    pub(crate) forwarding_context: Option<ReactiveContext>,
+    /// identity across `point_to` swaps. `OnceLock` for the same reason as `subscribers`.
+    pub(crate) forwarding_context: OnceLock<ReactiveContext>,
 }
 
 /// A boxed version of [Readable] that can be used to store any readable type.
@@ -57,72 +58,44 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
                 value: Some(S::new_readable(value, sealed::SealedToken)),
-                subscribers: None,
-                forwarding_context: None,
+                subscribers: OnceLock::new(),
+                forwarding_context: OnceLock::new(),
             }),
         }
     }
 
-    /// Get this wrapper's subscriber list, initializing it on first use.
-    fn ensure_subscribers(&self) -> Subscribers {
-        if let Some(subscribers) = self.inner.try_peek_unchecked().unwrap().subscribers.clone() {
-            return subscribers;
-        }
-        let subscribers = Subscribers::new();
-        self.inner.try_write_unchecked().unwrap().subscribers = Some(subscribers.clone());
-        subscribers
-    }
-
-    /// Get the reactive context that forwards writes on the inner readable to this wrapper's
-    /// subscribers, initializing it on first use.
-    fn ensure_forwarding_context(&self) -> ReactiveContext {
-        if let Some(context) = self.inner.try_peek_unchecked().unwrap().forwarding_context {
-            return context;
-        }
-        // Capture the `Subscribers` handle (which is `Send + Sync`) instead of the inner
-        // `CopyValue`, since the forwarding callback must be `Send + Sync` regardless of `S`.
-        let subscribers = self.ensure_subscribers();
-        let context = ReactiveContext::new_with_callback(
-            move || {
-                let mut current_subscribers = Vec::new();
-                subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
-                for subscriber in current_subscribers {
-                    if !subscriber.mark_dirty() {
-                        subscribers.remove(&subscriber);
-                    }
-                }
-            },
-            current_scope_id(),
-            std::panic::Location::caller(),
-        );
-        self.inner.try_write_unchecked().unwrap().forwarding_context = Some(context);
-        context
+    /// Borrow the wrapped readable. Centralizes the "value must be `Some` outside of `point_to`'s
+    /// brief swap window" invariant.
+    fn wrapped(&self) -> S::Ref<'static, Box<S::DynReadable<sealed::SealedToken>>> {
+        let inner_ref = self.inner.try_peek_unchecked().unwrap();
+        <S as AnyStorage>::map(inner_ref, |inner| {
+            inner
+                .value
+                .as_ref()
+                .expect("ReadSignal is missing its wrapped value")
+        })
     }
 
     /// Point to another [ReadSignal]. Subscribers attached to this wrapper migrate to the new
     /// inner readable so they receive writes through it, while subscribers attached directly to
     /// the underlying readable are left alone.
+    ///
+    /// Consumes `other` even though [`ReadSignal`] is `Copy`: `other`'s generational slot is
+    /// released, so any caller-side copy of `other` will fail on subsequent reads. The intended
+    /// caller is the `props` macro with a freshly-constructed wrapper.
     pub fn point_to(&self, other: Self) -> BorrowResult {
         // Migrate wrapper subscribers from the old inner readable to the new one before swapping
         // the boxed value, so the underlying signal's `subscribers` accounting stays consistent.
-        let this_subscribers_clone = self.inner.try_peek_unchecked().unwrap().subscribers.clone();
+        let this_subscribers_clone = self
+            .inner
+            .try_peek_unchecked()
+            .unwrap()
+            .subscribers
+            .get()
+            .cloned();
         if let Some(this_subscribers) = &this_subscribers_clone {
-            let old_wrapped_subscribers = self
-                .inner
-                .try_peek_unchecked()
-                .unwrap()
-                .value
-                .as_ref()
-                .expect("ReadSignal is missing its wrapped value")
-                .subscribers();
-            let other_wrapped_subscribers = other
-                .inner
-                .try_peek_unchecked()
-                .unwrap()
-                .value
-                .as_ref()
-                .expect("ReadSignal is missing its wrapped value")
-                .subscribers();
+            let old_wrapped_subscribers = self.wrapped().subscribers();
+            let other_wrapped_subscribers = other.wrapped().subscribers();
             let mut this_subscribers_vec = Vec::new();
             // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
             this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
@@ -130,8 +103,13 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
                 old_wrapped_subscribers.remove(&subscriber);
                 subscriber.subscribe(other_wrapped_subscribers.clone());
             }
-            if let Some(forwarding_context) =
-                self.inner.try_peek_unchecked().unwrap().forwarding_context
+            if let Some(forwarding_context) = self
+                .inner
+                .try_peek_unchecked()
+                .unwrap()
+                .forwarding_context
+                .get()
+                .copied()
             {
                 forwarding_context.clear_subscribers();
                 forwarding_context.subscribe(other_wrapped_subscribers);
@@ -158,7 +136,14 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// This is only used by the `props` macro.
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
-        let Some(subscribers) = self.inner.try_peek_unchecked().unwrap().subscribers.clone() else {
+        let Some(subscribers) = self
+            .inner
+            .try_peek_unchecked()
+            .unwrap()
+            .subscribers
+            .get()
+            .cloned()
+        else {
             return;
         };
         let mut this_subscribers_vec = Vec::new();
@@ -234,25 +219,39 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
+        // Single borrow on `self.inner` for the whole read path: subscriber subscribe, forwarding
+        // context init, and the inner read all happen under the same `try_peek_unchecked` guard.
+        let inner = self.inner.try_peek_unchecked()?;
+        let wrapped = inner
+            .value
+            .as_ref()
+            .expect("ReadSignal is missing its wrapped value");
         if let Some(reactive_context) = ReactiveContext::current() {
-            reactive_context.subscribe(self.ensure_subscribers());
-            let forwarding_context = self.ensure_forwarding_context();
-            forwarding_context.reset_and_run_in(|| {
-                self.inner
-                    .try_peek_unchecked()?
-                    .value
-                    .as_ref()
-                    .expect("ReadSignal is missing its wrapped value")
-                    .try_read_unchecked()
-            })
-        } else {
-            self.inner
-                .try_peek_unchecked()?
-                .value
-                .as_ref()
-                .expect("ReadSignal is missing its wrapped value")
-                .try_read_unchecked()
+            let subscribers = inner.subscribers.get_or_init(Subscribers::new);
+            reactive_context.subscribe(subscribers.clone());
+            // The forwarding context bridges writes on the inner readable to wrapper-level
+            // subscribers. Subscription is established once at init and re-pointed in `point_to`,
+            // so reads stay on a fast path with no per-read RC bookkeeping.
+            inner.forwarding_context.get_or_init(|| {
+                let subs = subscribers.clone();
+                let context = ReactiveContext::new_with_callback(
+                    move || {
+                        let mut current_subscribers = Vec::new();
+                        subs.visit(|subscriber| current_subscribers.push(*subscriber));
+                        for subscriber in current_subscribers {
+                            if !subscriber.mark_dirty() {
+                                subs.remove(&subscriber);
+                            }
+                        }
+                    },
+                    current_scope_id(),
+                    std::panic::Location::caller(),
+                );
+                context.subscribe(wrapped.subscribers());
+                context
+            });
         }
+        wrapped.try_read_unchecked()
     }
 
     #[track_caller]
@@ -272,7 +271,12 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.ensure_subscribers()
+        self.inner
+            .try_peek_unchecked()
+            .unwrap()
+            .subscribers
+            .get_or_init(Subscribers::new)
+            .clone()
     }
 }
 

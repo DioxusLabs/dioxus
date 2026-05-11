@@ -343,3 +343,78 @@ fn boxed_read_signal_subscribes_to_underlying_updates() {
         assert_eq!(*current_render_count, 2);
     }
 }
+
+// Exercises the Send+Sync forwarding-context path on SyncStorage. Mirrors
+// `boxed_read_signal_subscribes_to_underlying_updates` but with sync storage so the lazy-init
+// helpers' rechecked-under-write paths are exercised on a SyncStorage value.
+#[test]
+fn boxed_sync_read_signal_subscribes_to_underlying_updates() {
+    use generational_box::SyncStorage;
+
+    type SyncSignal = Signal<i32, SyncStorage>;
+    type Props = (
+        std::sync::Arc<std::sync::Mutex<usize>>,
+        std::sync::Arc<std::sync::Mutex<Option<SyncSignal>>>,
+    );
+
+    let render_count = std::sync::Arc::new(std::sync::Mutex::new(0usize));
+    let signal_handle: std::sync::Arc<std::sync::Mutex<Option<SyncSignal>>> =
+        std::sync::Arc::new(std::sync::Mutex::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(render_count, signal_handle): Props| {
+            let mut signal = use_signal_sync(|| 0);
+            *signal_handle.lock().unwrap() = Some(signal);
+
+            let boxed: ReadSignal<i32, SyncStorage> = ReadSignal::from(signal);
+            let _ = boxed();
+            *render_count.lock().unwrap() += 1;
+
+            rsx! { "{boxed}" }
+        },
+        (render_count.clone(), signal_handle.clone()),
+    );
+
+    dom.rebuild_in_place();
+
+    assert_eq!(*render_count.lock().unwrap(), 1);
+
+    let mut signal = signal_handle.lock().unwrap().unwrap();
+    signal.set(1);
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
+
+    assert_eq!(*render_count.lock().unwrap(), 2);
+}
+
+// `point_to` must not panic when called on a wrapper whose `subscribers`/`forwarding_context`
+// were never lazily initialized (e.g. the wrapper has never been read). Locks in the early-return
+// in the `if let Some(this_subscribers)` branch.
+#[test]
+fn point_to_on_never_read_wrapper_does_not_panic() {
+    let captured = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |captured: Rc<RefCell<Option<i32>>>| {
+            let signal_a = use_signal(|| 7);
+            let signal_b = use_signal(|| 42);
+
+            // Build two wrappers without ever reading them.
+            let target = ReadSignal::from(signal_a);
+            let replacement = ReadSignal::from(signal_b);
+
+            // Drive the `subscribers == None` branch in `point_to`.
+            target.point_to(replacement).unwrap();
+
+            // Now read; should reflect signal_b's value.
+            *captured.borrow_mut() = Some(target());
+
+            rsx! { "{target}" }
+        },
+        captured.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    assert_eq!(*captured.borrow(), Some(42));
+}
