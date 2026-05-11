@@ -1,6 +1,6 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus_core::{current_scope_id, generation, NoOpMutations};
+use dioxus_core::{NoOpMutations, current_scope_id, generation};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -307,14 +307,13 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
 
 #[test]
 fn boxed_read_signal_subscribes_to_underlying_updates() {
+    type Props = (Rc<RefCell<usize>>, Rc<RefCell<Option<Signal<i32>>>>);
+
     let render_count = Rc::new(RefCell::new(0usize));
     let signal_handle = Rc::new(RefCell::new(None));
 
     let mut dom = VirtualDom::new_with_props(
-        |(render_count, signal_handle): (
-            Rc<RefCell<usize>>,
-            Rc<RefCell<Option<Signal<i32>>>>,
-        )| {
+        |(render_count, signal_handle): Props| {
             let mut signal = use_signal(|| 0);
             *signal_handle.borrow_mut() = Some(signal);
 

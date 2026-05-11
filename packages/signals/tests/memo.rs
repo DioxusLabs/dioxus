@@ -2,7 +2,7 @@
 use dioxus::html::p;
 use dioxus::prelude::*;
 use dioxus_core::NoOpMutations;
-use dioxus_core::{generation, ElementId};
+use dioxus_core::{ElementId, generation};
 use dioxus_signals::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -184,6 +184,7 @@ fn boxed_memo_reads_recompute_dirty_memos() {
             let boxed_value_after_write = boxed_value_after_write.clone();
             move |boxed_value_after_write: Rc<RefCell<Option<i32>>>| {
                 let mut signal = use_signal(|| 0);
+                #[allow(clippy::redundant_closure)]
                 let memo = use_memo(move || signal());
                 let boxed = ReadSignal::from(memo);
 

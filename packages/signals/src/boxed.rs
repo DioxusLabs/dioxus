@@ -1,14 +1,13 @@
 use std::{any::Any, ops::Deref};
 
 use dioxus_core::{
-    current_scope_id, IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers,
+    IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, current_scope_id,
 };
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
-    read_impls, write_impls, CopyValue, Global, InitializeFromFunction, MappedMutSignal,
-    MappedSignal, Memo, Readable, ReadableExt, ReadableRef, Signal, SignalData, Writable,
-    WritableExt,
+    CopyValue, Global, InitializeFromFunction, MappedMutSignal, MappedSignal, Memo, Readable,
+    ReadableExt, ReadableRef, Signal, SignalData, Writable, WritableExt, read_impls, write_impls,
 };
 
 /// A signal that can only be read from.
@@ -18,11 +17,27 @@ use crate::{
 )]
 pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 
+/// The data behind a [ReadSignal] handle. The wrapped readable and the wrapper-level subscriber
+/// state live in a single [CopyValue] so that creating a wrapper that is immediately `point_to`'d
+/// (e.g. from the `props` macro) only allocates one generational-box reference — matching what a
+/// bare `Signal` costs. `point_to` moves the wrapped readable out of `other.inner` into our own
+/// `inner.value`, so subscribers attached to this wrapper's identity (the *outer* handle) stay put
+/// while the underlying readable is replaced.
+#[doc(hidden)]
+pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
+    /// The wrapped readable. `Option` so `point_to` can move ownership without needing a dummy.
+    pub(crate) value: Option<Box<S::DynReadable<sealed::SealedToken>>>,
+    /// Subscribers attached to this wrapper handle, independent of the wrapped readable. Lazy so
+    /// wrappers that are never read pay nothing.
+    pub(crate) subscribers: Option<Subscribers>,
+    /// Bridges writes on the inner readable to our own subscribers so they follow the wrapper's
+    /// identity across `point_to` swaps. Lazy for the same reason as `subscribers`.
+    pub(crate) forwarding_context: Option<ReactiveContext>,
+}
+
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
-    value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
-    subscribers: CopyValue<Subscribers, SyncStorage>,
-    forwarding_context: ReactiveContext,
+    inner: CopyValue<ReadSignalInner<T, S>, S>,
 }
 
 impl<T: ?Sized + 'static> ReadSignal<T> {
@@ -39,57 +54,113 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
-        let subscribers = CopyValue::<Subscribers, SyncStorage>::new_maybe_sync(Subscribers::new());
-        let callback_subscribers = subscribers;
-        let forwarding_context = ReactiveContext::new_with_callback(
+        Self {
+            inner: CopyValue::new_maybe_sync(ReadSignalInner {
+                value: Some(S::new_readable(value, sealed::SealedToken)),
+                subscribers: None,
+                forwarding_context: None,
+            }),
+        }
+    }
+
+    /// Get this wrapper's subscriber list, initializing it on first use.
+    fn ensure_subscribers(&self) -> Subscribers {
+        if let Some(subscribers) = self.inner.try_peek_unchecked().unwrap().subscribers.clone() {
+            return subscribers;
+        }
+        let subscribers = Subscribers::new();
+        self.inner.try_write_unchecked().unwrap().subscribers = Some(subscribers.clone());
+        subscribers
+    }
+
+    /// Get the reactive context that forwards writes on the inner readable to this wrapper's
+    /// subscribers, initializing it on first use.
+    fn ensure_forwarding_context(&self) -> ReactiveContext {
+        if let Some(context) = self.inner.try_peek_unchecked().unwrap().forwarding_context {
+            return context;
+        }
+        // Capture the `Subscribers` handle (which is `Send + Sync`) instead of the inner
+        // `CopyValue`, since the forwarding callback must be `Send + Sync` regardless of `S`.
+        let subscribers = self.ensure_subscribers();
+        let context = ReactiveContext::new_with_callback(
             move || {
                 let mut current_subscribers = Vec::new();
-                callback_subscribers
-                    .try_peek_unchecked()
-                    .unwrap()
-                    .visit(|subscriber| current_subscribers.push(*subscriber));
+                subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
                 for subscriber in current_subscribers {
                     if !subscriber.mark_dirty() {
-                        callback_subscribers
-                            .try_peek_unchecked()
-                            .unwrap()
-                            .remove(&subscriber);
+                        subscribers.remove(&subscriber);
                     }
                 }
             },
             current_scope_id(),
             std::panic::Location::caller(),
         );
-        Self {
-            value: CopyValue::new_maybe_sync(S::new_readable(value, sealed::SealedToken)),
-            subscribers,
-            forwarding_context,
-        }
+        self.inner.try_write_unchecked().unwrap().forwarding_context = Some(context);
+        context
     }
 
-    /// Point to another [ReadSignal]. This will subscribe the other [ReadSignal] to all subscribers of this [ReadSignal].
+    /// Point to another [ReadSignal]. Subscribers attached to this wrapper migrate to the new
+    /// inner readable so they receive writes through it, while subscribers attached directly to
+    /// the underlying readable are left alone.
     pub fn point_to(&self, other: Self) -> BorrowResult {
-        let this_subscribers = self.subscribers();
-        let old_wrapped_subscribers = self.value.try_peek_unchecked().unwrap().subscribers();
-        let forwarding_context = self.forwarding_context;
-        let mut this_subscribers_vec = Vec::new();
-        // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
-        this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
-        let other_subscribers = other.value.try_peek_unchecked().unwrap().subscribers();
-        for subscriber in this_subscribers_vec {
-            old_wrapped_subscribers.remove(&subscriber);
-            subscriber.subscribe(other_subscribers.clone());
+        // Migrate wrapper subscribers from the old inner readable to the new one before swapping
+        // the boxed value, so the underlying signal's `subscribers` accounting stays consistent.
+        let this_subscribers_clone = self.inner.try_peek_unchecked().unwrap().subscribers.clone();
+        if let Some(this_subscribers) = &this_subscribers_clone {
+            let old_wrapped_subscribers = self
+                .inner
+                .try_peek_unchecked()
+                .unwrap()
+                .value
+                .as_ref()
+                .expect("ReadSignal is missing its wrapped value")
+                .subscribers();
+            let other_wrapped_subscribers = other
+                .inner
+                .try_peek_unchecked()
+                .unwrap()
+                .value
+                .as_ref()
+                .expect("ReadSignal is missing its wrapped value")
+                .subscribers();
+            let mut this_subscribers_vec = Vec::new();
+            // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
+            this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
+            for subscriber in this_subscribers_vec {
+                old_wrapped_subscribers.remove(&subscriber);
+                subscriber.subscribe(other_wrapped_subscribers.clone());
+            }
+            if let Some(forwarding_context) =
+                self.inner.try_peek_unchecked().unwrap().forwarding_context
+            {
+                forwarding_context.clear_subscribers();
+                forwarding_context.subscribe(other_wrapped_subscribers);
+            }
         }
-        forwarding_context.clear_subscribers();
-        forwarding_context.subscribe(other_subscribers);
-        self.value.point_to(other.value)
+
+        // Move the new boxed value into our slot, dropping our previous one. We keep our existing
+        // `subscribers` and `forwarding_context` so the wrapper's identity is preserved.
+        let new_value = other
+            .inner
+            .try_write_unchecked()
+            .unwrap()
+            .value
+            .take()
+            .expect("ReadSignal is missing its wrapped value");
+        self.inner.try_write_unchecked().unwrap().value = Some(new_value);
+        // Release `other`'s slot: `other` is consumed here and its state was empty (None) for the
+        // common props-macro path, so this just frees the generational-box entry.
+        other.inner.manually_drop();
+        Ok(())
     }
 
     #[doc(hidden)]
     /// This is only used by the `props` macro.
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
-        let subscribers = self.subscribers();
+        let Some(subscribers) = self.inner.try_peek_unchecked().unwrap().subscribers.clone() else {
+            return;
+        };
         let mut this_subscribers_vec = Vec::new();
         subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
         for subscriber in this_subscribers_vec {
@@ -109,14 +180,14 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Copy for ReadSignal<T, S> {}
 
 impl<T: ?Sized, S: BoxedSignalStorage<T>> PartialEq for ReadSignal<T, S> {
     fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
+        self.inner == other.inner
     }
 }
 
 impl<
-        T: Default + 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > Default for ReadSignal<T, S>
+    T: Default + 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> Default for ReadSignal<T, S>
 {
     fn default() -> Self {
         Self::new_maybe_sync(Signal::new_maybe_sync(T::default()))
@@ -164,16 +235,24 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         T: 'static,
     {
         if let Some(reactive_context) = ReactiveContext::current() {
-            reactive_context.subscribe(self.subscribers());
-        }
-
-        let forwarding_context = self.forwarding_context;
-        forwarding_context.reset_and_run_in(|| {
-            self.value
-                .try_peek_unchecked()
-                .unwrap()
+            reactive_context.subscribe(self.ensure_subscribers());
+            let forwarding_context = self.ensure_forwarding_context();
+            forwarding_context.reset_and_run_in(|| {
+                self.inner
+                    .try_peek_unchecked()?
+                    .value
+                    .as_ref()
+                    .expect("ReadSignal is missing its wrapped value")
+                    .try_read_unchecked()
+            })
+        } else {
+            self.inner
+                .try_peek_unchecked()?
+                .value
+                .as_ref()
+                .expect("ReadSignal is missing its wrapped value")
                 .try_read_unchecked()
-        })
+        }
     }
 
     #[track_caller]
@@ -181,9 +260,11 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
+        self.inner
+            .try_peek_unchecked()?
+            .value
+            .as_ref()
+            .expect("ReadSignal is missing its wrapped value")
             .try_peek_unchecked()
     }
 
@@ -191,7 +272,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.subscribers.try_peek_unchecked().unwrap().clone()
+        self.ensure_subscribers()
     }
 }
 
@@ -199,9 +280,9 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
 impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > From<Signal<T, S>> for ReadSignal<T, S>
+    T: 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> From<Signal<T, S>> for ReadSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -212,10 +293,8 @@ impl<T: PartialEq + 'static> From<Memo<T>> for ReadSignal<T> {
         Self::new(value)
     }
 }
-impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
-    > From<CopyValue<T, S>> for ReadSignal<T, S>
+impl<T: 'static, S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>>
+    From<CopyValue<T, S>> for ReadSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -405,10 +484,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_read_unchecked()
+        self.value.try_peek_unchecked()?.try_read_unchecked()
     }
 
     #[track_caller]
@@ -416,10 +492,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -439,10 +512,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
     where
         T: 'static,
     {
-        self.value
-            .try_peek_unchecked()
-            .unwrap()
-            .try_write_unchecked()
+        self.value.try_peek_unchecked()?.try_write_unchecked()
     }
 }
 
@@ -450,18 +520,16 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Writable for WriteSignal<T, S> {
 // because it would conflict with the From<T> for T implementation, but we can implement it for
 // all specific readable types
 impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
-    > From<Signal<T, S>> for WriteSignal<T, S>
+    T: 'static,
+    S: CreateBoxedSignalStorage<Signal<T, S>> + BoxedSignalStorage<T> + Storage<SignalData<T>>,
+> From<Signal<T, S>> for WriteSignal<T, S>
 {
     fn from(value: Signal<T, S>) -> Self {
         Self::new_maybe_sync(value)
     }
 }
-impl<
-        T: 'static,
-        S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>,
-    > From<CopyValue<T, S>> for WriteSignal<T, S>
+impl<T: 'static, S: CreateBoxedSignalStorage<CopyValue<T, S>> + BoxedSignalStorage<T> + Storage<T>>
+    From<CopyValue<T, S>> for WriteSignal<T, S>
 {
     fn from(value: CopyValue<T, S>) -> Self {
         Self::new_maybe_sync(value)
@@ -497,6 +565,7 @@ where
 pub trait BoxedSignalStorage<T: ?Sized>:
     Storage<Box<Self::DynReadable<sealed::SealedToken>>>
     + Storage<Box<Self::DynWritable<sealed::SealedToken>>>
+    + Storage<ReadSignalInner<T, Self>>
     + sealed::Sealed
     + 'static
 {
