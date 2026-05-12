@@ -82,6 +82,10 @@ impl ForwardingContextState {
         self.context.subscribe(subscribers);
     }
 
+    fn clear_subscribers(&self) {
+        self.context.clear_subscribers();
+    }
+
     fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
         self.context.run_in(f)
     }
@@ -125,7 +129,15 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         }
 
         let old_subscribers = match self.inner.try_peek_unchecked() {
-            Ok(inner) => inner.snapshot_wrapper_subscribers(),
+            Ok(inner) => {
+                let old_subscribers = inner.snapshot_wrapper_subscribers();
+                let old_wrapper_subscribers = inner.wrapper_subscribers();
+                for subscriber in &old_subscribers {
+                    old_wrapper_subscribers.remove(subscriber);
+                }
+                inner.forwarding_context.clear_subscribers();
+                old_subscribers
+            }
             Err(_) => return Ok(()),
         };
 
