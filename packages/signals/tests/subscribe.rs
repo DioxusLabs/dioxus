@@ -308,6 +308,57 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
 }
 
 #[test]
+fn read_signal_point_to_migrated_subscribers_can_unsubscribe() {
+    type Props = (
+        Rc<RefCell<Option<(Signal<i32>, ReactiveContext)>>>,
+        Arc<AtomicUsize>,
+    );
+
+    let handles = Rc::new(RefCell::new(None));
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(handles, dirty_count): Props| {
+            let signal_a = use_signal(|| 0);
+            let signal_b = use_signal(|| 0);
+            let target = use_hook(|| ReadSignal::from(signal_a));
+            let replacement = ReadSignal::from(signal_b);
+            let context = use_hook({
+                let dirty_count = dirty_count.clone();
+                move || {
+                    ReactiveContext::new_with_callback(
+                        {
+                            let dirty_count = dirty_count.clone();
+                            move || {
+                                dirty_count.fetch_add(1, Ordering::SeqCst);
+                            }
+                        },
+                        current_scope_id(),
+                        std::panic::Location::caller(),
+                    )
+                }
+            });
+
+            context.run_in(|| assert_eq!(target(), 0));
+            target.point_to(replacement).unwrap();
+            *handles.borrow_mut() = Some((signal_b, context));
+
+            rsx! { "" }
+        },
+        (handles.clone(), dirty_count.clone()),
+    );
+
+    dom.rebuild_in_place();
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 0);
+
+    let (mut signal_b, context) = handles.borrow().unwrap();
+    context.reset_and_run_in(|| {});
+    signal_b.set(1);
+
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 0);
+}
+
+#[test]
 fn boxed_read_signal_subscribes_to_underlying_updates() {
     type Props = (Rc<RefCell<usize>>, Rc<RefCell<Option<Signal<i32>>>>);
 
