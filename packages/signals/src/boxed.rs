@@ -2,6 +2,7 @@ use std::{any::Any, ops::Deref};
 
 use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers, current_scope_id,
+    with_owner,
 };
 use generational_box::{BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage};
 
@@ -34,6 +35,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
         self.subscribers.clone()
     }
 
+    // Snapshot before mutating the subscriber list.
     fn snapshot_wrapper_subscribers(&self) -> Vec<ReactiveContext> {
         let mut subscribers = Vec::new();
         self.subscribers
@@ -41,6 +43,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
         subscribers
     }
 
+    // Forward writes from the wrapped readable to wrapper subscribers.
     fn sync_forwarding_to_value(&self) -> &ForwardingContextState {
         let wrapped_subscribers = self.value.subscribers();
         self.forwarding_context.repoint(wrapped_subscribers);
@@ -56,21 +59,23 @@ pub(crate) struct ForwardingContextState {
 impl ForwardingContextState {
     #[track_caller]
     fn new(subscribers: Subscribers, scope: ScopeId) -> Self {
+        // Own the forwarding context with the wrapper, not the first reader.
         let owner: Owner<SyncStorage> = Owner::default();
-        let context = ReactiveContext::new_with_callback_in_owner(
-            move || {
-                let mut current_subscribers = Vec::new();
-                subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
-                for subscriber in current_subscribers {
-                    if !subscriber.mark_dirty() {
-                        subscribers.remove(&subscriber);
+        let context = with_owner(owner.clone(), || {
+            ReactiveContext::new_with_callback(
+                move || {
+                    let mut current_subscribers = Vec::new();
+                    subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
+                    for subscriber in current_subscribers {
+                        if !subscriber.mark_dirty() {
+                            subscribers.remove(&subscriber);
+                        }
                     }
-                }
-            },
-            scope,
-            &owner,
-            std::panic::Location::caller(),
-        );
+                },
+                scope,
+                std::panic::Location::caller(),
+            )
+        });
         Self {
             context,
             _owner: owner,
@@ -78,6 +83,7 @@ impl ForwardingContextState {
     }
 
     fn repoint(&self, subscribers: Subscribers) {
+        // `point_to` can change the wrapped readable.
         self.context.clear_subscribers();
         self.context.subscribe(subscribers);
     }
@@ -128,6 +134,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
+        // Move wrapper subscribers, not direct subscribers on the wrapped readable.
         let old_subscribers = match self.inner.try_peek_unchecked() {
             Ok(inner) => {
                 let old_subscribers = inner.snapshot_wrapper_subscribers();
@@ -141,6 +148,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             Err(_) => return Ok(()),
         };
 
+        // Keep `other` usable; rsx clones can retarget multiple props from it.
         self.inner.point_to(other.inner)?;
 
         let inner = self.inner.try_peek_unchecked()?;
@@ -234,6 +242,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         let inner = self.inner.try_peek_unchecked()?;
         let wrapped = &inner.value;
         if let Some(reactive_context) = ReactiveContext::current() {
+            // Track the wrapped read separately from the wrapper subscriber.
             let read = inner
                 .forwarding_context
                 .run_in(|| wrapped.try_read_unchecked())?;
@@ -256,6 +265,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         T: 'static,
     {
         let inner = self.inner.try_peek_unchecked().unwrap();
+        // Direct subscriber access still needs the forwarding bridge.
         let subscribers = inner.wrapper_subscribers();
         inner.sync_forwarding_to_value();
         subscribers

@@ -1,6 +1,6 @@
 use crate::{Runtime, ScopeId, current_scope_id, scope_context::Scope, tasks::SchedulerMsg};
 use futures_channel::mpsc::UnboundedReceiver;
-use generational_box::{BorrowMutError, GenerationalBox, Owner, SyncStorage};
+use generational_box::{BorrowMutError, GenerationalBox, SyncStorage};
 use std::{
     cell::RefCell,
     collections::HashSet,
@@ -72,23 +72,6 @@ impl ReactiveContext {
         scope: ScopeId,
         origin: &'static std::panic::Location<'static>,
     ) -> Self {
-        Self::new_with_callback_in_owner(
-            callback,
-            scope,
-            &Runtime::current().scope_owner(scope),
-            origin,
-        )
-    }
-
-    #[doc(hidden)]
-    /// Create a new reactive context whose storage is held in the given [`Owner`] rather than the
-    /// scope's owner.
-    pub fn new_with_callback_in_owner(
-        callback: impl FnMut() + Send + Sync + 'static,
-        scope: ScopeId,
-        owner: &Owner<SyncStorage>,
-        #[allow(unused)] origin: &'static std::panic::Location<'static>,
-    ) -> Self {
         let inner = Inner {
             self_: None,
             update: Box::new(callback),
@@ -99,6 +82,7 @@ impl ReactiveContext {
             scope: None,
         };
 
+        let owner = crate::current_owner::<SyncStorage>();
         let self_ = Self {
             scope,
             inner: owner.insert(inner),
