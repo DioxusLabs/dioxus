@@ -559,13 +559,12 @@ fn point_to_self_is_noop() {
             let signal = use_signal(|| 42);
             let target = ReadSignal::from(signal);
 
-            // Force first-read init so the forwarding context exists. Self-point must still be a
-            // no-op in this path.
+            // Self-point must be a no-op after first-read init.
             let _ = target();
 
             target.point_to(target).unwrap();
 
-            // Slot must still be valid; this would panic if `manually_drop` had recycled it.
+            // Slot must still be valid.
             *captured.borrow_mut() = Some(target());
 
             rsx! { "{target}" }
@@ -578,8 +577,7 @@ fn point_to_self_is_noop() {
     assert_eq!(*captured.borrow(), Some(42));
 }
 
-// The forwarding `ReactiveContext` must outlive the scope that first *read* the wrapper, since
-// the wrapper itself may outlive that scope.
+// The forwarding context must outlive the first reader.
 #[test]
 fn forwarding_context_survives_first_reader_scope_drop() {
     type Props = (
@@ -599,8 +597,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
             *signal_slot.borrow_mut() = Some(signal);
             *show_child_slot.borrow_mut() = Some(show_child);
 
-            // Persist the wrapper across renders so the child's first read is the wrapper's
-            // first read. Wrapper is owned by this (parent) scope.
+            // The child does the wrapper's first read.
             let wrapper: ReadSignal<i32> = use_hook(|| ReadSignal::from(signal));
 
             *parent_renders.borrow_mut() += 1;
@@ -641,8 +638,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     let after_unmount = *parent_renders.borrow();
     assert!(after_unmount > after_initial);
 
-    // Write to the underlying signal. Parent has subscribed via the "after-child" branch's
-    // `{wrapper}` read, so it should re-render *if* the forwarding context is still alive.
+    // Parent should rerender if forwarding survived the child unmount.
     let mut signal = signal_slot.borrow().unwrap();
     signal.set(7);
     flush(&mut dom);
@@ -679,8 +675,7 @@ fn point_to_keeps_source_handle_readable() {
     assert_eq!(*observed.borrow(), Some((42, 42, 42)));
 }
 
-// Sibling `point_to` calls on the same `other` slot — the rsx-clone scenario — must all point to
-// the shared replacement without invalidating `other`.
+// Sibling `point_to` calls may share the same replacement slot.
 #[test]
 fn point_to_tolerates_shared_other_slot() {
     let observed = Rc::new(RefCell::new(None));
@@ -690,15 +685,15 @@ fn point_to_tolerates_shared_other_slot() {
             let signal_a = use_signal(|| 1);
             let signal_b = use_signal(|| 99);
 
-            // Two distinct `self` slots simulating two sibling components' stored props.sig.
+            // Two sibling stored props.
             let target_a = ReadSignal::from(signal_a);
             let target_a2 = ReadSignal::from(signal_a);
 
-            // One shared `other` slot used as the new value for both — the rsx-clone case.
+            // One shared replacement.
             let replacement = ReadSignal::from(signal_b);
 
             target_a.point_to(replacement).unwrap();
-            // Same `replacement` reused. It must remain readable and usable for another retarget.
+            // The replacement must remain reusable.
             target_a2.point_to(replacement).unwrap();
 
             *observed.borrow_mut() = Some((target_a(), target_a2(), replacement()));

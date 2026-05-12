@@ -70,7 +70,7 @@ impl ReactiveContext {
     pub fn new_with_callback(
         callback: impl FnMut() + Send + Sync + 'static,
         scope: ScopeId,
-        origin: &'static std::panic::Location<'static>,
+        #[allow(unused)] origin: &'static std::panic::Location<'static>,
     ) -> Self {
         let inner = Inner {
             self_: None,
