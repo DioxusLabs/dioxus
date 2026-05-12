@@ -174,9 +174,9 @@ fn deep_root_reader_sees_future_child_write() {
     assert_eq!(*runs.borrow(), 2);
 }
 
-// `ReadSignal::subscribers` now returns the wrapper's own subscriber set (introduced to fix leaky
-// `point_to` migrations), so the deep-subscription regression test exercises the underlying child
-// signal directly instead of going through a boxed wrapper.
+// `ReadSignal::subscribers` returns the wrapper's own subscriber set, so this
+// deep-subscription regression exercises the underlying child signal directly instead of going
+// through a boxed wrapper.
 #[test]
 fn child_store_subscribers_remove_visited_parent_deep_subscriber() {
     fn default_x() -> X {

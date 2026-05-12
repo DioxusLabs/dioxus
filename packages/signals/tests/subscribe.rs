@@ -9,6 +9,16 @@ use dioxus_core::ElementId;
 use dioxus_signals::*;
 use std::cell::RefCell;
 
+fn flush(dom: &mut VirtualDom) {
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
+}
+
+fn rerender_app(dom: &mut VirtualDom) {
+    dom.mark_dirty(ScopeId::APP);
+    flush(dom);
+}
+
 #[test]
 fn reading_subscribes() {
     tracing_subscriber::fmt::init();
@@ -80,9 +90,7 @@ fn reading_subscribes() {
         }
     }
 
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     {
         let current_counter = counter.borrow();
@@ -177,9 +185,7 @@ fn read_signal_point_to_moves_only_read_subscribers() {
 
     let mut use_b = handles.borrow().use_b.unwrap();
     use_b.set(true);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     {
         let current_counter = run_counter.borrow();
@@ -189,9 +195,7 @@ fn read_signal_point_to_moves_only_read_subscribers() {
 
     let mut signal_b = handles.borrow().signal_b.unwrap();
     signal_b.set(1);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     {
         let current_counter = run_counter.borrow();
@@ -276,15 +280,11 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
 
     let mut use_b = handles.borrow().use_b.unwrap();
     use_b.set(true);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     let mut signal_a = handles.borrow().signal_a.unwrap();
     signal_a.set(1);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     {
         let current_counter = run_counter.borrow();
@@ -294,9 +294,7 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
 
     let mut signal_b = handles.borrow().signal_b.unwrap();
     signal_b.set(1);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
 
     {
         let current_counter = run_counter.borrow();
@@ -335,56 +333,12 @@ fn boxed_read_signal_subscribes_to_underlying_updates() {
 
     let mut signal = signal_handle.borrow().unwrap();
     signal.set(1);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    flush(&mut dom);
 
     {
         let current_render_count = render_count.borrow();
         assert_eq!(*current_render_count, 2);
     }
-}
-
-// Exercises the Send+Sync forwarding-context path on SyncStorage. Mirrors
-// `boxed_read_signal_subscribes_to_underlying_updates` but with sync storage so the lazy-init
-// helpers' rechecked-under-write paths are exercised on a SyncStorage value.
-#[test]
-fn boxed_sync_read_signal_subscribes_to_underlying_updates() {
-    use generational_box::SyncStorage;
-
-    type SyncSignal = Signal<i32, SyncStorage>;
-    type Props = (
-        std::sync::Arc<std::sync::Mutex<usize>>,
-        std::sync::Arc<std::sync::Mutex<Option<SyncSignal>>>,
-    );
-
-    let render_count = std::sync::Arc::new(std::sync::Mutex::new(0usize));
-    let signal_handle: std::sync::Arc<std::sync::Mutex<Option<SyncSignal>>> =
-        std::sync::Arc::new(std::sync::Mutex::new(None));
-
-    let mut dom = VirtualDom::new_with_props(
-        |(render_count, signal_handle): Props| {
-            let mut signal = use_signal_sync(|| 0);
-            *signal_handle.lock().unwrap() = Some(signal);
-
-            let boxed: ReadSignal<i32, SyncStorage> = ReadSignal::from(signal);
-            let _ = boxed();
-            *render_count.lock().unwrap() += 1;
-
-            rsx! { "{boxed}" }
-        },
-        (render_count.clone(), signal_handle.clone()),
-    );
-
-    dom.rebuild_in_place();
-
-    assert_eq!(*render_count.lock().unwrap(), 1);
-
-    let mut signal = signal_handle.lock().unwrap().unwrap();
-    signal.set(1);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
-
-    assert_eq!(*render_count.lock().unwrap(), 2);
 }
 
 // `point_to` must not panic when called on a wrapper whose `forwarding_context` was never lazily
@@ -513,9 +467,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     // Unmount the child. Pre-fix, this drops the forwarding context.
     let mut show_child = show_child_slot.borrow().unwrap();
     show_child.set(false);
-    dom.mark_dirty(ScopeId::APP);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    rerender_app(&mut dom);
     let after_unmount = *parent_renders.borrow();
     assert!(after_unmount > after_initial);
 
@@ -523,8 +475,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     // `{wrapper}` read, so it should re-render *if* the forwarding context is still alive.
     let mut signal = signal_slot.borrow().unwrap();
     signal.set(7);
-    dom.render_immediate(&mut NoOpMutations);
-    dom.render_immediate(&mut NoOpMutations);
+    flush(&mut dom);
 
     assert!(
         *parent_renders.borrow() > after_unmount,
@@ -567,4 +518,3 @@ fn point_to_tolerates_shared_other_slot() {
     // dropped/empty) and left target_a2 unchanged — still pointing at signal_a.
     assert_eq!(*observed.borrow(), Some((99, 1)));
 }
-

@@ -4,8 +4,7 @@ use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, current_scope_id,
 };
 use generational_box::{
-    AnyStorage, BorrowError, BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage,
-    ValueDroppedError,
+    BorrowError, BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage, ValueDroppedError,
 };
 
 use crate::{
@@ -20,28 +19,56 @@ use crate::{
 )]
 pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 
-/// The data behind a [ReadSignal] handle. The wrapped readable and the wrapper-level subscriber
-/// state live in a single [CopyValue] so that creating a wrapper that is immediately `point_to`'d
-/// (e.g. from the `props` macro) only allocates one generational-box reference — matching what a
-/// bare `Signal` costs. `point_to` moves the wrapped readable out of `other.inner` into our own
-/// `inner.value`, so subscribers attached to this wrapper's identity (the *outer* handle) stay put
-/// while the underlying readable is replaced.
+/// Backing storage for a [ReadSignal] handle. The wrapped readable plus wrapper-level subscriber
+/// state share one [CopyValue] so `point_to` can swap the inner readable while preserving any
+/// subscribers attached to the wrapper itself.
 #[doc(hidden)]
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
-    /// The wrapped readable. `Option` so `point_to` can move ownership without needing a dummy.
+    // `Option` because `point_to` moves ownership out of `other.inner`.
     pub(crate) value: Option<Box<S::DynReadable<sealed::SealedToken>>>,
-    /// Subscribers attached to this wrapper handle, independent of the wrapped readable.
-    /// `OnceLock` so lazy init is internally atomic and only needs a read borrow on the
-    /// surrounding [CopyValue]
     pub(crate) subscribers: OnceLock<Subscribers>,
-    /// Bridges writes on the inner readable to our own subscribers so they follow the wrapper's
-    /// identity across `point_to` swaps. `OnceLock` for the same reason as `subscribers`.
-    pub(crate) forwarding_context: OnceLock<ReactiveContext>,
-    /// Owns the forwarding context's generational slot so its lifetime matches the wrapper's,
-    /// not the first reader's scope. Without this the bridging context would die when the scope
-    /// that first read the wrapper unmounts, silently breaking reactivity for the still-alive
-    /// wrapper.
-    pub(crate) forwarding_context_owner: Owner<SyncStorage>,
+    // Bridges writes on the wrapped readable to wrapper-level subscribers. The context and its
+    // owner are created together so the lifetime dependency stays local to the lazy slot.
+    pub(crate) forwarding_context: OnceLock<ForwardingContextState>,
+}
+
+pub(crate) struct ForwardingContextState {
+    context: ReactiveContext,
+    _owner: Owner<SyncStorage>,
+}
+
+impl ForwardingContextState {
+    #[track_caller]
+    fn new(subscribers: Subscribers) -> Self {
+        let owner: Owner<SyncStorage> = Owner::default();
+        let context = ReactiveContext::new_with_callback_in_owner(
+            move || {
+                let mut current_subscribers = Vec::new();
+                subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
+                for subscriber in current_subscribers {
+                    if !subscriber.mark_dirty() {
+                        subscribers.remove(&subscriber);
+                    }
+                }
+            },
+            current_scope_id(),
+            &owner,
+            std::panic::Location::caller(),
+        );
+        Self {
+            context,
+            _owner: owner,
+        }
+    }
+
+    fn repoint(&self, subscribers: Subscribers) {
+        self.context.clear_subscribers();
+        self.context.subscribe(subscribers);
+    }
+
+    fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
+        self.context.run_in(f)
+    }
 }
 
 /// A boxed version of [Readable] that can be used to store any readable type.
@@ -73,100 +100,39 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
                 value: Some(S::new_readable(value, sealed::SealedToken)),
                 subscribers: OnceLock::new(),
                 forwarding_context: OnceLock::new(),
-                forwarding_context_owner: Owner::default(),
             }),
         }
     }
 
-    /// Borrow the wrapped readable. Centralizes the "value must be `Some` outside of `point_to`'s
-    /// brief swap window" invariant.
-    fn wrapped(&self) -> S::Ref<'static, Box<S::DynReadable<sealed::SealedToken>>> {
-        let inner_ref = self.inner.try_peek_unchecked().unwrap();
-        <S as AnyStorage>::map(inner_ref, |inner| {
-            inner
-                .value
-                .as_ref()
-                .expect("ReadSignal is missing its wrapped value")
-        })
-    }
-
-    /// Point to another [ReadSignal]. Subscribers attached to this wrapper migrate to the new
-    /// inner readable so they receive writes through it, while subscribers attached directly to
-    /// the underlying readable are left alone.
+    /// Point to another [ReadSignal]. Wrapper-level subscribers stay attached to this wrapper;
+    /// subscribers attached directly to the underlying readable are left alone.
     ///
-    /// Consumes `other` even though [`ReadSignal`] is `Copy`: `other`'s generational slot is
-    /// released, so any caller-side copy of `other` will fail on subsequent reads. When the same
-    /// `rsx!` is cloned into multiple component trees both clones may legitimately call
-    /// `point_to` with the same shared `other` — that's handled by the early-return below when
-    /// `other`'s slot is observed dropped or already drained.
+    /// When the same `rsx!` is cloned into multiple component trees, sibling wrappers may call
+    /// `point_to` with a shared `other`. The first call drains `other`; later calls observe its
+    /// empty slot and short-circuit.
     pub fn point_to(&self, other: Self) -> BorrowResult {
-        // Self-pointing is a no-op: the wrapped readable and subscribers are already correct, and
-        // running the move below would leave our own slot empty.
         if self.inner == other.inner {
             return Ok(());
         }
 
-        // If `other` has already been consumed by a prior `point_to` on a shared slot (rsx-clone
-        // case), there is nothing to migrate or move — `self` already holds the new value because
-        // both wrappers stored the same slot for `self`.
-        let other_has_value = match other.inner.try_peek_unchecked() {
-            Ok(inner_ref) => inner_ref.value.is_some(),
-            Err(_) => false,
+        let new_value = match other.inner.try_write_unchecked() {
+            Ok(mut inner) => match inner.value.take() {
+                Some(value) => value,
+                None => return Ok(()),
+            },
+            Err(_) => return Ok(()),
         };
-        if !other_has_value {
-            return Ok(());
-        }
-
-        // Migrate wrapper subscribers from the old inner readable to the new one before swapping
-        // the boxed value, so the underlying signal's `subscribers` accounting stays consistent.
-        // Every read through the wrapper subscribes the reader's RC to both the wrapper's own
-        // `subscribers` set *and* (transitively, via `wrapped.try_read_unchecked`) the inner
-        // readable's subscribers — so when the wrapped readable changes here we have to move
-        // those direct subs from old wrapped → new wrapped.
-        let this_subscribers_clone = self
+        let new_wrapped_subscribers = new_value.subscribers();
+        self.inner.try_write_unchecked().unwrap().value = Some(new_value);
+        if let Some(forwarding_context) = self
             .inner
             .try_peek_unchecked()
             .unwrap()
-            .subscribers
+            .forwarding_context
             .get()
-            .cloned();
-        if let Some(this_subscribers) = &this_subscribers_clone {
-            let old_wrapped_subscribers = self.wrapped().subscribers();
-            let other_wrapped_subscribers = other.wrapped().subscribers();
-            let mut this_subscribers_vec = Vec::new();
-            // Note we don't subscribe directly in the visit closure to avoid a deadlock when pointing to self
-            this_subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
-            for subscriber in this_subscribers_vec {
-                old_wrapped_subscribers.remove(&subscriber);
-                subscriber.subscribe(other_wrapped_subscribers.clone());
-            }
-            // Re-point the forwarding bridge so external subscribers attached directly to
-            // `self.subscribers()` (i.e. not via reading) also get notified on inner writes.
-            if let Some(forwarding_context) = self
-                .inner
-                .try_peek_unchecked()
-                .unwrap()
-                .forwarding_context
-                .get()
-                .copied()
-            {
-                forwarding_context.clear_subscribers();
-                forwarding_context.subscribe(other_wrapped_subscribers);
-            }
+        {
+            forwarding_context.repoint(new_wrapped_subscribers);
         }
-
-        // Move the new boxed value into our slot, dropping our previous one. We keep our existing
-        // `subscribers` and `forwarding_context` so the wrapper's identity is preserved. Then
-        // release `other`'s slot — we are the unique consumer of its value (any sibling rsx-clone
-        // handle has already been short-circuited above), so it's safe to bump the generation.
-        let new_value = other
-            .inner
-            .try_write_unchecked()
-            .unwrap()
-            .value
-            .take()
-            .expect("ReadSignal is missing its wrapped value");
-        self.inner.try_write_unchecked().unwrap().value = Some(new_value);
         other.inner.manually_drop();
         Ok(())
     }
@@ -258,46 +224,17 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        // Single borrow on `self.inner` for the whole read path: subscriber subscribe, forwarding
-        // context init, and the inner read all happen under the same `try_peek_unchecked` guard.
         let inner = self.inner.try_peek_unchecked()?;
-        // `value` is `None` only after this wrapper has been `point_to`'d away from. Treat it as
-        // a dropped value rather than panicking, since `point_to` deliberately leaves shared
-        // sibling slots (rsx clones) with `None` to avoid invalidating their generation.
-        let wrapped = inner
-            .value
-            .as_ref()
-            .ok_or_else(point_to_dropped_error)?;
+        // `value` is `None` only after `point_to` has drained this wrapper's shared slot; treat
+        // it as dropped rather than panicking.
+        let wrapped = inner.value.as_ref().ok_or_else(point_to_dropped_error)?;
         if let Some(reactive_context) = ReactiveContext::current() {
             let subscribers = inner.subscribers.get_or_init(Subscribers::new);
             reactive_context.subscribe(subscribers.clone());
-            // The forwarding context bridges writes on the inner readable to wrapper-level
-            // subscribers. Subscription is established once at init and re-pointed in `point_to`,
-            // so reads stay on a fast path with no per-read RC bookkeeping.
-            inner.forwarding_context.get_or_init(|| {
-                let subs = subscribers.clone();
-                // Insert the forwarding context into the wrapper's own owner so its lifetime
-                // matches the wrapper's, not the first reader's scope. Otherwise, when the scope
-                // that first read this wrapper unmounts, the forwarding context dies and writes
-                // to the inner readable stop propagating to subscribers attached via this
-                // wrapper.
-                let context = ReactiveContext::new_with_callback_in_owner(
-                    move || {
-                        let mut current_subscribers = Vec::new();
-                        subs.visit(|subscriber| current_subscribers.push(*subscriber));
-                        for subscriber in current_subscribers {
-                            if !subscriber.mark_dirty() {
-                                subs.remove(&subscriber);
-                            }
-                        }
-                    },
-                    current_scope_id(),
-                    &inner.forwarding_context_owner,
-                    std::panic::Location::caller(),
-                );
-                context.subscribe(wrapped.subscribers());
-                context
-            });
+            let forwarding_context = inner
+                .forwarding_context
+                .get_or_init(|| ForwardingContextState::new(subscribers.clone()));
+            return forwarding_context.run_in(|| wrapped.try_read_unchecked());
         }
         wrapped.try_read_unchecked()
     }

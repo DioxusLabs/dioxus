@@ -80,10 +80,9 @@ impl ReactiveContext {
         )
     }
 
+    #[doc(hidden)]
     /// Create a new reactive context whose storage is held in the given [`Owner`] rather than the
-    /// scope's owner. This lets callers tie the context's lifetime to something other than a
-    /// `ScopeId` — for example, a per-wrapper owner whose lifetime exactly matches a long-lived
-    /// handle that may outlive its first reader's scope.
+    /// scope's owner.
     pub fn new_with_callback_in_owner(
         callback: impl FnMut() + Send + Sync + 'static,
         scope: ScopeId,
