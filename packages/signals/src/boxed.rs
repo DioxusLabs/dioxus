@@ -1,8 +1,13 @@
-use std::{any::Any, ops::Deref};
+use std::{
+    any::Any,
+    collections::HashSet,
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 use dioxus_core::{
-    IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers, current_scope_id,
-    with_owner,
+    IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, SubscriberList, Subscribers,
+    current_scope_id, with_owner,
 };
 use generational_box::{BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage};
 
@@ -24,51 +29,53 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 #[doc(hidden)]
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
     pub(crate) value: Box<S::DynReadable<sealed::SealedToken>>,
-    pub(crate) subscribers: Subscribers,
-    // Bridges writes on the wrapped readable to wrapper-level subscribers. The context owns its
-    // generational slot so it lives as long as this wrapper, not the first reader's scope.
-    pub(crate) forwarding_context: ForwardingContextState,
+    pub(crate) subscribers: Arc<ForwardingContextState>,
 }
 
 impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
     fn wrapper_subscribers(&self) -> Subscribers {
-        self.subscribers.clone()
+        self.subscribers.clone().into()
     }
 
     // Snapshot before mutating the subscriber list.
     fn snapshot_wrapper_subscribers(&self) -> Vec<ReactiveContext> {
         let mut subscribers = Vec::new();
         self.subscribers
-            .visit(|subscriber| subscribers.push(*subscriber));
+            .visit(&mut |subscriber: &ReactiveContext| subscribers.push(*subscriber));
         subscribers
-    }
-
-    // Forward writes from the wrapped readable to wrapper subscribers.
-    fn sync_forwarding_to_value(&self) -> &ForwardingContextState {
-        let wrapped_subscribers = self.value.subscribers();
-        self.forwarding_context.repoint(wrapped_subscribers);
-        &self.forwarding_context
     }
 }
 
 pub(crate) struct ForwardingContextState {
     context: ReactiveContext,
+    subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
+    wrapped_subscribers: Subscribers,
     _owner: Owner<SyncStorage>,
 }
 
 impl ForwardingContextState {
     #[track_caller]
-    fn new(subscribers: Subscribers, scope: ScopeId) -> Self {
+    fn new(wrapped_subscribers: Subscribers, scope: ScopeId) -> Arc<Self> {
         // Own the forwarding context with the wrapper, not the first reader.
         let owner: Owner<SyncStorage> = Owner::default();
+        let subscribers = Arc::new(Mutex::new(HashSet::<ReactiveContext>::new()));
         let context = with_owner(owner.clone(), || {
+            let subscribers = subscribers.clone();
             ReactiveContext::new_with_callback(
                 move || {
-                    let mut current_subscribers = Vec::new();
-                    subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
+                    #[allow(clippy::mutable_key_type)]
+                    let current_subscribers = match subscribers.lock() {
+                        Ok(subscribers) => subscribers.iter().copied().collect::<Vec<_>>(),
+                        Err(_) => {
+                            tracing::warn!("Failed to lock subscriber list to mark subscribers");
+                            Vec::new()
+                        }
+                    };
                     for subscriber in current_subscribers {
                         if !subscriber.mark_dirty() {
-                            subscribers.remove(&subscriber);
+                            if let Ok(mut subscribers) = subscribers.lock() {
+                                subscribers.remove(&subscriber);
+                            }
                         }
                     }
                 },
@@ -76,16 +83,12 @@ impl ForwardingContextState {
                 std::panic::Location::caller(),
             )
         });
-        Self {
+        Arc::new(Self {
             context,
+            subscribers,
+            wrapped_subscribers,
             _owner: owner,
-        }
-    }
-
-    fn repoint(&self, subscribers: Subscribers) {
-        // `point_to` can change the wrapped readable.
-        self.context.clear_subscribers();
-        self.context.subscribe(subscribers);
+        })
     }
 
     fn clear_subscribers(&self) {
@@ -94,6 +97,38 @@ impl ForwardingContextState {
 
     fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
         self.context.run_in(f)
+    }
+}
+
+impl SubscriberList for ForwardingContextState {
+    fn add(&self, subscriber: ReactiveContext) {
+        if let Ok(mut subscribers) = self.subscribers.lock() {
+            subscribers.insert(subscriber);
+        } else {
+            tracing::warn!("Failed to lock subscriber list to add subscriber: {subscriber}");
+        }
+        self.context.subscribe(self.wrapped_subscribers.clone());
+    }
+
+    fn remove(&self, subscriber: &ReactiveContext) {
+        let is_empty = if let Ok(mut subscribers) = self.subscribers.lock() {
+            subscribers.remove(subscriber);
+            subscribers.is_empty()
+        } else {
+            tracing::warn!("Failed to lock subscriber list to remove subscriber: {subscriber}");
+            false
+        };
+        if is_empty {
+            self.context.clear_subscribers();
+        }
+    }
+
+    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
+        if let Ok(subscribers) = self.subscribers.lock() {
+            subscribers.iter().for_each(f);
+        } else {
+            tracing::warn!("Failed to lock subscriber list to visit subscribers");
+        }
     }
 }
 
@@ -117,12 +152,11 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         R: Readable<Target = T>,
     {
         let scope = current_scope_id();
-        let subscribers = Subscribers::new();
+        let value = S::new_readable(value, sealed::SealedToken);
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
-                value: S::new_readable(value, sealed::SealedToken),
-                subscribers: subscribers.clone(),
-                forwarding_context: ForwardingContextState::new(subscribers, scope),
+                subscribers: ForwardingContextState::new(value.subscribers(), scope),
+                value,
             }),
         }
     }
@@ -142,7 +176,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
                 for subscriber in &old_subscribers {
                     old_wrapper_subscribers.remove(subscriber);
                 }
-                inner.forwarding_context.clear_subscribers();
+                inner.subscribers.clear_subscribers();
                 old_subscribers
             }
             Err(_) => return Ok(()),
@@ -158,7 +192,6 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
                 subscriber.subscribe(subscribers.clone());
             }
         }
-        inner.sync_forwarding_to_value();
         Ok(())
     }
 
@@ -243,9 +276,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         let wrapped = &inner.value;
         if let Some(reactive_context) = ReactiveContext::current() {
             // Track the wrapped read separately from the wrapper subscriber.
-            let read = inner
-                .forwarding_context
-                .run_in(|| wrapped.try_read_unchecked())?;
+            let read = inner.subscribers.run_in(|| wrapped.try_read_unchecked())?;
             reactive_context.subscribe(inner.wrapper_subscribers());
             return Ok(read);
         }
@@ -265,10 +296,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         T: 'static,
     {
         let inner = self.inner.try_peek_unchecked().unwrap();
-        // Direct subscriber access still needs the forwarding bridge.
-        let subscribers = inner.wrapper_subscribers();
-        inner.sync_forwarding_to_value();
-        subscribers
+        inner.wrapper_subscribers()
     }
 }
 
