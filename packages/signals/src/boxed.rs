@@ -1,8 +1,7 @@
 use std::{any::Any, ops::Deref, sync::Arc};
 
 use dioxus_core::{
-    IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, SubscriberList, Subscribers,
-    current_scope_id,
+    IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers,
 };
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
@@ -42,56 +41,28 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
 }
 
 pub(crate) struct ForwardingSubscribers {
-    context: ReactiveContext,
     subscribers: Subscribers,
     wrapped_subscribers: Subscribers,
 }
 
 impl ForwardingSubscribers {
-    #[track_caller]
-    fn new(wrapped_subscribers: Subscribers, scope: ScopeId) -> Arc<Self> {
-        let subscribers = Subscribers::new();
-        let context = {
-            let subscribers = subscribers.clone();
-            ReactiveContext::new_with_callback(
-                move || {
-                    let mut current_subscribers = Vec::new();
-                    subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
-                    for subscriber in current_subscribers {
-                        if !subscriber.mark_dirty() {
-                            subscribers.remove(&subscriber);
-                        }
-                    }
-                },
-                scope,
-                std::panic::Location::caller(),
-            )
-        };
+    fn new(wrapped_subscribers: Subscribers) -> Arc<Self> {
         Arc::new(Self {
-            context,
-            subscribers,
+            subscribers: Subscribers::new(),
             wrapped_subscribers,
         })
-    }
-
-    fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
-        self.context.run_in(f)
     }
 }
 
 impl SubscriberList for ForwardingSubscribers {
     fn add(&self, subscriber: ReactiveContext) {
         self.subscribers.add(subscriber);
-        self.context.subscribe(self.wrapped_subscribers.clone());
+        subscriber.subscribe(self.wrapped_subscribers.clone());
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
         self.subscribers.remove(subscriber);
-        let mut is_empty = true;
-        self.subscribers.visit(|_| is_empty = false);
-        if is_empty {
-            self.context.clear_subscribers();
-        }
+        self.wrapped_subscribers.remove(subscriber);
     }
 
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
@@ -118,11 +89,10 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
-        let scope = current_scope_id();
         let value = S::new_readable(value, sealed::SealedToken);
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
-                subscribers: ForwardingSubscribers::new(value.subscribers(), scope),
+                subscribers: ForwardingSubscribers::new(value.subscribers()),
                 value,
             }),
         }
@@ -239,10 +209,8 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         let inner = self.inner.try_peek_unchecked()?;
         let wrapped = &inner.value;
         if let Some(reactive_context) = ReactiveContext::current() {
-            // Track the wrapped read separately from the wrapper subscriber.
-            let read = inner.subscribers.run_in(|| wrapped.try_read_unchecked())?;
             reactive_context.subscribe(inner.wrapper_subscribers());
-            return Ok(read);
+            return wrapped.try_peek_unchecked();
         }
         wrapped.try_read_unchecked()
     }
