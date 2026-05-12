@@ -486,9 +486,7 @@ fn boxed_read_signal_read_in_context_without_current_scope_does_not_panic() {
     assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
 }
 
-// `point_to` must not panic when called on a wrapper whose `forwarding_context` was never lazily
-// initialized (e.g. the wrapper has never been read). Locks in the `if let Some(forwarding_context)`
-// branch's None path.
+// `point_to` must not panic when called on a wrapper that has never been read.
 #[test]
 fn point_to_on_never_read_wrapper_does_not_panic() {
     let captured = Rc::new(RefCell::new(None));
@@ -502,7 +500,6 @@ fn point_to_on_never_read_wrapper_does_not_panic() {
             let target = ReadSignal::from(signal_a);
             let replacement = ReadSignal::from(signal_b);
 
-            // Drive the never-initialized forwarding_context branch in `point_to`.
             target.point_to(replacement).unwrap();
 
             // Now read; should reflect signal_b's value.

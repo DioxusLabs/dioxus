@@ -1,6 +1,8 @@
-use std::{any::Any, ops::Deref, sync::OnceLock};
+use std::{any::Any, ops::Deref};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers};
+use dioxus_core::{
+    IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, Subscribers, current_scope_id,
+};
 use generational_box::{BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -21,33 +23,28 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 #[doc(hidden)]
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
     pub(crate) value: Box<S::DynReadable<sealed::SealedToken>>,
-    pub(crate) subscribers: OnceLock<Subscribers>,
-    // Bridges writes on the wrapped readable to wrapper-level subscribers. The context and its
-    // owner are created together so the lifetime dependency stays local to the lazy slot.
-    pub(crate) forwarding_context: OnceLock<ForwardingContextState>,
+    pub(crate) subscribers: Subscribers,
+    // Bridges writes on the wrapped readable to wrapper-level subscribers. The context owns its
+    // generational slot so it lives as long as this wrapper, not the first reader's scope.
+    pub(crate) forwarding_context: ForwardingContextState,
 }
 
 impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
     fn wrapper_subscribers(&self) -> Subscribers {
-        self.subscribers.get_or_init(Subscribers::new).clone()
+        self.subscribers.clone()
     }
 
     fn snapshot_wrapper_subscribers(&self) -> Vec<ReactiveContext> {
         let mut subscribers = Vec::new();
-        if let Some(wrapper_subscribers) = self.subscribers.get() {
-            wrapper_subscribers.visit(|subscriber| subscribers.push(*subscriber));
-        }
+        self.subscribers
+            .visit(|subscriber| subscribers.push(*subscriber));
         subscribers
     }
 
-    fn sync_forwarding_to_value(&self, scope: ScopeId) -> &ForwardingContextState {
-        let subscribers = self.wrapper_subscribers();
+    fn sync_forwarding_to_value(&self) -> &ForwardingContextState {
         let wrapped_subscribers = self.value.subscribers();
-        let forwarding_context = self
-            .forwarding_context
-            .get_or_init(|| ForwardingContextState::new(subscribers, scope));
-        forwarding_context.repoint(wrapped_subscribers);
-        forwarding_context
+        self.forwarding_context.repoint(wrapped_subscribers);
+        &self.forwarding_context
     }
 }
 
@@ -109,11 +106,13 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         S: CreateBoxedSignalStorage<R>,
         R: Readable<Target = T>,
     {
+        let scope = current_scope_id();
+        let subscribers = Subscribers::new();
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
                 value: S::new_readable(value, sealed::SealedToken),
-                subscribers: OnceLock::new(),
-                forwarding_context: OnceLock::new(),
+                subscribers: subscribers.clone(),
+                forwarding_context: ForwardingContextState::new(subscribers, scope),
             }),
         }
     }
@@ -138,8 +137,8 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             for subscriber in old_subscribers {
                 subscriber.subscribe(subscribers.clone());
             }
-            inner.sync_forwarding_to_value(self.inner.origin_scope());
         }
+        inner.sync_forwarding_to_value();
         Ok(())
     }
 
@@ -148,9 +147,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         let inner = self.inner.try_peek_unchecked().unwrap();
-        let Some(subscribers) = inner.subscribers.get().cloned() else {
-            return;
-        };
+        let subscribers = inner.subscribers.clone();
         for subscriber in inner.snapshot_wrapper_subscribers() {
             subscribers.remove(&subscriber);
             subscriber.mark_dirty();
@@ -227,7 +224,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         if let Some(reactive_context) = ReactiveContext::current() {
             let subscribers = inner.wrapper_subscribers();
             reactive_context.subscribe(subscribers.clone());
-            let forwarding_context = inner.sync_forwarding_to_value(self.inner.origin_scope());
+            let forwarding_context = inner.sync_forwarding_to_value();
             return forwarding_context.run_in(|| wrapped.try_read_unchecked());
         }
         wrapped.try_read_unchecked()
@@ -247,7 +244,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     {
         let inner = self.inner.try_peek_unchecked().unwrap();
         let subscribers = inner.wrapper_subscribers();
-        inner.sync_forwarding_to_value(self.inner.origin_scope());
+        inner.sync_forwarding_to_value();
         subscribers
     }
 }
