@@ -1,8 +1,12 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus_core::{NoOpMutations, current_scope_id, generation};
+use dioxus_core::{NoOpMutations, ReactiveContext, RuntimeGuard, current_scope_id, generation};
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use dioxus::prelude::*;
 use dioxus_core::ElementId;
@@ -341,6 +345,96 @@ fn boxed_read_signal_subscribes_to_underlying_updates() {
     }
 }
 
+#[test]
+fn boxed_read_signal_subscribers_bridge_before_tracked_read() {
+    type Props = (Arc<AtomicUsize>, Rc<RefCell<Option<Signal<i32>>>>);
+
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+    let signal_handle = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(dirty_count, signal_handle): Props| {
+            let signal = use_signal(|| 0);
+            *signal_handle.borrow_mut() = Some(signal);
+
+            let boxed = ReadSignal::from(signal);
+            let _context = use_hook({
+                let dirty_count = dirty_count.clone();
+                move || {
+                    let context = ReactiveContext::new_with_callback(
+                        {
+                            let dirty_count = dirty_count.clone();
+                            move || {
+                                dirty_count.fetch_add(1, Ordering::SeqCst);
+                            }
+                        },
+                        current_scope_id(),
+                        std::panic::Location::caller(),
+                    );
+                    context.subscribe(boxed.subscribers());
+                    context
+                }
+            });
+
+            rsx! { "" }
+        },
+        (dirty_count.clone(), signal_handle.clone()),
+    );
+
+    dom.rebuild_in_place();
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 0);
+
+    let mut signal = signal_handle.borrow().unwrap();
+    signal.set(1);
+
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn boxed_read_signal_read_in_context_without_current_scope_does_not_panic() {
+    type Props = (
+        Rc<RefCell<Option<(Signal<i32>, ReadSignal<i32>, ReactiveContext)>>>,
+        Arc<AtomicUsize>,
+    );
+
+    let captured = Rc::new(RefCell::new(None));
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(captured, dirty_count): Props| {
+            let signal = use_signal(|| 0);
+            let boxed = ReadSignal::from(signal);
+            let context = ReactiveContext::new_with_callback(
+                {
+                    let dirty_count = dirty_count.clone();
+                    move || {
+                        dirty_count.fetch_add(1, Ordering::SeqCst);
+                    }
+                },
+                current_scope_id(),
+                std::panic::Location::caller(),
+            );
+
+            *captured.borrow_mut() = Some((signal, boxed, context));
+
+            rsx! { "" }
+        },
+        (captured.clone(), dirty_count.clone()),
+    );
+
+    dom.rebuild_in_place();
+
+    let (mut signal, boxed, context) = captured.borrow().unwrap();
+    {
+        let _runtime = RuntimeGuard::new(dom.runtime());
+        context.run_in(|| assert_eq!(boxed(), 0));
+    }
+
+    signal.set(1);
+
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
+}
+
 // `point_to` must not panic when called on a wrapper whose `forwarding_context` was never lazily
 // initialized (e.g. the wrapper has never been read). Locks in the `if let Some(forwarding_context)`
 // branch's None path.
@@ -483,15 +577,40 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     );
 }
 
-// Sibling `point_to` calls on the same `other` slot — the rsx-clone scenario — must both
-// succeed. The first one consumes `other`'s wrapped value and bumps its generation via
-// `manually_drop`; the second sees `other` as dropped and short-circuits.
+#[test]
+fn point_to_keeps_source_handle_readable() {
+    let observed = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |observed: Rc<RefCell<Option<(i32, i32, i32)>>>| {
+            let signal_a = use_signal(|| 7);
+            let signal_b = use_signal(|| 42);
+
+            let target = ReadSignal::from(signal_a);
+            let source = ReadSignal::from(signal_b);
+            let source_copy = source;
+
+            target.point_to(source).unwrap();
+
+            *observed.borrow_mut() = Some((target(), source(), source_copy()));
+            rsx! { "{target}" }
+        },
+        observed.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    assert_eq!(*observed.borrow(), Some((42, 42, 42)));
+}
+
+// Sibling `point_to` calls on the same `other` slot — the rsx-clone scenario — must all point to
+// the shared replacement without invalidating `other`.
 #[test]
 fn point_to_tolerates_shared_other_slot() {
     let observed = Rc::new(RefCell::new(None));
 
     let mut dom = VirtualDom::new_with_props(
-        |observed: Rc<RefCell<Option<(i32, i32)>>>| {
+        |observed: Rc<RefCell<Option<(i32, i32, i32)>>>| {
             let signal_a = use_signal(|| 1);
             let signal_b = use_signal(|| 99);
 
@@ -503,10 +622,10 @@ fn point_to_tolerates_shared_other_slot() {
             let replacement = ReadSignal::from(signal_b);
 
             target_a.point_to(replacement).unwrap();
-            // Same `replacement` reused — must not panic on the dropped generational slot.
+            // Same `replacement` reused. It must remain readable and usable for another retarget.
             target_a2.point_to(replacement).unwrap();
 
-            *observed.borrow_mut() = Some((target_a(), target_a2()));
+            *observed.borrow_mut() = Some((target_a(), target_a2(), replacement()));
             rsx! { "{target_a}-{target_a2}" }
         },
         observed.clone(),
@@ -514,7 +633,5 @@ fn point_to_tolerates_shared_other_slot() {
 
     dom.rebuild_in_place();
 
-    // First call moved `replacement`'s box into target_a. Second call short-circuited (other was
-    // dropped/empty) and left target_a2 unchanged — still pointing at signal_a.
-    assert_eq!(*observed.borrow(), Some((99, 1)));
+    assert_eq!(*observed.borrow(), Some((99, 99, 99)));
 }
