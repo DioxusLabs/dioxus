@@ -222,10 +222,11 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         let inner = self.inner.try_peek_unchecked()?;
         let wrapped = &inner.value;
         if let Some(reactive_context) = ReactiveContext::current() {
-            let subscribers = inner.wrapper_subscribers();
-            reactive_context.subscribe(subscribers.clone());
-            let forwarding_context = inner.sync_forwarding_to_value();
-            return forwarding_context.run_in(|| wrapped.try_read_unchecked());
+            let read = inner
+                .forwarding_context
+                .run_in(|| wrapped.try_read_unchecked())?;
+            reactive_context.subscribe(inner.wrapper_subscribers());
+            return Ok(read);
         }
         wrapped.try_read_unchecked()
     }

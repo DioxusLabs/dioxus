@@ -486,6 +486,40 @@ fn boxed_read_signal_read_in_context_without_current_scope_does_not_panic() {
     assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
 }
 
+#[test]
+fn boxed_read_signal_try_read_in_context_returns_error_after_wrapped_signal_drops() {
+    type Props = Rc<RefCell<Option<(Signal<i32>, ReadSignal<i32>, ReactiveContext)>>>;
+
+    let captured = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |captured: Props| {
+            let signal = use_signal(|| 0);
+            let boxed = ReadSignal::from(signal);
+            let context = ReactiveContext::new_with_callback(
+                || {},
+                current_scope_id(),
+                std::panic::Location::caller(),
+            );
+
+            *captured.borrow_mut() = Some((signal, boxed, context));
+
+            rsx! { "" }
+        },
+        captured.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    let (signal, boxed, context) = captured.borrow().unwrap();
+    signal.manually_drop();
+
+    let _runtime = RuntimeGuard::new(dom.runtime());
+    context.run_in(|| {
+        assert!(boxed.try_read().is_err());
+    });
+}
+
 // `point_to` must not panic when called on a wrapper that has never been read.
 #[test]
 fn point_to_on_never_read_wrapper_does_not_panic() {
