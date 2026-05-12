@@ -387,9 +387,9 @@ fn boxed_sync_read_signal_subscribes_to_underlying_updates() {
     assert_eq!(*render_count.lock().unwrap(), 2);
 }
 
-// `point_to` must not panic when called on a wrapper whose `subscribers`/`forwarding_context`
-// were never lazily initialized (e.g. the wrapper has never been read). Locks in the early-return
-// in the `if let Some(this_subscribers)` branch.
+// `point_to` must not panic when called on a wrapper whose `forwarding_context` was never lazily
+// initialized (e.g. the wrapper has never been read). Locks in the `if let Some(forwarding_context)`
+// branch's None path.
 #[test]
 fn point_to_on_never_read_wrapper_does_not_panic() {
     let captured = Rc::new(RefCell::new(None));
@@ -403,7 +403,7 @@ fn point_to_on_never_read_wrapper_does_not_panic() {
             let target = ReadSignal::from(signal_a);
             let replacement = ReadSignal::from(signal_b);
 
-            // Drive the `subscribers == None` branch in `point_to`.
+            // Drive the never-initialized forwarding_context branch in `point_to`.
             target.point_to(replacement).unwrap();
 
             // Now read; should reflect signal_b's value.
@@ -418,3 +418,153 @@ fn point_to_on_never_read_wrapper_does_not_panic() {
 
     assert_eq!(*captured.borrow(), Some(42));
 }
+
+// `point_to` with a copy of `self` must be a no-op. The naive implementation runs `manually_drop`
+// on the slot just after repopulating it, which would invalidate the wrapper. Locks in the
+// `self.inner == other.inner` early-return.
+#[test]
+fn point_to_self_is_noop() {
+    let captured = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |captured: Rc<RefCell<Option<i32>>>| {
+            let signal = use_signal(|| 42);
+            let target = ReadSignal::from(signal);
+
+            // Force first-read init so the forwarding context exists. Self-point must still be a
+            // no-op in this path.
+            let _ = target();
+
+            target.point_to(target).unwrap();
+
+            // Slot must still be valid; this would panic if `manually_drop` had recycled it.
+            *captured.borrow_mut() = Some(target());
+
+            rsx! { "{target}" }
+        },
+        captured.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    assert_eq!(*captured.borrow(), Some(42));
+}
+
+// The forwarding `ReactiveContext` must outlive the scope that first *read* the wrapper, since
+// the wrapper itself may outlive that scope. We tie the forwarding context's generational slot
+// to a per-wrapper owner so it shares the wrapper's lifetime. Pre-fix, the forwarding context
+// was owned by the first reader's scope, so a child unmount silently broke reactivity for the
+// still-alive wrapper.
+#[test]
+fn forwarding_context_survives_first_reader_scope_drop() {
+    type Props = (
+        Rc<RefCell<usize>>,
+        Rc<RefCell<Option<Signal<i32>>>>,
+        Rc<RefCell<Option<Signal<bool>>>>,
+    );
+
+    let parent_renders = Rc::new(RefCell::new(0usize));
+    let signal_slot: Rc<RefCell<Option<Signal<i32>>>> = Rc::new(RefCell::new(None));
+    let show_child_slot: Rc<RefCell<Option<Signal<bool>>>> = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(parent_renders, signal_slot, show_child_slot): Props| {
+            let show_child = use_signal(|| true);
+            let signal = use_signal(|| 0);
+            *signal_slot.borrow_mut() = Some(signal);
+            *show_child_slot.borrow_mut() = Some(show_child);
+
+            // Persist the wrapper across renders so the child's first read is the wrapper's
+            // first read. Wrapper is owned by this (parent) scope.
+            let wrapper: ReadSignal<i32> = use_hook(|| ReadSignal::from(signal));
+
+            *parent_renders.borrow_mut() += 1;
+
+            rsx! {
+                if show_child() {
+                    Child { sig: wrapper }
+                } else {
+                    "after-child: {wrapper}"
+                }
+            }
+        },
+        (
+            parent_renders.clone(),
+            signal_slot.clone(),
+            show_child_slot.clone(),
+        ),
+    );
+
+    #[derive(Props, Clone, PartialEq)]
+    struct ChildProps {
+        sig: ReadSignal<i32>,
+    }
+
+    fn Child(props: ChildProps) -> Element {
+        // First read of `wrapper` happens here, in the child scope. Pre-fix, the forwarding
+        // context's owner was captured from this scope.
+        let _ = (props.sig)();
+        rsx! { "{props.sig}" }
+    }
+
+    dom.rebuild_in_place();
+    let after_initial = *parent_renders.borrow();
+
+    // Unmount the child. Pre-fix, this drops the forwarding context.
+    let mut show_child = show_child_slot.borrow().unwrap();
+    show_child.set(false);
+    dom.mark_dirty(ScopeId::APP);
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
+    let after_unmount = *parent_renders.borrow();
+    assert!(after_unmount > after_initial);
+
+    // Write to the underlying signal. Parent has subscribed via the "after-child" branch's
+    // `{wrapper}` read, so it should re-render *if* the forwarding context is still alive.
+    let mut signal = signal_slot.borrow().unwrap();
+    signal.set(7);
+    dom.render_immediate(&mut NoOpMutations);
+    dom.render_immediate(&mut NoOpMutations);
+
+    assert!(
+        *parent_renders.borrow() > after_unmount,
+        "parent should re-render on inner write: forwarding context must outlive the first-reader scope"
+    );
+}
+
+// Sibling `point_to` calls on the same `other` slot — the rsx-clone scenario — must both
+// succeed. The first one consumes `other`'s wrapped value and bumps its generation via
+// `manually_drop`; the second sees `other` as dropped and short-circuits.
+#[test]
+fn point_to_tolerates_shared_other_slot() {
+    let observed = Rc::new(RefCell::new(None));
+
+    let mut dom = VirtualDom::new_with_props(
+        |observed: Rc<RefCell<Option<(i32, i32)>>>| {
+            let signal_a = use_signal(|| 1);
+            let signal_b = use_signal(|| 99);
+
+            // Two distinct `self` slots simulating two sibling components' stored props.sig.
+            let target_a = ReadSignal::from(signal_a);
+            let target_a2 = ReadSignal::from(signal_a);
+
+            // One shared `other` slot used as the new value for both — the rsx-clone case.
+            let replacement = ReadSignal::from(signal_b);
+
+            target_a.point_to(replacement).unwrap();
+            // Same `replacement` reused — must not panic on the dropped generational slot.
+            target_a2.point_to(replacement).unwrap();
+
+            *observed.borrow_mut() = Some((target_a(), target_a2()));
+            rsx! { "{target_a}-{target_a2}" }
+        },
+        observed.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    // First call moved `replacement`'s box into target_a. Second call short-circuited (other was
+    // dropped/empty) and left target_a2 unchanged — still pointing at signal_a.
+    assert_eq!(*observed.borrow(), Some((99, 1)));
+}
+
