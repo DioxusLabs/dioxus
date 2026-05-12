@@ -82,7 +82,7 @@ impl ReactiveContext {
             scope: None,
         };
 
-        let owner = crate::current_owner::<SyncStorage>();
+        let owner = Runtime::current().scope_owner::<SyncStorage>(scope);
         let self_ = Self {
             scope,
             inner: owner.insert(inner),
@@ -133,7 +133,17 @@ impl ReactiveContext {
     pub fn clear_subscribers(&self) {
         // The key type is mutable, but the hash is stable through mutations because we hash by pointer
         #[allow(clippy::mutable_key_type)]
-        let old_subscribers = std::mem::take(&mut self.inner.write().subscribers);
+        let old_subscribers = match self.inner.try_write() {
+            Ok(mut inner) => std::mem::take(&mut inner.subscribers),
+            // If the context was dropped, it cannot actively unsubscribe itself;
+            // stale subscriber-list entries are cleaned lazily when they fail to mark dirty.
+            Err(BorrowMutError::Dropped(_)) => return,
+            Err(expect) => {
+                panic!(
+                    "Expected to be able to write to reactive context to clear subscribers, but it failed with: {expect:?}"
+                );
+            }
+        };
         for subscriber in old_subscribers {
             subscriber.0.remove(self);
         }

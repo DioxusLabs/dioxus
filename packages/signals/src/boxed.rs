@@ -2,9 +2,9 @@ use std::{any::Any, ops::Deref, sync::Arc};
 
 use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, SubscriberList, Subscribers,
-    current_scope_id, with_owner,
+    current_scope_id,
 };
-use generational_box::{BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
     CopyValue, Global, InitializeFromFunction, MappedMutSignal, MappedSignal, Memo, Readable,
@@ -45,16 +45,13 @@ pub(crate) struct ForwardingSubscribers {
     context: ReactiveContext,
     subscribers: Subscribers,
     wrapped_subscribers: Subscribers,
-    _owner: Owner<SyncStorage>,
 }
 
 impl ForwardingSubscribers {
     #[track_caller]
     fn new(wrapped_subscribers: Subscribers, scope: ScopeId) -> Arc<Self> {
-        // Own the forwarding context with the wrapper, not the first reader.
-        let owner: Owner<SyncStorage> = Owner::default();
         let subscribers = Subscribers::new();
-        let context = with_owner(owner.clone(), || {
+        let context = {
             let subscribers = subscribers.clone();
             ReactiveContext::new_with_callback(
                 move || {
@@ -69,22 +66,12 @@ impl ForwardingSubscribers {
                 scope,
                 std::panic::Location::caller(),
             )
-        });
+        };
         Arc::new(Self {
             context,
             subscribers,
             wrapped_subscribers,
-            _owner: owner,
         })
-    }
-
-    fn take_subscribers(&self) -> Vec<ReactiveContext> {
-        let mut subscribers = Vec::new();
-        self.visit(&mut |subscriber| subscribers.push(*subscriber));
-        for subscriber in &subscribers {
-            self.remove(subscriber);
-        }
-        subscribers
     }
 
     fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
@@ -148,19 +135,25 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
-        let old_subscribers = match self.inner.try_peek_unchecked() {
-            Ok(inner) => inner.subscribers.take_subscribers(),
+        let (old_subscribers, old_wrapper_subscribers) = match self.inner.try_peek_unchecked() {
+            Ok(inner) => (
+                inner.snapshot_wrapper_subscribers(),
+                inner.wrapper_subscribers(),
+            ),
             Err(_) => return Ok(()),
         };
+
+        let new_wrapper_subscribers = other.inner.try_peek_unchecked()?.wrapper_subscribers();
 
         // Keep `other` usable; rsx clones can retarget multiple props from it.
         self.inner.point_to(other.inner)?;
 
-        let inner = self.inner.try_peek_unchecked()?;
         if !old_subscribers.is_empty() {
-            let subscribers = inner.wrapper_subscribers();
+            for subscriber in &old_subscribers {
+                old_wrapper_subscribers.remove(subscriber);
+            }
             for subscriber in old_subscribers {
-                subscriber.subscribe(subscribers.clone());
+                subscriber.subscribe(new_wrapper_subscribers.clone());
             }
         }
         Ok(())

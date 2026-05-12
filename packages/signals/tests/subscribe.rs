@@ -706,3 +706,102 @@ fn point_to_tolerates_shared_other_slot() {
 
     assert_eq!(*observed.borrow(), Some((99, 99, 99)));
 }
+
+#[test]
+fn failed_point_to_preserves_existing_wrapper_subscribers() {
+    #[derive(Default)]
+    struct Captured {
+        signal_a: Option<Signal<i32>>,
+        show_child: Option<Signal<bool>>,
+        target: Option<ReadSignal<i32>>,
+        stale_replacement: Option<ReadSignal<i32>>,
+        context: Option<ReactiveContext>,
+    }
+
+    type Props = (Rc<RefCell<Captured>>, Arc<AtomicUsize>);
+
+    #[derive(Props, Clone)]
+    struct ReplacementOwnerProps {
+        captured: Rc<RefCell<Captured>>,
+    }
+
+    impl PartialEq for ReplacementOwnerProps {
+        fn eq(&self, other: &Self) -> bool {
+            Rc::ptr_eq(&self.captured, &other.captured)
+        }
+    }
+
+    let captured = Rc::new(RefCell::new(Captured::default()));
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(captured, dirty_count): Props| {
+            let signal_a = use_signal(|| 0);
+            let show_child = use_signal(|| true);
+            let target = use_hook(|| ReadSignal::from(signal_a));
+            let context = use_hook({
+                let dirty_count = dirty_count.clone();
+                move || {
+                    ReactiveContext::new_with_callback(
+                        {
+                            let dirty_count = dirty_count.clone();
+                            move || {
+                                dirty_count.fetch_add(1, Ordering::SeqCst);
+                            }
+                        },
+                        current_scope_id(),
+                        std::panic::Location::caller(),
+                    )
+                }
+            });
+
+            context.run_in(|| assert_eq!(target(), 0));
+
+            {
+                let mut captured = captured.borrow_mut();
+                captured.signal_a = Some(signal_a);
+                captured.show_child = Some(show_child);
+                captured.target = Some(target);
+                captured.context = Some(context);
+            }
+
+            rsx! {
+                if show_child() {
+                    ReplacementOwner { captured: captured.clone() }
+                }
+            }
+        },
+        (captured.clone(), dirty_count.clone()),
+    );
+
+    fn ReplacementOwner(props: ReplacementOwnerProps) -> Element {
+        let signal_b = use_signal(|| 1);
+        props.captured.borrow_mut().stale_replacement = Some(ReadSignal::from(signal_b));
+        rsx! { "" }
+    }
+
+    dom.rebuild_in_place();
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 0);
+
+    let mut show_child = captured.borrow().show_child.unwrap();
+    show_child.set(false);
+    rerender_app(&mut dom);
+
+    let (mut signal_a, target, stale_replacement) = {
+        let captured = captured.borrow();
+        (
+            captured.signal_a.unwrap(),
+            captured.target.unwrap(),
+            captured.stale_replacement.unwrap(),
+        )
+    };
+
+    assert!(target.point_to(stale_replacement).is_err());
+
+    signal_a.set(1);
+    assert_eq!(
+        dirty_count.load(Ordering::SeqCst),
+        1,
+        "failed point_to should leave the old wrapper subscriptions attached"
+    );
+}
