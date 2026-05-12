@@ -1,9 +1,4 @@
-use std::{
-    any::Any,
-    collections::HashSet,
-    ops::Deref,
-    sync::{Arc, Mutex},
-};
+use std::{any::Any, ops::Deref, sync::Arc};
 
 use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, ScopeId, SubscriberList, Subscribers,
@@ -29,7 +24,7 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 #[doc(hidden)]
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
     pub(crate) value: Box<S::DynReadable<sealed::SealedToken>>,
-    pub(crate) subscribers: Arc<ForwardingContextState>,
+    pub(crate) subscribers: Arc<ForwardingSubscribers>,
 }
 
 impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
@@ -46,36 +41,28 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
     }
 }
 
-pub(crate) struct ForwardingContextState {
+pub(crate) struct ForwardingSubscribers {
     context: ReactiveContext,
-    subscribers: Arc<Mutex<HashSet<ReactiveContext>>>,
+    subscribers: Subscribers,
     wrapped_subscribers: Subscribers,
     _owner: Owner<SyncStorage>,
 }
 
-impl ForwardingContextState {
+impl ForwardingSubscribers {
     #[track_caller]
     fn new(wrapped_subscribers: Subscribers, scope: ScopeId) -> Arc<Self> {
         // Own the forwarding context with the wrapper, not the first reader.
         let owner: Owner<SyncStorage> = Owner::default();
-        let subscribers = Arc::new(Mutex::new(HashSet::<ReactiveContext>::new()));
+        let subscribers = Subscribers::new();
         let context = with_owner(owner.clone(), || {
             let subscribers = subscribers.clone();
             ReactiveContext::new_with_callback(
                 move || {
-                    #[allow(clippy::mutable_key_type)]
-                    let current_subscribers = match subscribers.lock() {
-                        Ok(subscribers) => subscribers.iter().copied().collect::<Vec<_>>(),
-                        Err(_) => {
-                            tracing::warn!("Failed to lock subscriber list to mark subscribers");
-                            Vec::new()
-                        }
-                    };
+                    let mut current_subscribers = Vec::new();
+                    subscribers.visit(|subscriber| current_subscribers.push(*subscriber));
                     for subscriber in current_subscribers {
                         if !subscriber.mark_dirty() {
-                            if let Ok(mut subscribers) = subscribers.lock() {
-                                subscribers.remove(&subscriber);
-                            }
+                            subscribers.remove(&subscriber);
                         }
                     }
                 },
@@ -100,35 +87,23 @@ impl ForwardingContextState {
     }
 }
 
-impl SubscriberList for ForwardingContextState {
+impl SubscriberList for ForwardingSubscribers {
     fn add(&self, subscriber: ReactiveContext) {
-        if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.insert(subscriber);
-        } else {
-            tracing::warn!("Failed to lock subscriber list to add subscriber: {subscriber}");
-        }
+        self.subscribers.add(subscriber);
         self.context.subscribe(self.wrapped_subscribers.clone());
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
-        let is_empty = if let Ok(mut subscribers) = self.subscribers.lock() {
-            subscribers.remove(subscriber);
-            subscribers.is_empty()
-        } else {
-            tracing::warn!("Failed to lock subscriber list to remove subscriber: {subscriber}");
-            false
-        };
+        self.subscribers.remove(subscriber);
+        let mut is_empty = true;
+        self.subscribers.visit(|_| is_empty = false);
         if is_empty {
             self.context.clear_subscribers();
         }
     }
 
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
-        if let Ok(subscribers) = self.subscribers.lock() {
-            subscribers.iter().for_each(f);
-        } else {
-            tracing::warn!("Failed to lock subscriber list to visit subscribers");
-        }
+        self.subscribers.visit(f);
     }
 }
 
@@ -155,7 +130,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         let value = S::new_readable(value, sealed::SealedToken);
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
-                subscribers: ForwardingContextState::new(value.subscribers(), scope),
+                subscribers: ForwardingSubscribers::new(value.subscribers(), scope),
                 value,
             }),
         }
