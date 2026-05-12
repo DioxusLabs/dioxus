@@ -32,7 +32,15 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
         self.subscribers.get_or_init(Subscribers::new).clone()
     }
 
-    fn connect_forwarding(&self, scope: ScopeId) -> &ForwardingContextState {
+    fn snapshot_wrapper_subscribers(&self) -> Vec<ReactiveContext> {
+        let mut subscribers = Vec::new();
+        if let Some(wrapper_subscribers) = self.subscribers.get() {
+            wrapper_subscribers.visit(|subscriber| subscribers.push(*subscriber));
+        }
+        subscribers
+    }
+
+    fn sync_forwarding_to_value(&self, scope: ScopeId) -> &ForwardingContextState {
         let subscribers = self.wrapper_subscribers();
         let wrapped_subscribers = self.value.subscribers();
         let forwarding_context = self
@@ -117,15 +125,10 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
-        let mut old_subscribers = Vec::new();
-        match self.inner.try_peek_unchecked() {
-            Ok(inner) => {
-                if let Some(subscribers) = inner.subscribers.get() {
-                    subscribers.visit(|subscriber| old_subscribers.push(*subscriber));
-                }
-            }
+        let old_subscribers = match self.inner.try_peek_unchecked() {
+            Ok(inner) => inner.snapshot_wrapper_subscribers(),
             Err(_) => return Ok(()),
-        }
+        };
 
         self.inner.point_to(other.inner)?;
 
@@ -135,7 +138,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             for subscriber in old_subscribers {
                 subscribers.add(subscriber);
             }
-            inner.connect_forwarding(self.inner.origin_scope());
+            inner.sync_forwarding_to_value(self.inner.origin_scope());
         }
         Ok(())
     }
@@ -144,19 +147,11 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// This is only used by the `props` macro.
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
-        let Some(subscribers) = self
-            .inner
-            .try_peek_unchecked()
-            .unwrap()
-            .subscribers
-            .get()
-            .cloned()
-        else {
+        let inner = self.inner.try_peek_unchecked().unwrap();
+        let Some(subscribers) = inner.subscribers.get().cloned() else {
             return;
         };
-        let mut this_subscribers_vec = Vec::new();
-        subscribers.visit(|subscriber| this_subscribers_vec.push(*subscriber));
-        for subscriber in this_subscribers_vec {
+        for subscriber in inner.snapshot_wrapper_subscribers() {
             subscribers.remove(&subscriber);
             subscriber.mark_dirty();
         }
@@ -232,7 +227,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         if let Some(reactive_context) = ReactiveContext::current() {
             let subscribers = inner.wrapper_subscribers();
             reactive_context.subscribe(subscribers.clone());
-            let forwarding_context = inner.connect_forwarding(self.inner.origin_scope());
+            let forwarding_context = inner.sync_forwarding_to_value(self.inner.origin_scope());
             return forwarding_context.run_in(|| wrapped.try_read_unchecked());
         }
         wrapped.try_read_unchecked()
@@ -252,7 +247,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     {
         let inner = self.inner.try_peek_unchecked().unwrap();
         let subscribers = inner.wrapper_subscribers();
-        inner.connect_forwarding(self.inner.origin_scope());
+        inner.sync_forwarding_to_value(self.inner.origin_scope());
         subscribers
     }
 }
