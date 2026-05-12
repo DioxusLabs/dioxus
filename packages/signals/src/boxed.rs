@@ -136,7 +136,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         if !old_subscribers.is_empty() {
             let subscribers = inner.wrapper_subscribers();
             for subscriber in old_subscribers {
-                subscribers.add(subscriber);
+                subscriber.subscribe(subscribers.clone());
             }
             inner.sync_forwarding_to_value(self.inner.origin_scope());
         }
