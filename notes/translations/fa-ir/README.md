@@ -1,9 +1,9 @@
 <p>
     <p align="center" >
-      <img src="../../notes/header-light.svg#gh-light-mode-only" >
-      <img src="../../notes/header-dark.svg#gh-dark-mode-only" >
+      <img src="../../../notes/header-light.svg#gh-light-mode-only" >
+      <img src="../../../notes/header-dark.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
-          <img src="../../notes/dioxus_splash_8.avif">
+          <img src="../../../notes/dioxus_splash_8.avif">
       </a>
     </p>
 </p>
@@ -98,7 +98,7 @@ fn app() -> Element {
 تنها با یک دستور `dx serve` برنامه خود را اجرا کنید. تغییرات در مارک‌آپ و استایل‌ها (مانند HTML و CSS، یا در Dioxus با استفاده از rsx) را انجام دهید و نتیجه را به‌صورت آنی مشاهده کنید. اگرچه قابلیت‌های hot-reloading در Rust هنوز به‌طور کامل بهینه نیستند، اما با استفاده از [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) ممکن است.
 
 <div align="center">
-  <img src="../../notes/hotreload.gif" alt="بارگذاری مجدد آنی">
+  <img src="../../../notes/hotreload.gif" alt="بارگذاری مجدد آنی">
 </div>
 
 ## بسته‌بندی برای وب و دسکتاپ
@@ -106,7 +106,7 @@ fn app() -> Element {
 تنها با اجرای دستور `dx bundle` برنامه شما با حداکثر بهینه‌سازی کامپایل و بسته‌بندی می‌شود. از قابلیت‌های ایجاد فایل‌های [`.avif`، فشرده‌سازی `.wasm` و کوچک‌سازی](https://dioxuslabs.com/learn/0.7/tutorial/assets) و موارد بیشتر بهره‌مند شوید. برنامه‌های سبک وب (کمتر از [50kb](https://github.com/ealmloff/tiny-dioxus/)) و برنامه‌های دسکتاپ/موبایل با حجم کمتر از 15mb تولید کنید.
 
 <div align="center">
-  <img src="../../notes/bundle.gif" alt="بسته‌بندی برنامه">
+  <img src="../../../notes/bundle.gif" alt="بسته‌بندی برنامه">
 </div>
 
 ## مستندات فوق‌العاده
@@ -114,7 +114,7 @@ fn app() -> Element {
 ما زمان زیادی صرف کردیم تا مستنداتی واضح، خوانا و جامع ارائه دهیم. تمامی عناصر HTML و لیسنرها (listeners) با استفاده از MDN مستند شده‌اند ([برای جزئیات بیشتر کلیک کنید](https://developer.mozilla.org)) و برای به‌روز بودن، مستندات با خود Dioxus به‌صورت مداوم ادغام می‌شوند. برای راهنماها، مرجع‌ها، آموزش‌ها و موارد بیشتر به [وبسایت Dioxus](https://dioxuslabs.com/learn/0.7/) سر بزنید. نکته جالب: ما از وبسایت Dioxus به‌عنوان آزمایشگاهی برای تست ویژگی‌های جدید استفاده می‌کنیم -> [مشاهده کنید!](https://github.com/dioxusLabs/docsite).
 
 <div align="center">
-  <img src="../../notes/docs.avif" alt="مستندات Dioxus">
+  <img src="../../../notes/docs.avif" alt="مستندات Dioxus">
 </div>
 
 ## تمرکز بر تجربه توسعه‌دهنده
@@ -122,7 +122,7 @@ fn app() -> Element {
 Dioxus تمرکز زیادی بر تجربه توسعه‌دهنده دارد و ابزارهای متعددی برای بهبود آن ارائه می‌دهد. [افزونه VSCode](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) را توسعه دادیم که به شما امکان می‌دهد کدهای RSX را به‌صورت خودکار قالب‌بندی کنید، HTML را به RSX تبدیل کنید و موارد بیشتر. همچنین، CLI قدرتمندی توسعه دادیم که به شما کمک می‌کند برنامه‌های جدید بسازید، آن‌ها را سرو کنید و برای پلتفرم‌های مختلف بسته‌بندی کنید. در نقشه راه ما قابلیت‌های بیشتری مانند انتشار نیز پیش‌بینی شده است.
 
 <div align="center">
-  <img src="../../notes/autofmt.gif" alt="فرمت‌دهی خودکار">
+  <img src="../../../notes/autofmt.gif" alt="فرمت‌دهی خودکار">
 </div>
 
 ## جامعه
@@ -132,7 +132,7 @@ Dioxus یک پروژه با جامعه‌ای فعال و پویا در [Discord
 </div>
 
 <div align="center">
-  <img src="../../notes/dioxus-community.avif">
+  <img src="../../../notes/dioxus-community.avif">
 </div>
 
 <div dir="rtl">
