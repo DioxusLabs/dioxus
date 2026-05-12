@@ -78,8 +78,13 @@ impl ForwardingSubscribers {
         })
     }
 
-    fn clear_subscribers(&self) {
-        self.context.clear_subscribers();
+    fn take_subscribers(&self) -> Vec<ReactiveContext> {
+        let mut subscribers = Vec::new();
+        self.visit(&mut |subscriber| subscribers.push(*subscriber));
+        for subscriber in &subscribers {
+            self.remove(subscriber);
+        }
+        subscribers
     }
 
     fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
@@ -143,17 +148,8 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
-        // Move wrapper subscribers, not direct subscribers on the wrapped readable.
         let old_subscribers = match self.inner.try_peek_unchecked() {
-            Ok(inner) => {
-                let old_subscribers = inner.snapshot_wrapper_subscribers();
-                let old_wrapper_subscribers = inner.wrapper_subscribers();
-                for subscriber in &old_subscribers {
-                    old_wrapper_subscribers.remove(subscriber);
-                }
-                inner.subscribers.clear_subscribers();
-                old_subscribers
-            }
+            Ok(inner) => inner.subscribers.take_subscribers(),
             Err(_) => return Ok(()),
         };
 
