@@ -1,8 +1,6 @@
 use std::{any::Any, ops::Deref, sync::Arc};
 
-use dioxus_core::{
-    IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers,
-};
+use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -57,7 +55,7 @@ impl ForwardingSubscribers {
 impl SubscriberList for ForwardingSubscribers {
     fn add(&self, subscriber: ReactiveContext) {
         self.subscribers.add(subscriber);
-        subscriber.subscribe(self.wrapped_subscribers.clone());
+        self.wrapped_subscribers.add(subscriber);
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
@@ -210,7 +208,6 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         let wrapped = &inner.value;
         if let Some(reactive_context) = ReactiveContext::current() {
             reactive_context.subscribe(inner.wrapper_subscribers());
-            return wrapped.try_peek_unchecked();
         }
         wrapped.try_read_unchecked()
     }
