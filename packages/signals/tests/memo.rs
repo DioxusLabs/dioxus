@@ -179,7 +179,7 @@ fn memos_sync_rerun_after_unrelated_write() {
     assert!(PASSED.load(Ordering::SeqCst));
 }
 
-// Regression test for boxed ReadSignal wrappers bypassing Memo::try_read_unchecked
+// Boxed ReadSignal wrappers should read through Memo::try_read_unchecked.
 #[test]
 fn boxed_memo_reads_recompute_dirty_memos() {
     let boxed_value_after_write = Rc::new(RefCell::new(None));

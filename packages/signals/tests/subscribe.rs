@@ -549,9 +549,7 @@ fn point_to_on_never_read_wrapper_does_not_panic() {
     assert_eq!(*captured.borrow(), Some(42));
 }
 
-// `point_to` with a copy of `self` must be a no-op. The naive implementation runs `manually_drop`
-// on the slot just after repopulating it, which would invalidate the wrapper. Locks in the
-// `self.inner == other.inner` early-return.
+// `point_to` with a copy of `self` must be a no-op.
 #[test]
 fn point_to_self_is_noop() {
     let captured = Rc::new(RefCell::new(None));
@@ -581,10 +579,7 @@ fn point_to_self_is_noop() {
 }
 
 // The forwarding `ReactiveContext` must outlive the scope that first *read* the wrapper, since
-// the wrapper itself may outlive that scope. We tie the forwarding context's generational slot
-// to a per-wrapper owner so it shares the wrapper's lifetime. Pre-fix, the forwarding context
-// was owned by the first reader's scope, so a child unmount silently broke reactivity for the
-// still-alive wrapper.
+// the wrapper itself may outlive that scope.
 #[test]
 fn forwarding_context_survives_first_reader_scope_drop() {
     type Props = (
@@ -631,8 +626,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     }
 
     fn Child(props: ChildProps) -> Element {
-        // First read of `wrapper` happens here, in the child scope. Pre-fix, the forwarding
-        // context's owner was captured from this scope.
+        // First read of `wrapper` happens here, in the child scope.
         let _ = (props.sig)();
         rsx! { "{props.sig}" }
     }
@@ -640,7 +634,7 @@ fn forwarding_context_survives_first_reader_scope_drop() {
     dom.rebuild_in_place();
     let after_initial = *parent_renders.borrow();
 
-    // Unmount the child. Pre-fix, this drops the forwarding context.
+    // Unmount the first reader before reading the wrapper from the parent.
     let mut show_child = show_child_slot.borrow().unwrap();
     show_child.set(false);
     rerender_app(&mut dom);
