@@ -308,6 +308,42 @@ fn read_signal_point_to_leaves_direct_underlying_subscribers() {
 }
 
 #[test]
+fn read_signal_point_to_preserves_overlapping_direct_source_subscription() {
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |dirty_count: Arc<AtomicUsize>| {
+            let mut signal_a = use_signal(|| 0);
+            let signal_b = use_signal(|| 0);
+            let target = use_hook(|| ReadSignal::from(signal_a));
+            let replacement = ReadSignal::from(signal_b);
+            let dirty_count = dirty_count.clone();
+            let context = ReactiveContext::new_with_callback(
+                move || {
+                    dirty_count.fetch_add(1, Ordering::SeqCst);
+                },
+                current_scope_id(),
+                std::panic::Location::caller(),
+            );
+
+            context.run_in(|| {
+                assert_eq!(signal_a(), 0);
+                assert_eq!(target(), 0);
+            });
+            target.point_to(replacement).unwrap();
+            signal_a.set(1);
+
+            rsx! { "" }
+        },
+        dirty_count.clone(),
+    );
+
+    dom.rebuild_in_place();
+
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn read_signal_point_to_migrated_subscribers_can_unsubscribe() {
     type Props = (
         Rc<RefCell<Option<(Signal<i32>, ReactiveContext)>>>,

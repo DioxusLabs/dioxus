@@ -1,6 +1,8 @@
 use std::{any::Any, ops::Deref, sync::Arc};
 
-use dioxus_core::{IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers};
+use dioxus_core::{
+    IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers, current_scope_id,
+};
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
@@ -21,50 +23,115 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 #[doc(hidden)]
 pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
     pub(crate) value: Box<S::DynReadable<sealed::SealedToken>>,
-    pub(crate) subscribers: Arc<ForwardingSubscribers>,
+    pub(crate) subscribers: Arc<ForwardingContext>,
 }
 
 impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
     fn wrapper_subscribers(&self) -> Subscribers {
-        self.subscribers.clone().into()
+        self.subscribers.subscribers()
+    }
+}
+
+pub(crate) struct ForwardingContext {
+    subscribers: Subscribers,
+    forwarding_context: ReactiveContext,
+}
+
+impl ForwardingContext {
+    fn new(wrapped_subscribers: Subscribers) -> Arc<Self> {
+        // `ReadSignal` is a reactive proxy. A child component subscribes to this wrapper,
+        // and this forwarding context subscribes to the readable the wrapper currently points at.
+        //
+        // Prop memoization can retarget an existing `ReadSignal` with `point_to` without
+        // rerendering the child if the current values are equal. In that case the child
+        // subscriptions transfer from the old wrapper proxy to the new wrapper proxy, whose
+        // forwarding context is already subscribed to the new readable. Future updates then come
+        // from the new source instead of the old one.
+        //
+        // Running wrapped reads under this context preserves each readable's normal subscription
+        // behavior. Stores subscribe this forwarding context to the relevant store path, and memos
+        // recompute/read through their `Readable` impl before subscribing this context to the memo's
+        // output signal. When any of those sources change, this context marks the wrapper's child
+        // subscribers dirty. Direct reads the child made to the same signal, memo, or store are
+        // collected by the child's own context and are not removed when the wrapper is retargeted.
+        let subscribers = Subscribers::new();
+        let subscribers_to_notify = subscribers.clone();
+        let forwarding_context = ReactiveContext::new_with_callback(
+            move || mark_subscribers_dirty(&subscribers_to_notify),
+            current_scope_id(),
+            std::panic::Location::caller(),
+        );
+        forwarding_context.subscribe(wrapped_subscribers);
+
+        Arc::new(Self {
+            subscribers,
+            forwarding_context,
+        })
     }
 
-    // Snapshot before mutating the subscriber list.
-    fn snapshot_wrapper_subscribers(&self) -> Vec<ReactiveContext> {
+    fn subscribers(self: &Arc<Self>) -> Subscribers {
+        self.clone().into()
+    }
+
+    fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
+        self.forwarding_context.run_in(f)
+    }
+
+    fn transfer_subscribers_to(self: &Arc<Self>, other: &Arc<Self>) {
+        let subscribers = self.snapshot_subscribers();
+
+        for subscriber in &subscribers {
+            self.subscribers.remove(subscriber);
+        }
+        self.forwarding_context.clear_subscribers();
+
+        if subscribers.is_empty() {
+            return;
+        }
+
+        for subscriber in subscribers {
+            subscriber.subscribe(other.subscribers());
+        }
+    }
+
+    fn mark_dirty(&self) {
+        mark_subscribers_dirty(&self.subscribers);
+    }
+
+    fn snapshot_subscribers(&self) -> Vec<ReactiveContext> {
         let mut subscribers = Vec::new();
         self.subscribers
-            .visit(&mut |subscriber: &ReactiveContext| subscribers.push(*subscriber));
+            .visit(|subscriber: &ReactiveContext| subscribers.push(*subscriber));
         subscribers
     }
 }
 
-pub(crate) struct ForwardingSubscribers {
-    subscribers: Subscribers,
-    wrapped_subscribers: Subscribers,
-}
-
-impl ForwardingSubscribers {
-    fn new(wrapped_subscribers: Subscribers) -> Arc<Self> {
-        Arc::new(Self {
-            subscribers: Subscribers::new(),
-            wrapped_subscribers,
-        })
-    }
-}
-
-impl SubscriberList for ForwardingSubscribers {
+impl SubscriberList for ForwardingContext {
     fn add(&self, subscriber: ReactiveContext) {
         self.subscribers.add(subscriber);
-        self.wrapped_subscribers.add(subscriber);
     }
 
     fn remove(&self, subscriber: &ReactiveContext) {
         self.subscribers.remove(subscriber);
-        self.wrapped_subscribers.remove(subscriber);
     }
 
     fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
         self.subscribers.visit(f);
+    }
+}
+
+impl Drop for ForwardingContext {
+    fn drop(&mut self) {
+        self.forwarding_context.clear_subscribers();
+    }
+}
+
+fn mark_subscribers_dirty(subscribers: &Subscribers) {
+    let mut subscribers_to_notify = Vec::new();
+    subscribers.visit(|subscriber| subscribers_to_notify.push(*subscriber));
+    for subscriber in subscribers_to_notify {
+        subscribers.remove(&subscriber);
+        subscriber.mark_dirty();
     }
 }
 
@@ -90,7 +157,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         let value = S::new_readable(value, sealed::SealedToken);
         Self {
             inner: CopyValue::new_maybe_sync(ReadSignalInner {
-                subscribers: ForwardingSubscribers::new(value.subscribers()),
+                subscribers: ForwardingContext::new(value.subscribers()),
                 value,
             }),
         }
@@ -103,27 +170,17 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
-        let (old_subscribers, old_wrapper_subscribers) = match self.inner.try_peek_unchecked() {
-            Ok(inner) => (
-                inner.snapshot_wrapper_subscribers(),
-                inner.wrapper_subscribers(),
-            ),
+        let old_forwarding_context = match self.inner.try_peek_unchecked() {
+            Ok(inner) => inner.subscribers.clone(),
             Err(_) => return Ok(()),
         };
 
-        let new_wrapper_subscribers = other.inner.try_peek_unchecked()?.wrapper_subscribers();
+        let new_forwarding_context = other.inner.try_peek_unchecked()?.subscribers.clone();
 
         // Keep `other` usable; rsx clones can retarget multiple props from it.
         self.inner.point_to(other.inner)?;
 
-        if !old_subscribers.is_empty() {
-            for subscriber in &old_subscribers {
-                old_wrapper_subscribers.remove(subscriber);
-            }
-            for subscriber in old_subscribers {
-                subscriber.subscribe(new_wrapper_subscribers.clone());
-            }
-        }
+        old_forwarding_context.transfer_subscribers_to(&new_forwarding_context);
         Ok(())
     }
 
@@ -132,11 +189,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         let inner = self.inner.try_peek_unchecked().unwrap();
-        let subscribers = inner.subscribers.clone();
-        for subscriber in inner.snapshot_wrapper_subscribers() {
-            subscribers.remove(&subscriber);
-            subscriber.mark_dirty();
-        }
+        inner.subscribers.mark_dirty();
     }
 }
 
@@ -209,7 +262,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         if let Some(reactive_context) = ReactiveContext::current() {
             reactive_context.subscribe(inner.wrapper_subscribers());
         }
-        wrapped.try_read_unchecked()
+        inner.subscribers.run_in(|| wrapped.try_read_unchecked())
     }
 
     #[track_caller]
