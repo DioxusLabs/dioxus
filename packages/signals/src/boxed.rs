@@ -32,6 +32,62 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
     }
 }
 
+/// A wrapper-level subscriber list plus a reactive context that forwards updates from the
+/// currently wrapped readable.
+///
+/// `ReadSignal` is a reactive proxy. A child component subscribes to this wrapper, and the
+/// forwarding context subscribes to the readable the wrapper currently points at.
+///
+/// Prop memoization can retarget an existing `ReadSignal` with `point_to` without rerendering the
+/// child if the current values are equal. In that case the child subscriptions transfer from the
+/// old wrapper proxy to the new wrapper proxy, whose forwarding context is already subscribed to
+/// the new readable. Future updates then come from the new source instead of the old one.
+///
+/// Running wrapped reads under this context preserves each readable's normal subscription
+/// behavior. Stores subscribe this forwarding context to the relevant store path, and memos
+/// recompute/read through their `Readable` impl before subscribing this context to the memo's
+/// output signal. When any of those sources change, this context marks the wrapper's child
+/// subscribers dirty. Direct reads the child made to the same signal, memo, or store are collected
+/// by the child's own context and are not removed when the wrapper is retargeted.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// fn app() -> Element {
+///     let mut use_b = use_signal(|| false);
+///     let signal_a = use_signal(|| 0);
+///     let signal_b = use_signal(|| 0);
+///
+///     use_effect(move || {
+///         signal_a();
+///         // This effect's context subscribes directly to signal_a. It is not a
+///         // wrapper-level `ReadSignal` subscriber, so retargeting a child prop
+///         // must not move this subscription to signal_b.
+///     });
+///
+///     let child_signal = if use_b() { signal_b } else { signal_a };
+///     // When signal_a and signal_b currently hold equal values, props can be
+///     // memoized in place:
+///     //
+///     // old ReadSignal(signal_a).point_to(new ReadSignal(signal_b))
+///     //
+///     // That swap should move only subscribers that read the ReadSignal wrapper.
+///     rsx! { Child { sig: child_signal } }
+/// }
+///
+/// #[component]
+/// fn Child(sig: ReadSignal<i32>) -> Element {
+///     rsx! {
+///         // This read subscribes the child to the ReadSignal wrapper. The
+///         // wrapper's forwarding context subscribes to the current source.
+///         "{sig}"
+///     }
+/// }
+/// ```
+///
+/// After the child prop is retargeted from `signal_a` to `signal_b`, updating `signal_b` should
+/// dirty the child through the new wrapper context without rerunning the parent effect that only
+/// read `signal_a`.
 pub(crate) struct ForwardingContext {
     subscribers: Subscribers,
     forwarding_context: ReactiveContext,
@@ -39,21 +95,6 @@ pub(crate) struct ForwardingContext {
 
 impl ForwardingContext {
     fn new(wrapped_subscribers: Subscribers) -> Arc<Self> {
-        // `ReadSignal` is a reactive proxy. A child component subscribes to this wrapper,
-        // and this forwarding context subscribes to the readable the wrapper currently points at.
-        //
-        // Prop memoization can retarget an existing `ReadSignal` with `point_to` without
-        // rerendering the child if the current values are equal. In that case the child
-        // subscriptions transfer from the old wrapper proxy to the new wrapper proxy, whose
-        // forwarding context is already subscribed to the new readable. Future updates then come
-        // from the new source instead of the old one.
-        //
-        // Running wrapped reads under this context preserves each readable's normal subscription
-        // behavior. Stores subscribe this forwarding context to the relevant store path, and memos
-        // recompute/read through their `Readable` impl before subscribing this context to the memo's
-        // output signal. When any of those sources change, this context marks the wrapper's child
-        // subscribers dirty. Direct reads the child made to the same signal, memo, or store are
-        // collected by the child's own context and are not removed when the wrapper is retargeted.
         let subscribers = Subscribers::new();
         let subscribers_to_notify = subscribers.clone();
         let forwarding_context = ReactiveContext::new_with_callback(
