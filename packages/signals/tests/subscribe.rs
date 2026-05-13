@@ -523,6 +523,57 @@ fn boxed_read_signal_read_in_context_without_current_scope_does_not_panic() {
 }
 
 #[test]
+fn boxed_read_signal_custom_context_stays_subscribed_after_forwarded_write() {
+    type Props = (
+        Rc<RefCell<Option<(Signal<i32>, ReadSignal<i32>, ReactiveContext)>>>,
+        Arc<AtomicUsize>,
+    );
+
+    let captured = Rc::new(RefCell::new(None));
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(captured, dirty_count): Props| {
+            let signal = use_signal(|| 0);
+            let boxed = ReadSignal::from(signal);
+            let context = ReactiveContext::new_with_callback(
+                {
+                    let dirty_count = dirty_count.clone();
+                    move || {
+                        dirty_count.fetch_add(1, Ordering::SeqCst);
+                    }
+                },
+                current_scope_id(),
+                std::panic::Location::caller(),
+            );
+
+            *captured.borrow_mut() = Some((signal, boxed, context));
+
+            rsx! { "" }
+        },
+        (captured.clone(), dirty_count.clone()),
+    );
+
+    dom.rebuild_in_place();
+
+    let (mut signal, boxed, context) = captured.borrow().unwrap();
+    {
+        let _runtime = RuntimeGuard::new(dom.runtime());
+        context.run_in(|| assert_eq!(boxed(), 0));
+    }
+
+    signal.set(1);
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 1);
+
+    signal.set(2);
+    assert_eq!(
+        dirty_count.load(Ordering::SeqCst),
+        2,
+        "boxed ReadSignal wrapper subscribers should survive forwarded writes"
+    );
+}
+
+#[test]
 fn boxed_read_signal_try_read_in_context_returns_error_after_wrapped_signal_drops() {
     type Props = Rc<RefCell<Option<(Signal<i32>, ReadSignal<i32>, ReactiveContext)>>>;
 
@@ -741,6 +792,64 @@ fn point_to_tolerates_shared_other_slot() {
     dom.rebuild_in_place();
 
     assert_eq!(*observed.borrow(), Some((99, 99, 99)));
+}
+
+#[test]
+fn point_to_retargeting_one_shared_replacement_keeps_other_subscribed() {
+    type Props = (Rc<RefCell<Option<Signal<i32>>>>, Arc<AtomicUsize>);
+
+    let signal_y_handle = Rc::new(RefCell::new(None));
+    let dirty_count = Arc::new(AtomicUsize::new(0));
+
+    let mut dom = VirtualDom::new_with_props(
+        |(signal_y_handle, dirty_count): Props| {
+            let signal_x = use_signal(|| 0);
+            let signal_y = use_signal(|| 10);
+            let signal_z = use_signal(|| 20);
+
+            let target_a = use_hook(|| ReadSignal::from(signal_x));
+            let target_b = use_hook(|| ReadSignal::from(signal_x));
+            let replacement_y = ReadSignal::from(signal_y);
+            let replacement_z = ReadSignal::from(signal_z);
+            let context_b = use_hook({
+                let dirty_count = dirty_count.clone();
+                move || {
+                    ReactiveContext::new_with_callback(
+                        {
+                            let dirty_count = dirty_count.clone();
+                            move || {
+                                dirty_count.fetch_add(1, Ordering::SeqCst);
+                            }
+                        },
+                        current_scope_id(),
+                        std::panic::Location::caller(),
+                    )
+                }
+            });
+
+            target_a.point_to(replacement_y).unwrap();
+            target_b.point_to(replacement_y).unwrap();
+            context_b.run_in(|| assert_eq!(target_b(), 10));
+
+            target_a.point_to(replacement_z).unwrap();
+            *signal_y_handle.borrow_mut() = Some(signal_y);
+
+            rsx! { "" }
+        },
+        (signal_y_handle.clone(), dirty_count.clone()),
+    );
+
+    dom.rebuild_in_place();
+    assert_eq!(dirty_count.load(Ordering::SeqCst), 0);
+
+    let mut signal_y = signal_y_handle.borrow().unwrap();
+    signal_y.set(11);
+
+    assert_eq!(
+        dirty_count.load(Ordering::SeqCst),
+        1,
+        "retargeting one wrapper must not detach other wrappers that share the old forwarding context"
+    );
 }
 
 #[test]

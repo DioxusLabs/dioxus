@@ -1,7 +1,7 @@
-use std::{any::Any, ops::Deref, sync::Arc};
+use std::{any::Any, ops::Deref};
 
 use dioxus_core::{
-    IntoAttributeValue, IntoDynNode, ReactiveContext, SubscriberList, Subscribers, current_scope_id,
+    IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, current_scope_id,
 };
 use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
 
@@ -17,21 +17,6 @@ use crate::{
 )]
 pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 
-/// Backing storage for a [ReadSignal] handle. The wrapped readable plus wrapper-level subscriber
-/// state share one [CopyValue] so `point_to` can swap the inner readable while preserving any
-/// subscribers attached to the wrapper itself.
-#[doc(hidden)]
-pub struct ReadSignalInner<T: ?Sized, S: BoxedSignalStorage<T>> {
-    pub(crate) value: Box<S::DynReadable<sealed::SealedToken>>,
-    pub(crate) subscribers: Arc<ForwardingContext>,
-}
-
-impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
-    fn wrapper_subscribers(&self) -> Subscribers {
-        self.subscribers.subscribers()
-    }
-}
-
 /// A wrapper-level subscriber list plus a reactive context that forwards updates from the
 /// currently wrapped readable.
 ///
@@ -39,9 +24,9 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
 /// forwarding context subscribes to the readable the wrapper currently points at.
 ///
 /// Prop memoization can retarget an existing `ReadSignal` with `point_to` without rerendering the
-/// child if the current values are equal. In that case the child subscriptions transfer from the
-/// old wrapper proxy to the new wrapper proxy, whose forwarding context is already subscribed to
-/// the new readable. Future updates then come from the new source instead of the old one.
+/// child if the current values are equal. In that case the wrapper keeps its child subscriptions,
+/// swaps the wrapped readable it points at, and retargets its forwarding context to the new
+/// readable. Future updates then come from the new source instead of the old one.
 ///
 /// Running wrapped reads under this context preserves each readable's normal subscription
 /// behavior. Stores subscribe this forwarding context to the relevant store path, and memos
@@ -88,13 +73,14 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignalInner<T, S> {
 /// After the child prop is retargeted from `signal_a` to `signal_b`, updating `signal_b` should
 /// dirty the child through the new wrapper context without rerunning the parent effect that only
 /// read `signal_a`.
-pub(crate) struct ForwardingContext {
+#[doc(hidden)]
+pub struct ForwardingContext {
     subscribers: Subscribers,
     forwarding_context: ReactiveContext,
 }
 
 impl ForwardingContext {
-    fn new(wrapped_subscribers: Subscribers) -> Arc<Self> {
+    fn new(wrapped_subscribers: Subscribers) -> Self {
         let subscribers = Subscribers::new();
         let subscribers_to_notify = subscribers.clone();
         let forwarding_context = ReactiveContext::new_with_callback(
@@ -104,60 +90,27 @@ impl ForwardingContext {
         );
         forwarding_context.subscribe(wrapped_subscribers);
 
-        Arc::new(Self {
+        Self {
             subscribers,
             forwarding_context,
-        })
+        }
     }
 
-    fn subscribers(self: &Arc<Self>) -> Subscribers {
-        self.clone().into()
+    fn subscribers(&self) -> Subscribers {
+        self.subscribers.clone()
     }
 
     fn run_in<O>(&self, f: impl FnOnce() -> O) -> O {
         self.forwarding_context.run_in(f)
     }
 
-    fn transfer_subscribers_to(self: &Arc<Self>, other: &Arc<Self>) {
-        let subscribers = self.snapshot_subscribers();
-
-        for subscriber in &subscribers {
-            self.subscribers.remove(subscriber);
-        }
+    fn point_to(&self, wrapped_subscribers: Subscribers) {
         self.forwarding_context.clear_subscribers();
-
-        if subscribers.is_empty() {
-            return;
-        }
-
-        for subscriber in subscribers {
-            subscriber.subscribe(other.subscribers());
-        }
+        self.forwarding_context.subscribe(wrapped_subscribers);
     }
 
     fn mark_dirty(&self) {
         mark_subscribers_dirty(&self.subscribers);
-    }
-
-    fn snapshot_subscribers(&self) -> Vec<ReactiveContext> {
-        let mut subscribers = Vec::new();
-        self.subscribers
-            .visit(|subscriber: &ReactiveContext| subscribers.push(*subscriber));
-        subscribers
-    }
-}
-
-impl SubscriberList for ForwardingContext {
-    fn add(&self, subscriber: ReactiveContext) {
-        self.subscribers.add(subscriber);
-    }
-
-    fn remove(&self, subscriber: &ReactiveContext) {
-        self.subscribers.remove(subscriber);
-    }
-
-    fn visit(&self, f: &mut dyn FnMut(&ReactiveContext)) {
-        self.subscribers.visit(f);
     }
 }
 
@@ -171,14 +124,16 @@ fn mark_subscribers_dirty(subscribers: &Subscribers) {
     let mut subscribers_to_notify = Vec::new();
     subscribers.visit(|subscriber| subscribers_to_notify.push(*subscriber));
     for subscriber in subscribers_to_notify {
-        subscribers.remove(&subscriber);
-        subscriber.mark_dirty();
+        if !subscriber.mark_dirty() {
+            subscribers.remove(&subscriber);
+        }
     }
 }
 
 /// A boxed version of [Readable] that can be used to store any readable type.
 pub struct ReadSignal<T: ?Sized, S: BoxedSignalStorage<T> = UnsyncStorage> {
-    inner: CopyValue<ReadSignalInner<T, S>, S>,
+    value: CopyValue<Box<S::DynReadable<sealed::SealedToken>>, S>,
+    inner: CopyValue<ForwardingContext, S>,
 }
 
 impl<T: ?Sized + 'static> ReadSignal<T> {
@@ -196,11 +151,10 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
         R: Readable<Target = T>,
     {
         let value = S::new_readable(value, sealed::SealedToken);
+        let subscribers = ForwardingContext::new(value.subscribers());
         Self {
-            inner: CopyValue::new_maybe_sync(ReadSignalInner {
-                subscribers: ForwardingContext::new(value.subscribers()),
-                value,
-            }),
+            value: CopyValue::new_maybe_sync(value),
+            inner: CopyValue::new_maybe_sync(subscribers),
         }
     }
 
@@ -211,17 +165,18 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
             return Ok(());
         }
 
-        let old_forwarding_context = match self.inner.try_peek_unchecked() {
-            Ok(inner) => inner.subscribers.clone(),
+        let forwarding_context = match self.inner.try_peek_unchecked() {
+            Ok(inner) => inner,
             Err(_) => return Ok(()),
         };
 
-        let new_forwarding_context = other.inner.try_peek_unchecked()?.subscribers.clone();
+        let new_value = other.value;
+        let new_source_subscribers = new_value.try_peek_unchecked()?.subscribers();
 
         // Keep `other` usable; rsx clones can retarget multiple props from it.
-        self.inner.point_to(other.inner)?;
+        self.value.point_to(new_value)?;
 
-        old_forwarding_context.transfer_subscribers_to(&new_forwarding_context);
+        forwarding_context.point_to(new_source_subscribers);
         Ok(())
     }
 
@@ -230,7 +185,7 @@ impl<T: ?Sized + 'static, S: BoxedSignalStorage<T>> ReadSignal<T, S> {
     /// Mark any readers of the signal as dirty
     pub fn mark_dirty(&mut self) {
         let inner = self.inner.try_peek_unchecked().unwrap();
-        inner.subscribers.mark_dirty();
+        inner.mark_dirty();
     }
 }
 
@@ -299,11 +254,11 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         T: 'static,
     {
         let inner = self.inner.try_peek_unchecked()?;
-        let wrapped = &inner.value;
+        let wrapped = self.value.try_peek_unchecked()?;
         if let Some(reactive_context) = ReactiveContext::current() {
-            reactive_context.subscribe(inner.wrapper_subscribers());
+            reactive_context.subscribe(inner.subscribers());
         }
-        inner.subscribers.run_in(|| wrapped.try_read_unchecked())
+        inner.run_in(|| wrapped.try_read_unchecked())
     }
 
     #[track_caller]
@@ -311,7 +266,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
     where
         T: 'static,
     {
-        self.inner.try_peek_unchecked()?.value.try_peek_unchecked()
+        self.value.try_peek_unchecked()?.try_peek_unchecked()
     }
 
     fn subscribers(&self) -> Subscribers
@@ -319,7 +274,7 @@ impl<T: ?Sized, S: BoxedSignalStorage<T>> Readable for ReadSignal<T, S> {
         T: 'static,
     {
         let inner = self.inner.try_peek_unchecked().unwrap();
-        inner.wrapper_subscribers()
+        inner.subscribers()
     }
 }
 
@@ -612,7 +567,7 @@ where
 pub trait BoxedSignalStorage<T: ?Sized>:
     Storage<Box<Self::DynReadable<sealed::SealedToken>>>
     + Storage<Box<Self::DynWritable<sealed::SealedToken>>>
-    + Storage<ReadSignalInner<T, Self>>
+    + Storage<ForwardingContext>
     + sealed::Sealed
     + 'static
 {
