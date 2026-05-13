@@ -211,7 +211,7 @@ impl HotpatchModuleCache {
                     return Err(PatchError::MissingSymbols);
                 }
 
-                let name_to_ifunc_old = collect_func_ifuncs(&module);
+                let direct_name_to_ifunc = collect_func_ifuncs(&module);
 
                 // These are the "real" bindings for functions in the module
                 // Basically a map between a function's index and its real name
@@ -224,21 +224,33 @@ impl HotpatchModuleCache {
                     })
                     .collect::<HashMap<usize, &str>>();
 
-                // Find the corresponding function that shares the same index, but in the ifunc table
-                let name_to_ifunc_old: HashMap<_, _> = symbols
+                // Find the corresponding function that shares the same index, but in the ifunc table.
+                // This indirection through `code_symbol_map` is what lets us resolve symbols that
+                // were merged together at high opt-levels — multiple symbol names can share one
+                // wasm function index, so we map symbol-name → function-index → unified-name →
+                // ifunc-offset.
+                let mut symbol_ifunc_map: HashMap<String, i32> = symbols
                     .code_symbol_map
                     .par_iter()
                     .filter_map(|(name, idx)| {
                         let new_modules_unified_function = func_to_index.get(idx)?;
-                        let offset = name_to_ifunc_old.get(new_modules_unified_function)?;
-                        Some((*name, *offset))
+                        let offset = direct_name_to_ifunc.get(new_modules_unified_function)?;
+                        Some((name.to_string(), *offset))
                     })
                     .collect();
 
-                let symbol_ifunc_map = name_to_ifunc_old
-                    .par_iter()
-                    .map(|(name, idx)| (name.to_string(), *idx))
-                    .collect::<HashMap<_, _>>();
+                // Also expose any function whose `Function::name` matches an ifunc entry but
+                // doesn't appear in the linking section's symbol table. This covers ifunc-table
+                // entries we synthesize in `prepare_wasm_base_module` (env-import trap stubs)
+                // whose original symbol record in the linking section refers to the (now-deleted)
+                // import slot rather than a defined function. Existing entries take precedence —
+                // the merged-function indirection above is strictly more informative when it
+                // applies.
+                for (name, offset) in &direct_name_to_ifunc {
+                    symbol_ifunc_map
+                        .entry((*name).to_string())
+                        .or_insert(*offset);
+                }
 
                 let old_exports = module
                     .exports
@@ -1322,6 +1334,50 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
         ..
     } = parse_module_with_ids(bytes)?;
 
+    // Resolve unresolved `env` function imports (e.g. C libc symbols like `isprint` linked in
+    // from a `cc`-built dep) into local trap stubs before doing anything else.
+    //
+    // The fat build links with `--no-gc-sections` so every symbol survives for future hot patches.
+    // wasm-ld emits any unresolved external as `(import "env" <name>)`. wasm-bindgen, which runs
+    // after this function, doesn't own the `env` namespace — it translates each unknown namespace
+    // verbatim into an ES module import (`import * as importN from "env"`). The browser then
+    // rejects that as an unresolvable specifier (`TypeError: Module name, 'env' does not resolve
+    // to a valid URL`) and the app never instantiates.
+
+    // We register each stub in the ifunc table (via `make_indirect` below) so subsequent thin
+    // patches that re-reference the same symbol resolve through `name_to_ifunc_old` in
+    // `create_wasm_jump_table` rather than falling into the "slipped through the cracks" branch.
+    let env_imports_to_stub: Vec<FunctionId> = module
+        .imports
+        .iter()
+        .filter_map(|i| match i.kind {
+            ImportKind::Function(fid)
+                if i.module == "env"
+                    && !i.name.starts_with("__wbindgen")
+                    && !i.name.starts_with("__wbg_") =>
+            {
+                Some(fid)
+            }
+            _ => None,
+        })
+        .collect();
+    let mut env_stub_ifuncs: Vec<FunctionId> = Vec::with_capacity(env_imports_to_stub.len());
+    for fid in env_imports_to_stub {
+        // Walrus parses the wasm name section into `Function::name`, so the imported function
+        // already carries its original name (e.g. "isprint"). Capture it before replacement so
+        // we can restore it on the new local function — `collect_func_ifuncs` and the cache's
+        // `symbol_ifunc_map` both key off `Function::name`, and a patch's `env` import will look
+        // the symbol up by that exact name.
+        let original_name = module.funcs.get(fid).name.clone();
+        let new_fid = module
+            .replace_imported_func(fid, |(body, _args)| {
+                body.unreachable();
+            })
+            .map_err(|e| PatchError::InvalidModule(format!("Failed to stub env import: {e}")))?;
+        module.funcs.get_mut(new_fid).name = original_name;
+        env_stub_ifuncs.push(new_fid);
+    }
+
     // Due to monomorphizations, functions will get merged and multiple names will point to the same function.
     // Walrus loses this information, so we need to manually parse the names table to get the indices
     // and names of these functions.
@@ -1434,6 +1490,10 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
             }
         }
     }
+
+    // Register the env-import stubs we created above in the ifunc table so thin patches can
+    // resolve `env.<name>` lookups through `name_to_ifunc_old` (see `create_wasm_jump_table`).
+    make_indirect.extend(env_stub_ifuncs);
 
     // Now we need to make sure to add the new ifuncs to the ifunc segment initializer.
     // We just assume the last segment is the safest one we can add to which is common practice.
