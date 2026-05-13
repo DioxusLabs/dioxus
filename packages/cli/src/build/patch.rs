@@ -211,7 +211,7 @@ impl HotpatchModuleCache {
                     return Err(PatchError::MissingSymbols);
                 }
 
-                let name_to_ifunc_old = collect_func_ifuncs(&module);
+                let direct_name_to_ifunc = collect_func_ifuncs(&module);
 
                 // These are the "real" bindings for functions in the module
                 // Basically a map between a function's index and its real name
@@ -224,21 +224,33 @@ impl HotpatchModuleCache {
                     })
                     .collect::<HashMap<usize, &str>>();
 
-                // Find the corresponding function that shares the same index, but in the ifunc table
-                let name_to_ifunc_old: HashMap<_, _> = symbols
+                // Find the corresponding function that shares the same index, but in the ifunc table.
+                // This indirection through `code_symbol_map` is what lets us resolve symbols that
+                // were merged together at high opt-levels — multiple symbol names can share one
+                // wasm function index, so we map symbol-name → function-index → unified-name →
+                // ifunc-offset.
+                let mut symbol_ifunc_map: HashMap<String, i32> = symbols
                     .code_symbol_map
                     .par_iter()
                     .filter_map(|(name, idx)| {
                         let new_modules_unified_function = func_to_index.get(idx)?;
-                        let offset = name_to_ifunc_old.get(new_modules_unified_function)?;
-                        Some((*name, *offset))
+                        let offset = direct_name_to_ifunc.get(new_modules_unified_function)?;
+                        Some((name.to_string(), *offset))
                     })
                     .collect();
 
-                let symbol_ifunc_map = name_to_ifunc_old
-                    .par_iter()
-                    .map(|(name, idx)| (name.to_string(), *idx))
-                    .collect::<HashMap<_, _>>();
+                // Also expose any function whose `Function::name` matches an ifunc entry but
+                // doesn't appear in the linking section's symbol table. This covers ifunc-table
+                // entries we synthesize in `prepare_wasm_base_module` (env-import trap stubs)
+                // whose original symbol record in the linking section refers to the (now-deleted)
+                // import slot rather than a defined function. Existing entries take precedence —
+                // the merged-function indirection above is strictly more informative when it
+                // applies.
+                for (name, offset) in &direct_name_to_ifunc {
+                    symbol_ifunc_map
+                        .entry((*name).to_string())
+                        .or_insert(*offset);
+                }
 
                 let old_exports = module
                     .exports
@@ -1353,11 +1365,16 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
     // However, wasm-bindgen will run a GC pass on the module, removing any unused imports.
     let mut make_indirect = vec![];
     for (imported_func, importid) in imported_funcs {
-        let import = module.imports.get(importid);
+        // Pull out the import's metadata so the `&module.imports` borrow is released before
+        // any `&mut module` calls below (`replace_imported_func` takes `&mut self`).
+        let (import_module, import_name) = {
+            let import = module.imports.get(importid);
+            (import.module.to_string(), import.name.to_string())
+        };
         let name_is_wbg =
-            import.name.starts_with("__wbindgen") || import.name.starts_with("__wbg_");
+            import_name.starts_with("__wbindgen") || import_name.starts_with("__wbg_");
 
-        if name_is_wbg && !name_is_bindgen_symbol(import.name.as_str()) {
+        if name_is_wbg && !name_is_bindgen_symbol(&import_name) {
             let func = module.funcs.get(imported_func);
 
             let ty = module.types.get(func.ty());
@@ -1366,7 +1383,7 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let mut builder = FunctionBuilder::new(&mut module.types, &params, &results);
             let mut body = builder
-                .name(format!("__saved_wbg_{}", import.name))
+                .name(format!("__saved_wbg_{}", import_name))
                 .func_body();
 
             let locals = params
@@ -1382,12 +1399,42 @@ pub fn prepare_wasm_base_module(bytes: &[u8]) -> Result<Vec<u8>> {
 
             let new_func_id = module.funcs.add_local(builder.local_func(locals));
 
-            let saved_name = format!("__saved_wbg_{}", import.name);
+            let saved_name = format!("__saved_wbg_{}", import_name);
             if exported.insert(saved_name.clone()) {
                 module.exports.add(&saved_name, new_func_id);
             }
 
             make_indirect.push(new_func_id);
+        } else if import_module == "env" && !name_is_wbg {
+            // We also stub out any stray non-wbg `env` imports here. The fat build links with
+            // `--no-gc-sections` so every symbol survives for future hot patches, which means any
+            // unresolved C dep (e.g. `isprint` pulled in by a `cc`-compiled tree-sitter) stays in the
+            // module as `(import "env" <name>)`. wasm-bindgen, which runs after this, doesn't own the
+            // `env` namespace — it forwards the import verbatim as `import * as importN from "env"` in
+            // the JS loader, and the browser then rejects it with `TypeError: Module name, 'env' does
+            // not resolve to a valid URL`. Cold (Base) builds dodge this because default wasm-ld
+            // dead-strips the unreachable C call sites and never emits the import. We mirror that
+            // effect at the module level: replace the import with a local function whose body is a
+            // single `unreachable`, and register it in the ifunc table so a thin patch's later env
+            // reference resolves through `name_to_ifunc_old` in `create_wasm_jump_table`.
+            //
+            // Walrus parses the wasm name section into `Function::name`, so the imported
+            // function already carries its original name (e.g. "isprint"). Save it before
+            // replacement so we can put it back on the new local function — `collect_func_ifuncs`
+            // and the cache's `symbol_ifunc_map` both key off `Function::name`, and a patch's
+            // `env` import will look the symbol up by that exact name.
+            let original_name = module.funcs.get(imported_func).name.clone();
+            let new_fid = module
+                .replace_imported_func(imported_func, |(body, _args)| {
+                    body.unreachable();
+                })
+                .map_err(|e| {
+                    PatchError::InvalidModule(format!(
+                        "Failed to stub env import {import_name}: {e}"
+                    ))
+                })?;
+            module.funcs.get_mut(new_fid).name = original_name;
+            make_indirect.push(new_fid);
         }
     }
 
