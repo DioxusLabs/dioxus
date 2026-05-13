@@ -23,6 +23,16 @@ fn rerender_app(dom: &mut VirtualDom) {
     flush(dom);
 }
 
+fn dirty_counter_context(dirty_count: Arc<AtomicUsize>) -> ReactiveContext {
+    ReactiveContext::new_with_callback(
+        move || {
+            dirty_count.fetch_add(1, Ordering::SeqCst);
+        },
+        current_scope_id(),
+        std::panic::Location::caller(),
+    )
+}
+
 #[test]
 fn reading_subscribes() {
     tracing_subscriber::fmt::init();
@@ -491,16 +501,7 @@ fn boxed_read_signal_read_in_context_without_current_scope_does_not_panic() {
         |(captured, dirty_count): Props| {
             let signal = use_signal(|| 0);
             let boxed = ReadSignal::from(signal);
-            let context = ReactiveContext::new_with_callback(
-                {
-                    let dirty_count = dirty_count.clone();
-                    move || {
-                        dirty_count.fetch_add(1, Ordering::SeqCst);
-                    }
-                },
-                current_scope_id(),
-                std::panic::Location::caller(),
-            );
+            let context = dirty_counter_context(dirty_count.clone());
 
             *captured.borrow_mut() = Some((signal, boxed, context));
 
@@ -813,18 +814,7 @@ fn point_to_retargeting_one_shared_replacement_keeps_other_subscribed() {
             let replacement_z = ReadSignal::from(signal_z);
             let context_b = use_hook({
                 let dirty_count = dirty_count.clone();
-                move || {
-                    ReactiveContext::new_with_callback(
-                        {
-                            let dirty_count = dirty_count.clone();
-                            move || {
-                                dirty_count.fetch_add(1, Ordering::SeqCst);
-                            }
-                        },
-                        current_scope_id(),
-                        std::panic::Location::caller(),
-                    )
-                }
+                move || dirty_counter_context(dirty_count.clone())
             });
 
             target_a.point_to(replacement_y).unwrap();
