@@ -59,9 +59,11 @@ impl Esbuild {
         let platform = Self::npm_platform_package()
             .ok_or_else(|| anyhow!("No esbuild binary available for this platform"))?;
 
-        let url = format!(
-            "https://registry.npmjs.org/@esbuild/{platform}/-/{platform}-{ESBUILD_VERSION}.tgz"
-        );
+        let registry = std::env::var("NPM_CONFIG_REGISTRY")
+            .or_else(|_| std::env::var("npm_config_registry"))
+            .unwrap_or_else(|_| "https://registry.npmjs.org".to_string());
+        let registry = registry.trim_end_matches('/');
+        let url = format!("{registry}/@esbuild/{platform}/-/{platform}-{ESBUILD_VERSION}.tgz");
 
         tracing::info!("Installing esbuild v{ESBUILD_VERSION} from {url}...");
 
