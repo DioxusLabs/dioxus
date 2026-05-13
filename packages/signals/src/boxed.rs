@@ -3,7 +3,7 @@ use std::{any::Any, ops::Deref};
 use dioxus_core::{
     IntoAttributeValue, IntoDynNode, ReactiveContext, Subscribers, current_scope_id,
 };
-use generational_box::{BorrowResult, Storage, SyncStorage, UnsyncStorage};
+use generational_box::{BorrowResult, Owner, Storage, SyncStorage, UnsyncStorage};
 
 use crate::{
     CopyValue, Global, InitializeFromFunction, MappedMutSignal, MappedSignal, Memo, Readable,
@@ -68,15 +68,18 @@ pub type ReadOnlySignal<T, S = UnsyncStorage> = ReadSignal<T, S>;
 pub struct ForwardingContext {
     subscribers: Subscribers,
     forwarding_context: ReactiveContext,
+    _owner: Owner<SyncStorage>,
 }
 
 impl ForwardingContext {
     fn new(wrapped_subscribers: Subscribers) -> Self {
         let subscribers = Subscribers::new();
         let subscribers_to_notify = subscribers.clone();
-        let forwarding_context = ReactiveContext::new_with_callback(
+        let owner = Owner::<SyncStorage>::default();
+        let forwarding_context = ReactiveContext::new_with_callback_in_owner(
             move || mark_subscribers_dirty(&subscribers_to_notify),
             current_scope_id(),
+            owner.clone(),
             std::panic::Location::caller(),
         );
         forwarding_context.subscribe(wrapped_subscribers);
@@ -84,6 +87,7 @@ impl ForwardingContext {
         Self {
             subscribers,
             forwarding_context,
+            _owner: owner,
         }
     }
 
