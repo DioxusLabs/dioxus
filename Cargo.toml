@@ -342,19 +342,19 @@ form_urlencoded = "1.2.1"
 winnow = "0.7.14"
 
 # desktop
-wry = { version = "0.54.4", default-features = false }
-tao = { version = "0.34.0", features = ["rwh_05"] }
+wry = { version = "0.55.1", default-features = false }
+tao = { version = "0.35.2", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
 percent-encoding = "2.3.1"
-muda = "0.17.0"
+muda = "0.19.1"
 objc2 = { version = "0.6.4", features = ["exception"] }
 objc2-foundation = { version = "0.3.2", default-features = false }
 objc2-ui-kit = { version = "0.3.2", default-features = false }
 objc2-app-kit = { version = "0.3.2", default-features = false }
-tray-icon = "0.21.0"
-open = "5.3.2"
-webbrowser = "1.0"
+tray-icon = "0.24.0"
+open = "5.3.5"
+webbrowser = "1.2.1"
 
 # web
 gloo-dialogs = "0.2.0"
