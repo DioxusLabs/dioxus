@@ -93,7 +93,8 @@ async fn serve_server(
 /// - Hot-reloading
 /// - Async Runtime
 /// - Logging
-pub fn router(app: fn() -> Element) -> Router {
+pub fn router<S>(app: fn() -> Element) -> Router<S> where
+    S: Clone + Send + Sync + 'static {
     let cfg = ServeConfig::new();
     apply_base_path(
         Router::new().serve_dioxus_application(cfg.clone(), app),
