@@ -93,8 +93,10 @@ async fn serve_server(
 /// - Hot-reloading
 /// - Async Runtime
 /// - Logging
-pub fn router<S>(app: fn() -> Element) -> Router<S> where
-    S: Clone + Send + Sync + 'static {
+pub fn router<S>(app: fn() -> Element) -> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     let cfg = ServeConfig::new();
     apply_base_path(
         Router::new().serve_dioxus_application(cfg.clone(), app),
@@ -115,7 +117,7 @@ pub fn router<S>(app: fn() -> Element) -> Router<S> where
 /// This function uses axum to block on serving the application, and will not return.
 pub fn serve<F>(mut serve_it: impl FnMut() -> F) -> !
 where
-    F: Future<Output = Result<Router, anyhow::Error>> + 'static,
+    F: Future<Output=Result<Router, anyhow::Error>> + 'static,
 {
     let cb = move || Box::pin(serve_it()) as _;
 
@@ -133,7 +135,7 @@ where
 /// To enable hot-reloading of the router, the provided `serve_callback` should return a new `Router`
 /// each time it is called.
 pub async fn serve_router(
-    mut serve_callback: impl FnMut() -> Pin<Box<dyn Future<Output = Result<Router, anyhow::Error>>>>,
+    mut serve_callback: impl FnMut() -> Pin<Box<dyn Future<Output=Result<Router, anyhow::Error>>>>,
     addr: SocketAddr,
 ) {
     dioxus_logger::initialize_default();
@@ -187,8 +189,8 @@ pub async fn serve_router(
                             cx,
                         )
                     })
-                    .await
-                    .expect("Infallible");
+                        .await
+                        .expect("Infallible");
 
                     // upgrades needed for websockets
                     let builder = HyperBuilder::new(TokioExecutor::new());
@@ -223,10 +225,10 @@ pub async fn serve_router(
             //
             // todo(jon): I *believe* SSR is resilient to RSX changes, but we should verify that...
             Either::Right(DevserverMsg::HotReload(HotReloadMsg {
-                jump_table: Some(table),
-                for_build_id,
-                ..
-            })) if for_build_id == our_build_id => {
+                                                      jump_table: Some(table),
+                                                      for_build_id,
+                                                      ..
+                                                  })) if for_build_id == our_build_id => {
                 // Apply the hot-reload patch to the dioxus devtools first
                 unsafe { dioxus_devtools::subsecond::apply_patch(table).unwrap() };
 
@@ -251,7 +253,7 @@ pub async fn serve_router(
     }
 }
 
-fn block_on<T>(app_future: impl Future<Output = T>) {
+fn block_on<T>(app_future: impl Future<Output=T>) {
     if let Ok(handle) = tokio::runtime::Handle::try_current() {
         handle.block_on(app_future);
     } else {
@@ -263,12 +265,14 @@ fn block_on<T>(app_future: impl Future<Output = T>) {
     }
 }
 
-fn apply_base_path<M: 'static>(
-    mut router: Router,
+fn apply_base_path<M: 'static, S>(
+    mut router: Router<S>,
     root: impl ComponentFunction<(), M> + Send + Sync,
     cfg: ServeConfig,
     base_path: Option<String>,
-) -> Router {
+) -> Router<S> where
+    S: Clone + Send + Sync + 'static,
+{
     if let Some(base_path) = base_path {
         let base_path = base_path.trim_matches('/');
 
@@ -283,7 +287,7 @@ fn apply_base_path<M: 'static>(
                     FullstackState::render_handler(state, request).await
                 },
             )
-            .with_state(FullstackState::new(cfg, root)),
+                .with_state(FullstackState::new(cfg, root)),
         )
     }
 
