@@ -40,7 +40,7 @@ pretty_assertions = { workspace = true }
 sysinfo = "0.35.2"
 
 [dev-dependencies.web-sys]
-version = "0.3.77"
+workspace = true
 features = ["Document", "HtmlElement", "Window"]
 
 [features]
