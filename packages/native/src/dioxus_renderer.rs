@@ -1,56 +1,26 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::{any::Any, cell::RefCell};
 
-use anyrender::WindowRenderer;
+use anyrender::{RenderContext, WindowRenderer};
 
-// Renderers
-
-#[cfg(feature = "vello")]
-pub use anyrender_vello::{VelloRendererOptions, VelloWindowRenderer as InnerRenderer};
-#[cfg(all(feature = "vello-hybrid", not(feature = "vello")))]
-use anyrender_vello_hybrid::VelloHybridWindowRenderer as InnerRenderer;
-
-#[cfg(all(
-    feature = "skia",
-    not(feature = "vello"),
-    not(feature = "vello-hybrid"),
-    not(feature = "vello-cpu-base")
-))]
-use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
-#[cfg(all(
-    feature = "vello-cpu-base",
-    not(feature = "vello"),
-    not(feature = "vello-hybrid")
-))]
-use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
-
-// WGPU renderer extension features
-// TODO: enable for vello_hybrid
+#[cfg(feature = "vello-hybrid")]
+pub use anyrender_vello_hybrid::{
+    VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
+    wgpu::{Features, Limits},
+};
 
 #[cfg(feature = "vello")]
 pub use anyrender_vello::{
-    CustomPaintSource,
+    VelloRendererOptions as InnerRendererOptions, VelloWindowRenderer as InnerRenderer,
     wgpu::{Features, Limits},
 };
-#[cfg(feature = "vello")]
-pub fn use_wgpu<T: CustomPaintSource>(create_source: impl FnOnce() -> T) -> u64 {
-    use dioxus_core::{consume_context, use_hook_with_cleanup};
 
-    let (_renderer, id) = use_hook_with_cleanup(
-        || {
-            let renderer = consume_context::<DioxusNativeWindowRenderer>();
-            let source = Box::new(create_source());
-            let id = renderer.register_custom_paint_source(source);
-            (renderer, id)
-        },
-        |(renderer, id)| {
-            renderer.unregister_custom_paint_source(id);
-        },
-    );
+#[cfg(feature = "vello-cpu-base")]
+use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
 
-    id
-}
+#[cfg(feature = "skia")]
+use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
 
 #[derive(Clone)]
 pub struct DioxusNativeWindowRenderer {
@@ -69,9 +39,9 @@ impl DioxusNativeWindowRenderer {
         Self::with_inner_renderer(vello_renderer)
     }
 
-    #[cfg(feature = "vello")]
+    #[cfg(any(feature = "vello-hybrid", feature = "vello"))]
     pub fn with_features_and_limits(features: Option<Features>, limits: Option<Limits>) -> Self {
-        let vello_renderer = InnerRenderer::with_options(VelloRendererOptions {
+        let vello_renderer = InnerRenderer::with_options(InnerRendererOptions {
             features,
             limits,
             ..Default::default()
@@ -86,25 +56,44 @@ impl DioxusNativeWindowRenderer {
     }
 }
 
-#[cfg(feature = "vello")]
-impl DioxusNativeWindowRenderer {
-    pub fn register_custom_paint_source(&self, source: Box<dyn CustomPaintSource>) -> u64 {
-        self.inner.borrow_mut().register_custom_paint_source(source)
+impl RenderContext for DioxusNativeWindowRenderer {
+    fn try_register_custom_resource(
+        &mut self,
+        resource: Box<dyn Any>,
+    ) -> Result<anyrender::ResourceId, anyrender::RegisterResourceError> {
+        self.inner
+            .borrow_mut()
+            .try_register_custom_resource(resource)
     }
 
-    pub fn unregister_custom_paint_source(&self, id: u64) {
-        self.inner.borrow_mut().unregister_custom_paint_source(id)
+    fn unregister_resource(&mut self, resource_id: anyrender::ResourceId) {
+        self.inner.borrow_mut().unregister_resource(resource_id)
+    }
+
+    fn renderer_specific_context(&self) -> Option<Box<dyn Any>> {
+        self.inner.borrow_mut().renderer_specific_context()
     }
 }
-
 impl WindowRenderer for DioxusNativeWindowRenderer {
     type ScenePainter<'a>
         = <InnerRenderer as WindowRenderer>::ScenePainter<'a>
     where
         Self: 'a;
 
-    fn resume(&mut self, window: Arc<dyn anyrender::WindowHandle>, width: u32, height: u32) {
-        self.inner.borrow_mut().resume(window, width, height)
+    fn resume<F: FnOnce() + 'static>(
+        &mut self,
+        window: Arc<dyn anyrender::WindowHandle>,
+        width: u32,
+        height: u32,
+        on_ready: F,
+    ) {
+        self.inner
+            .borrow_mut()
+            .resume(window, width, height, on_ready)
+    }
+
+    fn complete_resume(&mut self) -> bool {
+        self.inner.borrow_mut().complete_resume()
     }
 
     fn suspend(&mut self) {
@@ -113,6 +102,10 @@ impl WindowRenderer for DioxusNativeWindowRenderer {
 
     fn is_active(&self) -> bool {
         self.inner.borrow().is_active()
+    }
+
+    fn is_pending(&self) -> bool {
+        self.inner.borrow().is_pending()
     }
 
     fn set_size(&mut self, width: u32, height: u32) {

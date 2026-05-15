@@ -147,6 +147,12 @@ impl NodeHandle {
         self.doc.borrow()
     }
 
+    /// Returns `None` if the document is currently mutably borrowed.
+    /// Use this from background tasks to avoid panicking during event handling.
+    pub fn try_doc(&self) -> Option<Ref<'_, BaseDocument>> {
+        self.doc.try_borrow().ok()
+    }
+
     pub fn doc_mut(&self) -> RefMut<'_, BaseDocument> {
         self.doc.borrow_mut()
     }

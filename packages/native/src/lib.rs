@@ -19,7 +19,7 @@ mod link_handler;
 #[cfg(feature = "prelude")]
 pub mod prelude;
 
-#[cfg(feature = "net")]
+#[cfg(all(feature = "net", not(target_arch = "wasm32")))]
 use blitz_traits::net::NetProvider;
 #[doc(inline)]
 pub use dioxus_native_dom::*;
@@ -47,12 +47,13 @@ pub fn current_android_app() -> android_activity::AndroidApp {
 #[cfg_attr(docsrs, doc(cfg(target_os = "android")))]
 pub use android_activity::AndroidApp;
 
-#[cfg(feature = "vello")]
+#[cfg(any(feature = "vello", feature = "vello-hybrid"))]
 pub use {
-    anyrender_vello::{CustomPaintCtx, CustomPaintSource, DeviceHandle, TextureHandle},
-    dioxus_renderer::{Features, Limits, use_wgpu},
+    dioxus_renderer::{Features, Limits},
+    wgpu_context::DeviceHandle,
 };
 
+pub use blitz_dom::{FontContext, Widget, build_single_font_ctx};
 pub use config::Config;
 pub use winit::dpi::{LogicalSize, PhysicalSize};
 pub use winit::window::WindowAttributes;
@@ -118,12 +119,12 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
     }
 
     // Read config values
-    #[cfg(feature = "vello")]
+    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
     let (mut features, mut limits) = (None, None);
     let mut window_attributes = None;
     let mut config = None;
     for mut cfg in configs {
-        #[cfg(feature = "vello")]
+        #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
         {
             cfg = try_read_config!(cfg, features, Features);
             cfg = try_read_config!(cfg, limits, Limits);
@@ -163,17 +164,15 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         })
     }
 
-    // Spin up the virtualdom
-    // We're going to need to hit it with a special waker
-    // Note that we are delaying the initialization of window-specific contexts (net provider, document, etc)
+    // Build the vdom first; the net provider, document, and other window-bound
+    // contexts are attached below once the event-loop proxy exists.
     let mut vdom = VirtualDom::new_with_props(app, props);
 
-    // Add contexts
     for context in contexts {
         vdom.insert_any_root_context(context());
     }
 
-    #[cfg(feature = "net")]
+    #[cfg(all(feature = "net", not(target_arch = "wasm32")))]
     let net_provider = {
         let net_waker = Some(Arc::new(proxy.clone()) as _);
         let inner_net_provider = Arc::new(blitz_net::Provider::new(net_waker));
@@ -185,7 +184,7 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
         )) as Arc<dyn NetProvider>
     };
 
-    #[cfg(not(feature = "net"))]
+    #[cfg(any(not(feature = "net"), target_arch = "wasm32"))]
     let net_provider = DioxusNativeNetProvider::shared(proxy.clone());
 
     vdom.provide_root_context(Arc::clone(&net_provider));
@@ -208,12 +207,13 @@ pub fn launch_cfg_with_props<P: Clone + 'static, M: 'static>(
             net_provider: Some(net_provider),
             html_parser_provider,
             navigation_provider,
+            font_ctx: config.font_ctx,
             ..Default::default()
         },
     );
-    #[cfg(feature = "vello")]
+    #[cfg(any(feature = "vello", feature = "vello-hybrid"))]
     let renderer = DioxusNativeWindowRenderer::with_features_and_limits(features, limits);
-    #[cfg(not(feature = "vello"))]
+    #[cfg(not(any(feature = "vello", feature = "vello-hybrid")))]
     let renderer = DioxusNativeWindowRenderer::new();
     let config = WindowConfig::with_attributes(
         Box::new(doc) as _,

@@ -82,7 +82,7 @@ which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "=0.23.3"
+cargo-generate = "=0.23.8"
 toml_edit = "0.22.27"
 
 # formatting
