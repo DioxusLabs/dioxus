@@ -76,7 +76,7 @@ impl Widget for DemoWidget {
                 &Rect::from_origin_size((0.0, 0.0), (width as f64, height as f64)),
             );
         } else {
-            println!("WANRING: render returned None");
+            println!("WARNING: render returned None");
         }
 
         scene
