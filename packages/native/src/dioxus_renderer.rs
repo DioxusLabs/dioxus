@@ -4,23 +4,26 @@ use std::{any::Any, cell::RefCell};
 
 use anyrender::{RenderContext, WindowRenderer};
 
-#[cfg(feature = "vello-hybrid")]
-pub use anyrender_vello_hybrid::{
-    VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
-    wgpu::{Features, Limits},
-};
-
-#[cfg(feature = "vello")]
-pub use anyrender_vello::{
-    VelloRendererOptions as InnerRendererOptions, VelloWindowRenderer as InnerRenderer,
-    wgpu::{Features, Limits},
-};
-
-#[cfg(feature = "vello-cpu-base")]
-use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
-
-#[cfg(feature = "skia")]
-use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
+// Renderer imports
+cfg_if::cfg_if! {
+    if #[cfg(feature = "vello")] {
+        pub use anyrender_vello::{
+            VelloRendererOptions as InnerRendererOptions, VelloWindowRenderer as InnerRenderer,
+            wgpu::{Features, Limits},
+        };
+    } else if #[cfg(feature = "vello-cpu-base")] {
+        use anyrender_vello_cpu::VelloCpuWindowRenderer as InnerRenderer;
+    } else if #[cfg(feature = "skia")] {
+        use anyrender_skia::SkiaWindowRenderer as InnerRenderer;
+        } else if #[cfg(feature = "vello-hybrid")] {
+        pub use anyrender_vello_hybrid::{
+            VelloHybridRendererOptions as InnerRendererOptions, VelloHybridWindowRenderer as InnerRenderer,
+            wgpu::{Features, Limits},
+        };
+    } else {
+        compile_error!("At least one renderer feature must be enabled");
+    }
+}
 
 #[derive(Clone)]
 pub struct DioxusNativeWindowRenderer {
