@@ -228,7 +228,7 @@ impl ActiveDemoRenderer {
         };
 
         let next_texture = &texture_and_handle.texture;
-        let next_texture_handle = texture_and_handle.handle.clone();
+        let next_texture_handle = texture_and_handle.handle;
 
         let elapsed: f32 = start_time.elapsed().as_millis() as f32 / 500.;
         let [light_red, light_green, light_blue] = light;
