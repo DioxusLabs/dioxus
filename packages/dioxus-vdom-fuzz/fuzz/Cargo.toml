@@ -1,0 +1,20 @@
+[package]
+name = "dioxus-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+dioxus-vdom-fuzz = { path = ".." }
+libfuzzer-sys = "0.4"
+mutatis = { version = "0.5", features = ["alloc", "derive"] }
+
+[[bin]]
+name = "vdom_ops"
+path = "fuzz_targets/vdom_ops.rs"
+test = false
+doc = false
+bench = false
