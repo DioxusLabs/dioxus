@@ -60,6 +60,14 @@ export function serializeEvent(
     extend({});
   }
 
+  if (
+    event.type === "select" ||
+    event.type === "selectstart" ||
+    event.type === "selectionchange"
+  ) {
+    extend(serializeSelectionEvent(event, target));
+  }
+
   if (event instanceof CustomEvent) {
     const detail = event.detail;
     if (detail instanceof ResizeObserverEntry) {
@@ -406,6 +414,49 @@ function serializeScrollEvent(event: Event): SerializedEvent {
     client_width: clientWidth,
     client_height: clientHeight,
   };
+}
+
+function serializeSelectionEvent(
+  event: Event,
+  target: EventTarget
+): SerializedEvent {
+  let selectionStart = null;
+  let selectionEnd = null;
+  let selectionDirection = null;
+  let selectedText = "";
+
+  const textControl = textControlTarget(target) ?? textControlTarget(event.target);
+  if (textControl) {
+    selectionStart = textControl.selectionStart;
+    selectionEnd = textControl.selectionEnd;
+    selectionDirection = textControl.selectionDirection || "none";
+
+    if (selectionStart !== null && selectionEnd !== null) {
+      selectedText = textControl.value.substring(selectionStart, selectionEnd);
+    }
+  }
+
+  const selection = document.getSelection();
+  return {
+    selection_start: selectionStart,
+    selection_end: selectionEnd,
+    selection_direction: selectionDirection,
+    selected_text: selectedText || selection?.toString() || "",
+    anchor_offset: selection?.anchorOffset ?? null,
+    focus_offset: selection?.focusOffset ?? null,
+    is_collapsed: selection?.isCollapsed ?? null,
+    range_count: selection?.rangeCount ?? null,
+  };
+}
+
+function textControlTarget(
+  target: EventTarget | null
+): HTMLInputElement | HTMLTextAreaElement | null {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return target;
+  }
+
+  return null;
 }
 
 
