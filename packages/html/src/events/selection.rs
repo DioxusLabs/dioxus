@@ -62,6 +62,12 @@ impl SelectionData {
     }
 
     /// The selection inside a text control.
+    ///
+    /// This is only populated for event targets that expose the text-control
+    /// selection APIs, such as `input` and `textarea` on the web. Some
+    /// selection events, notably `selectstart`, can also fire when selecting
+    /// normal document text. Those document selections are exposed by browser
+    /// APIs like `document.getSelection()` and intentionally return `None` here.
     pub fn selection(&self) -> Option<TextSelection> {
         self.inner.selection()
     }
@@ -178,6 +184,10 @@ impl<'de> serde::Deserialize<'de> for SelectionData {
 
 pub trait HasSelectionData: std::any::Any {
     /// The selection inside a text control.
+    ///
+    /// Return `None` when the event did not originate from a text control with
+    /// selection offsets. Document selections should use a separate API instead
+    /// of being mixed into this payload.
     fn selection(&self) -> Option<TextSelection> {
         None
     }
