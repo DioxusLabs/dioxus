@@ -348,7 +348,7 @@ wry = { version = "0.55.1", default-features = false }
 tao = { version = "0.35.2", features = ["rwh_05"] }
 infer = "0.19.0"
 dunce = "1.0.5"
-percent-encoding = "2.3.1"
+percent-encoding = "2.3.2"
 muda = "0.19.1"
 objc2 = { version = "0.6.4", features = ["exception"] }
 objc2-foundation = { version = "0.3.2", default-features = false }
