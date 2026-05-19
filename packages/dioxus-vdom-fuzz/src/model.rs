@@ -77,7 +77,6 @@ impl Model {
             .wake_mutation_for_ready_key(key)
             .unwrap_or(WakeMutationSpec::None)
     }
-
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -192,7 +191,6 @@ impl VNodeSpec {
             .iter()
             .find_map(|dynamic| dynamic.wake_mutation_for_ready_key(key))
     }
-
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -626,7 +624,6 @@ impl DynamicSpec {
             }
         }
     }
-
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Mutate)]

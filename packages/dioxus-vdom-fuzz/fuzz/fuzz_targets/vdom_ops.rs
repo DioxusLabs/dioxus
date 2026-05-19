@@ -1,8 +1,8 @@
 #![no_main]
 
 use dioxus_vdom_fuzz::{
-    FuzzCase, ReductionOptions, decode_case, encode_case, encode_case_vec, print_case_trace,
-    reduce_case, run_case,
+    FuzzCase, ReductionOptions, decode_case, encode_case, encode_case_vec, format_failure_report,
+    print_case_trace, reduce_case, run_case,
 };
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use mutatis::Session;
@@ -19,7 +19,7 @@ fuzz_target!(|data: &[u8]| {
 
     if let Err(failure) = run_case(&case) {
         print_case_trace(&case, &failure);
-        panic!("{failure}");
+        panic!("{}", format_failure_report(&case, &failure));
     }
 });
 

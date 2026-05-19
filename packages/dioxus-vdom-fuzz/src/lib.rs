@@ -212,6 +212,56 @@ impl fmt::Display for FuzzFailure {
     }
 }
 
+pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
+    const CONTEXT: usize = 6;
+
+    let mut report = String::new();
+    let summary = failure.message.lines().next().unwrap_or(&failure.message);
+    let (start, end) = trace_bounds(case.ops.len(), failure.step);
+
+    use fmt::Write;
+    writeln!(&mut report, "dioxus-vdom-fuzz failure").unwrap();
+    writeln!(&mut report, "decoded operations: {}", case.ops.len()).unwrap();
+    writeln!(&mut report, "failed at step: {}", failure.step).unwrap();
+    writeln!(&mut report, "failing op: {}", failure.op).unwrap();
+    writeln!(&mut report, "summary: {summary}").unwrap();
+    writeln!(&mut report).unwrap();
+    writeln!(&mut report, "operation window:").unwrap();
+    if start > 0 {
+        writeln!(&mut report, "  ... {} earlier ops omitted", start).unwrap();
+    }
+    for (index, op) in case.ops.iter().enumerate().take(end).skip(start) {
+        let marker = if index == failure.step { ">>" } else { "  " };
+        writeln!(&mut report, "{marker} {index:03}: {op:?}").unwrap();
+    }
+    if end < case.ops.len() {
+        writeln!(
+            &mut report,
+            "  ... {} later ops omitted",
+            case.ops.len() - end
+        )
+        .unwrap();
+    }
+    writeln!(&mut report).unwrap();
+    writeln!(&mut report, "full error:").unwrap();
+    for line in failure.message.lines() {
+        writeln!(&mut report, "  {line}").unwrap();
+    }
+
+    fn trace_bounds(ops_len: usize, failing_step: usize) -> (usize, usize) {
+        if ops_len <= CONTEXT * 4 {
+            return (0, ops_len);
+        }
+
+        (
+            failing_step.saturating_sub(CONTEXT),
+            (failing_step + CONTEXT + 1).min(ops_len),
+        )
+    }
+
+    report
+}
+
 pub fn decode_case(data: &[u8]) -> Option<FuzzCase> {
     let mut case = postcard::from_bytes::<FuzzCase>(data).ok()?;
     case.normalize();

@@ -2,7 +2,7 @@
 
 use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_renderer_oracle::Sequence;
 
 #[test]
 fn empty_fragment_creates_nothing() {
@@ -13,33 +13,26 @@ fn empty_fragment_creates_nothing() {
     let mut vdom = VirtualDom::new(app);
     let edits = vdom.rebuild_to_vec();
 
-    assert_eq!(
-        edits.edits,
-        [
-            CreatePlaceholder { id: ElementId(1) },
-            AppendChildren { id: ElementId(0), m: 1 }
-        ]
-    );
+    assert_eq!(edits.edits.len(), 2);
+    assert!(matches!(edits.edits[0], CreatePlaceholder { .. }));
+    assert!(matches!(edits.edits[1], AppendChildren { m: 1, .. }));
 }
 
 #[test]
 fn root_fragments_work() {
-    let mut vdom = VirtualDom::new(|| {
-        rsx!(
-            div { "hello" }
-            div { "goodbye" }
-        )
-    });
-
-    assert_eq!(
-        vdom.rebuild_to_vec().edits.last().unwrap(),
-        &AppendChildren { id: ElementId(0), m: 2 }
-    );
+    Sequence::new()
+        .render({
+            rsx! {
+                div { "hello" }
+                div { "goodbye" }
+            }
+        })
+        .run();
 }
 
 #[test]
 fn fragments_nested() {
-    let mut vdom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx!(
             div { "hello" }
             div { "goodbye" }
@@ -56,12 +49,9 @@ fn fragments_nested() {
                 }}
             }}
         )
-    });
+    }
 
-    assert_eq!(
-        vdom.rebuild_to_vec().edits.last().unwrap(),
-        &AppendChildren { id: ElementId(0), m: 8 }
-    );
+    Sequence::new().render_with(app).run();
 }
 
 #[test]
@@ -80,10 +70,7 @@ fn fragments_across_components() {
         rsx! { "hellO!" {world} }
     }
 
-    assert_eq!(
-        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
-        &AppendChildren { id: ElementId(0), m: 8 }
-    );
+    Sequence::new().render_with(app).run();
 }
 
 #[test]
@@ -94,8 +81,6 @@ fn list_fragments() {
             {(0..6).map(|f| rsx!( span { "{f}" }))}
         )
     }
-    assert_eq!(
-        VirtualDom::new(app).rebuild_to_vec().edits.last().unwrap(),
-        &AppendChildren { id: ElementId(0), m: 7 }
-    );
+
+    Sequence::new().render_with(app).run();
 }

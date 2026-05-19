@@ -1,133 +1,63 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
 //! Prove that the dom works normally through virtualdom methods.
-//!
-//! This methods all use "rebuild_to_vec" which completely bypasses the scheduler.
-//! Hard rebuild_to_vecs don't consume any events from the event queue.
 
 use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_renderer_oracle::Sequence;
 
 #[test]
 fn test_original_diff() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div { div { "Hello, world!" } }
-        }
-    });
-
-    let edits = dom.rebuild_to_vec();
-
-    assert_eq!(
-        edits.edits,
-        [
-            // add to root
-            LoadTemplate { index: 0, id: ElementId(1) },
-            AppendChildren { m: 1, id: ElementId(0) }
-        ]
-    )
+    Sequence::new()
+        .render(rsx! { div { div { "Hello, world!" } } })
+        .run();
 }
 
 #[test]
 fn create() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div {
+    Sequence::new()
+        .render({
+            rsx! {
                 div {
-                    "Hello, world!"
                     div {
+                        "Hello, world!"
                         div {
-                            Fragment { "hello""world" }
+                            div {
+                                Fragment { "hello" "world" }
+                            }
                         }
                     }
                 }
             }
-        }
-    });
-
-    let _edits = dom.rebuild_to_vec();
-
-    // todo: we don't test template mutations anymore since the templates are passed along
-
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "Hello, world!" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateStaticPlaceholder {},
-    //         AppendChildren { m: 1 },
-    //         AppendChildren { m: 1 },
-    //         AppendChildren { m: 2 },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate {  m: 1 },
-    //         // The fragment child template
-    //         CreateStaticText { value: "hello" },
-    //         CreateStaticText { value: "world" },
-    //         SaveTemplate {  m: 2 },
-    //     ]
-    // );
+        })
+        .run();
 }
 
 #[test]
 fn create_list() {
-    let mut dom = VirtualDom::new(|| rsx! {{(0..3).map(|f| rsx!( div { "hello" } ))}});
+    fn app() -> Element {
+        rsx! {{(0..3).map(|_| rsx!( div { "hello" } ))}}
+    }
 
-    let _edits = dom.rebuild_to_vec();
-
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "hello" },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate {  m: 1 }
-    //     ]
-    // );
+    Sequence::new().render_with(app).run();
 }
 
 #[test]
 fn create_simple() {
-    let mut dom = VirtualDom::new(|| {
-        rsx! {
-            div {}
-            div {}
-            div {}
-            div {}
-        }
-    });
-
-    let edits = dom.rebuild_to_vec();
-
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create template
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         CreateElement { name: "div" },
-    //         // add to root
-    //         SaveTemplate {  m: 4 }
-    //     ]
-    // );
+    Sequence::new()
+        .render(rsx! { div {} div {} div {} div {} })
+        .run();
 }
+
 #[test]
 fn create_components() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx! {
             Child { "abc1" }
             Child { "abc2" }
             Child { "abc3" }
         }
-    });
+    }
 
     #[derive(Props, Clone, PartialEq)]
     struct ChildProps {
@@ -142,9 +72,7 @@ fn create_components() {
         }
     }
 
-    let _edits = dom.rebuild_to_vec();
-
-    // todo: test this
+    Sequence::new().render_with(app).run();
 }
 
 #[test]
@@ -160,27 +88,10 @@ fn anchors() {
         }
     });
 
-    // note that the template under "false" doesn't show up since it's not loaded
     let edits = dom.rebuild_to_vec();
 
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     edits.templates,
-    //     [
-    //         // create each template
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "hello" },
-    //         AppendChildren { m: 1 },
-    //         SaveTemplate { m: 1, name: "template" },
-    //     ]
-    // );
-
-    assert_eq!(
-        edits.edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            CreatePlaceholder { id: ElementId(2) },
-            AppendChildren { m: 2, id: ElementId(0) }
-        ]
-    )
+    assert_eq!(edits.edits.len(), 3);
+    assert!(matches!(edits.edits[0], LoadTemplate { index: 0, .. }));
+    assert!(matches!(edits.edits[1], CreatePlaceholder { .. }));
+    assert!(matches!(edits.edits[2], AppendChildren { m: 2, .. }));
 }

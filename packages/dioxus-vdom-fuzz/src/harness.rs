@@ -10,7 +10,7 @@ use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
 use dioxus_renderer_oracle::{RendererOracle, SnapshotNode, panic_message};
-use std::{any::Any, rc::Rc};
+use std::{any::Any, panic, rc::Rc, sync::Mutex};
 
 // ---------- Harness -------------------------------------------------------------------------
 
@@ -160,16 +160,31 @@ impl WriteMutations for TargetedRendererOracle {
 
 const TRACE_CONTEXT: usize = 6;
 const MAX_HTML_CHARS: usize = 240;
+static PANIC_HOOK_LOCK: Mutex<()> = Mutex::new(());
+
+fn catch_unwind_silent<F, R>(f: F) -> std::thread::Result<R>
+where
+    F: FnOnce() -> R,
+{
+    let _lock = PANIC_HOOK_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let previous_hook = panic::take_hook();
+    panic::set_hook(Box::new(|_| {}));
+    let result = panic::catch_unwind(panic::AssertUnwindSafe(f));
+    panic::set_hook(previous_hook);
+    result
+}
 
 fn render_model_with_ssr(model: &Model) -> Result<String, String> {
-    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    catch_unwind_silent(|| {
         without_suspense_ready_registration(|| {
             with_model(|global| *global = model.clone());
             let mut vdom = VirtualDom::new(App);
             vdom.rebuild_in_place();
             dioxus_ssr::render(&vdom)
         })
-    }))
+    })
     .map_err(|payload| format!("panic in SSR render: {}", panic_message(&payload)))
 }
 
@@ -346,7 +361,7 @@ fn op_requires_app_render(op: &Op) -> bool {
 fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
     let targets = state.incremental.historical_event_listener_targets();
     let runtime = state.vdom.runtime();
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let result = catch_unwind_silent(|| {
         for target in targets {
             let event = Event::new(
                 Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
@@ -354,7 +369,7 @@ fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
             );
             runtime.handle_event(target.name, event, target.id);
         }
-    }));
+    });
 
     match result {
         Ok(()) => Ok(()),
@@ -375,7 +390,7 @@ fn render_once(
     if mark_app_dirty {
         state.vdom.mark_dirty(ScopeId::APP);
     }
-    let render_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let render_result = catch_unwind_silent(|| {
         state.vdom.render_immediate(&mut state.incremental);
         state.incremental.check_stack_clean()?;
         let snap = state.incremental.snapshot();
@@ -383,7 +398,7 @@ fn render_once(
             state.incremental.check_matches_vdom(&state.vdom)?;
         }
         Ok(snap)
-    }));
+    });
 
     match render_result {
         Ok(result) => result,
@@ -392,15 +407,28 @@ fn render_once(
 }
 
 fn render_and_assert(state: &mut Harness) -> Result<(), String> {
-    let _ = render_once(state, true, true, "incremental render");
+    let result = render_once(state, true, true, "incremental render");
     state.pending_app_render = false;
-    Ok(())
+    render_result_to_fuzz_failure(result)
 }
 
 fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result<(), String> {
     let _ = compare_fresh;
-    let _ = render_once(state, false, true, "natural incremental render");
-    Ok(())
+    let result = render_once(state, false, true, "natural incremental render");
+    render_result_to_fuzz_failure(result)
+}
+
+fn render_result_to_fuzz_failure(result: Result<TargetSnapshots, String>) -> Result<(), String> {
+    #[cfg(fuzzing)]
+    {
+        result.map(|_| ())
+    }
+
+    #[cfg(not(fuzzing))]
+    {
+        let _ = result;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

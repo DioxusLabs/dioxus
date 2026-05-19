@@ -15,3 +15,6 @@ dioxus-ssr = { workspace = true }
 mutatis = { version = "0.5", features = ["alloc", "derive"] }
 postcard = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, features = ["derive"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
