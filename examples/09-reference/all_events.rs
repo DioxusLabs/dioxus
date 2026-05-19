@@ -55,22 +55,22 @@ fn app() -> Element {
                     style: "display: grid; gap: 12px; max-width: 520px; margin: 0 auto 24px; font-family: sans-serif;",
                     label {
                         r#for: "selection-input",
-                        "Select text in the input to inspect selection event data"
+                        "Select text in the input to inspect the selection range and direction"
                     }
                     input {
                         id: "selection-input",
                         value: "Select part of this text to fire selection events",
                         style: "font: inherit; padding: 8px 10px;",
-                        onselect: move |event: Event<SelectionData>| log_event(event.data()),
-                        onselectstart: move |event: Event<SelectionData>| log_event(event.data()),
-                        onselectionchange: move |event: Event<SelectionData>| log_event(event.data()),
+                        onselect: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectstart: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
                     }
                     textarea {
                         style: "font: inherit; padding: 8px 10px; min-height: 80px;",
-                        onselect: move |event: Event<SelectionData>| log_event(event.data()),
-                        onselectstart: move |event: Event<SelectionData>| log_event(event.data()),
-                        onselectionchange: move |event: Event<SelectionData>| log_event(event.data()),
-                        "Selection events also include textarea ranges and selected text.",
+                        onselect: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectstart: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        "Selection events also include textarea ranges and direction.",
                     }
                 }
                 div {
