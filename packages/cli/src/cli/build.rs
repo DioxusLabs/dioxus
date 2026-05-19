@@ -162,7 +162,9 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     server_req.features.push("embed".into());
                 }
                 None => {
-                    anyhow::bail!("--embed requires a fullstack build (use --fullstack or enable the fullstack feature)");
+                    anyhow::bail!(
+                        "--embed requires a fullstack build (use --fullstack or enable the fullstack feature)"
+                    );
                 }
             }
         }

@@ -66,16 +66,14 @@ where
                     }
                 };
 
-                let mut builder = Response::builder()
-                    .header(CONTENT_TYPE, &mime);
+                let mut builder = Response::builder().header(CONTENT_TYPE, &mime);
 
                 if is_br {
                     builder = builder.header(CONTENT_ENCODING, "br");
                 }
 
                 if immutable {
-                    builder = builder
-                        .header(CACHE_CONTROL, "public, max-age=31536000, immutable");
+                    builder = builder.header(CACHE_CONTROL, "public, max-age=31536000, immutable");
                 }
 
                 builder

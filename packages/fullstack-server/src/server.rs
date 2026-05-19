@@ -16,9 +16,7 @@ use std::sync::Arc;
 use tokio_util::task::LocalPoolHandle;
 #[cfg(not(feature = "embed"))]
 use {
-    std::path::Path,
-    tower::ServiceExt,
-    tower::util::MapResponse,
+    std::path::Path, tower::ServiceExt, tower::util::MapResponse,
     tower_http::services::fs::ServeFileSystemResponseBody,
 };
 
@@ -149,7 +147,7 @@ impl DioxusRouterExt for Router<FullstackState> {
     fn serve_static_assets(self) -> Router<FullstackState> {
         #[cfg(feature = "embed")]
         {
-            return crate::embedded::serve_embedded_assets(self);
+            crate::embedded::serve_embedded_assets(self)
         }
 
         #[cfg(not(feature = "embed"))]
