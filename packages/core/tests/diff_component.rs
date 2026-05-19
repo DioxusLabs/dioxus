@@ -1,6 +1,5 @@
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use pretty_assertions::assert_eq;
+use dioxus_renderer_oracle::Sequence;
 
 /// When returning sets of components, we do a light diff of the contents to preserve some react-like functionality
 ///
@@ -49,7 +48,7 @@ fn component_swap() {
 
     fn nav_bar() -> Element {
         rsx! {
-            h1 {
+            h1 { id: "nav",
                 "NavBar"
                 for _ in 0..3 {
                     nav_link {}
@@ -70,47 +69,38 @@ fn component_swap() {
         rsx!( div { "results" } )
     }
 
-    let mut dom = VirtualDom::new(app);
-    {
-        let edits = dom.rebuild_to_vec();
-        assert_eq!(
-            edits.edits,
-            [
-                LoadTemplate { index: 0, id: ElementId(1) },
-                LoadTemplate { index: 0, id: ElementId(2) },
-                LoadTemplate { index: 0, id: ElementId(3) },
-                LoadTemplate { index: 0, id: ElementId(4) },
-                ReplacePlaceholder { path: &[1], m: 3 },
-                LoadTemplate { index: 0, id: ElementId(5) },
-                AppendChildren { m: 2, id: ElementId(0) }
-            ]
-        );
+    fn expected_dashboard() -> Element {
+        rsx! {
+            h1 { id: "nav",
+                "NavBar"
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+            }
+            div { "dashboard" }
+        }
     }
 
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
-        ]
-    );
+    fn expected_results() -> Element {
+        rsx! {
+            h1 { id: "nav",
+                "NavBar"
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+                h1 { "nav_link" }
+            }
+            div { "results" }
+        }
+    }
 
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(5) },
-            ReplaceWith { id: ElementId(6), m: 1 }
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(6) },
-            ReplaceWith { id: ElementId(5), m: 1 }
-        ]
-    );
+    Sequence::new()
+        .track_identity_by("id")
+        .render_with_expected(app, expected_results())
+        .render_with_expected(app, expected_dashboard())
+        .render_with_expected(app, expected_results())
+        .render_with_expected(app, expected_dashboard())
+        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(3, |s| assert_eq!(s.replaces, 1))
+        .run();
 }

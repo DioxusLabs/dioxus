@@ -1,6 +1,5 @@
 //! Do we create fragments properly across complex boundaries?
 
-use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_renderer_oracle::Sequence;
 
@@ -10,12 +9,7 @@ fn empty_fragment_creates_nothing() {
         rsx!({})
     }
 
-    let mut vdom = VirtualDom::new(app);
-    let edits = vdom.rebuild_to_vec();
-
-    assert_eq!(edits.edits.len(), 2);
-    assert!(matches!(edits.edits[0], CreatePlaceholder { .. }));
-    assert!(matches!(edits.edits[1], AppendChildren { m: 1, .. }));
+    Sequence::new().render_with_expected(app, rsx!({})).run();
 }
 
 #[test]
@@ -51,7 +45,21 @@ fn fragments_nested() {
         )
     }
 
-    Sequence::new().render_with(app).run();
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                div { "hello" }
+                div { "goodbye" }
+                div { "hello" }
+                div { "goodbye" }
+                div { "hello" }
+                div { "goodbye" }
+                div { "hello" }
+                div { "goodbye" }
+            },
+        )
+        .run();
 }
 
 #[test]
@@ -70,7 +78,21 @@ fn fragments_across_components() {
         rsx! { "hellO!" {world} }
     }
 
-    Sequence::new().render_with(app).run();
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                "hellO!"
+                "world"
+                "hellO!"
+                "world"
+                "hellO!"
+                "world"
+                "hellO!"
+                "world"
+            },
+        )
+        .run();
 }
 
 #[test]
@@ -82,5 +104,18 @@ fn list_fragments() {
         )
     }
 
-    Sequence::new().render_with(app).run();
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                h1 { "hello" }
+                span { "0" }
+                span { "1" }
+                span { "2" }
+                span { "3" }
+                span { "4" }
+                span { "5" }
+            },
+        )
+        .run();
 }

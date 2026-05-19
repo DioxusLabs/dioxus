@@ -2,7 +2,6 @@
 
 //! Prove that the dom works normally through virtualdom methods.
 
-use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
 use dioxus_renderer_oracle::Sequence;
 
@@ -39,7 +38,16 @@ fn create_list() {
         rsx! {{(0..3).map(|_| rsx!( div { "hello" } ))}}
     }
 
-    Sequence::new().render_with(app).run();
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                div { "hello" }
+                div { "hello" }
+                div { "hello" }
+            },
+        )
+        .run();
 }
 
 #[test]
@@ -72,12 +80,27 @@ fn create_components() {
         }
     }
 
-    Sequence::new().render_with(app).run();
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                h1 {}
+                div { "abc1" }
+                p {}
+                h1 {}
+                div { "abc2" }
+                p {}
+                h1 {}
+                div { "abc3" }
+                p {}
+            },
+        )
+        .run();
 }
 
 #[test]
 fn anchors() {
-    let mut dom = VirtualDom::new(|| {
+    fn app() -> Element {
         rsx! {
             if true {
                  div { "hello" }
@@ -86,12 +109,19 @@ fn anchors() {
                 div { "goodbye" }
             }
         }
-    });
+    }
 
-    let edits = dom.rebuild_to_vec();
-
-    assert_eq!(edits.edits.len(), 3);
-    assert!(matches!(edits.edits[0], LoadTemplate { index: 0, .. }));
-    assert!(matches!(edits.edits[1], CreatePlaceholder { .. }));
-    assert!(matches!(edits.edits[2], AppendChildren { m: 2, .. }));
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                if true {
+                     div { "hello" }
+                }
+                if false {
+                    div { "goodbye" }
+                }
+            },
+        )
+        .run();
 }

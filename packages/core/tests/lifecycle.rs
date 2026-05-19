@@ -2,9 +2,9 @@
 #![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::html::SerializedHtmlEventConverter;
 use dioxus::prelude::*;
+use dioxus_renderer_oracle::RendererOracle;
 use std::any::Any;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -24,21 +24,18 @@ fn manual_diffing() {
     };
 
     let value = Arc::new(Mutex::new("Hello"));
-    let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
+    fn expected_goodbye() -> Element {
+        rsx! { div { "goodbye" } }
+    }
 
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let mut dom = VirtualDom::new_with_props(app, AppProps { value: value.clone() });
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
 
     *value.lock().unwrap() = "goodbye";
 
-    assert_eq!(
-        dom.rebuild_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(3) },
-            CreateTextNode { value: "goodbye".to_string(), id: ElementId(4) },
-            ReplacePlaceholder { path: &[0], m: 1 },
-            AppendChildren { m: 1, id: ElementId(0) }
-        ]
-    );
+    oracle.rebuild(&mut dom);
+    oracle.assert_matches(expected_goodbye);
 }
 
 #[test]
@@ -49,7 +46,7 @@ fn events_generate() {
 
         match count() {
             0 => rsx! {
-                div { onclick: move |_| count += 1,
+                div { id: "click-target", onclick: move |_| count += 1,
                     div { "nested" }
                     "Click me!"
                 }
@@ -59,22 +56,17 @@ fn events_generate() {
     };
 
     let mut dom = VirtualDom::new(app);
-    dom.rebuild(&mut dioxus_core::NoOpMutations);
+    let mut oracle = RendererOracle::new();
+    oracle.rebuild(&mut dom);
 
     let event = Event::new(
         Rc::new(PlatformEventData::new(Box::<SerializedMouseData>::default())) as Rc<dyn Any>,
         true,
     );
-    dom.runtime().handle_event("click", event, ElementId(1));
+    let target = oracle.element_id_by_attr("id", "click-target");
+    dom.runtime().handle_event("click", event, target);
 
     dom.mark_dirty(ScopeId::APP);
-    let edits = dom.render_immediate_to_vec();
-
-    assert_eq!(
-        edits.edits,
-        [
-            CreatePlaceholder { id: ElementId(2) },
-            ReplaceWith { id: ElementId(1), m: 1 }
-        ]
-    )
+    oracle.render(&mut dom);
+    assert_eq!(oracle.last_edit_summary().replaces, 1);
 }

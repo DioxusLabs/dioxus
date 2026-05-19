@@ -3,81 +3,39 @@
 //! This tests to ensure we clean it up
 
 use dioxus::prelude::*;
-use dioxus_core::{ElementId, IntoAttributeValue, Mutation::*, generation};
+use dioxus_renderer_oracle::Sequence;
 
 #[test]
 fn attrs_cycle() {
     tracing_subscriber::fmt::init();
 
-    let mut dom = VirtualDom::new(|| {
-        let id = generation();
-        match id % 2 {
-            0 => rsx! { div {} },
-            1 => rsx! {
-                div { h1 { class: "{id}", id: "{id}" } }
+    Sequence::new()
+        .render(rsx! { div {} })
+        .render_with_expected(
+            || {
+                let id = 1;
+                rsx! { div { h1 { class: "{id}", id: "{id}" } } }
             },
-            _ => unreachable!(),
-        }
-    });
-
-    assert_eq!(
-        dom.rebuild_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            AssignId { path: &[0,], id: ElementId(3,) },
-            SetAttribute { name: "class", value: "1".into_value(), id: ElementId(3,), ns: None },
-            SetAttribute { name: "id", value: "1".into_value(), id: ElementId(3,), ns: None },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2) },
-            AssignId { path: &[0], id: ElementId(3) },
-            SetAttribute {
-                name: "class",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
-                id: ElementId(3),
-                ns: None
+            rsx! { div { h1 { class: "1", id: "1" } } },
+        )
+        .render(rsx! { div {} })
+        .render_with_expected(
+            || {
+                let id = 3;
+                rsx! { div { h1 { class: "{id}", id: "{id}" } } }
             },
-            SetAttribute {
-                name: "id",
-                value: dioxus_core::AttributeValue::Text("3".to_string()),
-                id: ElementId(3),
-                ns: None
-            },
-            ReplaceWith { id: ElementId(1), m: 1 }
-        ]
-    );
-
-    // we take the node taken by attributes since we reused it
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            ReplaceWith { id: ElementId(2), m: 1 }
-        ]
-    );
+            rsx! { div { h1 { class: "3", id: "3" } } },
+        )
+        .render(rsx! { div {} })
+        .assert_edit_summary(1, |s| {
+            assert_eq!(s.set_attrs, 2);
+            assert_eq!(s.replaces, 1);
+        })
+        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(3, |s| {
+            assert_eq!(s.set_attrs, 2);
+            assert_eq!(s.replaces, 1);
+        })
+        .assert_edit_summary(4, |s| assert_eq!(s.replaces, 1))
+        .run();
 }

@@ -1,52 +1,25 @@
-use dioxus::dioxus_core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::generation;
+use dioxus_renderer_oracle::Sequence;
 
 /// As we clean up old templates, the ID for the node should cycle
 #[test]
 fn cycling_elements() {
-    let mut dom = VirtualDom::new(|| match generation() % 2 {
-        0 => rsx! { div { "wasd" } },
-        1 => rsx! { div { "abcd" } },
-        _ => unreachable!(),
-    });
-
-    {
-        let edits = dom.rebuild_to_vec();
-        assert_eq!(
-            edits.edits,
-            [
-                LoadTemplate { index: 0, id: ElementId(1,) },
-                AppendChildren { m: 1, id: ElementId(0) },
-            ]
-        );
-    }
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
-
-    // notice that the IDs cycle back to ElementId(1), preserving a minimal memory footprint
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
-
-    dom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        dom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
+    Sequence::new()
+        .render(rsx! { div { "wasd" } })
+        .render(rsx! { div { "abcd" } })
+        .render(rsx! { div { "wasd" } })
+        .render(rsx! { div { "abcd" } })
+        .assert_edit_summary(1, |s| {
+            assert_eq!(s.loads, 1);
+            assert_eq!(s.replaces, 1);
+        })
+        .assert_edit_summary(2, |s| {
+            assert_eq!(s.loads, 1);
+            assert_eq!(s.replaces, 1);
+        })
+        .assert_edit_summary(3, |s| {
+            assert_eq!(s.loads, 1);
+            assert_eq!(s.replaces, 1);
+        })
+        .run();
 }

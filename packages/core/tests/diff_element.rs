@@ -1,7 +1,7 @@
-use dioxus::dioxus_core::Mutation::*;
-use dioxus::dioxus_core::{AttributeValue, ElementId, NoOpMutations};
+use dioxus::dioxus_core::AttributeValue;
 use dioxus::prelude::*;
 use dioxus_core::generation;
+use dioxus_renderer_oracle::Sequence;
 
 #[test]
 fn text_diff() {
@@ -10,26 +10,15 @@ fn text_diff() {
         rsx!( h1 { "hello {g}" } )
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 1".to_string(), id: ElementId(2) }]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 2".to_string(), id: ElementId(2) }]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [SetText { value: "hello 3".to_string(), id: ElementId(2) }]
-    );
+    Sequence::new()
+        .render_with_expected(app, rsx!( h1 { "hello 0" } ))
+        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
+        .render_with_expected(app, rsx!( h1 { "hello 2" } ))
+        .render_with_expected(app, rsx!( h1 { "hello 3" } ))
+        .assert_edit_summary(1, |s| assert_eq!(s.set_texts, 1))
+        .assert_edit_summary(2, |s| assert_eq!(s.set_texts, 1))
+        .assert_edit_summary(3, |s| assert_eq!(s.set_texts, 1))
+        .run();
 }
 
 #[test]
@@ -44,48 +33,25 @@ fn element_swap() {
         }
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    );
-
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1,) },
-            ReplaceWith { id: ElementId(2,), m: 1 },
-        ]
-    );
+    Sequence::new()
+        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
+        .render_with_expected(app, rsx!( h2 { "hello 2" } ))
+        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
+        .render_with_expected(app, rsx!( h2 { "hello 2" } ))
+        .render_with_expected(app, rsx!( h1 { "hello 1" } ))
+        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(2, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(3, |s| assert_eq!(s.replaces, 1))
+        .assert_edit_summary(4, |s| assert_eq!(s.replaces, 1))
+        .run();
 }
 
 #[test]
 fn attribute_diff() {
+    fn attr(name: &'static str, value: &'static str) -> Attribute {
+        Attribute::new(name, AttributeValue::Text(value.into()), None, false)
+    }
+
     fn app() -> Element {
         let g = generation();
 
@@ -124,63 +90,31 @@ fn attribute_diff() {
         )
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
+    fn expected_0() -> Element {
+        rsx!( div { ..vec![attr("a", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute {
-                name: "b",
-                value: (AttributeValue::Text("hello".into())),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute {
-                name: "c",
-                value: (AttributeValue::Text("hello".into())),
-                id: ElementId(1,),
-                ns: None,
-            },
-        ]
-    );
+    fn expected_1() -> Element {
+        rsx!( div { ..vec![attr("a", "hello"), attr("b", "hello"), attr("c", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute { name: "a", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute { name: "b", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute {
-                name: "d",
-                value: AttributeValue::Text("hello".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute {
-                name: "e",
-                value: AttributeValue::Text("hello".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-        ]
-    );
+    fn expected_2() -> Element {
+        rsx!( div { ..vec![attr("c", "hello"), attr("d", "hello"), attr("e", "hello")], "hello" } )
+    }
 
-    vdom.mark_dirty(ScopeId::APP);
-    assert_eq!(
-        vdom.render_immediate_to_vec().edits,
-        [
-            SetAttribute { name: "c", value: AttributeValue::None, id: ElementId(1,), ns: None },
-            SetAttribute {
-                name: "d",
-                value: AttributeValue::Text("world".into()),
-                id: ElementId(1,),
-                ns: None,
-            },
-            SetAttribute { name: "e", value: AttributeValue::None, id: ElementId(1,), ns: None },
-        ]
-    );
+    fn expected_3() -> Element {
+        rsx!( div { ..vec![attr("d", "world")], "hello" } )
+    }
+
+    Sequence::new()
+        .render_with_expected(app, expected_0())
+        .render_with_expected(app, expected_1())
+        .render_with_expected(app, expected_2())
+        .render_with_expected(app, expected_3())
+        .assert_edit_summary(1, |s| assert_eq!(s.set_attrs, 2))
+        .assert_edit_summary(2, |s| assert_eq!(s.set_attrs, 4))
+        .assert_edit_summary(3, |s| assert_eq!(s.set_attrs, 3))
+        .run();
 }
 
 #[test]
@@ -193,17 +127,9 @@ fn diff_empty() {
         }
     }
 
-    let mut vdom = VirtualDom::new(app);
-    vdom.rebuild(&mut NoOpMutations);
-
-    vdom.mark_dirty(ScopeId::APP);
-    let edits = vdom.render_immediate_to_vec().edits;
-
-    assert_eq!(
-        edits,
-        [
-            CreatePlaceholder { id: ElementId(2,) },
-            ReplaceWith { id: ElementId(1,), m: 1 },
-        ]
-    )
+    Sequence::new()
+        .render_with_expected(app, rsx! { div { "hello" } })
+        .render_with_expected(app, rsx! {})
+        .assert_edit_summary(1, |s| assert_eq!(s.replaces, 1))
+        .run();
 }

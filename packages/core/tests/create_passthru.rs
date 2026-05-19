@@ -1,6 +1,5 @@
-use dioxus::dioxus_core::Mutation::*;
 use dioxus::prelude::*;
-use dioxus_core::ElementId;
+use dioxus_renderer_oracle::Sequence;
 
 /// Should push the text node onto the stack and modify it
 #[test]
@@ -20,16 +19,9 @@ fn nested_passthru_creates() {
         rsx!({ children })
     }
 
-    let mut dom = VirtualDom::new(app);
-    let edits = dom.rebuild_to_vec();
-
-    assert_eq!(
-        edits.edits,
-        [
-            LoadTemplate { index: 0, id: ElementId(1) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    )
+    Sequence::new()
+        .render_with_expected(app, rsx! { div { "hi" } })
+        .run();
 }
 
 /// Should load all the templates and append them
@@ -57,22 +49,17 @@ fn nested_passthru_creates_add() {
         rsx! {{children}}
     }
 
-    let mut dom = VirtualDom::new(app);
-
-    assert_eq!(
-        dom.rebuild_to_vec().edits,
-        [
-            // load 1
-            LoadTemplate { index: 0, id: ElementId(1) },
-            // load 2
-            LoadTemplate { index: 0, id: ElementId(2) },
-            // load 3
-            LoadTemplate { index: 0, id: ElementId(3) },
-            // load div that contains 4
-            LoadTemplate { index: 1, id: ElementId(4) },
-            AppendChildren { id: ElementId(0), m: 4 },
-        ]
-    );
+    Sequence::new()
+        .render_with_expected(
+            app,
+            rsx! {
+                "1"
+                "2"
+                "3"
+                div { "hi" }
+            },
+        )
+        .run();
 }
 
 /// note that the template is all dynamic roots - so it doesn't actually get cached as a template
@@ -84,17 +71,7 @@ fn dynamic_node_as_root() {
         rsx! { "{a}" "{b}" }
     }
 
-    let mut dom = VirtualDom::new(app);
-    let edits = dom.rebuild_to_vec();
-
-    // Since the roots were all dynamic, they should not cause any template muations
-    // The root node is text, so we just create it on the spot
-    assert_eq!(
-        edits.edits,
-        [
-            CreateTextNode { value: "123".to_string(), id: ElementId(1) },
-            CreateTextNode { value: "456".to_string(), id: ElementId(2) },
-            AppendChildren { id: ElementId(0), m: 2 }
-        ]
-    )
+    Sequence::new()
+        .render_with_expected(app, rsx! { "123" "456" })
+        .run();
 }
