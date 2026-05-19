@@ -11,12 +11,16 @@ use axum::{
 };
 use dioxus_core::{ComponentFunction, VirtualDom};
 use http::header::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio_util::task::LocalPoolHandle;
-use tower::ServiceExt;
-use tower::util::MapResponse;
-use tower_http::services::fs::ServeFileSystemResponseBody;
+#[cfg(not(feature = "embed"))]
+use {
+    std::path::Path,
+    tower::ServiceExt,
+    tower::util::MapResponse,
+    tower_http::services::fs::ServeFileSystemResponseBody,
+};
 
 /// A extension trait with utilities for integrating Dioxus with your Axum router.
 pub trait DioxusRouterExt {
@@ -143,12 +147,20 @@ impl DioxusRouterExt for Router<FullstackState> {
     }
 
     fn serve_static_assets(self) -> Router<FullstackState> {
-        let Some(public_path) = public_path() else {
-            return self;
-        };
+        #[cfg(feature = "embed")]
+        {
+            return crate::embedded::serve_embedded_assets(self);
+        }
 
-        // Serve all files in public folder except index.html
-        serve_dir_cached(self, &public_path, &public_path)
+        #[cfg(not(feature = "embed"))]
+        {
+            let Some(public_path) = public_path() else {
+                return self;
+            };
+
+            // Serve all files in public folder except index.html
+            serve_dir_cached(self, &public_path, &public_path)
+        }
     }
 
     fn serve_api_application<M: 'static>(
@@ -399,6 +411,7 @@ pub(crate) fn public_path() -> Option<PathBuf> {
     )
 }
 
+#[cfg(not(feature = "embed"))]
 fn serve_dir_cached<S>(mut router: Router<S>, public_path: &Path, directory: &Path) -> Router<S>
 where
     S: Send + Sync + Clone + 'static,
@@ -455,11 +468,13 @@ where
     router
 }
 
+#[cfg(not(feature = "embed"))]
 type MappedAxumService<S> = MapResponse<
     S,
     fn(Response<ServeFileSystemResponseBody>) -> Response<ServeFileSystemResponseBody>,
 >;
 
+#[cfg(not(feature = "embed"))]
 fn cache_response_forever<S>(service: S) -> MappedAxumService<S>
 where
     S: ServiceExt<Request<Body>, Response = Response<ServeFileSystemResponseBody>>,
@@ -473,7 +488,7 @@ where
     })
 }
 
-fn file_name_looks_immutable(file_name: &str) -> bool {
+pub(crate) fn file_name_looks_immutable(file_name: &str) -> bool {
     // Check if the file name looks like a hash (e.g., "main-dxh12345678.js")
     file_name.rsplit_once("-dxh").is_some_and(|(_, hash)| {
         hash.chars()

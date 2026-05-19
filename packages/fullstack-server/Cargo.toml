@@ -79,6 +79,8 @@ chrono = { workspace = true }
 rustc-hash = { workspace = true }
 lru  = { workspace = true }
 walkdir = { workspace = true }
+rust-embed = { workspace = true, optional = true }
+mime_guess = { version = "2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 tokio = { workspace = true, features = ["rt", "sync", "macros"], optional = true }
@@ -99,6 +101,7 @@ rustls = ["dep:rustls", "dep:hyper-rustls"]
 axum-no-default = []
 rkyv = ["dep:rkyv"]
 server = []
+embed = ["dep:rust-embed", "dep:mime_guess"]
 
 [package.metadata.docs.rs]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
