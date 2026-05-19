@@ -52,6 +52,28 @@ fn app() -> Element {
             div {
                 style: "padding: 50px;",
                 div {
+                    style: "display: grid; gap: 12px; max-width: 520px; margin: 0 auto 24px; font-family: sans-serif;",
+                    label {
+                        r#for: "selection-input",
+                        "Select text in the input to inspect the selection range and direction"
+                    }
+                    input {
+                        id: "selection-input",
+                        value: "Select part of this text to fire selection events",
+                        style: "font: inherit; padding: 8px 10px;",
+                        onselect: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectstart: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                    }
+                    textarea {
+                        style: "font: inherit; padding: 8px 10px; min-height: 80px;",
+                        onselect: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectstart: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        onselectionchange: move |event: Event<SelectionData>| log_event(Rc::new(event.data().selection())),
+                        "Selection events also include textarea ranges and direction.",
+                    }
+                }
+                div {
                     style: "text-align: center; padding: 20px; font-family: sans-serif; overflow: auto; height: 400px;",
                     onscroll: move |event: Event<ScrollData>| {
                         log_event(event.data());

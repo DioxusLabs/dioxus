@@ -60,6 +60,14 @@ export function serializeEvent(
     extend({});
   }
 
+  if (
+    event.type === "select" ||
+    event.type === "selectstart" ||
+    event.type === "selectionchange"
+  ) {
+    extend(serializeSelectionEvent(event, target));
+  }
+
   if (event instanceof CustomEvent) {
     const detail = event.detail;
     if (detail instanceof ResizeObserverEntry) {
@@ -406,6 +414,38 @@ function serializeScrollEvent(event: Event): SerializedEvent {
     client_width: clientWidth,
     client_height: clientHeight,
   };
+}
+
+function serializeSelectionEvent(
+  event: Event,
+  target: EventTarget
+): SerializedEvent {
+  let selectionStart = null;
+  let selectionEnd = null;
+  let selectionDirection = null;
+
+  const textControl = textControlTarget(target) ?? textControlTarget(event.target);
+  if (textControl) {
+    selectionStart = textControl.selectionStart;
+    selectionEnd = textControl.selectionEnd;
+    selectionDirection = textControl.selectionDirection || "none";
+  }
+
+  return {
+    selection_start: selectionStart,
+    selection_end: selectionEnd,
+    selection_direction: selectionDirection,
+  };
+}
+
+function textControlTarget(
+  target: EventTarget | null
+): HTMLInputElement | HTMLTextAreaElement | null {
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    return target;
+  }
+
+  return null;
 }
 
 
