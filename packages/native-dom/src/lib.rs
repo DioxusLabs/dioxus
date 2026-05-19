@@ -12,11 +12,11 @@
 mod dioxus_document;
 mod events;
 mod mutation_writer;
-mod sub_document;
+mod write_once_attr;
 pub use blitz_dom::DocumentConfig;
 pub use dioxus_document::DioxusDocument;
 pub use events::NodeHandle;
-pub use sub_document::SubDocumentAttr;
+pub use write_once_attr::{CustomWidgetAttr, SubDocumentAttr};
 
 use blitz_dom::{LocalName, Namespace, QualName, ns};
 type NodeId = usize;

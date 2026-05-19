@@ -10,7 +10,7 @@ homepage = "https://dioxuslabs.com/learn/0.7/getting_started"
 keywords = ["dom", "ui", "gui", "react"]
 
 [features]
-default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello", "incremental"]
+default = ["accessibility", "hot-reload", "net", "html", "svg", "system-fonts", "clipboard", "file_dialog", "vello-hybrid", "incremental", "woff", "apple-font-embolden"]
 prelude = ["dep:dioxus-core-macro", "dep:dioxus-hooks", "dep:dioxus-signals", "dep:dioxus-stores", "dep:manganis"]
 
 # DOM features
@@ -19,6 +19,9 @@ floats = ["blitz-dom/floats"]
 incremental = ["blitz-dom/incremental"]
 autofocus = ["blitz-dom/autofocus"]
 system-fonts = ["blitz-dom/system_fonts"]
+# WOFF/WOFF2 decoder. Default-on so wasm callers (which can't use system fonts)
+# can bundle compressed fonts without extra setup.
+woff = ["blitz-dom/woff"]
 
 # Shell Features
 clipboard = ["blitz-shell/clipboard"]
@@ -28,16 +31,20 @@ accessibility = ["blitz-shell/accessibility", "blitz-dom/accessibility"]
 data-uri = ["blitz-shell/data-uri"]
 
 # Renderer features
-vello = ["alt-renderer", "dep:anyrender_vello"]
-vello-hybrid = ["alt-renderer", "dep:anyrender_vello_hybrid"]
-skia = ["alt-renderer", "dep:anyrender_skia"]
-vello-cpu = ["alt-renderer", "vello-cpu-pixels"]
-vello-cpu-pixels = ["alt-renderer", "vello-cpu-base", "anyrender_vello_cpu/pixels_window_renderer"]
-vello-cpu-softbuffer = ["alt-renderer", "vello-cpu-base", "anyrender_vello_cpu/softbuffer_window_renderer"]
-vello-cpu-base = ["alt-renderer", "dep:anyrender_vello_cpu"]
-alt-renderer = []
+vello = ["dep:anyrender_vello", "dep:wgpu_context"]
+vello-hybrid = ["dep:anyrender_vello_hybrid", "dep:wgpu_context"]
+skia = ["dep:anyrender_skia"]
+vello-cpu = ["vello-cpu-pixels"]
+vello-cpu-pixels = ["vello-cpu-base", "anyrender_vello_cpu/pixels_window_renderer"]
+vello-cpu-softbuffer = ["vello-cpu-base", "anyrender_vello_cpu/softbuffer_window_renderer"]
+vello-cpu-base = ["dep:anyrender_vello_cpu"]
+
+font-embolden = ["blitz-paint/font-embolden"]
+apple-font-embolden = ["blitz-paint/apple-font-embolden"]
 
 # Other features
+# No-op on wasm32 (blitz_net::Provider needs tokio's threaded runtime); launch_cfg
+# falls back to the in-process DioxusNativeNetProvider there.
 net = ["dep:tokio", "dep:blitz-net"]
 html = ["dep:blitz-html"]
 
@@ -57,10 +64,10 @@ tracing = ["dep:tracing", "dioxus-native-dom/tracing", "blitz-shell/tracing", "b
 
 [dependencies]
 # Blitz dependencies
-blitz-dom = { workspace = true }
+blitz-dom = { workspace = true, features = ["custom-widget"] }
 blitz-html = { workspace = true, optional = true }
 blitz-net = { workspace = true, optional = true }
-blitz-paint = { workspace = true, optional = true }
+blitz-paint = { workspace = true, optional = true, features = ["custom-widget"] }
 blitz-traits = { workspace = true }
 blitz-shell = { workspace = true }
 
@@ -70,6 +77,7 @@ anyrender_vello = { workspace = true, optional = true}
 anyrender_vello_hybrid = { workspace = true, optional = true}
 anyrender_vello_cpu = { workspace = true, optional = true}
 anyrender_skia = { workspace = true, optional = true}
+wgpu_context = { workspace = true, optional = true}
 
 # DioxusLabs dependencies
 dioxus-core = { workspace = true }
@@ -102,6 +110,7 @@ webbrowser = { workspace = true }
 tracing = { workspace = true, optional = true }
 rustc-hash = { workspace = true }
 futures-util = { workspace = true }
+cfg-if = "1.0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"], optional = true }

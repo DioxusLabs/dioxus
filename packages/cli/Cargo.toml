@@ -51,7 +51,7 @@ rustls = { workspace = true }
 rayon = { workspace = true }
 futures-channel = { workspace = true }
 krates = { workspace = true }
-regex = "1.11.1"
+regex = "1.12.3"
 console = "0.16.0"
 ctrlc = "3.4.7"
 
@@ -75,14 +75,14 @@ dunce = { workspace = true }
 dirs = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "json"] }
 tower = { workspace = true }
-git2 = "0.20.2"
+git2 = "0.20.4"
 
 # path lookup
 which = { version = "8.0.0" }
 
 # plugin packages
 open = { workspace = true }
-cargo-generate = "=0.23.3"
+cargo-generate = "=0.23.8"
 toml_edit = "0.22.27"
 
 # formatting
@@ -122,7 +122,7 @@ shell-words = { workspace = true }
 log = { version = "0.4.29", features = ["max_level_off", "release_max_level_off"] }
 
 # link intercept
-tempfile = "3.19.1"
+tempfile = "3.24.0"
 manganis = { workspace = true }
 manganis-core = { workspace = true }
 manganis-core-07 = { workspace = true }
@@ -148,7 +148,7 @@ md5 = { workspace = true }
 rpm = { workspace = true }
 include_dir = "0.7.4"
 flate2 = "1.1.2"
-tar = "0.4.44"
+tar = "0.4.45"
 dircpy = "0.3.19"
 plist = "1.7.4"
 backtrace = "0.3.74"
@@ -172,7 +172,7 @@ home = "=0.5.11"
 clap_complete = { version = "4.5.65", features = ["unstable-dynamic"] }
 
 [target.'cfg(target_env = "musl")'.dependencies]
-git2 = { version = "0.20.2", features = ["vendored-libgit2"] }
+git2 = { version = "0.20.4", features = ["vendored-libgit2"] }
 
 [features]
 default = []
