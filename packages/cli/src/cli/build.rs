@@ -29,6 +29,13 @@ pub struct BuildArgs {
     #[clap(long)]
     pub(crate) fat_binary: bool,
 
+    /// Embed all public assets into the server binary using rust-embed [default: false]
+    ///
+    /// Produces a single self-contained server executable with no need for a separate public/ directory.
+    /// Only applies to fullstack builds. Forces sequential build (client must build first).
+    #[clap(long)]
+    pub(crate) embed: bool,
+
     /// This flag only applies to fullstack builds. By default fullstack builds will run the server
     /// and client builds in parallel. This flag will force the build to run the server build first, then the client build. [default: false]
     ///
@@ -47,8 +54,10 @@ pub struct BuildArgs {
 
 impl BuildArgs {
     pub(crate) fn force_sequential_build(&self) -> bool {
-        self.force_sequential
-            .unwrap_or_else(|| std::env::var("CI").is_ok())
+        self.embed
+            || self
+                .force_sequential
+                .unwrap_or_else(|| std::env::var("CI").is_ok())
     }
 }
 
@@ -57,6 +66,7 @@ impl Anonymized for BuildArgs {
         json! {{
             "fullstack": self.fullstack,
             "ssg": self.ssg,
+            "embed": self.embed,
             "build_arguments": self.build_arguments.anonymized(),
         }}
     }
@@ -139,6 +149,20 @@ impl CommandWithPlatformOverrides<BuildArgs> {
                     args.bundle = Some(crate::BundleFormat::Server);
                     args.target = Some(target_lexicon::Triple::host());
                     server = Some(BuildRequest::new(&args, workspace.clone()).await?);
+                }
+            }
+        }
+
+        // Validate and wire up --embed: requires fullstack, sets embed_dir on server request
+        if self.shared.embed {
+            match server.as_mut() {
+                Some(server_req) => {
+                    server_req.embed_assets = true;
+                    server_req.embed_dir = Some(client.root_dir());
+                    server_req.features.push("embed".into());
+                }
+                None => {
+                    anyhow::bail!("--embed requires a fullstack build (use --fullstack or enable the fullstack feature)");
                 }
             }
         }
