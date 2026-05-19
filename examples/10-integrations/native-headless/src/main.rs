@@ -115,7 +115,7 @@ fn main() {
     // (i.e. to render a custom renderer instead of Vello)
     paint_scene(
         &mut VelloScenePainter::new(&mut scene),
-        &dioxus_doc.inner(),
+        &mut dioxus_doc.inner_mut(),
         SCALE_FACTOR as f64,
         WIDTH,
         HEIGHT,

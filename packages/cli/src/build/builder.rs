@@ -2098,7 +2098,15 @@ impl AppBuilder {
         let address = &address;
         let port = &port;
 
-        tracing::info!("Running SSG at http://{address}:{port} for {server_exe:?}");
+        let protocol = if self.build.config.web.https.enabled.unwrap_or_default() {
+            "https"
+        } else {
+            "http"
+        };
+        let server_url = format!("{protocol}://{address}:{port}");
+
+        tracing::info!("Running SSG at {server_url} for {server_exe:?}");
+        let server_url = &server_url;
 
         let vars = self.child_environment_variables(
             devserver_ip,
@@ -2116,8 +2124,11 @@ impl AppBuilder {
             .kill_on_drop(true)
             .spawn()?;
 
-        // Borrow reqwest_client so we only move the reference into the futures
-        let reqwest_client = reqwest::Client::new();
+        // SSG only talks to the local server process we just spawned. Accepting invalid certs
+        // here keeps self-signed local HTTPS usable without weakening user-facing requests.
+        let reqwest_client = reqwest::Client::builder()
+            .danger_accept_invalid_certs(protocol == "https")
+            .build()?;
         let reqwest_client = &reqwest_client;
 
         // Get the routes from the `/static_routes` endpoint
@@ -2131,7 +2142,7 @@ impl AppBuilder {
             );
 
             let request = reqwest_client
-                .post(format!("http://{address}:{port}/api/static_routes"))
+                .post(format!("{server_url}/api/static_routes"))
                 .body("{}".to_string())
                 .send()
                 .await;
@@ -2167,7 +2178,7 @@ impl AppBuilder {
 
                 // For each route, ping the server to force it to cache the response for ssg
                 let request = reqwest_client
-                    .get(format!("http://{address}:{port}{route}"))
+                    .get(format!("{server_url}{route}"))
                     .header("Accept", "text/html")
                     .send()
                     .await?;

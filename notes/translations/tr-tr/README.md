@@ -1,9 +1,9 @@
 <p>
     <p align="center" >
-      <img src="../../notes/header-light.svg#gh-light-mode-only" >
-      <img src="../../notes/header-dark.svg#gh-dark-mode-only" >
+      <img src="../../../notes/header-light.svg#gh-light-mode-only" >
+      <img src="../../../notes/header-dark.svg#gh-dark-mode-only" >
       <a href="https://dioxuslabs.com">
-          <img src="../../notes/dioxus_splash_8.avif">
+          <img src="../../../notes/dioxus_splash_8.avif">
       </a>
     </p>
 </p>
@@ -88,7 +88,7 @@ fn app() -> Element {
 Tek bir `dx serve` komutu ile uygulamanı çalıştır. Markup ve styles(html ve css aklınıza gelebilir burada, Dioxus da rsx ile yapıyorsunuz bu tarz şeyleri. Ekstradan css düzenlemeleri de yapabilirsiniz) düzenle ve sonucunu gerçek zamanlı gör. Rust'ın hotreloading özellikleri halen birinci sınıf olmasa da [hot-lib-reloader](https://docs.rs/hot-lib-reloader/latest/hot_lib_reloader/) ile mümkün.
 
 <div align="center">
-  <img src="../../notes/hotreload.gif">
+  <img src="../../../notes/hotreload.gif">
 </div>
 
 ## Web ve Masaüstü için Paketleyici
@@ -96,7 +96,7 @@ Tek bir `dx serve` komutu ile uygulamanı çalıştır. Markup ve styles(html ve
 Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon ile derlenip paketlensin. Web üzerindeki [`.avif` oluşturma, `.wasm` sıkıştırma, küçültme](https://dioxuslabs.com/learn/0.7/tutorial/assets) ve daha fazlası ile avantajı yakala. [50kb'dan daha küçük](https://github.com/ealmloff/tiny-dioxus/) hafif web uygulamaları ve 15mb'dan daha az boyutlarda masaüstü/mobil uygulamalar üret.
 
 <div align="center">
-  <img src="../../notes/bundle.gif">
+  <img src="../../../notes/bundle.gif">
 </div>
 
 ## Fantastik Dökümantasyon
@@ -104,7 +104,7 @@ Basitçe `dx bundle` komutunu çalıştır ve uygulaman maksimum optimizasyon il
 Temiz, okunabilir ve kapsayıcı döküman için bir ton uğraştık. Bütün html elementleri ve listeners(takipçiler) MDN (geliştiriciler için dökümantasyon detay için [tıkla](https://developer.mozilla.org)) ile dökümente edildi, ve güncelliğinden emin olmak için docsite(dökümanlar) Dioxus'un kendisi ile sürekli entegrasyon halinde. Rehbeler, referanslar, tarifler, ve daha fazlası için göz at [Dioxus websitesi](https://dioxuslabs.com/learn/0.7/). İlginç gerçek: Dioxus'un sitesini yeni özelliklerimizi test etmek için deneme tahtası olarak kullanıyoruz -> [Göz at!](https://github.com/dioxusLabs/docsite)
 
 <div align="center">
-  <img src="../../notes/docs.avif">
+  <img src="../../../notes/docs.avif">
 </div>
 
 ## Geliştirici Deneyimini Önemse
@@ -112,7 +112,7 @@ Temiz, okunabilir ve kapsayıcı döküman için bir ton uğraştık. Bütün ht
 Dioxus geliştirici deneyimini önceliklendirir, bu kapsamda end-to-end tooling (uçtan uca araç desteği) için tonla efor harcadık. [VSCode eklentisi](https://marketplace.visualstudio.com/items?itemName=DioxusLabs.dioxus) geliştirdik bu sayede RSX kodlarınızı otomatik formatlayabilir, HTML', RSX e çevirebilir ve daha fazlasını yapabilirsiniz. Aynı zamanda geliştirdiğimiz çok güçlü CLI sayesinde yeni uygulamalar üretmenize yardım ediyor, onları serve (sunmanızı) ve çapraz platform çalışacak şekilde paketlemenizi sağlıyoruz. Yol haritamızda deployment da mevcut.
 
 <div align="center">
-  <img src="../../notes/autofmt.gif">
+  <img src="../../../notes/autofmt.gif">
 </div>
 
 ## Topluluk
@@ -120,7 +120,7 @@ Dioxus geliştirici deneyimini önceliklendirir, bu kapsamda end-to-end tooling 
 Dioxus topluluk tarafından yürütülen epey aktif [Discord](https://discord.gg/XgGxMSkvUM) ve [GitHub](https://github.com/DioxusLabs/dioxus/issues) topluluğuna sahip bir proje. Her zaman yardım alıyoruz, sorularınızı cevaplamaktan mutlu oluyoruz ve projelerinize başlamanız için size destek oluyoruz. [SDK'mız (Software Development Kit (Yazılım Geliştirme Paketi))](https://github.com/DioxusLabs/dioxus-std) topluluk tarafından geliştiriliyor ve hatta [GitHub organizasyonu](https://github.com/dioxus-community/) ile ücretsiz güncelleme ve destek alan, en iyi Dioxus uygulamalarına ulaşabilirsiniz.
 
 <div align="center">
-  <img src="../../notes/dioxus-community.avif">
+  <img src="../../../notes/dioxus-community.avif">
 </div>
 
 ## Tam Zamanlı Çalışan Çekirdek Kadro

@@ -1,6 +1,6 @@
 //! Integration between Dioxus and Blitz
-use crate::{NodeId, SubDocumentAttr, qual_name, trace};
-use blitz_dom::{BaseDocument, Document as _, DocumentMutator};
+use crate::{NodeId, qual_name, trace, write_once_attr::WriteOnceAttr};
+use blitz_dom::{BaseDocument, Document as _, DocumentMutator, PlainDocument, Widget};
 use blitz_traits::events::DomEventKind;
 use dioxus_core::{
     AttributeValue, ElementId, Template, TemplateAttribute, TemplateNode, WriteMutations,
@@ -201,20 +201,41 @@ impl WriteMutations for MutationWriter<'_> {
             }
         }
 
+        // Set/unset subdocument for <web-view __webview_document>
         if local_name == "__webview_document" {
             match value {
-                AttributeValue::Any(sub_doc_attr) => {
-                    if let Some(sub_doc_attr) =
-                        sub_doc_attr.as_any().downcast_ref::<SubDocumentAttr>()
-                        && let Some(mut sub_document) = sub_doc_attr.take_document()
+                AttributeValue::Any(value) => {
+                    if let Some(value) = value
+                        .as_any()
+                        .downcast_ref::<WriteOnceAttr<Box<PlainDocument>>>()
+                        && let Some(mut sub_document) = value.take()
                     {
                         sub_document
                             .inner_mut()
                             .set_shell_provider(self.docm.doc.shell_provider.clone());
-                        self.docm.set_sub_document(node_id, sub_document as _);
+                        self.docm.set_sub_document(node_id, sub_document);
                     }
                 }
                 _ => self.docm.remove_sub_document(node_id),
+            }
+        }
+
+        // Set/unset custom widget for <object data>
+        if local_name == "data" {
+            let element_name = self.docm.element_name(node_id).unwrap();
+            if element_name.local.as_ref() == "object" {
+                match value {
+                    AttributeValue::Any(value) => {
+                        if let Some(value) = value
+                            .as_any()
+                            .downcast_ref::<WriteOnceAttr<Box<dyn Widget>>>()
+                            && let Some(widget) = value.take()
+                        {
+                            self.docm.set_custom_widget(node_id, widget);
+                        }
+                    }
+                    _ => self.docm.remove_custom_widget(node_id),
+                }
             }
         }
 

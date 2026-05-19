@@ -133,7 +133,7 @@ Render using web-sys, webview, server-side-rendering, liveview, or even with our
 Get started quickly with a complete set of primitives modeled after shadcn/ui and Radix-Primitives.
 
 <div align="center">
-  <img src="./notes/primitive-components.avif" width="700">
+  <img src="https://raw.githubusercontent.com/DioxusLabs/screenshots/refs/heads/main/blitz/dioxus-components.webp" width="700">
 </div>
 
 ## First-class Android and iOS support
