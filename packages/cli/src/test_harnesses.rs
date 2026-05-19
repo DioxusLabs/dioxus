@@ -294,6 +294,26 @@ async fn test_harnesses() {
                 assert_eq!(t.client.features.iter().map(|s| s.as_str()).collect::<HashSet<_>>(), ["dioxus/web", "other"].into_iter().collect::<HashSet<_>>());
                 assert!(t.server.is_none());
             }),
+        TestHarnessBuilder::new("harness-fullstack-embed")
+            .deps(r#"dioxus = { workspace = true, features = ["fullstack"] }"#)
+            .fetr(r#"web=["dioxus/web"]"#)
+            .fetr(r#"server=["dioxus/server"]"#)
+            .asrt(r#"dx build --embed"#, |targets| async move {
+                let t = targets.unwrap();
+                assert_eq!(t.client.bundle, BundleFormat::Web);
+                let client_root = t.client.root_dir();
+                let server = t.server.unwrap();
+                assert_eq!(server.bundle, BundleFormat::Server);
+                assert!(server.embed_assets, "server should have embed_assets set");
+                assert!(server.embed_dir.is_some(), "server should have embed_dir set");
+                assert!(server.features.contains(&"embed".to_string()), "server should have embed feature");
+                assert_eq!(server.embed_dir.unwrap(), client_root, "embed_dir should match client root_dir");
+            }),
+        TestHarnessBuilder::new("harness-web-embed-no-fullstack")
+            .deps(r#"dioxus = { workspace = true, features = ["web"] }"#)
+            .asrt(r#"dx build --embed"#, |targets| async move {
+                assert!(targets.is_err(), "--embed without fullstack should fail");
+            }),
     ])
     .await;
 }
