@@ -45,3 +45,6 @@ tmp/
 
 # External macos drives have extra ._ files
 ._*
+
+# Fuzzing logs
+fuzz-*.log

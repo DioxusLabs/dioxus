@@ -152,17 +152,6 @@ impl VNode {
                     to,
                 )
             }
-            (old, new) if to.is_some() && !dynamic_node_has_live_dom(old, mount, idx, dom) => {
-                let path = self.template.node_paths()[idx];
-                if path.len() > 1 {
-                    let to = to.as_deref_mut().unwrap();
-                    let m = self.create_dynamic_node(new, mount, idx, dom, Some(&mut *to));
-                    to.replace_placeholder_with_nodes(&path[1..], m);
-                } else {
-                    let _ =
-                        self.create_dynamic_node(new, mount, idx, dom, None::<&mut NoOpMutations>);
-                }
-            }
             (old, new) => {
                 // TODO: we should pass around the mount instead of the mount id
                 // that would make moving the mount around here much easier
