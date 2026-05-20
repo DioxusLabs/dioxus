@@ -173,6 +173,7 @@ fn build_suspense_child_vnode(
     }
 
     let template = compile_template(&TemplateSpec {
+        cache_key: None,
         roots: vec![
             TemplateNodeSpec::Element {
                 tag,
@@ -292,16 +293,17 @@ fn build_attr(slot: usize, spec: &AttrSpec) -> Attribute {
 }
 
 fn compile_template(spec: &TemplateSpec) -> Template {
-    static CACHE: OnceLock<Mutex<HashMap<TemplateSpec, Template>>> = OnceLock::new();
+    static CACHE: OnceLock<Mutex<HashMap<TemplateCacheKey, Template>>> = OnceLock::new();
 
+    let key = spec.cache_key();
     let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut cache = cache.lock().unwrap();
-    if let Some(template) = cache.get(spec) {
+    if let Some(template) = cache.get(&key) {
         return *template;
     }
 
     let template = compile_template_uncached(spec);
-    cache.insert(spec.clone(), template);
+    cache.insert(key, template);
     template
 }
 

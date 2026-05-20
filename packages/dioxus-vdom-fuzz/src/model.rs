@@ -94,6 +94,7 @@ impl VNodeSpec {
         Self {
             key: None,
             template: TemplateSpec {
+                cache_key: None,
                 roots: vec![TemplateNodeSpec::Element {
                     tag: 0,
                     namespace: None,
@@ -196,7 +197,18 @@ impl VNodeSpec {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum TemplateCacheKey {
+    Generated {
+        seed: u64,
+        dynamic_nodes: u16,
+        dynamic_attrs: u16,
+    },
+    Expanded(Vec<TemplateNodeSpec>),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct TemplateSpec {
+    pub(crate) cache_key: Option<TemplateCacheKey>,
     pub(crate) roots: Vec<TemplateNodeSpec>,
 }
 
@@ -208,6 +220,11 @@ impl TemplateSpec {
         let mut rng = TemplateRng::new(seed >> 8);
 
         Self {
+            cache_key: Some(TemplateCacheKey::Generated {
+                seed,
+                dynamic_nodes: dynamic_nodes as u16,
+                dynamic_attrs: dynamic_attrs as u16,
+            }),
             roots: vec![TemplateNodeSpec::Element {
                 tag: seed as u8,
                 namespace: rng.next_namespace(),
@@ -227,6 +244,12 @@ impl TemplateSpec {
 
     pub(crate) fn node_count(&self) -> u64 {
         self.roots.iter().map(TemplateNodeSpec::node_count).sum()
+    }
+
+    pub(crate) fn cache_key(&self) -> TemplateCacheKey {
+        self.cache_key
+            .clone()
+            .unwrap_or_else(|| TemplateCacheKey::Expanded(self.roots.clone()))
     }
 
     pub(crate) fn node_paths(&self) -> Vec<Vec<usize>> {

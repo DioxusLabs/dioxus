@@ -682,6 +682,7 @@ pub(crate) fn apply_to_model(op: &Op) {
 fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: bool) {
     match edit {
         TemplateEdit::SetNode { node, kind } => {
+            vnode.template.cache_key = None;
             if let Some(path) = select(vnode.template.node_paths(), *node) {
                 if let Some(node) = vnode.template.node_mut(&path) {
                     node.set_kind(kind);
@@ -689,9 +690,11 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
             }
         }
         TemplateEdit::Roots { edit } => {
+            vnode.template.cache_key = None;
             apply_template_node_list_edit(&mut vnode.template.roots, edit, 1, MAX_ROOTS, can_grow);
         }
         TemplateEdit::Children { element, edit } => {
+            vnode.template.cache_key = None;
             if let Some(path) = select(vnode.template.element_paths(), *element) {
                 if let Some(TemplateNodeSpec::Element { children, .. }) =
                     vnode.template.element_mut(&path)
@@ -701,6 +704,7 @@ fn apply_template_edit(vnode: &mut VNodeSpec, edit: &TemplateEdit, can_grow: boo
             }
         }
         TemplateEdit::Attrs { element, edit } => {
+            vnode.template.cache_key = None;
             if let Some(path) = select(vnode.template.element_paths(), *element) {
                 if let Some(TemplateNodeSpec::Element { attrs, .. }) =
                     vnode.template.element_mut(&path)
