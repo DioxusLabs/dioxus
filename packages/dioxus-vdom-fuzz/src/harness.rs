@@ -693,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    fn domless_root_fragment_child_materializes_before_sibling() {
+    fn anchor_only_root_fragment_child_materializes_before_sibling() {
         replay_ops([
             Op::template(
                 0,
@@ -1572,6 +1572,76 @@ mod tests {
     }
 
     #[test]
+    fn nested_ready_wake_while_parent_enters_suspense_keeps_renderer_stack_balanced() {
+        let ops = [
+            Op::template(
+                0,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 68,
+                        item: TemplateNodeKind::Text(94),
+                    },
+                },
+            ),
+            Op::template(
+                50,
+                TemplateEdit::SetNode {
+                    node: 189,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                15,
+                170,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic,
+                    },
+                },
+            ),
+            Op::wake_suspense(6),
+            Op::dynamic(2, 0, DynamicKind::ComponentB),
+            Op::Rerender,
+            Op::template(
+                2,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Remove { index: 97 },
+                },
+            ),
+            Op::suspense(31, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::suspense(240, SuspenseMode::Ready),
+            Op::wake_suspense(197),
+        ];
+
+        let mut harness = Harness::fresh_strict();
+        for op in ops {
+            apply_op(&mut harness, &op).unwrap();
+        }
+    }
+
+    #[test]
     fn keyed_fragment_moves_nested_child_after_component_insert() {
         let ops = [
             Op::template(
@@ -1668,7 +1738,7 @@ mod tests {
     }
 
     #[test]
-    fn keyed_fragment_remove_after_domless_child_move_keeps_parent_links() {
+    fn keyed_fragment_remove_after_anchor_only_child_move_keeps_parent_links() {
         let ops = [
             Op::template(
                 0,

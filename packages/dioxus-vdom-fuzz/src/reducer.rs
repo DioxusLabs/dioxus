@@ -1054,7 +1054,7 @@ mod tests {
 
     #[test]
     fn passing_case_is_not_reduced() {
-        let case = FuzzCase::seed();
+        let case = FuzzCase::default();
         assert_eq!(
             reduce_case(case, ReductionOptions::default()).unwrap_err(),
             ReduceError::NotFailing

@@ -42,7 +42,7 @@ fuzz_target!(|data: &[u8]| {
 });
 
 fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
-    let mut case = decode_case(&data[..size]).unwrap_or_else(FuzzCase::seed);
+    let mut case = decode_case(&data[..size]).unwrap_or_default();
     let minimizing = cargo_fuzz_minimizing();
 
     if let Some(options) = cargo_fuzz_semantic_reduction_options() {
