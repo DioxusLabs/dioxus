@@ -2,6 +2,7 @@
 
 use crate::{
     cache::InternSet,
+    lifecycle::{self, LifecycleRole},
     model::*,
     ops::{SuspenseReadyFuture, read_model},
 };
@@ -24,6 +25,8 @@ pub(crate) fn App() -> Element {
 
 #[derive(Clone, PartialEq, Props)]
 struct GeneratedProps {
+    id: u64,
+    suspense_ancestors: Vec<u64>,
     node: VNodeSpec,
 }
 
@@ -34,23 +37,46 @@ struct GeneratedSuspenseProps {
     mode: SuspenseMode,
     wake_mutation: WakeMutationSpec,
     wake_applied: bool,
+    suspense_ancestors: Vec<u64>,
     child: VNodeSpec,
 }
 
 fn GeneratedComponent(props: GeneratedProps) -> Element {
-    Ok(build_vnode(&props.node))
+    track_lifecycle(
+        LifecycleRole::ComponentA,
+        props.id,
+        &props.suspense_ancestors,
+    );
+    Ok(build_vnode_with_suspense(
+        &props.node,
+        &props.suspense_ancestors,
+    ))
 }
 
 fn OtherGeneratedComponent(props: GeneratedProps) -> Element {
-    Ok(build_vnode(&props.node))
+    track_lifecycle(
+        LifecycleRole::ComponentB,
+        props.id,
+        &props.suspense_ancestors,
+    );
+    Ok(build_vnode_with_suspense(
+        &props.node,
+        &props.suspense_ancestors,
+    ))
 }
 
 fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
+    track_lifecycle(
+        LifecycleRole::SuspenseBoundary,
+        props.id,
+        &props.suspense_ancestors,
+    );
     let id = props.id;
     let ready_generation = props.ready_generation;
     let mode = props.mode;
     let wake_mutation = props.wake_mutation;
     let wake_applied = props.wake_applied;
+    let suspense_ancestors = props.suspense_ancestors;
     let child = props.child;
     rsx! {
         SuspenseBoundary {
@@ -61,6 +87,7 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
                 mode,
                 wake_mutation,
                 wake_applied,
+                suspense_ancestors,
                 child,
             }
         }
@@ -68,6 +95,11 @@ fn GeneratedSuspenseBoundary(props: GeneratedSuspenseProps) -> Element {
 }
 
 fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
+    track_lifecycle(
+        LifecycleRole::SuspenseChild,
+        props.id,
+        &props.suspense_ancestors,
+    );
     let mut task: Signal<Option<Task>> = use_signal(|| None);
     let mut task_key: Signal<Option<SuspenseTaskKey>> = use_signal(|| None);
     let mut ready_resolved = use_signal(|| false);
@@ -153,19 +185,32 @@ fn GeneratedSuspenseChild(props: GeneratedSuspenseProps) -> Element {
     } else {
         props.wake_mutation
     };
+    let mut child_suspense_ancestors = props.suspense_ancestors.clone();
+    child_suspense_ancestors.push(props.id);
     Ok(build_suspense_child_vnode(
         &props.child,
+        &child_suspense_ancestors,
         wake_mutation,
         props.wake_applied || local_wake_mutation != WakeMutationSpec::None,
     ))
 }
 
+fn track_lifecycle(role: LifecycleRole, id: u64, suspense_ancestors: &[u64]) {
+    let suspense_ancestors = suspense_ancestors.to_vec();
+    let guard = use_hook({
+        let suspense_ancestors = suspense_ancestors.clone();
+        move || lifecycle::track(role, id, &suspense_ancestors)
+    });
+    guard.update(role, id, &suspense_ancestors);
+}
+
 fn build_suspense_child_vnode(
     child: &VNodeSpec,
+    suspense_ancestors: &[u64],
     wake_mutation: WakeMutationSpec,
     wake_applied: bool,
 ) -> VNode {
-    let child = build_vnode(child);
+    let child = build_vnode_with_suspense(child, suspense_ancestors);
     let WakeMutationSpec::PrependStaticRoot { tag } = wake_mutation else {
         return child;
     };
@@ -195,11 +240,18 @@ fn build_suspense_child_vnode(
 }
 
 fn build_vnode(spec: &VNodeSpec) -> VNode {
+    build_vnode_with_suspense(spec, &[])
+}
+
+fn build_vnode_with_suspense(spec: &VNodeSpec, suspense_ancestors: &[u64]) -> VNode {
     let spec = spec.clone().normalize();
     VNode::new(
         spec.key.map(|key| format!("k{key}")),
         compile_template(&spec.template),
-        spec.dynamics.iter().map(build_dynamic).collect(),
+        spec.dynamics
+            .iter()
+            .map(|dynamic| build_dynamic(dynamic, suspense_ancestors))
+            .collect(),
         spec.attrs
             .iter()
             .enumerate()
@@ -208,25 +260,32 @@ fn build_vnode(spec: &VNodeSpec) -> VNode {
     )
 }
 
-fn build_dynamic(spec: &DynamicSpec) -> DynamicNode {
+fn build_dynamic(spec: &DynamicSpec, suspense_ancestors: &[u64]) -> DynamicNode {
     match spec {
         DynamicSpec::Empty => DynamicNode::Fragment(Vec::new()),
         DynamicSpec::Text(value) => DynamicNode::Text(VText::new(format!("text-{value}"))),
         DynamicSpec::Placeholder => DynamicNode::Placeholder(Default::default()),
-        DynamicSpec::Fragment(nodes) => {
-            DynamicNode::Fragment(nodes.iter().map(build_vnode).collect())
-        }
-        DynamicSpec::ComponentA(node) => DynamicNode::Component(VComponent::new(
+        DynamicSpec::Fragment(nodes) => DynamicNode::Fragment(
+            nodes
+                .iter()
+                .map(|node| build_vnode_with_suspense(node, suspense_ancestors))
+                .collect(),
+        ),
+        DynamicSpec::ComponentA(component) => DynamicNode::Component(VComponent::new(
             GeneratedComponent,
             GeneratedProps {
-                node: node.as_ref().clone(),
+                id: component.id,
+                suspense_ancestors: suspense_ancestors.to_vec(),
+                node: component.child.as_ref().clone(),
             },
             "GeneratedComponent",
         )),
-        DynamicSpec::ComponentB(node) => DynamicNode::Component(VComponent::new(
+        DynamicSpec::ComponentB(component) => DynamicNode::Component(VComponent::new(
             OtherGeneratedComponent,
             GeneratedProps {
-                node: node.as_ref().clone(),
+                id: component.id,
+                suspense_ancestors: suspense_ancestors.to_vec(),
+                node: component.child.as_ref().clone(),
             },
             "OtherGeneratedComponent",
         )),
@@ -238,6 +297,7 @@ fn build_dynamic(spec: &DynamicSpec) -> DynamicNode {
                 mode: spec.mode,
                 wake_mutation: spec.wake_mutation,
                 wake_applied: spec.wake_applied,
+                suspense_ancestors: suspense_ancestors.to_vec(),
                 child: spec.child.as_ref().clone(),
             },
             "GeneratedSuspenseBoundary",

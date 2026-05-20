@@ -54,6 +54,11 @@ impl SuspendedFuture {
         Task::from_id(self.task)
     }
 
+    /// Get the scope that suspended on this task.
+    pub(crate) fn origin(&self) -> ScopeId {
+        self.origin
+    }
+
     /// Create a deep clone of this suspended future
     pub(crate) fn deep_clone(&self) -> Self {
         Self {

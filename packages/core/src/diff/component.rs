@@ -98,6 +98,10 @@ impl VirtualDom {
         scope_id: ScopeId,
         replace_with: Option<usize>,
     ) {
+        if scope_id.is_placeholder() || !self.scopes.contains(scope_id.0) {
+            return;
+        }
+
         // If this is a suspense boundary, remove the suspended nodes as well
         SuspenseContext::remove_suspended_nodes::<M>(self, scope_id, destroy_component_state);
 
@@ -112,6 +116,31 @@ impl VirtualDom {
             // Now drop all the resources
             self.drop_scope(scope_id);
         }
+    }
+
+    pub(crate) fn clear_scope_rendered_output<M: WriteMutations>(&mut self, scope_id: ScopeId) {
+        let Some(scope) = self.scopes.get_mut(scope_id.0) else {
+            return;
+        };
+
+        let Some(old) = scope.last_rendered_node.take() else {
+            return;
+        };
+
+        let parent = old.mount.get().as_usize().and_then(|mount| {
+            self.runtime
+                .mounts
+                .borrow()
+                .get(mount)
+                .map(|mount| mount.parent)
+        });
+
+        old.remove_node_inner(self, None::<&mut M>, true, None);
+        self.drop_orphaned_child_scopes(scope_id);
+
+        let placeholder = LastRenderedNode::Real(VNode::placeholder());
+        placeholder.create(self, parent.flatten(), None::<&mut M>);
+        self.scopes[scope_id.0].last_rendered_node = Some(placeholder);
     }
 }
 

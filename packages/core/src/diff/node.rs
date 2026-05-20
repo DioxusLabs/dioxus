@@ -32,24 +32,31 @@ fn dynamic_node_has_live_dom(
 }
 
 fn vnode_has_live_dom(node: &VNode, dom: &VirtualDom) -> bool {
-    node.mount
-        .get()
-        .as_usize()
-        .map(MountId)
-        .is_some_and(|mount| {
-            node.template
-                .roots()
-                .iter()
-                .enumerate()
-                .any(|(root_idx, root)| {
-                    if let Some(idx) = root.dynamic_id() {
-                        dynamic_node_has_live_dom(&node.dynamic_nodes[idx], mount, idx, dom)
-                    } else {
-                        let id = dom.get_mounted_root_node(mount, root_idx);
-                        id.0 != 0 && id.0 != usize::MAX
-                    }
-                })
-        })
+    mounted_mount(node, dom).is_some_and(|mount| {
+        node.template
+            .roots()
+            .iter()
+            .enumerate()
+            .any(|(root_idx, root)| {
+                if let Some(idx) = root.dynamic_id() {
+                    dynamic_node_has_live_dom(&node.dynamic_nodes[idx], mount, idx, dom)
+                } else {
+                    let id = dom.get_mounted_root_node(mount, root_idx);
+                    id.0 != 0 && id.0 != usize::MAX
+                }
+            })
+    })
+}
+
+fn mounted_mount(node: &VNode, dom: &VirtualDom) -> Option<MountId> {
+    let mount = node.mount.get();
+    let mount = mount.as_usize().map(MountId)?;
+    if dom.runtime.mounts.borrow().contains(mount.0) {
+        Some(mount)
+    } else {
+        node.mount.take();
+        None
+    }
 }
 
 impl VNode {
@@ -59,6 +66,12 @@ impl VNode {
         dom: &mut VirtualDom,
         mut to: Option<&mut impl WriteMutations>,
     ) {
+        let Some(mount_id) = mounted_mount(self, dom) else {
+            let _ =
+                dom.create_children(None::<&mut NoOpMutations>, std::slice::from_ref(new), None);
+            return;
+        };
+
         // The node we are diffing from should always be mounted
         debug_assert!(
             to.is_none()
@@ -72,7 +85,6 @@ impl VNode {
 
         // If the templates are different, we need to replace the entire template
         if self.template != new.template {
-            let mount_id = self.mount.get();
             let parent = dom.get_mounted_parent(mount_id);
             return self.replace(std::slice::from_ref(new), parent, dom, to);
         }
@@ -302,6 +314,12 @@ impl VNode {
     ) {
         if !vnode_has_live_dom(self, dom) {
             let _ = dom.create_children(None::<&mut NoOpMutations>, right, parent);
+            self.remove_node_inner(
+                dom,
+                None::<&mut NoOpMutations>,
+                destroy_component_state,
+                None,
+            );
             return;
         }
 
@@ -329,8 +347,9 @@ impl VNode {
         destroy_component_state: bool,
         replace_with: Option<usize>,
     ) {
-        let mount = self.mount.get();
-        debug_assert!(mount.mounted());
+        let Some(mount) = mounted_mount(self, dom) else {
+            return;
+        };
 
         // Clean up any attributes that have claimed a static node as dynamic for mount/unmounts
         // Will not generate mutations!

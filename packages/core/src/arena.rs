@@ -91,7 +91,7 @@ impl VirtualDom {
         self.resolved_scopes.retain(|s| s != &id);
     }
 
-    fn drop_orphaned_child_scopes(&mut self, parent: ScopeId) {
+    pub(crate) fn drop_orphaned_child_scopes(&mut self, parent: ScopeId) {
         let children = self
             .scopes
             .iter()

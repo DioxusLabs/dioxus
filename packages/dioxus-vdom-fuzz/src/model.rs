@@ -14,6 +14,7 @@ pub(crate) const MAX_MODEL_COST: u64 = 256;
 pub(crate) struct Model {
     pub(crate) root: VNodeSpec,
     pub(crate) next_suspense_id: u64,
+    pub(crate) next_component_id: u64,
 }
 
 impl Model {
@@ -21,6 +22,7 @@ impl Model {
         Self {
             root: VNodeSpec::minimal(),
             next_suspense_id: 0,
+            next_component_id: 0,
         }
     }
 
@@ -399,9 +401,15 @@ pub(crate) enum DynamicSpec {
     Text(u8),
     Placeholder,
     Fragment(Vec<VNodeSpec>),
-    ComponentA(Box<VNodeSpec>),
-    ComponentB(Box<VNodeSpec>),
+    ComponentA(ComponentSpec),
+    ComponentB(ComponentSpec),
     Suspense(SuspenseSpec),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ComponentSpec {
+    pub(crate) id: u64,
+    pub(crate) child: Box<VNodeSpec>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -412,6 +420,15 @@ pub(crate) struct SuspenseSpec {
     pub(crate) wake_mutation: WakeMutationSpec,
     pub(crate) wake_applied: bool,
     pub(crate) child: Box<VNodeSpec>,
+}
+
+impl ComponentSpec {
+    pub(crate) fn new(id: u64) -> Self {
+        Self {
+            id,
+            child: Box::new(VNodeSpec::minimal()),
+        }
+    }
 }
 
 impl SuspenseSpec {
@@ -453,7 +470,12 @@ impl SuspenseSpec {
 }
 
 impl DynamicSpec {
-    pub(crate) fn set_kind(&mut self, kind: &DynamicKind, next_suspense_id: &mut u64) {
+    pub(crate) fn set_kind(
+        &mut self,
+        kind: &DynamicKind,
+        next_suspense_id: &mut u64,
+        next_component_id: &mut u64,
+    ) {
         match kind {
             DynamicKind::Empty => *self = Self::Empty,
             DynamicKind::Text(value) => *self = Self::Text(*value),
@@ -465,12 +487,16 @@ impl DynamicSpec {
             }
             DynamicKind::ComponentA => {
                 if !matches!(self, Self::ComponentA(_)) {
-                    *self = Self::ComponentA(Box::new(VNodeSpec::minimal()));
+                    let id = *next_component_id;
+                    *next_component_id += 1;
+                    *self = Self::ComponentA(ComponentSpec::new(id));
                 }
             }
             DynamicKind::ComponentB => {
                 if !matches!(self, Self::ComponentB(_)) {
-                    *self = Self::ComponentB(Box::new(VNodeSpec::minimal()));
+                    let id = *next_component_id;
+                    *next_component_id += 1;
+                    *self = Self::ComponentB(ComponentSpec::new(id));
                 }
             }
             DynamicKind::Suspense { mode } => match self {
@@ -488,7 +514,9 @@ impl DynamicSpec {
         match self {
             Self::Empty | Self::Text(_) | Self::Placeholder => 0,
             Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::vnode_count).sum(),
-            Self::ComponentA(node) | Self::ComponentB(node) => node.vnode_count(),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.vnode_count()
+            }
             Self::Suspense(spec) => spec.child.vnode_count(),
         }
     }
@@ -504,7 +532,9 @@ impl DynamicSpec {
                 }
                 None
             }
-            Self::ComponentA(node) | Self::ComponentB(node) => node.nth_vnode_mut(index),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.nth_vnode_mut(index)
+            }
             Self::Suspense(spec) => spec.child.nth_vnode_mut(index),
         }
     }
@@ -513,7 +543,9 @@ impl DynamicSpec {
         match self {
             Self::Empty | Self::Text(_) | Self::Placeholder => 1,
             Self::Fragment(nodes) => 1 + nodes.iter().map(VNodeSpec::node_count).sum::<u64>(),
-            Self::ComponentA(node) | Self::ComponentB(node) => 1 + node.node_count(),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                1 + component.child.node_count()
+            }
             Self::Suspense(spec) => {
                 let wake_roots = if spec.wake_mutation.adds_root() { 1 } else { 0 };
                 1 + wake_roots + spec.child.node_count()
@@ -525,7 +557,9 @@ impl DynamicSpec {
         match self {
             Self::Empty | Self::Text(_) | Self::Placeholder => 0,
             Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::suspense_count).sum(),
-            Self::ComponentA(node) | Self::ComponentB(node) => node.suspense_count(),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.suspense_count()
+            }
             Self::Suspense(spec) => 1 + spec.child.suspense_count(),
         }
     }
@@ -541,7 +575,9 @@ impl DynamicSpec {
                 }
                 None
             }
-            Self::ComponentA(node) | Self::ComponentB(node) => node.nth_suspense_mut(index),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.nth_suspense_mut(index)
+            }
             Self::Suspense(spec) => {
                 if *index == 0 {
                     return Some(spec);
@@ -560,8 +596,8 @@ impl DynamicSpec {
                     node.collect_ready_suspense_keys(out);
                 }
             }
-            Self::ComponentA(node) | Self::ComponentB(node) => {
-                node.collect_ready_suspense_keys(out)
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.collect_ready_suspense_keys(out)
             }
             Self::Suspense(spec) => {
                 if spec.mode == SuspenseMode::Ready {
@@ -580,7 +616,9 @@ impl DynamicSpec {
                     node.resolve_ready_suspense(key);
                 }
             }
-            Self::ComponentA(node) | Self::ComponentB(node) => node.resolve_ready_suspense(key),
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.resolve_ready_suspense(key)
+            }
             Self::Suspense(spec) => {
                 if spec.mode == SuspenseMode::Ready && spec.ready_key() == key {
                     spec.resolve_ready();
@@ -599,8 +637,8 @@ impl DynamicSpec {
             Self::Fragment(nodes) => nodes
                 .iter()
                 .find_map(|node| node.wake_mutation_for_ready_key(key)),
-            Self::ComponentA(node) | Self::ComponentB(node) => {
-                node.wake_mutation_for_ready_key(key)
+            Self::ComponentA(component) | Self::ComponentB(component) => {
+                component.child.wake_mutation_for_ready_key(key)
             }
             Self::Suspense(spec) => {
                 if spec.ready_key() == key {

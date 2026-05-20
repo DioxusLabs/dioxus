@@ -1,4 +1,5 @@
 use crate::{
+    lifecycle::{self, LifecycleKey, LifecycleRole, LifecycleRun, LifecycleSnapshot},
     model::*,
     ops::{
         ModelEdit, Op, WakeMode, apply_to_model, clear_suspense_ready_tasks, read_model,
@@ -11,7 +12,7 @@ use dioxus_core::{
     AttributeValue, ElementId, Event, ScopeId, Template, VirtualDom, WriteMutations,
 };
 use dioxus_renderer_oracle::{EventListenerTarget, RendererOracle, SnapshotNode, panic_message};
-use std::{any::Any, fmt, panic, rc::Rc};
+use std::{any::Any, collections::BTreeSet, fmt, panic, rc::Rc};
 
 // ---------- Harness -------------------------------------------------------------------------
 
@@ -23,32 +24,47 @@ pub(crate) struct Harness {
     pending_app_render: bool,
     pending_fresh_compare: bool,
     strict_renderer_errors: bool,
+    strict_lifecycle_errors: bool,
 }
 
 impl Harness {
     pub(crate) fn fresh() -> Self {
-        Self::fresh_with_strict_renderer_errors(cfg!(fuzzing))
+        Self::fresh_with_strict_options(cfg!(fuzzing), cfg!(fuzzing))
     }
 
     #[cfg(test)]
     fn fresh_strict() -> Self {
-        Self::fresh_with_strict_renderer_errors(true)
+        Self::fresh_with_strict_options(true, false)
     }
 
-    fn fresh_with_strict_renderer_errors(strict_renderer_errors: bool) -> Self {
+    #[cfg(test)]
+    fn fresh_strict_lifecycle() -> Self {
+        Self::fresh_with_strict_options(true, true)
+    }
+
+    fn fresh_with_strict_options(
+        strict_renderer_errors: bool,
+        strict_lifecycle_errors: bool,
+    ) -> Self {
         clear_suspense_ready_tasks();
+        lifecycle::reset_all();
         with_model(|model| *model = Model::initial());
         let mut vdom = VirtualDom::new(App);
         let mut incremental = TargetedRendererOracle::new();
-        vdom.rebuild(&mut incremental);
+        lifecycle::with_run(LifecycleRun::Incremental, || vdom.rebuild(&mut incremental));
         incremental.assert_stack_clean();
-        Self {
+        let state = Self {
             vdom,
             incremental,
             pending_app_render: false,
             pending_fresh_compare: false,
             strict_renderer_errors,
+            strict_lifecycle_errors,
+        };
+        if strict_lifecycle_errors {
+            check_lifecycle_matches_fresh().unwrap();
         }
+        state
     }
 }
 
@@ -509,12 +525,15 @@ fn render_once(
     state: &mut Harness,
     mark_app_dirty: bool,
     assert_matches_vdom: bool,
+    assert_lifecycle_matches_fresh: bool,
 ) -> Result<(), String> {
     fire_historical_event_listeners(state)?;
     if mark_app_dirty {
         state.vdom.mark_dirty(ScopeId::APP);
     }
-    state.vdom.render_immediate(&mut state.incremental);
+    lifecycle::with_run(LifecycleRun::Incremental, || {
+        state.vdom.render_immediate(&mut state.incremental)
+    });
     state.incremental.check_stack_clean().map_err(|err| {
         let last_mutation = state
             .incremental
@@ -526,23 +545,298 @@ fn render_once(
     if assert_matches_vdom {
         state.incremental.check_matches_vdom(&state.vdom)?;
     }
+    if assert_lifecycle_matches_fresh {
+        check_lifecycle_matches_fresh().map_err(|err| {
+            let last_mutation = state
+                .incremental
+                .last_mutation
+                .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
+            let recent_mutations = state.incremental.recent_mutations_text();
+            format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
+        })?;
+    }
     Ok(())
 }
 
 fn render_and_assert(state: &mut Harness) -> Result<(), String> {
     let compare_fresh = state.pending_fresh_compare;
-    let result = render_once(state, true, compare_fresh);
+    let compare_lifecycle = state.strict_lifecycle_errors;
+    let result = render_once(state, true, compare_fresh, compare_lifecycle);
     state.pending_app_render = false;
     state.pending_fresh_compare = false;
     render_result_to_fuzz_failure(state, result)
 }
 
 fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result<(), String> {
-    let result = render_once(state, false, compare_fresh && state.pending_fresh_compare);
+    let compare_lifecycle = state.strict_lifecycle_errors && compare_fresh;
+    let result = render_once(
+        state,
+        false,
+        compare_fresh && state.pending_fresh_compare,
+        compare_lifecycle,
+    );
     if compare_fresh {
         state.pending_fresh_compare = false;
     }
     render_result_to_fuzz_failure(state, result)
+}
+
+fn check_lifecycle_matches_fresh() -> Result<(), String> {
+    lifecycle::reset_run(LifecycleRun::Fresh);
+    let mut fresh_vdom = VirtualDom::new(App);
+    let mut fresh_renderer = RendererOracle::new();
+    without_suspense_ready_registration(|| {
+        lifecycle::with_run(LifecycleRun::Fresh, || {
+            fresh_vdom.rebuild(&mut fresh_renderer)
+        });
+    });
+    fresh_renderer.check_stack_clean()?;
+
+    let incremental = lifecycle::snapshot(LifecycleRun::Incremental);
+    let fresh = lifecycle::snapshot(LifecycleRun::Fresh);
+    let model = expected_model_lifecycle_snapshot();
+    if lifecycle_is_within_expected_bounds(&incremental, &fresh, &model) {
+        return Ok(());
+    }
+
+    let retaining_suspense_ids = retaining_suspense_ids(&incremental, &fresh, &model);
+    let retained_suspended = lifecycle::snapshot_with_suspense_ancestor(
+        LifecycleRun::Incremental,
+        &retaining_suspense_ids,
+    );
+    let model_suspended = model_lifecycle_with_suspense_ancestor_snapshot(&retaining_suspense_ids);
+    Err(lifecycle_mismatch_error(
+        &incremental,
+        &fresh,
+        &model,
+        &retained_suspended,
+        &model_suspended,
+    ))
+}
+
+fn lifecycle_is_within_expected_bounds(
+    incremental: &LifecycleSnapshot,
+    fresh: &LifecycleSnapshot,
+    model: &LifecycleSnapshot,
+) -> bool {
+    let retaining_suspense_ids = retaining_suspense_ids(incremental, fresh, model);
+    let retained_suspended_subtree_lifecycle = lifecycle::snapshot_with_suspense_ancestor(
+        LifecycleRun::Incremental,
+        &retaining_suspense_ids,
+    );
+    let model_suspended_subtree_lifecycle =
+        model_lifecycle_with_suspense_ancestor_snapshot(&retaining_suspense_ids);
+    let has_all_visible_fresh_components = fresh
+        .iter()
+        .filter(|(key, _)| lifecycle_role_is_strict(**key))
+        .all(|(key, count)| incremental.get(key).copied().unwrap_or(0) >= *count);
+    let has_no_components_outside_the_model = incremental
+        .iter()
+        .filter(|(key, _)| lifecycle_role_is_strict(**key))
+        .all(|(key, count)| {
+            let model_count = model.get(key).copied().unwrap_or(0);
+            let retained_suspended_count = retained_suspended_subtree_lifecycle
+                .get(key)
+                .copied()
+                .unwrap_or(0);
+            let model_suspended_count = model_suspended_subtree_lifecycle
+                .get(key)
+                .copied()
+                .unwrap_or(0);
+            let retained_extra_count =
+                retained_suspended_count.saturating_sub(model_suspended_count);
+            *count <= model_count + retained_extra_count
+        });
+    has_all_visible_fresh_components && has_no_components_outside_the_model
+}
+
+fn lifecycle_role_is_strict(key: LifecycleKey) -> bool {
+    // Suspense helper components can overlap while core moves work between
+    // visible and suspended trees. The strict oracle targets generated app
+    // components, where a live key outside the model means stale state.
+    matches!(
+        key.role,
+        LifecycleRole::ComponentA | LifecycleRole::ComponentB
+    )
+}
+
+fn expected_model_lifecycle_snapshot() -> LifecycleSnapshot {
+    let model = read_model();
+    let mut out = LifecycleSnapshot::new();
+    collect_vnode_lifecycle(&model.root, &mut out);
+    out
+}
+
+fn retaining_suspense_ids(
+    incremental: &LifecycleSnapshot,
+    fresh: &LifecycleSnapshot,
+    model: &LifecycleSnapshot,
+) -> BTreeSet<u64> {
+    let current_model = read_model();
+    let mut out = BTreeSet::new();
+    collect_unresolved_suspense_ids(&current_model.root, &mut out);
+
+    for (key, count) in incremental {
+        if key.role != LifecycleRole::SuspenseChild {
+            continue;
+        }
+
+        let fresh_count = fresh.get(key).copied().unwrap_or(0);
+        let model_count = model.get(key).copied().unwrap_or(0);
+        if (fresh_count > 0 || model_count > 0) && *count > fresh_count.max(model_count) {
+            out.insert(key.id);
+        }
+    }
+
+    out
+}
+
+fn model_lifecycle_with_suspense_ancestor_snapshot(
+    suspense_ids: &BTreeSet<u64>,
+) -> LifecycleSnapshot {
+    let model = read_model();
+    let mut out = LifecycleSnapshot::new();
+    collect_model_lifecycle_with_suspense_ancestor(&model.root, false, suspense_ids, &mut out);
+    out
+}
+
+fn collect_unresolved_suspense_ids(vnode: &VNodeSpec, out: &mut BTreeSet<u64>) {
+    for dynamic in &vnode.dynamics {
+        collect_dynamic_unresolved_suspense_ids(dynamic, out);
+    }
+}
+
+fn collect_dynamic_unresolved_suspense_ids(dynamic: &DynamicSpec, out: &mut BTreeSet<u64>) {
+    match dynamic {
+        DynamicSpec::Fragment(nodes) => {
+            for node in nodes {
+                collect_unresolved_suspense_ids(node, out);
+            }
+        }
+        DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component) => {
+            collect_unresolved_suspense_ids(&component.child, out);
+        }
+        DynamicSpec::Suspense(spec) => {
+            if spec.mode != SuspenseMode::Resolved {
+                out.insert(spec.id);
+            }
+            collect_unresolved_suspense_ids(&spec.child, out);
+        }
+        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
+    }
+}
+
+fn collect_model_lifecycle_with_suspense_ancestor(
+    vnode: &VNodeSpec,
+    within_retaining_suspense: bool,
+    suspense_ids: &BTreeSet<u64>,
+    out: &mut LifecycleSnapshot,
+) {
+    for dynamic in &vnode.dynamics {
+        collect_model_dynamic_lifecycle_with_suspense_ancestor(
+            dynamic,
+            within_retaining_suspense,
+            suspense_ids,
+            out,
+        );
+    }
+}
+
+fn collect_model_dynamic_lifecycle_with_suspense_ancestor(
+    dynamic: &DynamicSpec,
+    within_retaining_suspense: bool,
+    suspense_ids: &BTreeSet<u64>,
+    out: &mut LifecycleSnapshot,
+) {
+    match dynamic {
+        DynamicSpec::Fragment(nodes) => {
+            for node in nodes {
+                collect_model_lifecycle_with_suspense_ancestor(
+                    node,
+                    within_retaining_suspense,
+                    suspense_ids,
+                    out,
+                );
+            }
+        }
+        DynamicSpec::ComponentA(component) => {
+            if within_retaining_suspense {
+                add_lifecycle_key(out, LifecycleRole::ComponentA, component.id);
+            }
+            collect_model_lifecycle_with_suspense_ancestor(
+                &component.child,
+                within_retaining_suspense,
+                suspense_ids,
+                out,
+            );
+        }
+        DynamicSpec::ComponentB(component) => {
+            if within_retaining_suspense {
+                add_lifecycle_key(out, LifecycleRole::ComponentB, component.id);
+            }
+            collect_model_lifecycle_with_suspense_ancestor(
+                &component.child,
+                within_retaining_suspense,
+                suspense_ids,
+                out,
+            );
+        }
+        DynamicSpec::Suspense(spec) => {
+            collect_model_lifecycle_with_suspense_ancestor(
+                &spec.child,
+                within_retaining_suspense || suspense_ids.contains(&spec.id),
+                suspense_ids,
+                out,
+            );
+        }
+        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
+    }
+}
+
+fn collect_vnode_lifecycle(vnode: &VNodeSpec, out: &mut LifecycleSnapshot) {
+    for dynamic in &vnode.dynamics {
+        collect_dynamic_lifecycle(dynamic, out);
+    }
+}
+
+fn collect_dynamic_lifecycle(dynamic: &DynamicSpec, out: &mut LifecycleSnapshot) {
+    match dynamic {
+        DynamicSpec::Fragment(nodes) => {
+            for node in nodes {
+                collect_vnode_lifecycle(node, out);
+            }
+        }
+        DynamicSpec::ComponentA(component) => {
+            add_lifecycle_key(out, LifecycleRole::ComponentA, component.id);
+            collect_vnode_lifecycle(&component.child, out);
+        }
+        DynamicSpec::ComponentB(component) => {
+            add_lifecycle_key(out, LifecycleRole::ComponentB, component.id);
+            collect_vnode_lifecycle(&component.child, out);
+        }
+        DynamicSpec::Suspense(spec) => {
+            add_lifecycle_key(out, LifecycleRole::SuspenseBoundary, spec.id);
+            add_lifecycle_key(out, LifecycleRole::SuspenseChild, spec.id);
+            collect_vnode_lifecycle(&spec.child, out);
+        }
+        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
+    }
+}
+
+fn add_lifecycle_key(out: &mut LifecycleSnapshot, role: LifecycleRole, id: u64) {
+    *out.entry(LifecycleKey { role, id }).or_insert(0) += 1;
+}
+
+fn lifecycle_mismatch_error(
+    incremental: &LifecycleSnapshot,
+    fresh: &LifecycleSnapshot,
+    model: &LifecycleSnapshot,
+    retained_suspended: &LifecycleSnapshot,
+    model_suspended: &LifecycleSnapshot,
+) -> String {
+    format!(
+        "incremental component lifecycle set is outside fresh/model bounds\nincremental:\n{incremental:#?}\nvisible fresh:\n{fresh:#?}\nmodel upper bound:\n{model:#?}\nretained suspended incremental:\n{retained_suspended:#?}\nmodel suspended subtree:\n{model_suspended:#?}"
+    )
 }
 
 fn render_result_to_fuzz_failure(
@@ -573,6 +867,70 @@ mod tests {
         for op in ops {
             apply_op(&mut harness, &op).unwrap();
         }
+    }
+
+    fn replay_ops_with_lifecycle(ops: impl IntoIterator<Item = Op>) {
+        let mut harness = Harness::fresh_strict_lifecycle();
+        for op in ops {
+            apply_op(&mut harness, &op).unwrap();
+        }
+    }
+
+    fn set_pending_suspense_model() {
+        with_model(|model| *model = Model::initial());
+        apply_to_model(&Op::template(
+            0,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        ));
+        apply_to_model(&Op::dynamic(
+            0,
+            0,
+            DynamicKind::Suspense {
+                mode: SuspenseMode::Pending,
+            },
+        ));
+    }
+
+    #[test]
+    fn lifecycle_oracle_rejects_stale_component_outside_unresolved_suspense() {
+        lifecycle::reset_all();
+        set_pending_suspense_model();
+
+        let stale_key = LifecycleKey {
+            role: LifecycleRole::ComponentA,
+            id: 99,
+        };
+        let incremental = LifecycleSnapshot::from([(stale_key, 1)]);
+        let fresh = LifecycleSnapshot::new();
+        let model = expected_model_lifecycle_snapshot();
+
+        assert!(!lifecycle_is_within_expected_bounds(
+            &incremental,
+            &fresh,
+            &model
+        ));
+    }
+
+    #[test]
+    fn lifecycle_oracle_allows_stale_component_inside_unresolved_suspense() {
+        lifecycle::reset_all();
+        set_pending_suspense_model();
+
+        let _guard = lifecycle::with_run(LifecycleRun::Incremental, || {
+            lifecycle::track(LifecycleRole::ComponentA, 99, &[0])
+        });
+        let incremental = lifecycle::snapshot(LifecycleRun::Incremental);
+        let fresh = LifecycleSnapshot::new();
+        let model = expected_model_lifecycle_snapshot();
+
+        assert!(lifecycle_is_within_expected_bounds(
+            &incremental,
+            &fresh,
+            &model
+        ));
     }
 
     // Regression test for a panic in `SuspenseContext::remove_suspended_task` when
@@ -688,6 +1046,456 @@ mod tests {
                 0,
                 FragmentEdit::Children(ListEdit::Move { from: 1, to: 0 }),
             ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn hidden_suspense_diff_drops_removed_generated_component() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic,
+                    },
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 1,
+                        item: TemplateNodeKind::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic(
+                1,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Pending,
+                },
+            ),
+            Op::dynamic(1, 1, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Remove { index: 1 },
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn reused_component_scope_updates_lifecycle_identity() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 51,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(0, 0, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::dynamic(98, 73, DynamicKind::Empty),
+            Op::dynamic(0, 0, DynamicKind::ComponentA),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn pending_parent_may_retain_rendered_nested_suspense_lifecycle() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                195,
+                186,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 207,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic(
+                39,
+                114,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Pending,
+                },
+            ),
+            Op::Rerender,
+            Op::wake_suspense(4),
+            Op::Rerender,
+            Op::wake_suspense_natural(210),
+            Op::Rerender,
+            Op::suspense(0, SuspenseMode::Pending),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn suspense_child_helper_overlap_does_not_fail_lifecycle_oracle() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic(
+                195,
+                186,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::Rerender,
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 207,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+            Op::dynamic(
+                1,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Pending,
+                },
+            ),
+            Op::wake_suspense(130),
+            Op::wake_suspense_natural(167),
+            Op::Rerender,
+            Op::suspense(245, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::suspense(0, SuspenseMode::Pending),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn resolving_parent_reuses_mounted_nested_suspense_children() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                50,
+                TemplateEdit::SetNode {
+                    node: 196,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(109, 211, DynamicKind::ComponentB),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                15,
+                170,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Pending,
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                2,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                },
+            ),
+            Op::template(
+                47,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 20,
+                        item: TemplateNodeKind::Dynamic,
+                    },
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic(3, 0, DynamicKind::ComponentB),
+            Op::suspense(124, SuspenseMode::Resolved),
+            Op::Rerender,
+            Op::suspense(23, SuspenseMode::Ready),
+            Op::wake_suspense(50),
+        ]);
+    }
+
+    #[test]
+    fn hidden_template_replace_drops_unmounted_component_state() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Pending,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Insert {
+                        index: 16,
+                        item: TemplateNodeKind::Text(88),
+                    },
+                },
+            ),
+            Op::dynamic(1, 0, DynamicKind::ComponentB),
+            Op::Rerender,
+            Op::suspense(0, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::suspense_wake_mutation(0, WakeMutationSpec::PrependStaticRoot { tag: 127 }),
+            Op::Rerender,
+            Op::wake_suspense(0),
+            Op::suspense_wake_mutation(0, WakeMutationSpec::None),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn suspended_component_may_retain_previous_generated_child() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                0,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(1, 0, DynamicKind::ComponentA),
+            Op::Rerender,
+            Op::wake_suspense(0),
+            Op::dynamic(
+                1,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::suspense(0, SuspenseMode::Ready),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn nested_ready_rewake_may_retain_current_generated_child() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                50,
+                TemplateEdit::SetNode {
+                    node: 189,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                15,
+                170,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                2,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(2, 0, DynamicKind::ComponentA),
+            Op::suspense(83, SuspenseMode::Pending),
+            Op::wake_suspense(0),
+            Op::Rerender,
+            Op::suspense(204, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::wake_suspense(2),
+            Op::suspense(31, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::Rerender,
+            Op::suspense(2, SuspenseMode::Ready),
+            Op::wake_suspense_natural(0),
+            Op::Rerender,
+            Op::wake_suspense(50),
+        ]);
+    }
+
+    #[test]
+    fn suspending_updated_child_drops_previous_generated_output() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                50,
+                TemplateEdit::SetNode {
+                    node: 84,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::Rerender,
+            Op::dynamic(1, 0, DynamicKind::ComponentB),
+            Op::Rerender,
+            Op::wake_suspense_natural(164),
+            Op::dynamic(0, 0, DynamicKind::ComponentB),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::Rerender,
+        ]);
+    }
+
+    #[test]
+    fn stale_suspended_output_reclaim_is_idempotent() {
+        replay_ops_with_lifecycle([
+            Op::template(
+                50,
+                TemplateEdit::SetNode {
+                    node: 2,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::Rerender,
+            Op::Rerender,
+            Op::wake_suspense_natural(104),
+            Op::dynamic(
+                0,
+                0,
+                DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            ),
+            Op::template(
+                1,
+                TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            ),
+            Op::wake_suspense(94),
+            Op::Rerender,
+            Op::suspense(50, SuspenseMode::Ready),
+            Op::Rerender,
+            Op::wake_suspense_natural(120),
+            Op::template(
+                3,
+                TemplateEdit::Roots {
+                    edit: ListEdit::Remove { index: 3 },
+                },
+            ),
+            Op::dynamic(2, 0, DynamicKind::Text(7)),
             Op::Rerender,
         ]);
     }

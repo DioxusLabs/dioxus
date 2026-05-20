@@ -109,7 +109,7 @@ echo "epoch:        ${fuzz_seconds}s"
 echo
 
 echo "==> minimizing corpus in place"
-cargo "+$toolchain" fuzz cmin "$target" "$corpus"
+cargo "+$toolchain" fuzz cmin -s none "$target" "$corpus"
 
 fuzz_log="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.XXXXXX.log")"
 artifact_marker="$(mktemp "${TMPDIR:-/tmp}/fuzz_parallel_cmin.XXXXXX.marker")"
@@ -117,7 +117,7 @@ trap 'rm -f "$fuzz_log" "$artifact_marker"' EXIT
 
 echo "==> fuzzing for ${fuzz_seconds}s"
 set +e
-cargo "+$toolchain" fuzz run "$target" "$corpus" -- \
+cargo "+$toolchain" fuzz run -s none "$target" "$corpus" -- \
   -jobs="$jobs" \
   -workers="$workers" \
   -max_total_time="$fuzz_seconds" \
@@ -142,7 +142,7 @@ fi
 echo
 echo "==> minimizing first failure: $failure_artifact"
 set +e
-cargo "+$toolchain" fuzz tmin "$target" "$failure_artifact"
+cargo "+$toolchain" fuzz tmin -s none "$target" "$failure_artifact"
 tmin_status="$?"
 set -e
 

@@ -6,6 +6,7 @@
 
 mod cache;
 mod harness;
+mod lifecycle;
 mod model;
 mod ops;
 mod reducer;
@@ -564,8 +565,8 @@ impl ModelFacts {
                         keyed: children.first().and_then(|child| child.key).is_some(),
                     });
                 }
-                DynamicSpec::ComponentA(child) | DynamicSpec::ComponentB(child) => {
-                    self.collect_vnode(child, suspense);
+                DynamicSpec::ComponentA(component) | DynamicSpec::ComponentB(component) => {
+                    self.collect_vnode(&component.child, suspense);
                 }
                 DynamicSpec::Suspense(suspense) => {
                     let suspense_index = self.suspense_count.min(u8::MAX as usize) as u8;

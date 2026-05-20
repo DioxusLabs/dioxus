@@ -398,6 +398,7 @@ fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bo
         }
         VNodeEdit::DynamicSlot { slot, edit } => {
             let mut next_suspense_id = model.next_suspense_id;
+            let mut next_component_id = model.next_component_id;
             {
                 let vnode = model.selected_vnode_mut(vnode);
                 match edit {
@@ -412,7 +413,11 @@ fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bo
                                         | DynamicKind::Placeholder
                                 )
                             {
-                                vnode.dynamics[index].set_kind(kind, &mut next_suspense_id);
+                                vnode.dynamics[index].set_kind(
+                                    kind,
+                                    &mut next_suspense_id,
+                                    &mut next_component_id,
+                                );
                             }
                         }
                     }
@@ -423,6 +428,7 @@ fn apply_vnode_edit(model: &mut Model, vnode: u8, edit: &VNodeEdit, can_grow: bo
                 vnode.normalize_in_place();
             }
             model.next_suspense_id = next_suspense_id;
+            model.next_component_id = next_component_id;
         }
         VNodeEdit::DynamicAttrs { slot, edit } => {
             let vnode = model.selected_vnode_mut(vnode);
