@@ -898,3 +898,4 @@ fn nested_suspense_resolves_client() {
             )
         });
 }
+

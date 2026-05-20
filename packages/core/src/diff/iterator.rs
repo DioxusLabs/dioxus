@@ -92,7 +92,8 @@ impl VirtualDom {
         new: &[VNode],
         parent: Option<ElementRef>,
     ) {
-        if cfg!(debug_assertions) {
+        #[cfg(debug_assertions)]
+        {
             let mut keys = rustc_hash::FxHashSet::default();
             let mut assert_unique_keys = |children: &[VNode]| {
                 keys.clear();
@@ -141,12 +142,7 @@ impl VirtualDom {
             "New middle returned from `diff_keyed_ends` should not be empty"
         );
 
-        // A few nodes in the middle were removed, just remove the old nodes
-        if new_middle.is_empty() {
-            self.remove_nodes(to, old_middle, None);
-        } else {
-            self.diff_keyed_middle(to, old_middle, new_middle, parent);
-        }
+        self.diff_keyed_middle(to, old_middle, new_middle, parent);
     }
 
     /// Diff both ends of the children that share keys.
@@ -488,13 +484,6 @@ impl VNode {
             .enumerate()
             .map(
                 |(root_idx, _)| match self.get_dynamic_root_node_and_id(root_idx) {
-                    // An empty fragment is materialised as a single placeholder anchor,
-                    // identical to `DynamicNode::Placeholder` from the DOM's perspective.
-                    Some((idx, DynamicNode::Fragment(nodes))) if nodes.is_empty() => {
-                        let id = mount.mounted_dynamic_nodes[idx];
-                        to.push_root(crate::ElementId(id));
-                        1
-                    }
                     Some((_, DynamicNode::Fragment(nodes))) => {
                         let mut accumulated = 0;
                         for node in nodes {

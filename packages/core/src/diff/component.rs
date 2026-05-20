@@ -103,8 +103,8 @@ impl VirtualDom {
 
         // Remove the component from the dom
         if let Some(node) = self.scopes[scope_id.0].last_rendered_node.clone() {
-            node.remove_node_inner(self, to, destroy_component_state, replace_with)
-        };
+            node.remove_node_inner(self, to, destroy_component_state, replace_with);
+        }
 
         if destroy_component_state {
             // Now drop all the resources

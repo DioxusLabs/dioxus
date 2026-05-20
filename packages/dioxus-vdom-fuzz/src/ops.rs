@@ -335,12 +335,18 @@ fn large_template_hash_stress_scenario() -> Vec<Op> {
 pub(crate) fn coverage_scenario_ops() -> Vec<Op> {
     let scenarios = [
         dynamic_text_and_placeholder_ops(),
+        no_change_diff_ops(),
+        suspended_text_diff_ops(),
+        dynamic_anchor_removal_ops(),
         dynamic_attribute_ops(),
         dynamic_root_keyed_move_ops(),
         dynamic_root_reference_ops(),
+        dynamic_root_find_anchor_ops(),
         component_replacement_ops(),
         suspense_background_ops(),
         suspense_dynamic_recovery_ops(),
+        suspense_hidden_component_recovery_ops(false),
+        suspense_hidden_component_recovery_ops(true),
         suspended_keyed_middle_ops(),
     ];
 
@@ -379,6 +385,96 @@ fn dynamic_text_and_placeholder_ops() -> Vec<Op> {
             vnode: 0,
             slot: 0,
             kind: DynamicKind::Text(2),
+        },
+        Op::Rerender,
+    ]
+}
+
+fn no_change_diff_ops() -> Vec<Op> {
+    vec![
+        make_root_dynamic(),
+        Op::Dynamic {
+            vnode: 0,
+            slot: 0,
+            kind: DynamicKind::Text(0),
+        },
+        Op::Rerender,
+        Op::Dynamic {
+            vnode: 0,
+            slot: 0,
+            kind: DynamicKind::Text(0),
+        },
+        Op::Rerender,
+    ]
+}
+
+fn suspended_text_diff_ops() -> Vec<Op> {
+    vec![
+        make_root_dynamic(),
+        Op::Dynamic {
+            vnode: 0,
+            slot: 0,
+            kind: DynamicKind::Suspense {
+                mode: SuspenseMode::Resolved,
+            },
+        },
+        Op::Template {
+            vnode: 1,
+            edit: TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        },
+        Op::Dynamic {
+            vnode: 1,
+            slot: 0,
+            kind: DynamicKind::Text(0),
+        },
+        Op::Rerender,
+        Op::Suspense {
+            suspense: 0,
+            mode: SuspenseMode::Pending,
+        },
+        Op::Dynamic {
+            vnode: 1,
+            slot: 0,
+            kind: DynamicKind::Text(1),
+        },
+        Op::Rerender,
+        Op::Suspense {
+            suspense: 0,
+            mode: SuspenseMode::Resolved,
+        },
+        Op::Rerender,
+    ]
+}
+
+fn dynamic_anchor_removal_ops() -> Vec<Op> {
+    vec![
+        make_root_dynamic(),
+        Op::Dynamic {
+            vnode: 0,
+            slot: 0,
+            kind: DynamicKind::Text(0),
+        },
+        Op::Template {
+            vnode: 0,
+            edit: TemplateEdit::Roots {
+                edit: ListEdit::Insert {
+                    index: 1,
+                    item: TemplateNodeKind::Element {
+                        tag: 1,
+                        namespace: None,
+                    },
+                },
+            },
+        },
+        Op::Rerender,
+        Op::Template {
+            vnode: 0,
+            edit: TemplateEdit::Roots {
+                edit: ListEdit::Remove { index: 0 },
+            },
         },
         Op::Rerender,
     ]
@@ -579,6 +675,100 @@ fn dynamic_root_reference_ops() -> Vec<Op> {
     ops
 }
 
+fn dynamic_root_find_anchor_ops() -> Vec<Op> {
+    fn append_after_dynamic_last(kind: DynamicKind) -> Vec<Op> {
+        vec![
+            make_root_dynamic(),
+            fragment_insert(0, None),
+            fragment_insert(1, None),
+            Op::Template {
+                vnode: 2,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Dynamic {
+                vnode: 2,
+                slot: 0,
+                kind,
+            },
+            Op::Rerender,
+            fragment_insert(2, None),
+            Op::Rerender,
+        ]
+    }
+
+    let mut ops = Vec::new();
+    for scenario in [
+        append_after_dynamic_last(DynamicKind::Text(40)),
+        append_after_dynamic_last(DynamicKind::Placeholder),
+        append_after_dynamic_last(DynamicKind::Empty),
+    ] {
+        if !ops.is_empty() {
+            ops.push(Op::Reset);
+        }
+        ops.extend(scenario);
+    }
+
+    ops.push(Op::Reset);
+    ops.extend([
+        make_root_dynamic(),
+        fragment_insert(0, None),
+        fragment_insert(1, None),
+        Op::Template {
+            vnode: 2,
+            edit: TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        },
+        Op::Dynamic {
+            vnode: 2,
+            slot: 0,
+            kind: DynamicKind::Fragment,
+        },
+        Op::Fragment {
+            vnode: 2,
+            slot: 0,
+            edit: FragmentEdit::Children(ListEdit::Insert {
+                index: 0,
+                item: None,
+            }),
+        },
+        Op::Rerender,
+        fragment_insert(2, None),
+        Op::Rerender,
+    ]);
+
+    ops.push(Op::Reset);
+    ops.extend([
+        make_root_dynamic(),
+        fragment_insert(0, Some(0)),
+        fragment_insert(1, Some(1)),
+        Op::Template {
+            vnode: 1,
+            edit: TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        },
+        Op::Fragment {
+            vnode: 1,
+            slot: 0,
+            edit: FragmentEdit::Children(ListEdit::Insert {
+                index: 0,
+                item: None,
+            }),
+        },
+        Op::Rerender,
+        fragment_insert(0, Some(9)),
+        Op::Rerender,
+    ]);
+
+    ops
+}
+
 fn component_replacement_ops() -> Vec<Op> {
     vec![
         make_root_dynamic(),
@@ -686,6 +876,71 @@ fn suspense_dynamic_recovery_ops() -> Vec<Op> {
         },
         Op::Rerender,
     ]
+}
+
+fn suspense_hidden_component_recovery_ops(nested: bool) -> Vec<Op> {
+    let mut ops = vec![
+        make_root_dynamic(),
+        Op::Dynamic {
+            vnode: 0,
+            slot: 0,
+            kind: DynamicKind::Suspense {
+                mode: SuspenseMode::Resolved,
+            },
+        },
+    ];
+
+    if nested {
+        ops.push(Op::Template {
+            vnode: 1,
+            edit: TemplateEdit::Children {
+                element: 0,
+                edit: ListEdit::Insert {
+                    index: 0,
+                    item: TemplateNodeKind::Dynamic,
+                },
+            },
+        });
+    } else {
+        ops.push(Op::Template {
+            vnode: 1,
+            edit: TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        });
+    }
+
+    ops.extend([
+        Op::Dynamic {
+            vnode: 1,
+            slot: 0,
+            kind: DynamicKind::Text(50),
+        },
+        Op::Rerender,
+        Op::Suspense {
+            suspense: 0,
+            mode: SuspenseMode::Pending,
+        },
+        Op::Dynamic {
+            vnode: 1,
+            slot: 0,
+            kind: DynamicKind::ComponentA,
+        },
+        Op::Rerender,
+        Op::Suspense {
+            suspense: 0,
+            mode: SuspenseMode::Resolved,
+        },
+        Op::Dynamic {
+            vnode: 1,
+            slot: 0,
+            kind: DynamicKind::Text(51),
+        },
+        Op::Rerender,
+    ]);
+
+    ops
 }
 
 fn suspended_keyed_middle_ops() -> Vec<Op> {

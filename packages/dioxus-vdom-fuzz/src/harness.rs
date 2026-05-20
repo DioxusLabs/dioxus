@@ -558,6 +558,60 @@ mod tests {
         ));
     }
 
+    // Regression test for a panic in `SuspenseContext::remove_suspended_task` when
+    // a nested suspense boundary was unmounted while a child task was still suspended.
+    // The boundary scope was dropped before the task cleanup ran, so `needs_update`
+    // unwrapped a `None` scope state.
+    #[test]
+    fn unmounting_nested_pending_suspense_does_not_panic_on_drop() {
+        replay_ops([
+            Op::Template {
+                vnode: 0,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Dynamic {
+                vnode: 0,
+                slot: 0,
+                kind: DynamicKind::Suspense {
+                    mode: SuspenseMode::Resolved,
+                },
+            },
+            Op::Template {
+                vnode: 1,
+                edit: TemplateEdit::SetNode {
+                    node: 0,
+                    kind: TemplateNodeKind::Dynamic,
+                },
+            },
+            Op::Dynamic {
+                vnode: 1,
+                slot: 0,
+                kind: DynamicKind::Suspense {
+                    mode: SuspenseMode::Ready,
+                },
+            },
+            Op::Rerender,
+            Op::Suspense {
+                suspense: 0,
+                mode: SuspenseMode::Pending,
+            },
+            Op::Dynamic {
+                vnode: 1,
+                slot: 0,
+                kind: DynamicKind::Placeholder,
+            },
+            Op::Rerender,
+            Op::Suspense {
+                suspense: 0,
+                mode: SuspenseMode::Resolved,
+            },
+            Op::Rerender,
+        ]);
+    }
+
     #[test]
     fn replacing_root_portal_with_fragment_removes_old_target_subtree() {
         replay_ops([

@@ -9,7 +9,6 @@ set -euo pipefail
 #   JOBS=8
 #   FUZZ_SECONDS=1800
 #   CORPUS=corpus/vdom_ops
-#   MIN_CORPUS=/private/tmp/dioxus-vdom-fuzz/vdom_ops-minimized
 #   TOOLCHAIN=nightly
 #   LIBFUZZER_ARGS="-rss_limit_mb=8192"
 
@@ -18,7 +17,6 @@ cd "$script_dir"
 
 target="${TARGET:-vdom_ops}"
 corpus="${CORPUS:-corpus/$target}"
-min_corpus="${MIN_CORPUS:-/private/tmp/dioxus-vdom-fuzz/$target-minimized}"
 toolchain="${TOOLCHAIN:-nightly}"
 fuzz_seconds="${FUZZ_SECONDS:-1800}"
 
@@ -32,34 +30,16 @@ fi
 workers="${WORKERS:-$default_workers}"
 jobs="${JOBS:-$workers}"
 
-mkdir -p "$corpus" "$min_corpus"
-
-minimize_corpus() {
-  echo "==> minimizing corpus"
-  tmp_corpus="${min_corpus}.tmp"
-  rm -rf "$tmp_corpus"
-  mkdir -p "$tmp_corpus"
-
-  cargo "+$toolchain" fuzz cmin "$target" "$tmp_corpus"
-
-  echo "==> replacing live corpus with minimized corpus"
-  old_corpus="${corpus}.old"
-  rm -rf "$old_corpus"
-  if [ -d "$corpus" ]; then
-    mv "$corpus" "$old_corpus"
-  fi
-  mv "$tmp_corpus" "$corpus"
-  rm -rf "$old_corpus"
-}
+mkdir -p "$corpus"
 
 echo "target:       $target"
 echo "corpus:       $corpus"
-echo "min corpus:   $min_corpus"
 echo "workers/jobs: $workers/$jobs"
 echo "epoch:        ${fuzz_seconds}s"
 echo
 
-minimize_corpus
+echo "==> minimizing corpus in place"
+cargo "+$toolchain" fuzz cmin "$target" "$corpus"
 
 echo "==> fuzzing for ${fuzz_seconds}s"
 cargo "+$toolchain" fuzz run "$target" "$corpus" -- \

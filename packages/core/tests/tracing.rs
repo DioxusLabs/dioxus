@@ -4,7 +4,7 @@ use dioxus_core::Event;
 use dioxus_renderer_oracle::RendererOracle;
 use std::{any::Any, rc::Rc};
 use tracing_fluent_assertions::{AssertionRegistry, AssertionsLayer};
-use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_subscriber::{Registry, layer::SubscriberExt};
 
 // This test asserts on tracing events emitted by `VirtualDom::new` and
 // `VirtualDom::rebuild`; it requires those calls to happen *exactly once*.
