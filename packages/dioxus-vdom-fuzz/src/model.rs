@@ -497,6 +497,7 @@ pub(crate) enum TemplateAttrSpec {
 pub(crate) enum DynamicSpec {
     Empty,
     Text(u8),
+    Placeholder,
     Fragment(Vec<VNodeSpec>),
     ComponentA(Box<VNodeSpec>),
     ComponentB(Box<VNodeSpec>),
@@ -572,6 +573,7 @@ impl DynamicSpec {
         match kind {
             DynamicKind::Empty => *self = Self::Empty,
             DynamicKind::Text(value) => *self = Self::Text(*value),
+            DynamicKind::Placeholder => *self = Self::Placeholder,
             DynamicKind::Fragment => {
                 if !matches!(self, Self::Fragment(_)) {
                     *self = Self::Fragment(Vec::new());
@@ -604,7 +606,7 @@ impl DynamicSpec {
 
     pub(crate) fn vnode_count(&self) -> usize {
         match self {
-            Self::Empty | Self::Text(_) => 0,
+            Self::Empty | Self::Text(_) | Self::Placeholder => 0,
             Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::vnode_count).sum(),
             Self::ComponentA(node) | Self::ComponentB(node) => node.vnode_count(),
             Self::Portal(spec) => spec.child.vnode_count(),
@@ -614,7 +616,7 @@ impl DynamicSpec {
 
     pub(crate) fn nth_vnode_mut(&mut self, index: &mut usize) -> Option<&mut VNodeSpec> {
         match self {
-            Self::Empty | Self::Text(_) => None,
+            Self::Empty | Self::Text(_) | Self::Placeholder => None,
             Self::Fragment(nodes) => {
                 for node in nodes {
                     if let Some(found) = node.nth_vnode_mut(index) {
@@ -631,7 +633,7 @@ impl DynamicSpec {
 
     pub(crate) fn node_count(&self) -> u64 {
         match self {
-            Self::Empty | Self::Text(_) => 1,
+            Self::Empty | Self::Text(_) | Self::Placeholder => 1,
             Self::Fragment(nodes) => 1 + nodes.iter().map(VNodeSpec::node_count).sum::<u64>(),
             Self::ComponentA(node) | Self::ComponentB(node) => 1 + node.node_count(),
             Self::Portal(spec) => 1 + spec.child.node_count(),
@@ -644,7 +646,7 @@ impl DynamicSpec {
 
     pub(crate) fn suspense_count(&self) -> usize {
         match self {
-            Self::Empty | Self::Text(_) => 0,
+            Self::Empty | Self::Text(_) | Self::Placeholder => 0,
             Self::Fragment(nodes) => nodes.iter().map(VNodeSpec::suspense_count).sum(),
             Self::ComponentA(node) | Self::ComponentB(node) => node.suspense_count(),
             Self::Portal(spec) => spec.child.suspense_count(),
@@ -654,7 +656,7 @@ impl DynamicSpec {
 
     pub(crate) fn nth_suspense_mut(&mut self, index: &mut usize) -> Option<&mut SuspenseSpec> {
         match self {
-            Self::Empty | Self::Text(_) => None,
+            Self::Empty | Self::Text(_) | Self::Placeholder => None,
             Self::Fragment(nodes) => {
                 for node in nodes {
                     if let Some(found) = node.nth_suspense_mut(index) {
@@ -677,7 +679,7 @@ impl DynamicSpec {
 
     pub(crate) fn collect_ready_suspense_keys(&self, out: &mut Vec<SuspenseReadyKey>) {
         match self {
-            Self::Empty | Self::Text(_) => {}
+            Self::Empty | Self::Text(_) | Self::Placeholder => {}
             Self::Fragment(nodes) => {
                 for node in nodes {
                     node.collect_ready_suspense_keys(out);
@@ -698,7 +700,7 @@ impl DynamicSpec {
 
     pub(crate) fn resolve_ready_suspense(&mut self, key: SuspenseReadyKey) {
         match self {
-            Self::Empty | Self::Text(_) => {}
+            Self::Empty | Self::Text(_) | Self::Placeholder => {}
             Self::Fragment(nodes) => {
                 for node in nodes {
                     node.resolve_ready_suspense(key);
@@ -720,7 +722,7 @@ impl DynamicSpec {
         key: SuspenseReadyKey,
     ) -> Option<WakeMutationSpec> {
         match self {
-            Self::Empty | Self::Text(_) => None,
+            Self::Empty | Self::Text(_) | Self::Placeholder => None,
             Self::Fragment(nodes) => nodes
                 .iter()
                 .find_map(|node| node.wake_mutation_for_ready_key(key)),
@@ -748,6 +750,7 @@ pub(crate) enum DynamicKind {
     ComponentB,
     Portal { target: PortalTargetSpec },
     Suspense { mode: SuspenseMode },
+    Placeholder,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Mutate)]

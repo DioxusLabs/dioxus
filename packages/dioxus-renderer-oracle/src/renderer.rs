@@ -32,15 +32,8 @@ struct Node {
     attrs: Vec<SnapshotAttr>,
     listeners: Vec<String>,
     children: Vec<NodeId>,
-    /// For each child, its template index within this element's template. Statics get
-    /// their position in the template; slot content shares the slot's template index;
-    /// nodes appended without template context get `u8::MAX` (sentinel meaning "no
-    /// template position, lives at the end").
-    child_template_indices: Vec<u8>,
     parent: Option<NodeId>,
 }
-
-const NO_TEMPLATE_INDEX: u8 = u8::MAX;
 
 /// A category-level summary of edits applied to the renderer in one render pass.
 ///
@@ -114,7 +107,6 @@ impl RendererOracle {
                 attrs: Vec::new(),
                 listeners: Vec::new(),
                 children: Vec::new(),
-                child_template_indices: Vec::new(),
                 parent: None,
             })],
             element_to_node: vec![Some(root)],
@@ -342,7 +334,6 @@ impl RendererOracle {
             attrs: Vec::new(),
             listeners: Vec::new(),
             children: Vec::new(),
-            child_template_indices: Vec::new(),
             parent: None,
         }));
         id
@@ -392,10 +383,10 @@ impl RendererOracle {
             .unwrap_or_else(|| panic!("renderer asked for unknown ElementId({})", id.0))
     }
 
-    /// Recursively materialize a template node. Returns the new node id for static
-    /// elements/text, or `None` for `TemplateNode::Dynamic` since dynamic slots have
-    /// no DOM presence until content is inserted into them.
-    fn clone_template(&mut self, template: &TemplateNode) -> Option<NodeId> {
+    /// Recursively materialize a template node. Mirrors what `native-dom` and the JS
+    /// interpreter do: `TemplateNode::Dynamic` becomes a real placeholder node, so
+    /// mutation paths can be walked as plain positional child indices.
+    fn clone_template(&mut self, template: &TemplateNode) -> NodeId {
         match template {
             TemplateNode::Element {
                 tag,
@@ -422,63 +413,38 @@ impl RendererOracle {
                         );
                     }
                 }
-                let mut child_ids = Vec::new();
-                let mut child_tis = Vec::new();
-                for (template_idx, child) in children.iter().enumerate() {
-                    if let Some(child_id) = self.clone_template(child) {
+                let child_ids: Vec<NodeId> = children
+                    .iter()
+                    .map(|child| {
+                        let child_id = self.clone_template(child);
                         self.node_mut(child_id).parent = Some(id);
-                        child_ids.push(child_id);
-                        child_tis.push(template_idx as u8);
-                    }
-                }
-                let node = self.node_mut(id);
-                node.children = child_ids;
-                node.child_template_indices = child_tis;
-                Some(id)
+                        child_id
+                    })
+                    .collect();
+                self.node_mut(id).children = child_ids;
+                id
             }
-            TemplateNode::Text { text } => Some(self.alloc(NodeKind::Text((*text).to_string()))),
-            TemplateNode::Dynamic { .. } => None,
+            TemplateNode::Text { text } => self.alloc(NodeKind::Text((*text).to_string())),
+            TemplateNode::Dynamic { .. } => self.alloc(NodeKind::Placeholder),
         }
     }
 
-    /// Walk from `start` through `path`, treating each segment as a template index.
-    /// Returns the node id of the static child at each step. Panics if any step
-    /// fails to resolve — paths must only end at slot positions (handled by
-    /// [`Self::walk_slot_path`]).
+    /// Walk from `start` through `path`, treating each segment as a positional child
+    /// index. Since `TemplateNode::Dynamic` slots are materialized as real placeholder
+    /// nodes (see `clone_template`), positional indices line up with the paths that
+    /// `dioxus_core` emits.
     fn walk_path(&self, start: NodeId, path: &[u8]) -> NodeId {
         let mut current = start;
         for &segment in path {
-            current = self
-                .find_child_with_template_index(current, segment)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "renderer path {path:?} walked past node {current}; missing child template-index {segment}"
-                    )
-                });
+            let parent = self.node(current);
+            current = *parent.children.get(segment as usize).unwrap_or_else(|| {
+                panic!(
+                    "renderer path {path:?} walked past node {current}; child index {segment} out of bounds (len {})",
+                    parent.children.len()
+                )
+            });
         }
         current
-    }
-
-    fn find_child_with_template_index(&self, parent: NodeId, ti: u8) -> Option<NodeId> {
-        let parent_node = self.node(parent);
-        for (idx, &this_ti) in parent_node.child_template_indices.iter().enumerate() {
-            if this_ti == ti {
-                return Some(parent_node.children[idx]);
-            }
-        }
-        None
-    }
-
-    /// Resolve `path` ending at a slot position. Returns `(parent_node, slot_ti)`
-    /// where `parent_node` is the element containing the slot and `slot_ti` is the
-    /// template index of the slot within that parent. The caller is responsible
-    /// for finding the right DOM insertion position from these.
-    fn walk_to_slot_parent(&self, start: NodeId, path: &[u8]) -> (NodeId, u8) {
-        let (&leaf, intermediate) = path
-            .split_last()
-            .expect("renderer was asked to walk an empty slot path");
-        let parent = self.walk_path(start, intermediate);
-        (parent, leaf)
     }
 
     fn pop_nodes(&mut self, m: usize) -> Vec<NodeId> {
@@ -506,14 +472,12 @@ impl RendererOracle {
         (parent, index)
     }
 
-    fn detach(&mut self, node: NodeId) -> (NodeId, usize, u8) {
+    fn detach(&mut self, node: NodeId) -> (NodeId, usize) {
         let (parent, index) = self.position_in_parent(node);
-        let parent_node = self.node_mut(parent);
-        let removed = parent_node.children.remove(index);
-        let ti = parent_node.child_template_indices.remove(index);
+        let removed = self.node_mut(parent).children.remove(index);
         debug_assert_eq!(removed, node);
         self.node_mut(node).parent = None;
-        (parent, index, ti)
+        (parent, index)
     }
 
     fn unhook(&mut self, node: NodeId) {
@@ -528,7 +492,7 @@ impl RendererOracle {
         }
     }
 
-    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: Vec<NodeId>, ti: u8) {
+    fn insert_detached(&mut self, parent: NodeId, index: usize, nodes: Vec<NodeId>) {
         if index > self.node(parent).children.len() {
             panic!(
                 "renderer insertion index {index} out of bounds for parent {parent} with {} children",
@@ -541,46 +505,14 @@ impl RendererOracle {
         let parent_node = self.node_mut(parent);
         for (offset, node) in nodes.into_iter().enumerate() {
             parent_node.children.insert(index + offset, node);
-            parent_node
-                .child_template_indices
-                .insert(index + offset, ti);
         }
     }
 
-    fn append_detached(&mut self, parent: NodeId, nodes: Vec<NodeId>, ti: u8) {
+    fn append_detached(&mut self, parent: NodeId, nodes: Vec<NodeId>) {
         for &node in &nodes {
             self.node_mut(node).parent = Some(parent);
         }
-        let parent_node = self.node_mut(parent);
-        let added = nodes.len();
-        parent_node.children.extend(nodes);
-        parent_node
-            .child_template_indices
-            .extend(std::iter::repeat(ti).take(added));
-    }
-
-    /// Find the insertion index in `parent` for content belonging to the slot at
-    /// template index `slot_ti`. Slot content is grouped together: this returns the
-    /// position right after the last existing child whose template index is `<=
-    /// slot_ti`. Children with `NO_TEMPLATE_INDEX` (append-only content) live at the
-    /// end regardless of `slot_ti`.
-    fn slot_insert_position(&self, parent: NodeId, slot_ti: u8) -> usize {
-        let parent_node = self.node(parent);
-        let mut pos = 0;
-        for (i, &ti) in parent_node.child_template_indices.iter().enumerate() {
-            if ti == NO_TEMPLATE_INDEX {
-                continue;
-            }
-            if ti <= slot_ti {
-                pos = i + 1;
-            } else {
-                return pos;
-            }
-        }
-        // Either ran out of template-indexed children (insert at `pos`) or only
-        // append-only children remain past `pos` — insert at `pos` to stay before
-        // the append-only tail.
-        pos
+        self.node_mut(parent).children.extend(nodes);
     }
 
     fn drop_subtree(&mut self, node: NodeId) {
@@ -667,7 +599,7 @@ impl WriteMutations for RendererOracle {
         self.edit_counters.inserts += 1;
         let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
-        self.append_detached(self.lookup(id), nodes, NO_TEMPLATE_INDEX);
+        self.append_detached(self.lookup(id), nodes);
     }
 
     fn assign_node_id(&mut self, path: &'static [u8], id: ElementId) {
@@ -698,9 +630,7 @@ impl WriteMutations for RendererOracle {
             .roots()
             .get(index)
             .unwrap_or_else(|| panic!("renderer loaded missing template root {index}"));
-        let node = self
-            .clone_template(root)
-            .unwrap_or_else(|| panic!("renderer cannot load a Dynamic root template"));
+        let node = self.clone_template(root);
         self.set_element_mapping(id, node);
         self.stack.push(node);
     }
@@ -710,22 +640,25 @@ impl WriteMutations for RendererOracle {
         let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let target = self.lookup(id);
-        let (parent, index, ti) = self.detach(target);
+        let (parent, index) = self.detach(target);
         self.drop_subtree(target);
-        self.insert_detached(parent, index, nodes, ti);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn replace_placeholder_with_nodes(&mut self, path: &'static [u8], m: usize) {
         self.edit_counters.inserts += 1;
+        // Order matters: pop the stack first, then walk_path reads from the top.
+        // Mirrors `native-dom`'s `replace_placeholder_with_nodes` (mutation_writer.rs).
         let nodes = self.pop_nodes(m);
         self.unhook_all(&nodes);
         let top = *self
             .stack
             .last()
             .expect("renderer stack unexpectedly empty during replace_placeholder_with_nodes");
-        let (parent, slot_ti) = self.walk_to_slot_parent(top, path);
-        let insert_index = self.slot_insert_position(parent, slot_ti);
-        self.insert_detached(parent, insert_index, nodes, slot_ti);
+        let anchor = self.walk_path(top, path);
+        let (parent, index) = self.detach(anchor);
+        self.drop_subtree(anchor);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn insert_nodes_after(&mut self, id: ElementId, m: usize) {
@@ -734,8 +667,7 @@ impl WriteMutations for RendererOracle {
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        let ti = self.node(parent).child_template_indices[index];
-        self.insert_detached(parent, index + 1, nodes, ti);
+        self.insert_detached(parent, index + 1, nodes);
     }
 
     fn insert_nodes_before(&mut self, id: ElementId, m: usize) {
@@ -744,8 +676,7 @@ impl WriteMutations for RendererOracle {
         self.unhook_all(&nodes);
         let anchor = self.lookup(id);
         let (parent, index) = self.position_in_parent(anchor);
-        let ti = self.node(parent).child_template_indices[index];
-        self.insert_detached(parent, index, nodes, ti);
+        self.insert_detached(parent, index, nodes);
     }
 
     fn set_attribute(

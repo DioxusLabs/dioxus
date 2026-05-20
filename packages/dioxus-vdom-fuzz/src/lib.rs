@@ -18,7 +18,7 @@ use reducer::{random_multistep_shrink_case, simplified_ops};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub const MAX_STEPS: usize = 256;
+pub const MAX_STEPS: usize = 512;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
@@ -32,13 +32,23 @@ impl FuzzCase {
     }
 
     pub fn seed() -> Self {
-        let ops = IteratorScenario::ALL
-            .into_iter()
-            .enumerate()
-            .flat_map(|(index, scenario)| {
-                ops::iterator_scenario_ops(scenario, (index as u8).wrapping_mul(16))
-            })
-            .collect();
+        let scenarios = std::iter::once(ops::coverage_scenario_ops()).chain(
+            IteratorScenario::ALL
+                .into_iter()
+                .enumerate()
+                .map(|(index, scenario)| {
+                    ops::iterator_scenario_ops(scenario, (index as u8).wrapping_mul(16))
+                }),
+        );
+
+        let mut ops = Vec::new();
+        for scenario in scenarios {
+            if !ops.is_empty() {
+                ops.push(Op::Reset);
+            }
+            ops.extend(scenario);
+        }
+
         Self::new(ops)
     }
 
@@ -331,5 +341,16 @@ mod tests {
         let decoded = decode_case(&bytes[..size]).unwrap();
         assert_eq!(case, decoded);
         run_case(&decoded).unwrap();
+    }
+
+    #[test]
+    fn export_seed_case_when_requested() {
+        let Ok(path) = std::env::var("DIOXUS_VDOM_FUZZ_EXPORT_SEED") else {
+            return;
+        };
+
+        let case = FuzzCase::seed();
+        let encoded = encode_case_vec(&case).unwrap();
+        std::fs::write(path, encoded).unwrap();
     }
 }

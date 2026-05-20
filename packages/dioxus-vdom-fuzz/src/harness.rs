@@ -1,9 +1,9 @@
 use crate::{
     model::*,
     ops::{
-        Op, apply_to_model, clear_suspense_ready_tasks, read_model, release_suspense_ready_task,
-        selected_registered_ready_suspense_key, with_model, without_suspense_ready_registration,
-        TemplateEdit,
+        Op, TemplateEdit, apply_to_model, clear_suspense_ready_tasks, read_model,
+        release_suspense_ready_task, selected_registered_ready_suspense_key, with_model,
+        without_suspense_ready_registration,
     },
     vdom::App,
 };
@@ -375,6 +375,10 @@ pub(crate) fn apply_step(state: &mut Harness, op: &Op) -> Result<(), String> {
 
 fn apply_op(state: &mut Harness, op: &Op) -> Result<(), String> {
     match op {
+        Op::Reset => {
+            *state = Harness::fresh_with_strict_renderer_errors(state.strict_renderer_errors);
+            Ok(())
+        }
         Op::Rerender => render_and_assert(state),
         Op::WakeSuspense { suspense } => {
             let Some(key) = read_model().selected_ready_suspense_key(*suspense) else {

@@ -329,6 +329,7 @@ pub(crate) fn simplified_ops(op: &Op) -> Vec<Op> {
 
     match op {
         Op::Rerender => {}
+        Op::Reset => {}
         Op::WakeSuspense { suspense } => {
             for suspense in simpler_u8_values(*suspense) {
                 push_unique(&mut out, Op::WakeSuspense { suspense });
@@ -869,6 +870,9 @@ fn simplified_dynamic_kinds(kind: &DynamicKind) -> Vec<DynamicKind> {
             for value in simpler_u8_values(*value) {
                 push_unique(&mut out, DynamicKind::Text(value));
             }
+            push_unique(&mut out, DynamicKind::Empty);
+        }
+        DynamicKind::Placeholder => {
             push_unique(&mut out, DynamicKind::Empty);
         }
         DynamicKind::Fragment => {
