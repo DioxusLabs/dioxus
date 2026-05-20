@@ -1,4 +1,4 @@
-use crate::innerlude::ScopeOrder;
+use crate::innerlude::{NoOpMutations, ScopeOrder};
 use crate::{ScopeId, virtual_dom::VirtualDom};
 
 /// An Element's unique identifier.
@@ -72,10 +72,13 @@ impl VirtualDom {
         elements.try_remove(el.0).is_some()
     }
 
-    // Drop a scope without dropping its children
+    // Drop a scope whose rendered nodes have already been removed.
     //
-    // Note: This will not remove any ids from the arena
+    // Normal vnode removal drops child component scopes before their parent. Suspense can keep
+    // background nodes outside of that traversal, so clean up any remaining live child scopes here.
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        self.drop_orphaned_child_scopes(id);
+
         let height = {
             let scope = self.scopes.remove(id.0);
             let context = scope.state();
@@ -86,6 +89,33 @@ impl VirtualDom {
 
         // If this scope was a suspense boundary, remove it from the resolved scopes
         self.resolved_scopes.retain(|s| s != &id);
+    }
+
+    fn drop_orphaned_child_scopes(&mut self, parent: ScopeId) {
+        let children = self
+            .scopes
+            .iter()
+            .filter_map(|(idx, _)| {
+                let scope = ScopeId(idx);
+                let parent_id = self
+                    .runtime
+                    .try_get_state(scope)
+                    .and_then(|scope| scope.parent_id());
+                (parent_id == Some(parent)).then_some(scope)
+            })
+            .collect::<Vec<_>>();
+
+        for child in children {
+            if !self.scopes.contains(child.0) {
+                continue;
+            }
+
+            if self.scopes[child.0].last_rendered_node.is_some() {
+                self.remove_component_node(None::<&mut NoOpMutations>, true, child, None);
+            } else {
+                self.drop_scope(child);
+            }
+        }
     }
 }
 

@@ -160,16 +160,34 @@ impl VNode {
                 // if it is the placeholder value, it will create the scope, otherwise it will
                 // reuse the scope
                 let old_mount = dom.get_mounted_dyn_node(mount, idx);
+                let old_has_live_dom = dynamic_node_has_live_dom(old, mount, idx, dom);
                 dom.set_mounted_dyn_node(mount, idx, usize::MAX);
 
-                let new_nodes_on_stack =
-                    self.create_dynamic_node(new, mount, idx, dom, to.as_deref_mut());
+                let new_nodes_on_stack = self.create_dynamic_node(
+                    new,
+                    mount,
+                    idx,
+                    dom,
+                    if old_has_live_dom {
+                        to.as_deref_mut()
+                    } else {
+                        None
+                    },
+                );
 
                 // Restore the mount for the scope we are removing
                 let new_mount = dom.get_mounted_dyn_node(mount, idx);
                 dom.set_mounted_dyn_node(mount, idx, old_mount);
 
-                self.remove_dynamic_node(mount, dom, to, true, idx, old, Some(new_nodes_on_stack));
+                self.remove_dynamic_node(
+                    mount,
+                    dom,
+                    if old_has_live_dom { to } else { None },
+                    true,
+                    idx,
+                    old,
+                    old_has_live_dom.then_some(new_nodes_on_stack),
+                );
 
                 // Restore the mount for the node we created
                 dom.set_mounted_dyn_node(mount, idx, new_mount);

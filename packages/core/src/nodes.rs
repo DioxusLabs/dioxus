@@ -231,25 +231,21 @@ impl VNode {
 
     /// Create a deep clone of this VNode
     pub(crate) fn deep_clone(&self) -> Self {
-        let mut dynamic_nodes: Box<[DynamicNode]> = self
-            .vnode
-            .dynamic_nodes
-            .iter()
-            .map(|node| match node {
-                DynamicNode::Fragment(nodes) => {
-                    DynamicNode::Fragment(nodes.iter().map(|node| node.deep_clone()).collect())
-                }
-                other => other.clone(),
-            })
-            .collect();
-        for node in &mut dynamic_nodes {
-            normalize_empty_fragment(node);
-        }
         Self {
             vnode: Rc::new(VNodeInner {
                 key: self.vnode.key.clone(),
                 template: self.vnode.template,
-                dynamic_nodes,
+                dynamic_nodes: self
+                    .vnode
+                    .dynamic_nodes
+                    .iter()
+                    .map(|node| match node {
+                        DynamicNode::Fragment(nodes) => DynamicNode::Fragment(
+                            nodes.iter().map(|node| node.deep_clone()).collect(),
+                        ),
+                        other => other.clone(),
+                    })
+                    .collect(),
                 dynamic_attrs: self
                     .vnode
                     .dynamic_attrs

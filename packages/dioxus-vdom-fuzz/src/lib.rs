@@ -38,12 +38,8 @@ const OPTIMIZED_STRATEGIES: &[OptimizedStrategy] = &[
     OptimizedStrategy::SetDynamicLeaf,
     OptimizedStrategy::SetDynamicComponent,
     OptimizedStrategy::SetFragmentKeyMode,
-    OptimizedStrategy::InsertFragmentChild,
-    OptimizedStrategy::RemoveFragmentChild,
-    OptimizedStrategy::MoveFragmentChild,
-    OptimizedStrategy::InsertDynamicAttr,
-    OptimizedStrategy::RemoveDynamicAttr,
-    OptimizedStrategy::MoveDynamicAttr,
+    OptimizedStrategy::EditFragmentChildren,
+    OptimizedStrategy::EditDynamicAttrs,
     OptimizedStrategy::SetSuspenseMode,
     OptimizedStrategy::SetSuspenseWakeMutation,
     OptimizedStrategy::WakeSuspenseHarness,
@@ -65,12 +61,8 @@ enum OptimizedStrategy {
     SetDynamicLeaf,
     SetDynamicComponent,
     SetFragmentKeyMode,
-    InsertFragmentChild,
-    RemoveFragmentChild,
-    MoveFragmentChild,
-    InsertDynamicAttr,
-    RemoveDynamicAttr,
-    MoveDynamicAttr,
+    EditFragmentChildren,
+    EditDynamicAttrs,
     SetSuspenseMode,
     SetSuspenseWakeMutation,
     WakeSuspenseHarness,
@@ -323,99 +315,20 @@ fn optimized_model_aware_op(
             },
         ),
         OptimizedStrategy::SetFragmentKeyMode if facts.has_dynamic_slots() => {
-            let fragment = facts.select_fragment(selector);
+            let fragment = facts
+                .select_fragment(selector)
+                .unwrap_or_else(|| facts.fragment_prerequisite(selector));
             Op::fragment(
                 fragment.vnode,
                 fragment.slot,
                 FragmentEdit::KeyMode(biased_fragment_key_mode(value)),
             )
         }
-        OptimizedStrategy::InsertFragmentChild if model.can_grow() && facts.has_dynamic_slots() => {
-            let fragment = facts.select_fragment(selector);
-            Op::fragment(
-                fragment.vnode,
-                fragment.slot,
-                FragmentEdit::Children(ListEdit::Insert {
-                    index: biased_index(value, fragment.len),
-                    item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
-                }),
-            )
+        OptimizedStrategy::EditFragmentChildren if facts.has_dynamic_slots() => {
+            edit_fragment_children_op(&facts, model.can_grow(), selector, value)
         }
-        OptimizedStrategy::RemoveFragmentChild if facts.has_dynamic_slots() => {
-            let fragment = facts.select_fragment(selector);
-            if fragment.len == 0 && model.can_grow() {
-                Op::fragment(
-                    fragment.vnode,
-                    fragment.slot,
-                    FragmentEdit::Children(ListEdit::Insert {
-                        index: 0,
-                        item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
-                    }),
-                )
-            } else {
-                Op::fragment(
-                    fragment.vnode,
-                    fragment.slot,
-                    FragmentEdit::Children(ListEdit::Remove {
-                        index: biased_existing_index(value, fragment.len),
-                    }),
-                )
-            }
-        }
-        OptimizedStrategy::MoveFragmentChild if facts.has_dynamic_slots() => {
-            let fragment = facts.select_fragment(selector);
-            if fragment.len < 2 && model.can_grow() {
-                Op::fragment(
-                    fragment.vnode,
-                    fragment.slot,
-                    FragmentEdit::Children(ListEdit::Insert {
-                        index: biased_index(value, fragment.len),
-                        item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
-                    }),
-                )
-            } else {
-                Op::fragment(
-                    fragment.vnode,
-                    fragment.slot,
-                    FragmentEdit::Children(ListEdit::Move {
-                        from: biased_existing_index(selector, fragment.len),
-                        to: biased_index(value, fragment.len),
-                    }),
-                )
-            }
-        }
-        OptimizedStrategy::InsertDynamicAttr if facts.has_attr_slots() => {
-            let attr = facts.select_attr_slot(selector);
-            dynamic_attr_op(&facts, attr, vnode, element, value, |attr| {
-                ListEdit::Insert {
-                    index: biased_index(value, attr.len),
-                    item: optimized_attr(value),
-                }
-            })
-        }
-        OptimizedStrategy::InsertDynamicAttr if model.can_grow() => {
-            prerequisite_dynamic_attr_op(&facts, vnode, element, value)
-        }
-        OptimizedStrategy::RemoveDynamicAttr if facts.has_attr_slots() => {
-            let attr = facts.select_attr_slot(selector);
-            dynamic_attr_op(&facts, attr, vnode, element, value, |attr| {
-                ListEdit::Remove {
-                    index: biased_existing_index(value, attr.len),
-                }
-            })
-        }
-        OptimizedStrategy::RemoveDynamicAttr if model.can_grow() => {
-            prerequisite_dynamic_attr_op(&facts, vnode, element, value)
-        }
-        OptimizedStrategy::MoveDynamicAttr if facts.has_attr_slots() => {
-            let attr = facts.select_attr_slot(selector);
-            dynamic_attr_op(&facts, attr, vnode, element, value, |attr| ListEdit::Move {
-                from: biased_existing_index(selector, attr.len),
-                to: biased_index(value, attr.len),
-            })
-        }
-        OptimizedStrategy::MoveDynamicAttr if model.can_grow() => {
-            prerequisite_dynamic_attr_op(&facts, vnode, element, value)
+        OptimizedStrategy::EditDynamicAttrs => {
+            edit_dynamic_attrs_op(&facts, model.can_grow(), vnode, element, selector, value)
         }
         OptimizedStrategy::SetSuspenseMode if facts.has_suspense() => {
             Op::suspense(facts.select_suspense(selector), biased_suspense_mode(value))
@@ -482,19 +395,64 @@ fn ready_suspense_slot_op(facts: &ModelFacts, vnode: u8, selector: u8) -> Op {
     )
 }
 
-fn dynamic_attr_op(
+fn edit_fragment_children_op(facts: &ModelFacts, can_grow: bool, selector: u8, value: u8) -> Op {
+    let fragment = facts
+        .select_fragment(selector)
+        .unwrap_or_else(|| facts.fragment_prerequisite(selector));
+    let edit = match value % 3 {
+        0 if can_grow => ListEdit::Insert {
+            index: biased_index(value, fragment.len),
+            item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
+        },
+        1 if fragment.len > 0 => ListEdit::Remove {
+            index: biased_existing_index(value, fragment.len),
+        },
+        2 if fragment.len >= 2 => ListEdit::Move {
+            from: biased_existing_index(selector, fragment.len),
+            to: biased_index(value, fragment.len),
+        },
+        _ if can_grow => ListEdit::Insert {
+            index: 0,
+            item: biased_fragment_child_key(value, fragment.len, fragment.keyed),
+        },
+        _ => ListEdit::Remove { index: 0 },
+    };
+
+    Op::fragment(fragment.vnode, fragment.slot, FragmentEdit::Children(edit))
+}
+
+fn edit_dynamic_attrs_op(
     facts: &ModelFacts,
-    attr: AttrShape,
+    can_grow: bool,
     vnode: u8,
     element: u8,
+    selector: u8,
     value: u8,
-    edit: impl FnOnce(AttrShape) -> ListEdit<AttrSpec>,
 ) -> Op {
-    if attr.len == 0 {
-        prerequisite_dynamic_attr_op(facts, vnode, element, value)
-    } else {
-        Op::dynamic_attrs(attr.vnode, attr.slot, edit(attr))
-    }
+    let Some(attr) = facts.select_attr_slot(selector) else {
+        return prerequisite_dynamic_attr_op(facts, vnode, element, value);
+    };
+
+    let edit = match value % 3 {
+        0 => ListEdit::Insert {
+            index: biased_index(value, attr.len),
+            item: optimized_attr(value),
+        },
+        1 if attr.len > 0 => ListEdit::Remove {
+            index: biased_existing_index(value, attr.len),
+        },
+        2 if attr.len >= 2 => ListEdit::Move {
+            from: biased_existing_index(selector, attr.len),
+            to: biased_index(value, attr.len),
+        },
+        _ if can_grow => ListEdit::Insert {
+            index: biased_index(value, attr.len),
+            item: optimized_attr(value),
+        },
+        _ => ListEdit::Remove { index: 0 },
+    };
+
+    Op::dynamic_attrs(attr.vnode, attr.slot, edit)
 }
 
 fn prerequisite_dynamic_attr_op(facts: &ModelFacts, vnode: u8, element: u8, value: u8) -> Op {
@@ -674,31 +632,26 @@ impl ModelFacts {
         self.vnodes.iter().any(|vnode| vnode.dynamic_slots > 0)
     }
 
-    fn select_fragment(&self, selector: u8) -> FragmentShape {
-        if self.fragments.is_empty() {
-            return FragmentShape {
-                vnode: self.select_vnode(selector),
-                slot: self.select_dynamic_slot(self.select_vnode(selector), selector),
-                len: 0,
-                keyed: false,
-            };
-        }
-        self.fragments[selector as usize % self.fragments.len()]
+    fn select_fragment(&self, selector: u8) -> Option<FragmentShape> {
+        self.fragments
+            .get(selector as usize % self.fragments.len().max(1))
+            .copied()
     }
 
-    fn select_attr_slot(&self, selector: u8) -> AttrShape {
-        if self.attrs.is_empty() {
-            return AttrShape {
-                vnode: self.select_vnode(selector),
-                slot: 0,
-                len: 0,
-            };
+    fn fragment_prerequisite(&self, selector: u8) -> FragmentShape {
+        let vnode = self.select_vnode(selector);
+        FragmentShape {
+            vnode,
+            slot: self.select_dynamic_slot(vnode, selector),
+            len: 0,
+            keyed: false,
         }
-        self.attrs[selector as usize % self.attrs.len()]
     }
 
-    fn has_attr_slots(&self) -> bool {
-        !self.attrs.is_empty()
+    fn select_attr_slot(&self, selector: u8) -> Option<AttrShape> {
+        self.attrs
+            .get(selector as usize % self.attrs.len().max(1))
+            .copied()
     }
 
     fn select_suspense(&self, selector: u8) -> u8 {
