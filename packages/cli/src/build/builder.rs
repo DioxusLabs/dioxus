@@ -614,6 +614,10 @@ impl AppBuilder {
             ));
         }
 
+        if krate.relative {
+            envs.push((dioxus_cli_config::RELATIVE_ASSETS_ENV.into(), "1".to_string()));
+        }
+
         if let Some(env_filter) = env::var_os("RUST_LOG").and_then(|e| e.into_string().ok()) {
             envs.push(("RUST_LOG".into(), env_filter));
         }

@@ -124,6 +124,11 @@ pub(crate) struct TargetArgs {
     #[clap(long, help_heading = HELP_HEADING)]
     pub(crate) base_path: Option<String>,
 
+    /// Use relative URLs (starting with `./`) instead of root-absolute URLs (`/`) for
+    /// wasm/js loading, asset preloads, and other generated web bundle paths.
+    #[clap(long, default_value_t = false, help_heading = HELP_HEADING)]
+    pub(crate) relative: bool,
+
     /// Should dx attempt to codesign the app bundle?
     #[clap(long, default_value_t = false, help_heading = HELP_HEADING, num_args = 0..=1)]
     pub(crate) codesign: bool,
@@ -201,6 +206,7 @@ impl Anonymized for TargetArgs {
             "keep_names": self.keep_names,
             "device": self.device,
             "base_path": self.base_path.is_some(),
+            "relative": self.relative,
             "cargo_args": self.cargo_args.is_some(),
             "rustc_args": self.rustc_args.is_some(),
             "raw_json_diagnostics": self.raw_json_diagnostics,

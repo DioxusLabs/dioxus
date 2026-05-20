@@ -24,7 +24,7 @@ impl WebAssetResolveError {
 }
 
 pub(crate) async fn resolve_web_asset(path: &str) -> Result<Vec<u8>, WebAssetResolveError> {
-    let url = if path.starts_with("/") {
+    let url = if path.starts_with('/') || path.starts_with("./") || path.starts_with("../") {
         path.to_string()
     } else {
         format!("/{path}")
