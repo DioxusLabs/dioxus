@@ -13,8 +13,9 @@ mod vdom;
 
 use harness::{Harness, apply_step, print_ssr_diff_trace};
 use model::{
-    AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, Model, SuspenseMode,
-    TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec, WakeMutationSpec,
+    AttrSpec, AttrValueSpec, DynamicKind, DynamicSpec, FragmentKeyMode, MAX_FRAGMENT_CHILDREN,
+    Model, SuspenseMode, TemplateAttrSpec, TemplateNodeKind, TemplateNodeSpec, VNodeSpec,
+    WakeMutationSpec,
 };
 use mutatis::{Candidates, DefaultMutate, Generate, Mutate, Result as MutatisResult};
 use ops::{FragmentEdit, ListEdit, Op, TemplateEdit};
@@ -26,6 +27,7 @@ use std::fmt;
 pub const MAX_STEPS: usize = 512;
 const OPTIMIZED_MUTATION_STRATEGIES: u32 = 26;
 const OPTIMIZED_BURST_LIMIT: usize = 6;
+const TARGETED_MUTATION_STRATEGIES: [u32; 4] = [11, 14, 16, 23];
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct FuzzCase {
@@ -120,6 +122,19 @@ impl Mutate<FuzzCase> for FuzzCaseMutator {
             })?;
         }
 
+        if !candidates.shrink() {
+            candidates.mutation(|context| {
+                let which = TARGETED_MUTATION_STRATEGIES[context
+                    .rng()
+                    .gen_index(TARGETED_MUTATION_STRATEGIES.len())
+                    .unwrap_or(0)];
+                if !insert_targeted_model_aware_burst(context, case, which) {
+                    insert_optimized_model_aware_ops(context, case, which);
+                }
+                Ok(())
+            })?;
+        }
+
         if !case.ops.is_empty() {
             candidates.mutation(|context| {
                 let index = context.rng().gen_index(case.ops.len()).unwrap();
@@ -180,6 +195,10 @@ fn insert_optimized_model_aware_ops(
     case: &mut FuzzCase,
     which: u32,
 ) {
+    if insert_targeted_model_aware_burst(context, case, which) {
+        return;
+    }
+
     insert_optimized_model_aware_op(context, case, which);
 
     let burst_len = context.rng().gen_index(OPTIMIZED_BURST_LIMIT).unwrap_or(0);
@@ -190,6 +209,255 @@ fn insert_optimized_model_aware_ops(
             .unwrap_or(0) as u32;
         insert_optimized_model_aware_op(context, case, which);
     }
+}
+
+fn insert_targeted_model_aware_burst(
+    context: &mut mutatis::Context,
+    case: &mut FuzzCase,
+    which: u32,
+) -> bool {
+    let index = context.rng().gen_index(case.ops.len() + 1).unwrap();
+    let model = replay_model_prefix(&case.ops, index);
+    let selector = context.rng().gen_u8();
+    let value = context.rng().gen_u8();
+
+    let ops = match which {
+        11 => domless_dynamic_placeholder_burst(&model, selector, value),
+        14 => keyed_domless_fragment_burst(&model, selector, value, false),
+        16 => keyed_domless_fragment_burst(&model, selector, value, true),
+        23 => suspense_background_keyed_burst(&model, selector, value),
+        _ => None,
+    };
+
+    let Some(ops) = ops else {
+        return false;
+    };
+    insert_ops_at(case, index, ops);
+    true
+}
+
+fn insert_ops_at(case: &mut FuzzCase, index: usize, ops: Vec<Op>) {
+    if ops.is_empty() {
+        return;
+    }
+
+    if case.ops.len() + ops.len() <= MAX_STEPS {
+        case.ops.splice(index..index, ops);
+        return;
+    }
+
+    for (offset, op) in ops.into_iter().enumerate() {
+        let replace_index = index.saturating_add(offset);
+        if replace_index < case.ops.len() {
+            case.ops[replace_index] = op;
+        } else if case.ops.len() < MAX_STEPS {
+            case.ops.push(op);
+        }
+    }
+}
+
+fn replay_model_with_ops(model: &Model, ops: &[Op]) -> Model {
+    let mut model = model.clone();
+    for op in ops {
+        ops::apply_op_to_model(&mut model, op);
+    }
+    model
+}
+
+fn apply_model_op(model: &mut Model, op: &Op) {
+    ops::apply_op_to_model(model, op);
+}
+
+fn domless_dynamic_placeholder_burst(model: &Model, selector: u8, value: u8) -> Option<Vec<Op>> {
+    if !model.can_grow() {
+        return None;
+    }
+
+    let facts = ModelFacts::new(model);
+    let vnode = facts.select_focus_vnode(selector, value);
+    let element = facts.select_element_with_child_capacity(vnode, selector)?;
+    let mut ops = Vec::new();
+    let mut current = model.clone();
+
+    let insert = Op::template(
+        vnode,
+        TemplateEdit::Children {
+            element,
+            edit: ListEdit::Insert {
+                index: biased_index(value, facts.child_count(vnode, element)),
+                item: TemplateNodeKind::Dynamic,
+            },
+        },
+    );
+    apply_model_op(&mut current, &insert);
+    ops.push(insert);
+
+    let facts = ModelFacts::new(&current);
+    if let Some(slot) = facts.select_nested_domless_slot(selector) {
+        ops.push(Op::dynamic(slot.vnode, slot.slot, DynamicKind::Empty));
+    }
+    ops.push(Op::Rerender);
+    Some(ops)
+}
+
+fn keyed_domless_fragment_burst(
+    model: &Model,
+    selector: u8,
+    value: u8,
+    prefer_existing: bool,
+) -> Option<Vec<Op>> {
+    let facts = ModelFacts::new(model);
+    if prefer_existing {
+        if let Some(ops) = move_existing_keyed_domless_fragment(&facts, selector, value, false) {
+            return Some(ops);
+        }
+    }
+
+    let mut ops = Vec::new();
+    let mut current = model.clone();
+    let facts = ModelFacts::new(&current);
+    let vnode = facts.select_focus_vnode(selector, value);
+    if !current.can_grow() || !facts.has_dynamic_slots() {
+        return move_existing_keyed_domless_fragment(&facts, selector, value, false);
+    }
+
+    let slot = facts.select_dynamic_slot(vnode, selector);
+    ops.push(Op::dynamic(vnode, slot, DynamicKind::Fragment));
+    apply_model_op(&mut current, ops.last().unwrap());
+
+    for child in 0..4 {
+        if !current.can_grow() {
+            break;
+        }
+        let facts = ModelFacts::new(&current);
+        let fragment = facts.select_fragment(selector);
+        ops.push(Op::fragment(
+            fragment.vnode,
+            fragment.slot,
+            FragmentEdit::Children(ListEdit::Insert {
+                index: (child as u8).min(fragment.len as u8),
+                item: None,
+            }),
+        ));
+        apply_model_op(&mut current, ops.last().unwrap());
+    }
+
+    let facts = ModelFacts::new(&current);
+    let fragment = facts.select_fragment(selector);
+    ops.push(Op::fragment(
+        fragment.vnode,
+        fragment.slot,
+        FragmentEdit::KeyMode(FragmentKeyMode::Keyed { base: value }),
+    ));
+    apply_model_op(&mut current, ops.last().unwrap());
+
+    let facts = ModelFacts::new(&current);
+    let fragment = facts.select_fragment(selector);
+    let changed_start = ops.len();
+    for child in fragment.select_child_pair(selector) {
+        ops.push(Op::template(
+            child.vnode,
+            TemplateEdit::SetNode {
+                node: 0,
+                kind: TemplateNodeKind::Dynamic,
+            },
+        ));
+    }
+    if ops.len() == changed_start {
+        return None;
+    }
+    ops.push(Op::Rerender);
+    current = replay_model_with_ops(&current, &ops[changed_start..]);
+
+    let facts = ModelFacts::new(&current);
+    if let Some(mut move_ops) = move_existing_keyed_domless_fragment(&facts, selector, value, true)
+    {
+        ops.append(&mut move_ops);
+    }
+
+    Some(ops)
+}
+
+fn move_existing_keyed_domless_fragment(
+    facts: &ModelFacts,
+    selector: u8,
+    value: u8,
+    require_domless: bool,
+) -> Option<Vec<Op>> {
+    let fragment = facts.select_keyed_fragment(selector, require_domless)?;
+    if fragment.len < 2 {
+        return None;
+    }
+
+    let from = fragment
+        .select_domless_child(selector)
+        .map(|child| child.index)
+        .unwrap_or_else(|| biased_existing_index(selector, fragment.len));
+
+    let mut ops = Vec::new();
+    for to in adjacent_move_targets(from, fragment.len, value) {
+        ops.push(fragment_move_op(fragment, from, to));
+        ops.push(Op::Rerender);
+    }
+
+    (!ops.is_empty()).then_some(ops)
+}
+
+fn adjacent_move_targets(from: u8, len: usize, value: u8) -> Vec<u8> {
+    let mut targets = Vec::new();
+    let last = len.saturating_sub(1).min(u8::MAX as usize) as u8;
+    if from > 0 {
+        targets.push(from - 1);
+    }
+    if from < last {
+        targets.push(from + 1);
+    }
+
+    let biased = biased_index(value, len);
+    if biased != from && !targets.contains(&biased) {
+        targets.push(biased);
+    }
+
+    targets.truncate(3);
+    targets
+}
+
+fn fragment_move_op(fragment: FragmentShape, from: u8, to: u8) -> Op {
+    Op::fragment(
+        fragment.vnode,
+        fragment.slot,
+        FragmentEdit::Children(ListEdit::Move { from, to }),
+    )
+}
+
+fn suspense_background_keyed_burst(model: &Model, selector: u8, value: u8) -> Option<Vec<Op>> {
+    let facts = ModelFacts::new(model);
+    let fragment = facts.select_suspense_keyed_domless_fragment(selector)?;
+    if fragment.len < 2 {
+        return None;
+    }
+
+    let from = fragment
+        .select_domless_child(selector)
+        .map(|child| child.index)
+        .unwrap_or_else(|| biased_existing_index(selector, fragment.len));
+    let to = adjacent_move_targets(from, fragment.len, value)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| biased_index(value, fragment.len));
+
+    Some(vec![
+        Op::Rerender,
+        Op::suspense(
+            fragment
+                .suspense
+                .unwrap_or_else(|| facts.select_suspense(selector)),
+            SuspenseMode::Pending,
+        ),
+        Op::Rerender,
+        fragment_move_op(fragment, from, to),
+        Op::Rerender,
+    ])
 }
 
 fn optimized_model_aware_op(model: &Model, which: u32, selector: u8, value: u8) -> Op {
@@ -483,6 +751,8 @@ struct FragmentShape {
     slot: u8,
     len: usize,
     keyed: bool,
+    suspense: Option<u8>,
+    children: [Option<FragmentChildShape>; MAX_FRAGMENT_CHILDREN],
 }
 
 #[derive(Clone, Copy)]
@@ -490,6 +760,21 @@ struct AttrShape {
     vnode: u8,
     slot: u8,
     len: usize,
+}
+
+#[derive(Clone, Copy)]
+struct FragmentChildShape {
+    vnode: u8,
+    index: u8,
+    domless: bool,
+}
+
+#[derive(Clone, Copy)]
+struct DynamicSlotShape {
+    vnode: u8,
+    slot: u8,
+    nested: bool,
+    domless: bool,
 }
 
 #[derive(Default)]
@@ -504,11 +789,13 @@ struct VNodeShape {
 struct ElementShape {
     children: usize,
     attrs: usize,
+    can_insert_child: bool,
 }
 
 #[derive(Default)]
 struct ModelFacts {
     vnodes: Vec<VNodeShape>,
+    dynamic_slots: Vec<DynamicSlotShape>,
     fragments: Vec<FragmentShape>,
     attrs: Vec<AttrShape>,
     suspense_child_vnodes: Vec<u8>,
@@ -518,12 +805,11 @@ struct ModelFacts {
 impl ModelFacts {
     fn new(model: &Model) -> Self {
         let mut facts = Self::default();
-        facts.collect_vnode(&model.root);
-        facts.suspense_count = model.root.suspense_count();
+        facts.collect_vnode(&model.root, None);
         facts
     }
 
-    fn collect_vnode(&mut self, vnode: &VNodeSpec) -> u8 {
+    fn collect_vnode(&mut self, vnode: &VNodeSpec, suspense: Option<u8>) -> u8 {
         let vnode_index = self.vnodes.len() as u8;
         let elements = vnode
             .template
@@ -537,11 +823,13 @@ impl ModelFacts {
                     return ElementShape {
                         children: 0,
                         attrs: 0,
+                        can_insert_child: false,
                     };
                 };
                 ElementShape {
                     children: children.len(),
                     attrs: attrs.len(),
+                    can_insert_child: children.len() < model::MAX_CHILDREN,
                 }
             })
             .collect::<Vec<_>>();
@@ -561,16 +849,51 @@ impl ModelFacts {
             });
         }
 
+        let dynamic_paths = collect_dynamic_slot_paths(&vnode.template.roots);
         for (slot, dynamic) in vnode.dynamics.iter().enumerate() {
-            if let DynamicSpec::Fragment(children) = dynamic {
-                self.fragments.push(FragmentShape {
-                    vnode: vnode_index,
-                    slot: slot as u8,
-                    len: children.len(),
-                    keyed: children.first().and_then(|child| child.key).is_some(),
-                });
+            self.dynamic_slots.push(DynamicSlotShape {
+                vnode: vnode_index,
+                slot: slot as u8,
+                nested: dynamic_paths
+                    .get(slot)
+                    .map(|path| path.len() > 1)
+                    .unwrap_or(false),
+                domless: !dynamic_creates_dom(dynamic),
+            });
+
+            match dynamic {
+                DynamicSpec::Fragment(children) => {
+                    let mut child_shapes = [None; MAX_FRAGMENT_CHILDREN];
+                    for (index, child) in children.iter().enumerate() {
+                        let child_vnode = self.collect_vnode(child, suspense);
+                        if let Some(slot) = child_shapes.get_mut(index) {
+                            *slot = Some(FragmentChildShape {
+                                vnode: child_vnode,
+                                index: index as u8,
+                                domless: !vnode_creates_dom(child),
+                            });
+                        }
+                    }
+                    self.fragments.push(FragmentShape {
+                        vnode: vnode_index,
+                        slot: slot as u8,
+                        len: children.len(),
+                        keyed: children.first().and_then(|child| child.key).is_some(),
+                        suspense,
+                        children: child_shapes,
+                    });
+                }
+                DynamicSpec::ComponentA(child) | DynamicSpec::ComponentB(child) => {
+                    self.collect_vnode(child, suspense);
+                }
+                DynamicSpec::Suspense(suspense) => {
+                    let suspense_index = self.suspense_count.min(u8::MAX as usize) as u8;
+                    self.suspense_count += 1;
+                    let child = self.collect_vnode(&suspense.child, Some(suspense_index));
+                    self.suspense_child_vnodes.push(child);
+                }
+                DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
             }
-            collect_dynamic_vnodes(dynamic, self);
         }
 
         vnode_index
@@ -604,6 +927,20 @@ impl ModelFacts {
         select_bounded(selector, self.vnodes[vnode as usize].elements.len())
     }
 
+    fn select_element_with_child_capacity(&self, vnode: u8, selector: u8) -> Option<u8> {
+        let elements = &self.vnodes[vnode as usize].elements;
+        let candidates = elements
+            .iter()
+            .enumerate()
+            .filter(|(_, element)| element.can_insert_child)
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        candidates
+            .get(selector as usize % candidates.len().max(1))
+            .copied()
+            .map(|index| index as u8)
+    }
+
     fn child_count(&self, vnode: u8, element: u8) -> usize {
         self.vnodes[vnode as usize]
             .elements
@@ -628,6 +965,16 @@ impl ModelFacts {
         self.vnodes.iter().any(|vnode| vnode.dynamic_slots > 0)
     }
 
+    fn select_nested_domless_slot(&self, selector: u8) -> Option<DynamicSlotShape> {
+        let slots = self
+            .dynamic_slots
+            .iter()
+            .copied()
+            .filter(|slot| slot.nested && slot.domless)
+            .collect::<Vec<_>>();
+        slots.get(selector as usize % slots.len().max(1)).copied()
+    }
+
     fn select_fragment(&self, selector: u8) -> FragmentShape {
         if self.fragments.is_empty() {
             return FragmentShape {
@@ -635,9 +982,44 @@ impl ModelFacts {
                 slot: self.select_dynamic_slot(self.select_vnode(selector), selector),
                 len: 0,
                 keyed: false,
+                suspense: None,
+                children: [None; MAX_FRAGMENT_CHILDREN],
             };
         }
         self.fragments[selector as usize % self.fragments.len()]
+    }
+
+    fn select_keyed_fragment(&self, selector: u8, require_domless: bool) -> Option<FragmentShape> {
+        self.select_fragment_matching(selector, |fragment| {
+            fragment.keyed
+                && fragment.len >= 2
+                && (!require_domless || fragment.select_domless_child(selector).is_some())
+        })
+    }
+
+    fn select_suspense_keyed_domless_fragment(&self, selector: u8) -> Option<FragmentShape> {
+        self.select_fragment_matching(selector, |fragment| {
+            fragment.suspense.is_some()
+                && fragment.keyed
+                && fragment.len >= 2
+                && fragment.select_domless_child(selector).is_some()
+        })
+    }
+
+    fn select_fragment_matching(
+        &self,
+        selector: u8,
+        mut matches: impl FnMut(&FragmentShape) -> bool,
+    ) -> Option<FragmentShape> {
+        let fragments = self
+            .fragments
+            .iter()
+            .copied()
+            .filter(|fragment| matches(fragment))
+            .collect::<Vec<_>>();
+        fragments
+            .get(selector as usize % fragments.len().max(1))
+            .copied()
     }
 
     fn select_attr_slot(&self, selector: u8) -> AttrShape {
@@ -664,6 +1046,41 @@ impl ModelFacts {
     }
 }
 
+impl FragmentShape {
+    fn select_child_pair(&self, selector: u8) -> Vec<FragmentChildShape> {
+        let children = self.children.iter().flatten().copied().collect::<Vec<_>>();
+        if children.is_empty() {
+            return Vec::new();
+        }
+
+        let first = selector as usize % children.len();
+        let second = if children.len() > 1 {
+            (first + 1) % children.len()
+        } else {
+            first
+        };
+
+        let mut selected = vec![children[first]];
+        if second != first {
+            selected.push(children[second]);
+        }
+        selected
+    }
+
+    fn select_domless_child(&self, selector: u8) -> Option<FragmentChildShape> {
+        let children = self
+            .children
+            .iter()
+            .flatten()
+            .copied()
+            .filter(|child| child.domless)
+            .collect::<Vec<_>>();
+        children
+            .get(selector as usize % children.len().max(1))
+            .copied()
+    }
+}
+
 fn template_node_at<'a>(
     roots: &'a [TemplateNodeSpec],
     path: &[usize],
@@ -679,21 +1096,66 @@ fn template_node_at<'a>(
     Some(node)
 }
 
-fn collect_dynamic_vnodes(dynamic: &DynamicSpec, facts: &mut ModelFacts) {
-    match dynamic {
-        DynamicSpec::Fragment(children) => {
-            for child in children {
-                facts.collect_vnode(child);
+fn collect_dynamic_slot_paths(roots: &[TemplateNodeSpec]) -> Vec<Vec<usize>> {
+    let mut out = Vec::new();
+    for (index, root) in roots.iter().enumerate() {
+        collect_dynamic_slot_paths_from(root, vec![index], &mut out);
+    }
+    out
+}
+
+fn collect_dynamic_slot_paths_from(
+    node: &TemplateNodeSpec,
+    path: Vec<usize>,
+    out: &mut Vec<Vec<usize>>,
+) {
+    match node {
+        TemplateNodeSpec::Dynamic => out.push(path),
+        TemplateNodeSpec::Element { children, .. } => {
+            for (index, child) in children.iter().enumerate() {
+                let mut child_path = path.clone();
+                child_path.push(index);
+                collect_dynamic_slot_paths_from(child, child_path, out);
             }
         }
-        DynamicSpec::ComponentA(child) | DynamicSpec::ComponentB(child) => {
-            facts.collect_vnode(child);
+        TemplateNodeSpec::Text(_) => {}
+    }
+}
+
+fn vnode_creates_dom(vnode: &VNodeSpec) -> bool {
+    let mut dynamic_index = 0;
+    vnode
+        .template
+        .roots
+        .iter()
+        .any(|root| template_node_creates_dom(root, vnode, &mut dynamic_index))
+}
+
+fn template_node_creates_dom(
+    node: &TemplateNodeSpec,
+    vnode: &VNodeSpec,
+    dynamic_index: &mut usize,
+) -> bool {
+    match node {
+        TemplateNodeSpec::Element { .. } | TemplateNodeSpec::Text(_) => true,
+        TemplateNodeSpec::Dynamic => {
+            let creates_dom = vnode
+                .dynamics
+                .get(*dynamic_index)
+                .map(dynamic_creates_dom)
+                .unwrap_or(false);
+            *dynamic_index += 1;
+            creates_dom
         }
-        DynamicSpec::Suspense(suspense) => {
-            let child = facts.collect_vnode(&suspense.child);
-            facts.suspense_child_vnodes.push(child);
-        }
-        DynamicSpec::Empty | DynamicSpec::Text(_) | DynamicSpec::Placeholder => {}
+    }
+}
+
+fn dynamic_creates_dom(dynamic: &DynamicSpec) -> bool {
+    match dynamic {
+        DynamicSpec::Empty => false,
+        DynamicSpec::Fragment(children) => children.iter().any(vnode_creates_dom),
+        DynamicSpec::ComponentA(child) | DynamicSpec::ComponentB(child) => vnode_creates_dom(child),
+        DynamicSpec::Suspense(_) | DynamicSpec::Text(_) | DynamicSpec::Placeholder => true,
     }
 }
 
@@ -1088,5 +1550,33 @@ mod tests {
         let case = FuzzCase::seed();
         let encoded = encode_case_vec(&case).unwrap();
         std::fs::write(path, encoded).unwrap();
+    }
+
+    #[test]
+    fn export_probe_cases_when_requested() {
+        let Ok(dir) = std::env::var("DIOXUS_VDOM_FUZZ_EXPORT_PROBES") else {
+            return;
+        };
+
+        let nested_empty = FuzzCase::new(vec![
+            Op::template(
+                0,
+                TemplateEdit::Children {
+                    element: 0,
+                    edit: ListEdit::Insert {
+                        index: 0,
+                        item: TemplateNodeKind::Dynamic,
+                    },
+                },
+            ),
+            Op::dynamic(0, 0, DynamicKind::Empty),
+            Op::Rerender,
+        ]);
+        run_case(&nested_empty).unwrap();
+        std::fs::write(
+            format!("{dir}/nested-empty"),
+            encode_case_vec(&nested_empty).unwrap(),
+        )
+        .unwrap();
     }
 }

@@ -20,6 +20,7 @@ use std::{
 pub struct ReductionOptions {
     preserve_failure: bool,
     random_multi_attempts: usize,
+    max_attempts: Option<usize>,
 }
 
 impl ReductionOptions {
@@ -32,6 +33,11 @@ impl ReductionOptions {
         self.random_multi_attempts = attempts;
         self
     }
+
+    pub fn max_attempts(mut self, attempts: usize) -> Self {
+        self.max_attempts = Some(attempts);
+        self
+    }
 }
 
 impl Default for ReductionOptions {
@@ -39,6 +45,7 @@ impl Default for ReductionOptions {
         Self {
             preserve_failure: true,
             random_multi_attempts: 2048,
+            max_attempts: None,
         }
     }
 }
@@ -155,6 +162,14 @@ impl Reducer {
     }
 
     fn accepts(&mut self, case: &FuzzCase) -> Option<FuzzFailure> {
+        if self
+            .options
+            .max_attempts
+            .is_some_and(|max_attempts| self.attempts >= max_attempts)
+        {
+            return None;
+        }
+
         self.attempts += 1;
         let ReductionRun::Failed(failure) = run_case_for_reduction(case) else {
             return None;

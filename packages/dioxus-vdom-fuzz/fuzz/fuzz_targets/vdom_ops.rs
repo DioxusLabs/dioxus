@@ -9,8 +9,14 @@ use mutatis::Session;
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
-    sync::{Mutex, OnceLock},
+    sync::{
+        Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
+
+const INTERNAL_MINIMIZE_RANDOM_ATTEMPTS: usize = 64;
+const INTERNAL_MINIMIZE_ATTEMPT_LIMIT: usize = 64;
 
 fuzz_target!(|data: &[u8]| {
     let Some(case) = decode_case(data) else {
@@ -27,10 +33,14 @@ fuzz_mutator!(|data: &mut [u8], size: usize, max_size: usize, seed: u32| {
     let mut case = decode_case(&data[..size]).unwrap_or_else(FuzzCase::seed);
     let minimizing = cargo_fuzz_minimizing();
 
-    if cargo_fuzz_semantic_reduction_enabled() {
-        if let Some(reduced) = cached_semantic_reduction(&case, &data[..size], max_size) {
-            data[..reduced.len()].copy_from_slice(&reduced);
-            return reduced.len();
+    if let Some(options) = cargo_fuzz_semantic_reduction_options() {
+        if claim_semantic_reduction_attempt() {
+            if let Some(reduced) =
+                cached_semantic_reduction(&case, &data[..size], max_size, options)
+            {
+                data[..reduced.len()].copy_from_slice(&reduced);
+                return reduced.len();
+            }
         }
     }
 
@@ -73,18 +83,39 @@ fn cargo_fuzz_minimizing() -> bool {
     *MINIMIZING.get_or_init(|| std::env::args().any(|arg| is_minimize_crash_arg(&arg)))
 }
 
-fn cargo_fuzz_semantic_reduction_enabled() -> bool {
-    static ENABLED: OnceLock<bool> = OnceLock::new();
-    *ENABLED.get_or_init(|| {
-        let mut minimizing = false;
-        for arg in std::env::args() {
-            if is_minimize_crash_internal_step_arg(&arg) {
-                return false;
+fn claim_semantic_reduction_attempt() -> bool {
+    static ATTEMPTED: AtomicBool = AtomicBool::new(false);
+    !ATTEMPTED.swap(true, Ordering::Relaxed)
+}
+
+fn cargo_fuzz_semantic_reduction_options() -> Option<ReductionOptions> {
+    static OPTIONS: OnceLock<Option<ReductionOptions>> = OnceLock::new();
+    OPTIONS
+        .get_or_init(|| {
+            let mut minimizing = false;
+            let mut internal_step = false;
+            for arg in std::env::args() {
+                if is_minimize_crash_internal_step_arg(&arg) {
+                    internal_step = true;
+                }
+                minimizing |= is_minimize_crash_arg(&arg);
             }
-            minimizing |= is_minimize_crash_arg(&arg);
-        }
-        minimizing
-    })
+
+            if !minimizing {
+                return None;
+            }
+
+            let options = if internal_step {
+                ReductionOptions::default()
+                    .random_multi_attempts(INTERNAL_MINIMIZE_RANDOM_ATTEMPTS)
+                    .max_attempts(INTERNAL_MINIMIZE_ATTEMPT_LIMIT)
+            } else {
+                ReductionOptions::default()
+            };
+
+            Some(options)
+        })
+        .clone()
 }
 
 fn is_minimize_crash_arg(arg: &str) -> bool {
@@ -109,6 +140,7 @@ fn cached_semantic_reduction(
     case: &FuzzCase,
     encoded_case: &[u8],
     max_size: usize,
+    options: ReductionOptions,
 ) -> Option<Vec<u8>> {
     static CACHE: OnceLock<Mutex<HashMap<u64, Option<Vec<u8>>>>> = OnceLock::new();
 
@@ -121,14 +153,12 @@ fn cached_semantic_reduction(
         return cached;
     }
 
-    let reduction = reduce_case(case.clone(), ReductionOptions::default())
-        .ok()
-        .and_then(|report| {
-            let encoded = encode_case_vec(&report.case)?;
-            let reduced_ops = report.stats.reduced_ops < report.stats.original_ops;
-            let reduced_bytes = encoded.len() < encoded_case.len();
-            (encoded.len() <= max_size && (reduced_ops || reduced_bytes)).then_some(encoded)
-        });
+    let reduction = reduce_case(case.clone(), options).ok().and_then(|report| {
+        let encoded = encode_case_vec(&report.case)?;
+        let reduced_ops = report.stats.reduced_ops < report.stats.original_ops;
+        let reduced_bytes = encoded.len() < encoded_case.len();
+        (encoded.len() <= max_size && (reduced_ops || reduced_bytes)).then_some(encoded)
+    });
 
     cache.lock().unwrap().insert(key, reduction.clone());
     reduction
