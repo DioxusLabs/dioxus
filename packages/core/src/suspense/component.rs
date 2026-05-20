@@ -350,6 +350,12 @@ impl SuspenseBoundaryProps {
             } else {
                 // Otherwise just render the children in the real dom
                 debug_assert!(children.mount.get().mounted());
+                // Clear any stale suspended nodes BEFORE rendering the children, so
+                // nested scopes under this boundary observe `is_suspended() == false`
+                // via `scope_should_render`. Otherwise `create_scope` would return a
+                // node count without emitting matching `load_template`/`create_*`
+                // mutations, leaving the caller's stack accounting off by that count.
+                suspense_context.take_suspended_nodes();
                 let nodes_created = suspense_context
                     .under_suspense_boundary(&dom.runtime(), || children.create(dom, parent, to));
                 let scope_state = &mut dom.scopes[scope_id.0];
@@ -357,7 +363,6 @@ impl SuspenseBoundaryProps {
                 let suspense_context =
                     SuspenseContext::downcast_suspense_boundary_from_scope(&dom.runtime, scope_id)
                         .unwrap();
-                suspense_context.take_suspended_nodes();
                 mark_suspense_resolved(&suspense_context, dom, scope_id);
 
                 nodes_created

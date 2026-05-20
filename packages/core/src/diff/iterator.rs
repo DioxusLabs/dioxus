@@ -438,10 +438,9 @@ impl VirtualDom {
 
     fn insert_before(&mut self, to: Option<&mut impl WriteMutations>, new: usize, before: &VNode) {
         if let Some(to) = to {
-            if new > 0 {
-                let id = before.find_first_element(self);
-                to.insert_nodes_before(id, new);
-            }
+            debug_assert!(new > 0);
+            let id = before.find_first_element(self);
+            to.insert_nodes_before(id, new);
         }
     }
 
