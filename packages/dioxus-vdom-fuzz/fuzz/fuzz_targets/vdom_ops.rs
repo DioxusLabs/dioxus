@@ -1,16 +1,19 @@
 #![no_main]
 
 use dioxus_vdom_fuzz::{
-    FuzzCase, ReductionOptions, decode_case, encode_case, encode_case_vec, format_failure_report,
-    print_case_trace, reduce_case, run_case,
+    FuzzCase, ReductionOptions, active_run_step, decode_case, encode_case, encode_case_vec,
+    format_failure_report, format_panic_failure_report, print_case_trace, reduce_case, run_case,
 };
 use libfuzzer_sys::{fuzz_mutator, fuzz_target, fuzzer_mutate};
 use mutatis::Session;
 use std::{
+    cell::{Cell, RefCell},
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
+    io::{self, Write},
+    panic::PanicHookInfo,
     sync::{
-        Mutex, OnceLock,
+        Mutex, Once, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -18,13 +21,22 @@ use std::{
 const INTERNAL_MINIMIZE_RANDOM_ATTEMPTS: usize = 64;
 const INTERNAL_MINIMIZE_ATTEMPT_LIMIT: usize = 64;
 
+thread_local! {
+    static CURRENT_FUZZ_CASE: RefCell<Option<FuzzCase>> = const { RefCell::new(None) };
+    static PRINTING_PANIC_REPORT: Cell<bool> = const { Cell::new(false) };
+}
+
 fuzz_target!(|data: &[u8]| {
+    install_pretty_panic_hook();
+
     let Some(case) = decode_case(data) else {
         return;
     };
 
+    let current_case = CurrentFuzzCase::new(case.clone());
     if let Err(failure) = run_case(&case) {
         print_case_trace(&case, &failure);
+        drop(current_case);
         panic!("{}", format_failure_report(&case, &failure));
     }
 });
@@ -76,6 +88,90 @@ fn extra_minimization_mutations(seed: u32) -> usize {
     } else {
         0
     }
+}
+
+struct CurrentFuzzCase {
+    previous: Option<FuzzCase>,
+}
+
+impl CurrentFuzzCase {
+    fn new(case: FuzzCase) -> Self {
+        let previous = CURRENT_FUZZ_CASE.with(|current| current.replace(Some(case)));
+        Self { previous }
+    }
+}
+
+impl Drop for CurrentFuzzCase {
+    fn drop(&mut self) {
+        CURRENT_FUZZ_CASE.with(|current| {
+            current.replace(self.previous.take());
+        });
+    }
+}
+
+struct PanicReportGuard;
+
+impl PanicReportGuard {
+    fn try_enter() -> Option<Self> {
+        let already_printing = PRINTING_PANIC_REPORT.with(|printing| printing.replace(true));
+        (!already_printing).then_some(Self)
+    }
+}
+
+impl Drop for PanicReportGuard {
+    fn drop(&mut self) {
+        PRINTING_PANIC_REPORT.with(|printing| printing.set(false));
+    }
+}
+
+fn install_pretty_panic_hook() {
+    static INSTALL: Once = Once::new();
+
+    INSTALL.call_once(|| {
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            print_current_case_panic_report(info);
+            previous_hook(info);
+        }));
+    });
+}
+
+fn print_current_case_panic_report(info: &PanicHookInfo<'_>) {
+    let Some(_guard) = PanicReportGuard::try_enter() else {
+        return;
+    };
+
+    CURRENT_FUZZ_CASE.with(|current| {
+        let current = current.borrow();
+        let Some(case) = current.as_ref() else {
+            return;
+        };
+
+        let message = panic_info_message(info);
+        let report = format_panic_failure_report(case, active_run_step(), &message);
+        let mut stdout = io::stdout().lock();
+        let _ = writeln!(stdout);
+        let _ = write!(stdout, "{report}");
+        let _ = stdout.flush();
+        let _ = io::stderr().flush();
+    });
+}
+
+fn panic_info_message(info: &PanicHookInfo<'_>) -> String {
+    let payload = info.payload();
+    let mut message = if let Some(message) = payload.downcast_ref::<&'static str>() {
+        (*message).to_string()
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.clone()
+    } else {
+        "<non-string panic payload>".to_string()
+    };
+
+    if let Some(location) = info.location() {
+        message.push_str(&format!(" at {}:{}", location.file(), location.line()));
+    }
+
+    message
 }
 
 fn cargo_fuzz_minimizing() -> bool {

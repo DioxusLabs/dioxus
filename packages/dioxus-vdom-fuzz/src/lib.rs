@@ -22,7 +22,7 @@ use ops::{FragmentEdit, ListEdit, Op, TemplateEdit};
 pub use reducer::{ReduceError, ReductionOptions, ReductionReport, ReductionStats, reduce_case};
 use reducer::{random_multistep_shrink_case, simplified_ops};
 use serde::{Deserialize, Serialize};
-use std::fmt;
+use std::{cell::Cell, fmt};
 
 pub const MAX_STEPS: usize = 512;
 const OPTIMIZED_MUTATION_STRATEGIES: u32 = 26;
@@ -86,6 +86,33 @@ impl Default for FuzzCase {
     fn default() -> Self {
         Self::seed()
     }
+}
+
+thread_local! {
+    static ACTIVE_RUN_STEP: Cell<Option<usize>> = const { Cell::new(None) };
+}
+
+struct ActiveRunStepGuard;
+
+impl ActiveRunStepGuard {
+    fn new() -> Self {
+        ACTIVE_RUN_STEP.with(|step| step.set(None));
+        Self
+    }
+
+    fn set(&self, next_step: usize) {
+        ACTIVE_RUN_STEP.with(|step| step.set(Some(next_step)));
+    }
+}
+
+impl Drop for ActiveRunStepGuard {
+    fn drop(&mut self) {
+        ACTIVE_RUN_STEP.with(|step| step.set(None));
+    }
+}
+
+pub fn active_run_step() -> Option<usize> {
+    ACTIVE_RUN_STEP.with(Cell::get)
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1386,11 +1413,8 @@ impl fmt::Display for FuzzFailure {
 }
 
 pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
-    const CONTEXT: usize = 6;
-
     let mut report = String::new();
     let summary = failure.message.lines().next().unwrap_or(&failure.message);
-    let (start, end) = trace_bounds(case.ops.len(), failure.step);
 
     use fmt::Write;
     writeln!(&mut report, "dioxus-vdom-fuzz failure").unwrap();
@@ -1399,21 +1423,10 @@ pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
     writeln!(&mut report, "failing op: {}", failure.op).unwrap();
     writeln!(&mut report, "summary: {summary}").unwrap();
     writeln!(&mut report).unwrap();
-    writeln!(&mut report, "operation window:").unwrap();
-    if start > 0 {
-        writeln!(&mut report, "  ... {} earlier ops omitted", start).unwrap();
-    }
-    for (index, op) in case.ops.iter().enumerate().take(end).skip(start) {
+    writeln!(&mut report, "operations:").unwrap();
+    for (index, op) in case.ops.iter().enumerate() {
         let marker = if index == failure.step { ">>" } else { "  " };
         writeln!(&mut report, "{marker} {index:03}: {op:?}").unwrap();
-    }
-    if end < case.ops.len() {
-        writeln!(
-            &mut report,
-            "  ... {} later ops omitted",
-            case.ops.len() - end
-        )
-        .unwrap();
     }
     writeln!(&mut report).unwrap();
     writeln!(&mut report, "full error:").unwrap();
@@ -1421,18 +1434,28 @@ pub fn format_failure_report(case: &FuzzCase, failure: &FuzzFailure) -> String {
         writeln!(&mut report, "  {line}").unwrap();
     }
 
-    fn trace_bounds(ops_len: usize, failing_step: usize) -> (usize, usize) {
-        if ops_len <= CONTEXT * 4 {
-            return (0, ops_len);
-        }
-
-        (
-            failing_step.saturating_sub(CONTEXT),
-            (failing_step + CONTEXT + 1).min(ops_len),
-        )
-    }
-
     report
+}
+
+pub fn format_panic_failure_report(
+    case: &FuzzCase,
+    active_step: Option<usize>,
+    panic_message: &str,
+) -> String {
+    let step = active_step
+        .filter(|step| *step < case.ops.len())
+        .unwrap_or_else(|| case.ops.len().saturating_sub(1));
+    let op = case
+        .ops
+        .get(step)
+        .map_or_else(|| "<unknown>".to_string(), |op| format!("{op:?}"));
+    let failure = FuzzFailure {
+        step,
+        op,
+        message: format!("panic while applying operation: {panic_message}"),
+    };
+
+    format_failure_report(case, &failure)
 }
 
 pub fn decode_case(data: &[u8]) -> Option<FuzzCase> {
@@ -1453,7 +1476,9 @@ pub fn encode_case_vec(case: &FuzzCase) -> Option<Vec<u8>> {
 
 pub fn run_case(case: &FuzzCase) -> Result<(), FuzzFailure> {
     let mut state = Harness::fresh();
+    let active_step = ActiveRunStepGuard::new();
     for (step, op) in case.ops.iter().enumerate() {
+        active_step.set(step);
         apply_step(&mut state, op).map_err(|message| FuzzFailure {
             step,
             op: format!("{op:?}"),
@@ -1550,33 +1575,5 @@ mod tests {
         let case = FuzzCase::seed();
         let encoded = encode_case_vec(&case).unwrap();
         std::fs::write(path, encoded).unwrap();
-    }
-
-    #[test]
-    fn export_probe_cases_when_requested() {
-        let Ok(dir) = std::env::var("DIOXUS_VDOM_FUZZ_EXPORT_PROBES") else {
-            return;
-        };
-
-        let nested_empty = FuzzCase::new(vec![
-            Op::template(
-                0,
-                TemplateEdit::Children {
-                    element: 0,
-                    edit: ListEdit::Insert {
-                        index: 0,
-                        item: TemplateNodeKind::Dynamic,
-                    },
-                },
-            ),
-            Op::dynamic(0, 0, DynamicKind::Empty),
-            Op::Rerender,
-        ]);
-        run_case(&nested_empty).unwrap();
-        std::fs::write(
-            format!("{dir}/nested-empty"),
-            encode_case_vec(&nested_empty).unwrap(),
-        )
-        .unwrap();
     }
 }

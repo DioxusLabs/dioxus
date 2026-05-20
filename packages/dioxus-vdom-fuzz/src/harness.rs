@@ -343,19 +343,11 @@ fn print_indented(text: &str, indent: &str) {
     }
 }
 
-fn print_op_window(ops: &[Op], failing_step: usize) {
-    let (start, end) = trace_bounds(ops.len(), failing_step);
-
-    println!("operation window:");
-    if start > 0 {
-        println!("  ... {} earlier ops omitted", start);
-    }
-    for (index, op) in ops.iter().enumerate().take(end).skip(start) {
+fn print_op_list(ops: &[Op], failing_step: usize) {
+    println!("operations:");
+    for (index, op) in ops.iter().enumerate() {
         let marker = if index == failing_step { ">>" } else { "  " };
         println!("{marker} {index:03}: {op:?}");
-    }
-    if end < ops.len() {
-        println!("  ... {} later ops omitted", ops.len() - end);
     }
 }
 
@@ -380,7 +372,7 @@ pub(crate) fn print_ssr_diff_trace(ops: &[Op], failing_step: usize, minimized_er
     println!("reported failing step: {failing_step}");
     println!("summary: {}", first_line(minimized_error));
     println!();
-    print_op_window(ops, failing_step);
+    print_op_list(ops, failing_step);
     println!();
     println!("ssr replay around failing step:");
 
@@ -503,84 +495,50 @@ fn fire_historical_event_listeners(state: &Harness) -> Result<(), String> {
     }
 
     let runtime = state.vdom.runtime();
-    let result = catch_unwind_result(|| {
-        for target in targets {
-            let event = Event::new(
-                Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
-                true,
-            );
-            runtime.handle_event(target.name, event, target.id);
-        }
-    });
-
-    match result {
-        Ok(()) => Ok(()),
-        Err(payload) => Err(format!(
-            "panic while firing historical event listeners: {}",
-            panic_message(&payload)
-        )),
+    for target in targets {
+        let event = Event::new(
+            Rc::new(String::from("fuzzer stale event")) as Rc<dyn Any>,
+            true,
+        );
+        runtime.handle_event(target.name, event, target.id);
     }
+    Ok(())
 }
 
 fn render_once(
     state: &mut Harness,
     mark_app_dirty: bool,
     assert_matches_vdom: bool,
-    label: &'static str,
 ) -> Result<(), String> {
     fire_historical_event_listeners(state)?;
     if mark_app_dirty {
         state.vdom.mark_dirty(ScopeId::APP);
     }
-    let render_result = catch_unwind_result(|| {
-        state.vdom.render_immediate(&mut state.incremental);
-        state.incremental.check_stack_clean().map_err(|err| {
-            let last_mutation = state
-                .incremental
-                .last_mutation
-                .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
-            let recent_mutations = state.incremental.recent_mutations_text();
-            format!(
-                "{err} after {last_mutation}\nrecent mutations:\n  {}",
-                recent_mutations
-            )
-        })?;
-        if assert_matches_vdom {
-            state.incremental.check_matches_vdom(&state.vdom)?;
-        }
-        Ok(())
-    });
-
-    match render_result {
-        Ok(result) => result,
-        Err(payload) => {
-            let last_mutation = state
-                .incremental
-                .last_mutation
-                .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
-            Err(format!(
-                "panic in {label} after {last_mutation}: {}",
-                panic_message(&payload),
-            ))
-        }
+    state.vdom.render_immediate(&mut state.incremental);
+    state.incremental.check_stack_clean().map_err(|err| {
+        let last_mutation = state
+            .incremental
+            .last_mutation
+            .map_or_else(|| "<none>".to_string(), |mutation| mutation.to_string());
+        let recent_mutations = state.incremental.recent_mutations_text();
+        format!("{err} after {last_mutation}\nrecent mutations:\n  {recent_mutations}")
+    })?;
+    if assert_matches_vdom {
+        state.incremental.check_matches_vdom(&state.vdom)?;
     }
+    Ok(())
 }
 
 fn render_and_assert(state: &mut Harness) -> Result<(), String> {
     let compare_fresh = state.pending_fresh_compare;
-    let result = render_once(state, true, compare_fresh, "incremental render");
+    let result = render_once(state, true, compare_fresh);
     state.pending_app_render = false;
     state.pending_fresh_compare = false;
     render_result_to_fuzz_failure(state, result)
 }
 
 fn render_natural_and_assert(state: &mut Harness, compare_fresh: bool) -> Result<(), String> {
-    let result = render_once(
-        state,
-        false,
-        compare_fresh && state.pending_fresh_compare,
-        "natural incremental render",
-    );
+    let result = render_once(state, false, compare_fresh && state.pending_fresh_compare);
     if compare_fresh {
         state.pending_fresh_compare = false;
     }
